@@ -1,5 +1,5 @@
 # alist-tvbox
-AList proxy server for TvBox, support playlist
+AList 3.0 proxy server for TvBox, support playlist.
 
 # Configure
 Configure the AList server url in application.yaml
