@@ -19,6 +19,8 @@ import java.util.List;
 @Slf4j
 @Service
 public class TvBoxService {
+    public static final String FOLDER_PIC = "http://img1.3png.com/281e284a670865a71d91515866552b5f172b.png";
+    public static final String LIST_PIC = "http://img1.3png.com/3063ad894f04619af7270df68a124f129c8f.png";
     private final AListService aListService;
     private final AppProperties appProperties;
     private final LoadingCache<String, MovieList> cache;
@@ -50,10 +52,15 @@ public class TvBoxService {
         MovieList result = new MovieList();
         int count = 0;
         for (FsInfo fsDetail : aListService.listFiles(path)) {
+            String pic = fsDetail.getThumb();
+            if(pic.isEmpty() && fsDetail.getType()==1) {
+                pic = FOLDER_PIC;
+            }
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(path + "/" + fsDetail.getName());
             movieDetail.setVod_name(fsDetail.getName());
             movieDetail.setVod_tag(fsDetail.getType() == 1 ? "folder" : "file");
+            movieDetail.setVod_pic(pic);
             movieDetail.setVod_remarks(fileSize(fsDetail.getSize()) + (fsDetail.getType() == 1 ? "文件夹" : ""));
             result.getList().add(movieDetail);
             if (isVideoFormat(fsDetail.getName())) {
@@ -66,6 +73,7 @@ public class TvBoxService {
             movieDetail.setVod_id(path + "/playlist");
             movieDetail.setVod_name("播放列表");
             movieDetail.setVod_tag("file");
+            movieDetail.setVod_pic(LIST_PIC);
             movieDetail.setVod_remarks("共" + count + "集");
             result.getList().add(0, movieDetail);
         }
@@ -81,12 +89,17 @@ public class TvBoxService {
             return cache.get(path);
         }
         FsDetail fsDetail = aListService.getFile(path);
+        String pic = fsDetail.getThumb();
+        if(pic.isEmpty() && fsDetail.getType()==1) {
+            pic = FOLDER_PIC;
+        }
         MovieList result = new MovieList();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(path + "/" + fsDetail.getName());
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_tag(fsDetail.getType() == 1 ? "folder" : "file");
         movieDetail.setVod_time(fsDetail.getModified());
+        movieDetail.setVod_pic(pic);
         movieDetail.setVod_play_from(fsDetail.getProvider());
         movieDetail.setVod_play_url(fsDetail.getName() + "$" + fsDetail.getRaw_url());
         result.getList().add(movieDetail);
@@ -107,6 +120,7 @@ public class TvBoxService {
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_tag("file");
+        movieDetail.setVod_pic(LIST_PIC);
 
         List<String> list = new ArrayList<>();
         for (FsInfo fsInfo : aListService.listFiles(newPath)) {
@@ -129,14 +143,13 @@ public class TvBoxService {
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
-        log.info("total: {}", result.getTotal());
         log.debug("detail: {}", result);
         return result;
     }
 
     private String fileSize(long size) {
         double sz = size;
-        String filesize = "";
+        String filesize;
         if (sz > 1024 * 1024 * 1024 * 1024.0) {
             sz /= (1024 * 1024 * 1024 * 1024.0);
             filesize = "TB";
