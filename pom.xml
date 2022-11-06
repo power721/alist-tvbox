@@ -14,7 +14,7 @@
     <name>alist-tvbox</name>
     <description>AList proxy server for TvBox, support playlist</description>
     <properties>
-        <java.version>11</java.version>
+        <java.version>8</java.version>
     </properties>
     <dependencies>
         <dependency>
