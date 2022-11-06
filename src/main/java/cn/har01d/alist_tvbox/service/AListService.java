@@ -22,7 +22,7 @@ public class AListService {
 
     public List<FsInfo> listFiles(String path) {
         String url = appProperties.getUrl() + "/api/fs/list";
-        FsListRequest request = new FsListRequest();
+        FsRequest request = new FsRequest();
         request.setPath(path);
         FsListResponse response = restTemplate.postForObject(url, request, FsListResponse.class);
         log.debug("list files: {} {}", path, response.getData());
@@ -31,7 +31,7 @@ public class AListService {
 
     public FsDetail getFile(String path) {
         String url = appProperties.getUrl() + "/api/fs/get";
-        FsListRequest request = new FsListRequest();
+        FsRequest request = new FsRequest();
         request.setPath(path);
         FsDetailResponse response = restTemplate.postForObject(url, request, FsDetailResponse.class);
         log.debug("get file: {} {}", path, response.getData());

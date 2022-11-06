@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data
-public class FsListRequest {
+public class FsRequest {
     private int page = 1;
     private String path;
     private String password = "";
