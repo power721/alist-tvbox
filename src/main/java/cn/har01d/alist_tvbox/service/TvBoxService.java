@@ -26,7 +26,10 @@ public class TvBoxService {
     public TvBoxService(AListService aListService, AppProperties appProperties) {
         this.aListService = aListService;
         this.appProperties = appProperties;
-        this.cache = Caffeine.newBuilder().maximumSize(appProperties.getCacheSize()).build(this::getPlaylist);
+        this.cache = Caffeine.newBuilder()
+                .maximumSize(appProperties.getCache().getSize())
+                .expireAfterWrite(appProperties.getCache().getExpire())
+                .build(this::getPlaylist);
     }
 
     public CategoryList getCategoryList() {
@@ -58,12 +61,12 @@ public class TvBoxService {
             }
         }
 
-        if (count > 0) {
+        if (count > 1) {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(path + "/playlist");
             movieDetail.setVod_name("播放列表");
             movieDetail.setVod_tag("file");
-            movieDetail.setVod_remarks(count + "集");
+            movieDetail.setVod_remarks("共" + count + "集");
             result.getList().add(0, movieDetail);
         }
 
@@ -126,6 +129,7 @@ public class TvBoxService {
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
+        log.info("total: {}", result.getTotal());
         log.debug("detail: {}", result);
         return result;
     }
