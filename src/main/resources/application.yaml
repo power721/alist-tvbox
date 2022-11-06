@@ -1,0 +1,10 @@
+app:
+  url: http://192.168.50.10:5678
+  formats:
+    - mp4
+    - flv
+    - avi
+    - mkv
+    - rm
+    - wmv
+    - mpg
