@@ -18,6 +18,7 @@ import java.util.List;
 public class TvBoxService {
     public static final String FOLDER_PIC = "http://img1.3png.com/281e284a670865a71d91515866552b5f172b.png";
     public static final String LIST_PIC = "http://img1.3png.com/3063ad894f04619af7270df68a124f129c8f.png";
+    public static final String PLAYLIST = "/#playlist";
     private final AListService aListService;
     private final AppProperties appProperties;
     private final LoadingCache<SitePath, MovieList> cache;
@@ -67,7 +68,7 @@ public class TvBoxService {
 
         if (count > 1) {
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(path + "/playlist");
+            movieDetail.setVod_id(path + PLAYLIST);
             movieDetail.setVod_name("播放列表");
             movieDetail.setVod_tag("file");
             movieDetail.setVod_pic(LIST_PIC);
@@ -82,7 +83,7 @@ public class TvBoxService {
     }
 
     public MovieList getDetail(String site, String path) {
-        if (path.endsWith("/playlist")) {
+        if (path.endsWith(PLAYLIST)) {
             return cache.get(new SitePath(site, path));
         }
         FsDetail fsDetail = aListService.getFile(site, path);
@@ -110,7 +111,7 @@ public class TvBoxService {
         String site = sitePath.getSite();
         String path = sitePath.getPath();
         log.info("load playlist: {}", path);
-        String newPath = path.substring(0, path.length() - "/playlist".length());
+        String newPath = path.substring(0, path.length() - PLAYLIST.length());
         FsDetail fsDetail = aListService.getFile(site, newPath);
         MovieList result = new MovieList();
 

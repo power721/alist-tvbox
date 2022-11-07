@@ -21,7 +21,7 @@ public class TvBoxController {
     @GetMapping
     public Object api(String site, String t, String ids, HttpServletRequest request) {
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), request.getQueryString());
-        log.info("site: {} path: {}  type: {}", site, ids, t);
+        log.info("site: {}  path: {}  folder: {}", site, ids, t);
         if (ids != null && !ids.isEmpty()) {
             return tvBoxService.getDetail(site, ids);
         } else if (t != null && !t.isEmpty()) {
