@@ -3,10 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.model.FsDetail;
 import cn.har01d.alist_tvbox.model.FsInfo;
-import cn.har01d.alist_tvbox.tvbox.Category;
-import cn.har01d.alist_tvbox.tvbox.CategoryList;
-import cn.har01d.alist_tvbox.tvbox.MovieDetail;
-import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.tvbox.*;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +20,7 @@ public class TvBoxService {
     public static final String LIST_PIC = "http://img1.3png.com/3063ad894f04619af7270df68a124f129c8f.png";
     private final AListService aListService;
     private final AppProperties appProperties;
-    private final LoadingCache<String, MovieList> cache;
+    private final LoadingCache<SitePath, MovieList> cache;
 
     public TvBoxService(AListService aListService, AppProperties appProperties) {
         this.aListService = aListService;
@@ -34,9 +31,9 @@ public class TvBoxService {
                 .build(this::getPlaylist);
     }
 
-    public CategoryList getCategoryList() {
+    public CategoryList getCategoryList(String site) {
         CategoryList result = new CategoryList();
-        for (FsInfo fsInfo : aListService.listFiles("/")) {
+        for (FsInfo fsInfo : aListService.listFiles(site, "/")) {
             Category category = new Category();
             category.setType_id("/" + fsInfo.getName());
             category.setType_name(fsInfo.getName());
@@ -48,12 +45,12 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList getMovieList(String path) {
+    public MovieList getMovieList(String site, String path) {
         MovieList result = new MovieList();
         int count = 0;
-        for (FsInfo fsDetail : aListService.listFiles(path)) {
+        for (FsInfo fsDetail : aListService.listFiles(site, path)) {
             String pic = fsDetail.getThumb();
-            if(pic.isEmpty() && fsDetail.getType()==1) {
+            if (pic.isEmpty() && fsDetail.getType() == 1) {
                 pic = FOLDER_PIC;
             }
             MovieDetail movieDetail = new MovieDetail();
@@ -84,13 +81,13 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList getDetail(String path) {
+    public MovieList getDetail(String site, String path) {
         if (path.endsWith("/playlist")) {
-            return cache.get(path);
+            return cache.get(new SitePath(site, path));
         }
-        FsDetail fsDetail = aListService.getFile(path);
+        FsDetail fsDetail = aListService.getFile(site, path);
         String pic = fsDetail.getThumb();
-        if(pic.isEmpty() && fsDetail.getType()==1) {
+        if (pic.isEmpty() && fsDetail.getType() == 1) {
             pic = FOLDER_PIC;
         }
         MovieList result = new MovieList();
@@ -109,10 +106,12 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList getPlaylist(String path) {
+    public MovieList getPlaylist(SitePath sitePath) {
+        String site = sitePath.getSite();
+        String path = sitePath.getPath();
         log.info("load playlist: {}", path);
         String newPath = path.substring(0, path.length() - "/playlist".length());
-        FsDetail fsDetail = aListService.getFile(newPath);
+        FsDetail fsDetail = aListService.getFile(site, newPath);
         MovieList result = new MovieList();
 
         MovieDetail movieDetail = new MovieDetail();
@@ -123,9 +122,9 @@ public class TvBoxService {
         movieDetail.setVod_pic(LIST_PIC);
 
         List<String> list = new ArrayList<>();
-        for (FsInfo fsInfo : aListService.listFiles(newPath)) {
+        for (FsInfo fsInfo : aListService.listFiles(site, newPath)) {
             if (isMediaFormat(fsInfo.getName())) {
-                FsDetail detail = aListService.getFile(newPath + "/" + fsInfo.getName());
+                FsDetail detail = aListService.getFile(site, newPath + "/" + fsInfo.getName());
                 list.add(getName(detail.getName()) + "$" + detail.getRaw_url());
                 if (movieDetail.getVod_pic() == null) {
                     movieDetail.setVod_pic(detail.getThumb());
