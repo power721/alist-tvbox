@@ -9,7 +9,7 @@ import java.util.Set;
 @Data
 @ConfigurationProperties("app")
 public class AppProperties {
-    private String url = "http://localhost:5422";
+    private String url = "http://localhost:5244";
     private CacheConfig cache = new CacheConfig();
     private boolean playlistSort;
     private Set<String> formats;
