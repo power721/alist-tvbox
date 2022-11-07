@@ -1,4 +1,5 @@
 app:
+  sort: false
   cache:
     size: 50
     expire: PT2H

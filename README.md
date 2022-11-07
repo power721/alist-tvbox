@@ -1,5 +1,5 @@
 # alist-tvbox
-AList 3.0 proxy server for TvBox, support playlist.
+AList proxy server for TvBox, support playlist.
 
 # Deploy
 ```bash

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 @Slf4j
@@ -64,6 +65,10 @@ public class TvBoxService {
             if (isMediaFormat(fsDetail.getName())) {
                 count++;
             }
+        }
+
+        if (appProperties.isSort()) {
+            result.getList().sort(Comparator.comparing(MovieDetail::getVod_name));
         }
 
         if (count > 1) {
@@ -135,7 +140,7 @@ public class TvBoxService {
                 }
             }
         }
-        if (appProperties.isPlaylistSort()) {
+        if (appProperties.isSort()) {
             Collections.sort(list);
         }
         movieDetail.setVod_play_url(String.join("#", list));

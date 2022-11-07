@@ -11,4 +11,5 @@ public class FsResponse {
     private int total;
     private boolean write;
     private List<FsInfo> content;
+    private List<FsInfo> files;
 }
