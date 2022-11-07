@@ -95,7 +95,7 @@ public class TvBoxService {
         }
         MovieList result = new MovieList();
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(path + "/" + fsDetail.getName());
+        movieDetail.setVod_id(path);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_tag(fsDetail.getType() == 1 ? "folder" : "file");
         movieDetail.setVod_time(fsDetail.getModified());

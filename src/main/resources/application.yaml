@@ -2,7 +2,7 @@ app:
   url: http://192.168.50.10:5678
   cache:
     size: 50
-    expire: PT24H
+    expire: PT2H
   formats:
     - mp4
     - flv
