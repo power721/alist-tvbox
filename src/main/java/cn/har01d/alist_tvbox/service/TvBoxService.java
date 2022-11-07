@@ -63,7 +63,7 @@ public class TvBoxService {
             movieDetail.setVod_pic(pic);
             movieDetail.setVod_remarks(fileSize(fsDetail.getSize()) + (fsDetail.getType() == 1 ? "文件夹" : ""));
             result.getList().add(movieDetail);
-            if (isVideoFormat(fsDetail.getName())) {
+            if (isMediaFormat(fsDetail.getName())) {
                 count++;
             }
         }
@@ -124,7 +124,7 @@ public class TvBoxService {
 
         List<String> list = new ArrayList<>();
         for (FsInfo fsInfo : aListService.listFiles(newPath)) {
-            if (isVideoFormat(fsInfo.getName())) {
+            if (isMediaFormat(fsInfo.getName())) {
                 FsDetail detail = aListService.getFile(newPath + "/" + fsInfo.getName());
                 list.add(getName(detail.getName()) + "$" + detail.getRaw_url());
                 if (movieDetail.getVod_pic() == null) {
@@ -170,7 +170,7 @@ public class TvBoxService {
         return remark;
     }
 
-    private boolean isVideoFormat(String name) {
+    private boolean isMediaFormat(String name) {
         int index = name.lastIndexOf('.');
         if (index > 0) {
             String suffix = name.substring(index + 1);

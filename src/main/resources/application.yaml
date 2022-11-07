@@ -9,5 +9,15 @@ app:
     - avi
     - mkv
     - rm
+    - rmvb
     - wmv
     - mpg
+    - mpeg
+    - mov
+    - ts
+    - mp3
+    - m4a
+    - ape
+    - flac
+    - wma
+    - wav
