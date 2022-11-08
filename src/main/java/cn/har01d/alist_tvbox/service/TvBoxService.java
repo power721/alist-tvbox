@@ -22,7 +22,7 @@ public class TvBoxService {
     public static final String PLAYLIST = "/#playlist";
     private final AListService aListService;
     private final AppProperties appProperties;
-    private final LoadingCache<SitePath, MovieList> cache;
+    private final LoadingCache<String, MovieList> cache;
 
     public TvBoxService(AListService aListService, AppProperties appProperties) {
         this.aListService = aListService;
@@ -33,12 +33,12 @@ public class TvBoxService {
                 .build(this::getPlaylist);
     }
 
-    public CategoryList getCategoryList(String site) {
+    public CategoryList getCategoryList() {
         CategoryList result = new CategoryList();
-        for (FsInfo fsInfo : aListService.listFiles(site, "/")) {
+        for (Site site : appProperties.getSites()) {
             Category category = new Category();
-            category.setType_id("/" + fsInfo.getName());
-            category.setType_name(fsInfo.getName());
+            category.setType_id(site.getName() + "$/");
+            category.setType_name(site.getName());
             result.getList().add(category);
         }
         result.setTotal(result.getList().size());
@@ -47,7 +47,10 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList getMovieList(String site, String path) {
+    public MovieList getMovieList(String tid) {
+        int index = tid.indexOf('$');
+        String site = tid.substring(0, index);
+        String path = tid.substring(index + 1);
         MovieList result = new MovieList();
         int count = 0;
         for (FsInfo fsDetail : aListService.listFiles(site, path)) {
@@ -56,7 +59,7 @@ public class TvBoxService {
                 pic = FOLDER_PIC;
             }
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(path + "/" + fsDetail.getName());
+            movieDetail.setVod_id(site + "$" + fixPath(path + "/" + fsDetail.getName()));
             movieDetail.setVod_name(fsDetail.getName());
             movieDetail.setVod_tag(fsDetail.getType() == 1 ? "folder" : "file");
             movieDetail.setVod_pic(pic);
@@ -73,7 +76,7 @@ public class TvBoxService {
 
         if (count > 1) {
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(path + PLAYLIST);
+            movieDetail.setVod_id(site + "$" + fixPath(path + PLAYLIST));
             movieDetail.setVod_name("播放列表");
             movieDetail.setVod_tag("file");
             movieDetail.setVod_pic(LIST_PIC);
@@ -87,9 +90,12 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList getDetail(String site, String path) {
+    public MovieList getDetail(String tid) {
+        int index = tid.indexOf('$');
+        String site = tid.substring(0, index);
+        String path = tid.substring(index + 1);
         if (path.endsWith(PLAYLIST)) {
-            return cache.get(new SitePath(site, path));
+            return cache.get(tid);
         }
         FsDetail fsDetail = aListService.getFile(site, path);
         String pic = fsDetail.getThumb();
@@ -98,7 +104,7 @@ public class TvBoxService {
         }
         MovieList result = new MovieList();
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(path);
+        movieDetail.setVod_id(site + "$" + path);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_tag(fsDetail.getType() == 1 ? "folder" : "file");
         movieDetail.setVod_time(fsDetail.getModified());
@@ -112,16 +118,17 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList getPlaylist(SitePath sitePath) {
-        String site = sitePath.getSite();
-        String path = sitePath.getPath();
+    public MovieList getPlaylist(String tid) {
+        int index = tid.indexOf('$');
+        String site = tid.substring(0, index);
+        String path = tid.substring(index + 1);
         log.info("load playlist: {}", path);
         String newPath = path.substring(0, path.length() - PLAYLIST.length());
         FsDetail fsDetail = aListService.getFile(site, newPath);
         MovieList result = new MovieList();
 
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(path);
+        movieDetail.setVod_id(site + "$" + path);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_tag("file");
@@ -191,4 +198,9 @@ public class TvBoxService {
         }
         return name;
     }
+
+    private String fixPath(String path) {
+        return path.replaceAll("/+", "/");
+    }
+
 }

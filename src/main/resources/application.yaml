@@ -21,3 +21,6 @@ app:
     - flac
     - wma
     - wav
+  sites:
+    - name: 本地
+      url: http://192.168.50.10:5244

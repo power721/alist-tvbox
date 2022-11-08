@@ -2,14 +2,14 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.model.*;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -17,21 +17,26 @@ import java.util.regex.Pattern;
 @Service
 public class AListService {
 
-    private static final Pattern VERSION = Pattern.compile("\"version\":\"v\\d+.\\d+.\\d+\"");
+    private static final Pattern VERSION = Pattern.compile("\"version\":\"v\\d+\\.\\d+\\.\\d+\"");
 
     private final RestTemplate restTemplate;
-    private final Cache<String, Integer> cache;
+    private final Map<String, Integer> cache = new HashMap<>();
+    private final Map<String, String> sites = new HashMap<>();
 
     public AListService(RestTemplateBuilder builder, AppProperties appProperties) {
-        this.restTemplate = builder.build();
-        this.cache = Caffeine.newBuilder().maximumSize(appProperties.getCache().getSize()).build();
+        this.restTemplate = builder
+                .defaultHeader("Accept", "application/json, text/plain, */*")
+                .defaultHeader("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36")
+                .build();
+        appProperties.getSites().forEach(site -> sites.put(site.getName(), site.getUrl()));
     }
 
     public List<FsInfo> listFiles(String site, String path) {
         int version = getVersion(site);
-        String url = site + (version == 2 ? "/api/public/path" : "/api/fs/list");
+        String url = getSiteUrl(site) + (version == 2 ? "/api/public/path" : "/api/fs/list");
         FsRequest request = new FsRequest();
         request.setPath(path);
+        log.debug("call api: {}", url);
         FsListResponse response = restTemplate.postForObject(url, request, FsListResponse.class);
         log.debug("list files: {} {}", path, response.getData());
         return version == 2 ? getFiles(response.getData()) : response.getData().getContent();
@@ -54,18 +59,20 @@ public class AListService {
     }
 
     private FsDetail getFileV3(String site, String path) {
-        String url = site + "/api/fs/get";
+        String url = getSiteUrl(site) + "/api/fs/get";
         FsRequest request = new FsRequest();
         request.setPath(path);
+        log.debug("call api: {}", url);
         FsDetailResponse response = restTemplate.postForObject(url, request, FsDetailResponse.class);
         log.debug("get file: {} {}", path, response.getData());
         return response.getData();
     }
 
     private FsDetail getFileV2(String site, String path) {
-        String url = site + "/api/public/path";
+        String url = getSiteUrl(site) + "/api/public/path";
         FsRequest request = new FsRequest();
         request.setPath(path);
+        log.debug("call api: {}", url);
         FsListResponseV2 response = restTemplate.postForObject(url, request, FsListResponseV2.class);
         FsInfoV2 fsInfo = Optional.ofNullable(response)
                 .map(Response::getData)
@@ -88,12 +95,15 @@ public class AListService {
     }
 
     private Integer getVersion(String site) {
-        Integer version = cache.getIfPresent(site);
-        if (version != null) {
-            return version;
+        if (cache.containsKey(site)) {
+            return cache.get(site);
         }
 
-        String text = restTemplate.getForObject(site + "/api/public/settings", String.class);
+        String url = getSiteUrl(site) + "/api/public/settings";
+        log.debug("call api: {}", url);
+        String text = restTemplate.getForObject(url, String.class);
+        log.debug("response: {}", text);
+        int version;
         if (text != null && VERSION.matcher(text).find()) {
             version = 3;
         } else {
@@ -103,5 +113,9 @@ public class AListService {
         cache.put(site, version);
 
         return version;
+    }
+
+    private String getSiteUrl(String site) {
+        return sites.get(site);
     }
 }

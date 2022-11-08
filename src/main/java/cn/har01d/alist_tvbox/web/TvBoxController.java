@@ -19,15 +19,15 @@ public class TvBoxController {
     }
 
     @GetMapping
-    public Object api(String site, String t, String ids, HttpServletRequest request) {
+    public Object api(String t, String ids, HttpServletRequest request) {
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), request.getQueryString());
-        log.info("site: {}  path: {}  folder: {}", site, ids, t);
+        log.info("path: {}  folder: {}", ids, t);
         if (ids != null && !ids.isEmpty()) {
-            return tvBoxService.getDetail(site, ids);
+            return tvBoxService.getDetail(ids);
         } else if (t != null && !t.isEmpty()) {
-            return tvBoxService.getMovieList(site, t);
+            return tvBoxService.getMovieList(t);
         } else {
-            return tvBoxService.getCategoryList(site);
+            return tvBoxService.getCategoryList();
         }
     }
 }
