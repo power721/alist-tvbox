@@ -18,6 +18,8 @@ import java.util.regex.Pattern;
 public class AListService {
 
     private static final Pattern VERSION = Pattern.compile("\"version\":\"v\\d+\\.\\d+\\.\\d+\"");
+    private static final String ACCEPT = "application/json, text/plain, */*";
+    private static final String USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36";
 
     private final RestTemplate restTemplate;
     private final Map<String, Integer> cache = new HashMap<>();
@@ -25,8 +27,8 @@ public class AListService {
 
     public AListService(RestTemplateBuilder builder, AppProperties appProperties) {
         this.restTemplate = builder
-                .defaultHeader("Accept", "application/json, text/plain, */*")
-                .defaultHeader("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36")
+                .defaultHeader("Accept", ACCEPT)
+                .defaultHeader("User-Agent", USER_AGENT)
                 .build();
         appProperties.getSites().forEach(site -> sites.put(site.getName(), site.getUrl()));
     }
@@ -102,7 +104,6 @@ public class AListService {
         String url = getSiteUrl(site) + "/api/public/settings";
         log.debug("call api: {}", url);
         String text = restTemplate.getForObject(url, String.class);
-        log.debug("response: {}", text);
         int version;
         if (text != null && VERSION.matcher(text).find()) {
             version = 3;

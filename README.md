@@ -4,7 +4,12 @@ AList proxy server for TvBox, support playlist.
 # Configure
 Set `app.sites` in the file src/main/resources/application.yaml
 
-# Deploy
+# Build
+```bash
+mvn clean package
+```
+
+# Run
 ```bash
 java -jar target/alist-tvbox-1.0.jar
 ```
