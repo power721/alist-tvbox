@@ -53,19 +53,19 @@ public class TvBoxService {
         String path = tid.substring(index + 1);
         MovieList result = new MovieList();
         int count = 0;
-        for (FsInfo fsDetail : aListService.listFiles(site, path)) {
-            String pic = fsDetail.getThumb();
-            if (pic.isEmpty() && fsDetail.getType() == 1) {
-                pic = FOLDER_PIC;
+        for (FsInfo fsInfo : aListService.listFiles(site, path)) {
+            if (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName())) {
+                continue;
             }
+
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site + "$" + fixPath(path + "/" + fsDetail.getName()));
-            movieDetail.setVod_name(fsDetail.getName());
-            movieDetail.setVod_tag(fsDetail.getType() == 1 ? "folder" : "file");
-            movieDetail.setVod_pic(pic);
-            movieDetail.setVod_remarks(fileSize(fsDetail.getSize()) + (fsDetail.getType() == 1 ? "文件夹" : ""));
+            movieDetail.setVod_id(site + "$" + fixPath(path + "/" + fsInfo.getName()));
+            movieDetail.setVod_name(fsInfo.getName());
+            movieDetail.setVod_tag(fsInfo.getType() == 1 ? "folder" : "file");
+            movieDetail.setVod_pic(getCover(fsInfo.getThumb(), fsInfo.getType()));
+            movieDetail.setVod_remarks(fileSize(fsInfo.getSize()) + (fsInfo.getType() == 1 ? "文件夹" : ""));
             result.getList().add(movieDetail);
-            if (isMediaFormat(fsDetail.getName())) {
+            if (isMediaFormat(fsInfo.getName())) {
                 count++;
             }
         }
@@ -86,7 +86,7 @@ public class TvBoxService {
 
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
-        log.debug("detail: {}", result);
+        log.debug("list: {}", result);
         return result;
     }
 
@@ -97,18 +97,15 @@ public class TvBoxService {
         if (path.endsWith(PLAYLIST)) {
             return cache.get(tid);
         }
+
         FsDetail fsDetail = aListService.getFile(site, path);
-        String pic = fsDetail.getThumb();
-        if (pic.isEmpty() && fsDetail.getType() == 1) {
-            pic = FOLDER_PIC;
-        }
         MovieList result = new MovieList();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(site + "$" + path);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_tag(fsDetail.getType() == 1 ? "folder" : "file");
         movieDetail.setVod_time(fsDetail.getModified());
-        movieDetail.setVod_pic(pic);
+        movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
         movieDetail.setVod_play_from(fsDetail.getProvider());
         movieDetail.setVod_play_url(fsDetail.getName() + "$" + fsDetail.getRaw_url());
         result.getList().add(movieDetail);
@@ -136,15 +133,17 @@ public class TvBoxService {
 
         List<String> list = new ArrayList<>();
         for (FsInfo fsInfo : aListService.listFiles(site, newPath)) {
-            if (isMediaFormat(fsInfo.getName())) {
-                FsDetail detail = aListService.getFile(site, newPath + "/" + fsInfo.getName());
-                list.add(getName(detail.getName()) + "$" + detail.getRaw_url());
-                if (movieDetail.getVod_pic() == null) {
-                    movieDetail.setVod_pic(detail.getThumb());
-                }
-                if (movieDetail.getVod_play_from() == null) {
-                    movieDetail.setVod_play_from(detail.getProvider());
-                }
+            if (!isMediaFormat(fsInfo.getName())) {
+                continue;
+            }
+
+            FsDetail detail = aListService.getFile(site, newPath + "/" + fsInfo.getName());
+            list.add(getName(detail.getName()) + "$" + detail.getRaw_url());
+            if (movieDetail.getVod_pic() == null) {
+                movieDetail.setVod_pic(detail.getThumb());
+            }
+            if (movieDetail.getVod_play_from() == null) {
+                movieDetail.setVod_play_from(detail.getProvider());
             }
         }
         if (appProperties.isSort()) {
@@ -157,6 +156,14 @@ public class TvBoxService {
         result.setLimit(result.getList().size());
         log.debug("detail: {}", result);
         return result;
+    }
+
+    private static String getCover(String thumb, int type) {
+        String pic = thumb;
+        if (pic.isEmpty() && type == 1) {
+            pic = FOLDER_PIC;
+        }
+        return pic;
     }
 
     private String fileSize(long size) {
