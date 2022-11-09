@@ -43,7 +43,7 @@ public class TvBoxService {
         }
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
-        log.debug("list: {}", result);
+        log.debug("category: {}", result);
         return result;
     }
 
@@ -161,7 +161,7 @@ public class TvBoxService {
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
-        log.debug("detail: {}", result);
+        log.debug("playlist: {}", result);
         return result;
     }
 

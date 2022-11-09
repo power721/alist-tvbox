@@ -53,10 +53,10 @@ public class AListService {
 
     public FsDetail getFile(String site, String path) {
         int version = getVersion(site);
-        if (version == 3) {
-            return getFileV3(site, path);
-        } else {
+        if (version == 2) {
             return getFileV2(site, path);
+        } else {
+            return getFileV3(site, path);
         }
     }
 
