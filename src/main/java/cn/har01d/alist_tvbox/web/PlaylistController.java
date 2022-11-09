@@ -1,9 +1,8 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.service.PlaylistService;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import cn.har01d.alist_tvbox.tvbox.GenerateRequest;
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
@@ -18,7 +17,7 @@ public class PlaylistController {
     }
 
     @GetMapping
-    public byte[] generate(String site, String path, HttpServletResponse response) {
+    public byte[] generate(String site, String path, boolean includeSub, HttpServletResponse response) {
         if (site == null || site.isEmpty()) {
             throw new IllegalArgumentException("The parameter site is required.");
         }
@@ -28,6 +27,11 @@ public class PlaylistController {
 
         response.setContentType("text/plain");
         response.setHeader("Content-Disposition", "attachment; filename=\"playlist.txt\"");
-        return playlistService.generate(site, path).getBytes(StandardCharsets.UTF_8);
+        return playlistService.generate(site, path, includeSub).getBytes(StandardCharsets.UTF_8);
+    }
+
+    @PostMapping
+    public byte[] generate(@RequestBody GenerateRequest request, HttpServletResponse response) {
+        return generate(request.getSite(), request.getPath(), request.isIncludeSub(), response);
     }
 }

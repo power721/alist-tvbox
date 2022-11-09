@@ -17,7 +17,7 @@ public class PlaylistService {
         this.appProperties = appProperties;
     }
 
-    public String generate(String site, String path) {
+    public String generate(String site, String path, boolean includeSub) {
         String header = "#name \n" +
                 "#type \n" +
                 "#actor \n" +
@@ -26,19 +26,19 @@ public class PlaylistService {
                 "#lang \n" +
                 "#area \n" +
                 "#year \n\n";
-        return header + generate(site, path, "播放列表", "");
+        return header + generate(site, path, "播放列表", "", includeSub);
     }
 
-    private String generate(String site, String path, String name, String parent) {
+    private String generate(String site, String path, String name, String parent, boolean includeSub) {
         StringBuilder sb = new StringBuilder();
-        sb.append(name).append(",#genre#\n");
 
         List<String> files = new ArrayList<>();
         List<String> folders = new ArrayList<>();
+        List<String> lines = new ArrayList<>();
         for (FsInfo fsInfo : aListService.listFiles(site, path)) {
             if (fsInfo.getType() != 1) {
                 files.add(fsInfo.getName());
-            } else {
+            } else if (includeSub) {
                 folders.add(fsInfo.getName());
             }
         }
@@ -47,18 +47,19 @@ public class PlaylistService {
             if (!isMediaFormat(file)) {
                 continue;
             }
-            sb.append(getName(file))
-                    .append(",")
-                    .append(parent)
-                    .append(parent.isEmpty() ? "" : "/")
-                    .append(file)
-                    .append("\n");
+            lines.add(getName(file) + "," + parent + (parent.isEmpty() ? "" : "/") + file + "\n");
         }
-        sb.append("\n");
+
+        if (lines.size() > 1) {
+            sb.append(name).append(",#genre#\n");
+            lines.forEach(sb::append);
+            sb.append("\n");
+        }
 
         for (String file : folders) {
-            sb.append(generate(site, path + "/" + file, file, file));
+            sb.append(generate(site, path + "/" + file, file, parent + (parent.isEmpty() ? "" : "/") + file, true));
         }
+
         return sb.toString();
     }
 

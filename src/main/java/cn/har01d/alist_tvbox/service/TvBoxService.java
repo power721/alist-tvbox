@@ -276,7 +276,7 @@ public class TvBoxService {
                     if (count > id) {
                         break;
                     }
-                    pname = text.split(",#genre#")[0];
+                    pname = text.split(",")[0];
                     files = new ArrayList<>();
                 } else {
                     files.add(text);
