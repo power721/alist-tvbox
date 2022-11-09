@@ -14,6 +14,14 @@ mvn clean package
 java -jar target/alist-tvbox-1.0.jar
 ```
 
+# Deploy
+```bash
+scp target/alist-tvbox-1.0.jar user@your-server:~/atv.jar
+scp config/install-service.sh user@your-server:~
+# login to your server
+./install-service.sh
+```
+
 # Docker
 ```bash
 ./build.sh
