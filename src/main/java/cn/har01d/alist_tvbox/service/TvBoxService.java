@@ -10,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
@@ -78,17 +77,12 @@ public class TvBoxService {
             files.sort(Comparator.comparing(MovieDetail::getVod_name));
         }
 
+        result.getList().addAll(folders);
+
         if (files.size() > 1) {
-            MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site + "$" + fixPath(path + PLAYLIST));
-            movieDetail.setVod_name("播放列表");
-            movieDetail.setVod_tag("file");
-            movieDetail.setVod_pic(LIST_PIC);
-            movieDetail.setVod_remarks("共" + files.size() + "集");
-            result.getList().add(movieDetail);
+            result.getList().addAll(generatePlaylist(site + "$" + fixPath(path + PLAYLIST + "-"), files));
         }
 
-        result.getList().addAll(folders);
         result.getList().addAll(files);
 
         result.setTotal(result.getList().size());
@@ -97,11 +91,38 @@ public class TvBoxService {
         return result;
     }
 
+    private List<MovieDetail> generatePlaylist(String path, List<MovieDetail> files) {
+        int size = appProperties.getPlaylistSize();
+        List<MovieDetail> list = new ArrayList<>();
+        int id = 0;
+        for (; id < files.size() / size; ++id) {
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(path + id);
+            movieDetail.setVod_name("播放列表" + (id + 1));
+            movieDetail.setVod_tag("file");
+            movieDetail.setVod_pic(LIST_PIC);
+            movieDetail.setVod_remarks("共" + size + "集");
+            list.add(movieDetail);
+        }
+
+        if (files.size() % size > 0) {
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(path + id);
+            movieDetail.setVod_name("播放列表" + (id > 0 ? id + 1 : ""));
+            movieDetail.setVod_tag("file");
+            movieDetail.setVod_pic(LIST_PIC);
+            movieDetail.setVod_remarks("共" + (files.size() % size) + "集");
+            list.add(movieDetail);
+        }
+
+        return list;
+    }
+
     public MovieList getDetail(String tid) {
         int index = tid.indexOf('$');
         String site = tid.substring(0, index);
         String path = tid.substring(index + 1);
-        if (path.endsWith(PLAYLIST)) {
+        if (path.contains(PLAYLIST)) {
             return cache.get(tid);
         }
 
@@ -127,7 +148,7 @@ public class TvBoxService {
         String site = tid.substring(0, index);
         String path = tid.substring(index + 1);
         log.info("load playlist: {}", path);
-        String newPath = path.substring(0, path.length() - PLAYLIST.length());
+        String newPath = getParent(path);
         FsDetail fsDetail = aListService.getFile(site, newPath);
         MovieList result = new MovieList();
 
@@ -139,11 +160,19 @@ public class TvBoxService {
         movieDetail.setVod_pic(LIST_PIC);
 
         List<String> list = new ArrayList<>();
+        List<FsInfo> files = new ArrayList<>();
         for (FsInfo fsInfo : aListService.listFiles(site, newPath)) {
-            if (!isMediaFormat(fsInfo.getName())) {
-                continue;
+            if (isMediaFormat(fsInfo.getName())) {
+                files.add(fsInfo);
             }
+        }
 
+        if (appProperties.isSort()) {
+            files.sort(Comparator.comparing(FsInfo::getName));
+        }
+
+        int id = getPlaylistId(path);
+        for (FsInfo fsInfo : getMovies(id, files)) {
             FsDetail detail = aListService.getFile(site, newPath + "/" + fsInfo.getName());
             list.add(getName(detail.getName()) + "$" + detail.getRaw_url());
             if (movieDetail.getVod_pic() == null) {
@@ -153,9 +182,7 @@ public class TvBoxService {
                 movieDetail.setVod_play_from(detail.getProvider());
             }
         }
-        if (appProperties.isSort()) {
-            Collections.sort(list);
-        }
+
         movieDetail.setVod_play_url(String.join("#", list));
 
         result.getList().add(movieDetail);
@@ -163,6 +190,43 @@ public class TvBoxService {
         result.setLimit(result.getList().size());
         log.debug("playlist: {}", result);
         return result;
+    }
+
+    private String getParent(String path) {
+        int index = path.lastIndexOf('/');
+        if (index > 0) {
+            return path.substring(0, index);
+        }
+        return path;
+    }
+
+    private List<FsInfo> getMovies(int id, List<FsInfo> files) {
+        if (id < 0) {
+            return files;
+        }
+
+        int start = id * appProperties.getPlaylistSize();
+        int end = start + appProperties.getPlaylistSize();
+        if (end > files.size()) {
+            end = files.size();
+        }
+
+        return files.subList(start, end);
+    }
+
+    private int getPlaylistId(String path) {
+        try {
+            int index = path.lastIndexOf('/');
+            if (index > 0) {
+                String[] parts = path.substring(index + 1).split("-", 2);
+                if (parts.length == 2) {
+                    return Integer.parseInt(parts[1]);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return -1;
     }
 
     private static String getCover(String thumb, int type) {
