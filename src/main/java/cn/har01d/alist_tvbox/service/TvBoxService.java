@@ -51,8 +51,10 @@ public class TvBoxService {
         int index = tid.indexOf('$');
         String site = tid.substring(0, index);
         String path = tid.substring(index + 1);
+        List<MovieDetail> folders = new ArrayList<>();
+        List<MovieDetail> files = new ArrayList<>();
         MovieList result = new MovieList();
-        int count = 0;
+
         for (FsInfo fsInfo : aListService.listFiles(site, path)) {
             if (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName())) {
                 continue;
@@ -64,25 +66,30 @@ public class TvBoxService {
             movieDetail.setVod_tag(fsInfo.getType() == 1 ? "folder" : "file");
             movieDetail.setVod_pic(getCover(fsInfo.getThumb(), fsInfo.getType()));
             movieDetail.setVod_remarks(fileSize(fsInfo.getSize()) + (fsInfo.getType() == 1 ? "文件夹" : ""));
-            result.getList().add(movieDetail);
-            if (isMediaFormat(fsInfo.getName())) {
-                count++;
+            if (fsInfo.getType() == 1) {
+                folders.add(movieDetail);
+            } else {
+                files.add(movieDetail);
             }
         }
 
         if (appProperties.isSort()) {
-            result.getList().sort(Comparator.comparing(MovieDetail::getVod_name));
+            folders.sort(Comparator.comparing(MovieDetail::getVod_name));
+            files.sort(Comparator.comparing(MovieDetail::getVod_name));
         }
 
-        if (count > 1) {
+        if (files.size() > 1) {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site + "$" + fixPath(path + PLAYLIST));
             movieDetail.setVod_name("播放列表");
             movieDetail.setVod_tag("file");
             movieDetail.setVod_pic(LIST_PIC);
-            movieDetail.setVod_remarks("共" + count + "集");
-            result.getList().add(0, movieDetail);
+            movieDetail.setVod_remarks("共" + files.size() + "集");
+            result.getList().add(movieDetail);
         }
+
+        result.getList().addAll(folders);
+        result.getList().addAll(files);
 
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
