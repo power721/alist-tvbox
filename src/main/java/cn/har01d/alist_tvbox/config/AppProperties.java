@@ -20,6 +20,6 @@ public class AppProperties {
     @Data
     public static class CacheConfig {
         private int size = 50;
-        private Duration expire = Duration.ofHours(2);
+        private Duration expire = Duration.ofHours(6);
     }
 }

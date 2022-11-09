@@ -51,6 +51,11 @@ public class AListService {
         return response.getFiles();
     }
 
+    public String readFileContent(String site, String path) {
+        String url = getSiteUrl(site) + "/p" + path;
+        return restTemplate.getForObject(url, String.class);
+    }
+
     public FsDetail getFile(String site, String path) {
         int version = getVersion(site);
         if (version == 2) {

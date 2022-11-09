@@ -12,4 +12,11 @@ public class MovieDetail {
     private String vod_remarks;
     private String vod_play_from;
     private String vod_play_url;
+    private String type_name;
+    private String vod_actor;
+    private String vod_area;
+    private String vod_content;
+    private String vod_director;
+    private String vod_lang;
+    private String vod_year;
 }

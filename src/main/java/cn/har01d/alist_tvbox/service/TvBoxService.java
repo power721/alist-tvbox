@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -19,6 +20,8 @@ public class TvBoxService {
     public static final String FOLDER_PIC = "http://img1.3png.com/281e284a670865a71d91515866552b5f172b.png";
     public static final String LIST_PIC = "http://img1.3png.com/3063ad894f04619af7270df68a124f129c8f.png";
     public static final String PLAYLIST = "/#playlist";
+    public static final String FILE = "file";
+    public static final String FOLDER = "folder";
     private final AListService aListService;
     private final AppProperties appProperties;
     private final LoadingCache<String, MovieList> cache;
@@ -52,9 +55,14 @@ public class TvBoxService {
         String path = tid.substring(index + 1);
         List<MovieDetail> folders = new ArrayList<>();
         List<MovieDetail> files = new ArrayList<>();
+        List<MovieDetail> playlists = new ArrayList<>();
         MovieList result = new MovieList();
 
         for (FsInfo fsInfo : aListService.listFiles(site, path)) {
+            if (fsInfo.getType() != 1 && fsInfo.getName().equals("playlist.txt")) {
+                playlists = generatePlaylistFromFile(site, path + "/playlist.txt");
+                continue;
+            }
             if (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName())) {
                 continue;
             }
@@ -62,7 +70,7 @@ public class TvBoxService {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site + "$" + fixPath(path + "/" + fsInfo.getName()));
             movieDetail.setVod_name(fsInfo.getName());
-            movieDetail.setVod_tag(fsInfo.getType() == 1 ? "folder" : "file");
+            movieDetail.setVod_tag(fsInfo.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_pic(getCover(fsInfo.getThumb(), fsInfo.getType()));
             movieDetail.setVod_remarks(fileSize(fsInfo.getSize()) + (fsInfo.getType() == 1 ? "文件夹" : ""));
             if (fsInfo.getType() == 1) {
@@ -79,16 +87,62 @@ public class TvBoxService {
 
         result.getList().addAll(folders);
 
-        if (files.size() > 1) {
-            result.getList().addAll(generatePlaylist(site + "$" + fixPath(path + PLAYLIST + "-"), files));
+        if (files.size() > 1 && playlists.isEmpty()) {
+            result.getList().addAll(generatePlaylist(site + "$" + fixPath(path + PLAYLIST + "#"), files));
         }
 
+        result.getList().addAll(playlists);
         result.getList().addAll(files);
 
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         log.debug("list: {}", result);
         return result;
+    }
+
+    private List<MovieDetail> generatePlaylistFromFile(String site, String path) {
+        List<MovieDetail> list = new ArrayList<>();
+        String content = aListService.readFileContent(site, path);
+        if (content != null) {
+            int count = 0;
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(site + "$" + path + "#" + 0);
+            movieDetail.setVod_name("播放列表");
+            movieDetail.setVod_tag(FILE);
+            movieDetail.setVod_pic(LIST_PIC);
+
+            for (String line : content.split("[\r\n]")) {
+                String text = line.trim();
+                if (text.isEmpty() || text.startsWith("#")) {
+                    if (text.startsWith("#cover")) {
+                        movieDetail.setVod_pic(text.substring("#cover".length()).trim());
+                    }
+                    continue;
+                }
+                if (text.contains(",#genre#")) {
+                    if (count > 0) {
+                        movieDetail.setVod_remarks("共" + count + "集");
+                        list.add(movieDetail);
+                    }
+                    count = 0;
+                    String[] parts = text.split(",");
+                    movieDetail = new MovieDetail();
+                    movieDetail.setVod_id(site + "$" + path + "#" + list.size());
+                    movieDetail.setVod_name(parts[0]);
+                    movieDetail.setVod_tag(FILE);
+                    movieDetail.setVod_pic(parts.length == 3 ? parts[2].trim() : LIST_PIC);
+                } else {
+                    count++;
+                }
+            }
+
+            if (count > 0) {
+                movieDetail.setVod_remarks("共" + count + "集");
+                list.add(movieDetail);
+            }
+        }
+
+        return list;
     }
 
     private List<MovieDetail> generatePlaylist(String path, List<MovieDetail> files) {
@@ -99,7 +153,7 @@ public class TvBoxService {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(path + id);
             movieDetail.setVod_name("播放列表" + (id + 1));
-            movieDetail.setVod_tag("file");
+            movieDetail.setVod_tag(FILE);
             movieDetail.setVod_pic(LIST_PIC);
             movieDetail.setVod_remarks("共" + size + "集");
             list.add(movieDetail);
@@ -109,7 +163,7 @@ public class TvBoxService {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(path + id);
             movieDetail.setVod_name("播放列表" + (id > 0 ? id + 1 : ""));
-            movieDetail.setVod_tag("file");
+            movieDetail.setVod_tag(FILE);
             movieDetail.setVod_pic(LIST_PIC);
             movieDetail.setVod_remarks("共" + (files.size() % size) + "集");
             list.add(movieDetail);
@@ -122,7 +176,7 @@ public class TvBoxService {
         int index = tid.indexOf('$');
         String site = tid.substring(0, index);
         String path = tid.substring(index + 1);
-        if (path.contains(PLAYLIST)) {
+        if (path.contains(PLAYLIST) || path.contains("/playlist.txt")) {
             return cache.get(tid);
         }
 
@@ -131,7 +185,7 @@ public class TvBoxService {
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(site + "$" + path);
         movieDetail.setVod_name(fsDetail.getName());
-        movieDetail.setVod_tag(fsDetail.getType() == 1 ? "folder" : "file");
+        movieDetail.setVod_tag(fsDetail.getType() == 1 ? FOLDER : FILE);
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
         movieDetail.setVod_play_from(fsDetail.getProvider());
@@ -148,36 +202,32 @@ public class TvBoxService {
         String site = tid.substring(0, index);
         String path = tid.substring(index + 1);
         log.info("load playlist: {}", path);
+        if (!path.contains(PLAYLIST)) {
+            return readPlaylistFromFile(site, path);
+        }
         String newPath = getParent(path);
         FsDetail fsDetail = aListService.getFile(site, newPath);
-        MovieList result = new MovieList();
 
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(site + "$" + path);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
-        movieDetail.setVod_tag("file");
+        movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
 
         List<String> list = new ArrayList<>();
-        List<FsInfo> files = new ArrayList<>();
-        for (FsInfo fsInfo : aListService.listFiles(site, newPath)) {
-            if (isMediaFormat(fsInfo.getName())) {
-                files.add(fsInfo);
-            }
-        }
+        List<FsInfo> files = aListService.listFiles(site, newPath).stream()
+                .filter(e -> isMediaFormat(e.getName()))
+                .collect(Collectors.toList());
 
         if (appProperties.isSort()) {
             files.sort(Comparator.comparing(FsInfo::getName));
         }
 
         int id = getPlaylistId(path);
-        for (FsInfo fsInfo : getMovies(id, files)) {
+        for (FsInfo fsInfo : getMoviesInPlaylist(id, files)) {
             FsDetail detail = aListService.getFile(site, newPath + "/" + fsInfo.getName());
             list.add(getName(detail.getName()) + "$" + detail.getRaw_url());
-            if (movieDetail.getVod_pic() == null) {
-                movieDetail.setVod_pic(detail.getThumb());
-            }
             if (movieDetail.getVod_play_from() == null) {
                 movieDetail.setVod_play_from(detail.getProvider());
             }
@@ -185,11 +235,99 @@ public class TvBoxService {
 
         movieDetail.setVod_play_url(String.join("#", list));
 
+        MovieList result = new MovieList();
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         log.debug("playlist: {}", result);
         return result;
+    }
+
+    private MovieList readPlaylistFromFile(String site, String path) {
+        List<String> files = new ArrayList<>();
+        int id = getPlaylistId(path);
+
+        String newPath = getParent(path);
+        String pname = "";
+        FsDetail fsDetail = aListService.getFile(site, newPath);
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id(site + "$" + path);
+        movieDetail.setVod_name(fsDetail.getName());
+        movieDetail.setVod_time(fsDetail.getModified());
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_pic(LIST_PIC);
+
+        String content = aListService.readFileContent(site, path);
+        if (content != null) {
+            int count = 0;
+            for (String line : content.split("[\r\n]")) {
+                String text = line.trim();
+                if (text.isEmpty()) {
+                    continue;
+                }
+                if (text.startsWith("#")) {
+                    readMetadata(movieDetail, text);
+                    continue;
+                }
+                if (text.contains(",#genre#")) {
+                    if (files.size() > 0) {
+                        count++;
+                    }
+                    if (count > id) {
+                        break;
+                    }
+                    pname = text.split(",#genre#")[0];
+                    files = new ArrayList<>();
+                } else {
+                    files.add(text);
+                }
+            }
+        }
+
+        List<String> list = new ArrayList<>();
+        for (String line : files) {
+            try {
+                String name = line.split(",")[0];
+                String file = line.split(",")[1];
+                FsDetail detail = aListService.getFile(site, newPath + "/" + file);
+                list.add(name + "$" + detail.getRaw_url());
+                if (movieDetail.getVod_play_from() == null) {
+                    movieDetail.setVod_play_from(detail.getProvider());
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+        movieDetail.setVod_play_url(String.join("#", list));
+        movieDetail.setVod_name(movieDetail.getVod_name() + " " + pname);
+
+        MovieList result = new MovieList();
+        result.getList().add(movieDetail);
+        log.debug("playlist: {}", result);
+        return result;
+    }
+
+    private void readMetadata(MovieDetail movieDetail, String text) {
+        if (text.startsWith("#name")) {
+            String name = text.substring("#name".length()).trim();
+            if (!name.isEmpty()) {
+                movieDetail.setVod_name(name);
+            }
+        } else if (text.startsWith("#type")) {
+            movieDetail.setType_name(text.substring("#type".length()).trim());
+        } else if (text.startsWith("#actor")) {
+            movieDetail.setVod_actor(text.substring("#actor".length()).trim());
+        } else if (text.startsWith("#director")) {
+            movieDetail.setVod_director(text.substring("#director".length()).trim());
+        } else if (text.startsWith("#content")) {
+            movieDetail.setVod_content(text.substring("#content".length()).trim());
+        } else if (text.startsWith("#lang")) {
+            movieDetail.setVod_lang(text.substring("#lang".length()).trim());
+        } else if (text.startsWith("#area")) {
+            movieDetail.setVod_area(text.substring("#area".length()).trim());
+        } else if (text.startsWith("#year")) {
+            movieDetail.setVod_year(text.substring("#year".length()).trim());
+        }
     }
 
     private String getParent(String path) {
@@ -200,7 +338,7 @@ public class TvBoxService {
         return path;
     }
 
-    private List<FsInfo> getMovies(int id, List<FsInfo> files) {
+    private List<FsInfo> getMoviesInPlaylist(int id, List<FsInfo> files) {
         if (id < 0) {
             return files;
         }
@@ -218,7 +356,7 @@ public class TvBoxService {
         try {
             int index = path.lastIndexOf('/');
             if (index > 0) {
-                String[] parts = path.substring(index + 1).split("-", 2);
+                String[] parts = path.substring(index + 1).split("#", 2);
                 if (parts.length == 2) {
                     return Integer.parseInt(parts[1]);
                 }
