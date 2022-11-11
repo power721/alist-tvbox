@@ -183,13 +183,13 @@ public class TvBoxService {
         FsDetail fsDetail = aListService.getFile(site, path);
         MovieList result = new MovieList();
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(site + "$" + path);
+        movieDetail.setVod_id(tid);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_tag(fsDetail.getType() == 1 ? FOLDER : FILE);
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
         movieDetail.setVod_play_from(fsDetail.getProvider());
-        movieDetail.setVod_play_url(fsDetail.getName() + "$" + fsDetail.getRaw_url());
+        movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRaw_url()));
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
@@ -209,7 +209,7 @@ public class TvBoxService {
         FsDetail fsDetail = aListService.getFile(site, newPath);
 
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(site + "$" + path);
+        movieDetail.setVod_id(tid);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_tag(FILE);
@@ -227,7 +227,7 @@ public class TvBoxService {
         int id = getPlaylistId(path);
         for (FsInfo fsInfo : getMoviesInPlaylist(id, files)) {
             FsDetail detail = aListService.getFile(site, newPath + "/" + fsInfo.getName());
-            list.add(getName(detail.getName()) + "$" + detail.getRaw_url());
+            list.add(getName(detail.getName()) + "$" + fixHttp(detail.getRaw_url()));
             if (movieDetail.getVod_play_from() == null) {
                 movieDetail.setVod_play_from(detail.getProvider());
             }
@@ -290,7 +290,7 @@ public class TvBoxService {
                 String name = line.split(",")[0];
                 String file = line.split(",")[1];
                 FsDetail detail = aListService.getFile(site, newPath + "/" + file);
-                list.add(name + "$" + detail.getRaw_url());
+                list.add(name + "$" + fixHttp(detail.getRaw_url()));
                 if (movieDetail.getVod_play_from() == null) {
                     movieDetail.setVod_play_from(detail.getProvider());
                 }
@@ -417,6 +417,13 @@ public class TvBoxService {
 
     private String fixPath(String path) {
         return path.replaceAll("/+", "/");
+    }
+
+    private String fixHttp(String url) {
+        if (url.startsWith("//")) {
+            return "http:" + url;
+        }
+        return url;
     }
 
 }
