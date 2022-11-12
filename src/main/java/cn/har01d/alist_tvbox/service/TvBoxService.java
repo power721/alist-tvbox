@@ -3,7 +3,10 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.model.FsDetail;
 import cn.har01d.alist_tvbox.model.FsInfo;
-import cn.har01d.alist_tvbox.tvbox.*;
+import cn.har01d.alist_tvbox.tvbox.Category;
+import cn.har01d.alist_tvbox.tvbox.CategoryList;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import lombok.extern.slf4j.Slf4j;
@@ -19,12 +22,15 @@ import java.util.stream.Collectors;
 public class TvBoxService {
     public static final String FOLDER_PIC = "http://img1.3png.com/281e284a670865a71d91515866552b5f172b.png";
     public static final String LIST_PIC = "http://img1.3png.com/3063ad894f04619af7270df68a124f129c8f.png";
-    public static final String PLAYLIST = "/#playlist";
+    public static final String PLAYLIST = "/#playlist"; // auto generated playlist
+    public static final String PLAYLIST_TXT = "playlist.txt"; // user provided playlist
     public static final String FILE = "file";
     public static final String FOLDER = "folder";
+
     private final AListService aListService;
     private final AppProperties appProperties;
     private final LoadingCache<String, MovieList> cache;
+    private final List<Category> categories = new ArrayList<>();
 
     public TvBoxService(AListService aListService, AppProperties appProperties) {
         this.aListService = aListService;
@@ -33,18 +39,12 @@ public class TvBoxService {
                 .maximumSize(appProperties.getCache().getSize())
                 .expireAfterWrite(appProperties.getCache().getExpire())
                 .build(this::getPlaylist);
+        appProperties.getSites()
+                .forEach(site -> categories.add(new Category(site.getName() + "$/", site.getName())));
     }
 
     public CategoryList getCategoryList() {
-        CategoryList result = new CategoryList();
-        for (Site site : appProperties.getSites()) {
-            Category category = new Category();
-            category.setType_id(site.getName() + "$/");
-            category.setType_name(site.getName());
-            result.getList().add(category);
-        }
-        result.setTotal(result.getList().size());
-        result.setLimit(result.getList().size());
+        CategoryList result = new CategoryList(categories);
         log.debug("category: {}", result);
         return result;
     }
@@ -59,8 +59,8 @@ public class TvBoxService {
         MovieList result = new MovieList();
 
         for (FsInfo fsInfo : aListService.listFiles(site, path)) {
-            if (fsInfo.getType() != 1 && fsInfo.getName().equals("playlist.txt")) {
-                playlists = generatePlaylistFromFile(site, path + "/playlist.txt");
+            if (fsInfo.getType() != 1 && fsInfo.getName().equals(PLAYLIST_TXT)) {
+                playlists = generatePlaylistFromFile(site, path + "/" + PLAYLIST_TXT);
                 continue;
             }
             if (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName())) {
@@ -88,14 +88,12 @@ public class TvBoxService {
         result.getList().addAll(folders);
 
         if (files.size() > 1 && playlists.isEmpty()) {
-            result.getList().addAll(generatePlaylist(site + "$" + fixPath(path + PLAYLIST + "#"), files));
+            playlists = generatePlaylist(site + "$" + fixPath(path + PLAYLIST + "#"), files);
         }
 
         result.getList().addAll(playlists);
         result.getList().addAll(files);
 
-        result.setTotal(result.getList().size());
-        result.setLimit(result.getList().size());
         log.debug("list: {}", result);
         return result;
     }
@@ -176,7 +174,7 @@ public class TvBoxService {
         int index = tid.indexOf('$');
         String site = tid.substring(0, index);
         String path = tid.substring(index + 1);
-        if (path.contains(PLAYLIST) || path.contains("/playlist.txt")) {
+        if (path.contains(PLAYLIST) || path.contains(PLAYLIST_TXT)) {
             return cache.get(tid);
         }
 
@@ -191,8 +189,6 @@ public class TvBoxService {
         movieDetail.setVod_play_from(fsDetail.getProvider());
         movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRaw_url()));
         result.getList().add(movieDetail);
-        result.setTotal(result.getList().size());
-        result.setLimit(result.getList().size());
         log.debug("detail: {}", result);
         return result;
     }
@@ -237,8 +233,6 @@ public class TvBoxService {
 
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
-        result.setTotal(result.getList().size());
-        result.setLimit(result.getList().size());
         log.debug("playlist: {}", result);
         return result;
     }

@@ -4,7 +4,6 @@ import lombok.Data;
 
 @Data
 public class Category {
-    private String type_id;
-    private String type_name;
-    private int type_flag = 1;
+    private final String type_id;
+    private final String type_name;
 }
