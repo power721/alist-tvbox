@@ -30,5 +30,14 @@ docker run -d -p 8080:8080 --restart=always --name=alist-tvbox alist-tvbox
 
 # TvBox Config
 ```json
-{"key":"Alist","name":"Alist┃转发","type":1,"api":"http://ip:8080/vod","searchable":2,"quickSearch":0,"filterable":0}
+{
+  "sites": [
+    {"key":"Alist","name":"Alist┃转发","type":1,"api":"http://ip:8080/vod","searchable":0,"quickSearch":0,"filterable":0}
+  ],
+  "rules": [
+    {"host":"pdsapi.aliyundrive.com","rule":["/redirect"]},
+    {"host":"*","rule":["http((?!http).){12,}?\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\?.*"]},
+    {"host":"*","rule":["http((?!http).){12,}\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"]}
+  ]
+}
 ```
