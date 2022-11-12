@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
-import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 
 @Slf4j
@@ -40,7 +39,7 @@ public class TvBoxController {
 
         try {
             return URLDecoder.decode(text, "UTF-8");
-        } catch (UnsupportedEncodingException e) {
+        } catch (Exception e) {
             return text;
         }
     }
