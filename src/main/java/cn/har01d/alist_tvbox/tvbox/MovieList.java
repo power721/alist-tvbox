@@ -7,9 +7,9 @@ import java.util.List;
 
 @Data
 public class MovieList {
+    private int page = 1;
+    private int pagecount = 1;
+    private int limit;
+    private int total;
     private List<MovieDetail> list = new ArrayList<>();
-
-    public int getTotal() {
-        return list.size();
-    }
 }
