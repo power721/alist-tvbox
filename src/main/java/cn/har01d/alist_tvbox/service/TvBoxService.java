@@ -19,7 +19,8 @@ import java.util.stream.Collectors;
 public class TvBoxService {
     public static final String FOLDER_PIC = "http://img1.3png.com/281e284a670865a71d91515866552b5f172b.png";
     public static final String LIST_PIC = "http://img1.3png.com/3063ad894f04619af7270df68a124f129c8f.png";
-    public static final String PLAYLIST = "/#playlist";
+    public static final String PLAYLIST = "/#playlist"; // auto generated playlist
+    public static final String PLAYLIST_TXT = "playlist.txt"; // user provided playlist
     public static final String FILE = "file";
     public static final String FOLDER = "folder";
     private final AListService aListService;
@@ -59,8 +60,8 @@ public class TvBoxService {
         MovieList result = new MovieList();
 
         for (FsInfo fsInfo : aListService.listFiles(site, path)) {
-            if (fsInfo.getType() != 1 && fsInfo.getName().equals("playlist.txt")) {
-                playlists = generatePlaylistFromFile(site, path + "/playlist.txt");
+            if (fsInfo.getType() != 1 && fsInfo.getName().equals(PLAYLIST_TXT)) {
+                playlists = generatePlaylistFromFile(site, path + "/" + PLAYLIST_TXT);
                 continue;
             }
             if (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName())) {
@@ -88,7 +89,7 @@ public class TvBoxService {
         result.getList().addAll(folders);
 
         if (files.size() > 1 && playlists.isEmpty()) {
-            result.getList().addAll(generatePlaylist(site + "$" + fixPath(path + PLAYLIST + "#"), files));
+            playlists = generatePlaylist(site + "$" + fixPath(path + PLAYLIST + "#"), files);
         }
 
         result.getList().addAll(playlists);
@@ -176,7 +177,7 @@ public class TvBoxService {
         int index = tid.indexOf('$');
         String site = tid.substring(0, index);
         String path = tid.substring(index + 1);
-        if (path.contains(PLAYLIST) || path.contains("/playlist.txt")) {
+        if (path.contains(PLAYLIST) || path.contains(PLAYLIST_TXT)) {
             return cache.get(tid);
         }
 
