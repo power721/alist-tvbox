@@ -27,6 +27,7 @@ public class TvBoxService {
     private final AppProperties appProperties;
     private final FileNameComparator nameComparator = new FileNameComparator();
     private final List<FilterValue> filters = Arrays.asList(
+            new FilterValue("原始顺序", ""),
             new FilterValue("名字 升序", "name,asc"),
             new FilterValue("名字 降序", "name,desc"),
             new FilterValue("时间 升序", "time,asc"),
@@ -95,9 +96,7 @@ public class TvBoxService {
             }
         }
 
-        if (sort != null && !sort.isEmpty()) {
-            sortFiles(sort, folders, files);
-        }
+        sortFiles(sort, folders, files);
 
         result.getList().addAll(folders);
 
@@ -115,6 +114,9 @@ public class TvBoxService {
     }
 
     private void sortFiles(String sort, List<MovieDetail> folders, List<MovieDetail> files) {
+        if (sort == null) {
+            sort = "name,asc";
+        }
         Comparator<MovieDetail> comparator;
         switch (sort) {
             case "name,asc":
@@ -197,7 +199,7 @@ public class TvBoxService {
         for (; id < files.size() / size; ++id) {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(path + id);
-            movieDetail.setVod_name("播放列表" + (id + 1));
+            movieDetail.setVod_name("播放列表" + (files.size() > size ? id + 1 : ""));
             movieDetail.setVod_tag(FILE);
             movieDetail.setVod_pic(LIST_PIC);
             movieDetail.setVod_remarks("共" + size + "集");
