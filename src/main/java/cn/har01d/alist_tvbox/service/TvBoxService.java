@@ -1,9 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.model.FileNameInfo;
-import cn.har01d.alist_tvbox.model.FsDetail;
-import cn.har01d.alist_tvbox.model.FsInfo;
+import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.tvbox.*;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -11,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -27,6 +26,14 @@ public class TvBoxService {
     private final AListService aListService;
     private final AppProperties appProperties;
     private final FileNameComparator nameComparator = new FileNameComparator();
+    private final List<FilterValue> filters = Arrays.asList(
+            new FilterValue("名字 升序", "name,asc"),
+            new FilterValue("名字 降序", "name,desc"),
+            new FilterValue("时间 升序", "time,asc"),
+            new FilterValue("时间 降序", "time,desc"),
+            new FilterValue("大小 升序", "size,asc"),
+            new FilterValue("大小 降序", "size,desc")
+    );
     private final LoadingCache<String, MovieList> cache;
 
     public TvBoxService(AListService aListService, AppProperties appProperties) {
@@ -40,19 +47,22 @@ public class TvBoxService {
 
     public CategoryList getCategoryList() {
         CategoryList result = new CategoryList();
+
         for (Site site : appProperties.getSites()) {
             Category category = new Category();
             category.setType_id(site.getName() + "$/");
             category.setType_name(site.getName());
             result.getList().add(category);
+            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
         }
+
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         log.debug("category: {}", result);
         return result;
     }
 
-    public MovieList getMovieList(String tid) {
+    public MovieList getMovieList(String tid, String sort) {
         int index = tid.indexOf('$');
         String site = tid.substring(0, index);
         String path = tid.substring(index + 1);
@@ -76,6 +86,8 @@ public class TvBoxService {
             movieDetail.setVod_tag(fsInfo.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_pic(getCover(fsInfo.getThumb(), fsInfo.getType()));
             movieDetail.setVod_remarks(fileSize(fsInfo.getSize()) + (fsInfo.getType() == 1 ? "文件夹" : ""));
+            movieDetail.setVod_time(fsInfo.getModified());
+            movieDetail.setSize(fsInfo.getSize());
             if (fsInfo.getType() == 1) {
                 folders.add(movieDetail);
             } else {
@@ -83,9 +95,8 @@ public class TvBoxService {
             }
         }
 
-        if (appProperties.isSort()) {
-            folders.sort(Comparator.comparing(e -> new FileNameInfo(e.getVod_name()), nameComparator));
-            files.sort(Comparator.comparing(e -> new FileNameInfo(e.getVod_name()), nameComparator));
+        if (sort != null && !sort.isEmpty()) {
+            sortFiles(sort, folders, files);
         }
 
         result.getList().addAll(folders);
@@ -101,6 +112,37 @@ public class TvBoxService {
         result.setLimit(result.getList().size());
         log.debug("list: {}", result);
         return result;
+    }
+
+    private void sortFiles(String sort, List<MovieDetail> folders, List<MovieDetail> files) {
+        Comparator<MovieDetail> comparator;
+        switch (sort) {
+            case "name,asc":
+                comparator = Comparator.comparing(e -> new FileNameInfo(e.getVod_name()), nameComparator);
+                break;
+            case "time,asc":
+                comparator = Comparator.comparing(MovieDetail::getVod_time);
+                break;
+            case "size,asc":
+                comparator = Comparator.comparing(MovieDetail::getSize);
+                break;
+            case "name,desc":
+                comparator = Comparator.comparing(e -> new FileNameInfo(e.getVod_name()), nameComparator);
+                comparator = comparator.reversed();
+                break;
+            case "time,desc":
+                comparator = Comparator.comparing(MovieDetail::getVod_time);
+                comparator = comparator.reversed();
+                break;
+            case "size,desc":
+                comparator = Comparator.comparing(MovieDetail::getSize);
+                comparator = comparator.reversed();
+                break;
+            default:
+                return;
+        }
+        folders.sort(comparator);
+        files.sort(comparator);
     }
 
     private List<MovieDetail> generatePlaylistFromFile(String site, String path) {

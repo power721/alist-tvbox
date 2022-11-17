@@ -9,4 +9,5 @@ public class FsInfo {
     private long size;
     private String thumb;
     private String thumbnail;
+    private String modified;
 }

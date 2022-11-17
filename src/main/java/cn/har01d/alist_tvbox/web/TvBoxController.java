@@ -20,13 +20,13 @@ public class TvBoxController {
     }
 
     @GetMapping
-    public Object api(String t, String ids, HttpServletRequest request) {
+    public Object api(String t, String ids, String sort, HttpServletRequest request) {
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        log.info("path: {}  folder: {}", ids, t);
+        log.info("path: {}  folder: {}  sort: {}", ids, t, sort);
         if (ids != null && !ids.isEmpty()) {
             return tvBoxService.getDetail(ids);
         } else if (t != null && !t.isEmpty()) {
-            return tvBoxService.getMovieList(t);
+            return tvBoxService.getMovieList(t, sort);
         } else {
             return tvBoxService.getCategoryList();
         }

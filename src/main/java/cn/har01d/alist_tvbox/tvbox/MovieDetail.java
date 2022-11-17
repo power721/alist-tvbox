@@ -19,4 +19,5 @@ public class MovieDetail {
     private String vod_director;
     private String vod_lang;
     private String vod_year;
+    private long size;
 }
