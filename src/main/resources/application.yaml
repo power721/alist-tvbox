@@ -1,5 +1,5 @@
 app:
-  sort: false
+  sort: true
   cache:
     size: 50
     expire: PT6H
