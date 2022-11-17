@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.model.FileNameInfo;
 import cn.har01d.alist_tvbox.model.FsDetail;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.tvbox.*;
@@ -25,6 +26,7 @@ public class TvBoxService {
     public static final String FOLDER = "folder";
     private final AListService aListService;
     private final AppProperties appProperties;
+    private final FileNameComparator nameComparator = new FileNameComparator();
     private final LoadingCache<String, MovieList> cache;
 
     public TvBoxService(AListService aListService, AppProperties appProperties) {
@@ -82,8 +84,8 @@ public class TvBoxService {
         }
 
         if (appProperties.isSort()) {
-            folders.sort(Comparator.comparing(MovieDetail::getVod_name));
-            files.sort(Comparator.comparing(MovieDetail::getVod_name));
+            folders.sort(Comparator.comparing(e -> new FileNameInfo(e.getVod_name()), nameComparator));
+            files.sort(Comparator.comparing(e -> new FileNameInfo(e.getVod_name()), nameComparator));
         }
 
         result.getList().addAll(folders);
@@ -222,7 +224,7 @@ public class TvBoxService {
                 .collect(Collectors.toList());
 
         if (appProperties.isSort()) {
-            files.sort(Comparator.comparing(FsInfo::getName));
+            files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName()), nameComparator));
         }
 
         int id = getPlaylistId(path);
