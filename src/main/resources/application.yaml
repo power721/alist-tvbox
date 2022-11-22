@@ -2,7 +2,7 @@ app:
   sort: true
   cache:
     size: 50
-    expire: PT6H
+    expire: PT1H
   formats:
     - mp4
     - flv
