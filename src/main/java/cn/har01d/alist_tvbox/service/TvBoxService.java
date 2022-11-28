@@ -59,6 +59,16 @@ public class TvBoxService {
         return result;
     }
 
+    public MovieList search(String word) {
+        MovieList result = new MovieList();
+        for (Site site : appProperties.getSites()) {
+            if (site.isSearchable()) {
+
+            }
+        }
+        return result;
+    }
+
     public MovieList getMovieList(String tid, String sort) {
         int index = tid.indexOf('$');
         String site = tid.substring(0, index);
