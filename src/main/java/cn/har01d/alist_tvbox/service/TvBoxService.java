@@ -3,11 +3,12 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.tvbox.*;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -28,22 +29,17 @@ public class TvBoxService {
     private final FileNameComparator nameComparator = new FileNameComparator();
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
-            new FilterValue("名字 升序", "name,asc"),
-            new FilterValue("名字 降序", "name,desc"),
-            new FilterValue("时间 升序", "time,asc"),
-            new FilterValue("时间 降序", "time,desc"),
-            new FilterValue("大小 升序", "size,asc"),
-            new FilterValue("大小 降序", "size,desc")
+            new FilterValue("名字⬆️", "name,asc"),
+            new FilterValue("名字⬇️", "name,desc"),
+            new FilterValue("时间⬆️", "time,asc"),
+            new FilterValue("时间⬇️", "time,desc"),
+            new FilterValue("大小⬆️", "size,asc"),
+            new FilterValue("大小⬇️", "size,desc")
     );
-    private final LoadingCache<String, MovieList> cache;
 
     public TvBoxService(AListService aListService, AppProperties appProperties) {
         this.aListService = aListService;
         this.appProperties = appProperties;
-        this.cache = Caffeine.newBuilder()
-                .maximumSize(appProperties.getCache().getSize())
-                .expireAfterWrite(appProperties.getCache().getExpire())
-                .build(this::getPlaylist);
     }
 
     public CategoryList getCategoryList() {
@@ -219,12 +215,17 @@ public class TvBoxService {
         return list;
     }
 
+    public String getPlayUrl(String site, String path) {
+        FsDetail fsDetail = aListService.getFile(site, path);
+        return fixHttp(fsDetail.getRaw_url());
+    }
+
     public MovieList getDetail(String tid) {
         int index = tid.indexOf('$');
         String site = tid.substring(0, index);
         String path = tid.substring(index + 1);
         if (path.contains(PLAYLIST) || path.contains(PLAYLIST_TXT)) {
-            return cache.get(tid);
+            return getPlaylist(site, path);
         }
 
         FsDetail fsDetail = aListService.getFile(site, path);
@@ -244,11 +245,16 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList getPlaylist(String tid) {
-        int index = tid.indexOf('$');
-        String site = tid.substring(0, index);
-        String path = tid.substring(index + 1);
-        log.info("load playlist: {}", path);
+    private String buildPlayUrl(String site, String path) {
+        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
+        builder.replacePath("/play");
+        builder.queryParam("site", encodeUrl(site));
+        builder.queryParam("path", encodeUrl(path));
+        return builder.build().toUriString();
+    }
+
+    public MovieList getPlaylist(String site, String path) {
+        log.info("load playlist: {} {}", site, path);
         if (!path.contains(PLAYLIST)) {
             return readPlaylistFromFile(site, path);
         }
@@ -256,9 +262,10 @@ public class TvBoxService {
         FsDetail fsDetail = aListService.getFile(site, newPath);
 
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(tid);
+        movieDetail.setVod_id(site + "$" + path);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
+        movieDetail.setVod_play_from(fsDetail.getProvider());
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
 
@@ -273,11 +280,7 @@ public class TvBoxService {
 
         int id = getPlaylistId(path);
         for (FsInfo fsInfo : getMoviesInPlaylist(id, files)) {
-            FsDetail detail = aListService.getFile(site, newPath + "/" + fsInfo.getName());
-            list.add(getName(detail.getName()) + "$" + fixHttp(detail.getRaw_url()));
-            if (movieDetail.getVod_play_from() == null) {
-                movieDetail.setVod_play_from(detail.getProvider());
-            }
+            list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, newPath + "/" + fsInfo.getName()));
         }
 
         movieDetail.setVod_play_url(String.join("#", list));
@@ -301,6 +304,7 @@ public class TvBoxService {
         movieDetail.setVod_id(site + "$" + path);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
+        movieDetail.setVod_play_from(fsDetail.getProvider());
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
 
@@ -336,11 +340,7 @@ public class TvBoxService {
             try {
                 String name = line.split(",")[0];
                 String file = line.split(",")[1];
-                FsDetail detail = aListService.getFile(site, newPath + "/" + file);
-                list.add(name + "$" + fixHttp(detail.getRaw_url()));
-                if (movieDetail.getVod_play_from() == null) {
-                    movieDetail.setVod_play_from(detail.getProvider());
-                }
+                list.add(name + "$" + buildPlayUrl(site, newPath + "/" + file));
             } catch (Exception e) {
                 log.warn("", e);
             }
@@ -403,9 +403,9 @@ public class TvBoxService {
         try {
             int index = path.lastIndexOf('/');
             if (index > 0) {
-                String[] parts = path.substring(index + 1).split("#", 2);
-                if (parts.length == 2) {
-                    return Integer.parseInt(parts[1]);
+                String[] parts = path.substring(index + 1).split("#");
+                if (parts.length >= 2) {
+                    return Integer.parseInt(parts[parts.length - 1]);
                 }
             }
         } catch (Exception e) {
@@ -473,4 +473,11 @@ public class TvBoxService {
         return url;
     }
 
+    private String encodeUrl(String url) {
+        try {
+            return URLEncoder.encode(url, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            return url;
+        }
+    }
 }
