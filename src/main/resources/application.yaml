@@ -1,23 +1,46 @@
 app:
   sort: true
   formats:
-    - mp4
-    - flv
-    - avi
-    - mkv
-    - rm
-    - rmvb
+    - dff
+    - dsf
+    - mp3
+    - aac
+    - wav
+    - wma
+    - cda
+    - flac
+    - m4a
+    - mid
+    - mka
+    - mp2
+    - mpa
+    - mpc
+    - ape
+    - ofr
+    - ogg
+    - ra
+    - wv
+    - tta
+    - ac3
+    - dts
+    - tak
+    - webm
     - wmv
-    - mpg
     - mpeg
     - mov
+    - ram
+    - swf
+    - mp4
+    - avi
+    - rm
+    - rmvb
+    - flv
+    - mpg
+    - mkv
+    - m3u8
     - ts
-    - mp3
-    - m4a
-    - ape
-    - flac
-    - wma
-    - wav
+    - 3gp
+    - asf
   sites:
     - name: 本地
       url: http://192.168.50.10:5244
