@@ -36,22 +36,28 @@ public class AListService {
         return response.getData();
     }
 
-    public List<FsInfo> listFiles(String site, String path) {
+    public FsResponse listFiles(String site, String path, int page, int size) {
         int version = getVersion(site);
         String url = getSiteUrl(site) + (version == 2 ? "/api/public/path" : "/api/fs/list");
         FsRequest request = new FsRequest();
         request.setPath(path);
+        request.setPage(page);
+        request.setSize(size);
         log.debug("call api: {}", url);
         FsListResponse response = restTemplate.postForObject(url, request, FsListResponse.class);
         log.debug("list files: {} {}", path, response.getData());
-        return version == 2 ? getFiles(response.getData()) : response.getData().getContent();
+        return getFiles(version, response.getData());
     }
 
-    private List<FsInfo> getFiles(FsResponse response) {
-        for (FsInfo fsInfo : response.getFiles()) {
-            fsInfo.setThumb(fsInfo.getThumbnail());
+    private FsResponse getFiles(int version, FsResponse response) {
+        if (version == 2) {
+            for (FsInfo fsInfo : response.getFiles()) {
+                fsInfo.setThumb(fsInfo.getThumbnail());
+            }
+        } else {
+            response.setFiles(response.getContent());
         }
-        return response.getFiles();
+        return response;
     }
 
     public String readFileContent(String site, String path) {

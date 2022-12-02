@@ -9,7 +9,7 @@ import java.util.List;
 public class MovieList {
     private int page = 1;
     private int pagecount = 1;
-    private int limit;
+    private int limit = 100;
     private int total;
     private List<MovieDetail> list = new ArrayList<>();
 }

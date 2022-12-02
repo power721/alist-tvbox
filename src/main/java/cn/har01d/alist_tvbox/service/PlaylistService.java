@@ -35,7 +35,7 @@ public class PlaylistService {
         List<String> files = new ArrayList<>();
         List<String> folders = new ArrayList<>();
         List<String> lines = new ArrayList<>();
-        for (FsInfo fsInfo : aListService.listFiles(site, path)) {
+        for (FsInfo fsInfo : aListService.listFiles(site, path, 1, 0).getFiles()) {
             if (fsInfo.getType() != 1) {
                 files.add(fsInfo.getName());
             } else if (includeSub) {

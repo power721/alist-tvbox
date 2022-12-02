@@ -9,6 +9,6 @@ public class FsRequest {
     private String path;
     private String password = "";
     @JsonProperty("per_page")
-    private int size;
+    private int size = 25;
     private boolean refresh;
 }
