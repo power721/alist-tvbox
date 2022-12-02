@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 public class TvBoxService {
     public static final String FOLDER_PIC = "http://img1.3png.com/281e284a670865a71d91515866552b5f172b.png";
     public static final String LIST_PIC = "http://img1.3png.com/3063ad894f04619af7270df68a124f129c8f.png";
-    public static final String PLAYLIST = "/#playlist"; // auto generated playlist
+    public static final String PLAYLIST = "/~playlist"; // auto generated playlist
     public static final String PLAYLIST_TXT = "playlist.txt"; // user provided playlist
     public static final String FILE = "file";
     public static final String FOLDER = "folder";
@@ -59,14 +59,38 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList search(String word) {
+    public MovieList search(String keyword) {
         MovieList result = new MovieList();
         for (Site site : appProperties.getSites()) {
             if (site.isSearchable()) {
-
+                List<MovieDetail> list = aListService.search(site.getName(), keyword)
+                        .stream()
+                        .map(e -> {
+                            boolean isMediaFile = isMediaFile(e);
+                            String path = fixPath("/" + e + (isMediaFile ? "" : PLAYLIST));
+                            MovieDetail movieDetail = new MovieDetail();
+                            movieDetail.setVod_id(site.getName() + "$" + path);
+                            movieDetail.setVod_name(e);
+                            movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
+                            return movieDetail;
+                        })
+                        .collect(Collectors.toList());
+                result.setList(list);
+                result.setTotal(list.size());
+                result.setLimit(list.size());
+                return result;
             }
         }
         return result;
+    }
+
+    private boolean isMediaFile(String path) {
+        String name = path;
+        int index = path.lastIndexOf('/');
+        if (index > -1) {
+            name = path.substring(index + 1);
+        }
+        return isMediaFormat(name);
     }
 
     public MovieList getMovieList(String tid, String sort) {

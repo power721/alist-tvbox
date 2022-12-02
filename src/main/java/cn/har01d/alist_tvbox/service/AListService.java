@@ -7,10 +7,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -31,6 +28,12 @@ public class AListService {
                 .defaultHeader("User-Agent", USER_AGENT)
                 .build();
         appProperties.getSites().forEach(site -> sites.put(site.getName(), site.getUrl()));
+    }
+
+    public List<String> search(String site, String keyword) {
+        String url = getSiteUrl(site) + "/api/search?type=video&box=" + keyword;
+        SearchResponse response = restTemplate.getForObject(url, SearchResponse.class);
+        return response.getData();
     }
 
     public List<FsInfo> listFiles(String site, String path) {
