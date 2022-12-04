@@ -133,14 +133,26 @@ public class TvBoxService {
         }
     }
 
-    private String downloadIndexFile(String site, String indexFile) throws IOException {
-        File file = new File(".cache/" + site + "/index.txt");
+    private String downloadIndexFile(String site, String url) throws IOException {
+        File file = new File(".cache/" + site + "/" + getFileName(url));
         if (file.exists()) {
             return file.getAbsolutePath();
         }
-        log.info("download index file from {}", indexFile);
-        FileUtils.copyURLToFile(new URL(indexFile), file);
+        log.info("download index file from {}", url);
+        FileUtils.copyURLToFile(new URL(url), file);
         return file.getAbsolutePath();
+    }
+
+    private String getFileName(String url) {
+        int index = url.lastIndexOf('/');
+        String name = "index.txt";
+        if (index > -1) {
+            name = url.substring(index + 1);
+        }
+        if (name.isEmpty()) {
+            return "index.txt";
+        }
+        return name;
     }
 
     private List<MovieDetail> searchByApi(String site, String keyword) {
