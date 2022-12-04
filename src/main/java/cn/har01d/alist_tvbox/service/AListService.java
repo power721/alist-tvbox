@@ -33,6 +33,7 @@ public class AListService {
     public List<String> search(String site, String keyword) {
         String url = getSiteUrl(site) + "/api/search?type=video&box=" + keyword;
         SearchResponse response = restTemplate.getForObject(url, SearchResponse.class);
+        log.debug("search \"{}\" from site {} result: {} {}", keyword, site, response.getData().size(), response.getData());
         return response.getData();
     }
 

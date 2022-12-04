@@ -13,6 +13,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -27,6 +31,7 @@ public class TvBoxService {
     private final AListService aListService;
     private final AppProperties appProperties;
     private final FileNameComparator nameComparator = new FileNameComparator();
+    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
             new FilterValue("名字⬆️", "name,asc"),
@@ -61,9 +66,11 @@ public class TvBoxService {
 
     public MovieList search(String keyword) {
         MovieList result = new MovieList();
+        List<Future<List<MovieDetail>>> futures = new ArrayList<>();
         for (Site site : appProperties.getSites()) {
             if (site.isSearchable()) {
-                List<MovieDetail> list = aListService.search(site.getName(), keyword)
+                log.info("search \"{}\" from site {}: {}", keyword, site.getName(), site.getUrl());
+                futures.add(executorService.submit(() -> aListService.search(site.getName(), keyword)
                         .stream()
                         .map(e -> {
                             boolean isMediaFile = isMediaFile(e);
@@ -74,13 +81,24 @@ public class TvBoxService {
                             movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
                             return movieDetail;
                         })
-                        .collect(Collectors.toList());
-                result.setList(list);
-                result.setTotal(list.size());
-                result.setLimit(list.size());
-                return result;
+                        .collect(Collectors.toList())));
             }
         }
+
+        List<MovieDetail> list = new ArrayList<>();
+        for (Future<List<MovieDetail>> future : futures) {
+            try {
+                list.addAll(future.get());
+            } catch (InterruptedException | ExecutionException e) {
+                log.warn("", e);
+            }
+        }
+
+        log.info("search \"{}\" result: {}", keyword, list.size());
+        result.setList(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
+
         return result;
     }
 

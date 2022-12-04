@@ -59,6 +59,10 @@ docker run -d -p 5244:80 --restart=always --name=alist haroldli/alist
 docker run -d -p 5244:80 --restart=always -e ALI_TOKEN=xxx --name=alist haroldli/alist
 ```
 
+```bash
+curl -s http://d.har01d.cn/update_xiaoya.sh | bash
+```
+
 ### TvBox Config
 ```json
 {
