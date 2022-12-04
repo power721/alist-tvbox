@@ -55,7 +55,7 @@ public class AListService {
             for (FsInfo fsInfo : response.getFiles()) {
                 fsInfo.setThumb(fsInfo.getThumbnail());
             }
-        } else {
+        } else if (response != null && response.getContent() != null) {
             response.setFiles(response.getContent());
         }
         return response;

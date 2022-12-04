@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.service.ParseService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -15,9 +16,11 @@ import java.io.IOException;
 @RequestMapping("/play")
 public class PlayController {
     private final TvBoxService tvBoxService;
+    private final ParseService parseService;
 
-    public PlayController(TvBoxService tvBoxService) {
+    public PlayController(TvBoxService tvBoxService, ParseService parseService) {
         this.tvBoxService = tvBoxService;
+        this.parseService = parseService;
     }
 
     @GetMapping
@@ -25,6 +28,6 @@ public class PlayController {
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), request.getQueryString());
         log.info("get play url - site: {}  path: {}", site, path);
         String url = tvBoxService.getPlayUrl(site, path);
-        response.sendRedirect(url);
+        response.sendRedirect(parseService.parse(url));
     }
 }

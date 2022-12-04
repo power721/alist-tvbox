@@ -4,11 +4,19 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.tvbox.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -42,9 +50,10 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService, AppProperties appProperties) {
+    public TvBoxService(AListService aListService, AppProperties appProperties) throws IOException {
         this.aListService = aListService;
         this.appProperties = appProperties;
+        downloadIndexFile();
     }
 
     public CategoryList getCategoryList() {
@@ -69,19 +78,11 @@ public class TvBoxService {
         List<Future<List<MovieDetail>>> futures = new ArrayList<>();
         for (Site site : appProperties.getSites()) {
             if (site.isSearchable()) {
-                log.info("search \"{}\" from site {}: {}", keyword, site.getName(), site.getUrl());
-                futures.add(executorService.submit(() -> aListService.search(site.getName(), keyword)
-                        .stream()
-                        .map(e -> {
-                            boolean isMediaFile = isMediaFile(e);
-                            String path = fixPath("/" + e + (isMediaFile ? "" : PLAYLIST));
-                            MovieDetail movieDetail = new MovieDetail();
-                            movieDetail.setVod_id(site.getName() + "$" + path);
-                            movieDetail.setVod_name(e);
-                            movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
-                            return movieDetail;
-                        })
-                        .collect(Collectors.toList())));
+                if (StringUtils.hasText(site.getIndexFile())) {
+                    futures.add(executorService.submit(() -> searchByFile(site.getName(), keyword, site.getIndexFile())));
+                } else {
+                    futures.add(executorService.submit(() -> searchByApi(site.getName(), keyword)));
+                }
             }
         }
 
@@ -102,6 +103,62 @@ public class TvBoxService {
         return result;
     }
 
+    private List<MovieDetail> searchByFile(String site, String keyword, String indexFile) throws IOException {
+        List<MovieDetail> list = new ArrayList<>();
+        if (indexFile.startsWith("http://") || indexFile.startsWith("https://")) {
+            indexFile = downloadIndexFile(site, indexFile);
+        }
+
+        log.info("search \"{}\" from site {}, index: {}", keyword, site, indexFile);
+        List<String> lines = Files.readAllLines(Paths.get(indexFile)).stream().filter(e -> e.contains(keyword)).collect(Collectors.toList());
+        for (String e : lines) {
+            boolean isMediaFile = isMediaFile(e);
+            String path = fixPath("/" + e + (isMediaFile ? "" : PLAYLIST));
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(site + "$" + path);
+            movieDetail.setVod_name(site + ":" + e);
+            movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
+            list.add(movieDetail);
+        }
+
+        log.debug("search \"{}\" from site {}, result: {} {}", keyword, site, lines.size(), lines);
+        return list;
+    }
+
+    private void downloadIndexFile() throws IOException {
+        for (Site site : appProperties.getSites()) {
+            if (site.isSearchable() && StringUtils.hasText(site.getIndexFile())) {
+                downloadIndexFile(site.getName(), site.getIndexFile());
+            }
+        }
+    }
+
+    private String downloadIndexFile(String site, String indexFile) throws IOException {
+        File file = new File(".cache/" + site + "/index.txt");
+        if (file.exists()) {
+            return file.getAbsolutePath();
+        }
+        log.info("download index file from {}", indexFile);
+        FileUtils.copyURLToFile(new URL(indexFile), file);
+        return file.getAbsolutePath();
+    }
+
+    private List<MovieDetail> searchByApi(String site, String keyword) {
+        log.info("search \"{}\" from site {}", keyword, site);
+        return aListService.search(site, keyword)
+                .stream()
+                .map(e -> {
+                    boolean isMediaFile = isMediaFile(e);
+                    String path = fixPath("/" + e + (isMediaFile ? "" : PLAYLIST));
+                    MovieDetail movieDetail = new MovieDetail();
+                    movieDetail.setVod_id(site + "$" + path);
+                    movieDetail.setVod_name(site + ":" + e);
+                    movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
+                    return movieDetail;
+                })
+                .collect(Collectors.toList());
+    }
+
     private boolean isMediaFile(String path) {
         String name = path;
         int index = path.lastIndexOf('/');
@@ -109,6 +166,55 @@ public class TvBoxService {
             name = path.substring(index + 1);
         }
         return isMediaFormat(name);
+    }
+
+    public void index(IndexRequest indexRequest) throws IOException {
+        File dir = new File("data/" + indexRequest.getSite() + indexRequest.getPath());
+        dir.mkdirs();
+        File file = new File(dir, "index.video.txt");
+        file.createNewFile();
+        try (FileWriter writer = new FileWriter(file, true)) {
+            index(writer, indexRequest, indexRequest.getPath());
+        }
+        log.info("index done");
+    }
+
+    private void index(FileWriter writer, IndexRequest indexRequest, String path) throws IOException {
+        FsResponse fsResponse = aListService.listFiles(indexRequest.getSite(), path, 1, 0);
+        if (fsResponse == null) {
+            return;
+        }
+        List<String> files = new ArrayList<>();
+        for (FsInfo fsInfo : fsResponse.getFiles()) {
+            if (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName())) {
+                continue;
+            }
+
+            if (fsInfo.getType() == 1) {
+                String newPath = fixPath(path + "/" + fsInfo.getName());
+                if (indexRequest.getExcludes().stream().anyMatch(newPath::startsWith)) {
+                    continue;
+                }
+
+                if (indexRequest.getIncludes().isEmpty() || indexRequest.getIncludes().stream().anyMatch(newPath::startsWith)) {
+                    index(writer, indexRequest, newPath);
+                }
+            } else {
+                files.add(fixPath(path + "/" + fsInfo.getName()));
+            }
+        }
+
+        if (files.size() > 0) {
+            writer.write(path + "\n");
+        }
+
+        if (indexRequest.isIncludeFile()) {
+            for (String line : files) {
+                writer.write(line + "\n");
+            }
+        }
+
+        writer.flush();
     }
 
     public MovieList getMovieList(String tid, String sort, int page) {
@@ -327,6 +433,7 @@ public class TvBoxService {
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(fsDetail.getProvider());
+        movieDetail.setVod_content("来自AList站点：" + site);
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
 

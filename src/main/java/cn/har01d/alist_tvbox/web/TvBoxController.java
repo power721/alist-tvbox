@@ -1,17 +1,18 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.service.TvBoxService;
+import cn.har01d.alist_tvbox.tvbox.IndexRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
+import java.io.IOException;
 import java.net.URLDecoder;
 
 @Slf4j
 @RestController
-@RequestMapping("/vod")
+@RequestMapping
 public class TvBoxController {
     private final TvBoxService tvBoxService;
 
@@ -19,7 +20,7 @@ public class TvBoxController {
         this.tvBoxService = tvBoxService;
     }
 
-    @GetMapping
+    @GetMapping("/vod")
     public Object api(String t, String ids, String wd, String sort, Integer pg, HttpServletRequest request) {
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("path: {}  folder: {} keyword: {}  sort: {}", ids, t, wd, sort);
@@ -27,11 +28,17 @@ public class TvBoxController {
             return tvBoxService.getDetail(ids);
         } else if (t != null && !t.isEmpty()) {
             return tvBoxService.getMovieList(t, sort, pg);
-        }  else if (wd != null && !wd.isEmpty()) {
+        } else if (wd != null && !wd.isEmpty()) {
             return tvBoxService.search(wd);
         } else {
             return tvBoxService.getCategoryList();
         }
+    }
+
+    @Async
+    @PostMapping("/index")
+    public void index(@RequestBody IndexRequest indexRequest) throws IOException {
+        tvBoxService.index(indexRequest);
     }
 
     private String decodeUrl(String text) {
