@@ -116,7 +116,7 @@ public class TvBoxService {
             String path = fixPath("/" + e + (isMediaFile ? "" : PLAYLIST));
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site + "$" + path);
-            movieDetail.setVod_name(site + ":" + e);
+            movieDetail.setVod_name(e);
             movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
             list.add(movieDetail);
         }
@@ -152,7 +152,7 @@ public class TvBoxService {
                     String path = fixPath("/" + e + (isMediaFile ? "" : PLAYLIST));
                     MovieDetail movieDetail = new MovieDetail();
                     movieDetail.setVod_id(site + "$" + path);
-                    movieDetail.setVod_name(site + ":" + e);
+                    movieDetail.setVod_name(e);
                     movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
                     return movieDetail;
                 })
@@ -433,7 +433,6 @@ public class TvBoxService {
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(fsDetail.getProvider());
-        movieDetail.setVod_content("来自AList站点：" + site);
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
 

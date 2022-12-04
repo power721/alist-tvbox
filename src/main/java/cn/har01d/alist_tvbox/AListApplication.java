@@ -9,10 +9,10 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableAsync
 @EnableConfigurationProperties(AppProperties.class)
 @SpringBootApplication
-public class AListPlaylistApplication {
+public class AListApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(AListPlaylistApplication.class, args);
+        SpringApplication.run(AListApplication.class, args);
     }
 
 }
