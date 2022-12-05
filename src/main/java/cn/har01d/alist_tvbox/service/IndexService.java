@@ -30,12 +30,10 @@ public class IndexService {
 
     public void index(IndexRequest indexRequest) throws IOException {
         StopWatch stopWatch = new StopWatch();
-        stopWatch.start("create file");
         File dir = new File("data/" + indexRequest.getSite());
         Files.createDirectories(dir.toPath());
         File file = new File(dir, "index.txt");
         File fullFile = new File(dir, "index.full.txt");
-        stopWatch.stop();
 
         try (FileWriter writer = new FileWriter(file, true);
              FileWriter fullWriter = new FileWriter(fullFile, true)) {
@@ -62,8 +60,7 @@ public class IndexService {
             return;
         }
 
-        int size = context.isIncludeFile() || context.isWriteFull() ? 0 : 10;
-        FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, size);
+        FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 0);
         if (fsResponse == null) {
             return;
         }
