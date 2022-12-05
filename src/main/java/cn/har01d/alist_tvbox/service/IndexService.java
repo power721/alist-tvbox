@@ -10,12 +10,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Slf4j
 @Service
@@ -32,8 +35,10 @@ public class IndexService {
         StopWatch stopWatch = new StopWatch();
         File dir = new File("data/" + indexRequest.getSite());
         Files.createDirectories(dir.toPath());
-        File file = new File(dir, "index.txt");
-        File fullFile = new File(dir, "index.full.txt");
+        File file = new File(dir, indexRequest.getIndexName() + ".txt");
+        Files.delete(file.toPath());
+        File fullFile = new File(dir, indexRequest.getIndexName() + ".full.txt");
+        Files.delete(fullFile.toPath());
 
         try (FileWriter writer = new FileWriter(file, true);
              FileWriter fullWriter = new FileWriter(fullFile, true)) {
@@ -52,7 +57,22 @@ public class IndexService {
             }
         }
 
+        zipFile(file, new File(dir, indexRequest.getIndexName() + ".zip"));
         log.info("index done: {}", stopWatch.prettyPrint());
+    }
+
+    private void zipFile(File file, File output) throws IOException {
+        try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(output.toPath()));
+             FileInputStream fis = new FileInputStream(file)) {
+            ZipEntry zipEntry = new ZipEntry(file.getName());
+            zipOut.putNextEntry(zipEntry);
+
+            byte[] bytes = new byte[4096];
+            int length;
+            while ((length = fis.read(bytes)) >= 0) {
+                zipOut.write(bytes, 0, length);
+            }
+        }
     }
 
     private void index(IndexContext context, String path, int depth) throws IOException {
