@@ -36,7 +36,7 @@ docker run -d -p 8080:8080 --restart=always --name=alist-tvbox haroldli/alist-tv
 ```json
 {
   "sites": [
-    {"key":"Alist","name":"Alist┃转发","type":1,"api":"http://ip:8080/vod","searchable":1,"quickSearch":0,"filterable":0}
+    {"key":"Alist","name":"Alist┃转发","type":1,"api":"http://ip:8080/vod","searchable":1,"quickSearch":1,"filterable":1}
   ],
   "rules": [
     {"host":"pdsapi.aliyundrive.com","rule":["/redirect"]},
@@ -44,6 +44,14 @@ docker run -d -p 8080:8080 --restart=always --name=alist-tvbox haroldli/alist-tv
     {"host":"*","rule":["http((?!http).){12,}\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"]}
   ]
 }
+```
+
+Or use this config url `http://ip:8080/sub`.
+
+Change the backend config url in application.yaml
+```yaml
+app:
+  configUrl: https://hutool.ml/tang
 ```
 
 # Index And Search
@@ -68,6 +76,7 @@ Content-Type: application/json
 
 ```
 
+application.yaml
 ```yaml
 app:
   sites:

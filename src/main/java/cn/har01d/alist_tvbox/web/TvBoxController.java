@@ -1,25 +1,27 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
 import java.net.URLDecoder;
+import java.util.Map;
 
 @Slf4j
 @RestController
-@RequestMapping("/vod")
 public class TvBoxController {
     private final TvBoxService tvBoxService;
+    private final SubscriptionService subscriptionService;
 
-    public TvBoxController(TvBoxService tvBoxService) {
+    public TvBoxController(TvBoxService tvBoxService, SubscriptionService subscriptionService) {
         this.tvBoxService = tvBoxService;
+        this.subscriptionService = subscriptionService;
     }
 
-    @GetMapping
+    @GetMapping("/vod")
     public Object api(String t, String ids, String wd, String sort, Integer pg, HttpServletRequest request) {
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("path: {}  folder: {} keyword: {}  sort: {}", ids, t, wd, sort);
@@ -32,6 +34,11 @@ public class TvBoxController {
         } else {
             return tvBoxService.getCategoryList();
         }
+    }
+
+    @GetMapping("/sub")
+    public Map<String, Object> subscription() {
+        return subscriptionService.subscription();
     }
 
     private String decodeUrl(String text) {

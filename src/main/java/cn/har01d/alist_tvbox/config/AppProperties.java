@@ -12,6 +12,7 @@ import java.util.Set;
 public class AppProperties {
     private boolean sort;
     private int playlistSize = 100;
+    private String configUrl = "https://hutool.ml/tang";
     private Set<String> formats;
     private List<Site> sites;
 }
