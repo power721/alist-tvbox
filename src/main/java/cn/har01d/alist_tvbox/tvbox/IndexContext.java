@@ -18,6 +18,10 @@ public class IndexContext {
         return indexRequest.getSite();
     }
 
+    public boolean isWriteFull() {
+        return indexRequest.isWriteFull();
+    }
+
     public int getMaxDepth() {
         return indexRequest.getMaxDepth();
     }

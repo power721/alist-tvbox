@@ -5,27 +5,28 @@ import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.tvbox.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.io.IOUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 @Slf4j
 @Service
@@ -104,24 +105,27 @@ public class TvBoxService {
     }
 
     private List<MovieDetail> searchByFile(String site, String keyword, String indexFile) throws IOException {
-        List<MovieDetail> list = new ArrayList<>();
         if (indexFile.startsWith("http://") || indexFile.startsWith("https://")) {
             indexFile = downloadIndexFile(site, indexFile);
         }
 
         log.info("search \"{}\" from site {}, index: {}", keyword, site, indexFile);
-        List<String> lines = Files.readAllLines(Paths.get(indexFile)).stream().filter(e -> e.contains(keyword)).collect(Collectors.toList());
-        for (String e : lines) {
-            boolean isMediaFile = isMediaFile(e);
-            String path = fixPath("/" + e + (isMediaFile ? "" : PLAYLIST));
-            MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site + "$" + path);
-            movieDetail.setVod_name(e);
-            movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
-            list.add(movieDetail);
-        }
+        Set<String> keywords = Arrays.stream(keyword.split("\\s+")).collect(Collectors.toSet());
+        List<MovieDetail> list = Files.readAllLines(Paths.get(indexFile))
+                .stream()
+                .filter(path -> keywords.stream().allMatch(path::contains))
+                .map(e -> {
+                    boolean isMediaFile = isMediaFile(e);
+                    String path = fixPath("/" + e + (isMediaFile ? "" : PLAYLIST));
+                    MovieDetail movieDetail = new MovieDetail();
+                    movieDetail.setVod_id(site + "$" + path);
+                    movieDetail.setVod_name(e);
+                    movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
+                    return movieDetail;
+                })
+                .collect(Collectors.toList());
 
-        log.debug("search \"{}\" from site {}, result: {} {}", keyword, site, lines.size(), lines);
+        log.debug("search \"{}\" from site {}, result: {}", keyword, site, list.size());
         return list;
     }
 
@@ -134,13 +138,51 @@ public class TvBoxService {
     }
 
     private String downloadIndexFile(String site, String url) throws IOException {
-        File file = new File(".cache/" + site + "/" + getFileName(url));
+        String name = getFileName(url);
+        String filename = name;
+        if (name.endsWith(".zip")) {
+            filename = name.replace(".zip", ".txt");
+        }
+
+        File file = new File(".cache/" + site + "/" + filename);
         if (file.exists()) {
             return file.getAbsolutePath();
         }
+
         log.info("download index file from {}", url);
-        FileUtils.copyURLToFile(new URL(url), file);
+        if (name.endsWith(".zip")) {
+            File zipFile = new File(".cache/" + site + "/" + name);
+            FileUtils.copyURLToFile(new URL(url), zipFile);
+            unzip(zipFile);
+            Files.delete(zipFile.toPath());
+        } else {
+            FileUtils.copyURLToFile(new URL(url), file);
+        }
+
         return file.getAbsolutePath();
+    }
+
+    public static void unzip(File file) throws IOException {
+        Path destFolderPath = Paths.get(file.getParent());
+
+        try (ZipFile zipFile = new ZipFile(file, ZipFile.OPEN_READ, StandardCharsets.UTF_8)) {
+            Enumeration<? extends ZipEntry> entries = zipFile.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                Path entryPath = destFolderPath.resolve(entry.getName());
+                if (entryPath.normalize().startsWith(destFolderPath.normalize())) {
+                    if (entry.isDirectory()) {
+                        Files.createDirectories(entryPath);
+                    } else {
+                        Files.createDirectories(entryPath.getParent());
+                        try (InputStream in = zipFile.getInputStream(entry);
+                             OutputStream out = Files.newOutputStream(entryPath.toFile().toPath())) {
+                            IOUtils.copy(in, out);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private String getFileName(String url) {

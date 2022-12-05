@@ -8,6 +8,7 @@ import java.util.Set;
 @Data
 public class IndexRequest {
     private String site;
+    private boolean writeFull;
     private int maxDepth = 10;
     private Set<String> collection = new HashSet<>();
     private Set<String> single = new HashSet<>();

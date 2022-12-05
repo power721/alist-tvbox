@@ -12,6 +12,7 @@ import org.springframework.util.StopWatch;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -31,12 +32,9 @@ public class IndexService {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start("create file");
         File dir = new File("data/" + indexRequest.getSite());
-        dir.mkdirs();
+        Files.createDirectories(dir.toPath());
         File file = new File(dir, "index.txt");
-        file.createNewFile();
-
         File fullFile = new File(dir, "index.full.txt");
-        fullFile.createNewFile();
         stopWatch.stop();
 
         try (FileWriter writer = new FileWriter(file, true);
@@ -64,7 +62,8 @@ public class IndexService {
             return;
         }
 
-        FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 0);
+        int size = context.isIncludeFile() || context.isWriteFull() ? 0 : 10;
+        FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, size);
         if (fsResponse == null) {
             return;
         }
@@ -90,18 +89,24 @@ public class IndexService {
 
         if (files.size() > 0) {
             context.getWriter().write(path + "\n");
-            context.getFullWriter().write(path + "\n");
+            if (context.isWriteFull()) {
+                context.getFullWriter().write(path + "\n");
+            }
         }
 
         for (String line : files) {
             if (context.isIncludeFile()) {
                 context.getWriter().write(line + "\n");
             }
-            context.getFullWriter().write(line + "\n");
+            if (context.isWriteFull()) {
+                context.getFullWriter().write(line + "\n");
+            }
         }
 
         context.getWriter().flush();
-        context.getFullWriter().flush();
+        if (context.isWriteFull()) {
+            context.getFullWriter().flush();
+        }
     }
 
     private boolean exclude(Set<String> rules, String path) {
@@ -132,7 +137,7 @@ public class IndexService {
     }
 
     private String fixPath(String path) {
-        return path.replaceAll("/+", "/");
+        return path.replaceAll("/+", "/").replaceAll("\n", "%20");
     }
 
 }
