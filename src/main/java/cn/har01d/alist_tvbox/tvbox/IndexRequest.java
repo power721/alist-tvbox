@@ -10,6 +10,7 @@ public class IndexRequest {
     private String site;
     private String indexName = "index";
     private boolean writeFull;
+    private boolean excludeExternal;
     private int maxDepth = 10;
     private Set<String> collection = new HashSet<>();
     private Set<String> single = new HashSet<>();

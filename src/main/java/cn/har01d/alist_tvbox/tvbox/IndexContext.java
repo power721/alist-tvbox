@@ -1,18 +1,19 @@
 package cn.har01d.alist_tvbox.tvbox;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.io.FileWriter;
+import java.io.IOException;
+import java.util.HashSet;
 import java.util.Set;
 
 @Data
-@AllArgsConstructor
 public class IndexContext {
-    private IndexRequest indexRequest;
+    private final IndexRequest indexRequest;
+    private final FileWriter writer;
+    private final FileWriter fullWriter;
     private boolean includeFile;
-    private FileWriter writer;
-    private FileWriter fullWriter;
+    private Set<String> set = new HashSet<>();
 
     public String getSite() {
         return indexRequest.getSite();
@@ -22,11 +23,31 @@ public class IndexContext {
         return indexRequest.isWriteFull();
     }
 
+    public boolean isExcludeExternal() {
+        return indexRequest.isExcludeExternal();
+    }
+
     public int getMaxDepth() {
         return indexRequest.getMaxDepth();
     }
 
     public Set<String> getExcludes() {
         return indexRequest.getExcludes();
+    }
+
+    public boolean contains(String key) {
+        return set.contains(key);
+    }
+
+    public void write(String path) throws IOException {
+        set.add(path);
+        writer.write(path + "\n");
+    }
+
+    public void writeFull(String path) throws IOException {
+        if (indexRequest.isWriteFull()) {
+            set.add(path);
+            fullWriter.write(path + "\n");
+        }
     }
 }

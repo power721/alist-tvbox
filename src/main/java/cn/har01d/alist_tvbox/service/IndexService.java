@@ -36,22 +36,22 @@ public class IndexService {
         File dir = new File("data/" + indexRequest.getSite());
         Files.createDirectories(dir.toPath());
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
-        Files.delete(file.toPath());
+        Files.deleteIfExists(file.toPath());
         File fullFile = new File(dir, indexRequest.getIndexName() + ".full.txt");
-        Files.delete(fullFile.toPath());
+        Files.deleteIfExists(fullFile.toPath());
 
         try (FileWriter writer = new FileWriter(file, true);
              FileWriter fullWriter = new FileWriter(fullFile, true)) {
+            IndexContext context = new IndexContext(indexRequest, writer, fullWriter);
             for (String path : indexRequest.getCollection()) {
                 stopWatch.start("index " + path);
-                IndexContext context = new IndexContext(indexRequest, false, writer, fullWriter);
                 index(context, path, 0);
                 stopWatch.stop();
             }
 
+            context.setIncludeFile(true);
             for (String path : indexRequest.getSingle()) {
                 stopWatch.start("index " + path);
-                IndexContext context = new IndexContext(indexRequest, true, writer, fullWriter);
                 index(context, path, 0);
                 stopWatch.stop();
             }
@@ -81,7 +81,7 @@ public class IndexService {
         }
 
         FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 0);
-        if (fsResponse == null) {
+        if (fsResponse == null || (context.isExcludeExternal() && fsResponse.getProvider().contains("AList"))) {
             return;
         }
 
@@ -104,25 +104,23 @@ public class IndexService {
             }
         }
 
-        if (files.size() > 0) {
-            context.getWriter().write(path + "\n");
+        if (files.size() > 0 && !context.contains(path)) {
+            context.write(path);
             if (context.isWriteFull()) {
-                context.getFullWriter().write(path + "\n");
+                context.writeFull(path);
             }
         }
 
         for (String line : files) {
+            if (context.contains(line)) {
+                continue;
+            }
             if (context.isIncludeFile()) {
-                context.getWriter().write(line + "\n");
+                context.write(line);
             }
             if (context.isWriteFull()) {
-                context.getFullWriter().write(line + "\n");
+                context.writeFull(line);
             }
-        }
-
-        context.getWriter().flush();
-        if (context.isWriteFull()) {
-            context.getFullWriter().flush();
         }
     }
 
