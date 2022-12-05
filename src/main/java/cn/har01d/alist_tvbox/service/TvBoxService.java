@@ -180,55 +180,6 @@ public class TvBoxService {
         return isMediaFormat(name);
     }
 
-    public void index(IndexRequest indexRequest) throws IOException {
-        File dir = new File("data/" + indexRequest.getSite() + indexRequest.getPath());
-        dir.mkdirs();
-        File file = new File(dir, "index.video.txt");
-        file.createNewFile();
-        try (FileWriter writer = new FileWriter(file, true)) {
-            index(writer, indexRequest, indexRequest.getPath());
-        }
-        log.info("index done");
-    }
-
-    private void index(FileWriter writer, IndexRequest indexRequest, String path) throws IOException {
-        FsResponse fsResponse = aListService.listFiles(indexRequest.getSite(), path, 1, 0);
-        if (fsResponse == null) {
-            return;
-        }
-        List<String> files = new ArrayList<>();
-        for (FsInfo fsInfo : fsResponse.getFiles()) {
-            if (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName())) {
-                continue;
-            }
-
-            if (fsInfo.getType() == 1) {
-                String newPath = fixPath(path + "/" + fsInfo.getName());
-                if (indexRequest.getExcludes().stream().anyMatch(newPath::startsWith)) {
-                    continue;
-                }
-
-                if (indexRequest.getIncludes().isEmpty() || indexRequest.getIncludes().stream().anyMatch(newPath::startsWith)) {
-                    index(writer, indexRequest, newPath);
-                }
-            } else {
-                files.add(fixPath(path + "/" + fsInfo.getName()));
-            }
-        }
-
-        if (files.size() > 0) {
-            writer.write(path + "\n");
-        }
-
-        if (indexRequest.isIncludeFile()) {
-            for (String line : files) {
-                writer.write(line + "\n");
-            }
-        }
-
-        writer.flush();
-    }
-
     public MovieList getMovieList(String tid, String sort, int page) {
         int index = tid.indexOf('$');
         String site = tid.substring(0, index);

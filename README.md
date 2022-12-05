@@ -36,37 +36,6 @@ docker run -d -p 8080:8080 --restart=always --name=alist-tvbox haroldli/alist-tv
 ```json
 {
   "sites": [
-    {"key":"Alist","name":"Alist┃转发","type":1,"api":"http://ip:8080/vod","searchable":0,"quickSearch":0,"filterable":0}
-  ],
-  "rules": [
-    {"host":"pdsapi.aliyundrive.com","rule":["/redirect"]},
-    {"host":"*","rule":["http((?!http).){12,}?\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\?.*"]},
-    {"host":"*","rule":["http((?!http).){12,}\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"]}
-  ]
-}
-```
-
-# Support Search
-Can only search data from xiaoyaliu/alist now.
-
-Thanks xiaoyaliu/alist to provide the index file.
-
-### Docker Container
-Use the following docker to provide data from xiaoyaliu/alist.
-```bash
-docker run -d -p 5244:80 --restart=always --name=alist haroldli/alist
-# or use your own ali token
-docker run -d -p 5244:80 --restart=always -e ALI_TOKEN=xxx --name=alist haroldli/alist
-```
-
-```bash
-curl -s http://d.har01d.cn/update_xiaoya.sh | bash
-```
-
-### TvBox Config
-```json
-{
-  "sites": [
     {"key":"Alist","name":"Alist┃转发","type":1,"api":"http://ip:8080/vod","searchable":1,"quickSearch":0,"filterable":0}
   ],
   "rules": [
@@ -75,4 +44,35 @@ curl -s http://d.har01d.cn/update_xiaoya.sh | bash
     {"host":"*","rule":["http((?!http).){12,}\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"]}
   ]
 }
+```
+
+# Index And Search
+```http request
+POST http://localhost:8080/index
+Content-Type: application/json
+
+{
+  "site": "小雅",
+  "collection": [
+    "/电视剧",
+    "/动漫",
+    "/综艺",
+    "/纪录片"
+  ],
+  "single": [
+    "/电影",
+    "/音乐"
+  ],
+  "maxDepth": 10
+}
+
+```
+
+```yaml
+app:
+  sites:
+    - name: 小雅
+      url: http://alist.xiaoya.pro
+      searchable: true
+      indexFile: /the/path/to/index.txt
 ```
