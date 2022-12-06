@@ -7,7 +7,10 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -33,6 +36,7 @@ public class AListService {
     public List<String> search(String site, String keyword) {
         String url = getSiteUrl(site) + "/api/search?type=video&box=" + keyword;
         SearchResponse response = restTemplate.getForObject(url, SearchResponse.class);
+        logError(response);
         log.debug("search \"{}\" from site {} result: {} {}", keyword, site, response.getData().size(), response.getData());
         return response.getData();
     }
@@ -46,6 +50,7 @@ public class AListService {
         request.setSize(size);
         log.debug("call api: {}", url);
         FsListResponse response = restTemplate.postForObject(url, request, FsListResponse.class);
+        logError(response);
         log.debug("list files: {} {}", path, response.getData());
         return getFiles(version, response.getData());
     }
@@ -81,6 +86,7 @@ public class AListService {
         request.setPath(path);
         log.debug("call api: {}", url);
         FsDetailResponse response = restTemplate.postForObject(url, request, FsDetailResponse.class);
+        logError(response);
         log.debug("get file: {} {}", path, response.getData());
         return response.getData();
     }
@@ -91,6 +97,7 @@ public class AListService {
         request.setPath(path);
         log.debug("call api: {}", url);
         FsListResponseV2 response = restTemplate.postForObject(url, request, FsListResponseV2.class);
+        logError(response);
         FsInfoV2 fsInfo = Optional.ofNullable(response)
                 .map(Response::getData)
                 .map(FsResponseV2::getFiles)
@@ -133,5 +140,11 @@ public class AListService {
 
     private String getSiteUrl(String site) {
         return sites.get(site);
+    }
+
+    private void logError(Response<?> response) {
+        if (response != null && response.getCode() != 200) {
+            log.warn("error {} {}", response.getCode(), response.getMessage());
+        }
     }
 }
