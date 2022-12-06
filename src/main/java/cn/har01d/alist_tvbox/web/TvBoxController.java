@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
@@ -38,7 +39,12 @@ public class TvBoxController {
 
     @GetMapping("/sub")
     public Map<String, Object> subscription() {
-        return subscriptionService.subscription();
+        return subscriptionService.subscription(1);
+    }
+
+    @GetMapping("/sub/{id}")
+    public Map<String, Object> subscription(@PathVariable int id) {
+        return subscriptionService.subscription(id);
     }
 
     private String decodeUrl(String text) {

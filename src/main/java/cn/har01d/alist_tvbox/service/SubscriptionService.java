@@ -37,18 +37,21 @@ public class SubscriptionService {
         this.appProperties = appProperties;
     }
 
-    public Map<String, Object> subscription() {
-        String apiUrl = appProperties.getConfigUrl();
+    public Map<String, Object> subscription(int id) {
         String configKey = null;
-        String configUrl = apiUrl;
-        String pk = ";pk;";
-        if (apiUrl.contains(pk)) {
-            String[] a = apiUrl.split(pk);
-            configUrl = a[0];
-            configKey = a[1];
-        }
-        if (!configUrl.startsWith("http")) {
-            configUrl = "http://" + configUrl;
+        String configUrl = null;
+        if (id > 0) {
+            String apiUrl = appProperties.getConfigUrl();
+            configUrl = apiUrl;
+            String pk = ";pk;";
+            if (apiUrl.contains(pk)) {
+                String[] a = apiUrl.split(pk);
+                configUrl = a[0];
+                configKey = a[1];
+            }
+            if (!configUrl.startsWith("http")) {
+                configUrl = "http://" + configUrl;
+            }
         }
 
         String json = loadConfigJson(configUrl);
@@ -103,6 +106,10 @@ public class SubscriptionService {
     }
 
     private String loadConfigJson(String url) {
+        if (url == null || url.isEmpty()) {
+            return null;
+        }
+
         try {
             log.info("load json from {}", url);
             return restTemplate.getForObject(url, String.class);
