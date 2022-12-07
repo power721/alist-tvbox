@@ -148,7 +148,6 @@ public class AListService {
     private void logError(Response<?> response) {
         if (response != null && response.getCode() != 200) {
             log.warn("error {} {}", response.getCode(), response.getMessage());
-            throw new RestClientException(response.getMessage());
         }
     }
 }
