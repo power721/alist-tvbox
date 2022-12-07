@@ -5,7 +5,10 @@ import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
 import cn.har01d.alist_tvbox.tvbox.IndexRequest;
+import com.hankcs.hanlp.HanLP;
+import com.hankcs.hanlp.seg.common.Term;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.text.similarity.CosineSimilarity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
 
@@ -14,9 +17,8 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.time.Duration;
+import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -32,33 +34,26 @@ public class IndexService {
     }
 
     public void index(IndexRequest indexRequest) throws IOException {
-        StopWatch stopWatch = new StopWatch();
-        File dir = new File("data/" + indexRequest.getSite());
+        StopWatch stopWatch = new StopWatch("index");
+        File dir = new File("data/index/" + indexRequest.getSite());
         Files.createDirectories(dir.toPath());
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
         Files.deleteIfExists(file.toPath());
-        File fullFile = new File(dir, indexRequest.getIndexName() + ".full.txt");
-        Files.deleteIfExists(fullFile.toPath());
 
-        try (FileWriter writer = new FileWriter(file, true);
-             FileWriter fullWriter = new FileWriter(fullFile, true)) {
-            IndexContext context = new IndexContext(indexRequest, writer, fullWriter);
-            for (String path : indexRequest.getCollection()) {
+        try (FileWriter writer = new FileWriter(file, true)) {
+            IndexContext context = new IndexContext(indexRequest, writer);
+            for (String path : indexRequest.getPaths()) {
                 stopWatch.start("index " + path);
                 index(context, path, 0);
                 stopWatch.stop();
             }
-
-            context.setIncludeFile(true);
-            for (String path : indexRequest.getSingle()) {
-                stopWatch.start("index " + path);
-                index(context, path, 0);
-                stopWatch.stop();
-            }
+            log.info("index stats: {}", context.stats);
         }
 
-        zipFile(file, new File(dir, indexRequest.getIndexName() + ".zip"));
-        log.info("index done: {}", stopWatch.prettyPrint());
+        File zipFIle = new File(dir, indexRequest.getIndexName() + ".zip");
+        zipFile(file, zipFIle);
+        log.info("index done, total time : {} {}", Duration.ofNanos(stopWatch.getTotalTimeNanos()), stopWatch.prettyPrint());
+        log.info("index file: {}", file.getAbsolutePath());
     }
 
     private void zipFile(File file, File output) throws IOException {
@@ -81,15 +76,21 @@ public class IndexService {
         }
 
         FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 0);
-        if (fsResponse == null || (context.isExcludeExternal() && fsResponse.getProvider().contains("AList"))) {
+        if (fsResponse == null) {
+            context.stats.errors++;
             return;
         }
+        if (context.isExcludeExternal() && fsResponse.getProvider().contains("AList")) {
+            return;
+        }
+
 
         List<String> files = new ArrayList<>();
         for (FsInfo fsInfo : fsResponse.getFiles()) {
             if (fsInfo.getType() == 1) {
                 String newPath = fixPath(path + "/" + fsInfo.getName());
                 if (exclude(context.getExcludes(), newPath)) {
+                    context.stats.excluded++;
                     continue;
                 }
 
@@ -97,30 +98,29 @@ public class IndexService {
             } else if (isMediaFormat(fsInfo.getName())) {
                 String newPath = fixPath(path + "/" + fsInfo.getName());
                 if (exclude(context.getExcludes(), newPath)) {
+                    context.stats.excluded++;
                     continue;
                 }
 
-                files.add(newPath);
+                context.stats.files++;
+                files.add(fsInfo.getName());
             }
         }
 
         if (files.size() > 0 && !context.contains(path)) {
             context.write(path);
-            if (context.isWriteFull()) {
-                context.writeFull(path);
-            }
         }
 
-        for (String line : files) {
-            if (context.contains(line)) {
+        if (isSimilar(path, files, context.getStopWords())) {
+            return;
+        }
+
+        for (String name : files) {
+            String newPath = fixPath(path + "/" + name);
+            if (context.contains(newPath)) {
                 continue;
             }
-            if (context.isIncludeFile()) {
-                context.write(line);
-            }
-            if (context.isWriteFull()) {
-                context.writeFull(line);
-            }
+            context.write(newPath);
         }
     }
 
@@ -155,4 +155,57 @@ public class IndexService {
         return path.replaceAll("/+", "/").replaceAll("\n", "%20");
     }
 
+    private String getFolderName(String path) {
+        int index = path.lastIndexOf('/');
+        if (index > 0) {
+            return path.substring(index + 1);
+        }
+        return path;
+    }
+
+    public boolean isSimilar(String path, List<String> sentences, Set<String> stopWords) {
+        if (sentences.isEmpty()) {
+            return true;
+        }
+        if (sentences.size() == 1) {
+            String folderName = getFolderName(path);
+            List<String> list = new ArrayList<>(sentences);
+            list.add(folderName);
+            return isSimilar(path, list, stopWords);
+        }
+
+        double sum = 0.0;
+        CosineSimilarity cosineSimilarity = new CosineSimilarity();
+        Map<CharSequence, Integer> leftVector = getVector(stopWords, sentences.get(0));
+        for (int i = 1; i < sentences.size(); ++i) {
+            Map<CharSequence, Integer> rightVector = getVector(stopWords, sentences.get(i));
+            sum += cosineSimilarity.cosineSimilarity(leftVector, rightVector);
+            leftVector = rightVector;
+        }
+        double result = sum / (sentences.size() - 1);
+
+        log.debug("cosineSimilarity {} : {}", path, result);
+        return result > 0.9;
+    }
+
+    private Map<CharSequence, Integer> getVector(Set<String> stopWords, String text) {
+        Map<CharSequence, Integer> result = new HashMap<>();
+        for (String stopWord : stopWords) {
+            text = text.replaceAll(stopWord, "");
+        }
+        text = text.replaceAll("\\d+", " ").replaceAll("\\s+", " ");
+        List<Term> termList = HanLP.segment(text);
+        for (Term term : termList) {
+            int frequency = term.getFrequency();
+            if (frequency == 0) {
+                frequency = 1;
+            }
+            if (result.containsKey(term.word)) {
+                result.put(term.word, result.get(term.word) + frequency);
+            } else {
+                result.put(term.word, frequency);
+            }
+        }
+        return result;
+    }
 }

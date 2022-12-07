@@ -9,18 +9,13 @@ import java.util.Set;
 
 @Data
 public class IndexContext {
+    public Stats stats = new Stats();
     private final IndexRequest indexRequest;
     private final FileWriter writer;
-    private final FileWriter fullWriter;
-    private boolean includeFile;
     private Set<String> set = new HashSet<>();
 
     public String getSite() {
         return indexRequest.getSite();
-    }
-
-    public boolean isWriteFull() {
-        return indexRequest.isWriteFull();
     }
 
     public boolean isExcludeExternal() {
@@ -35,19 +30,25 @@ public class IndexContext {
         return indexRequest.getExcludes();
     }
 
+    public Set<String> getStopWords() {
+        return indexRequest.getStopWords();
+    }
+
     public boolean contains(String key) {
         return set.contains(key);
     }
 
     public void write(String path) throws IOException {
         set.add(path);
+        stats.indexed++;
         writer.write(path + "\n");
     }
 
-    public void writeFull(String path) throws IOException {
-        if (indexRequest.isWriteFull()) {
-            set.add(path);
-            fullWriter.write(path + "\n");
-        }
+    @Data
+    public static class Stats {
+        public int files;
+        public int indexed;
+        public int errors;
+        public int excluded;
     }
 }

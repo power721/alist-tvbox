@@ -11,7 +11,7 @@ mvn clean package
 
 # Run
 ```bash
-java -jar target/alist-tvbox-1.0.jar
+java -jar target/alist-tvbox-1.0.jar --server.port=5678
 ```
 
 # Deploy
@@ -25,18 +25,18 @@ scp config/install-service.sh user@your-server:~
 # Docker
 ```bash
 ./build.sh
-docker run -d -p 8080:8080 --restart=always --name=alist-tvbox alist-tvbox
+docker run -d -p 5678:8080 --restart=always --name=alist-tvbox alist-tvbox
 ```
 Or run container from Docker hub.
 ```bash
-docker run -d -p 8080:8080 --restart=always --name=alist-tvbox haroldli/alist-tvbox
+docker run -d -p 5678:8080 --restart=always --name=alist-tvbox haroldli/alist-tvbox
 ```
 
 # TvBox Config
 ```json
 {
   "sites": [
-    {"key":"Alist","name":"Alist┃转发","type":1,"api":"http://ip:8080/vod","searchable":1,"quickSearch":1,"filterable":1}
+    {"key":"Alist","name":"Alist┃转发","type":1,"api":"http://ip:5678/vod","searchable":1,"quickSearch":1,"filterable":1}
   ],
   "rules": [
     {"host":"pdsapi.aliyundrive.com","rule":["/redirect"]},
@@ -46,7 +46,7 @@ docker run -d -p 8080:8080 --restart=always --name=alist-tvbox haroldli/alist-tv
 }
 ```
 
-Or use this config url `http://ip:8080/sub`.
+Or use this config url `http://ip:5678/sub/1`.
 
 Change the backend config url in application.yaml
 ```yaml
@@ -56,20 +56,24 @@ app:
 
 # Index And Search
 ```http request
-POST http://localhost:8080/index
+POST http://localhost:5678/index
 Content-Type: application/json
 
 {
   "site": "小雅",
-  "collection": [
+  "indexName": "index.xiaoya",
+  "excludeExternal": false,
+  "paths": [
     "/电视剧",
     "/动漫",
     "/综艺",
-    "/纪录片"
-  ],
-  "single": [
+    "/纪录片",
     "/电影",
     "/音乐"
+  ],
+  "stopWords": [
+  ],
+  "excludes": [
   ],
   "maxDepth": 10
 }
@@ -83,5 +87,9 @@ app:
     - name: 小雅
       url: http://alist.xiaoya.pro
       searchable: true
-      indexFile: /the/path/to/index.txt
+      indexFile: /the/path/to/index.xiaoya.txt
+    - name: Har01d
+      url: http://alist.har01d.cn
+      searchable: true
+      indexFile: http://d.har01d.cn/index.full.zip
 ```

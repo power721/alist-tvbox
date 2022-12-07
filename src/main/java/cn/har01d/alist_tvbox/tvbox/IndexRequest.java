@@ -9,10 +9,9 @@ import java.util.Set;
 public class IndexRequest {
     private String site;
     private String indexName = "index";
-    private boolean writeFull;
     private boolean excludeExternal;
     private int maxDepth = 10;
-    private Set<String> collection = new HashSet<>();
-    private Set<String> single = new HashSet<>();
+    private Set<String> paths = new HashSet<>();
+    private Set<String> stopWords = new HashSet<>();
     private Set<String> excludes = new HashSet<>();
 }
