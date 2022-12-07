@@ -7,5 +7,6 @@ public class Site {
     private String name;
     private String url;
     private boolean searchable;
+    private String searchApi = "/api/fs/search";
     private String indexFile;
 }

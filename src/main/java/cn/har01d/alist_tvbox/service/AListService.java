@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.model.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
@@ -33,12 +34,14 @@ public class AListService {
         appProperties.getSites().forEach(site -> sites.put(site.getName(), site.getUrl()));
     }
 
-    public List<String> search(String site, String keyword) {
-        String url = getSiteUrl(site) + "/api/search?type=video&box=" + keyword;
-        SearchResponse response = restTemplate.getForObject(url, SearchResponse.class);
+    public List<SearchResult> search(String site, String api, String keyword) {
+        String url = getSiteUrl(site) + api + "?keyword=" + keyword;
+        SearchRequest request = new SearchRequest();
+        request.setKeywords(keyword);
+        SearchListResponse response = restTemplate.postForObject(url, request, SearchListResponse.class);
         logError(response);
-        log.debug("search \"{}\" from site {} result: {} {}", keyword, site, response.getData().size(), response.getData());
-        return response.getData();
+        log.debug("search \"{}\" from site {} result: {}", keyword, site, response.getData().getContent().size());
+        return response.getData().getContent();
     }
 
     public FsResponse listFiles(String site, String path, int page, int size) {
@@ -145,6 +148,7 @@ public class AListService {
     private void logError(Response<?> response) {
         if (response != null && response.getCode() != 200) {
             log.warn("error {} {}", response.getCode(), response.getMessage());
+            throw new RestClientException(response.getMessage());
         }
     }
 }

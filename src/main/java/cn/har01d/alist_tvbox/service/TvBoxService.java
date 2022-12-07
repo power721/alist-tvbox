@@ -80,7 +80,7 @@ public class TvBoxService {
                 if (StringUtils.hasText(site.getIndexFile())) {
                     futures.add(executorService.submit(() -> searchByFile(site.getName(), keyword, site.getIndexFile())));
                 } else {
-                    futures.add(executorService.submit(() -> searchByApi(site.getName(), keyword)));
+                    futures.add(executorService.submit(() -> searchByApi(site.getName(), site.getSearchApi(), keyword)));
                 }
             }
         }
@@ -195,16 +195,16 @@ public class TvBoxService {
         return name;
     }
 
-    private List<MovieDetail> searchByApi(String site, String keyword) {
-        log.info("search \"{}\" from site {}", keyword, site);
-        return aListService.search(site, keyword)
+    private List<MovieDetail> searchByApi(String site, String api, String keyword) {
+        log.info("search \"{}\" from site {}, api: {}", keyword, site, api);
+        return aListService.search(site, api, keyword)
                 .stream()
                 .map(e -> {
-                    boolean isMediaFile = isMediaFile(e);
-                    String path = fixPath("/" + e + (isMediaFile ? "" : PLAYLIST));
+                    boolean isMediaFile = isMediaFile(e.getName());
+                    String path = fixPath(e.getParent() + "/" + e.getName() + (isMediaFile ? "" : PLAYLIST));
                     MovieDetail movieDetail = new MovieDetail();
                     movieDetail.setVod_id(site + "$" + path);
-                    movieDetail.setVod_name(e);
+                    movieDetail.setVod_name(e.getName());
                     movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
                     return movieDetail;
                 })

@@ -5,5 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 @Data
-public class SearchResponse extends Response<List<String>> {
+public class SearchResponse {
+    private List<SearchResult> content;
+    private int total;
 }
