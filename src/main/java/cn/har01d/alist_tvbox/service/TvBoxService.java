@@ -109,19 +109,25 @@ public class TvBoxService {
 
         log.info("search \"{}\" from site {}, index: {}", keyword, site, indexFile);
         Set<String> keywords = Arrays.stream(keyword.split("\\s+")).collect(Collectors.toSet());
-        List<MovieDetail> list = Files.readAllLines(Paths.get(indexFile))
+        Set<String> lines = Files.readAllLines(Paths.get(indexFile))
                 .stream()
                 .filter(path -> keywords.stream().allMatch(path::contains))
-                .map(e -> {
-                    boolean isMediaFile = isMediaFile(e);
-                    String path = fixPath("/" + e + (isMediaFile ? "" : PLAYLIST));
-                    MovieDetail movieDetail = new MovieDetail();
-                    movieDetail.setVod_id(site + "$" + path);
-                    movieDetail.setVod_name(e);
-                    movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
-                    return movieDetail;
-                })
-                .collect(Collectors.toList());
+                .collect(Collectors.toSet());
+
+        List<MovieDetail> list = new ArrayList<>();
+        for (String line : lines) {
+            boolean isMediaFile = isMediaFile(line);
+            if (isMediaFile && lines.contains(getParent(line))) {
+                continue;
+            }
+            String path = fixPath("/" + line + (isMediaFile ? "" : PLAYLIST));
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(site + "$" + path);
+            movieDetail.setVod_name(site + ":" + line);
+            movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
+            list.add(movieDetail);
+        }
+        list.sort(Comparator.comparing(MovieDetail::getVod_id));
 
         log.debug("search \"{}\" from site {}, result: {}", keyword, site, list.size());
         return list;
