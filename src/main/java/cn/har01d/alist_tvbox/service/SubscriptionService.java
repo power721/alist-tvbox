@@ -20,7 +20,6 @@ import java.util.regex.Pattern;
 @Service
 @SuppressWarnings("unchecked")
 public class SubscriptionService {
-    //    private static final String ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9";
     private static final String ACCEPT = "application/json, text/plain, */*";
     private static final String USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36";
 
