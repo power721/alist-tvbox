@@ -1,9 +1,11 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -20,17 +22,14 @@ import java.util.regex.Pattern;
 @Service
 @SuppressWarnings("unchecked")
 public class SubscriptionService {
-    private static final String ACCEPT = "application/json, text/plain, */*";
-    private static final String USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36";
-
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final AppProperties appProperties;
 
     public SubscriptionService(RestTemplateBuilder builder, ObjectMapper objectMapper, AppProperties appProperties) {
         this.restTemplate = builder
-                .defaultHeader("Accept", ACCEPT)
-                .defaultHeader("User-Agent", USER_AGENT)
+                .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
+                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
         this.appProperties = appProperties;
@@ -69,17 +68,17 @@ public class SubscriptionService {
     }
 
     private static Map<String, Object> buildSite() {
-        Map<String, Object> alist = new HashMap<>();
+        Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
         builder.replacePath("/vod");
-        alist.put("key", "Alist");
-        alist.put("name", "Alist┃转发");
-        alist.put("type", 1);
-        alist.put("api", builder.build().toUriString());
-        alist.put("searchable", 1);
-        alist.put("quickSearch", 1);
-        alist.put("filterable", 1);
-        return alist;
+        site.put("key", "AList");
+        site.put("name", "AList┃转发");
+        site.put("type", 1);
+        site.put("api", builder.build().toUriString());
+        site.put("searchable", 1);
+        site.put("quickSearch", 1);
+        site.put("filterable", 1);
+        return site;
     }
 
     private static void addRules(Map<String, Object> config) {

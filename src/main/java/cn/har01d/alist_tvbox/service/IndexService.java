@@ -8,18 +8,22 @@ import cn.har01d.alist_tvbox.tvbox.IndexRequest;
 import com.hankcs.hanlp.HanLP;
 import com.hankcs.hanlp.seg.common.Term;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.text.similarity.CosineSimilarity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.*;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 @Slf4j
@@ -31,6 +35,66 @@ public class IndexService {
     public IndexService(AListService aListService, AppProperties appProperties) {
         this.aListService = aListService;
         this.appProperties = appProperties;
+    }
+
+    public String downloadIndexFile(String site, String url) throws IOException {
+        String name = getIndexFileName(url);
+        String filename = name;
+        if (name.endsWith(".zip")) {
+            filename = name.replace(".zip", ".txt");
+        }
+
+        File file = new File(".cache/" + site + "/" + filename);
+        if (file.exists()) {
+            return file.getAbsolutePath();
+        }
+
+        log.info("download index file from {}", url);
+        if (name.endsWith(".zip")) {
+            File zipFile = new File(".cache/" + site + "/" + name);
+            FileUtils.copyURLToFile(new URL(url), zipFile);
+            unzip(zipFile);
+            Files.delete(zipFile.toPath());
+        } else {
+            FileUtils.copyURLToFile(new URL(url), file);
+        }
+
+        return file.getAbsolutePath();
+    }
+
+    public static void unzip(File file) throws IOException {
+        Path destFolderPath = Paths.get(file.getParent());
+
+        try (ZipFile zipFile = new ZipFile(file, ZipFile.OPEN_READ, StandardCharsets.UTF_8)) {
+            Enumeration<? extends ZipEntry> entries = zipFile.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                Path entryPath = destFolderPath.resolve(entry.getName());
+                if (entryPath.normalize().startsWith(destFolderPath.normalize())) {
+                    if (entry.isDirectory()) {
+                        Files.createDirectories(entryPath);
+                    } else {
+                        Files.createDirectories(entryPath.getParent());
+                        try (InputStream in = zipFile.getInputStream(entry);
+                             OutputStream out = Files.newOutputStream(entryPath.toFile().toPath())) {
+                            IOUtils.copy(in, out);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private String getIndexFileName(String url) {
+        int index = url.lastIndexOf('/');
+        String name = "index.txt";
+        if (index > -1) {
+            name = url.substring(index + 1);
+        }
+        if (name.isEmpty()) {
+            return "index.txt";
+        }
+        return name;
     }
 
     public void index(IndexRequest indexRequest) throws IOException {

@@ -2,8 +2,10 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.model.*;
+import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -16,10 +18,7 @@ import java.util.regex.Pattern;
 @Slf4j
 @Service
 public class AListService {
-
     private static final Pattern VERSION = Pattern.compile("\"version\":\"v\\d+\\.\\d+\\.\\d+\"");
-    private static final String ACCEPT = "application/json, text/plain, */*";
-    private static final String USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36";
 
     private final RestTemplate restTemplate;
     private final Map<String, Integer> cache = new HashMap<>();
@@ -27,8 +26,8 @@ public class AListService {
 
     public AListService(RestTemplateBuilder builder, AppProperties appProperties) {
         this.restTemplate = builder
-                .defaultHeader("Accept", ACCEPT)
-                .defaultHeader("User-Agent", USER_AGENT)
+                .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
+                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
         appProperties.getSites().forEach(site -> sites.put(site.getName(), site.getUrl()));
     }

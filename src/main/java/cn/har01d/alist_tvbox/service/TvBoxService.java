@@ -4,18 +4,14 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.tvbox.*;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.io.*;
-import java.net.URL;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -23,19 +19,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+
+import static cn.har01d.alist_tvbox.util.Constants.*;
 
 @Slf4j
 @Service
 public class TvBoxService {
-    public static final String FOLDER_PIC = "http://img1.3png.com/281e284a670865a71d91515866552b5f172b.png";
-    public static final String LIST_PIC = "http://img1.3png.com/3063ad894f04619af7270df68a124f129c8f.png";
-    public static final String PLAYLIST = "/~playlist"; // auto generated playlist
-    public static final String PLAYLIST_TXT = "playlist.txt"; // user provided playlist
-    public static final String FILE = "file";
-    public static final String FOLDER = "folder";
+
     private final AListService aListService;
+    private final IndexService indexService;
     private final AppProperties appProperties;
     private final FileNameComparator nameComparator = new FileNameComparator();
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
@@ -49,8 +41,9 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService, AppProperties appProperties) throws IOException {
+    public TvBoxService(AListService aListService, IndexService indexService, AppProperties appProperties) throws IOException {
         this.aListService = aListService;
+        this.indexService = indexService;
         this.appProperties = appProperties;
         downloadIndexFile();
     }
@@ -104,7 +97,7 @@ public class TvBoxService {
 
     private List<MovieDetail> searchByFile(String site, String keyword, String indexFile) throws IOException {
         if (indexFile.startsWith("http://") || indexFile.startsWith("https://")) {
-            indexFile = downloadIndexFile(site, indexFile);
+            indexFile = indexService.downloadIndexFile(site, indexFile);
         }
 
         log.info("search \"{}\" from site {}, index: {}", keyword, site, indexFile);
@@ -136,69 +129,9 @@ public class TvBoxService {
     private void downloadIndexFile() throws IOException {
         for (Site site : appProperties.getSites()) {
             if (site.isSearchable() && StringUtils.hasText(site.getIndexFile())) {
-                downloadIndexFile(site.getName(), site.getIndexFile());
+                indexService.downloadIndexFile(site.getName(), site.getIndexFile());
             }
         }
-    }
-
-    private String downloadIndexFile(String site, String url) throws IOException {
-        String name = getFileName(url);
-        String filename = name;
-        if (name.endsWith(".zip")) {
-            filename = name.replace(".zip", ".txt");
-        }
-
-        File file = new File(".cache/" + site + "/" + filename);
-        if (file.exists()) {
-            return file.getAbsolutePath();
-        }
-
-        log.info("download index file from {}", url);
-        if (name.endsWith(".zip")) {
-            File zipFile = new File(".cache/" + site + "/" + name);
-            FileUtils.copyURLToFile(new URL(url), zipFile);
-            unzip(zipFile);
-            Files.delete(zipFile.toPath());
-        } else {
-            FileUtils.copyURLToFile(new URL(url), file);
-        }
-
-        return file.getAbsolutePath();
-    }
-
-    public static void unzip(File file) throws IOException {
-        Path destFolderPath = Paths.get(file.getParent());
-
-        try (ZipFile zipFile = new ZipFile(file, ZipFile.OPEN_READ, StandardCharsets.UTF_8)) {
-            Enumeration<? extends ZipEntry> entries = zipFile.entries();
-            while (entries.hasMoreElements()) {
-                ZipEntry entry = entries.nextElement();
-                Path entryPath = destFolderPath.resolve(entry.getName());
-                if (entryPath.normalize().startsWith(destFolderPath.normalize())) {
-                    if (entry.isDirectory()) {
-                        Files.createDirectories(entryPath);
-                    } else {
-                        Files.createDirectories(entryPath.getParent());
-                        try (InputStream in = zipFile.getInputStream(entry);
-                             OutputStream out = Files.newOutputStream(entryPath.toFile().toPath())) {
-                            IOUtils.copy(in, out);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private String getFileName(String url) {
-        int index = url.lastIndexOf('/');
-        String name = "index.txt";
-        if (index > -1) {
-            name = url.substring(index + 1);
-        }
-        if (name.isEmpty()) {
-            return "index.txt";
-        }
-        return name;
     }
 
     private List<MovieDetail> searchByApi(String site, String api, String keyword) {
@@ -431,7 +364,7 @@ public class TvBoxService {
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(fsDetail.getProvider());
-        movieDetail.setVod_content(site + "$" + newPath);
+        movieDetail.setVod_content(site + ":" + newPath);
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
 
@@ -543,14 +476,6 @@ public class TvBoxService {
         }
     }
 
-    private String getParent(String path) {
-        int index = path.lastIndexOf('/');
-        if (index > 0) {
-            return path.substring(0, index);
-        }
-        return path;
-    }
-
     private int getPlaylistId(String path) {
         try {
             int index = path.lastIndexOf('/');
@@ -604,6 +529,14 @@ public class TvBoxService {
             return appProperties.getFormats().contains(suffix);
         }
         return false;
+    }
+
+    private String getParent(String path) {
+        int index = path.lastIndexOf('/');
+        if (index > 0) {
+            return path.substring(0, index);
+        }
+        return path;
     }
 
     private String getName(String name) {

@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
@@ -18,7 +19,7 @@ public class ParseService {
     public ParseService(RestTemplateBuilder builder) {
         restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, "*/*")
-                .defaultHeader(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36")
+                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .requestFactory(() -> new SimpleClientHttpRequestFactory() {
                     @Override
                     protected void prepareConnection(HttpURLConnection connection, String httpMethod) {
