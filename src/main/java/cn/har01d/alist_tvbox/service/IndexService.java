@@ -34,16 +34,20 @@ public class IndexService {
     private final AListService aListService;
     private final AppProperties appProperties;
 
-    public IndexService(AListService aListService, AppProperties appProperties) throws IOException {
+    public IndexService(AListService aListService, AppProperties appProperties) {
         this.aListService = aListService;
         this.appProperties = appProperties;
         downloadIndexFile();
     }
 
-    public void downloadIndexFile() throws IOException {
+    public void downloadIndexFile() {
         for (Site site : appProperties.getSites()) {
             if (site.isSearchable() && StringUtils.hasText(site.getIndexFile())) {
-                downloadIndexFile(site.getName(), site.getIndexFile(), true);
+                try {
+                    downloadIndexFile(site.getName(), site.getIndexFile(), true);
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
             }
         }
     }
