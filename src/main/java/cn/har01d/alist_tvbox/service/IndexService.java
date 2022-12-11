@@ -114,8 +114,11 @@ public class IndexService {
             log.info("index stats: {}", context.stats);
         }
 
-        File zipFIle = new File(dir, indexRequest.getIndexName() + ".zip");
-        zipFile(file, zipFIle);
+        if (indexRequest.isCompress()) {
+            File zipFIle = new File(dir, indexRequest.getIndexName() + ".zip");
+            zipFile(file, zipFIle);
+        }
+
         log.info("index done, total time : {} {}", Duration.ofNanos(stopWatch.getTotalTimeNanos()), stopWatch.prettyPrint());
         log.info("index file: {}", file.getAbsolutePath());
     }
