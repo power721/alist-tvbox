@@ -36,20 +36,25 @@ public class SubscriptionService {
     }
 
     public Map<String, Object> subscription(int id) {
-        String configKey = null;
-        String configUrl = null;
+        String apiUrl = "";
         if (id > 0) {
-            String apiUrl = appProperties.getConfigUrl();
-            configUrl = apiUrl;
-            String pk = ";pk;";
-            if (apiUrl.contains(pk)) {
-                String[] a = apiUrl.split(pk);
-                configUrl = a[0];
-                configKey = a[1];
-            }
-            if (!configUrl.startsWith("http")) {
-                configUrl = "http://" + configUrl;
-            }
+            apiUrl = appProperties.getConfigUrl();
+        }
+
+        return subscription(apiUrl);
+    }
+
+    public Map<String, Object> subscription(String apiUrl) {
+        String configKey = null;
+        String configUrl = apiUrl;
+        String pk = ";pk;";
+        if (apiUrl != null && apiUrl.contains(pk)) {
+            String[] a = apiUrl.split(pk);
+            configUrl = a[0];
+            configKey = a[1];
+        }
+        if (configUrl != null && !configUrl.startsWith("http")) {
+            configUrl = "http://" + configUrl;
         }
 
         String json = loadConfigJson(configUrl);

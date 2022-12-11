@@ -38,8 +38,8 @@ public class TvBoxController {
     }
 
     @GetMapping("/sub")
-    public Map<String, Object> subscription() {
-        return subscriptionService.subscription(1);
+    public Map<String, Object> subscription(String url) {
+        return subscriptionService.subscription(url);
     }
 
     @GetMapping("/sub/{id}")
