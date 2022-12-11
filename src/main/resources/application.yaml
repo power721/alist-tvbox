@@ -43,5 +43,5 @@ app:
     - asf
   sites:
     - name: 本地
-      url: http://192.168.50.10:5244
+      url: ${ALIST_URL:http://127.0.0.1:5244}
       searchable: true

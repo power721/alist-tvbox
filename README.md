@@ -25,7 +25,7 @@ scp config/install-service.sh user@your-server:~
 # Docker
 ```bash
 ./build.sh
-docker run -d -p 5678:8080 --restart=always --name=alist-tvbox alist-tvbox
+docker run -d -p 5678:8080 -e ALIST_URL=http://IP:5244 --restart=always --name=alist-tvbox alist-tvbox
 ```
 Or run container from Docker hub.
 ```bash
