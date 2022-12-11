@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
 import cn.har01d.alist_tvbox.tvbox.IndexRequest;
+import cn.har01d.alist_tvbox.tvbox.Site;
 import com.hankcs.hanlp.HanLP;
 import com.hankcs.hanlp.seg.common.Term;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +14,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.text.similarity.CosineSimilarity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
+import org.springframework.util.StringUtils;
 
 import java.io.*;
 import java.net.URL;
@@ -32,12 +34,25 @@ public class IndexService {
     private final AListService aListService;
     private final AppProperties appProperties;
 
-    public IndexService(AListService aListService, AppProperties appProperties) {
+    public IndexService(AListService aListService, AppProperties appProperties) throws IOException {
         this.aListService = aListService;
         this.appProperties = appProperties;
+        downloadIndexFile();
+    }
+
+    public void downloadIndexFile() throws IOException {
+        for (Site site : appProperties.getSites()) {
+            if (site.isSearchable() && StringUtils.hasText(site.getIndexFile())) {
+                downloadIndexFile(site.getName(), site.getIndexFile(), true);
+            }
+        }
     }
 
     public String downloadIndexFile(String site, String url) throws IOException {
+        return downloadIndexFile(site, url, false);
+    }
+
+    public String downloadIndexFile(String site, String url, boolean update) throws IOException {
         String name = getIndexFileName(url);
         String filename = name;
         if (name.endsWith(".zip")) {
@@ -45,7 +60,9 @@ public class IndexService {
         }
 
         File file = new File(".cache/" + site + "/" + filename);
-        if (file.exists()) {
+        if (update) {
+            Files.deleteIfExists(file.toPath());
+        } else if (file.exists()) {
             return file.getAbsolutePath();
         }
 

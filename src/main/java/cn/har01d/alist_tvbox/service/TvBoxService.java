@@ -41,11 +41,10 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService, IndexService indexService, AppProperties appProperties) throws IOException {
+    public TvBoxService(AListService aListService, IndexService indexService, AppProperties appProperties) {
         this.aListService = aListService;
         this.indexService = indexService;
         this.appProperties = appProperties;
-        downloadIndexFile();
     }
 
     public CategoryList getCategoryList() {
@@ -124,14 +123,6 @@ public class TvBoxService {
 
         log.debug("search \"{}\" from site {}, result: {}", keyword, site, list.size());
         return list;
-    }
-
-    private void downloadIndexFile() throws IOException {
-        for (Site site : appProperties.getSites()) {
-            if (site.isSearchable() && StringUtils.hasText(site.getIndexFile())) {
-                indexService.downloadIndexFile(site.getName(), site.getIndexFile());
-            }
-        }
     }
 
     private List<MovieDetail> searchByApi(String site, String api, String keyword) {
