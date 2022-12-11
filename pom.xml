@@ -12,10 +12,27 @@
     <artifactId>alist-tvbox</artifactId>
     <version>1.0</version>
     <name>alist-tvbox</name>
-    <description>AList proxy server for TvBox, support playlist</description>
+    <description>AList proxy server for TvBox, support playlist and search.</description>
+    <url>https://har01d.cn/</url>
+
+    <scm>
+        <url>https://github.com/power721/alist-tvbox</url>
+        <connection>scm:git:https://github.com/power721/alist-tvbox.git</connection>
+        <developerConnection>scm:git:https://github.com/power721/alist-tvbox</developerConnection>
+    </scm>
+
+    <developers>
+        <developer>
+            <name>Harold</name>
+            <email>power0721@gmail.com</email>
+            <url>https://github.com/power721</url>
+        </developer>
+    </developers>
+
     <properties>
         <java.version>8</java.version>
     </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
