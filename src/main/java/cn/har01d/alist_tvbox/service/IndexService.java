@@ -37,10 +37,10 @@ public class IndexService {
     public IndexService(AListService aListService, AppProperties appProperties) {
         this.aListService = aListService;
         this.appProperties = appProperties;
-        downloadIndexFile();
+        updateIndexFile();
     }
 
-    public void downloadIndexFile() {
+    public void updateIndexFile() {
         for (Site site : appProperties.getSites()) {
             if (site.isSearchable() && StringUtils.hasText(site.getIndexFile())) {
                 try {

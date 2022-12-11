@@ -1,5 +1,5 @@
 # alist-tvbox
-AList proxy server for TvBox, support playlist.
+AList proxy server for TvBox, support playlist and search.
 
 # Configure
 Set `app.sites` in the file src/main/resources/application.yaml

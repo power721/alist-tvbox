@@ -29,7 +29,6 @@ public class TvBoxService {
     private final AListService aListService;
     private final IndexService indexService;
     private final AppProperties appProperties;
-    private final FileNameComparator nameComparator = new FileNameComparator();
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -215,7 +214,7 @@ public class TvBoxService {
         Comparator<MovieDetail> comparator;
         switch (sort) {
             case "name,asc":
-                comparator = Comparator.comparing(e -> new FileNameInfo(e.getVod_name()), nameComparator);
+                comparator = Comparator.comparing(e -> new FileNameInfo(e.getVod_name()));
                 break;
             case "time,asc":
                 comparator = Comparator.comparing(MovieDetail::getVod_time);
@@ -224,7 +223,7 @@ public class TvBoxService {
                 comparator = Comparator.comparing(MovieDetail::getSize);
                 break;
             case "name,desc":
-                comparator = Comparator.comparing(e -> new FileNameInfo(e.getVod_name()), nameComparator);
+                comparator = Comparator.comparing(e -> new FileNameInfo(e.getVod_name()));
                 comparator = comparator.reversed();
                 break;
             case "time,desc":
@@ -365,7 +364,7 @@ public class TvBoxService {
                 .collect(Collectors.toList());
 
         if (appProperties.isSort()) {
-            files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName()), nameComparator));
+            files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
         }
 
         List<String> list = new ArrayList<>();
