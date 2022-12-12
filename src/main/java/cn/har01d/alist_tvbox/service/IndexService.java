@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -57,30 +58,71 @@ public class IndexService {
     }
 
     public String downloadIndexFile(String site, String url, boolean update) throws IOException {
+        if (!url.startsWith("http")) {
+            return url;
+        }
+
         String name = getIndexFileName(url);
         String filename = name;
         if (name.endsWith(".zip")) {
-            filename = name.replace(".zip", ".txt");
+            filename = name.substring(0, name.length() - 4) + ".txt";
         }
 
         File file = new File(".cache/" + site + "/" + filename);
-        if (update) {
-            Files.deleteIfExists(file.toPath());
-        } else if (file.exists()) {
+        if (!update && file.exists()) {
             return file.getAbsolutePath();
         }
 
-        log.info("download index file from {}", url);
         if (name.endsWith(".zip")) {
-            File zipFile = new File(".cache/" + site + "/" + name);
-            FileUtils.copyURLToFile(new URL(url), zipFile);
-            unzip(zipFile);
-            Files.delete(zipFile.toPath());
+            if (unchanged(site, url, name)) {
+                return file.getAbsolutePath();
+            }
+
+            log.info("download index file from {}", url);
+            downloadZipFile(site, url, name);
         } else {
+            log.info("download index file from {}", url);
             FileUtils.copyURLToFile(new URL(url), file);
         }
 
         return file.getAbsolutePath();
+    }
+
+    private static boolean unchanged(String site, String url, String name) {
+        String localTime = getLocalTime(site, name.substring(0, name.length() - 4) + ".info");
+        String infoUrl = url.substring(0, url.length() - 4) + ".info";
+        String remoteTime = getRemoteTime(site, infoUrl);
+        return localTime.equals(remoteTime);
+    }
+
+    private static String getLocalTime(String site, String filename) {
+        File info = new File(".cache/" + site + "/" + filename);
+        if (info.exists()) {
+            try {
+                return FileUtils.readFileToString(info, StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                // ignore
+            }
+        }
+        return Instant.now().toString();
+    }
+
+    private static String getRemoteTime(String site, String url) {
+        try {
+            File file = Files.createTempFile(site, ".info").toFile();
+            FileUtils.copyURLToFile(new URL(url), file);
+            return FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            // ignore
+        }
+        return "";
+    }
+
+    private static void downloadZipFile(String site, String url, String name) throws IOException {
+        File zipFile = new File(".cache/" + site + "/" + name);
+        FileUtils.copyURLToFile(new URL(url), zipFile);
+        unzip(zipFile);
+        Files.delete(zipFile.toPath());
     }
 
     public static void unzip(File file) throws IOException {
@@ -123,30 +165,39 @@ public class IndexService {
         File dir = new File("data/index/" + indexRequest.getSite());
         Files.createDirectories(dir.toPath());
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
-        Files.deleteIfExists(file.toPath());
+        File info = new File(dir, indexRequest.getIndexName() + ".info");
 
-        try (FileWriter writer = new FileWriter(file, true)) {
+        try (FileWriter writer = new FileWriter(file);
+             FileWriter writer2 = new FileWriter(info)) {
+            Instant time = Instant.now();
             IndexContext context = new IndexContext(indexRequest, writer);
             for (String path : indexRequest.getPaths()) {
                 stopWatch.start("index " + path);
                 index(context, path, 0);
                 stopWatch.stop();
             }
+            writer2.write(time.toString());
             log.info("index stats: {}", context.stats);
         }
 
         if (indexRequest.isCompress()) {
             File zipFIle = new File(dir, indexRequest.getIndexName() + ".zip");
-            zipFile(file, zipFIle);
+            zipFile(file, info, zipFIle);
         }
 
         log.info("index done, total time : {} {}", Duration.ofNanos(stopWatch.getTotalTimeNanos()), stopWatch.prettyPrint());
         log.info("index file: {}", file.getAbsolutePath());
     }
 
-    private void zipFile(File file, File output) throws IOException {
-        try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(output.toPath()));
-             FileInputStream fis = new FileInputStream(file)) {
+    private void zipFile(File file, File info, File output) throws IOException {
+        try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(output.toPath()))) {
+            addZipEntry(zipOut, file);
+            addZipEntry(zipOut, info);
+        }
+    }
+
+    private void addZipEntry(ZipOutputStream zipOut, File file) throws IOException {
+        try (FileInputStream fis = new FileInputStream(file)) {
             ZipEntry zipEntry = new ZipEntry(file.getName());
             zipOut.putNextEntry(zipEntry);
 
