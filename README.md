@@ -40,8 +40,8 @@ docker run -d -p 5678:8080 --restart=always --name=alist-tvbox haroldli/alist-tv
   ],
   "rules": [
     {"host":"pdsapi.aliyundrive.com","rule":["/redirect"]},
-    {"host":"*","rule":["http((?!http).){12,}?\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\?.*"]},
-    {"host":"*","rule":["http((?!http).){12,}\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"]}
+    {"host":"*","rule":["http((?!http).){12,}?\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a|ts)\\?.*"]},
+    {"host":"*","rule":["http((?!http).){12,}\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a|ts)"]}
   ]
 }
 ```

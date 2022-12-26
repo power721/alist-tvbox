@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
 public class FileNameInfo implements Comparable<FileNameInfo> {
     private static final Comparator<Object> comparator = Collator.getInstance(java.util.Locale.CHINA);
     private static final List<String> NUMBERS = Arrays.asList("零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十");
-    private static final Pattern NUMBER = Pattern.compile("(\\d+\\.?\\d*|[零一二三四五六七八九十])");
+    private static final Pattern NUMBER = Pattern.compile("(\\d+\\.?\\d*|[零一二三四五六七八九十]+)");
 
     private final String name;
     private final List<String> prefixes = new ArrayList<>();
@@ -33,9 +33,13 @@ public class FileNameInfo implements Comparable<FileNameInfo> {
         try {
             return Double.parseDouble(text);
         } catch (Exception e) {
-            int index = NUMBERS.indexOf(text);
+            int index = NUMBERS.indexOf(text.substring(0 ,1));
             if (index >= 0) {
-                return (double) (index + 1);
+                if (index == 10 && text.length() == 2) {
+                    index = NUMBERS.indexOf(text.substring(1 , 2));
+                    return (double) (10 + index);
+                }
+                return (double) index;
             }
             return Double.NaN;
         }
