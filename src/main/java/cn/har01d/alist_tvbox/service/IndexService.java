@@ -214,35 +214,45 @@ public class IndexService {
             return;
         }
 
+        if (!log.isDebugEnabled()) {
+            log.info("index {} : {}", context.getSite(), path);
+        }
+
         FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 0);
         if (fsResponse == null) {
             context.stats.errors++;
             return;
         }
         if (context.isExcludeExternal() && fsResponse.getProvider().contains("AList")) {
+            log.warn("exclude external {}", path);
             return;
         }
 
-
         List<String> files = new ArrayList<>();
         for (FsInfo fsInfo : fsResponse.getFiles()) {
-            if (fsInfo.getType() == 1) {
-                String newPath = fixPath(path + "/" + fsInfo.getName());
-                if (exclude(context.getExcludes(), newPath)) {
-                    context.stats.excluded++;
-                    continue;
-                }
+            try {
+                if (fsInfo.getType() == 1) { // folder
+                    String newPath = fixPath(path + "/" + fsInfo.getName());
+                    if (exclude(context.getExcludes(), newPath)) {
+                        log.warn("exclude folder {}", newPath);
+                        context.stats.excluded++;
+                        continue;
+                    }
 
-                index(context, newPath, depth + 1);
-            } else if (isMediaFormat(fsInfo.getName())) {
-                String newPath = fixPath(path + "/" + fsInfo.getName());
-                if (exclude(context.getExcludes(), newPath)) {
-                    context.stats.excluded++;
-                    continue;
-                }
+                    index(context, newPath, depth + 1);
+                } else if (isMediaFormat(fsInfo.getName())) { // file
+                    String newPath = fixPath(path + "/" + fsInfo.getName());
+                    if (exclude(context.getExcludes(), newPath)) {
+                        log.warn("exclude file {}", newPath);
+                        context.stats.excluded++;
+                        continue;
+                    }
 
-                context.stats.files++;
-                files.add(fsInfo.getName());
+                    context.stats.files++;
+                    files.add(fsInfo.getName());
+                }
+            } catch (Exception e) {
+                log.warn("index error", e);
             }
         }
 
