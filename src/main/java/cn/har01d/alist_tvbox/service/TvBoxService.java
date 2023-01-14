@@ -1,8 +1,12 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.*;
-import cn.har01d.alist_tvbox.tvbox.*;
+import cn.har01d.alist_tvbox.tvbox.Category;
+import cn.har01d.alist_tvbox.tvbox.CategoryList;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -29,6 +33,7 @@ public class TvBoxService {
     private final AListService aListService;
     private final IndexService indexService;
     private final MovieService movieService;
+    private final SiteService siteService;
     private final AppProperties appProperties;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
@@ -41,17 +46,18 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService, IndexService indexService, MovieService movieService, AppProperties appProperties) {
+    public TvBoxService(AListService aListService, IndexService indexService, MovieService movieService, SiteService siteService, AppProperties appProperties) {
         this.aListService = aListService;
         this.indexService = indexService;
         this.movieService = movieService;
+        this.siteService = siteService;
         this.appProperties = appProperties;
     }
 
     public CategoryList getCategoryList() {
         CategoryList result = new CategoryList();
 
-        for (Site site : appProperties.getSites()) {
+        for (Site site : siteService.list()) {
             Category category = new Category();
             category.setType_id(site.getName() + "$/");
             category.setType_name(site.getName());
@@ -68,7 +74,7 @@ public class TvBoxService {
     public MovieList search(String keyword) {
         MovieList result = new MovieList();
         List<Future<List<MovieDetail>>> futures = new ArrayList<>();
-        for (Site site : appProperties.getSites()) {
+        for (Site site : siteService.list()) {
             if (site.isSearchable()) {
                 if (StringUtils.hasText(site.getIndexFile())) {
                     futures.add(executorService.submit(() -> searchByFile(site.getName(), keyword, site.getIndexFile())));

@@ -62,6 +62,11 @@
             <artifactId>hanlp</artifactId>
             <version>portable-1.8.3</version>
         </dependency>
+        <dependency>
+            <groupId>org.hibernate</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <version>8.0.0.Final</version>
+        </dependency>
 
         <dependency>
             <groupId>org.projectlombok</groupId>
