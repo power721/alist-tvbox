@@ -28,6 +28,7 @@ public class TvBoxService {
 
     private final AListService aListService;
     private final IndexService indexService;
+    private final MovieService movieService;
     private final AppProperties appProperties;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
@@ -40,9 +41,10 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService, IndexService indexService, AppProperties appProperties) {
+    public TvBoxService(AListService aListService, IndexService indexService, MovieService movieService, AppProperties appProperties) {
         this.aListService = aListService;
         this.indexService = indexService;
+        this.movieService = movieService;
         this.appProperties = appProperties;
     }
 
@@ -326,6 +328,7 @@ public class TvBoxService {
         movieDetail.setVod_play_from(fsDetail.getProvider());
         movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRaw_url()));
         movieDetail.setVod_content(tid);
+        movieService.readMetaData(movieDetail, site, path);
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
@@ -373,6 +376,7 @@ public class TvBoxService {
         }
 
         movieDetail.setVod_play_url(String.join("#", list));
+        movieService.readMetaData(movieDetail, site, newPath);
 
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
