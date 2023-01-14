@@ -16,7 +16,7 @@ import java.util.Objects;
 @Entity
 public class Movie {
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
     @ManyToOne

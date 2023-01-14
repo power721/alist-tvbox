@@ -8,6 +8,7 @@ import {RouterView} from 'vue-router'</script>
         <el-menu mode="horizontal" :ellipsis="false" :router="true">
           <el-menu-item index="/">首页</el-menu-item>
           <el-menu-item index="/sites">站点</el-menu-item>
+          <el-menu-item index="/index">索引</el-menu-item>
           <el-menu-item index="/vod">vod</el-menu-item>
           <el-menu-item index="/sub/0">订阅0</el-menu-item>
           <el-menu-item index="/sub/1">订阅1</el-menu-item>

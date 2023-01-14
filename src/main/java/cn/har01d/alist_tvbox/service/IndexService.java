@@ -1,8 +1,11 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.TaskResult;
+import cn.har01d.alist_tvbox.domain.TaskStatus;
 import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.IndexResponse;
+import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
@@ -38,12 +41,14 @@ import java.util.zip.ZipOutputStream;
 public class IndexService {
     private final AListService aListService;
     private final SiteService siteService;
+    private final TaskService taskService;
     private final AppProperties appProperties;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
-    public IndexService(AListService aListService, SiteService siteService, AppProperties appProperties) {
+    public IndexService(AListService aListService, SiteService siteService, TaskService taskService, AppProperties appProperties) {
         this.aListService = aListService;
         this.siteService = siteService;
+        this.taskService = taskService;
         this.appProperties = appProperties;
         updateIndexFile();
     }
@@ -168,38 +173,43 @@ public class IndexService {
     }
 
     public IndexResponse index(IndexRequest indexRequest) throws IOException {
-        StopWatch stopWatch = new StopWatch("index");
         if (StringUtils.isBlank(indexRequest.getSite())) {
             cn.har01d.alist_tvbox.entity.Site site = siteService.getById(indexRequest.getSiteId());
             indexRequest.setSite(site.getName());
         }
-        File dir = new File("data/index/" + indexRequest.getSite());
-        Files.createDirectories(dir.toPath());
-        File file = new File(dir, indexRequest.getIndexName() + ".txt");
 
-        IndexResponse response = new IndexResponse(indexRequest);
-        response.setFilePath(file.getAbsolutePath());
+        Task task = taskService.addIndexTask(indexRequest);
 
         executorService.submit(() -> {
             try {
-                index(indexRequest, stopWatch, dir, file);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+                index(indexRequest, task);
+            } catch (Exception e) {
+                taskService.failTask(task.getId(), e.getMessage());
             }
         });
 
-        return response;
+        return new IndexResponse(task.getId());
     }
 
     @Async
-    public void index(IndexRequest indexRequest, StopWatch stopWatch, File dir, File file) throws IOException {
+    public void index(IndexRequest indexRequest, Task task) throws IOException {
+        StopWatch stopWatch = new StopWatch("index");
+        File dir = new File("data/index/" + indexRequest.getSite());
+        Files.createDirectories(dir.toPath());
+        File file = new File(dir, indexRequest.getIndexName() + ".txt");
         File info = new File(dir, indexRequest.getIndexName() + ".info");
 
+        String summary;
         try (FileWriter writer = new FileWriter(file);
              FileWriter writer2 = new FileWriter(info)) {
             Instant time = Instant.now();
-            IndexContext context = new IndexContext(indexRequest, writer);
+            taskService.startTask(task.getId());
+            taskService.updateTaskData(task.getId(), file.getAbsolutePath());
+            IndexContext context = new IndexContext(indexRequest, writer, task.getId());
             for (String path : indexRequest.getPaths()) {
+                if (isCancelled(context)) {
+                    break;
+                }
                 if (StringUtils.isBlank(path)) {
                     continue;
                 }
@@ -209,15 +219,23 @@ public class IndexService {
             }
             writer2.write(time.toString());
             log.info("index stats: {}", context.stats);
+            summary = context.stats.toString();
         }
 
         if (indexRequest.isCompress()) {
             File zipFIle = new File(dir, indexRequest.getIndexName() + ".zip");
             zipFile(file, info, zipFIle);
         }
+        taskService.completeTask(task.getId());
+        taskService.updateTaskSummary(task.getId(), summary);
 
         log.info("index done, total time : {} {}", Duration.ofNanos(stopWatch.getTotalTimeNanos()), stopWatch.prettyPrint());
         log.info("index file: {}", file.getAbsolutePath());
+    }
+
+    private boolean isCancelled(IndexContext context) {
+        Task task = taskService.getById(context.getTaskId());
+        return task.getStatus() == TaskStatus.COMPLETED && task.getResult() == TaskResult.CANCELLED;
     }
 
     private void zipFile(File file, File info, File output) throws IOException {
@@ -241,7 +259,7 @@ public class IndexService {
     }
 
     private void index(IndexContext context, String path, int depth) throws IOException {
-        if (context.getMaxDepth() > 0 && depth == context.getMaxDepth()) {
+        if ((context.getMaxDepth() > 0 && depth == context.getMaxDepth()) || isCancelled(context)) {
             return;
         }
 
@@ -301,6 +319,8 @@ public class IndexService {
             }
             context.write(newPath);
         }
+
+        taskService.updateTaskSummary(context.getTaskId(), context.stats.toString());
     }
 
     private boolean exclude(Set<String> rules, String path) {

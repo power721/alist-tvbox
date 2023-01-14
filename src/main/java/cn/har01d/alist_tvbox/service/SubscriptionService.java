@@ -77,7 +77,7 @@ public class SubscriptionService {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
         builder.replacePath("/vod");
-        site.put("key", "AList");
+        site.put("key", "AListAPI");
         site.put("name", "AList┃转发");
         site.put("type", 1);
         site.put("api", builder.build().toUriString());

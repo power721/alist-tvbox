@@ -13,6 +13,7 @@ public class IndexContext {
     public Stats stats = new Stats();
     private final IndexRequest indexRequest;
     private final FileWriter writer;
+    private final Integer taskId;
     private Set<String> set = new HashSet<>();
 
     public String getSite() {
@@ -51,5 +52,15 @@ public class IndexContext {
         public int indexed;
         public int errors;
         public int excluded;
+
+        @Override
+        public String toString() {
+            return "Stats{" +
+                    "files=" + files +
+                    ", indexed=" + indexed +
+                    ", errors=" + errors +
+                    ", excluded=" + excluded +
+                    '}';
+        }
     }
 }

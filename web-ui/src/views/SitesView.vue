@@ -33,10 +33,10 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column fixed="right" label="操作" width="150">
+      <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
-          <el-button link type="primary" size="small" @click="handleIndex(scope.row)">索引</el-button>
+          <el-button link type="primary" size="small" @click="showDetails(scope.row)">数据</el-button>
           <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
@@ -71,38 +71,34 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="indexVisible" :title="dialogTitle">
-      <el-form :model="indexRequest">
-        <el-form-item label="索引名称" label-width="140">
-          <span>用于生成文件名，自动添加后缀.txt</span>
-          <el-input v-model="indexRequest.indexName" autocomplete="off"/>
-        </el-form-item>
-        <el-form-item label="索引路径" label-width="140">
-          <span>支持多个路径，逗号分割</span>
-          <el-input v-model="indexRequest.paths" autocomplete="off" placeholder="逗号分割"/>
-        </el-form-item>
-        <el-form-item label="排除路径" label-width="140">
-          <span>支持多个路径，逗号分割</span>
-          <el-input v-model="indexRequest.excludes" autocomplete="off" placeholder="逗号分割"/>
-        </el-form-item>
-        <el-form-item label="排除关键词" label-width="140">
-          <span>支持多个关键词，逗号分割</span>
-          <el-input v-model="indexRequest.stopWords" autocomplete="off" placeholder="逗号分割"/>
-        </el-form-item>
-        <el-form-item label="包含外部AList站点？">
-          <el-switch v-model="indexRequest.excludeExternal"/>
-        </el-form-item>
-        <el-form-item label="压缩文件？">
-          <el-switch v-model="indexRequest.compress"/>
-        </el-form-item>
-        <el-form-item label="最大索引目录层级" label-width="140">
-          <el-input-number v-model="indexRequest.maxDepth" :min="1"/>
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="siteVisible" :title="dialogTitle" :fullscreen="true">
+      <h2>文件夹列表</h2>
+      <el-breadcrumb separator="/">
+        <el-breadcrumb-item v-for="item of paths">
+          <a @click="loadFiles(item.path)">{{ item.text }}</a>
+        </el-breadcrumb-item>
+      </el-breadcrumb>
+      <div class="space"></div>
+      <el-scrollbar>
+        <div>
+          <el-button
+            v-for="item in jsonData.list.filter(e => e.vod_tag=='folder')"
+            :key="item.vod_id"
+            @click="loadFiles(item.vod_id)"
+            text
+          >{{ item.vod_name }}
+          </el-button>
+        </div>
+      </el-scrollbar>
+      <el-divider/>
+      <h2>JSON数据</h2>
+      <el-scrollbar height="600px">
+        <pre><code>{{ jsonData }}</code></pre>
+      </el-scrollbar>
+      <div class="json"></div>
       <template #footer>
       <span class="dialog-footer">
-        <el-button @click="indexVisible=false">取消</el-button>
-        <el-button type="primary" @click="handleIndexRequest">索引</el-button>
+        <el-button type="primary" @click="siteVisible = false">关闭</el-button>
       </span>
       </template>
     </el-dialog>
@@ -125,15 +121,23 @@ import {onMounted, ref} from 'vue'
 import {Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
 import {ElMessage, ElNotification} from "element-plus";
+import type {VodList} from "@/model/VodList";
+
+interface Item {
+  path: string
+  text: string
+}
 
 const updateAction = ref(false)
 const dialogTitle = ref('')
+const jsonData = ref({} as VodList)
+const paths = ref([] as Item[])
 const sites = ref([])
-const indexVisible = ref(false)
+const siteVisible = ref(false)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const form = ref({
-  id: '',
+  id: 0,
   name: '',
   url: '',
   searchable: false,
@@ -141,22 +145,12 @@ const form = ref({
   disabled: false,
   order: 0,
 })
-const indexRequest = ref({
-  siteId: 0,
-  indexName: 'index',
-  excludeExternal: false,
-  compress: false,
-  maxDepth: 10,
-  paths: '/',
-  stopWords: '',
-  excludes: '',
-})
 
 const handleAdd = () => {
   dialogTitle.value = '添加站点'
   updateAction.value = false
   form.value = {
-    id: '',
+    id: 0,
     name: '',
     url: '',
     searchable: false,
@@ -174,19 +168,40 @@ const handleEdit = (data: any) => {
   formVisible.value = true
 }
 
-const handleIndex = (data: any) => {
-  dialogTitle.value = '索引站点 - ' + data.name
-  indexRequest.value = {
-    siteId: data.id,
-    indexName: 'index',
-    excludeExternal: false,
-    compress: false,
-    maxDepth: 10,
-    paths: '/',
-    stopWords: '',
-    excludes: '',
+const showDetails = (data: any) => {
+  form.value = data
+  dialogTitle.value = '站点数据 - ' + data.name
+  loadFiles('/')
+}
+
+const loadFiles = (id: string) => {
+  extractPaths(id)
+  if (!id.startsWith(form.value.name + '$')) {
+    id = form.value.name + '$' + id
   }
-  indexVisible.value = true
+  axios.get('/vod?pg=1&t=' + id).then(({data}) => {
+    jsonData.value = data
+    siteVisible.value = true
+  }, ({response}) => {
+    console.log(response.data.message)
+    ElMessage.error('加载失败')
+  })
+}
+
+const extractPaths = (id: string) => {
+  const path = id.replace(form.value.name + '$', '')
+  if (path == '/') {
+    paths.value = [{path: '/', text: '首页'}]
+    return
+  }
+  const array = path.split('/')
+  const items: Item[] = []
+  for (let index = 0; index < array.length; ++index) {
+    const path = array.slice(0, index+1).join('/')
+    const text = array[index]
+    items.push({text: text ? text : '首页', path: path ? path : '/'})
+  }
+  paths.value = items
 }
 
 const handleDelete = (data: any) => {
@@ -198,29 +213,6 @@ const deleteSite = () => {
   dialogVisible.value = false
   axios.delete('/sites/' + form.value.id).then(() => {
     load()
-  })
-}
-
-const handleIndexRequest = () => {
-  const request = {
-    siteId: indexRequest.value.siteId,
-    indexName: indexRequest.value.indexName,
-    excludeExternal: indexRequest.value.excludeExternal,
-    compress: indexRequest.value.compress,
-    maxDepth: indexRequest.value.maxDepth,
-    paths: indexRequest.value.paths ? indexRequest.value.paths.split(/\s*,\s*/) : [],
-    stopWords: indexRequest.value.stopWords ? indexRequest.value.stopWords.split(/\s*,\s*/) : [],
-    excludes: indexRequest.value.excludes ? indexRequest.value.excludes.split(/\s*,\s*/) : [],
-  }
-  axios.post('/index', request).then(({data}) => {
-    indexVisible.value = false
-    ElNotification({
-      title: '索引文件路径',
-      message: data.filePath,
-      duration: 0,
-    })
-  }, ({response}) => {
-    ElMessage.error(response.data.message)
   })
 }
 
@@ -249,8 +241,13 @@ onMounted(() => {
 })
 </script>
 
-<style>
+<style scoped>
 .space {
   margin-bottom: 6px;
+}
+
+.json pre {
+  height: 600px;
+  overflow: scroll;
 }
 </style>

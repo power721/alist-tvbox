@@ -23,6 +23,7 @@ export default defineConfig({
       "/sub": API,
       "/index": API,
       "/movies": API,
+      "/tasks": API,
       "/parse": API,
       "/play": API,
       "/playlist": API,
