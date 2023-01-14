@@ -6,7 +6,6 @@ import lombok.Data;
 public class SiteDto {
     private String name;
     private String url;
-    private String searchApi;
     private String indexFile;
     private boolean searchable;
     private boolean disabled;

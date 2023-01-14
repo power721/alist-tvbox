@@ -21,7 +21,6 @@ public class Site {
 
     private String name;
     private String url;
-    private String searchApi;
     private String indexFile;
     private boolean searchable;
     private boolean disabled;

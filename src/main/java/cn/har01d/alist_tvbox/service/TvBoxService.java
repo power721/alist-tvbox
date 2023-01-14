@@ -79,7 +79,7 @@ public class TvBoxService {
                 if (StringUtils.hasText(site.getIndexFile())) {
                     futures.add(executorService.submit(() -> searchByFile(site.getName(), keyword, site.getIndexFile())));
                 } else {
-                    futures.add(executorService.submit(() -> searchByApi(site.getName(), site.getSearchApi(), keyword)));
+                    futures.add(executorService.submit(() -> searchByApi(site.getName(), keyword)));
                 }
             }
         }
@@ -132,9 +132,9 @@ public class TvBoxService {
         return list;
     }
 
-    private List<MovieDetail> searchByApi(String site, String api, String keyword) {
-        log.info("search \"{}\" from site {}, api: {}", keyword, site, api);
-        return aListService.search(site, api, keyword)
+    private List<MovieDetail> searchByApi(String site, String keyword) {
+        log.info("search \"{}\" from site {}", keyword, site);
+        return aListService.search(site, keyword)
                 .stream()
                 .map(e -> {
                     boolean isMediaFile = isMediaFile(e.getName());

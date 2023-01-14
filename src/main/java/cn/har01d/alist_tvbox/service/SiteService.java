@@ -12,6 +12,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
+import java.io.File;
+import java.net.URL;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,7 +40,6 @@ public class SiteService {
             site.setName(s.getName());
             site.setUrl(s.getUrl());
             site.setSearchable(s.isSearchable());
-            site.setSearchApi(s.getSearchApi());
             site.setIndexFile(s.getIndexFile());
             site.setOrder(order++);
             siteRepository.save(site);
@@ -70,7 +71,7 @@ public class SiteService {
             throw new BadRequestException("站点名字重复");
         }
         if (siteRepository.existsByUrl(dto.getUrl())) {
-            throw new BadRequestException("站点链接重复");
+            throw new BadRequestException("站点地址重复");
         }
 
         Site site = new Site();
@@ -80,7 +81,6 @@ public class SiteService {
         site.setSearchable(dto.isSearchable());
         site.setIndexFile(dto.getIndexFile());
         site.setDisabled(dto.isDisabled());
-        // TODO: validate index file
         return siteRepository.save(site);
     }
 
@@ -93,7 +93,7 @@ public class SiteService {
         }
         other = siteRepository.findByUrl(dto.getUrl());
         if (other.isPresent() && other.get().getId() != id) {
-            throw new BadRequestException("站点链接重复");
+            throw new BadRequestException("站点地址重复");
         }
 
         site.setName(dto.getName());
@@ -109,8 +109,32 @@ public class SiteService {
         if (StringUtils.isBlank(dto.getName())) {
             throw new BadRequestException("站点名称不能为空");
         }
+
         if (StringUtils.isBlank(dto.getUrl())) {
             throw new BadRequestException("站点地址不能为空");
+        }
+
+        try {
+            new URL(dto.getUrl());
+        } catch (Exception e) {
+            throw new BadRequestException("站点地址不正确", e);
+        }
+
+        if (dto.isSearchable() && StringUtils.isNotBlank(dto.getIndexFile())) {
+            if (dto.getIndexFile().startsWith("http")) {
+                try {
+                    new URL(dto.getIndexFile());
+                } catch (Exception e) {
+                    throw new BadRequestException("索引地址不正确", e);
+                }
+            } else if (dto.getIndexFile().startsWith("/")) {
+                File file = new File(dto.getIndexFile());
+                if (!file.exists()) {
+                    throw new BadRequestException("索引文件不存在");
+                }
+            } else {
+                throw new BadRequestException("索引文件不正确");
+            }
         }
     }
 

@@ -32,8 +32,8 @@ public class AListService {
         appProperties.getSites().forEach(site -> sites.put(site.getName(), site.getUrl()));
     }
 
-    public List<SearchResult> search(String site, String api, String keyword) {
-        String url = getSiteUrl(site) + api + "?keyword=" + keyword;
+    public List<SearchResult> search(String site, String keyword) {
+        String url = getSiteUrl(site) + "/api/fs/search?keyword=" + keyword;
         SearchRequest request = new SearchRequest();
         request.setKeywords(keyword);
         SearchListResponse response = restTemplate.postForObject(url, request, SearchListResponse.class);

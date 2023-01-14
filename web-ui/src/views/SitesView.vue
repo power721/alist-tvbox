@@ -21,7 +21,6 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column prop="searchApi" label="搜索API"/>
       <el-table-column prop="indexFile" label="索引文件"/>
       <el-table-column prop="order" label="顺序" sortable width="90"/>
       <el-table-column prop="disabled" label="禁用？" width="90">
@@ -54,9 +53,6 @@
         <el-form-item label="可搜索？">
           <el-switch v-model="form.searchable"/>
         </el-form-item>
-        <el-form-item label="搜索API" label-width="140">
-          <el-input v-model="form.searchApi" placeholder="默认不填写"/>
-        </el-form-item>
         <el-form-item label="索引文件" label-width="140">
           <el-input v-model="form.indexFile" placeholder="文件路径或者URL"/>
         </el-form-item>
@@ -70,7 +66,7 @@
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="handleCancel">取消</el-button>
-        <el-button type="primary" @click="handleConfirm">更新</el-button>
+        <el-button type="primary" @click="handleConfirm">{{updateAction ? '更新' : '添加'}}</el-button>
       </span>
       </template>
     </el-dialog>
@@ -141,7 +137,6 @@ const form = ref({
   name: '',
   url: '',
   searchable: false,
-  searchApi: '',
   indexFile: '',
   disabled: false,
   order: 0,
@@ -165,7 +160,6 @@ const handleAdd = () => {
     name: '',
     url: '',
     searchable: false,
-    searchApi: '',
     indexFile: '',
     disabled: false,
     order: 0,
