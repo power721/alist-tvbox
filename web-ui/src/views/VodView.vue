@@ -1,7 +1,7 @@
 <template>
-  <div class="config">
-    <div>
-      <h2>API地址</h2>
+  <div class="vod">
+    <h2>API地址</h2>
+    <div class="description">
       <a :href="currentUrl+'/vod'" target="_blank">{{currentUrl}}/vod</a>
     </div>
 
@@ -27,4 +27,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.description {
+  margin-bottom: 12px;
+}
 </style>

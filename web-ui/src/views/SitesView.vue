@@ -8,7 +8,7 @@
     <div class="space"></div>
 
     <el-table :data="sites" border style="width: 100%">
-      <el-table-column prop="id" label="ID" sortable width="90"/>
+      <el-table-column prop="id" label="ID" sortable width="70"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
       <el-table-column prop="url" label="URL地址" sortable/>
       <el-table-column prop="searchable" label="可搜索？" width="90">
@@ -23,7 +23,7 @@
       </el-table-column>
       <el-table-column prop="indexFile" label="索引文件"/>
       <el-table-column prop="order" label="顺序" sortable width="90"/>
-      <el-table-column prop="disabled" label="禁用？" width="90">
+      <el-table-column prop="disabled" label="禁用？" width="80">
         <template #default="scope">
           <el-icon v-if="scope.row.disabled">
             <Check/>
@@ -66,7 +66,7 @@
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="handleCancel">取消</el-button>
-        <el-button type="primary" @click="handleConfirm">{{updateAction ? '更新' : '添加'}}</el-button>
+        <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
       </span>
       </template>
     </el-dialog>
@@ -204,13 +204,13 @@ const deleteSite = () => {
 const handleIndexRequest = () => {
   const request = {
     siteId: indexRequest.value.siteId,
-    indexName:  indexRequest.value.indexName,
-    excludeExternal:  indexRequest.value.excludeExternal,
-    compress:  indexRequest.value.compress,
-    maxDepth:  indexRequest.value.maxDepth,
-    paths:  indexRequest.value.paths ? indexRequest.value.paths.split(/\s*,\s*/) : [],
-    stopWords:  indexRequest.value.stopWords ? indexRequest.value.stopWords.split(/\s*,\s*/) : [],
-    excludes:  indexRequest.value.excludes ? indexRequest.value.excludes.split(/\s*,\s*/) : [],
+    indexName: indexRequest.value.indexName,
+    excludeExternal: indexRequest.value.excludeExternal,
+    compress: indexRequest.value.compress,
+    maxDepth: indexRequest.value.maxDepth,
+    paths: indexRequest.value.paths ? indexRequest.value.paths.split(/\s*,\s*/) : [],
+    stopWords: indexRequest.value.stopWords ? indexRequest.value.stopWords.split(/\s*,\s*/) : [],
+    excludes: indexRequest.value.excludes ? indexRequest.value.excludes.split(/\s*,\s*/) : [],
   }
   axios.post('/index', request).then(({data}) => {
     indexVisible.value = false

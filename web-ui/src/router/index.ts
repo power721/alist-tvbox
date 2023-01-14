@@ -19,7 +19,7 @@ const router = createRouter({
       component: SitesView
     },
     {
-      path: '/sub',
+      path: '/sub/:id',
       name: 'sub',
       component: SubView
     },

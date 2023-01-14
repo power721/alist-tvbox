@@ -27,6 +27,8 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -37,6 +39,7 @@ public class IndexService {
     private final AListService aListService;
     private final SiteService siteService;
     private final AppProperties appProperties;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     public IndexService(AListService aListService, SiteService siteService, AppProperties appProperties) {
         this.aListService = aListService;
@@ -177,7 +180,13 @@ public class IndexService {
         IndexResponse response = new IndexResponse(indexRequest);
         response.setFilePath(file.getAbsolutePath());
 
-        index(indexRequest, stopWatch, dir, file);
+        executorService.submit(() -> {
+            try {
+                index(indexRequest, stopWatch, dir, file);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
 
         return response;
     }
@@ -236,6 +245,10 @@ public class IndexService {
             return;
         }
 
+        if (!log.isDebugEnabled()) {
+            log.info("index {} : {}", context.getSite(), path);
+        }
+
         FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 0);
         if (fsResponse == null) {
             context.stats.errors++;
@@ -245,26 +258,31 @@ public class IndexService {
             return;
         }
 
-
         List<String> files = new ArrayList<>();
         for (FsInfo fsInfo : fsResponse.getFiles()) {
-            if (fsInfo.getType() == 1) {
-                String newPath = fixPath(path + "/" + fsInfo.getName());
-                if (exclude(context.getExcludes(), newPath)) {
-                    context.stats.excluded++;
-                    continue;
-                }
+            try {
+                if (fsInfo.getType() == 1) { // folder
+                    String newPath = fixPath(path + "/" + fsInfo.getName());
+                    if (exclude(context.getExcludes(), newPath)) {
+                        log.warn("exclude folder {}", newPath);
+                        context.stats.excluded++;
+                        continue;
+                    }
 
-                index(context, newPath, depth + 1);
-            } else if (isMediaFormat(fsInfo.getName())) {
-                String newPath = fixPath(path + "/" + fsInfo.getName());
-                if (exclude(context.getExcludes(), newPath)) {
-                    context.stats.excluded++;
-                    continue;
-                }
+                    index(context, newPath, depth + 1);
+                } else if (isMediaFormat(fsInfo.getName())) { // file
+                    String newPath = fixPath(path + "/" + fsInfo.getName());
+                    if (exclude(context.getExcludes(), newPath)) {
+                        log.warn("exclude file {}", newPath);
+                        context.stats.excluded++;
+                        continue;
+                    }
 
-                context.stats.files++;
-                files.add(fsInfo.getName());
+                    context.stats.files++;
+                    files.add(fsInfo.getName());
+                }
+            } catch (Exception e) {
+                log.warn("index error", e);
             }
         }
 
