@@ -24,6 +24,7 @@ public class Site {
     private String searchApi;
     private String indexFile;
     private boolean searchable;
+    private boolean disabled;
     @Column(name = "`order`")
     private int order;
 

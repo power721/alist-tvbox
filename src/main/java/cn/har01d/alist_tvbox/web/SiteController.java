@@ -5,7 +5,6 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.service.SiteService;
 import org.springframework.web.bind.annotation.*;
 
-import javax.validation.Valid;
 import java.util.List;
 
 @RestController
@@ -19,11 +18,11 @@ public class SiteController {
 
     @GetMapping
     public List<Site> list() {
-        return siteService.list();
+        return siteService.findAll();
     }
 
     @PostMapping
-    public Site create(@RequestBody @Valid SiteDto dto) {
+    public Site create(@RequestBody SiteDto dto) {
         return siteService.create(dto);
     }
 
@@ -33,7 +32,7 @@ public class SiteController {
     }
 
     @PostMapping("/{id}")
-    public Site update(@PathVariable int id, @RequestBody @Valid SiteDto dto) {
+    public Site update(@PathVariable int id, @RequestBody SiteDto dto) {
         return siteService.update(id, dto);
     }
 
