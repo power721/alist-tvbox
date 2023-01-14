@@ -1,4 +1,4 @@
-package cn.har01d.alist_tvbox.tvbox;
+package cn.har01d.alist_tvbox.dto;
 
 import lombok.Data;
 

@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.tvbox;
 
+import cn.har01d.alist_tvbox.dto.IndexRequest;
 import lombok.Data;
 
 import java.io.FileWriter;

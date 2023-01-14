@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
@@ -53,7 +54,7 @@ public class SubscriptionService {
             configUrl = a[0];
             configKey = a[1];
         }
-        if (configUrl != null && !configUrl.startsWith("http")) {
+        if (StringUtils.isNotBlank(configUrl) && !configUrl.startsWith("http")) {
             configUrl = "http://" + configUrl;
         }
 

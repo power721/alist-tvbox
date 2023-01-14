@@ -1,20 +1,22 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.IndexRequest;
+import cn.har01d.alist_tvbox.dto.IndexResponse;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
-import cn.har01d.alist_tvbox.tvbox.IndexRequest;
 import cn.har01d.alist_tvbox.tvbox.Site;
 import com.hankcs.hanlp.HanLP;
 import com.hankcs.hanlp.seg.common.Term;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.similarity.CosineSimilarity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
-import org.springframework.util.StringUtils;
 
 import java.io.*;
 import java.net.URL;
@@ -33,17 +35,19 @@ import java.util.zip.ZipOutputStream;
 @Service
 public class IndexService {
     private final AListService aListService;
+    private final SiteService siteService;
     private final AppProperties appProperties;
 
-    public IndexService(AListService aListService, AppProperties appProperties) {
+    public IndexService(AListService aListService, SiteService siteService, AppProperties appProperties) {
         this.aListService = aListService;
+        this.siteService = siteService;
         this.appProperties = appProperties;
         updateIndexFile();
     }
 
     public void updateIndexFile() {
         for (Site site : appProperties.getSites()) {
-            if (site.isSearchable() && StringUtils.hasText(site.getIndexFile())) {
+            if (site.isSearchable() && StringUtils.isNotBlank(site.getIndexFile())) {
                 try {
                     downloadIndexFile(site.getName(), site.getIndexFile(), true);
                 } catch (Exception e) {
@@ -160,11 +164,26 @@ public class IndexService {
         return name;
     }
 
-    public void index(IndexRequest indexRequest) throws IOException {
+    public IndexResponse index(IndexRequest indexRequest) throws IOException {
         StopWatch stopWatch = new StopWatch("index");
+        if (StringUtils.isBlank(indexRequest.getSite())) {
+            cn.har01d.alist_tvbox.entity.Site site = siteService.getById(indexRequest.getSiteId());
+            indexRequest.setSite(site.getName());
+        }
         File dir = new File("data/index/" + indexRequest.getSite());
         Files.createDirectories(dir.toPath());
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
+
+        IndexResponse response = new IndexResponse(indexRequest);
+        response.setFilePath(file.getAbsolutePath());
+
+        index(indexRequest, stopWatch, dir, file);
+
+        return response;
+    }
+
+    @Async
+    public void index(IndexRequest indexRequest, StopWatch stopWatch, File dir, File file) throws IOException {
         File info = new File(dir, indexRequest.getIndexName() + ".info");
 
         try (FileWriter writer = new FileWriter(file);
@@ -172,6 +191,9 @@ public class IndexService {
             Instant time = Instant.now();
             IndexContext context = new IndexContext(indexRequest, writer);
             for (String path : indexRequest.getPaths()) {
+                if (StringUtils.isBlank(path)) {
+                    continue;
+                }
                 stopWatch.start("index " + path);
                 index(context, path, 0);
                 stopWatch.stop();
@@ -265,6 +287,9 @@ public class IndexService {
 
     private boolean exclude(Set<String> rules, String path) {
         for (String rule : rules) {
+            if (StringUtils.isBlank(rule)) {
+                continue;
+            }
             if (rule.startsWith("^") && rule.endsWith("$") && path.equals(rule.substring(1, rule.length() - 1))) {
                 return true;
             }

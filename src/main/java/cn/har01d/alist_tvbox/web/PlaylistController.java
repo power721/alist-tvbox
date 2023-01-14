@@ -1,7 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.service.PlaylistService;
-import cn.har01d.alist_tvbox.tvbox.GenerateRequest;
+import cn.har01d.alist_tvbox.dto.GenerateRequest;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;

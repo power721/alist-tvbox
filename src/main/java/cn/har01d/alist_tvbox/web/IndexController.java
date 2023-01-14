@@ -1,9 +1,9 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.IndexResponse;
 import cn.har01d.alist_tvbox.service.IndexService;
-import cn.har01d.alist_tvbox.tvbox.IndexRequest;
+import cn.har01d.alist_tvbox.dto.IndexRequest;
 import org.springframework.http.HttpStatus;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -17,10 +17,9 @@ public class IndexController {
         this.indexService = indexService;
     }
 
-    @Async
     @ResponseStatus(HttpStatus.ACCEPTED)
     @PostMapping
-    public void index(@RequestBody IndexRequest indexRequest) throws IOException {
-        indexService.index(indexRequest);
+    public IndexResponse index(@RequestBody IndexRequest indexRequest) throws IOException {
+        return indexService.index(indexRequest);
     }
 }
