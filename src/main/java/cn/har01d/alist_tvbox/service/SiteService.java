@@ -51,8 +51,8 @@ public class SiteService {
         return siteRepository.findById(id).orElseThrow(() -> new NotFoundException("站点不存在"));
     }
 
-    public Optional<Site> getByName(String name) {
-        return siteRepository.findByName(name);
+    public Site getByName(String name) {
+        return siteRepository.findByName(name).orElseThrow(() -> new NotFoundException("站点不存在"));
     }
 
     public List<Site> findAll() {
@@ -140,5 +140,9 @@ public class SiteService {
 
     public void delete(int id) {
         siteRepository.deleteById(id);
+    }
+
+    public void save(Site site) {
+        siteRepository.save(site);
     }
 }

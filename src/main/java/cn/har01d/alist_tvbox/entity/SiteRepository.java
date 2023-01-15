@@ -8,6 +8,7 @@ import java.util.Optional;
 
 public interface SiteRepository extends JpaRepository<Site, Integer> {
     List<Site> findAllByDisabledFalse(Sort sort);
+
     Optional<Site> findByName(String name);
 
     Optional<Site> findByUrl(String url);

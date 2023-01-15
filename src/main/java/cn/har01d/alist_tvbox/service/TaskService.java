@@ -3,7 +3,6 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
 import cn.har01d.alist_tvbox.domain.TaskType;
-import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.entity.TaskRepository;

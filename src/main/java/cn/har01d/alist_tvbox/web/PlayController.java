@@ -24,9 +24,9 @@ public class PlayController {
     }
 
     @GetMapping
-    public void play(String site, String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public void play(Integer site, String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), request.getQueryString());
-        log.info("get play url - site: {}  path: {}", site, path);
+        log.debug("get play url - site: {}  path: {}", site, path);
         String url = tvBoxService.getPlayUrl(site, path);
         response.sendRedirect(parseService.parse(url));
     }

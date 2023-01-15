@@ -57,7 +57,7 @@ public class IndexService {
         for (Site site : siteService.list()) {
             if (site.isSearchable() && StringUtils.isNotBlank(site.getIndexFile())) {
                 try {
-                    downloadIndexFile(site.getName(), site.getIndexFile(), true);
+                    downloadIndexFile(site, true);
                 } catch (Exception e) {
                     log.warn("", e);
                 }
@@ -65,11 +65,12 @@ public class IndexService {
         }
     }
 
-    public String downloadIndexFile(String site, String url) throws IOException {
-        return downloadIndexFile(site, url, false);
+    public String downloadIndexFile(Site site) throws IOException {
+        return downloadIndexFile(site, false);
     }
 
-    public String downloadIndexFile(String site, String url, boolean update) throws IOException {
+    public String downloadIndexFile(Site site, boolean update) throws IOException {
+        String url = site.getIndexFile();
         if (!url.startsWith("http")) {
             return url;
         }
@@ -80,7 +81,7 @@ public class IndexService {
             filename = name.substring(0, name.length() - 4) + ".txt";
         }
 
-        File file = new File(".cache/" + site + "/" + filename);
+        File file = new File(".cache/" + site.getId() + "/" + filename);
         if (!update && file.exists()) {
             return file.getAbsolutePath();
         }
@@ -100,15 +101,15 @@ public class IndexService {
         return file.getAbsolutePath();
     }
 
-    private static boolean unchanged(String site, String url, String name) {
+    private static boolean unchanged(Site site, String url, String name) {
         String localTime = getLocalTime(site, name.substring(0, name.length() - 4) + ".info");
         String infoUrl = url.substring(0, url.length() - 4) + ".info";
         String remoteTime = getRemoteTime(site, infoUrl);
         return localTime.equals(remoteTime);
     }
 
-    private static String getLocalTime(String site, String filename) {
-        File info = new File(".cache/" + site + "/" + filename);
+    private static String getLocalTime(Site site, String filename) {
+        File info = new File(".cache/" + site.getId() + "/" + filename);
         if (info.exists()) {
             try {
                 return FileUtils.readFileToString(info, StandardCharsets.UTF_8);
@@ -119,9 +120,9 @@ public class IndexService {
         return Instant.now().toString();
     }
 
-    private static String getRemoteTime(String site, String url) {
+    private static String getRemoteTime(Site site, String url) {
         try {
-            File file = Files.createTempFile(site, ".info").toFile();
+            File file = Files.createTempFile(String.valueOf(site.getId()), ".info").toFile();
             FileUtils.copyURLToFile(new URL(url), file);
             return FileUtils.readFileToString(file, StandardCharsets.UTF_8);
         } catch (Exception e) {
@@ -130,8 +131,8 @@ public class IndexService {
         return "";
     }
 
-    private static void downloadZipFile(String site, String url, String name) throws IOException {
-        File zipFile = new File(".cache/" + site + "/" + name);
+    private static void downloadZipFile(Site site, String url, String name) throws IOException {
+        File zipFile = new File(".cache/" + site.getId() + "/" + name);
         FileUtils.copyURLToFile(new URL(url), zipFile);
         unzip(zipFile);
         Files.delete(zipFile.toPath());
@@ -263,7 +264,7 @@ public class IndexService {
             log.info("index {} : {}", context.getSiteName(), path);
         }
 
-        FsResponse fsResponse = aListService.listFiles(context.getSiteName(), path, 1, 0);
+        FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 0);
         if (fsResponse == null) {
             context.stats.errors++;
             return;

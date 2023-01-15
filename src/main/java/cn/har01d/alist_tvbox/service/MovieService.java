@@ -73,11 +73,9 @@ public class MovieService {
         movieRepository.deleteById(id);
     }
 
-    public void readMetaData(MovieDetail movieDetail, String siteName, String path) {
+    public void readMetaData(MovieDetail movieDetail, Site site, String path) {
         try {
-            siteService.getByName(siteName)
-                    .flatMap(site -> movieRepository.findBySiteAndPath(site, path))
-                    .ifPresent(movie -> updateDetails(movieDetail, movie));
+            movieRepository.findBySiteAndPath(site, path).ifPresent(movie -> updateDetails(movieDetail, movie));
         } catch (Exception e) {
             log.warn("read meta data failed", e);
         }

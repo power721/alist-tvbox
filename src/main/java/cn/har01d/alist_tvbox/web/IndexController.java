@@ -1,8 +1,8 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.IndexResponse;
 import cn.har01d.alist_tvbox.service.IndexService;
-import cn.har01d.alist_tvbox.dto.IndexRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 

@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class GenerateRequest {
-    private String site;
+    private Integer siteId;
     private String path;
     private boolean includeSub;
 }
