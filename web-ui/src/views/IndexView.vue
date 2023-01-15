@@ -137,16 +137,12 @@ const handleCurrentChange = (data: number) => {
 const handleCancel = (data: any) => {
   axios.post('/tasks/' + data.id + '/cancel').then(() => {
     loadTasks()
-  }, ({response}) => {
-    ElMessage.error(response.data.message)
   })
 }
 
 const handleDelete = (data: any) => {
   axios.delete('/tasks/' + data.id).then(() => {
     loadTasks()
-  }, ({response}) => {
-    ElMessage.error(response.data.message)
   })
 }
 
@@ -164,8 +160,6 @@ const handleIndexRequest = () => {
   axios.post('/index', request).then(() => {
     currentPage.value = 1
     loadTasks()
-  }, ({response}) => {
-    ElMessage.error(response.data.message)
   })
 }
 

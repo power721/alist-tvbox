@@ -18,6 +18,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      "/accounts": API,
       "/sites": API,
       "/vod": API,
       "/sub": API,

@@ -19,6 +19,12 @@ server:
   error:
     include-message: always
 
+cn:
+  spark2fire:
+    auth:
+      jwt:
+        secret-key: "27b8c0a5-ed89-45cb-b5fd-cae6af9be6d7"
+
 app:
   sort: true
   formats:

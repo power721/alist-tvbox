@@ -232,15 +232,11 @@ const handleConfirm = () => {
   axios.post(url, form.value).then(() => {
     formVisible.value = false
     load()
-  }, ({response}) => {
-    ElMessage.error(response.data.message)
   })
 }
 
 const updateIndexFile = (id: string | number) => {
   axios.post('/sites/' + id + '/updateIndexFile').then(() => {
-  }, ({response}) => {
-    ElMessage.error(response.data.message)
   })
 }
 
