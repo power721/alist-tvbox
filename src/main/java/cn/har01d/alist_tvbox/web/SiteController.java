@@ -1,7 +1,9 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.dto.SiteDto;
 import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.service.AListService;
 import cn.har01d.alist_tvbox.service.IndexService;
 import cn.har01d.alist_tvbox.service.SiteService;
 import org.springframework.web.bind.annotation.*;
@@ -14,10 +16,12 @@ import java.util.List;
 public class SiteController {
     private final SiteService siteService;
     private final IndexService indexService;
+    private final AListService aListService;
 
-    public SiteController(SiteService siteService, IndexService indexService) {
+    public SiteController(SiteService siteService, IndexService indexService, AListService aListService) {
         this.siteService = siteService;
         this.indexService = indexService;
+        this.aListService = aListService;
     }
 
     @GetMapping
@@ -33,6 +37,11 @@ public class SiteController {
     @GetMapping("/{id}")
     public Site get(@PathVariable int id) {
         return siteService.getById(id);
+    }
+
+    @GetMapping("/{id}/browse")
+    public List<FileItem> browse(@PathVariable int id, @RequestParam(required = false, defaultValue = "") String path) {
+        return aListService.browse(id, path);
     }
 
     @PostMapping("/{id}")

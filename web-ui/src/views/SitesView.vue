@@ -183,8 +183,8 @@ const showDetails = (data: any) => {
 
 const loadFiles = (id: string) => {
   extractPaths(id)
-  if (!id.startsWith(form.value.name + '$')) {
-    id = form.value.name + '$' + id
+  if (!id.startsWith(form.value.id + '$')) {
+    id = form.value.id + '$' + id
   }
   axios.get('/vod?pg=1&t=' + id).then(({data}) => {
     jsonData.value = data
@@ -196,7 +196,7 @@ const loadFiles = (id: string) => {
 }
 
 const extractPaths = (id: string) => {
-  const path = id.replace(form.value.name + '$', '')
+  const path = id.replace(form.value.id + '$', '')
   if (path == '/') {
     paths.value = [{path: '/', text: '首页'}]
     return

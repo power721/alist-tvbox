@@ -1,14 +1,17 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -37,6 +40,26 @@ public class AListService {
         logError(response);
         log.debug("search \"{}\" from site {}:{} result: {}", keyword, site.getId(), site.getName(), response.getData().getContent().size());
         return response.getData().getContent();
+    }
+
+    public List<FileItem> browse(int id, String path) {
+        List<FileItem> list = new ArrayList<>();
+        if (StringUtils.isEmpty(path)) {
+            list.add(new FileItem("/", "/", 1));
+            return list;
+        }
+
+        Site site = siteService.getById(id);
+        FsResponse response = listFiles(site, path, 1, 1000);
+        for (FsInfo fsInfo : response.getFiles()) {
+            FileItem item = new FileItem(fsInfo.getName(), fixPath(path + "/" + fsInfo.getName()), fsInfo.getType());
+            list.add(item);
+        }
+        return list;
+    }
+
+    private String fixPath(String path) {
+        return path.replaceAll("/+", "/");
     }
 
     public FsResponse listFiles(Site site, String path, int page, int size) {
