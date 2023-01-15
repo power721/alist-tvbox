@@ -5,11 +5,11 @@ import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
 import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.IndexResponse;
+import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
-import cn.har01d.alist_tvbox.tvbox.Site;
 import com.hankcs.hanlp.HanLP;
 import com.hankcs.hanlp.seg.common.Term;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +54,7 @@ public class IndexService {
     }
 
     public void updateIndexFile() {
-        for (Site site : appProperties.getSites()) {
+        for (Site site : siteService.list()) {
             if (site.isSearchable() && StringUtils.isNotBlank(site.getIndexFile())) {
                 try {
                     downloadIndexFile(site.getName(), site.getIndexFile(), true);
@@ -173,16 +173,12 @@ public class IndexService {
     }
 
     public IndexResponse index(IndexRequest indexRequest) throws IOException {
-        if (StringUtils.isBlank(indexRequest.getSite())) {
-            cn.har01d.alist_tvbox.entity.Site site = siteService.getById(indexRequest.getSiteId());
-            indexRequest.setSite(site.getName());
-        }
-
-        Task task = taskService.addIndexTask(indexRequest);
+        cn.har01d.alist_tvbox.entity.Site site = siteService.getById(indexRequest.getSiteId());
+        Task task = taskService.addIndexTask(site);
 
         executorService.submit(() -> {
             try {
-                index(indexRequest, task);
+                index(indexRequest, site, task);
             } catch (Exception e) {
                 taskService.failTask(task.getId(), e.getMessage());
             }
@@ -192,9 +188,9 @@ public class IndexService {
     }
 
     @Async
-    public void index(IndexRequest indexRequest, Task task) throws IOException {
+    public void index(IndexRequest indexRequest, cn.har01d.alist_tvbox.entity.Site site, Task task) throws IOException {
         StopWatch stopWatch = new StopWatch("index");
-        File dir = new File("data/index/" + indexRequest.getSite());
+        File dir = new File("data/index/" + indexRequest.getSiteId());
         Files.createDirectories(dir.toPath());
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
         File info = new File(dir, indexRequest.getIndexName() + ".info");
@@ -205,7 +201,7 @@ public class IndexService {
             Instant time = Instant.now();
             taskService.startTask(task.getId());
             taskService.updateTaskData(task.getId(), file.getAbsolutePath());
-            IndexContext context = new IndexContext(indexRequest, writer, task.getId());
+            IndexContext context = new IndexContext(indexRequest, site, writer, task.getId());
             for (String path : indexRequest.getPaths()) {
                 if (isCancelled(context)) {
                     break;
@@ -264,10 +260,10 @@ public class IndexService {
         }
 
         if (!log.isDebugEnabled()) {
-            log.info("index {} : {}", context.getSite(), path);
+            log.info("index {} : {}", context.getSiteName(), path);
         }
 
-        FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 0);
+        FsResponse fsResponse = aListService.listFiles(context.getSiteName(), path, 1, 0);
         if (fsResponse == null) {
             context.stats.errors++;
             return;

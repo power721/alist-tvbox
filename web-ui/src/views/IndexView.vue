@@ -79,7 +79,9 @@ import {ElMessage} from "element-plus";
 import type {Site} from "@/model/Site";
 import type {TaskPage} from "@/model/Page";
 import type {Task} from "@/model/Task";
+import {onUnmounted} from "@vue/runtime-core";
 
+let intervalId = 0
 const labelWidth = 160
 const total = ref(0)
 const currentPage = ref(1)
@@ -162,6 +164,11 @@ const handleIndexRequest = () => {
 onMounted(() => {
   loadSites()
   loadTasks()
+  intervalId = setInterval(loadTasks, 30000)
+})
+
+onUnmounted(() => {
+  clearInterval(intervalId)
 })
 </script>
 

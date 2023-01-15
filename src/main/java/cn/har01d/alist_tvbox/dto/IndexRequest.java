@@ -7,7 +7,6 @@ import java.util.Set;
 
 @Data
 public class IndexRequest {
-    private String site;
     private Integer siteId;
     private String indexName = "index";
     private boolean excludeExternal;

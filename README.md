@@ -60,7 +60,7 @@ POST http://localhost:5678/index
 Content-Type: application/json
 
 {
-  "site": "小雅",
+  "siteId": 1,
   "indexName": "index.xiaoya",
   "excludeExternal": false,
   "paths": [

@@ -7,7 +7,7 @@ const currentUrl = window.location.origin
     <h1>AList - TvBox</h1>
 
     <h2>
-      TvBox配置URL：
+      TvBox配置地址：
     </h2>
     <p>只包含AList数据源</p>
     <p>
@@ -15,7 +15,7 @@ const currentUrl = window.location.origin
     </p>
 
     <h2>
-      TvBox配置URL：
+      TvBox配置地址：
     </h2>
     <p>
       {{ currentUrl }}/sub/1

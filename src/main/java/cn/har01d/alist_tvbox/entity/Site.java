@@ -23,6 +23,8 @@ public class Site {
     private boolean disabled;
     @Column(name = "`order`")
     private int order;
+    @Column(name = "`version`")
+    private Integer version;
 
     @Override
     public boolean equals(Object o) {

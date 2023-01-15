@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
@@ -21,15 +22,15 @@ public class AListService {
     private static final Pattern VERSION = Pattern.compile("\"version\":\"v\\d+\\.\\d+\\.\\d+\"");
 
     private final RestTemplate restTemplate;
+    private final SiteService siteService;
     private final Map<String, Integer> cache = new HashMap<>();
-    private final Map<String, String> sites = new HashMap<>();
 
-    public AListService(RestTemplateBuilder builder, AppProperties appProperties) {
+    public AListService(RestTemplateBuilder builder, SiteService siteService) {
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
-        appProperties.getSites().forEach(site -> sites.put(site.getName(), site.getUrl()));
+        this.siteService = siteService;
     }
 
     public List<SearchResult> search(String site, String keyword) {
@@ -139,8 +140,9 @@ public class AListService {
         return version;
     }
 
-    private String getSiteUrl(String site) {
-        return sites.get(site);
+    private String getSiteUrl(String name) {
+        Site site = siteService.getByName(name).orElseThrow(() -> new NotFoundException("站点'" + name + "'不存在"));
+        return site.getUrl();
     }
 
     private void logError(Response<?> response) {

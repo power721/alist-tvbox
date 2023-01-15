@@ -4,16 +4,20 @@ import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
 import cn.har01d.alist_tvbox.domain.TaskType;
 import cn.har01d.alist_tvbox.dto.IndexRequest;
+import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.entity.TaskRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import java.time.Instant;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -22,6 +26,11 @@ public class TaskService {
 
     public TaskService(TaskRepository taskRepository) {
         this.taskRepository = taskRepository;
+    }
+
+    @PostConstruct
+    public void init() {
+        cancelAll();
     }
 
     public Page<Task> list(Pageable pageable) {
@@ -37,32 +46,38 @@ public class TaskService {
             if (task.getStatus() == TaskStatus.RUNNING) {
                 throw new BadRequestException("任务在运行中");
             }
+            log.info("delete task {}: {}", id, task.getName());
             taskRepository.delete(task);
         });
     }
 
-    public Task addIndexTask(IndexRequest request) {
+    public Task addIndexTask(Site site) {
         Task task = new Task();
         task.setType(TaskType.INDEX);
-        task.setName("索引站点 - " + request.getSite());
+        task.setName("索引站点 - " + site.getName());
+        task.setCreatedTime(Instant.now());
         return taskRepository.save(task);
     }
 
     public void startTask(Integer id) {
         Task task = getById(id);
+        log.info("start task {}: {}", id, task.getName());
         task.setStatus(TaskStatus.RUNNING);
+        task.setStartTime(Instant.now());
         taskRepository.save(task);
     }
 
     public void updateTaskData(Integer id, String data) {
         Task task = getById(id);
         task.setData(data);
+        task.setUpdatedTime(Instant.now());
         taskRepository.save(task);
     }
 
     public void updateTaskSummary(Integer id, String summary) {
         Task task = getById(id);
         task.setSummary(summary);
+        task.setUpdatedTime(Instant.now());
         taskRepository.save(task);
     }
 
@@ -71,6 +86,7 @@ public class TaskService {
         if (task.getStatus() == TaskStatus.COMPLETED) {
             return;
         }
+        log.info("complete task {}: {}", id, task.getName());
         task.setStatus(TaskStatus.COMPLETED);
         task.setResult(TaskResult.OK);
         task.setEndTime(Instant.now());
@@ -82,6 +98,7 @@ public class TaskService {
         if (task.getStatus() == TaskStatus.COMPLETED) {
             return;
         }
+        log.info("fail task {}: {}", id, task.getName());
         task.setStatus(TaskStatus.COMPLETED);
         task.setResult(TaskResult.FAILED);
         task.setEndTime(Instant.now());
@@ -89,11 +106,31 @@ public class TaskService {
         taskRepository.save(task);
     }
 
+    public void cancelAll() {
+        cancelAllByStatus(TaskStatus.READY);
+        cancelAllByStatus(TaskStatus.RUNNING);
+    }
+
+    public void cancelAllByStatus(TaskStatus status) {
+        Task t = new Task();
+        t.setStatus(status);
+        Example<Task> example = Example.of(t);
+        List<Task> tasks = taskRepository.findAll(example);
+        for (Task task : tasks) {
+            log.info("cancel task {}: {}", task.getId(), task.getName());
+            task.setStatus(TaskStatus.COMPLETED);
+            task.setResult(TaskResult.CANCELLED);
+            task.setEndTime(Instant.now());
+            taskRepository.save(task);
+        }
+    }
+
     public Task cancelTask(Integer id) {
         Task task = getById(id);
         if (task.getStatus() == TaskStatus.COMPLETED) {
             return task;
         }
+        log.info("cancel task {}: {}", id, task.getName());
         task.setStatus(TaskStatus.COMPLETED);
         task.setResult(TaskResult.CANCELLED);
         task.setEndTime(Instant.now());
