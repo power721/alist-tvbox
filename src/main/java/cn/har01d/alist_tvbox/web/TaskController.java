@@ -20,6 +20,11 @@ public class TaskController {
         return taskService.list(pageable);
     }
 
+    @DeleteMapping
+    public void clean(@RequestParam(required = false, defaultValue = "30") int days) {
+        taskService.clean(days);
+    }
+
     @GetMapping("/{id}")
     public Task getById(@PathVariable Integer id) {
         return taskService.getById(id);

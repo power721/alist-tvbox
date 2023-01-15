@@ -19,7 +19,7 @@ axios.interceptors.response.use(function (response) {
 }, function (error) {
   if (error.response && error.response.status === 401) {
     accountService.logout()
-    if (error.response.data && error.response.data.code === 40100) {
+    if (error.response.data && (error.response.data.code === 40100 || error.response.data.code === 40102)) {
       router.push('/')
     }
   }

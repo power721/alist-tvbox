@@ -22,6 +22,7 @@ const router = useRouter()
 const account = ref({
   username: accountService.account.username,
   password: '',
+  rememberMe: true,
   authenticated: false
 })
 const rules = reactive({

@@ -1,9 +1,6 @@
 # alist-tvbox
 AList proxy server for TvBox, support playlist and search.
 
-# Configure
-Set `app.sites` in the file src/main/resources/application.yaml
-
 # Build
 ```bash
 mvn clean package
@@ -31,7 +28,9 @@ Or run container from Docker hub.
 ```bash
 docker run -d -p 5678:8080 --restart=always --name=alist-tvbox haroldli/alist-tvbox
 ```
+username: admin
 
+password: admin
 # TvBox Config
 ```json
 {
@@ -52,44 +51,4 @@ Change the backend config url in application.yaml
 ```yaml
 app:
   configUrl: https://hutool.ml/tang
-```
-
-# Index And Search
-```http request
-POST http://localhost:5678/index
-Content-Type: application/json
-
-{
-  "siteId": 1,
-  "indexName": "index.xiaoya",
-  "excludeExternal": false,
-  "paths": [
-    "/电视剧",
-    "/动漫",
-    "/综艺",
-    "/纪录片",
-    "/电影",
-    "/音乐"
-  ],
-  "stopWords": [
-  ],
-  "excludes": [
-  ],
-  "maxDepth": 10
-}
-
-```
-
-application.yaml
-```yaml
-app:
-  sites:
-    - name: 小雅
-      url: http://alist.xiaoya.pro
-      searchable: true
-      indexFile: /the/path/to/index.xiaoya.txt
-    - name: Har01d
-      url: http://alist.har01d.cn
-      searchable: true
-      indexFile: http://d.har01d.cn/index.full.zip
 ```

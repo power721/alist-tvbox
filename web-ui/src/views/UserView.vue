@@ -18,11 +18,8 @@
 <script setup lang="ts">
 import {reactive, ref} from "vue";
 import {ElMessage} from "element-plus";
-import {useRoute, useRouter} from "vue-router";
 import accountService from "@/services/account.service";
 
-const route = useRoute()
-const router = useRouter()
 const form = ref({
   username: accountService.account.username,
   password: '',

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Slf4j
@@ -134,5 +135,16 @@ public class TaskService {
         task.setResult(TaskResult.CANCELLED);
         task.setEndTime(Instant.now());
         return taskRepository.save(task);
+    }
+
+    public void clean(int days) {
+        if (days == 0) {
+            return;
+        }
+
+        Instant today = Instant.now().truncatedTo(ChronoUnit.DAYS);
+        Instant time = today.minus(days, ChronoUnit.DAYS);
+        long count = taskRepository.deleteAllByCreatedTimeBefore(time);
+        log.info("deleted {} tasks which create before {} days ago", count, days);
     }
 }
