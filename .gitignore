@@ -4,6 +4,12 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+*.log
+*.info
+*.txt
+*.zip
+*.gz
+
 ### STS ###
 .apt_generated
 .classpath

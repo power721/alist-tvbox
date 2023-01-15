@@ -1,20 +1,25 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.TaskResult;
+import cn.har01d.alist_tvbox.domain.TaskStatus;
+import cn.har01d.alist_tvbox.dto.IndexRequest;
+import cn.har01d.alist_tvbox.dto.IndexResponse;
+import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
-import cn.har01d.alist_tvbox.tvbox.IndexRequest;
-import cn.har01d.alist_tvbox.tvbox.Site;
 import com.hankcs.hanlp.HanLP;
 import com.hankcs.hanlp.seg.common.Term;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.similarity.CosineSimilarity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
-import org.springframework.util.StringUtils;
 
 import java.io.*;
 import java.net.URL;
@@ -25,6 +30,8 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -33,19 +40,24 @@ import java.util.zip.ZipOutputStream;
 @Service
 public class IndexService {
     private final AListService aListService;
+    private final SiteService siteService;
+    private final TaskService taskService;
     private final AppProperties appProperties;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
-    public IndexService(AListService aListService, AppProperties appProperties) {
+    public IndexService(AListService aListService, SiteService siteService, TaskService taskService, AppProperties appProperties) {
         this.aListService = aListService;
+        this.siteService = siteService;
+        this.taskService = taskService;
         this.appProperties = appProperties;
         updateIndexFile();
     }
 
     public void updateIndexFile() {
-        for (Site site : appProperties.getSites()) {
-            if (site.isSearchable() && StringUtils.hasText(site.getIndexFile())) {
+        for (Site site : siteService.list()) {
+            if (site.isSearchable() && StringUtils.isNotBlank(site.getIndexFile())) {
                 try {
-                    downloadIndexFile(site.getName(), site.getIndexFile(), true);
+                    downloadIndexFile(site, true);
                 } catch (Exception e) {
                     log.warn("", e);
                 }
@@ -53,11 +65,17 @@ public class IndexService {
         }
     }
 
-    public String downloadIndexFile(String site, String url) throws IOException {
-        return downloadIndexFile(site, url, false);
+    public void updateIndexFile(Integer siteId) throws IOException {
+        Site site = siteService.getById(siteId);
+        downloadIndexFile(site, true);
     }
 
-    public String downloadIndexFile(String site, String url, boolean update) throws IOException {
+    public String downloadIndexFile(Site site) throws IOException {
+        return downloadIndexFile(site, false);
+    }
+
+    public String downloadIndexFile(Site site, boolean update) throws IOException {
+        String url = site.getIndexFile();
         if (!url.startsWith("http")) {
             return url;
         }
@@ -68,7 +86,7 @@ public class IndexService {
             filename = name.substring(0, name.length() - 4) + ".txt";
         }
 
-        File file = new File(".cache/" + site + "/" + filename);
+        File file = new File(".cache/" + site.getId() + "/" + filename);
         if (!update && file.exists()) {
             return file.getAbsolutePath();
         }
@@ -88,15 +106,15 @@ public class IndexService {
         return file.getAbsolutePath();
     }
 
-    private static boolean unchanged(String site, String url, String name) {
+    private static boolean unchanged(Site site, String url, String name) {
         String localTime = getLocalTime(site, name.substring(0, name.length() - 4) + ".info");
         String infoUrl = url.substring(0, url.length() - 4) + ".info";
         String remoteTime = getRemoteTime(site, infoUrl);
         return localTime.equals(remoteTime);
     }
 
-    private static String getLocalTime(String site, String filename) {
-        File info = new File(".cache/" + site + "/" + filename);
+    private static String getLocalTime(Site site, String filename) {
+        File info = new File(".cache/" + site.getId() + "/" + filename);
         if (info.exists()) {
             try {
                 return FileUtils.readFileToString(info, StandardCharsets.UTF_8);
@@ -107,9 +125,9 @@ public class IndexService {
         return Instant.now().toString();
     }
 
-    private static String getRemoteTime(String site, String url) {
+    private static String getRemoteTime(Site site, String url) {
         try {
-            File file = Files.createTempFile(site, ".info").toFile();
+            File file = Files.createTempFile(String.valueOf(site.getId()), ".info").toFile();
             FileUtils.copyURLToFile(new URL(url), file);
             return FileUtils.readFileToString(file, StandardCharsets.UTF_8);
         } catch (Exception e) {
@@ -118,8 +136,8 @@ public class IndexService {
         return "";
     }
 
-    private static void downloadZipFile(String site, String url, String name) throws IOException {
-        File zipFile = new File(".cache/" + site + "/" + name);
+    private static void downloadZipFile(Site site, String url, String name) throws IOException {
+        File zipFile = new File(".cache/" + site.getId() + "/" + name);
         FileUtils.copyURLToFile(new URL(url), zipFile);
         unzip(zipFile);
         Files.delete(zipFile.toPath());
@@ -160,33 +178,66 @@ public class IndexService {
         return name;
     }
 
-    public void index(IndexRequest indexRequest) throws IOException {
+    public IndexResponse index(IndexRequest indexRequest) throws IOException {
+        cn.har01d.alist_tvbox.entity.Site site = siteService.getById(indexRequest.getSiteId());
+        Task task = taskService.addIndexTask(site);
+
+        executorService.submit(() -> {
+            try {
+                index(indexRequest, site, task);
+            } catch (Exception e) {
+                taskService.failTask(task.getId(), e.getMessage());
+            }
+        });
+
+        return new IndexResponse(task.getId());
+    }
+
+    @Async
+    public void index(IndexRequest indexRequest, cn.har01d.alist_tvbox.entity.Site site, Task task) throws IOException {
         StopWatch stopWatch = new StopWatch("index");
-        File dir = new File("data/index/" + indexRequest.getSite());
+        File dir = new File("data/index/" + indexRequest.getSiteId());
         Files.createDirectories(dir.toPath());
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
         File info = new File(dir, indexRequest.getIndexName() + ".info");
 
+        String summary;
         try (FileWriter writer = new FileWriter(file);
              FileWriter writer2 = new FileWriter(info)) {
             Instant time = Instant.now();
-            IndexContext context = new IndexContext(indexRequest, writer);
+            taskService.startTask(task.getId());
+            taskService.updateTaskData(task.getId(), file.getAbsolutePath());
+            IndexContext context = new IndexContext(indexRequest, site, writer, task.getId());
             for (String path : indexRequest.getPaths()) {
+                if (isCancelled(context)) {
+                    break;
+                }
+                if (StringUtils.isBlank(path)) {
+                    continue;
+                }
                 stopWatch.start("index " + path);
                 index(context, path, 0);
                 stopWatch.stop();
             }
             writer2.write(time.toString());
             log.info("index stats: {}", context.stats);
+            summary = context.stats.toString();
         }
 
         if (indexRequest.isCompress()) {
             File zipFIle = new File(dir, indexRequest.getIndexName() + ".zip");
             zipFile(file, info, zipFIle);
         }
+        taskService.completeTask(task.getId());
+        taskService.updateTaskSummary(task.getId(), summary);
 
         log.info("index done, total time : {} {}", Duration.ofNanos(stopWatch.getTotalTimeNanos()), stopWatch.prettyPrint());
         log.info("index file: {}", file.getAbsolutePath());
+    }
+
+    private boolean isCancelled(IndexContext context) {
+        Task task = taskService.getById(context.getTaskId());
+        return task.getStatus() == TaskStatus.COMPLETED && task.getResult() == TaskResult.CANCELLED;
     }
 
     private void zipFile(File file, File info, File output) throws IOException {
@@ -210,12 +261,12 @@ public class IndexService {
     }
 
     private void index(IndexContext context, String path, int depth) throws IOException {
-        if (context.getMaxDepth() > 0 && depth == context.getMaxDepth()) {
+        if ((context.getMaxDepth() > 0 && depth == context.getMaxDepth()) || isCancelled(context)) {
             return;
         }
 
         if (!log.isDebugEnabled()) {
-            log.info("index {} : {}", context.getSite(), path);
+            log.info("index {} : {}", context.getSiteName(), path);
         }
 
         FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 0);
@@ -271,10 +322,15 @@ public class IndexService {
             }
             context.write(newPath);
         }
+
+        taskService.updateTaskSummary(context.getTaskId(), context.stats.toString());
     }
 
     private boolean exclude(Set<String> rules, String path) {
         for (String rule : rules) {
+            if (StringUtils.isBlank(rule)) {
+                continue;
+            }
             if (rule.startsWith("^") && rule.endsWith("$") && path.equals(rule.substring(1, rule.length() - 1))) {
                 return true;
             }

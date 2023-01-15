@@ -1,17 +1,18 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.FileItem;
+import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -21,30 +22,49 @@ public class AListService {
     private static final Pattern VERSION = Pattern.compile("\"version\":\"v\\d+\\.\\d+\\.\\d+\"");
 
     private final RestTemplate restTemplate;
-    private final Map<String, Integer> cache = new HashMap<>();
-    private final Map<String, String> sites = new HashMap<>();
+    private final SiteService siteService;
 
-    public AListService(RestTemplateBuilder builder, AppProperties appProperties) {
+    public AListService(RestTemplateBuilder builder, SiteService siteService) {
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
-        appProperties.getSites().forEach(site -> sites.put(site.getName(), site.getUrl()));
+        this.siteService = siteService;
     }
 
-    public List<SearchResult> search(String site, String api, String keyword) {
-        String url = getSiteUrl(site) + api + "?keyword=" + keyword;
+    public List<SearchResult> search(Site site, String keyword) {
+        String url = site.getUrl() + "/api/fs/search?keyword=" + keyword;
         SearchRequest request = new SearchRequest();
         request.setKeywords(keyword);
         SearchListResponse response = restTemplate.postForObject(url, request, SearchListResponse.class);
         logError(response);
-        log.debug("search \"{}\" from site {} result: {}", keyword, site, response.getData().getContent().size());
+        log.debug("search \"{}\" from site {}:{} result: {}", keyword, site.getId(), site.getName(), response.getData().getContent().size());
         return response.getData().getContent();
     }
 
-    public FsResponse listFiles(String site, String path, int page, int size) {
+    public List<FileItem> browse(int id, String path) {
+        List<FileItem> list = new ArrayList<>();
+        if (StringUtils.isEmpty(path)) {
+            list.add(new FileItem("/", "/", 1));
+            return list;
+        }
+
+        Site site = siteService.getById(id);
+        FsResponse response = listFiles(site, path, 1, 1000);
+        for (FsInfo fsInfo : response.getFiles()) {
+            FileItem item = new FileItem(fsInfo.getName(), fixPath(path + "/" + fsInfo.getName()), fsInfo.getType());
+            list.add(item);
+        }
+        return list;
+    }
+
+    private String fixPath(String path) {
+        return path.replaceAll("/+", "/");
+    }
+
+    public FsResponse listFiles(Site site, String path, int page, int size) {
         int version = getVersion(site);
-        String url = getSiteUrl(site) + (version == 2 ? "/api/public/path" : "/api/fs/list");
+        String url = site.getUrl() + (version == 2 ? "/api/public/path" : "/api/fs/list");
         FsRequest request = new FsRequest();
         request.setPath(path);
         request.setPage(page);
@@ -67,12 +87,12 @@ public class AListService {
         return response;
     }
 
-    public String readFileContent(String site, String path) {
-        String url = getSiteUrl(site) + "/p" + path;
+    public String readFileContent(Site site, String path) {
+        String url = site.getUrl() + "/p" + path;
         return restTemplate.getForObject(url, String.class);
     }
 
-    public FsDetail getFile(String site, String path) {
+    public FsDetail getFile(Site site, String path) {
         int version = getVersion(site);
         if (version == 2) {
             return getFileV2(site, path);
@@ -81,8 +101,8 @@ public class AListService {
         }
     }
 
-    private FsDetail getFileV3(String site, String path) {
-        String url = getSiteUrl(site) + "/api/fs/get";
+    private FsDetail getFileV3(Site site, String path) {
+        String url = site.getUrl() + "/api/fs/get";
         FsRequest request = new FsRequest();
         request.setPath(path);
         log.debug("call api: {}", url);
@@ -92,8 +112,8 @@ public class AListService {
         return response.getData();
     }
 
-    private FsDetail getFileV2(String site, String path) {
-        String url = getSiteUrl(site) + "/api/public/path";
+    private FsDetail getFileV2(Site site, String path) {
+        String url = site.getUrl() + "/api/public/path";
         FsRequest request = new FsRequest();
         request.setPath(path);
         log.debug("call api: {}", url);
@@ -119,12 +139,12 @@ public class AListService {
         return null;
     }
 
-    private Integer getVersion(String site) {
-        if (cache.containsKey(site)) {
-            return cache.get(site);
+    private Integer getVersion(Site site) {
+        if (site.getVersion() != null) {
+            return site.getVersion();
         }
 
-        String url = getSiteUrl(site) + "/api/public/settings";
+        String url = site.getUrl() + "/api/public/settings";
         log.debug("call api: {}", url);
         String text = restTemplate.getForObject(url, String.class);
         int version;
@@ -133,14 +153,11 @@ public class AListService {
         } else {
             version = 2;
         }
-        log.info("site: {} version: {}", site, version);
-        cache.put(site, version);
+        log.info("site {}:{} version: {}", site.getId(), site.getName(), version);
+        site.setVersion(version);
+        siteService.save(site);
 
         return version;
-    }
-
-    private String getSiteUrl(String site) {
-        return sites.get(site);
     }
 
     private void logError(Response<?> response) {

@@ -33,10 +33,10 @@ public class FileNameInfo implements Comparable<FileNameInfo> {
         try {
             return Double.parseDouble(text);
         } catch (Exception e) {
-            int index = NUMBERS.indexOf(text.substring(0 ,1));
+            int index = NUMBERS.indexOf(text.substring(0, 1));
             if (index >= 0) {
                 if (index == 10 && text.length() == 2) {
-                    index = NUMBERS.indexOf(text.substring(1 , 2));
+                    index = NUMBERS.indexOf(text.substring(1, 2));
                     return (double) (10 + index);
                 }
                 return (double) index;

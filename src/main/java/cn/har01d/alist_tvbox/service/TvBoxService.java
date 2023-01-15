@@ -1,8 +1,12 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.*;
-import cn.har01d.alist_tvbox.tvbox.*;
+import cn.har01d.alist_tvbox.tvbox.Category;
+import cn.har01d.alist_tvbox.tvbox.CategoryList;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -28,6 +32,8 @@ public class TvBoxService {
 
     private final AListService aListService;
     private final IndexService indexService;
+    private final MovieService movieService;
+    private final SiteService siteService;
     private final AppProperties appProperties;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
@@ -40,18 +46,20 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService, IndexService indexService, AppProperties appProperties) {
+    public TvBoxService(AListService aListService, IndexService indexService, MovieService movieService, SiteService siteService, AppProperties appProperties) {
         this.aListService = aListService;
         this.indexService = indexService;
+        this.movieService = movieService;
+        this.siteService = siteService;
         this.appProperties = appProperties;
     }
 
     public CategoryList getCategoryList() {
         CategoryList result = new CategoryList();
 
-        for (Site site : appProperties.getSites()) {
+        for (Site site : siteService.list()) {
             Category category = new Category();
-            category.setType_id(site.getName() + "$/");
+            category.setType_id(site.getId() + "$/");
             category.setType_name(site.getName());
             result.getList().add(category);
             result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
@@ -66,12 +74,12 @@ public class TvBoxService {
     public MovieList search(String keyword) {
         MovieList result = new MovieList();
         List<Future<List<MovieDetail>>> futures = new ArrayList<>();
-        for (Site site : appProperties.getSites()) {
+        for (Site site : siteService.list()) {
             if (site.isSearchable()) {
                 if (StringUtils.hasText(site.getIndexFile())) {
-                    futures.add(executorService.submit(() -> searchByFile(site.getName(), keyword, site.getIndexFile())));
+                    futures.add(executorService.submit(() -> searchByFile(site, keyword)));
                 } else {
-                    futures.add(executorService.submit(() -> searchByApi(site.getName(), site.getSearchApi(), keyword)));
+                    futures.add(executorService.submit(() -> searchByApi(site, keyword)));
                 }
             }
         }
@@ -93,12 +101,13 @@ public class TvBoxService {
         return result;
     }
 
-    private List<MovieDetail> searchByFile(String site, String keyword, String indexFile) throws IOException {
+    private List<MovieDetail> searchByFile(Site site, String keyword) throws IOException {
+        String indexFile = site.getIndexFile();
         if (indexFile.startsWith("http://") || indexFile.startsWith("https://")) {
-            indexFile = indexService.downloadIndexFile(site, indexFile);
+            indexFile = indexService.downloadIndexFile(site);
         }
 
-        log.info("search \"{}\" from site {}, index: {}", keyword, site, indexFile);
+        log.info("search \"{}\" from site {}:{}, index file: {}", keyword, site.getId(), site.getName(), indexFile);
         Set<String> keywords = Arrays.stream(keyword.split("\\s+")).collect(Collectors.toSet());
         Set<String> lines = Files.readAllLines(Paths.get(indexFile))
                 .stream()
@@ -113,26 +122,26 @@ public class TvBoxService {
             }
             String path = fixPath("/" + line + (isMediaFile ? "" : PLAYLIST));
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site + "$" + path);
-            movieDetail.setVod_name(site + ":" + line);
+            movieDetail.setVod_id(site.getId() + "$" + path);
+            movieDetail.setVod_name(site.getName() + ":" + line);
             movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
             list.add(movieDetail);
         }
         list.sort(Comparator.comparing(MovieDetail::getVod_id));
 
-        log.debug("search \"{}\" from site {}, result: {}", keyword, site, list.size());
+        log.debug("search \"{}\" from site {}:{}, result: {}", keyword, site.getId(), site.getName(), list.size());
         return list;
     }
 
-    private List<MovieDetail> searchByApi(String site, String api, String keyword) {
-        log.info("search \"{}\" from site {}, api: {}", keyword, site, api);
-        return aListService.search(site, api, keyword)
+    private List<MovieDetail> searchByApi(Site site, String keyword) {
+        log.info("search \"{}\" from site {}:{}", keyword, site.getId(), site.getName());
+        return aListService.search(site, keyword)
                 .stream()
                 .map(e -> {
                     boolean isMediaFile = isMediaFile(e.getName());
                     String path = fixPath(e.getParent() + "/" + e.getName() + (isMediaFile ? "" : PLAYLIST));
                     MovieDetail movieDetail = new MovieDetail();
-                    movieDetail.setVod_id(site + "$" + path);
+                    movieDetail.setVod_id(site.getId() + "$" + path);
                     movieDetail.setVod_name(e.getName());
                     movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
                     return movieDetail;
@@ -149,9 +158,22 @@ public class TvBoxService {
         return isMediaFormat(name);
     }
 
+    private Site getSite(String tid) {
+        int index = tid.indexOf('$');
+        String id = tid.substring(0, index);
+        try {
+            Integer siteId = Integer.parseInt(id);
+            return siteService.getById(siteId);
+        } catch (NumberFormatException e) {
+            // ignore
+        }
+
+        return siteService.getByName(id);
+    }
+
     public MovieList getMovieList(String tid, String sort, int page) {
         int index = tid.indexOf('$');
-        String site = tid.substring(0, index);
+        Site site = getSite(tid);
         String path = tid.substring(index + 1);
         List<MovieDetail> folders = new ArrayList<>();
         List<MovieDetail> files = new ArrayList<>();
@@ -174,7 +196,7 @@ public class TvBoxService {
             }
 
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site + "$" + fixPath(path + "/" + fsInfo.getName()));
+            movieDetail.setVod_id(site.getId() + "$" + fixPath(path + "/" + fsInfo.getName()));
             movieDetail.setVod_name(fsInfo.getName());
             movieDetail.setVod_tag(fsInfo.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_pic(getCover(fsInfo.getThumb(), fsInfo.getType()));
@@ -193,7 +215,7 @@ public class TvBoxService {
         result.getList().addAll(folders);
 
         if (page == 1 && files.size() > 1 && playlists.isEmpty()) {
-            playlists = generatePlaylist(site + "$" + fixPath(path + PLAYLIST), total - folders.size(), files);
+            playlists = generatePlaylist(site.getId() + "$" + fixPath(path + PLAYLIST), total - folders.size(), files);
         }
 
         result.getList().addAll(playlists);
@@ -241,13 +263,13 @@ public class TvBoxService {
         files.sort(comparator);
     }
 
-    private List<MovieDetail> generatePlaylistFromFile(String site, String path) {
+    private List<MovieDetail> generatePlaylistFromFile(Site site, String path) {
         List<MovieDetail> list = new ArrayList<>();
         String content = aListService.readFileContent(site, path);
         if (content != null) {
             int count = 0;
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site + "$" + path + "#" + 0);
+            movieDetail.setVod_id(site.getId() + "$" + path + "#" + 0);
             movieDetail.setVod_name("播放列表");
             movieDetail.setVod_tag(FILE);
             movieDetail.setVod_pic(LIST_PIC);
@@ -268,7 +290,7 @@ public class TvBoxService {
                     count = 0;
                     String[] parts = text.split(",");
                     movieDetail = new MovieDetail();
-                    movieDetail.setVod_id(site + "$" + path + "#" + list.size());
+                    movieDetail.setVod_id(site.getId() + "$" + path + "#" + list.size());
                     movieDetail.setVod_name(parts[0]);
                     movieDetail.setVod_tag(FILE);
                     movieDetail.setVod_pic(parts.length == 3 ? parts[2].trim() : LIST_PIC);
@@ -302,14 +324,16 @@ public class TvBoxService {
         return list;
     }
 
-    public String getPlayUrl(String site, String path) {
+    public String getPlayUrl(Integer siteId, String path) {
+        Site site = siteService.getById(siteId);
+        log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path);
         FsDetail fsDetail = aListService.getFile(site, path);
         return fixHttp(fsDetail.getRaw_url());
     }
 
     public MovieList getDetail(String tid) {
         int index = tid.indexOf('$');
-        String site = tid.substring(0, index);
+        Site site = getSite(tid);
         String path = tid.substring(index + 1);
         if (path.contains(PLAYLIST) || path.contains(PLAYLIST_TXT)) {
             return getPlaylist(site, path);
@@ -326,6 +350,7 @@ public class TvBoxService {
         movieDetail.setVod_play_from(fsDetail.getProvider());
         movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRaw_url()));
         movieDetail.setVod_content(tid);
+        movieService.readMetaData(movieDetail, site, path);
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
@@ -333,16 +358,16 @@ public class TvBoxService {
         return result;
     }
 
-    private String buildPlayUrl(String site, String path) {
+    private String buildPlayUrl(Site site, String path) {
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
         builder.replacePath("/play");
-        builder.queryParam("site", encodeUrl(site));
+        builder.queryParam("site", String.valueOf(site.getId()));
         builder.queryParam("path", encodeUrl(path));
         return builder.build().toUriString();
     }
 
-    public MovieList getPlaylist(String site, String path) {
-        log.info("load playlist: {} {}", site, path);
+    public MovieList getPlaylist(Site site, String path) {
+        log.info("load playlist {}:{} {}", site.getId(), site.getName(), path);
         if (!path.contains(PLAYLIST)) {
             return readPlaylistFromFile(site, path);
         }
@@ -350,11 +375,11 @@ public class TvBoxService {
         FsDetail fsDetail = aListService.getFile(site, newPath);
 
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(site + "$" + path);
+        movieDetail.setVod_id(site.getId() + "$" + path);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(fsDetail.getProvider());
-        movieDetail.setVod_content(site + ":" + newPath);
+        movieDetail.setVod_content(site.getName() + ":" + newPath);
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
 
@@ -373,6 +398,7 @@ public class TvBoxService {
         }
 
         movieDetail.setVod_play_url(String.join("#", list));
+        movieService.readMetaData(movieDetail, site, newPath);
 
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
@@ -382,7 +408,7 @@ public class TvBoxService {
         return result;
     }
 
-    private MovieList readPlaylistFromFile(String site, String path) {
+    private MovieList readPlaylistFromFile(Site site, String path) {
         List<String> files = new ArrayList<>();
         int id = getPlaylistId(path);
 
@@ -390,7 +416,7 @@ public class TvBoxService {
         String pname = "";
         FsDetail fsDetail = aListService.getFile(site, newPath);
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(site + "$" + path);
+        movieDetail.setVod_id(site.getId() + "$" + path);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(fsDetail.getProvider());

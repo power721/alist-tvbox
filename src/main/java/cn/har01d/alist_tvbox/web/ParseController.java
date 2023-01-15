@@ -1,7 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.ParseResponse;
 import cn.har01d.alist_tvbox.service.ParseService;
-import cn.har01d.alist_tvbox.tvbox.ParseResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

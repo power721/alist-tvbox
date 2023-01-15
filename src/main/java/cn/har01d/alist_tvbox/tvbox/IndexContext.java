@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.tvbox;
 
+import cn.har01d.alist_tvbox.dto.IndexRequest;
 import lombok.Data;
 
 import java.io.FileWriter;
@@ -11,11 +12,13 @@ import java.util.Set;
 public class IndexContext {
     public Stats stats = new Stats();
     private final IndexRequest indexRequest;
+    private final cn.har01d.alist_tvbox.entity.Site site;
     private final FileWriter writer;
+    private final Integer taskId;
     private Set<String> set = new HashSet<>();
 
-    public String getSite() {
-        return indexRequest.getSite();
+    public String getSiteName() {
+        return site.getName();
     }
 
     public boolean isExcludeExternal() {
@@ -50,5 +53,15 @@ public class IndexContext {
         public int indexed;
         public int errors;
         public int excluded;
+
+        @Override
+        public String toString() {
+            return "Stats{" +
+                    "files=" + files +
+                    ", indexed=" + indexed +
+                    ", errors=" + errors +
+                    ", excluded=" + excluded +
+                    '}';
+        }
     }
 }

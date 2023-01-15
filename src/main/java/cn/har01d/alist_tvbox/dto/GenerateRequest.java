@@ -1,10 +1,10 @@
-package cn.har01d.alist_tvbox.tvbox;
+package cn.har01d.alist_tvbox.dto;
 
 import lombok.Data;
 
 @Data
 public class GenerateRequest {
-    private String site;
+    private Integer siteId;
     private String path;
     private boolean includeSub;
 }

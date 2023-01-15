@@ -1,4 +1,4 @@
-package cn.har01d.alist_tvbox.tvbox;
+package cn.har01d.alist_tvbox.dto;
 
 import lombok.Data;
 
@@ -7,7 +7,7 @@ import java.util.Set;
 
 @Data
 public class IndexRequest {
-    private String site;
+    private Integer siteId;
     private String indexName = "index";
     private boolean excludeExternal;
     private boolean compress;

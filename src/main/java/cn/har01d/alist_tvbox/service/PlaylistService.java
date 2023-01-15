@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import org.springframework.stereotype.Service;
 
@@ -10,14 +11,16 @@ import java.util.List;
 @Service
 public class PlaylistService {
     private final AListService aListService;
+    private final SiteService siteService;
     private final AppProperties appProperties;
 
-    public PlaylistService(AListService aListService, AppProperties appProperties) {
+    public PlaylistService(AListService aListService, SiteService siteService, AppProperties appProperties) {
         this.aListService = aListService;
+        this.siteService = siteService;
         this.appProperties = appProperties;
     }
 
-    public String generate(String site, String path, boolean includeSub) {
+    public String generate(Integer siteId, String path, boolean includeSub) {
         String header = "#name \n" +
                 "#type \n" +
                 "#actor \n" +
@@ -26,10 +29,11 @@ public class PlaylistService {
                 "#lang \n" +
                 "#area \n" +
                 "#year \n\n";
+        Site site = siteService.getById(siteId);
         return header + generate(site, path, "播放列表", "", includeSub);
     }
 
-    private String generate(String site, String path, String name, String parent, boolean includeSub) {
+    private String generate(Site site, String path, String name, String parent, boolean includeSub) {
         StringBuilder sb = new StringBuilder();
 
         List<String> files = new ArrayList<>();
