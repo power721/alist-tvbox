@@ -21,7 +21,14 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column prop="indexFile" label="索引文件"/>
+      <el-table-column prop="indexFile" label="索引文件">
+        <template #default="scope">
+          {{ scope.row.indexFile }}
+          <el-button :icon="Refresh" @click="updateIndexFile(scope.row.id)"
+                     v-if="scope.row.indexFile&&scope.row.indexFile.startsWith('http')">
+          </el-button>
+        </template>
+      </el-table-column>
       <el-table-column prop="order" label="顺序" sortable width="90"/>
       <el-table-column prop="disabled" label="禁用？" width="80">
         <template #default="scope">
@@ -118,9 +125,9 @@
 
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
-import {Check, Close} from '@element-plus/icons-vue'
+import {Check, Close, Refresh} from '@element-plus/icons-vue'
 import axios from "axios"
-import {ElMessage, ElNotification} from "element-plus";
+import {ElMessage} from "element-plus";
 import type {VodList} from "@/model/VodList";
 
 interface Item {
@@ -197,7 +204,7 @@ const extractPaths = (id: string) => {
   const array = path.split('/')
   const items: Item[] = []
   for (let index = 0; index < array.length; ++index) {
-    const path = array.slice(0, index+1).join('/')
+    const path = array.slice(0, index + 1).join('/')
     const text = array[index]
     items.push({text: text ? text : '首页', path: path ? path : '/'})
   }
@@ -225,6 +232,13 @@ const handleConfirm = () => {
   axios.post(url, form.value).then(() => {
     formVisible.value = false
     load()
+  }, ({response}) => {
+    ElMessage.error(response.data.message)
+  })
+}
+
+const updateIndexFile = (id: string | number) => {
+  axios.post('/sites/' + id + '/updateIndexFile').then(() => {
   }, ({response}) => {
     ElMessage.error(response.data.message)
   })

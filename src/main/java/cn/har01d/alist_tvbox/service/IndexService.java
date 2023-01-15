@@ -65,6 +65,11 @@ public class IndexService {
         }
     }
 
+    public void updateIndexFile(Integer siteId) throws IOException {
+        Site site = siteService.getById(siteId);
+        downloadIndexFile(site, true);
+    }
+
     public String downloadIndexFile(Site site) throws IOException {
         return downloadIndexFile(site, false);
     }

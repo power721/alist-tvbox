@@ -42,8 +42,16 @@
     <el-table :data="tasks.content" border style="width: 100%">
       <el-table-column prop="id" label="ID" sortable width="70"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
-      <el-table-column prop="status" label="状态" sortable width="120"/>
-      <el-table-column prop="result" label="结果" sortable width="120"/>
+      <el-table-column prop="status" label="状态" sortable width="120">
+        <template #default="scope">
+          <span>{{ getTaskStatus(scope.row.status) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="result" label="结果" sortable width="120">
+        <template #default="scope">
+          <span>{{ getTaskResult(scope.row.result) }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="summary" label="概要"/>
       <el-table-column prop="error" label="错误"/>
       <el-table-column prop="startTime" label="开始时间" sortable width="150"/>
@@ -159,6 +167,32 @@ const handleIndexRequest = () => {
   }, ({response}) => {
     ElMessage.error(response.data.message)
   })
+}
+
+const getTaskStatus = (status: string) => {
+  if (status === 'READY') {
+    return '就绪'
+  }
+  if (status === 'COMPLETED') {
+    return '结束'
+  }
+  if (status === 'RUNNING') {
+    return '运行'
+  }
+  return ''
+}
+
+const getTaskResult = (result: string) => {
+  if (result === 'OK') {
+    return '成功'
+  }
+  if (result === 'FAILED') {
+    return '失败'
+  }
+  if (result === 'CANCELLED') {
+    return '取消'
+  }
+  return ''
 }
 
 onMounted(() => {
