@@ -275,6 +275,7 @@ public class IndexService {
             return;
         }
         if (context.isExcludeExternal() && fsResponse.getProvider().contains("AList")) {
+            log.warn("exclude external {}", path);
             return;
         }
 
