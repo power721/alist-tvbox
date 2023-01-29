@@ -39,7 +39,9 @@
         <el-input-number v-model="form.maxDepth" :min="1"/>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="handleform">开始索引</el-button>
+        <el-button type="primary" @click="handleForm">开始索引</el-button>
+        <el-button type="info" @click="saveTemplates">存为模板</el-button>
+        <el-button type="info" @click="showTemplates">索引模板</el-button>
       </el-form-item>
     </el-form>
     <div class="space"></div>
@@ -86,6 +88,26 @@
       </span>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="templatesVisible" title="索引模板">
+      <el-table :data="templates" border style="width: 100%">
+        <el-table-column prop="id" label="ID" sortable width="70"/>
+        <el-table-column prop="name" label="名称" sortable width="120"/>
+        <el-table-column prop="data" label="数据"/>
+        <el-table-column prop="createdTime" label="创建时间" sortable width="165"/>
+        <el-table-column fixed="right" label="操作" width="140">
+          <template #default="scope">
+            <el-button link type="primary" size="small" @click="loadTemplate(scope.row)">加载</el-button>
+            <el-button link type="danger" size="small" @click="deleteTemplate(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="templatesVisible = false">关闭</el-button>
+      </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -96,6 +118,8 @@ import type {Site} from "@/model/Site";
 import type {TaskPage} from "@/model/Page";
 import type {Task} from "@/model/Task";
 import {onUnmounted} from "@vue/runtime-core";
+import type {IndexTemplate} from "@/model/IndexTemplate";
+import {ElMessage} from "element-plus";
 
 interface Item {
   key: number
@@ -107,9 +131,11 @@ const labelWidth = 160
 const total = ref(0)
 const currentPage = ref(1)
 const dialogVisible = ref(false)
+const templatesVisible = ref(false)
 const sites = ref([] as Site[])
 const tasks = ref({} as TaskPage)
 const task = ref({} as Task)
+const templates = ref([] as IndexTemplate[])
 const form = reactive({
   siteId: 0,
   indexName: 'index',
@@ -137,6 +163,63 @@ const loadTasks = () => {
   axios.get('/tasks?sort=id,desc&size=10&page=' + (currentPage.value - 1)).then(({data}) => {
     tasks.value = data
     total.value = data.totalElements
+  })
+}
+
+const loadTemplates = () => {
+  axios.get('/index-templates?sort=id,desc').then(({data}) => {
+    templates.value = data.content
+  })
+}
+
+const showTemplates = () => {
+  loadTemplates()
+  templatesVisible.value = true
+}
+
+const loadTemplate = (data: IndexTemplate) => {
+  const template = JSON.parse(data.data)
+  console.log(template)
+  form.siteId = template.siteId
+  form.indexName = template.indexName
+  form.excludeExternal = template.excludeExternal
+  form.compress = template.compress
+  form.maxDepth = template.maxDepth
+  form.paths = []
+  for (let path of template.paths) {
+    form.paths.push({
+      key: Date.now(),
+      value: path,
+    })
+  }
+  form.excludes = template.excludes.join(',')
+  form.stopWords = template.stopWords.join(',')
+}
+
+const saveTemplates = () => {
+  const data = {
+    siteId: form.siteId,
+    indexName: form.indexName,
+    excludeExternal: form.excludeExternal,
+    compress: form.compress,
+    maxDepth: form.maxDepth,
+    paths: form.paths.map(e => e.value).filter(e => e),
+    stopWords: form.stopWords ? form.stopWords.split(/\s*,\s*/) : [],
+    excludes: form.excludes ? form.excludes.split(/\s*,\s*/) : [],
+  }
+  const request = {
+    name: form.indexName,
+    siteId: form.siteId,
+    data: JSON.stringify(data)
+  }
+  axios.post('/index-templates', request).then(() => {
+    ElMessage.success('保持模板成功')
+  })
+}
+
+const deleteTemplate = (data: any) => {
+  axios.delete('/index-templates/' + data.id).then(() => {
+    loadTemplates()
   })
 }
 
@@ -179,7 +262,7 @@ const removePath = (item: Item) => {
   }
 }
 
-const handleform = () => {
+const handleForm = () => {
   const request = {
     siteId: form.siteId,
     indexName: form.indexName,
