@@ -65,8 +65,8 @@
       </el-table-column>
       <el-table-column prop="summary" label="概要"/>
       <el-table-column prop="error" label="错误"/>
-      <el-table-column prop="startTime" label="开始时间" sortable width="150"/>
-      <el-table-column prop="endTime" label="结束时间" sortable width="150"/>
+      <el-table-column prop="startTime" label="开始时间" :formatter="datetime" sortable width="155"/>
+      <el-table-column prop="endTime" label="结束时间" :formatter="datetime" sortable width="155"/>
       <el-table-column fixed="right" label="操作" width="140">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">数据</el-button>
@@ -94,7 +94,7 @@
         <el-table-column prop="id" label="ID" sortable width="70"/>
         <el-table-column prop="name" label="名称" sortable width="120"/>
         <el-table-column prop="data" label="数据"/>
-        <el-table-column prop="createdTime" label="创建时间" sortable width="165"/>
+        <el-table-column prop="createdTime" label="创建时间" :formatter="datetime" sortable width="155"/>
         <el-table-column fixed="right" label="操作" width="140">
           <template #default="scope">
             <el-button link type="primary" size="small" @click="loadTemplate(scope.row)">加载</el-button>
@@ -120,6 +120,7 @@ import type {Task} from "@/model/Task";
 import {onUnmounted} from "@vue/runtime-core";
 import type {IndexTemplate} from "@/model/IndexTemplate";
 import {ElMessage} from "element-plus";
+import {formatDatetime} from "@/services/utils";
 
 interface Item {
   key: number
@@ -149,6 +150,13 @@ const form = reactive({
   stopWords: '',
   excludes: '',
 })
+
+const datetime = (row: any, column: any, cellValue: any) => {
+  if (cellValue) {
+    return formatDatetime(new Date(cellValue))
+  }
+  return ''
+}
 
 const loadSites = () => {
   axios.get('/sites').then(({data}) => {
