@@ -32,6 +32,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -202,7 +203,7 @@ public class IndexService {
         File info = new File(dir, indexRequest.getIndexName() + ".info");
 
         String summary;
-        try (FileWriter writer = new FileWriter(file);
+        try (FileWriter writer = new FileWriter(file, indexRequest.isIncremental());
              FileWriter writer2 = new FileWriter(info)) {
             Instant time = Instant.now();
             taskService.startTask(task.getId());
@@ -216,6 +217,9 @@ public class IndexService {
                     continue;
                 }
                 stopWatch.start("index " + path);
+                if (indexRequest.isIncremental()) {
+                    removeLines(file, path);
+                }
                 index(context, path, 0);
                 stopWatch.stop();
             }
@@ -238,6 +242,18 @@ public class IndexService {
     private boolean isCancelled(IndexContext context) {
         Task task = taskService.getById(context.getTaskId());
         return task.getStatus() == TaskStatus.COMPLETED && task.getResult() == TaskResult.CANCELLED;
+    }
+
+    private void removeLines(File file, String prefix) {
+        try (FileWriter writer = new FileWriter(file)) {
+            List<String> lines = Files.readAllLines(file.toPath())
+                    .stream()
+                    .filter(path -> !path.startsWith(prefix))
+                    .collect(Collectors.toList());
+            IOUtils.writeLines(lines, null, writer);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
     }
 
     private void zipFile(File file, File info, File output) throws IOException {

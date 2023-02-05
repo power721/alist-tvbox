@@ -10,6 +10,7 @@ public class IndexRequest {
     private Integer siteId;
     private String indexName = "index";
     private boolean excludeExternal;
+    private boolean incremental;
     private boolean compress;
     private int maxDepth = 10;
     private Set<String> paths = new HashSet<>();

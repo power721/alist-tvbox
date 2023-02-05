@@ -25,12 +25,15 @@
         <span>支持多个路径，逗号分割</span>
         <el-input v-model="form.excludes" autocomplete="off" placeholder="逗号分割"/>
       </el-form-item>
-      <el-form-item label="排除关键词" :label-width="labelWidth">
+      <el-form-item label="忽略关键词" :label-width="labelWidth">
         <span>支持多个关键词，逗号分割</span>
         <el-input v-model="form.stopWords" autocomplete="off" placeholder="逗号分割"/>
       </el-form-item>
       <el-form-item label="排除外部AList站点？" :label-width="labelWidth">
         <el-switch v-model="form.excludeExternal"/>
+      </el-form-item>
+      <el-form-item label="增量更新？" :label-width="labelWidth">
+        <el-switch v-model="form.incremental"/>
       </el-form-item>
       <el-form-item label="压缩文件？" :label-width="labelWidth">
         <el-switch v-model="form.compress"/>
@@ -67,6 +70,11 @@
       <el-table-column prop="error" label="错误"/>
       <el-table-column prop="startTime" label="开始时间" :formatter="datetime" sortable width="155"/>
       <el-table-column prop="endTime" label="结束时间" :formatter="datetime" sortable width="155"/>
+      <el-table-column label="耗时" width="80">
+        <template #default="scope">
+          <div>{{formatDuration(scope.row.startTime, scope.row.endTime)}}</div>
+        </template>
+      </el-table-column>
       <el-table-column fixed="right" label="操作" width="140">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">数据</el-button>
@@ -120,7 +128,7 @@ import type {Task} from "@/model/Task";
 import {onUnmounted} from "@vue/runtime-core";
 import type {IndexTemplate} from "@/model/IndexTemplate";
 import {ElMessage} from "element-plus";
-import {formatDatetime} from "@/services/utils";
+import {formatDatetime, formatDuration} from "@/services/utils";
 
 interface Item {
   key: number
@@ -141,6 +149,7 @@ const form = reactive({
   siteId: 0,
   indexName: 'index',
   excludeExternal: false,
+  incremental: false,
   compress: false,
   maxDepth: 10,
   paths: [{
@@ -191,6 +200,7 @@ const loadTemplate = (data: IndexTemplate) => {
   form.siteId = template.siteId
   form.indexName = template.indexName
   form.excludeExternal = template.excludeExternal
+  form.incremental = template.incremental
   form.compress = template.compress
   form.maxDepth = template.maxDepth
   form.paths = []
@@ -209,6 +219,7 @@ const saveTemplates = () => {
     siteId: form.siteId,
     indexName: form.indexName,
     excludeExternal: form.excludeExternal,
+    incremental: form.incremental,
     compress: form.compress,
     maxDepth: form.maxDepth,
     paths: form.paths.map(e => e.value).filter(e => e),
@@ -275,6 +286,7 @@ const handleForm = () => {
     siteId: form.siteId,
     indexName: form.indexName,
     excludeExternal: form.excludeExternal,
+    incremental: form.incremental,
     compress: form.compress,
     maxDepth: form.maxDepth,
     paths: form.paths.map(e => e.value).filter(e => e),
