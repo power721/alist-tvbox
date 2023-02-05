@@ -202,6 +202,10 @@ public class IndexService {
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
         File info = new File(dir, indexRequest.getIndexName() + ".info");
 
+        if (indexRequest.isIncremental()) {
+            removeLines(file, indexRequest.getPaths());
+        }
+
         String summary;
         try (FileWriter writer = new FileWriter(file, indexRequest.isIncremental());
              FileWriter writer2 = new FileWriter(info)) {
@@ -217,9 +221,6 @@ public class IndexService {
                     continue;
                 }
                 stopWatch.start("index " + path);
-                if (indexRequest.isIncremental()) {
-                    removeLines(file, path);
-                }
                 index(context, path, 0);
                 stopWatch.stop();
             }
@@ -244,13 +245,16 @@ public class IndexService {
         return task.getStatus() == TaskStatus.COMPLETED && task.getResult() == TaskResult.CANCELLED;
     }
 
-    private void removeLines(File file, String prefix) {
-        try (FileWriter writer = new FileWriter(file)) {
+    private void removeLines(File file, Set<String> prefix) {
+        try {
             List<String> lines = Files.readAllLines(file.toPath())
                     .stream()
-                    .filter(path -> !path.startsWith(prefix))
+                    .filter(path -> prefix.stream().noneMatch(path::startsWith))
                     .collect(Collectors.toList());
-            IOUtils.writeLines(lines, null, writer);
+
+            try (FileWriter writer = new FileWriter(file)) {
+                IOUtils.writeLines(lines, null, writer);
+            }
         } catch (Exception e) {
             log.warn("", e);
         }
