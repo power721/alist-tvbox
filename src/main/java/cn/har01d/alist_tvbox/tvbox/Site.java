@@ -6,7 +6,7 @@ import lombok.Data;
 public class Site {
     private String name;
     private String url;
-    private String password;
+    private String password = "";
     private boolean searchable;
     private String searchApi = "/api/fs/search";
     private String indexFile;
