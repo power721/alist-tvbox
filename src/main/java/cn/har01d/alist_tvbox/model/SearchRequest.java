@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 public class SearchRequest {
     private String keywords;
+    private String password;
     private String parent = "/";
     private int page = 1;
     @JsonProperty("per_page")

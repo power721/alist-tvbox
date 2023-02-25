@@ -39,6 +39,7 @@ public class SiteService {
             Site site = new Site();
             site.setName(s.getName());
             site.setUrl(s.getUrl());
+            site.setPassword(s.getPassword());
             site.setSearchable(s.isSearchable());
             site.setIndexFile(s.getIndexFile());
             site.setOrder(order++);

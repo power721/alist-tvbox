@@ -35,6 +35,7 @@ public class AListService {
     public List<SearchResult> search(Site site, String keyword) {
         String url = site.getUrl() + "/api/fs/search?keyword=" + keyword;
         SearchRequest request = new SearchRequest();
+        request.setPassword(site.getPassword());
         request.setKeywords(keyword);
         SearchListResponse response = restTemplate.postForObject(url, request, SearchListResponse.class);
         logError(response);
@@ -66,6 +67,7 @@ public class AListService {
         int version = getVersion(site);
         String url = site.getUrl() + (version == 2 ? "/api/public/path" : "/api/fs/list");
         FsRequest request = new FsRequest();
+        request.setPassword(site.getPassword());
         request.setPath(path);
         request.setPage(page);
         request.setSize(size);
@@ -88,6 +90,7 @@ public class AListService {
     }
 
     public String readFileContent(Site site, String path) {
+        // TODO: fix it
         String url = site.getUrl() + "/p" + path;
         return restTemplate.getForObject(url, String.class);
     }
@@ -104,6 +107,7 @@ public class AListService {
     private FsDetail getFileV3(Site site, String path) {
         String url = site.getUrl() + "/api/fs/get";
         FsRequest request = new FsRequest();
+        request.setPassword(site.getPassword());
         request.setPath(path);
         log.debug("call api: {}", url);
         FsDetailResponse response = restTemplate.postForObject(url, request, FsDetailResponse.class);
@@ -115,6 +119,7 @@ public class AListService {
     private FsDetail getFileV2(Site site, String path) {
         String url = site.getUrl() + "/api/public/path";
         FsRequest request = new FsRequest();
+        request.setPassword(site.getPassword());
         request.setPath(path);
         log.debug("call api: {}", url);
         FsListResponseV2 response = restTemplate.postForObject(url, request, FsListResponseV2.class);
