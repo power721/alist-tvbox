@@ -11,6 +11,7 @@
       <el-table-column prop="id" label="ID" sortable width="70"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
       <el-table-column prop="url" label="URL地址" sortable/>
+      <el-table-column prop="version" label="版本" width="70"/>
       <el-table-column prop="password" label="访问密码" width="120"/>
       <el-table-column prop="searchable" label="可搜索？" width="90">
         <template #default="scope">
@@ -57,6 +58,9 @@
         </el-form-item>
         <el-form-item label="URL地址" label-width="140">
           <el-input v-model="form.url" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="版本" label-width="140">
+          <el-input v-model="form.version" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="访问密码" label-width="140">
           <el-input v-model="form.password" autocomplete="off"/>
@@ -156,6 +160,7 @@ const form = ref({
   indexFile: '',
   disabled: false,
   order: 0,
+  version: null,
 })
 
 const handleAdd = () => {
@@ -170,6 +175,7 @@ const handleAdd = () => {
     indexFile: '',
     disabled: false,
     order: 0,
+    version: null,
   }
   formVisible.value = true
 }

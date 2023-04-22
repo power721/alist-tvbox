@@ -10,4 +10,5 @@ public class Site {
     private boolean searchable;
     private String searchApi = "/api/fs/search";
     private String indexFile;
+    private Integer version;
 }

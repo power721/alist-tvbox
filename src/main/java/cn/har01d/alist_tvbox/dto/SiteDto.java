@@ -11,4 +11,5 @@ public class SiteDto {
     private boolean searchable;
     private boolean disabled;
     private int order;
+    private Integer version;
 }

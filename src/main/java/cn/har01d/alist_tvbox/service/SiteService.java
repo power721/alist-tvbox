@@ -42,6 +42,7 @@ public class SiteService {
             site.setPassword(s.getPassword());
             site.setSearchable(s.isSearchable());
             site.setIndexFile(s.getIndexFile());
+            site.setVersion(s.getVersion());
             site.setOrder(order++);
             siteRepository.save(site);
             log.info("save site to database: {}", site);
@@ -83,6 +84,7 @@ public class SiteService {
         site.setSearchable(dto.isSearchable());
         site.setIndexFile(dto.getIndexFile());
         site.setDisabled(dto.isDisabled());
+        site.setVersion(dto.getVersion());
         return siteRepository.save(site);
     }
 
@@ -105,6 +107,7 @@ public class SiteService {
         site.setSearchable(dto.isSearchable());
         site.setIndexFile(dto.getIndexFile());
         site.setDisabled(dto.isDisabled());
+        site.setVersion(dto.getVersion());
         return siteRepository.save(site);
     }
 
