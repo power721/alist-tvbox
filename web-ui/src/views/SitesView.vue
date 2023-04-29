@@ -13,6 +13,7 @@
       <el-table-column prop="url" label="URL地址" sortable/>
       <el-table-column prop="version" label="版本" width="70"/>
       <el-table-column prop="password" label="访问密码" width="120"/>
+      <el-table-column prop="xiaoya" label="小雅版？" width="90"/>
       <el-table-column prop="searchable" label="可搜索？" width="90">
         <template #default="scope">
           <el-icon v-if="scope.row.searchable">
@@ -67,6 +68,9 @@
         </el-form-item>
         <el-form-item label="可搜索？">
           <el-switch v-model="form.searchable"/>
+        </el-form-item>
+        <el-form-item label="小雅版">
+          <el-switch v-model="form.xiaoya"/>
         </el-form-item>
         <el-form-item label="索引文件" label-width="140">
           <el-input v-model="form.indexFile" placeholder="文件路径或者URL"/>
@@ -157,6 +161,7 @@ const form = ref({
   url: '',
   password: '',
   searchable: false,
+  xiaoya: false,
   indexFile: '',
   disabled: false,
   order: 0,
@@ -172,6 +177,7 @@ const handleAdd = () => {
     url: '',
     password: '',
     searchable: false,
+    xiaoya: false,
     indexFile: '',
     disabled: false,
     order: 0,

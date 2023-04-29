@@ -25,6 +25,8 @@ public class Site {
     private String indexFile;
     private boolean searchable;
     private boolean disabled;
+    @Column(columnDefinition = "boolean default false")
+    private boolean xiaoya;
     @Column(name = "`order`")
     private int order;
     @Column(name = "`version`")

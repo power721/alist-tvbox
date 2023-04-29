@@ -41,6 +41,7 @@ public class SiteService {
             site.setUrl(s.getUrl());
             site.setPassword(s.getPassword());
             site.setSearchable(s.isSearchable());
+            site.setXiaoya(s.isXiaoya());
             site.setIndexFile(s.getIndexFile());
             site.setVersion(s.getVersion());
             site.setOrder(order++);
@@ -82,6 +83,7 @@ public class SiteService {
         site.setPassword(dto.getPassword());
         site.setOrder(dto.getOrder());
         site.setSearchable(dto.isSearchable());
+        site.setXiaoya(dto.isXiaoya());
         site.setIndexFile(dto.getIndexFile());
         site.setDisabled(dto.isDisabled());
         site.setVersion(dto.getVersion());
@@ -105,6 +107,7 @@ public class SiteService {
         site.setPassword(dto.getPassword());
         site.setOrder(dto.getOrder());
         site.setSearchable(dto.isSearchable());
+        site.setXiaoya(dto.isXiaoya());
         site.setIndexFile(dto.getIndexFile());
         site.setDisabled(dto.isDisabled());
         site.setVersion(dto.getVersion());

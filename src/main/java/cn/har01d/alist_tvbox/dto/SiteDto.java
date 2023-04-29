@@ -10,6 +10,7 @@ public class SiteDto {
     private String indexFile;
     private boolean searchable;
     private boolean disabled;
+    private boolean xiaoya;
     private int order;
     private Integer version;
 }

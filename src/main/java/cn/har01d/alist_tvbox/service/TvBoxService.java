@@ -2,29 +2,48 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.model.*;
+import cn.har01d.alist_tvbox.model.FileNameInfo;
+import cn.har01d.alist_tvbox.model.Filter;
+import cn.har01d.alist_tvbox.model.FilterValue;
+import cn.har01d.alist_tvbox.model.FsDetail;
+import cn.har01d.alist_tvbox.model.FsInfo;
+import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.*;
+import static cn.har01d.alist_tvbox.util.Constants.FILE;
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER_PIC;
+import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
+import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
+import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST_TXT;
 
 @Slf4j
 @Service
@@ -134,6 +153,14 @@ public class TvBoxService {
     }
 
     private List<MovieDetail> searchByApi(Site site, String keyword) {
+        if (site.isXiaoya()) {
+            try {
+                return searchByXiaoya(site, keyword);
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
         log.info("search \"{}\" from site {}:{}", keyword, site.getId(), site.getName());
         return aListService.search(site, keyword)
                 .stream()
@@ -147,6 +174,36 @@ public class TvBoxService {
                     return movieDetail;
                 })
                 .collect(Collectors.toList());
+    }
+
+    private List<MovieDetail> searchByXiaoya(Site site, String keyword) throws IOException {
+        log.info("search \"{}\" from xiaoya {}:{}", keyword, site.getId(), site.getName());
+        String url = site.getUrl() + "/search?url=&type=video&box=" + keyword;
+        Document doc = Jsoup.connect(url).get();
+        Elements links = doc.select("div a[href]");
+
+        List<MovieDetail> list = new ArrayList<>();
+        for (Element element : links) {
+            MovieDetail movieDetail = new MovieDetail();
+            String path = URLDecoder.decode(element.attr("href"), "UTF-8");
+            String name = getNameFromPath(path);
+            boolean isMediaFile = isMediaFile(name);
+            path = fixPath(path + (isMediaFile ? "" : PLAYLIST));
+            movieDetail.setVod_id(site.getId() + "$" + path);
+            movieDetail.setVod_name(name);
+            movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
+            list.add(movieDetail);
+        }
+
+        return list;
+    }
+
+    private String getNameFromPath(String path) {
+        int index = path.lastIndexOf('/');
+        if (index > -1) {
+            return path.substring(index + 1);
+        }
+        return path;
     }
 
     private boolean isMediaFile(String path) {
