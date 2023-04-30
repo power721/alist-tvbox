@@ -4,8 +4,10 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -14,8 +16,12 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
@@ -28,11 +34,13 @@ import java.util.regex.Pattern;
 @Service
 @SuppressWarnings("unchecked")
 public class SubscriptionService {
+    private final Environment environment;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final AppProperties appProperties;
 
-    public SubscriptionService(RestTemplateBuilder builder, ObjectMapper objectMapper, AppProperties appProperties) {
+    public SubscriptionService(Environment environment, RestTemplateBuilder builder, ObjectMapper objectMapper, AppProperties appProperties) {
+        this.environment = environment;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
@@ -116,6 +124,9 @@ public class SubscriptionService {
 
     private String loadConfigJson(String url) {
         if (url == null || url.isEmpty()) {
+            if (Arrays.asList(environment.getActiveProfiles()).contains("xiaoya")) {
+                return loadConfigJsonXiaoya();
+            }
             return null;
         }
 
@@ -126,6 +137,38 @@ public class SubscriptionService {
             log.warn("load config json failed", e);
             return null;
         }
+    }
+
+    private String loadConfigJsonXiaoya() {
+        try {
+            File file = new File("/www/tvbox/my.json");
+            if (file.exists()) {
+                String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+                String address = readHostAddress();
+                json = json.replaceAll("DOCKER_ADDRESS", address);
+                return json;
+            }
+        } catch (IOException e) {
+            log.warn("", e);
+            return null;
+        }
+        return null;
+    }
+
+    private static String readHostAddress() throws IOException {
+        String address;
+        File file = new File("/data/docker_address.txt");
+        if (file.exists()) {
+            address = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+        } else {
+            address = ServletUriComponentsBuilder.fromCurrentRequest().port(5244).replacePath("/").build().toUriString();
+        }
+
+        if (address.endsWith("/")) {
+            address = address.substring(0, address.length() - 1);
+        }
+
+        return address;
     }
 
     public Map<String, Object> convertResult(String json, String configKey) {
