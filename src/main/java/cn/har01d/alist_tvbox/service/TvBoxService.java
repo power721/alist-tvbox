@@ -198,12 +198,13 @@ public class TvBoxService {
         return list;
     }
 
-    private String getNameFromPath(String path) {
-        int index = path.lastIndexOf('/');
-        if (index > -1) {
-            return path.substring(index + 1);
+    private boolean isFolder(String name) {
+        int index = name.lastIndexOf('.');
+        if (index > 0) {
+            String suffix = name.substring(index + 1);
+            return suffix.length() > 4;
         }
-        return path;
+        return true;
     }
 
     private boolean isMediaFile(String path) {
@@ -452,9 +453,10 @@ public class TvBoxService {
         List<String> list = new ArrayList<>();
 
         if (files.isEmpty()) {
-            log.info("load media files from folders: {}", fsResponse.getFiles().stream().map(FsInfo::getName).collect(Collectors.toSet()));
-            for (FsInfo folder : fsResponse.getFiles()) {
-                fsResponse = aListService.listFiles(site, newPath + "/" + folder.getName(), 1, 0);
+            List<String> folders = fsResponse.getFiles().stream().map(FsInfo::getName).filter(this::isFolder).collect(Collectors.toList());
+            log.info("load media files from folders: {}", folders);
+            for (String folder : folders) {
+                fsResponse = aListService.listFiles(site, newPath + "/" + folder, 1, 0);
                 files = fsResponse.getFiles().stream()
                         .filter(e -> isMediaFormat(e.getName()))
                         .collect(Collectors.toList());
@@ -463,7 +465,7 @@ public class TvBoxService {
                 }
 
                 for (FsInfo fsInfo : files) {
-                    list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, newPath + "/" + folder.getName() + "/" + fsInfo.getName()));
+                    list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, newPath + "/" + folder + "/" + fsInfo.getName()));
                 }
             }
         } else {
