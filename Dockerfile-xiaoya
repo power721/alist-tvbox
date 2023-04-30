@@ -1,0 +1,20 @@
+FROM xiaoyaliu/alist:latest
+
+LABEL MAINTAINER="Har01d"
+
+VOLUME /opt/atv/data/
+
+WORKDIR /opt/atv/
+
+RUN apk add --no-cache openjdk8-jre
+
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+
+COPY target/alist-tvbox-1.0.jar ./alist-tvbox.jar
+
+EXPOSE 8080
+EXPOSE 80
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
+CMD ["/opt/alist/alist", "server", "--no-prefix"]

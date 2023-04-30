@@ -15,7 +15,12 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.spec.AlgorithmParameterSpec;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -162,6 +167,9 @@ public class SubscriptionService {
             } else {
                 json = content;
             }
+
+            json = Pattern.compile("^\\s*#.*", Pattern.MULTILINE).matcher(json).replaceAll("");
+            json = Pattern.compile("^\\s*//.*", Pattern.MULTILINE).matcher(json).replaceAll("");
 
             return objectMapper.readValue(json, Map.class);
         } catch (Exception e) {
