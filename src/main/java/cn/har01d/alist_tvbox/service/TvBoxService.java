@@ -186,7 +186,7 @@ public class TvBoxService {
         for (Element element : links) {
             MovieDetail movieDetail = new MovieDetail();
             String path = URLDecoder.decode(element.attr("href"), "UTF-8");
-            String name = getNameFromPath(path);
+            String name = path;
             boolean isMediaFile = isMediaFile(name);
             path = fixPath(path + (isMediaFile ? "" : PLAYLIST));
             movieDetail.setVod_id(site.getId() + "$" + path);
@@ -385,7 +385,11 @@ public class TvBoxService {
         Site site = siteService.getById(siteId);
         log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path);
         FsDetail fsDetail = aListService.getFile(site, path);
-        return fixHttp(fsDetail.getRaw_url());
+        String url = fixHttp(fsDetail.getRaw_url());
+        if (url.contains("abnormal.png")) {
+            throw new IllegalStateException("阿里云盘开放token过期");
+        }
+        return url;
     }
 
     public MovieList getDetail(String tid) {
@@ -445,13 +449,31 @@ public class TvBoxService {
                 .filter(e -> isMediaFormat(e.getName()))
                 .collect(Collectors.toList());
 
-        if (appProperties.isSort()) {
-            files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
-        }
-
         List<String> list = new ArrayList<>();
-        for (FsInfo fsInfo : files) {
-            list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, newPath + "/" + fsInfo.getName()));
+
+        if (files.isEmpty()) {
+            log.info("load media files from folders: {}", fsResponse.getFiles().stream().map(FsInfo::getName).collect(Collectors.toSet()));
+            for (FsInfo folder : fsResponse.getFiles()) {
+                fsResponse = aListService.listFiles(site, newPath + "/" + folder.getName(), 1, 0);
+                files = fsResponse.getFiles().stream()
+                        .filter(e -> isMediaFormat(e.getName()))
+                        .collect(Collectors.toList());
+                if (appProperties.isSort()) {
+                    files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
+                }
+
+                for (FsInfo fsInfo : files) {
+                    list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, newPath + "/" + folder.getName() + "/" + fsInfo.getName()));
+                }
+            }
+        } else {
+            if (appProperties.isSort()) {
+                files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
+            }
+
+            for (FsInfo fsInfo : files) {
+                list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, newPath + "/" + fsInfo.getName()));
+            }
         }
 
         movieDetail.setVod_play_url(String.join("#", list));
