@@ -390,6 +390,9 @@ public class TvBoxService {
         if (url.contains("abnormal.png")) {
             throw new IllegalStateException("阿里云盘开放token过期");
         }
+        if (url.contains("diskfull.png")) {
+            throw new IllegalStateException("阿里云盘空间不足");
+        }
         return url;
     }
 

@@ -8,6 +8,9 @@ mvn clean package
 
 # Run
 ```bash
+curl -s http://d.har01d.cn/update_new.sh | sudo bash
+```
+```bash
 java -jar target/alist-tvbox-1.0.jar --server.port=5678
 ```
 
@@ -27,6 +30,9 @@ docker run -d -p 5678:8080 -e ALIST_URL=http://IP:5244 --restart=always --name=a
 Or run container from Docker hub.
 ```bash
 docker run -d -p 5678:8080 --restart=always --name=alist-tvbox haroldli/alist-tvbox
+```
+```bash
+docker run -d -p 5678:8080 -p 5244:80 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 ```
 username: admin
 

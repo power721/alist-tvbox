@@ -15,6 +15,7 @@
     <p>
       使用方式：
       <code>docker run -d -p 5678:8080 --restart=always --name=alist-tvbox haroldli/alist-tvbox</code>
+      <code>docker run -d -p 5678:8080 -p 5244:80 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest</code>
     </p>
   </div>
 </template>
