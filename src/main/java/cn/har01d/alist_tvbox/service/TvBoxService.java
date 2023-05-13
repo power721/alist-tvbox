@@ -1,24 +1,20 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.DoubanData;
 import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.model.FileNameInfo;
-import cn.har01d.alist_tvbox.model.Filter;
-import cn.har01d.alist_tvbox.model.FilterValue;
-import cn.har01d.alist_tvbox.model.FsDetail;
-import cn.har01d.alist_tvbox.model.FsInfo;
-import cn.har01d.alist_tvbox.model.FsResponse;
+import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
@@ -27,23 +23,14 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.FILE;
-import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
-import static cn.har01d.alist_tvbox.util.Constants.FOLDER_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
-import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST_TXT;
+import static cn.har01d.alist_tvbox.util.Constants.*;
 
 @Slf4j
 @Service
@@ -54,6 +41,7 @@ public class TvBoxService {
     private final MovieService movieService;
     private final SiteService siteService;
     private final AppProperties appProperties;
+    private final DoubanService doubanService;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -65,12 +53,13 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService, IndexService indexService, MovieService movieService, SiteService siteService, AppProperties appProperties) {
+    public TvBoxService(AListService aListService, IndexService indexService, MovieService movieService, SiteService siteService, AppProperties appProperties, DoubanService doubanService) {
         this.aListService = aListService;
         this.indexService = indexService;
         this.movieService = movieService;
         this.siteService = siteService;
         this.appProperties = appProperties;
+        this.doubanService = doubanService;
     }
 
     public CategoryList getCategoryList() {
@@ -95,7 +84,7 @@ public class TvBoxService {
         List<Future<List<MovieDetail>>> futures = new ArrayList<>();
         for (Site site : siteService.list()) {
             if (site.isSearchable()) {
-                if (StringUtils.hasText(site.getIndexFile())) {
+                if (StringUtils.isNotEmpty(site.getIndexFile())) {
                     futures.add(executorService.submit(() -> searchByFile(site, keyword)));
                 } else {
                     futures.add(executorService.submit(() -> searchByApi(site, keyword)));
@@ -386,7 +375,7 @@ public class TvBoxService {
         Site site = siteService.getById(siteId);
         log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path);
         FsDetail fsDetail = aListService.getFile(site, path);
-        String url = fixHttp(fsDetail.getRaw_url());
+        String url = fixHttp(fsDetail.getRawUrl());
         if (url.contains("abnormal.png")) {
             throw new IllegalStateException("阿里云盘开放token过期");
         }
@@ -413,8 +402,9 @@ public class TvBoxService {
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
         movieDetail.setVod_play_from(fsDetail.getProvider());
-        movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRaw_url()));
-        movieDetail.setVod_content(tid);
+        movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRawUrl()));
+        movieDetail.setVod_content(site.getName() + ":" + getParent(path));
+        setDoubanInfo(movieDetail, site, path);
         movieService.readMetaData(movieDetail, site, path);
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
@@ -447,6 +437,8 @@ public class TvBoxService {
         movieDetail.setVod_content(site.getName() + ":" + newPath);
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
+
+        setDoubanInfo(fsDetail, movieDetail);
 
         FsResponse fsResponse = aListService.listFiles(site, newPath, 1, 0);
         List<FsInfo> files = fsResponse.getFiles().stream()
@@ -490,6 +482,27 @@ public class TvBoxService {
         result.setTotal(result.getList().size());
         log.debug("playlist: {}", result);
         return result;
+    }
+
+    private void setDoubanInfo(MovieDetail movieDetail, Site site, String path) {
+        try {
+            String newPath = getParent(path);
+            FsDetail fsDetail = aListService.getFile(site, newPath);
+            setDoubanInfo(fsDetail, movieDetail);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    private void setDoubanInfo(FsDetail fsDetail, MovieDetail movieDetail) {
+        DoubanData data = doubanService.getDataFromUrl(fsDetail.getReadme());
+        if (data != null) {
+            movieDetail.setVod_area(data.getCountry());
+            movieDetail.setType_name(data.getGenre());
+            if (StringUtils.isNotEmpty(data.getDescription())) {
+                movieDetail.setVod_content(data.getDescription());
+            }
+        }
     }
 
     private MovieList readPlaylistFromFile(Site site, String path) {

@@ -135,7 +135,7 @@ public class AListService {
             fsDetail.setName(fsInfo.getName());
             fsDetail.setThumb(fsInfo.getThumbnail());
             fsDetail.setSize(fsInfo.getSize());
-            fsDetail.setRaw_url(fsInfo.getUrl());
+            fsDetail.setRawUrl(fsInfo.getUrl());
             fsDetail.setType(fsInfo.getType());
             fsDetail.setProvider(fsInfo.getDriver());
             log.debug("get file: {} {}", path, fsDetail);
