@@ -6,6 +6,10 @@
       <a href="https://github.com/power721/alist-tvbox" target="_blank">https://github.com/power721/alist-tvbox</a>
     </p>
     <p>
+      AList：
+      <a href="https://alist.nn.ci/" target="_blank">https://alist.nn.ci/</a>
+    </p>
+    <p>
       Docker：
       <a href="https://hub.docker.com/r/haroldli/alist-tvbox" target="_blank">https://hub.docker.com/r/haroldli/alist-tvbox</a>
     </p>

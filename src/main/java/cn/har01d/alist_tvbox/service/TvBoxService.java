@@ -24,7 +24,6 @@ import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -96,7 +95,7 @@ public class TvBoxService {
         for (Future<List<MovieDetail>> future : futures) {
             try {
                 list.addAll(future.get());
-            } catch (InterruptedException | ExecutionException e) {
+            } catch (Exception e) {
                 log.warn("", e);
             }
         }
@@ -533,7 +532,7 @@ public class TvBoxService {
                     continue;
                 }
                 if (text.contains(",#genre#")) {
-                    if (files.size() > 0) {
+                    if (!files.isEmpty()) {
                         count++;
                     }
                     if (count > id) {
