@@ -37,7 +37,6 @@ public class TvBoxService {
 
     private final AListService aListService;
     private final IndexService indexService;
-    private final MovieService movieService;
     private final SiteService siteService;
     private final AppProperties appProperties;
     private final DoubanService doubanService;
@@ -52,10 +51,9 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService, IndexService indexService, MovieService movieService, SiteService siteService, AppProperties appProperties, DoubanService doubanService) {
+    public TvBoxService(AListService aListService, IndexService indexService, SiteService siteService, AppProperties appProperties, DoubanService doubanService) {
         this.aListService = aListService;
         this.indexService = indexService;
-        this.movieService = movieService;
         this.siteService = siteService;
         this.appProperties = appProperties;
         this.doubanService = doubanService;
@@ -404,7 +402,6 @@ public class TvBoxService {
         movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRawUrl()));
         movieDetail.setVod_content(site.getName() + ":" + getParent(path));
         setDoubanInfo(movieDetail, site, path);
-        movieService.readMetaData(movieDetail, site, path);
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
@@ -473,7 +470,6 @@ public class TvBoxService {
         }
 
         movieDetail.setVod_play_url(String.join("#", list));
-        movieService.readMetaData(movieDetail, site, newPath);
 
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
