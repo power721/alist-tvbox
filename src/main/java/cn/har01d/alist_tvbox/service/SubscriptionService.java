@@ -205,8 +205,13 @@ public class SubscriptionService {
                 json = content;
             }
 
-            json = Pattern.compile("^\\s*#.*", Pattern.MULTILINE).matcher(json).replaceAll("");
-            json = Pattern.compile("^\\s*//.*", Pattern.MULTILINE).matcher(json).replaceAll("");
+            int index = json.indexOf('{');
+            if (index > 0) {
+                json = json.substring(index);
+            }
+
+            json = Pattern.compile("^\\s*#.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
+            json = Pattern.compile("^\\s*//.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
 
             return objectMapper.readValue(json, Map.class);
         } catch (Exception e) {
