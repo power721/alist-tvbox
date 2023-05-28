@@ -2,7 +2,19 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.model.*;
+import cn.har01d.alist_tvbox.model.FsDetail;
+import cn.har01d.alist_tvbox.model.FsDetailResponse;
+import cn.har01d.alist_tvbox.model.FsInfo;
+import cn.har01d.alist_tvbox.model.FsInfoV2;
+import cn.har01d.alist_tvbox.model.FsListResponse;
+import cn.har01d.alist_tvbox.model.FsListResponseV2;
+import cn.har01d.alist_tvbox.model.FsRequest;
+import cn.har01d.alist_tvbox.model.FsResponse;
+import cn.har01d.alist_tvbox.model.FsResponseV2;
+import cn.har01d.alist_tvbox.model.Response;
+import cn.har01d.alist_tvbox.model.SearchListResponse;
+import cn.har01d.alist_tvbox.model.SearchRequest;
+import cn.har01d.alist_tvbox.model.SearchResult;
 import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -71,7 +83,7 @@ public class AListService {
         request.setPath(path);
         request.setPage(page);
         request.setSize(size);
-        log.debug("call api: {}", url);
+        log.debug("call api: {} request: {}", url, request);
         FsListResponse response = restTemplate.postForObject(url, request, FsListResponse.class);
         logError(response);
         log.debug("list files: {} {}", path, response.getData());
@@ -109,7 +121,7 @@ public class AListService {
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
         request.setPath(path);
-        log.debug("call api: {}", url);
+        log.debug("call api: {} request: {}", url, request);
         FsDetailResponse response = restTemplate.postForObject(url, request, FsDetailResponse.class);
         logError(response);
         log.debug("get file: {} {}", path, response.getData());

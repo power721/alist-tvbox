@@ -27,6 +27,9 @@ public class TvBoxController {
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("path: {}  folder: {} keyword: {}  sort: {}", ids, t, wd, sort);
         if (ids != null && !ids.isEmpty()) {
+            if (ids.startsWith("msearch:")) {
+                return tvBoxService.msearch(ids.substring(8));
+            }
             return tvBoxService.getDetail(ids);
         } else if (t != null && !t.isEmpty()) {
             return tvBoxService.getMovieList(t, sort, pg);
