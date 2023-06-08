@@ -66,6 +66,9 @@
         <el-form-item label="访问密码" label-width="140">
           <el-input v-model="form.password" autocomplete="off"/>
         </el-form-item>
+        <el-form-item label="Authorization" label-width="140">
+          <el-input v-model="form.token" autocomplete="off"/>
+        </el-form-item>
         <el-form-item label="可搜索？">
           <el-switch v-model="form.searchable"/>
         </el-form-item>
@@ -160,6 +163,7 @@ const form = ref({
   name: '',
   url: '',
   password: '',
+  token: '',
   searchable: false,
   xiaoya: false,
   indexFile: '',
@@ -176,6 +180,7 @@ const handleAdd = () => {
     name: '',
     url: '',
     password: '',
+    token: '',
     searchable: false,
     xiaoya: false,
     indexFile: '',

@@ -379,7 +379,7 @@ public class TvBoxService {
         movieDetail.setVod_tag(fsDetail.getType() == 1 ? FOLDER : FILE);
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
-        movieDetail.setVod_play_from(fsDetail.getProvider());
+        movieDetail.setVod_play_from(site.getName());
         movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRawUrl()));
         movieDetail.setVod_content(site.getName() + ":" + getParent(path));
         setDoubanInfo(movieDetail, site, path);
@@ -407,7 +407,7 @@ public class TvBoxService {
         movieDetail.setVod_id(site.getId() + "$" + path);
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
-        movieDetail.setVod_play_from(fsDetail.getProvider());
+        movieDetail.setVod_play_from(site.getName());
         movieDetail.setVod_content(site.getName() + ":" + newPath);
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);

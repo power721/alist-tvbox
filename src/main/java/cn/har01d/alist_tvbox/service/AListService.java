@@ -19,7 +19,10 @@ import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -49,7 +52,7 @@ public class AListService {
         SearchRequest request = new SearchRequest();
         request.setPassword(site.getPassword());
         request.setKeywords(keyword);
-        SearchListResponse response = restTemplate.postForObject(url, request, SearchListResponse.class);
+        SearchListResponse response = post(site, url, request, SearchListResponse.class);
         logError(response);
         log.debug("search \"{}\" from site {}:{} result: {}", keyword, site.getId(), site.getName(), response.getData().getContent().size());
         return response.getData().getContent();
@@ -84,7 +87,7 @@ public class AListService {
         request.setPage(page);
         request.setSize(size);
         log.debug("call api: {} request: {}", url, request);
-        FsListResponse response = restTemplate.postForObject(url, request, FsListResponse.class);
+        FsListResponse response = post(site, url, request, FsListResponse.class);
         logError(response);
         log.debug("list files: {} {}", path, response.getData());
         return getFiles(version, response.getData());
@@ -104,7 +107,7 @@ public class AListService {
     public String readFileContent(Site site, String path) {
         // TODO: fix it
         String url = site.getUrl() + "/p" + path;
-        return restTemplate.getForObject(url, String.class);
+        return get(site, url, String.class);
     }
 
     public FsDetail getFile(Site site, String path) {
@@ -122,7 +125,7 @@ public class AListService {
         request.setPassword(site.getPassword());
         request.setPath(path);
         log.debug("call api: {} request: {}", url, request);
-        FsDetailResponse response = restTemplate.postForObject(url, request, FsDetailResponse.class);
+        FsDetailResponse response = post(site, url, request, FsDetailResponse.class);
         logError(response);
         log.debug("get file: {} {}", path, response.getData());
         return response.getData();
@@ -134,7 +137,7 @@ public class AListService {
         request.setPassword(site.getPassword());
         request.setPath(path);
         log.debug("call api: {}", url);
-        FsListResponseV2 response = restTemplate.postForObject(url, request, FsListResponseV2.class);
+        FsListResponseV2 response = post(site, url, request, FsListResponseV2.class);
         logError(response);
         FsInfoV2 fsInfo = Optional.ofNullable(response)
                 .map(Response::getData)
@@ -163,7 +166,7 @@ public class AListService {
 
         String url = site.getUrl() + "/api/public/settings";
         log.debug("call api: {}", url);
-        String text = restTemplate.getForObject(url, String.class);
+        String text = get(site, url, String.class);
         int version;
         if (text != null && VERSION.matcher(text).find()) {
             version = 3;
@@ -175,6 +178,26 @@ public class AListService {
         siteService.save(site);
 
         return version;
+    }
+
+    private <T> T get(Site site, String url, Class<T> responseType) {
+        HttpHeaders headers = new HttpHeaders();
+        if (StringUtils.isNotBlank(site.getToken())) {
+            headers.add("Authorization", site.getToken());
+        }
+        HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+        ResponseEntity<T> response = restTemplate.exchange(url, HttpMethod.GET, entity, responseType);
+        return response.getBody();
+    }
+
+    private <T, R> T post(Site site, String url, R request, Class<T> responseType) {
+        HttpHeaders headers = new HttpHeaders();
+        if (StringUtils.isNotBlank(site.getToken())) {
+            headers.add("Authorization", site.getToken());
+        }
+        HttpEntity<R> entity = new HttpEntity<>(request, headers);
+        ResponseEntity<T> response = restTemplate.exchange(url, HttpMethod.POST, entity, responseType);
+        return response.getBody();
     }
 
     private void logError(Response<?> response) {

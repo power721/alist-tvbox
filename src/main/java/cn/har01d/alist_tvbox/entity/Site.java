@@ -26,6 +26,7 @@ public class Site {
     private String name;
     private String url;
     private String password = "";
+    private String token = "";
     private String indexFile;
     private boolean searchable;
     private boolean disabled;

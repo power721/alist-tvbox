@@ -31,12 +31,14 @@ const router = createRouter({
     {
       path: '/sub/:id',
       name: 'sub',
-      component: SubView
+      component: SubView,
+      meta: {auth: true}
     },
     {
       path: '/vod',
       name: 'vod',
       component: ConfigView,
+      meta: {auth: true}
     },
     {
       path: '/login',
