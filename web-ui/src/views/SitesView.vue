@@ -61,7 +61,7 @@
           <el-input v-model="form.url" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="版本" label-width="140">
-          <el-input v-model="form.version" autocomplete="off"/>
+          <el-input-number v-model="form.version" min="2" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="访问密码" label-width="140">
           <el-input v-model="form.password" autocomplete="off"/>

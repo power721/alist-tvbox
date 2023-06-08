@@ -8,12 +8,14 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.io.File;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,10 +24,12 @@ import java.util.Optional;
 public class SiteService {
     private final AppProperties appProperties;
     private final SiteRepository siteRepository;
+    private final Environment environment;
 
-    public SiteService(AppProperties appProperties, SiteRepository siteRepository) {
+    public SiteService(AppProperties appProperties, SiteRepository siteRepository, Environment environment) {
         this.appProperties = appProperties;
         this.siteRepository = siteRepository;
+        this.environment = environment;
     }
 
     @PostConstruct
@@ -150,6 +154,9 @@ public class SiteService {
     }
 
     public void delete(int id) {
+        if (id == 1 && Arrays.asList(environment.getActiveProfiles()).contains("xiaoya")) {
+            throw new BadRequestException("不能删除默认站点");
+        }
         siteRepository.deleteById(id);
     }
 

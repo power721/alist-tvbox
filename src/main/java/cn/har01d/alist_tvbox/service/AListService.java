@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -101,7 +102,23 @@ public class AListService {
         } else if (response != null && response.getContent() != null) {
             response.setFiles(response.getContent());
         }
+        response.setFiles(filter(response.getFiles()));
         return response;
+    }
+
+    private List<FsInfo> filter(List<FsInfo> files) {
+        return files.stream().filter(e -> include(e.getName())).collect(Collectors.toList());
+    }
+
+    private String[] excludes = {"转存赠送优惠券", "代找", "会员"};
+
+    private boolean include(String name) {
+        for (String text : excludes) {
+            if (name.contains(text)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public String readFileContent(Site site, String path) {
