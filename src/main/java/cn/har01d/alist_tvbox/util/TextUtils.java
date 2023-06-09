@@ -18,6 +18,10 @@ public class TextUtils {
         return c >= 0x4E00 && c <= 0x9FA5;
     }
 
+    public static boolean isEnglishChar(int c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+    }
+
     public static String fixName(String name) {
         int index = name.lastIndexOf('/');
         String newName = name;
@@ -32,7 +36,7 @@ public class TextUtils {
             }
         }
 
-        if (Character.isAlphabetic(newName.codePointAt(0)) && isChineseChar(newName.codePointAt(1))) {
+        if (isEnglishChar(newName.codePointAt(0)) && isChineseChar(newName.codePointAt(1))) {
             newName = newName.substring(1);
         }
 
