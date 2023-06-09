@@ -61,4 +61,22 @@ public class TextUtils {
         return newName;
     }
 
+    public static String updateName(String name) {
+        if (TextUtils.isEnglishChar(name.codePointAt(0)) && TextUtils.isChineseChar(name.codePointAt(1))) {
+            name = name.substring(1);
+        }
+        int start = name.indexOf('.');
+        if (start == 4) {
+            try {
+                Integer.parseInt(name.substring(0, 4));
+                int end = name.indexOf('.', start + 1);
+                if (end > start + 1) {
+                    name = name.substring(start + 1, end);
+                }
+            } catch (Exception e) {
+                // ignore
+            }
+        }
+        return name;
+    }
 }

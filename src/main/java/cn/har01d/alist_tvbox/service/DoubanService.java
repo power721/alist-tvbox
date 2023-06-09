@@ -85,10 +85,6 @@ public class DoubanService {
 
     public Movie getByName(String name) {
         name = TextUtils.fixName(name);
-        List<Movie> movies = movieRepository.getByName(name);
-        if (movies != null && !movies.isEmpty()) {
-            return movies.get(0);
-        }
 
         Alias alias = aliasRepository.findById(name).orElse(null);
         if (alias != null) {
@@ -96,18 +92,25 @@ public class DoubanService {
             return alias.getMovie();
         }
 
-        if (TextUtils.isEnglishChar(name.codePointAt(0)) && TextUtils.isChineseChar(name.codePointAt(1))) {
-            name = name.substring(1);
+        List<Movie> movies = movieRepository.getByName(name);
+        if (movies != null && !movies.isEmpty()) {
+            return movies.get(0);
+        }
+
+        String newName = TextUtils.updateName(name);
+        if (!newName.equals(name)) {
+            name = newName;
             log.debug("search by name: {}", name);
-            movies = movieRepository.getByName(name);
-            if (movies != null && !movies.isEmpty()) {
-                return movies.get(0);
-            }
 
             alias = aliasRepository.findById(name).orElse(null);
             if (alias != null) {
                 log.debug("name: {} alias: {}", name, alias.getAlias());
                 return alias.getMovie();
+            }
+
+            movies = movieRepository.getByName(name);
+            if (movies != null && !movies.isEmpty()) {
+                return movies.get(0);
             }
         }
 
