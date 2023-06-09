@@ -205,7 +205,9 @@ public class TvBoxService {
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
-            setDoubanInfo(movieDetail, getParent(path), false);
+            if (!isMediaFile) {
+                setDoubanInfo(movieDetail, getParent(path), false);
+            }
             list.add(movieDetail);
         }
 
