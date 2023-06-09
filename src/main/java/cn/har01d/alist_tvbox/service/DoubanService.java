@@ -89,11 +89,28 @@ public class DoubanService {
         if (movies != null && !movies.isEmpty()) {
             return movies.get(0);
         }
+
         Alias alias = aliasRepository.findById(name).orElse(null);
         if (alias != null) {
-            log.info("name: {} alias: {}", name, alias.getAlias());
+            log.debug("name: {} alias: {}", name, alias.getAlias());
             return alias.getMovie();
         }
+
+        if (TextUtils.isEnglishChar(name.codePointAt(0)) && TextUtils.isChineseChar(name.codePointAt(1))) {
+            name = name.substring(1);
+            log.debug("search by name: {}", name);
+            movies = movieRepository.getByName(name);
+            if (movies != null && !movies.isEmpty()) {
+                return movies.get(0);
+            }
+
+            alias = aliasRepository.findById(name).orElse(null);
+            if (alias != null) {
+                log.debug("name: {} alias: {}", name, alias.getAlias());
+                return alias.getMovie();
+            }
+        }
+
         return null;
     }
 

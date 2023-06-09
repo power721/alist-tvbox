@@ -19,7 +19,7 @@ public class TextUtils {
     }
 
     public static boolean isEnglishChar(int c) {
-        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+        return (c >= 'A' && c <= 'Z');
     }
 
     public static String fixName(String name) {
@@ -34,10 +34,6 @@ public class TextUtils {
             if (index > 0) {
                 newName = newName.substring(0, index);
             }
-        }
-
-        if (isEnglishChar(newName.codePointAt(0)) && isChineseChar(newName.codePointAt(1))) {
-            newName = newName.substring(1);
         }
 
         Matcher m = NUMBER.matcher(newName);
