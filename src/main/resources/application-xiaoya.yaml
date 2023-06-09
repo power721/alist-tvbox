@@ -6,7 +6,6 @@ spring:
     driverClassName: org.h2.Driver
 
 app:
-  meta: jdbc:h2:file:/data/meta
   sites:
     - name: 丫仙女
       url: http://localhost

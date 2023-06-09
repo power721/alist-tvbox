@@ -31,7 +31,6 @@ cn:
 
 app:
   sort: true
-  meta: jdbc:h2:file:./data/meta
   configUrl: http://饭太硬.top/tv
   formats:
     - dff

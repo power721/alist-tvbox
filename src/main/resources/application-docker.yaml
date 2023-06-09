@@ -4,6 +4,3 @@ spring:
     username: sa
     password: password
     driverClassName: org.h2.Driver
-
-app:
-  meta: jdbc:h2:file:/data/meta
