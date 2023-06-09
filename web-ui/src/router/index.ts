@@ -6,6 +6,7 @@ import SubView from "@/views/SubView.vue";
 import AboutView from "@/views/AboutView.vue";
 import LoginView from "@/views/LoginView.vue";
 import UserView from "@/views/UserView.vue";
+import SearchView from "@/views/SearchView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -38,6 +39,12 @@ const router = createRouter({
       path: '/vod',
       name: 'vod',
       component: ConfigView,
+      meta: {auth: true}
+    },
+    {
+      path: '/search',
+      name: 'search',
+      component: SearchView,
       meta: {auth: true}
     },
     {
