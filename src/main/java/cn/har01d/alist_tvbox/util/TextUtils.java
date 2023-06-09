@@ -14,18 +14,28 @@ public class TextUtils {
     private static final Pattern NUMBER = Pattern.compile("第(\\d+\\.?\\d*)季");
     private static final Pattern NUMBER2 = Pattern.compile("(第.+季)");
 
+    public static boolean isChineseChar(int c) {
+        return c >= 0x4E00 && c <= 0x9FA5;
+    }
+
     public static String fixName(String name) {
         int index = name.lastIndexOf('/');
         String newName = name;
         if (index > -1) {
             newName = newName.substring(index + 1);
         }
+
         if (newName.endsWith(")")) {
             index = newName.lastIndexOf('(');
             if (index > 0) {
                 newName = newName.substring(0, index);
             }
         }
+
+        if (Character.isAlphabetic(newName.codePointAt(0)) && isChineseChar(newName.codePointAt(1))) {
+            newName = newName.substring(1);
+        }
+
         Matcher m = NUMBER.matcher(newName);
         if (m.find()) {
             String text = m.group(1);
@@ -43,6 +53,7 @@ public class TextUtils {
                 }
             }
         }
+
         newName = newName.trim();
         if (!name.equals(newName)) {
             log.debug("name: {} -> {}", name, newName);
