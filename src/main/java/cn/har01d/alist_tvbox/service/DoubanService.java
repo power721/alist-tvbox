@@ -66,7 +66,6 @@ public class DoubanService {
                 detail.setVod_name(node.get("title").asText());
                 detail.setVod_id("msearch:" + detail.getVod_name());
                 detail.setVod_pic("https://avatars.githubusercontent.com/u/97389433?s=120&v=4");
-                detail.setVod_remarks(node.get("changeOrder").asText());
 
                 setDoubanInfo(detail);
 

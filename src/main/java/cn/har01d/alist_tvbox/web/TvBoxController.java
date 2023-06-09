@@ -29,6 +29,8 @@ public class TvBoxController {
         if (ids != null && !ids.isEmpty()) {
             if (ids.startsWith("msearch:")) {
                 return tvBoxService.msearch(ids.substring(8));
+            } else if (ids.equals("recommend")) {
+                return tvBoxService.recommend();
             }
             return tvBoxService.getDetail(ids);
         } else if (t != null && !t.isEmpty()) {

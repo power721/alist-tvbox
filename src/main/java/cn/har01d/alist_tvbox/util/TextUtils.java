@@ -45,7 +45,7 @@ public class TextUtils {
         }
         newName = newName.trim();
         if (!name.equals(newName)) {
-            log.info("name: {} -> {}", name, newName);
+            log.debug("name: {} -> {}", name, newName);
         }
         return newName;
     }

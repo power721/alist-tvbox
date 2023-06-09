@@ -84,11 +84,23 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
         }
 
-        result.setList(doubanService.getHotRank());
+        List<MovieDetail> list = new ArrayList<>();
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id("recommend");
+        list.add(movieDetail);
+        result.setList(list);
 
         result.setTotal(result.getCategories().size());
         result.setLimit(result.getCategories().size());
         log.debug("category: {}", result);
+        return result;
+    }
+
+    public MovieList recommend() {
+        MovieList result = new MovieList();
+        result.setList(doubanService.getHotRank());
+        result.setTotal(result.getList().size());
+        result.setLimit(result.getList().size());
         return result;
     }
 
