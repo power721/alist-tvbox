@@ -10,5 +10,6 @@ public class DoubanData {
     private String language;
     private String country;
     private String year;
+    private String poster;
     private Integer episodes;
 }

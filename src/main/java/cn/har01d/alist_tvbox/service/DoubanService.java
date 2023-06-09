@@ -1,21 +1,22 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.dto.DoubanData;
-import cn.har01d.alist_tvbox.dto.DoubanDto;
+import cn.har01d.alist_tvbox.entity.Meta;
+import cn.har01d.alist_tvbox.entity.MetaRepository;
+import cn.har01d.alist_tvbox.entity.Movie;
+import cn.har01d.alist_tvbox.entity.MovieRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.TextUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,53 +27,30 @@ import java.util.regex.Pattern;
 @Service
 public class DoubanService {
 
-    private static final Pattern DB_URL = Pattern.compile("https://movie.douban.com/subject/(\\d+)");
+    private static final List<String> NUMBERS = Arrays.asList("零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十");
+    private static final Pattern NUMBER = Pattern.compile("第(\\d+\\.?\\d*)季");
+
+    private final MetaRepository metaRepository;
+    private final MovieRepository movieRepository;
 
     private final RestTemplate restTemplate;
-    LoadingCache<String, DoubanData> cache = Caffeine.newBuilder()
-            .maximumSize(100)
-            .build(this::load);
 
-    public DoubanService(RestTemplateBuilder builder) {
+
+    public DoubanService(MetaRepository metaRepository, MovieRepository movieRepository, RestTemplateBuilder builder) {
+        this.metaRepository = metaRepository;
+        this.movieRepository = movieRepository;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
     }
 
-    public DoubanData getDataFromUrl(String url) {
-        if (StringUtils.isNotEmpty(url)) {
-            Matcher matcher = DB_URL.matcher(url);
-            if (matcher.find()) {
-                String id = matcher.group(1);
-                try {
-                    return getById(id);
-                } catch (Exception e) {
-                    log.warn("", e);
-                }
-            }
+    public Movie getByPath(String path) {
+        Meta meta = metaRepository.findByPath(path);
+        if (meta != null) {
+            return meta.getMovie();
         }
-
         return null;
-    }
-
-    public DoubanData getById(String id) {
-        return cache.get(id);
-    }
-
-    public DoubanData load(String id) {
-        String url = "https://api.wmdb.tv/movie/api?id=" + id;
-        log.info("get douban info from {}", url);
-        DoubanDto dto = restTemplate.getForObject(url, DoubanDto.class);
-        if (dto == null || dto.getData() == null || dto.getData().isEmpty()) {
-            return null;
-        }
-
-        DoubanData data = dto.getData().get(0);
-        data.setEpisodes(dto.getEpisodes());
-        data.setYear(dto.getYear());
-        log.info("douban info: {}", data);
-        return data;
     }
 
     public List<MovieDetail> getHotRank() {
@@ -89,6 +67,9 @@ public class DoubanService {
                 detail.setVod_id("msearch:" + detail.getVod_name());
                 detail.setVod_pic("https://avatars.githubusercontent.com/u/97389433?s=120&v=4");
                 detail.setVod_remarks(node.get("changeOrder").asText());
+
+                setDoubanInfo(detail);
+
                 list.add(detail);
             }
         } catch (Exception e) {
@@ -97,4 +78,20 @@ public class DoubanService {
 
         return list;
     }
+
+    private void setDoubanInfo(MovieDetail detail) {
+        Movie movie = getByName(detail.getVod_name());
+        if (movie != null) {
+            detail.setVod_pic(movie.getCover());
+        }
+    }
+
+    public Movie getByName(String name) {
+        List<Movie> movies = movieRepository.getByName(TextUtils.fixName(name));
+        if (movies != null && !movies.isEmpty()) {
+            return movies.get(0);
+        }
+        return null;
+    }
+
 }

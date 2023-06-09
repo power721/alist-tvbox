@@ -13,7 +13,11 @@ spring:
       ddl-auto: update
       use-new-id-generator-mappings: true
     database-platform: org.hibernate.dialect.H2Dialect
+    defer-datasource-initialization: true
     open-in-view: false
+  sql:
+    init:
+      mode: always
 
 server:
   error:
@@ -27,6 +31,7 @@ cn:
 
 app:
   sort: true
+  meta: jdbc:h2:file:./data/meta
   configUrl: http://饭太硬.top/tv
   formats:
     - dff

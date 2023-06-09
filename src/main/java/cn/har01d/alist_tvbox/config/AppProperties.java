@@ -12,6 +12,7 @@ import java.util.Set;
 public class AppProperties {
     private boolean sort;
     private int pageSize = 100;
+    private String meta;
     private String configUrl = "https://freed.yuanhsing.cf/TVBox/meowcf.json";
     private Set<String> formats;
     private List<Site> sites;

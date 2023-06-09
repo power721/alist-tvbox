@@ -1,7 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.dto.DoubanData;
+import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.FileNameInfo;
 import cn.har01d.alist_tvbox.model.Filter;
@@ -205,9 +205,11 @@ public class TvBoxService {
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
+            setDoubanInfo(movieDetail, getParent(path), false);
             list.add(movieDetail);
         }
 
+        log.debug("{}", list);
         return list;
     }
 
@@ -265,8 +267,9 @@ public class TvBoxService {
                 continue;
             }
 
+            String newPath = fixPath(path + "/" + fsInfo.getName());
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site.getId() + "$" + fixPath(path + "/" + fsInfo.getName()));
+            movieDetail.setVod_id(site.getId() + "$" + newPath);
             movieDetail.setVod_name(fsInfo.getName());
             movieDetail.setVod_tag(fsInfo.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_pic(getCover(fsInfo.getThumb(), fsInfo.getType()));
@@ -274,6 +277,7 @@ public class TvBoxService {
             movieDetail.setVod_time(fsInfo.getModified());
             movieDetail.setSize(fsInfo.getSize());
             if (fsInfo.getType() == 1) {
+                setDoubanInfo(movieDetail, newPath, false);
                 folders.add(movieDetail);
             } else {
                 files.add(movieDetail);
@@ -382,7 +386,7 @@ public class TvBoxService {
         movieDetail.setVod_play_from(site.getName());
         movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRawUrl()));
         movieDetail.setVod_content(site.getName() + ":" + getParent(path));
-        setDoubanInfo(movieDetail, site, path);
+        setDoubanInfo(movieDetail, getParent(path), true);
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
@@ -412,7 +416,7 @@ public class TvBoxService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
 
-        setDoubanInfo(fsDetail, movieDetail);
+        setDoubanInfo(movieDetail, newPath, true);
 
         FsResponse fsResponse = aListService.listFiles(site, newPath, 1, 0);
         List<FsInfo> files = fsResponse.getFiles().stream()
@@ -457,23 +461,23 @@ public class TvBoxService {
         return result;
     }
 
-    private void setDoubanInfo(MovieDetail movieDetail, Site site, String path) {
-        try {
-            String newPath = getParent(path);
-            FsDetail fsDetail = aListService.getFile(site, newPath);
-            setDoubanInfo(fsDetail, movieDetail);
-        } catch (Exception e) {
-            log.warn("", e);
+    private void setDoubanInfo(MovieDetail movieDetail, String path, boolean details) {
+        Movie movie = doubanService.getByPath(path);
+        if (movie == null) {
+            movie = doubanService.getByPath(getParent(path));
         }
-    }
-
-    private void setDoubanInfo(FsDetail fsDetail, MovieDetail movieDetail) {
-        DoubanData data = doubanService.getDataFromUrl(fsDetail.getReadme());
-        if (data != null) {
-            movieDetail.setVod_area(data.getCountry());
-            movieDetail.setType_name(data.getGenre());
-            if (StringUtils.isNotEmpty(data.getDescription())) {
-                movieDetail.setVod_content(data.getDescription());
+        if (movie == null) {
+            movie = doubanService.getByName(movieDetail.getVod_name());
+        }
+        if (movie != null) {
+            movieDetail.setVod_pic(movie.getCover());
+            if (!details) {
+                return;
+            }
+            movieDetail.setVod_area(movie.getCountry());
+            movieDetail.setType_name(movie.getGenre());
+            if (StringUtils.isNotEmpty(movie.getDescription())) {
+                movieDetail.setVod_content(movie.getDescription());
             }
         }
     }
