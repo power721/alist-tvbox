@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.entity.Alias;
+import cn.har01d.alist_tvbox.entity.AliasRepository;
 import cn.har01d.alist_tvbox.entity.Meta;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
 import cn.har01d.alist_tvbox.entity.Movie;
@@ -16,29 +18,25 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 public class DoubanService {
 
-    private static final List<String> NUMBERS = Arrays.asList("零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十");
-    private static final Pattern NUMBER = Pattern.compile("第(\\d+\\.?\\d*)季");
-
     private final MetaRepository metaRepository;
     private final MovieRepository movieRepository;
+    private final AliasRepository aliasRepository;
 
     private final RestTemplate restTemplate;
 
 
-    public DoubanService(MetaRepository metaRepository, MovieRepository movieRepository, RestTemplateBuilder builder) {
+    public DoubanService(MetaRepository metaRepository, MovieRepository movieRepository, AliasRepository aliasRepository, RestTemplateBuilder builder) {
         this.metaRepository = metaRepository;
         this.movieRepository = movieRepository;
+        this.aliasRepository = aliasRepository;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
@@ -86,9 +84,15 @@ public class DoubanService {
     }
 
     public Movie getByName(String name) {
-        List<Movie> movies = movieRepository.getByName(TextUtils.fixName(name));
+        name = TextUtils.fixName(name);
+        List<Movie> movies = movieRepository.getByName(name);
         if (movies != null && !movies.isEmpty()) {
             return movies.get(0);
+        }
+        Alias alias = aliasRepository.findById(name).orElse(null);
+        if (alias != null) {
+            log.info("name: {} alias: {}", name, alias.getAlias());
+            return alias.getMovie();
         }
         return null;
     }
