@@ -38,9 +38,9 @@ public class ParseService {
             if (location != null) {
                 result = location;
             }
+            log.info("result: {}", result);
         }
 
-        log.info("result: {}", result);
         return result;
     }
 }

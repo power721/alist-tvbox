@@ -24,13 +24,20 @@ public class TextUtils {
 
     public static String fixName(String name) {
         int index = name.lastIndexOf('/');
-        String newName = name;
+        String newName = name.trim();
         if (index > -1) {
             newName = newName.substring(index + 1);
         }
 
         if (newName.endsWith(")")) {
             index = newName.lastIndexOf('(');
+            if (index > 0) {
+                newName = newName.substring(0, index);
+            }
+        }
+
+        if (newName.endsWith("）")) {
+            index = newName.lastIndexOf('（');
             if (index > 0) {
                 newName = newName.substring(0, index);
             }
