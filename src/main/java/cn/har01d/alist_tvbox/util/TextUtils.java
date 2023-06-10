@@ -36,6 +36,8 @@ public class TextUtils {
             }
         }
 
+        newName = newName.replace("普通话版", "");
+
         Matcher m = NUMBER.matcher(newName);
         if (m.find()) {
             String text = m.group(1);

@@ -488,6 +488,8 @@ public class TvBoxService {
             if (!details) {
                 return;
             }
+            movieDetail.setVod_actor(movie.getActors());
+            movieDetail.setVod_director(movie.getDirectors());
             movieDetail.setVod_area(movie.getCountry());
             movieDetail.setType_name(movie.getGenre());
             if (StringUtils.isNotEmpty(movie.getDescription())) {

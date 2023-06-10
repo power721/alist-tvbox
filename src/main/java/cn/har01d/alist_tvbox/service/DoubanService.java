@@ -79,6 +79,7 @@ public class DoubanService {
     private void setDoubanInfo(MovieDetail detail) {
         Movie movie = getByName(detail.getVod_name());
         if (movie != null) {
+            detail.setVod_name(movie.getName());
             detail.setVod_pic(movie.getCover());
         }
     }
