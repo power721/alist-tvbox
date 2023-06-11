@@ -124,7 +124,7 @@ public class SubscriptionService {
     private Map<String, Object> buildSite() {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        builder.replacePath("/vod");
+        builder.replacePath("/vod" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
         site.put("key", "Alist");
         site.put("name", "AList");
         site.put("type", 1);
