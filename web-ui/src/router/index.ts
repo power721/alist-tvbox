@@ -1,12 +1,13 @@
 import {createRouter, createWebHashHistory} from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import SitesView from "@/views/SitesView.vue";
-import ConfigView from "@/views/VodView.vue";
+import ConfigView from "@/views/ConfigView.vue";
 import SubView from "@/views/SubView.vue";
 import AboutView from "@/views/AboutView.vue";
 import LoginView from "@/views/LoginView.vue";
 import UserView from "@/views/UserView.vue";
 import SearchView from "@/views/SearchView.vue";
+import VodView from "@/views/VodView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -15,7 +16,8 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: HomeView
+      component: HomeView,
+      meta: {auth: true}
     },
     {
       path: '/sites',
@@ -30,6 +32,12 @@ const router = createRouter({
       meta: {auth: true}
     },
     {
+      path: '/config',
+      name: 'config',
+      component: ConfigView,
+      meta: {auth: true}
+    },
+    {
       path: '/sub/:id',
       name: 'sub',
       component: SubView,
@@ -38,7 +46,7 @@ const router = createRouter({
     {
       path: '/vod',
       name: 'vod',
-      component: ConfigView,
+      component: VodView,
       meta: {auth: true}
     },
     {
@@ -56,7 +64,8 @@ const router = createRouter({
     {
       path: '/about',
       name: 'about',
-      component: AboutView
+      component: AboutView,
+      meta: {auth: true}
     }
   ]
 })

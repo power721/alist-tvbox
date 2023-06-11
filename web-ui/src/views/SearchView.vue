@@ -2,7 +2,7 @@
   <div class="search">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="currentUrl+'/vod?wd=' + keyword" target="_blank">{{currentUrl}}/vod?wd={{keyword}}</a>
+      <a :href="currentUrl+'/vod'+token+'?wd=' + keyword" target="_blank">{{currentUrl}}/vod{{token}}?wd={{keyword}}</a>
     </div>
 
     <div>
@@ -18,19 +18,25 @@
 </template>
 
 <script setup lang="ts">
-import {ref} from 'vue'
+import {onMounted, ref} from 'vue'
 import axios from "axios"
 
+const token = ref('')
 const keyword = ref('')
 const config = ref('')
 const currentUrl = window.location.origin
 
 const search = function () {
-  axios.get('/vod?wd=' + keyword.value).then(({data}) => {
+  axios.get('/vod' + token.value + '?wd=' + keyword.value).then(({data}) => {
     config.value = data
   })
 }
 
+onMounted(() => {
+  axios.get('/token').then(({data}) => {
+    token.value = data ? '/' + data : ''
+  })
+})
 </script>
 
 <style scoped>

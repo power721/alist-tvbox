@@ -22,6 +22,7 @@ export default defineConfig({
       "/sites": API,
       "/vod": API,
       "/sub": API,
+      "/token": API,
       "/index": API,
       "/index-templates": API,
       "/movies": API,

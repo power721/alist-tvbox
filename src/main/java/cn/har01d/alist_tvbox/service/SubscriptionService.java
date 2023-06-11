@@ -1,7 +1,11 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.TokenDto;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.IdUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
@@ -13,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import javax.annotation.PostConstruct;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -38,8 +43,10 @@ public class SubscriptionService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final AppProperties appProperties;
+    private final SettingRepository settingRepository;
+    private String token = "";
 
-    public SubscriptionService(Environment environment, RestTemplateBuilder builder, ObjectMapper objectMapper, AppProperties appProperties) {
+    public SubscriptionService(Environment environment, RestTemplateBuilder builder, ObjectMapper objectMapper, AppProperties appProperties, SettingRepository settingRepository) {
         this.environment = environment;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
@@ -47,6 +54,34 @@ public class SubscriptionService {
                 .build();
         this.objectMapper = objectMapper;
         this.appProperties = appProperties;
+        this.settingRepository = settingRepository;
+    }
+
+    @PostConstruct
+    public void init() {
+        token = settingRepository.findById("token")
+                .map(Setting::getValue)
+                .orElse("");
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void deleteToken() {
+        token = "";
+        settingRepository.save(new Setting("token", token));
+    }
+
+    public String createToken(TokenDto dto) {
+        if (StringUtils.isBlank(dto.getToken())) {
+            token = IdUtils.generate(8);
+        } else {
+            token = dto.getToken();
+        }
+
+        settingRepository.save(new Setting("token", token));
+        return token;
     }
 
     public Map<String, Object> subscription(int id) {
@@ -80,13 +115,13 @@ public class SubscriptionService {
         return config;
     }
 
-    private static void addSite(Map<String, Object> config) {
+    private void addSite(Map<String, Object> config) {
         Map<String, Object> site = buildSite();
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         sites.add(0, site);
     }
 
-    private static Map<String, Object> buildSite() {
+    private Map<String, Object> buildSite() {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
         builder.replacePath("/vod");

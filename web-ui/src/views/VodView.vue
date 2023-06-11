@@ -2,7 +2,7 @@
   <div class="vod">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="currentUrl+'/vod'" target="_blank">{{currentUrl}}/vod</a>
+      <a :href="currentUrl+'/vod'+token" target="_blank">{{ currentUrl }}/vod{{ token }}</a>
     </div>
 
     <div>
@@ -17,7 +17,7 @@
 
     <h2>API返回数据</h2>
     <div class="data">
-      <pre><code>{{config}}</code></pre>
+      <pre><code>{{ config }}</code></pre>
     </div>
   </div>
 </template>
@@ -26,25 +26,29 @@
 import {onMounted, ref} from 'vue'
 import axios from "axios"
 
+const token = ref('')
 const id = ref('')
 const path = ref('')
 const config = ref('')
 const currentUrl = window.location.origin
 
 const getDetail = function () {
-  axios.get('/vod?ids=' + id.value).then(({data}) => {
+  axios.get('/vod' + token.value + '?ids=' + id.value).then(({data}) => {
     config.value = data
   })
 }
 
 const load = function () {
-  axios.get('/vod?t=' + path.value).then(({data}) => {
+  axios.get('/vod' + token.value + '?t=' + path.value).then(({data}) => {
     config.value = data
   })
 }
 
-onMounted(() => {
-  axios.get('/vod').then(({data}) => {
+onMounted(async () => {
+  token.value = await axios.get('/token').then(({data}) => {
+    return data ? '/' + data : ''
+  })
+  axios.get('/vod' + token.value).then(({data}) => {
     config.value = data
   })
 })

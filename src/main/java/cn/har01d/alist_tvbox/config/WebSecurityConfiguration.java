@@ -25,7 +25,7 @@ public class WebSecurityConfiguration {
                 .authorizeRequests()
                 .antMatchers(HttpMethod.POST, "/accounts/login", "/accounts/logout").permitAll()
                 .antMatchers(HttpMethod.OPTIONS).permitAll()
-                .antMatchers("/sites/**").authenticated()
+                .antMatchers("/sites/**", "/token").authenticated()
                 .antMatchers(HttpMethod.POST).authenticated()
                 .antMatchers(HttpMethod.PUT).authenticated()
                 .antMatchers(HttpMethod.PATCH).authenticated()

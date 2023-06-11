@@ -150,6 +150,7 @@ interface Item {
   text: string
 }
 
+const token = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({} as VodList)
@@ -209,7 +210,7 @@ const loadFiles = (id: string) => {
   if (!id.startsWith(form.value.id + '$')) {
     id = form.value.id + '$' + id
   }
-  axios.get('/vod?pg=1&t=' + id).then(({data}) => {
+  axios.get('/vod' + token.value + '?pg=1&t=' + id).then(({data}) => {
     jsonData.value = data
     siteVisible.value = true
   }, ({response}) => {
@@ -271,6 +272,9 @@ const load = () => {
 
 onMounted(() => {
   load()
+  axios.get('/token').then(({data}) => {
+    token.value = data ? '/' + data : ''
+  })
 })
 </script>
 

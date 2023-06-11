@@ -12,6 +12,8 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 
 COPY target/alist-tvbox-1.0.jar ./alist-tvbox.jar
 
+COPY data/data.zip /var/lib/
+
 EXPOSE 8080
 EXPOSE 80
 

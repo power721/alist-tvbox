@@ -2,7 +2,7 @@
   <div class="subscription">
     <h2>TvBox订阅地址</h2>
     <div class="description">
-      <a :href="currentUrl+'/sub/'+id" target="_blank">{{ currentUrl }}/sub/{{ id }}</a>
+      <a :href="currentUrl+'/sub'+token+'/'+id" target="_blank">{{ currentUrl }}/sub{{ token }}/{{ id }}</a>
     </div>
 
     <h2>API返回数据</h2>
@@ -20,13 +20,14 @@ import {useRoute} from "vue-router";
 const route = useRoute()
 const loading = ref(false)
 const id = ref('')
+const token = ref('')
 const config = ref('')
 const currentUrl = window.location.origin
 
 const load = (id: any) => {
   loading.value = true
   config.value = ''
-  return axios.get('/sub/' + id).then(({data}) => {
+  return axios.get('/sub' + token.value + '/' + id).then(({data}) => {
     loading.value = false
     config.value = data
     return data
@@ -42,6 +43,9 @@ watch(
 )
 
 onMounted(async () => {
+  token.value = await axios.get('/token').then(({data}) => {
+    return  data ? '/' + data : ''
+  })
   id.value = route.params.id as string
   config.value = await load(id.value)
 })
