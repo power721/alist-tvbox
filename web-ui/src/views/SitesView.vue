@@ -10,7 +10,11 @@
     <el-table :data="sites" border style="width: 100%">
       <el-table-column prop="id" label="ID" sortable width="70"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
-      <el-table-column prop="url" label="URL地址" sortable/>
+      <el-table-column prop="url" label="URL地址" sortable>
+        <template #default="scope">
+          <a :href="scope.row.url" target="_blank">{{scope.row.url}}</a>
+        </template>
+      </el-table-column>
       <el-table-column prop="version" label="版本" width="70"/>
       <el-table-column prop="password" label="访问密码" width="120"/>
       <el-table-column prop="xiaoya" label="小雅版？" width="90"/>
@@ -66,7 +70,7 @@
         <el-form-item label="访问密码" label-width="140">
           <el-input v-model="form.password" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="Authorization" label-width="140">
+        <el-form-item label="Authorization Token" label-width="140">
           <el-input v-model="form.token" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="可搜索？">

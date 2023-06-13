@@ -218,7 +218,7 @@ public class TvBoxService {
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_tag(FILE);
             if (!isMediaFile) {
-                setDoubanInfo(movieDetail, getParent(path), false);
+                setDoubanInfo(site, movieDetail, getParent(path), false);
             }
             list.add(movieDetail);
         }
@@ -291,7 +291,7 @@ public class TvBoxService {
             movieDetail.setVod_time(fsInfo.getModified());
             movieDetail.setSize(fsInfo.getSize());
             if (fsInfo.getType() == 1) {
-                setDoubanInfo(movieDetail, newPath, false);
+                setDoubanInfo(site, movieDetail, newPath, false);
                 folders.add(movieDetail);
             } else {
                 files.add(movieDetail);
@@ -400,7 +400,7 @@ public class TvBoxService {
         movieDetail.setVod_play_from(site.getName());
         movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRawUrl()));
         movieDetail.setVod_content(site.getName() + ":" + getParent(path));
-        setDoubanInfo(movieDetail, getParent(path), true);
+        setDoubanInfo(site, movieDetail, getParent(path), true);
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
@@ -430,7 +430,7 @@ public class TvBoxService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
 
-        setDoubanInfo(movieDetail, newPath, true);
+        setDoubanInfo(site, movieDetail, newPath, true);
 
         FsResponse fsResponse = aListService.listFiles(site, newPath, 1, 0);
         List<FsInfo> files = fsResponse.getFiles().stream()
@@ -475,14 +475,19 @@ public class TvBoxService {
         return result;
     }
 
-    private void setDoubanInfo(MovieDetail movieDetail, String path, boolean details) {
-        Movie movie = doubanService.getByPath(path);
-        if (movie == null) {
-            movie = doubanService.getByPath(getParent(path));
+    private void setDoubanInfo(Site site, MovieDetail movieDetail, String path, boolean details) {
+        Movie movie = null;
+        if (site.isXiaoya()) {
+            movie = doubanService.getByPath(path);
+            if (movie == null) {
+                movie = doubanService.getByPath(getParent(path));
+            }
         }
+
         if (movie == null) {
             movie = doubanService.getByName(movieDetail.getVod_name());
         }
+
         if (movie != null) {
             movieDetail.setVod_pic(movie.getCover());
             if (!details) {

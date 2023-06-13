@@ -1,12 +1,27 @@
+FROM amazoncorretto:11-alpine as corretto-jdk
+
+RUN apk add --no-cache binutils
+
+RUN jlink \
+--add-modules ALL-MODULE-PATH \
+--strip-debug \
+--no-man-pages \
+--no-header-files \
+--compress=2 \
+--output /jre
+
 FROM xiaoyaliu/alist:latest
 
 LABEL MAINTAINER="Har01d"
 
+ENV JAVA_HOME=/jre
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+COPY --from=corretto-jdk /jre $JAVA_HOME
+
 VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
-
-RUN apk add --no-cache openjdk8-jre
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 
