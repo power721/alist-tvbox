@@ -153,9 +153,10 @@ public class SubscriptionService {
                     config.put(key, value);
                 }
             }
+
             overrideSite(config, override);
         } catch (Exception e) {
-            // ignore
+            log.warn("", e);
         }
     }
 
@@ -176,8 +177,10 @@ public class SubscriptionService {
                 Map<String, Object> original = map.get(key);
                 if (original != null) {
                     original.putAll(site);
+                    log.debug("override site: {}", key);
                 } else {
                     configSites.add(site);
+                    log.debug("add site: {}", key);
                 }
             }
         }

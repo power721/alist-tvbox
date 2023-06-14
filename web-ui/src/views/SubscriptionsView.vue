@@ -121,7 +121,7 @@ const handleEdit = (data: any) => {
 const showDetails = (data: any) => {
   form.value = data
   dialogTitle.value = '订阅数据 - ' + data.name
-  axios.get('/sub/' + data.id).then(({data}) => {
+  axios.get('/sub' + token.value + '/' + data.id).then(({data}) => {
     jsonData.value = data
     detailVisible.value = true
   })
@@ -157,9 +157,9 @@ const load = () => {
 }
 
 onMounted(() => {
-  load()
   axios.get('/token').then(({data}) => {
     token.value = data ? '/' + data : ''
+    load()
   })
 })
 </script>
