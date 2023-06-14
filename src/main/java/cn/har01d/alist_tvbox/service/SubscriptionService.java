@@ -146,8 +146,12 @@ public class SubscriptionService {
                 if (value instanceof Collection) {
                     if (!"sites".equals(key)) {
                         Collection<Map<String, Object>> list = (Collection<Map<String, Object>>) value;
-                        Collection<Map<String, Object>> collection = (Collection<Map<String, Object>>) config.get(key);
-                        collection.addAll(list);
+                        if (config.containsKey(key)) {
+                            Collection<Map<String, Object>> original = (Collection<Map<String, Object>>) config.get(key);
+                            original.addAll(list);
+                        } else {
+                            config.put(key, value);
+                        }
                     }
                 } else {
                     config.put(key, value);

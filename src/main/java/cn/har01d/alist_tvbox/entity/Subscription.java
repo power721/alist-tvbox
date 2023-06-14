@@ -24,6 +24,7 @@ public class Subscription {
     private Integer id;
     private String name;
     private String url;
+    @Column(columnDefinition = "TEXT")
     private String override;
 
     @Override
