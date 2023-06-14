@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -116,16 +117,23 @@ public class SubscriptionService {
     }
 
     private void addSite(Map<String, Object> config) {
-        Map<String, Object> site = buildSite();
+        String key = "Alist";
+        Map<String, Object> site = buildSite(key);
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        for (Iterator<Map<String, Object>> it = sites.iterator();it.hasNext();) {
+            Map<String, Object> item = it.next();
+            if (key.equals(item.get("key"))) {
+                it.remove();
+            }
+        }
         sites.add(0, site);
     }
 
-    private Map<String, Object> buildSite() {
+    private Map<String, Object> buildSite(String key) {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
         builder.replacePath("/vod" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
-        site.put("key", "Alist");
+        site.put("key", key);
         site.put("name", "AList");
         site.put("type", 1);
         site.put("api", builder.build().toUriString());
