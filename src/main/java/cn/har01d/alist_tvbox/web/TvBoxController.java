@@ -84,6 +84,16 @@ public class TvBoxController {
 
         return subscriptionService.subscription(id);
     }
+    
+    @RequestMapping(value = "/sub_url", method = RequestMethod.GET)
+    public Map<String, Object> subscription(@RequestParam(required = false, value = "token", defaultValue = "") String token,
+                                            @RequestParam(required = false, value = "url") String url) {
+        if (!subscriptionService.getToken().equals(token)) {
+            throw new BadRequestException();
+        }
+
+        return subscriptionService.subscription(url);
+    }
 
     private String decodeUrl(String text) {
         if (text == null || text.isEmpty()) {
