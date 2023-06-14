@@ -1,6 +1,7 @@
 import {createRouter, createWebHashHistory} from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import SitesView from "@/views/SitesView.vue";
+import SubscriptionsView from "@/views/SubscriptionsView.vue";
 import ConfigView from "@/views/ConfigView.vue";
 import SubView from "@/views/SubView.vue";
 import AboutView from "@/views/AboutView.vue";
@@ -23,6 +24,12 @@ const router = createRouter({
       path: '/sites',
       name: 'sites',
       component: SitesView,
+      meta: {auth: true}
+    },
+    {
+      path: '/subscriptions',
+      name: 'subscriptions',
+      component: SubscriptionsView,
       meta: {auth: true}
     },
     {

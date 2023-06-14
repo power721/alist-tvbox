@@ -18,11 +18,12 @@ const logout = () => {
         <el-menu mode="horizontal" :ellipsis="false" :router="true">
           <el-menu-item index="/">首页</el-menu-item>
           <el-menu-item index="/sites" v-if="account.authenticated">站点</el-menu-item>
+          <el-menu-item index="/subscriptions" v-if="account.authenticated">订阅</el-menu-item>
           <el-menu-item index="/config" v-if="account.authenticated">配置</el-menu-item>
           <el-menu-item index="/vod" v-if="account.authenticated">vod</el-menu-item>
           <el-menu-item index="/search" v-if="account.authenticated">搜索</el-menu-item>
-          <el-menu-item index="/sub/0" v-if="account.authenticated">订阅0</el-menu-item>
-          <el-menu-item index="/sub/1" v-if="account.authenticated">订阅1</el-menu-item>
+<!--          <el-menu-item index="/sub/0" v-if="account.authenticated">订阅0</el-menu-item>-->
+<!--          <el-menu-item index="/sub/1" v-if="account.authenticated">订阅1</el-menu-item>-->
           <!--          <el-menu-item index="/settings">配置</el-menu-item>-->
           <!--          <el-menu-item index="/playlist">播放列表</el-menu-item>-->
           <el-menu-item index="/about" v-if="account.authenticated">关于</el-menu-item>

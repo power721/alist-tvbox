@@ -1,9 +1,11 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.Subscription;
+import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
+import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +30,7 @@ import java.security.spec.AlgorithmParameterSpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -43,19 +46,23 @@ public class SubscriptionService {
     private final Environment environment;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final AppProperties appProperties;
     private final SettingRepository settingRepository;
+    private final SubscriptionRepository subscriptionRepository;
+
     private String token = "";
 
-    public SubscriptionService(Environment environment, RestTemplateBuilder builder, ObjectMapper objectMapper, AppProperties appProperties, SettingRepository settingRepository) {
+    public SubscriptionService(Environment environment, RestTemplateBuilder builder,
+                               ObjectMapper objectMapper,
+                               SettingRepository settingRepository,
+                               SubscriptionRepository subscriptionRepository) {
         this.environment = environment;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.OK_USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
-        this.appProperties = appProperties;
         this.settingRepository = settingRepository;
+        this.subscriptionRepository = subscriptionRepository;
     }
 
     @PostConstruct
@@ -63,6 +70,13 @@ public class SubscriptionService {
         token = settingRepository.findById("token")
                 .map(Setting::getValue)
                 .orElse("");
+
+        if (subscriptionRepository.count() == 0) {
+            Subscription sub = new Subscription();
+            sub.setName("饭太硬");
+            sub.setUrl("http://饭太硬.top/tv");
+            subscriptionRepository.save(sub);
+        }
     }
 
     public String getToken() {
@@ -87,14 +101,17 @@ public class SubscriptionService {
 
     public Map<String, Object> subscription(int id) {
         String apiUrl = "";
+        String override = "";
         if (id > 0) {
-            apiUrl = appProperties.getConfigUrl();
+            Subscription subscription = subscriptionRepository.findById(id).orElseThrow(NotFoundException::new);
+            apiUrl = subscription.getUrl();
+            override = subscription.getOverride();
         }
 
-        return subscription(apiUrl);
+        return subscription(apiUrl, override);
     }
 
-    public Map<String, Object> subscription(String apiUrl) {
+    public Map<String, Object> subscription(String apiUrl, String override) {
         String configKey = null;
         String configUrl = apiUrl;
         String pk = ";pk;";
@@ -110,17 +127,67 @@ public class SubscriptionService {
         String json = loadConfigJson(configUrl);
         Map<String, Object> config = convertResult(json, configKey);
 
+        if (StringUtils.isNotBlank(override)) {
+            overrideConfig(config, override);
+        }
+
         addSite(config);
         addRules(config);
 
         return config;
     }
 
+    private void overrideConfig(Map<String, Object> config, String overrideJson) {
+        try {
+            Map<String, Object> override = objectMapper.readValue(overrideJson, Map.class);
+            for (Map.Entry<String, Object> entry : override.entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                if (value instanceof Collection) {
+                    if (!"sites".equals(key)) {
+                        Collection<Map<String, Object>> list = (Collection<Map<String, Object>>) value;
+                        Collection<Map<String, Object>> collection = (Collection<Map<String, Object>>) config.get(key);
+                        collection.addAll(list);
+                    }
+                } else {
+                    config.put(key, value);
+                }
+            }
+            overrideSite(config, override);
+        } catch (Exception e) {
+            // ignore
+        }
+    }
+
+    private static void overrideSite(Map<String, Object> config, Map<String, Object> override) {
+        List<Map<String, Object>> configSites = (List<Map<String, Object>>) config.get("sites");
+        List<Map<String, Object>> overrideSites = (List<Map<String, Object>>) override.get("sites");
+        Map<Object, Map<String, Object>> map = new HashMap<>();
+        for (Map<String, Object> site : configSites) {
+            Object key = site.get("key");
+            if (key != null) {
+                map.put(key, site);
+            }
+        }
+
+        for (Map<String, Object> site : overrideSites) {
+            Object key = site.get("key");
+            if (key != null) {
+                Map<String, Object> original = map.get(key);
+                if (original != null) {
+                    original.putAll(site);
+                } else {
+                    configSites.add(site);
+                }
+            }
+        }
+    }
+
     private void addSite(Map<String, Object> config) {
         String key = "Alist";
         Map<String, Object> site = buildSite(key);
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
-        for (Iterator<Map<String, Object>> it = sites.iterator();it.hasNext();) {
+        for (Iterator<Map<String, Object>> it = sites.iterator(); it.hasNext(); ) {
             Map<String, Object> item = it.next();
             if (key.equals(item.get("key"))) {
                 it.remove();

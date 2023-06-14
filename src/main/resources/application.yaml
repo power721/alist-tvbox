@@ -31,7 +31,6 @@ cn:
 
 app:
   sort: true
-  configUrl: http://饭太硬.top/tv
   formats:
     - dff
     - dsf
