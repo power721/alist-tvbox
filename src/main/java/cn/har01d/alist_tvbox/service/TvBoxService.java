@@ -54,6 +54,7 @@ public class TvBoxService {
     private final SiteService siteService;
     private final AppProperties appProperties;
     private final DoubanService doubanService;
+    private final SubscriptionService subscriptionService;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -65,12 +66,13 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService, IndexService indexService, SiteService siteService, AppProperties appProperties, DoubanService doubanService) {
+    public TvBoxService(AListService aListService, IndexService indexService, SiteService siteService, AppProperties appProperties, DoubanService doubanService, SubscriptionService subscriptionService) {
         this.aListService = aListService;
         this.indexService = indexService;
         this.siteService = siteService;
         this.appProperties = appProperties;
         this.doubanService = doubanService;
+        this.subscriptionService = subscriptionService;
     }
 
     public CategoryList getCategoryList() {
@@ -410,7 +412,8 @@ public class TvBoxService {
 
     private String buildPlayUrl(Site site, String path) {
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        builder.replacePath("/play");
+        String token = subscriptionService.getToken();
+        builder.replacePath("/play" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
         builder.queryParam("site", String.valueOf(site.getId()));
         builder.queryParam("path", encodeUrl(path));
         return builder.build().toUriString();

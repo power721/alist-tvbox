@@ -15,6 +15,11 @@ import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
 import java.io.File;
 import java.net.URL;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +40,11 @@ public class SiteService {
     @PostConstruct
     public void init() {
         if (siteRepository.count() > 0) {
+            if (Arrays.asList(environment.getActiveProfiles()).contains("xiaoya")) {
+                siteRepository.findById(1).ifPresent(site -> {
+                    updateUserToken(site);
+                });
+            }
             return;
         }
 
@@ -51,6 +61,32 @@ public class SiteService {
             site.setOrder(order++);
             siteRepository.save(site);
             log.info("save site to database: {}", site);
+        }
+    }
+
+    private void updateUserToken(Site site) {
+        Connection connection = null;
+        try {
+            connection = DriverManager.getConnection("jdbc:sqlite:/opt/alist/data/data.db");
+            Statement statement = connection.createStatement();
+            String sql = "select value from x_setting_items where key = 'token'";
+            ResultSet rs = statement.executeQuery(sql);
+            String token = rs.getString(1);
+            if (!token.equals(site.getToken())) {
+                log.info("update user token: {}", token);
+                site.setToken(token);
+                siteRepository.save(site);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    // ignore
+                }
+            }
         }
     }
 
