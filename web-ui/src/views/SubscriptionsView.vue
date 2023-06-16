@@ -12,12 +12,14 @@
       <el-table-column prop="name" label="名称" sortable width="180"/>
       <el-table-column prop="url" label="配置URL" sortable>
         <template #default="scope">
-          <a :href="scope.row.url" target="_blank">{{scope.row.url}}</a>
+          <a :href="scope.row.url" target="_blank">{{ scope.row.url }}</a>
         </template>
       </el-table-column>
       <el-table-column prop="url" label="订阅地址" sortable>
         <template #default="scope">
-          <a :href="currentUrl+'/sub'+token+'/'+scope.row.id" target="_blank">{{ currentUrl }}/sub{{ token }}/{{ scope.row.id }}</a>
+          <a :href="currentUrl+'/sub'+token+'/'+scope.row.id" target="_blank">{{ currentUrl }}/sub{{
+              token
+            }}/{{ scope.row.id }}</a>
         </template>
       </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
@@ -35,10 +37,10 @@
           <el-input v-model="form.name" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="配置URL" label-width="140">
-          <el-input v-model="form.url" autocomplete="off"/>
+          <el-input v-model="form.url" autocomplete="off" placeholder="支持多个，逗号分割"/>
         </el-form-item>
         <el-form-item label="定制" label-width="140">
-          <el-input v-model="form.override" type="textarea" rows="15" />
+          <el-input v-model="form.override" type="textarea" rows="15"/>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -52,7 +54,7 @@
     <el-dialog v-model="detailVisible" :title="dialogTitle" :fullscreen="true">
       <div>
         <p>配置URL：</p>
-        <a :href="form.url" target="_blank">{{form.url}}</a>
+        <a :href="form.url" target="_blank">{{ form.url }}</a>
       </div>
       <h2>JSON数据</h2>
       <el-scrollbar height="800px">
@@ -114,7 +116,12 @@ const handleAdd = () => {
 const handleEdit = (data: any) => {
   dialogTitle.value = '更新订阅 - ' + data.name
   updateAction.value = true
-  form.value = data
+  form.value = {
+    id: data.id,
+    name: data.name,
+    url: data.url,
+    override: data.override
+  }
   formVisible.value = true
 }
 
@@ -144,7 +151,7 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
-  axios.post('/subscriptions' , form.value).then(() => {
+  axios.post('/subscriptions', form.value).then(() => {
     formVisible.value = false
     load()
   })

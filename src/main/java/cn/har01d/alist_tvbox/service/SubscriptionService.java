@@ -25,6 +25,8 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.ArrayList;
@@ -33,11 +35,14 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -112,6 +117,25 @@ public class SubscriptionService {
     }
 
     public Map<String, Object> subscription(String apiUrl, String override) {
+        Map<String, Object> config = new HashMap<>();
+        for (String url : apiUrl.split(",")) {
+            overrideConfig(config, url.trim(), getConfigData(url.trim()));
+        }
+
+        if (StringUtils.isNotBlank(override)) {
+            overrideConfig(config, override);
+        }
+
+        // should after overrideConfig
+        removeBlacklist(config);
+
+        addSite(config);
+        addRules(config);
+
+        return config;
+    }
+
+    private Map<String, Object> getConfigData(String apiUrl) {
         String configKey = null;
         String configUrl = apiUrl;
         String pk = ";pk;";
@@ -127,54 +151,104 @@ public class SubscriptionService {
         String json = loadConfigJson(configUrl);
         Map<String, Object> config = convertResult(json, configKey);
 
-        if (StringUtils.isNotBlank(override)) {
-            overrideConfig(config, override);
-        }
-
-        addSite(config);
-        addRules(config);
-
         return config;
     }
 
-    private void overrideConfig(Map<String, Object> config, String overrideJson) {
+    private void removeBlacklist(Map<String, Object> config) {
         try {
-            Map<String, Object> override = objectMapper.readValue(overrideJson, Map.class);
-            for (Map.Entry<String, Object> entry : override.entrySet()) {
-                String key = entry.getKey();
-                Object value = entry.getValue();
-                if (value instanceof Collection) {
-                    if (!"sites".equals(key)) {
-                        Collection<Map<String, Object>> list = (Collection<Map<String, Object>>) value;
-                        if (config.containsKey(key)) {
-                            Collection<Map<String, Object>> original = (Collection<Map<String, Object>>) config.get(key);
-                            original.addAll(list);
-                        } else {
-                            config.put(key, value);
-                        }
-                    }
-                } else {
-                    config.put(key, value);
-                }
+            Object obj1 = config.get("sites-blacklist");
+            Object obj2 = config.get("sites");
+            if (obj1 instanceof List && obj2 instanceof List) {
+                List<Map<String, Object>> list = (List<Map<String, Object>>) obj2;
+                Set<String> set = new HashSet<>((List<String>) obj1);
+                list = list.stream().filter(e -> !set.contains(e.get("key"))).collect(Collectors.toList());
+                config.put("sites", list);
             }
-
-            overrideSite(config, override);
+            config.remove("sites-blacklist");
         } catch (Exception e) {
             log.warn("", e);
         }
     }
 
-    private static void overrideSite(Map<String, Object> config, Map<String, Object> override) {
-        List<Map<String, Object>> configList = (List<Map<String, Object>>) config.get("sites");
-        List<Map<String, Object>> overrideList = (List<Map<String, Object>>) override.get("sites");
-        if (configList == null) {
-            config.put("sites", overrideList);
-        } else {
-            overrideCollection(configList, overrideList, "key");
+    private void overrideConfig(Map<String, Object> config, String json) {
+        try {
+            json = Pattern.compile("^\\s*#.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
+            json = Pattern.compile("^\\s*//.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
+            Map<String, Object> override = objectMapper.readValue(json, Map.class);
+            overrideConfig(config, "", override);
+        } catch (Exception e) {
+            log.warn("", e);
         }
     }
 
-    private static void overrideCollection(List<Map<String, Object>> configList, List<Map<String, Object>> overrideList, String keyName) {
+    private static void overrideConfig(Map<String, Object> config, String url, Map<String, Object> override) {
+        for (Map.Entry<String, Object> entry : override.entrySet()) {
+            try {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                if (value instanceof Collection) {
+                    String keyName = "name";
+                    String spider = null;
+                    if ("sites".equals(key)) {
+                        keyName = "key";
+                        spider = (String) override.get("spider");
+                        if (StringUtils.isBlank(spider)) {
+                            spider = (String) config.get("spider");
+                        }
+                        if (StringUtils.isNotBlank(spider) && StringUtils.isNotBlank(url)) {
+                            if (spider.startsWith("./")) {
+                                spider = url + spider.substring(1);
+                            } else if (spider.startsWith("/")) {
+                                spider = getRoot(url) + spider;
+                            } else if (!spider.startsWith("http")) {
+                                spider = url + spider;
+                            }
+                        }
+                    }
+                    overrideList(config, override, spider, key, keyName);
+                } else {
+                    config.put(key, value);
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+    }
+
+    private static String getRoot(String path) {
+        try {
+            URL url = new URL(path);
+            return url.getProtocol() + "://" + url.getHost();
+        } catch (MalformedURLException e) {
+            log.warn("", e);
+        }
+        return "";
+    }
+
+    private static void overrideList(Map<String, Object> config, Map<String, Object> override, String spider, String name, String keyName) {
+        try {
+
+            List<Object> overrideList = (List<Object>) override.get(name);
+            Object obj = config.get(name);
+            if (obj == null) {
+                config.put(name, overrideList);
+            } else if (obj instanceof List) {
+                List<Object> list = (List<Object>) config.get(name);
+                if ((list.isEmpty() || list.get(0) instanceof String) || (overrideList.isEmpty() || overrideList.get(0) instanceof String)) {
+                    list.addAll(overrideList);
+                } else {
+                    List<Map<String, Object>> configList = (List<Map<String, Object>>) config.get(name);
+                    overrideCollection(configList, (List<Map<String, Object>>) override.get(name), spider, name, keyName);
+                }
+            } else {
+                log.warn("type not match: {} {}", name, obj);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    private static void overrideCollection(List<Map<String, Object>> configList, List<Map<String, Object>> overrideList, String spider, String name, String keyName) {
         Map<Object, Map<String, Object>> map = new HashMap<>();
         for (Map<String, Object> site : configList) {
             Object key = site.get(keyName);
@@ -183,16 +257,23 @@ public class SubscriptionService {
             }
         }
 
+        int index = 0;
         for (Map<String, Object> site : overrideList) {
             Object key = site.get(keyName);
             if (key != null) {
                 Map<String, Object> original = map.get(key);
                 if (original != null) {
+                    if (StringUtils.isNotBlank(spider) && original.get("jar") == null && site.get("jar") == null) {
+                        site.put("jar", spider);
+                    }
                     original.putAll(site);
-                    log.debug("override: {}", key);
+                    log.debug("override {}: {}", name, key);
                 } else {
-                    configList.add(site);
-                    log.debug("add: {}", key);
+                    if (StringUtils.isNotBlank(spider) && site.get("jar") == null) {
+                        site.put("jar", spider);
+                    }
+                    configList.add(index++, site);
+                    log.debug("add {}: {}", name, key);
                 }
             }
         }
