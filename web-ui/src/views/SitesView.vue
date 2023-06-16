@@ -70,7 +70,7 @@
         <el-form-item label="访问密码" label-width="140">
           <el-input v-model="form.password" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="Authorization Token" label-width="140">
+        <el-form-item label="Token" label-width="140">
           <el-input v-model="form.token" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="可搜索？">
@@ -119,7 +119,7 @@
       <el-divider/>
       <h2>JSON数据</h2>
       <el-scrollbar height="600px">
-        <pre><code>{{ jsonData }}</code></pre>
+        <json-viewer :value="jsonData" :expanded="true" :expand-depth=3></json-viewer>
       </el-scrollbar>
       <div class="json"></div>
       <template #footer>

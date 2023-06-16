@@ -165,26 +165,34 @@ public class SubscriptionService {
     }
 
     private static void overrideSite(Map<String, Object> config, Map<String, Object> override) {
-        List<Map<String, Object>> configSites = (List<Map<String, Object>>) config.get("sites");
-        List<Map<String, Object>> overrideSites = (List<Map<String, Object>>) override.get("sites");
+        List<Map<String, Object>> configList = (List<Map<String, Object>>) config.get("sites");
+        List<Map<String, Object>> overrideList = (List<Map<String, Object>>) override.get("sites");
+        if (configList == null) {
+            config.put("sites", overrideList);
+        } else {
+            overrideCollection(configList, overrideList, "key");
+        }
+    }
+
+    private static void overrideCollection(List<Map<String, Object>> configList, List<Map<String, Object>> overrideList, String keyName) {
         Map<Object, Map<String, Object>> map = new HashMap<>();
-        for (Map<String, Object> site : configSites) {
-            Object key = site.get("key");
+        for (Map<String, Object> site : configList) {
+            Object key = site.get(keyName);
             if (key != null) {
                 map.put(key, site);
             }
         }
 
-        for (Map<String, Object> site : overrideSites) {
-            Object key = site.get("key");
+        for (Map<String, Object> site : overrideList) {
+            Object key = site.get(keyName);
             if (key != null) {
                 Map<String, Object> original = map.get(key);
                 if (original != null) {
                     original.putAll(site);
-                    log.debug("override site: {}", key);
+                    log.debug("override: {}", key);
                 } else {
-                    configSites.add(site);
-                    log.debug("add site: {}", key);
+                    configList.add(site);
+                    log.debug("add: {}", key);
                 }
             }
         }
