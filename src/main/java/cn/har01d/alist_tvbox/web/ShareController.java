@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.AListLogin;
 import cn.har01d.alist_tvbox.dto.ShareInfo;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.service.ShareService;
@@ -50,6 +51,16 @@ public class ShareController {
     @GetMapping("/resources")
     public Page<ShareInfo> listResources(Pageable pageable) {
         return shareService.listResources(pageable);
+    }
+
+    @PostMapping("/login")
+    public void updateLogin(@RequestBody AListLogin login) {
+        shareService.updateLogin(login);
+    }
+
+    @GetMapping("/login")
+    public AListLogin getLogin() {
+        return shareService.getLoginInfo();
     }
 
 }

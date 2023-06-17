@@ -19,6 +19,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/accounts": API,
+      "/login": API,
       "/sites": API,
       "/shares": API,
       "/resources": API,

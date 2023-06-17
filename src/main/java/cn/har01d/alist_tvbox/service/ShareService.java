@@ -1,13 +1,16 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.AListLogin;
 import cn.har01d.alist_tvbox.dto.ShareInfo;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.AListUser;
 import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
+import cn.har01d.alist_tvbox.model.UserResponse;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -181,6 +184,7 @@ public class ShareService {
         validate(share);
 
         Connection connection = null;
+        String token = login();
         try {
             connection = DriverManager.getConnection(DB_URL);
             Statement statement = connection.createStatement();
@@ -195,7 +199,7 @@ public class ShareService {
             sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
             int count = statement.executeUpdate(String.format(sql, id, getMountPath(share.getPath()), accessToken, openToken, folderId, share.getShareId(), share.getPassword(), share.getFolderId()));
 
-            enableStorage(id);
+            enableStorage(id, token);
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
@@ -222,15 +226,16 @@ public class ShareService {
 
         Connection connection = null;
 
+        String token = login();
         try {
             connection = DriverManager.getConnection(DB_URL);
             Statement statement = connection.createStatement();
-            deleteStorage(id);
+            deleteStorage(id, token);
             // TODO: use AList API
             String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
             int count = statement.executeUpdate(String.format(sql, id, getMountPath(share.getPath()), accessToken, openToken, folderId, share.getShareId(), share.getPassword(), share.getFolderId()));
 
-            enableStorage(id);
+            enableStorage(id, token);
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
@@ -267,12 +272,13 @@ public class ShareService {
         request.setUsername(username);
         request.setPassword(password);
         LoginResponse response = restTemplate.postForObject("http://localhost:5244/api/auth/login", request, LoginResponse.class);
+        log.info("login response: {}", response.getData());
         return response.getData().getToken();
     }
 
-    private void enableStorage(Integer id) {
+    private void enableStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(login()));
+        headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("enable storage response: {}", response.getBody());
@@ -280,12 +286,13 @@ public class ShareService {
 
     public void delete(Integer id) {
         shareRepository.deleteById(id);
-        deleteStorage(id);
+        String token = login();
+        deleteStorage(id, token);
     }
 
-    private void deleteStorage(Integer id) {
+    private void deleteStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(login()));
+        headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/storage/delete?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("delete storage response: {}", response.getBody());
@@ -340,5 +347,78 @@ public class ShareService {
         }
 
         return new PageImpl<>(list, pageable, total);
+    }
+
+    private AListUser getUser(Integer id, String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("Authorization", Collections.singletonList(token));
+        HttpEntity<String> entity = new HttpEntity<>(null, headers);
+        ResponseEntity<UserResponse> response = restTemplate.exchange("http://localhost:5244/api/admin/user/get?id=" + id, HttpMethod.GET, entity, UserResponse.class);
+        log.info("get user {} response: {}", id, response.getBody());
+        return response.getBody().getData();
+    }
+
+    private void deleteUser(Integer id, String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("Authorization", Collections.singletonList(token));
+        HttpEntity<String> entity = new HttpEntity<>(null, headers);
+        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/user/delete?id=" + id, HttpMethod.POST, entity, String.class);
+        log.info("delete user {} response: {}", id, response.getBody());
+    }
+
+    private void updateUser(AListUser user, String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("Authorization", Collections.singletonList(token));
+        HttpEntity<AListUser> entity = new HttpEntity<>(user, headers);
+        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/user/update", HttpMethod.POST, entity, String.class);
+        log.info("update user {} response: {}", user.getId(), response.getBody());
+    }
+
+    private void createUser(AListUser user, String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("Authorization", Collections.singletonList(token));
+        HttpEntity<AListUser> entity = new HttpEntity<>(user, headers);
+        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/user/create", HttpMethod.POST, entity, String.class);
+        log.info("create user response: {}", response.getBody());
+    }
+
+    public void updateLogin(AListLogin login) {
+        if (login.isEnabled()) {
+            if (StringUtils.isBlank(login.getUsername())) {
+                throw new BadRequestException("缺少用户名");
+            }
+            if (StringUtils.isBlank(login.getPassword())) {
+                throw new BadRequestException("缺少密码");
+            }
+        }
+
+        settingRepository.save(new Setting("alist_username", login.getUsername()));
+        settingRepository.save(new Setting("alist_password", login.getPassword()));
+        settingRepository.save(new Setting("alist_login", String.valueOf(login.isEnabled())));
+
+        String token = login();
+        AListUser guest = getUser(2, token);
+        guest.setDisabled(login.isEnabled());
+        updateUser(guest, token);
+
+        deleteUser(3, token);
+        if (login.isEnabled()) {
+            AListUser user = new AListUser();
+            user.setId(3);
+            user.setUsername(login.getUsername());
+            user.setPassword(login.getPassword());
+            createUser(user, token);
+        }
+    }
+
+    public AListLogin getLoginInfo() {
+        String username = settingRepository.findById("alist_username").map(Setting::getValue).orElse("");
+        String password = settingRepository.findById("alist_password").map(Setting::getValue).orElse("");
+        String enabled = settingRepository.findById("alist_login").map(Setting::getValue).orElse("");
+        AListLogin login = new AListLogin();
+        login.setUsername(username);
+        login.setPassword(password);
+        login.setEnabled("true".equals(enabled));
+        return login;
     }
 }
