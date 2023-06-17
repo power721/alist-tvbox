@@ -20,6 +20,6 @@ import javax.persistence.Id;
 public class Setting {
     @Id
     private String name;
-    @Column(name = "`value`")
+    @Column(name = "`svalue`", columnDefinition = "TEXT")
     private String value;
 }

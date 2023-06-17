@@ -304,7 +304,8 @@ public class SubscriptionService {
                     log.debug("add {}: {}", name, key);
                 }
 
-                if (StringUtils.isNotBlank(spider) && site.get("jar") == null && site.get("type").equals(3)) {
+                if (StringUtils.isNotBlank(spider) && site.get("jar") == null
+                        && site.get("type") != null && site.get("type").equals(3)) {
                     String api = (String) site.get("api");
                     if (!api.startsWith("http")) {
                         site.put("jar", spider);

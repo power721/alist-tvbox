@@ -1,14 +1,10 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.dto.ShareInfo;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
-import cn.har01d.alist_tvbox.service.ShareService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,12 +21,10 @@ import java.util.Map;
 public class TvBoxController {
     private final TvBoxService tvBoxService;
     private final SubscriptionService subscriptionService;
-    private final ShareService shareService;
 
-    public TvBoxController(TvBoxService tvBoxService, SubscriptionService subscriptionService, ShareService shareService) {
+    public TvBoxController(TvBoxService tvBoxService, SubscriptionService subscriptionService) {
         this.tvBoxService = tvBoxService;
         this.subscriptionService = subscriptionService;
-        this.shareService = shareService;
     }
 
     @GetMapping("/vod")
@@ -62,11 +56,6 @@ public class TvBoxController {
         }
     }
 
-    @GetMapping("/profiles")
-    public String[] getProfiles() {
-        return shareService.getProfiles();
-    }
-
     @GetMapping("/token")
     public String getToken() {
         return subscriptionService.getToken();
@@ -94,11 +83,6 @@ public class TvBoxController {
         }
 
         return subscriptionService.subscription(id);
-    }
-
-    @GetMapping("/shares")
-    public Page<ShareInfo> listShares(Pageable pageable) {
-        return shareService.list(pageable);
     }
 
     private String decodeUrl(String text) {

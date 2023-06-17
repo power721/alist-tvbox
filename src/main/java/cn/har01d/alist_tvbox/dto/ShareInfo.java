@@ -8,5 +8,6 @@ public class ShareInfo {
     private String path;
     private String shareId;
     private String folderId;
+    private String status;
     private String password;
 }
