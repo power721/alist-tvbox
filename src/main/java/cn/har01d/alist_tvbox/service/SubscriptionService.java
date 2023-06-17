@@ -119,7 +119,13 @@ public class SubscriptionService {
     public Map<String, Object> subscription(String apiUrl, String override) {
         Map<String, Object> config = new HashMap<>();
         for (String url : apiUrl.split(",")) {
-            overrideConfig(config, url.trim(), getConfigData(url.trim()));
+            String[] parts = url.split("@", 2);
+            String prefix = "";
+            if (parts.length == 2) {
+                prefix = parts[0].trim() + "@";
+                url = parts[1].trim();
+            }
+            overrideConfig(config, fixUrl(url.trim()), prefix, getConfigData(url.trim()));
         }
 
         if (StringUtils.isNotBlank(override)) {
@@ -175,13 +181,13 @@ public class SubscriptionService {
             json = Pattern.compile("^\\s*#.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
             json = Pattern.compile("^\\s*//.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
             Map<String, Object> override = objectMapper.readValue(json, Map.class);
-            overrideConfig(config, "", override);
+            overrideConfig(config, "", "", override);
         } catch (Exception e) {
             log.warn("", e);
         }
     }
 
-    private static void overrideConfig(Map<String, Object> config, String url, Map<String, Object> override) {
+    private static void overrideConfig(Map<String, Object> config, String url, String prefix, Map<String, Object> override) {
         for (Map.Entry<String, Object> entry : override.entrySet()) {
             try {
                 String key = entry.getKey();
@@ -205,7 +211,7 @@ public class SubscriptionService {
                             }
                         }
                     }
-                    overrideList(config, override, spider, key, keyName);
+                    overrideList(config, override, prefix, spider, key, keyName);
                 } else {
                     config.put(key, value);
                 }
@@ -213,6 +219,19 @@ public class SubscriptionService {
                 log.warn("", e);
             }
         }
+    }
+
+    private static String fixUrl(String url) {
+        if (StringUtils.isBlank(url)) {
+            return url;
+        }
+
+        int index = url.lastIndexOf('/');
+        String file = url.substring(index + 1);
+        if (file.contains(".")) {
+            return url.substring(0, index);
+        }
+        return url;
     }
 
     private static String getRoot(String path) {
@@ -225,12 +244,23 @@ public class SubscriptionService {
         return "";
     }
 
-    private static void overrideList(Map<String, Object> config, Map<String, Object> override, String spider, String name, String keyName) {
+    private static void overrideList(Map<String, Object> config, Map<String, Object> override, String prefix, String spider, String name, String keyName) {
         try {
-
             List<Object> overrideList = (List<Object>) override.get(name);
             Object obj = config.get(name);
             if (obj == null) {
+                if (name.equals("sites")) {
+                    List<Map<String, Object>> sites = (List<Map<String, Object>>) override.get(name);
+                    for (Map<String, Object> site : sites) {
+                        site.put("name", prefix + site.get("name").toString());
+                        if (StringUtils.isNotBlank(spider) && site.get("jar") == null && site.get("type").equals(3)) {
+                            String api = (String) site.get("api");
+                            if (!api.startsWith("http")) {
+                                site.put("jar", spider);
+                            }
+                        }
+                    }
+                }
                 config.put(name, overrideList);
             } else if (obj instanceof List) {
                 List<Object> list = (List<Object>) config.get(name);
@@ -238,7 +268,7 @@ public class SubscriptionService {
                     list.addAll(overrideList);
                 } else {
                     List<Map<String, Object>> configList = (List<Map<String, Object>>) config.get(name);
-                    overrideCollection(configList, (List<Map<String, Object>>) override.get(name), spider, name, keyName);
+                    overrideCollection(configList, (List<Map<String, Object>>) override.get(name), prefix, spider, name, keyName);
                 }
             } else {
                 log.warn("type not match: {} {}", name, obj);
@@ -248,7 +278,7 @@ public class SubscriptionService {
         }
     }
 
-    private static void overrideCollection(List<Map<String, Object>> configList, List<Map<String, Object>> overrideList, String spider, String name, String keyName) {
+    private static void overrideCollection(List<Map<String, Object>> configList, List<Map<String, Object>> overrideList, String prefix, String spider, String name, String keyName) {
         Map<Object, Map<String, Object>> map = new HashMap<>();
         for (Map<String, Object> site : configList) {
             Object key = site.get(keyName);
@@ -262,18 +292,23 @@ public class SubscriptionService {
             Object key = site.get(keyName);
             if (key != null) {
                 Map<String, Object> original = map.get(key);
+                if (name.equals("sites")) {
+                    site.put("name", prefix + site.get("name").toString());
+                }
+
                 if (original != null) {
-                    if (StringUtils.isNotBlank(spider) && original.get("jar") == null && site.get("jar") == null) {
-                        site.put("jar", spider);
-                    }
                     original.putAll(site);
                     log.debug("override {}: {}", name, key);
                 } else {
-                    if (StringUtils.isNotBlank(spider) && site.get("jar") == null) {
-                        site.put("jar", spider);
-                    }
                     configList.add(index++, site);
                     log.debug("add {}: {}", name, key);
+                }
+
+                if (StringUtils.isNotBlank(spider) && site.get("jar") == null && site.get("type").equals(3)) {
+                    String api = (String) site.get("api");
+                    if (!api.startsWith("http")) {
+                        site.put("jar", spider);
+                    }
                 }
             }
         }

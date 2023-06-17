@@ -55,6 +55,7 @@ Or use this config url `http://ip:5678/sub/1`.
 
 ### Customize
 Backed URL support multiple values, use comma as separator.
+e.g.: disable 2 sites by key, change 1 site name by key, add new site.
 ```json
 {
     "sites-blacklist": ["csp_Bili", "csp_Biliych"],

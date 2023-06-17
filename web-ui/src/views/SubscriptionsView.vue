@@ -41,6 +41,7 @@
         </el-form-item>
         <el-form-item label="定制" label-width="140">
           <el-input v-model="form.override" type="textarea" rows="15"/>
+          <a href="https://www.json.cn/" target="_blank">JSON验证</a>
         </el-form-item>
       </el-form>
       <template #footer>
