@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -128,17 +129,25 @@ public class SubscriptionService {
             overrideConfig(config, fixUrl(url.trim()), prefix, getConfigData(url.trim()));
         }
 
+        sortSites(config);
+
         if (StringUtils.isNotBlank(override)) {
             overrideConfig(config, override);
         }
 
         // should after overrideConfig
+        handleWhitelist(config);
         removeBlacklist(config);
 
         addSite(config);
         addRules(config);
 
         return config;
+    }
+
+    private void sortSites(Map<String, Object> config) {
+        List<Map<String, String>> list = (List<Map<String, String>>) config.get("sites");
+        Collections.sort(list, Comparator.comparing(a -> a.get("name")));
     }
 
     private Map<String, Object> getConfigData(String apiUrl) {
@@ -158,6 +167,22 @@ public class SubscriptionService {
         Map<String, Object> config = convertResult(json, configKey);
 
         return config;
+    }
+
+    private void handleWhitelist(Map<String, Object> config) {
+        try {
+            Object obj1 = config.get("sites-whitelist");
+            Object obj2 = config.get("sites");
+            if (obj1 instanceof List && obj2 instanceof List) {
+                List<Map<String, Object>> list = (List<Map<String, Object>>) obj2;
+                Set<String> set = new HashSet<>((List<String>) obj1);
+                list = list.stream().filter(e -> set.contains(e.get("key"))).collect(Collectors.toList());
+                config.put("sites", list);
+            }
+            config.remove("sites-whitelist");
+        } catch (Exception e) {
+            log.warn("", e);
+        }
     }
 
     private void removeBlacklist(Map<String, Object> config) {

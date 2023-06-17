@@ -38,7 +38,7 @@
         <el-input v-model="form.password" autocomplete="off"/>
       </el-form-item>
       <el-form-item label="文件夹ID" label-width="140">
-        <el-input v-model="form.folderId" autocomplete="off" placeholder="除非没有文件夹，否则必须填写"/>
+        <el-input v-model="form.folderId" autocomplete="off"/>
       </el-form-item>
     </el-form>
     <template #footer>

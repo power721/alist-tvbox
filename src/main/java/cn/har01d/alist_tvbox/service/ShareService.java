@@ -252,11 +252,11 @@ public class ShareService {
         if (StringUtils.isBlank(share.getPath())) {
             throw new BadRequestException("挂载路径不能为空");
         }
-        if (StringUtils.isBlank(share.getFolderId())) {
-            throw new BadRequestException("文件夹ID不能为空");
-        }
         if (StringUtils.isAnyBlank(accessToken, openToken, folderId)) {
             throw new BadRequestException("token参数缺失");
+        }
+        if (StringUtils.isBlank(share.getFolderId())) {
+            share.setFolderId("root");
         }
     }
 
