@@ -60,7 +60,8 @@
     </template>
   </el-dialog>
 
-  <div class="space"></div>
+  <el-divider/>
+
   <h2>资源列表</h2>
 
   <el-table :data="resources" border style="width: 100%">

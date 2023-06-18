@@ -20,10 +20,12 @@ export default defineConfig({
     proxy: {
       "/accounts": API,
       "/login": API,
+      "/checkin": API,
       "/sites": API,
       "/shares": API,
       "/resources": API,
       "/subscriptions": API,
+      "/storage": API,
       "/vod": API,
       "/sub": API,
       "/token": API,
