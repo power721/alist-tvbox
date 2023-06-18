@@ -479,30 +479,34 @@ public class TvBoxService {
     }
 
     private void setDoubanInfo(Site site, MovieDetail movieDetail, String path, boolean details) {
-        Movie movie = null;
-        if (site.isXiaoya()) {
-            movie = doubanService.getByPath(path);
+        try {
+            Movie movie = null;
+            if (site.isXiaoya()) {
+                movie = doubanService.getByPath(path);
+                if (movie == null) {
+                    movie = doubanService.getByPath(getParent(path));
+                }
+            }
+
             if (movie == null) {
-                movie = doubanService.getByPath(getParent(path));
+                movie = doubanService.getByName(movieDetail.getVod_name());
             }
-        }
 
-        if (movie == null) {
-            movie = doubanService.getByName(movieDetail.getVod_name());
-        }
-
-        if (movie != null) {
-            movieDetail.setVod_pic(movie.getCover());
-            if (!details) {
-                return;
+            if (movie != null) {
+                movieDetail.setVod_pic(movie.getCover());
+                if (!details) {
+                    return;
+                }
+                movieDetail.setVod_actor(movie.getActors());
+                movieDetail.setVod_director(movie.getDirectors());
+                movieDetail.setVod_area(movie.getCountry());
+                movieDetail.setType_name(movie.getGenre());
+                if (StringUtils.isNotEmpty(movie.getDescription())) {
+                    movieDetail.setVod_content(movie.getDescription());
+                }
             }
-            movieDetail.setVod_actor(movie.getActors());
-            movieDetail.setVod_director(movie.getDirectors());
-            movieDetail.setVod_area(movie.getCountry());
-            movieDetail.setType_name(movie.getGenre());
-            if (StringUtils.isNotEmpty(movie.getDescription())) {
-                movieDetail.setVod_content(movie.getDescription());
-            }
+        } catch (Exception e) {
+            log.warn("", e);
         }
     }
 

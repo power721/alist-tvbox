@@ -44,9 +44,13 @@ public class DoubanService {
     }
 
     public Movie getByPath(String path) {
-        Meta meta = metaRepository.findByPath(path);
-        if (meta != null) {
-            return meta.getMovie();
+        try {
+            Meta meta = metaRepository.findByPath(path);
+            if (meta != null) {
+                return meta.getMovie();
+            }
+        } catch (Exception e) {
+            log.warn("", e);
         }
         return null;
     }
@@ -85,36 +89,39 @@ public class DoubanService {
     }
 
     public Movie getByName(String name) {
-        name = TextUtils.fixName(name);
+        try {
+            name = TextUtils.fixName(name);
 
-        Alias alias = aliasRepository.findById(name).orElse(null);
-        if (alias != null) {
-            log.debug("name: {} alias: {}", name, alias.getAlias());
-            return alias.getMovie();
-        }
-
-        List<Movie> movies = movieRepository.getByName(name);
-        if (movies != null && !movies.isEmpty()) {
-            return movies.get(0);
-        }
-
-        String newName = TextUtils.updateName(name);
-        if (!newName.equals(name)) {
-            name = newName;
-            log.debug("search by name: {}", name);
-
-            alias = aliasRepository.findById(name).orElse(null);
+            Alias alias = aliasRepository.findById(name).orElse(null);
             if (alias != null) {
                 log.debug("name: {} alias: {}", name, alias.getAlias());
                 return alias.getMovie();
             }
 
-            movies = movieRepository.getByName(name);
+            List<Movie> movies = movieRepository.getByName(name);
             if (movies != null && !movies.isEmpty()) {
                 return movies.get(0);
             }
-        }
 
+            String newName = TextUtils.updateName(name);
+            if (!newName.equals(name)) {
+                name = newName;
+                log.debug("search by name: {}", name);
+
+                alias = aliasRepository.findById(name).orElse(null);
+                if (alias != null) {
+                    log.debug("name: {} alias: {}", name, alias.getAlias());
+                    return alias.getMovie();
+                }
+
+                movies = movieRepository.getByName(name);
+                if (movies != null && !movies.isEmpty()) {
+                    return movies.get(0);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
         return null;
     }
 

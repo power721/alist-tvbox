@@ -52,7 +52,17 @@ public class TextUtils {
                 newName = newName.replace("第" + text + "季", " 第" + text + "季");
             }
             int num = Integer.parseInt(text);
-            newName = newName.replace(text, NUMBERS.get(num));
+            String newNum;
+            if (num <= 10) {
+                newNum = NUMBERS.get(num);
+            } else if (num < 20) {
+                newNum = "十" + NUMBERS.get(num % 10);
+            } else if (num % 10 == 0) {
+                newNum = NUMBERS.get(num / 10) + "十";
+            } else {
+                newNum = NUMBERS.get(num / 10) + "十" + NUMBERS.get(num % 10);
+            }
+            newName = newName.replace(text, newNum);
         } else {
             m = NUMBER2.matcher(newName);
             if (m.find()) {
