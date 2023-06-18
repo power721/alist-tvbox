@@ -25,6 +25,7 @@ export default defineConfig({
       "/shares": API,
       "/resources": API,
       "/subscriptions": API,
+      "/settings": API,
       "/storage": API,
       "/vod": API,
       "/sub": API,

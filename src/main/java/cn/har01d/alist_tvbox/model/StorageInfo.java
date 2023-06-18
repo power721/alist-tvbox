@@ -4,9 +4,9 @@ import lombok.Data;
 
 @Data
 public class StorageInfo {
-    private String accessToken;
+    private String refreshToken;
     private String openToken;
     private String folderId;
-    private String accessTokenTime;
+    private String refreshTokenTime;
     private String openTokenTime;
 }

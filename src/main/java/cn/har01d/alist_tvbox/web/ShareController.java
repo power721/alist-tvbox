@@ -3,6 +3,8 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.AListLogin;
 import cn.har01d.alist_tvbox.dto.CheckinResult;
 import cn.har01d.alist_tvbox.dto.ShareInfo;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.model.StorageInfo;
 import cn.har01d.alist_tvbox.service.ShareService;
@@ -22,9 +24,11 @@ import java.util.List;
 @RestController
 public class ShareController {
     private final ShareService shareService;
+    private final SettingRepository settingRepository;
 
-    public ShareController(ShareService shareService) {
+    public ShareController(ShareService shareService, SettingRepository settingRepository) {
         this.shareService = shareService;
+        this.settingRepository = settingRepository;
     }
 
     @GetMapping("/shares")
@@ -90,5 +94,15 @@ public class ShareController {
     @GetMapping("/checkin")
     public Instant getCheckinTime() {
         return shareService.getCheckinTime();
+    }
+
+    @PostMapping("/show-my-ali")
+    public void showMyAli(@RequestParam(required = false) boolean enabled) {
+        shareService.showMyAli(enabled);
+    }
+
+    @GetMapping("/show-my-ali")
+    public boolean showMyAli() {
+        return settingRepository.findById("show_my_ali").map(Setting::getValue).map(Boolean::parseBoolean).orElse(false);
     }
 }

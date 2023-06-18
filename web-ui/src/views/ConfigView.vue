@@ -43,10 +43,10 @@
 
     <el-form :model="storage" label-width="120px" v-if="showLogin">
       <el-form-item prop="accessToken" label="阿里token">
-        <el-input v-model="storage.accessToken"/>
+        <el-input v-model="storage.refreshToken"/>
       </el-form-item>
       <el-form-item prop="updateTime" label="更新时间">
-        <el-input :model-value="formatTime(storage.accessTokenTime)" readonly/>
+        <el-input :model-value="formatTime(storage.refreshTokenTime)" readonly/>
       </el-form-item>
       <el-form-item prop="openToken" label="开放token">
         <el-input v-model="storage.openToken" type="textarea" rows="3"/>
@@ -57,6 +57,15 @@
       <el-form-item prop="folderId" label="转存文件夹ID">
         <el-input v-model="storage.folderId"/>
       </el-form-item>
+      <el-form-item label="加载我的云盘">
+        <el-switch
+          v-model="showMyAli"
+          @change="updateMyAli"
+          inline-prompt
+          active-text="加载"
+          inactive-text="关闭"
+        />
+      </el-form-item>
       <el-form-item>
         <el-button type="primary" @click="updateStorage">更新</el-button>
       </el-form-item>
@@ -65,10 +74,20 @@
     <el-divider v-if="showLogin"/>
 
     <el-form label-width="120px" v-if="showLogin">
-      <el-form-item label="签到时间">
+      <el-form-item label="自动签到">
+        <el-switch
+          v-model="autoCheckin"
+          @change="updateAutoCheckin"
+          inline-prompt
+          active-text="开启"
+          inactive-text="关闭"
+        />
+        <span class="hint">每天9点自动签到</span>
+      </el-form-item>
+      <el-form-item label="上次签到时间">
         <el-input :model-value="formatTime(checkinTime)" readonly/>
       </el-form-item>
-      <el-checkbox v-model="force" label="强制签到" />
+      <el-checkbox v-model="forceCheckin" label="强制签到"/>
       <el-form-item>
         <el-button type="primary" @click="checkin">签到</el-button>
       </el-form-item>
@@ -83,7 +102,9 @@ import {ElMessage} from "element-plus";
 import axios from "axios";
 
 const showLogin = ref(false)
-const force = ref(false)
+const forceCheckin = ref(false)
+const autoCheckin = ref(false)
+const showMyAli = ref(false)
 const checkinTime = ref('')
 const login = ref({
   username: '',
@@ -92,10 +113,10 @@ const login = ref({
 })
 
 const storage = ref({
-  accessToken: '',
+  refreshToken: '',
   openToken: '',
   folderId: '',
-  accessTokenTime: '',
+  refreshTokenTime: '',
   openTokenTime: '',
 })
 
@@ -117,9 +138,29 @@ const updateToken = () => {
   } else {
     axios.delete('/token').then(() => {
       form.value.token = ''
-      ElMessage.success('成功关闭安全订阅')
+      ElMessage.info('成功关闭安全订阅')
     })
   }
+}
+
+const updateAutoCheckin = () => {
+  axios.post('/settings', {name: 'auto_checkin', value: autoCheckin.value}).then(() => {
+    if (autoCheckin.value) {
+      ElMessage.success('成功开启自动签到')
+    } else {
+      ElMessage.info('成功关闭自动签到')
+    }
+  })
+}
+
+const updateMyAli = () => {
+  axios.post('/show-my-ali?enabled=' + showMyAli.value).then(() => {
+    if (showMyAli.value) {
+      ElMessage.success('成功加载我的阿里云盘')
+    } else {
+      ElMessage.info('成功关闭我的阿里云盘')
+    }
+  })
 }
 
 const updateLogin = () => {
@@ -136,29 +177,31 @@ const updateStorage = () => {
 }
 
 const checkin = () => {
-  axios.post('/checkin?force=' + force.value).then(({data}) => {
+  axios.post('/checkin?force=' + forceCheckin.value).then(({data}) => {
     checkinTime.value = data.checkinTime
-    force.value = false
+    forceCheckin.value = false
     ElMessage.success('签到成功, 本月累计' + data.signInCount + '天')
   })
 }
 
 onMounted(() => {
-  axios.get('/token').then(({data}) => {
-    form.value.token = data
-    form.value.enabledToken = data != ''
-  })
   axios.get("/profiles").then(({data}) => {
     showLogin.value = data.includes('xiaoya')
     if (showLogin.value) {
-      axios.get('/login').then(({data}) => {
-        login.value = data
-      })
-      axios.get('/storage').then(({data}) => {
-        storage.value = data
-      })
-      axios.get('/checkin').then(({data}) => {
-        checkinTime.value = data
+      axios.get('/settings').then(({data}) => {
+        form.value.token = data.token
+        form.value.enabledToken = data.token != ''
+        checkinTime.value = data.checkin_time
+        autoCheckin.value = data.auto_checkin === 'true'
+        showMyAli.value = data.show_my_ali === 'true'
+        login.value.username = data.alist_username
+        login.value.password = data.alist_password
+        login.value.enabled = data.alist_login === 'true'
+        storage.value.refreshToken = data.refresh_token
+        storage.value.openToken = data.open_token
+        storage.value.folderId = data.folder_id
+        storage.value.refreshTokenTime = data.refresh_token_time
+        storage.value.openTokenTime = data.open_token_time
       })
     }
   })
@@ -168,5 +211,9 @@ onMounted(() => {
 <style>
 #config {
   max-width: 1080px;
+}
+
+.hint {
+  margin-left: 12px;
 }
 </style>
