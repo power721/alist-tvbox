@@ -47,16 +47,16 @@
         <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
         <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
       </el-form-item>
-      <el-form-item prop="updateTime" label="创建时间">
+      <el-form-item prop="updateTime" label="更新时间">
         <el-input :model-value="formatTime(storage.refreshTokenTime)" readonly/>
       </el-form-item>
       <el-form-item prop="openToken" label="开放token">
         <el-input v-model="storage.openToken" type="textarea" rows="3" placeholder="长度280位"/>
         <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
-        <span class="hint">过期时间： {{formatTime(exp * 1000)}}</span>
+        <span class="hint">过期时间： {{formatTime(exp)}}</span>
       </el-form-item>
       <el-form-item prop="updateTime" label="创建时间">
-        <el-input :model-value="formatTime(storage.openTokenTime)" readonly/>
+        <el-input :model-value="formatTime(iat)" readonly/>
       </el-form-item>
       <el-form-item prop="folderId" label="转存文件夹ID">
         <el-input v-model="storage.folderId"/>
@@ -111,6 +111,7 @@ const forceCheckin = ref(false)
 const autoCheckin = ref(false)
 const showMyAli = ref(false)
 const checkinTime = ref('')
+const iat = ref(0)
 const exp = ref(0)
 const login = ref({
   username: '',
@@ -209,7 +210,8 @@ onMounted(() => {
         storage.value.refreshTokenTime = data.refresh_token_time
         storage.value.openTokenTime = data.open_token_time
         let details = JSON.parse(atob(data.open_token.split('.')[1]))
-        exp.value = details.exp
+        iat.value = details.iat * 1000
+        exp.value = details.exp * 1000
       })
     }
   })

@@ -627,6 +627,8 @@ public class ShareService {
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<Map> response = restTemplate.exchange("https://auth.aliyundrive.com/v2/account/token", HttpMethod.POST, entity, Map.class);
         log.debug("get Ali token response: {}", response.getBody());
+        String driveID = (String) response.getBody().get("default_drive_id");
+        settingRepository.save(new Setting("ali_drive_id", driveID));
         return response.getBody();
     }
 

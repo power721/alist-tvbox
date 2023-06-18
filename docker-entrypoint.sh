@@ -2,7 +2,7 @@
 
 /updateall
 
-rm -f /tmp/updated
+mv /var/lib/nginx.conf /etc/nginx/http.d/default.conf
 
 /bin/busybox-extras httpd -p 81 -h /www
 /usr/sbin/nginx
