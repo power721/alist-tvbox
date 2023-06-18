@@ -13,6 +13,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.AListUser;
 import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
+import cn.har01d.alist_tvbox.model.SettingResponse;
 import cn.har01d.alist_tvbox.model.StorageInfo;
 import cn.har01d.alist_tvbox.model.UserResponse;
 import cn.har01d.alist_tvbox.util.IdUtils;
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -69,6 +72,7 @@ public class ShareService {
     private String refreshToken;
     private String openToken;
     private String folderId;
+    private volatile boolean started;
     private volatile int shareId = 5000;
 
     public ShareService(Environment environment, ObjectMapper objectMapper, ShareRepository shareRepository, SettingRepository settingRepository, RestTemplateBuilder builder) {
@@ -86,13 +90,13 @@ public class ShareService {
             readOpenToken();
             readFolderId();
 
-            List<Share> list = shareRepository.findAll();
-            new Thread(() -> loadShares(list)).start();
-
             boolean auto = settingRepository.findById("auto_checkin").map(Setting::getValue).map(Boolean::valueOf).orElse(false);
             if (!auto) {
                 new Thread(() -> checkin(false)).start();
             }
+
+            List<Share> list = shareRepository.findAll();
+            loadAList(list);
         }
     }
 
@@ -139,18 +143,11 @@ public class ShareService {
         }
     }
 
-    private void loadShares(List<Share> list) {
+    private void loadAList(List<Share> list) {
         Connection connection = null;
         try {
             connection = DriverManager.getConnection(DB_URL);
             Statement statement = connection.createStatement();
-            for (int i = 0; i < 60000; ++i) {
-                if (Files.exists(Paths.get("/tmp/updated"))) {
-                    break;
-                }
-                Thread.sleep(1);
-            }
-
             String sql = "";
             for (Share share : list) {
                 sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
@@ -162,7 +159,26 @@ public class ShareService {
             sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0);";
             statement.executeUpdate(sql);
 
-            enableMyAli(connection);
+            try {
+                enableMyAli(connection);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+
+            try {
+                enableLogin(connection);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+
+            if (!StringUtils.isAnyBlank(openToken, refreshToken, folderId)) {
+                try {
+                    updateTokens(connection);
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
+                startAListServer(true);
+            }
         } catch (Exception e) {
             log.warn("", e);
         } finally {
@@ -174,13 +190,44 @@ public class ShareService {
                 }
             }
         }
+    }
 
+    private void updateTokens(Connection connection) throws SQLException {
+        Statement statement = connection.createStatement();
+        statement.executeUpdate("update x_storages set driver = 'AliyundriveShare2Open' where driver = 'AliyundriveShare'");
+        statement.executeUpdate("update x_storages set addition = json_set(addition, '$.RefreshToken', '" + refreshToken + "') where driver = 'AliyundriveShare2Open'");
+        statement.executeUpdate("update x_storages set addition = json_set(addition, '$.RefreshTokenOpen', '" + openToken + "') where driver = 'AliyundriveShare2Open'");
+        statement.executeUpdate("update x_storages set addition = json_set(addition, '$.TempTransferFolderID', '" + folderId + "') where driver = 'AliyundriveShare2Open'");
+        log.info("update tokens to AList");
+    }
+
+    private void startAListServer(boolean wait) {
         try {
-            enableLogin();
+            log.info("start AList server");
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.inheritIO();
+            builder.command("/opt/alist/alist", "server", "--no-prefix");
+            builder.directory(new File("/opt/alist"));
+            Process process = builder.start();
+            if (wait) {
+                process.waitFor(30, TimeUnit.SECONDS);
+                waitAListStart();
+            }
+            log.info("AList server started");
+            started = true;
         } catch (Exception e) {
-            log.warn("", e);
+            throw new IllegalStateException(e);
         }
+    }
 
+    private void waitAListStart() throws InterruptedException {
+        for (int i = 0; i < 60; ++i) {
+            ResponseEntity<SettingResponse> response = restTemplate.getForEntity("http://localhost:5244/api/public/settings", SettingResponse.class);
+            if (response.getBody() != null && response.getBody().getCode() == 200) {
+                break;
+            }
+            Thread.sleep(500);
+        }
     }
 
     private void enableMyAli(Connection connection) {
@@ -201,27 +248,17 @@ public class ShareService {
                 statement.executeUpdate(sql);
             } catch (Exception e) {
                 throw new RuntimeException(e);
-            } finally {
-                if (connection != null) {
-                    try {
-                        connection.close();
-                    } catch (SQLException e) {
-                        // ignore
-                    }
-                }
             }
         }
     }
 
-    private void enableLogin() {
+    private void enableLogin(Connection connection) {
         AListLogin login = new AListLogin();
         login.setEnabled(settingRepository.findById("alist_login").map(Setting::getValue).orElse("").equals("true"));
         login.setUsername(settingRepository.findById("alist_username").map(Setting::getValue).orElse(""));
         login.setPassword(settingRepository.findById("alist_password").map(Setting::getValue).orElse(""));
 
-        Connection connection = null;
         try {
-            connection = DriverManager.getConnection(DB_URL);
             Statement statement = connection.createStatement();
             String sql = "";
             if (login.isEnabled()) {
@@ -237,14 +274,6 @@ public class ShareService {
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    // ignore
-                }
-            }
         }
         log.info("{} user {}", login.isEnabled() ? "enable" : "disable", login.getUsername());
     }
@@ -632,6 +661,10 @@ public class ShareService {
 
         String now = saveSettings();
         updateAList();
+
+        if (!started) {
+            startAListServer(false);
+        }
 
         dto.setRefreshToken(refreshToken);
         dto.setOpenToken(openToken);

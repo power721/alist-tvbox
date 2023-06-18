@@ -43,19 +43,24 @@
 
     <el-form :model="storage" label-width="120px" v-if="showLogin">
       <el-form-item prop="accessToken" label="阿里token">
-        <el-input v-model="storage.refreshToken"/>
+        <el-input v-model="storage.refreshToken" placeholder="长度32位"/>
+        <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
+        <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
       </el-form-item>
-      <el-form-item prop="updateTime" label="更新时间">
+      <el-form-item prop="updateTime" label="创建时间">
         <el-input :model-value="formatTime(storage.refreshTokenTime)" readonly/>
       </el-form-item>
       <el-form-item prop="openToken" label="开放token">
-        <el-input v-model="storage.openToken" type="textarea" rows="3"/>
+        <el-input v-model="storage.openToken" type="textarea" rows="3" placeholder="长度280位"/>
+        <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
+        <span class="hint">过期时间： {{formatTime(exp * 1000)}}</span>
       </el-form-item>
-      <el-form-item prop="updateTime" label="更新时间">
+      <el-form-item prop="updateTime" label="创建时间">
         <el-input :model-value="formatTime(storage.openTokenTime)" readonly/>
       </el-form-item>
       <el-form-item prop="folderId" label="转存文件夹ID">
         <el-input v-model="storage.folderId"/>
+        <a href="https://www.aliyundrive.com/drive" target="_blank">阿里云盘</a>
       </el-form-item>
       <el-form-item label="加载我的云盘">
         <el-switch
@@ -106,6 +111,7 @@ const forceCheckin = ref(false)
 const autoCheckin = ref(false)
 const showMyAli = ref(false)
 const checkinTime = ref('')
+const exp = ref(0)
 const login = ref({
   username: '',
   password: '',
@@ -125,7 +131,7 @@ const form = ref({
   enabledToken: false
 })
 
-const formatTime = (value: string) => {
+const formatTime = (value: string|number) => {
   return new Date(value).toLocaleString('zh-cn')
 }
 
@@ -202,6 +208,8 @@ onMounted(() => {
         storage.value.folderId = data.folder_id
         storage.value.refreshTokenTime = data.refresh_token_time
         storage.value.openTokenTime = data.open_token_time
+        let details = JSON.parse(atob(data.open_token.split('.')[1]))
+        exp.value = details.exp
       })
     }
   })

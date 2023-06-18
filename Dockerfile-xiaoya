@@ -33,5 +33,3 @@ EXPOSE 8080
 EXPOSE 80
 
 ENTRYPOINT ["/entrypoint.sh"]
-
-CMD ["/opt/alist/alist", "server", "--no-prefix"]

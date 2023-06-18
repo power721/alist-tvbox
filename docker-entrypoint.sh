@@ -1,33 +1,15 @@
 #!/bin/sh
 
-java -jar alist-tvbox.jar --spring.profiles.active=production,xiaoya &
+/updateall
 
 rm -f /tmp/updated
 
-/updateall
 /bin/busybox-extras httpd -p 81 -h /www
 /usr/sbin/nginx
 
 if [[ -f /data/pikpak.txt ]] && [[ -s /data/pikpak.txt ]]; then
   /pikpak
   echo $(date) "User's own PikPak account has been updated into database successfully"
-fi
-
-if [[ -s /data/mytoken.txt ]] && [[ -s /data/myopentoken.txt ]] && [[ -s /data/temp_transfer_folder_id.txt ]]; then
-  user_open_token=$(head -n1 /data/myopentoken.txt)
-  user_token=$(head -n1 /data/mytoken.txt)
-  tempfolderid=$(head -n1 /data/temp_transfer_folder_id.txt)
-  sqlite3 /opt/alist/data/data.db <<EOF
-update x_storages set driver = "AliyundriveShare2Open" where driver = 'AliyundriveShare';
-update x_storages set addition = json_set(addition, '$.RefreshToken', "$user_token") where driver = 'AliyundriveShare2Open';
-update x_storages set addition = json_set(addition, '$.RefreshTokenOpen', "$user_open_token") where driver = 'AliyundriveShare2Open';
-update x_storages set addition = json_set(addition, '$.TempTransferFolderID', "$tempfolderid") where driver = 'AliyundriveShare2Open';
-EOF
-  echo "driver updated to AliyundriveShare2Open"
-  date >/tmp/updated
-else
-  echo "请检查已正确配置 mytoken.txt myopentoken.txt temp_transfer_folder_id.txt 后再重启容器"
-  exit
 fi
 
 version=$(head -n1 /docker.version)
@@ -42,6 +24,4 @@ if [[ -f /data/proxy.txt ]] && [[ -s /data/proxy.txt ]]; then
   export no_proxy=*.aliyundrive.com
 fi
 
-cd /opt/alist
-
-exec "$@"
+java -jar alist-tvbox.jar --spring.profiles.active=production,xiaoya
