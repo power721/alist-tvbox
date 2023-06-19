@@ -6,6 +6,7 @@ import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.Hibernate;
 
+import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import java.util.Objects;
@@ -18,6 +19,7 @@ import java.util.Objects;
 public class Share {
     @Id
     private Integer id;
+    @Column(unique = true)
     private String path;
     private String shareId;
     private String folderId = "root";

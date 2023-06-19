@@ -98,4 +98,9 @@ public class TextUtils {
         }
         return name;
     }
+
+    public static String truncate(CharSequence charSequence, int threshold) {
+        return charSequence.length() > threshold ? charSequence.subSequence(0, threshold) + "..." : charSequence.toString();
+    }
+
 }
