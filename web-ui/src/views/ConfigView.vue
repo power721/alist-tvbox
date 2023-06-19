@@ -85,7 +85,7 @@
           inactive-text="关闭"
         />
       </el-form-item>
-      <el-form-item label="自动签到时间" v-if="autoCheckin">
+      <el-form-item label="计划时间">
         <el-time-picker v-model="scheduleTime" />
         <el-button type="primary" @click="updateScheduleTime">更新</el-button>
       </el-form-item>
