@@ -40,6 +40,8 @@ export default defineConfig({
       "/play": API,
       "/playlist": API,
       "/alist": API,
+      "/import-shares": API,
+      "/delete-shares": API,
     }
   }
 })

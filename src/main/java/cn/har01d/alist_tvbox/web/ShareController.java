@@ -18,8 +18,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
 
 @Profile("xiaoya")
 @RestController
@@ -50,6 +53,11 @@ public class ShareController {
     @DeleteMapping("/shares/{id}")
     public void delete(@PathVariable Integer id) {
         shareService.delete(id);
+    }
+
+    @PostMapping("/delete-shares")
+    public void deleteShares(@RequestBody List<Integer> ids) {
+        shareService.deleteShares(ids);
     }
 
     @GetMapping("/resources")
@@ -125,6 +133,11 @@ public class ShareController {
     @PostMapping("/alist/restart")
     public void restartAListServer() {
         shareService.restartAListServer();
+    }
+
+    @PostMapping("/import-shares")
+    public int handleFileUpload(@RequestParam("file") MultipartFile file) throws IOException {
+        return shareService.importShares(file);
     }
 
 }

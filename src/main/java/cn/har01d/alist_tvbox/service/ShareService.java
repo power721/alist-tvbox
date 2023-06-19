@@ -33,9 +33,13 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.PostConstruct;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -185,7 +189,7 @@ public class ShareService {
                 log.info("loading share list from file");
                 List<String> lines = Files.readAllLines(path);
                 for (String line : lines) {
-                    String[] parts = line.trim().split("\\s+", 3);
+                    String[] parts = line.trim().split("\\s+");
                     if (parts.length == 3) {
                         Share share = new Share();
                         share.setId(shareId++);
@@ -204,6 +208,34 @@ public class ShareService {
         return list;
     }
 
+    public int importShares(MultipartFile file) throws IOException {
+        int count = 0;
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+            log.info("loading share list from file");
+            while (reader.ready()) {
+                String line = reader.readLine();
+                String[] parts = line.trim().split("\\s+");
+                if (parts.length == 3) {
+                    try {
+                        Share share = new Share();
+                        share.setId(shareId);
+                        share.setPath(parts[0]);
+                        share.setShareId(parts[1]);
+                        share.setFolderId(parts[2]);
+                        create(share);
+                        count++;
+                        shareId++;
+                    } catch (Exception e) {
+                        log.warn("{}", e.getMessage());
+                    }
+                }
+            }
+        }
+
+        log.info("loaded {} shares", count);
+        return count;
+    }
+
     private void loadAList(List<Share> list) {
         if (list.isEmpty()) {
             return;
@@ -215,10 +247,14 @@ public class ShareService {
             Statement statement = connection.createStatement();
             String sql = "";
             for (Share share : list) {
-                sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share.getPath()), refreshToken, openToken, folderId, share.getShareId(), share.getPassword(), share.getFolderId()));
-                log.info("insert {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share.getPath()), count);
-                shareId = Math.max(shareId, share.getId() + 1);
+                try {
+                    sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+                    int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share.getPath()), refreshToken, openToken, folderId, share.getShareId(), share.getPassword(), share.getFolderId()));
+                    log.info("insert {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share.getPath()), count);
+                    shareId = Math.max(shareId, share.getId() + 1);
+                } catch (Exception e) {
+                    log.warn("{}", e.getMessage());
+                }
             }
 
             sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0);";
@@ -564,6 +600,18 @@ public class ShareService {
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("enable storage response: {}", response.getBody());
+    }
+
+    public void deleteShares(List<Integer> ids) {
+        for (Integer id : ids) {
+            try {
+                shareRepository.deleteById(id);
+                String token = login();
+                deleteStorage(id, token);
+            } catch (Exception e) {
+                log.warn("{}", e.getMessage());
+            }
+        }
     }
 
     public void delete(Integer id) {

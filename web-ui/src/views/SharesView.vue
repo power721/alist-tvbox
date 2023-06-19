@@ -1,12 +1,14 @@
 <template>
   <h2>分享列表</h2>
   <el-row justify="end">
+    <el-button type="success" @click="uploadVisible=true">导入</el-button>
     <el-button type="primary" @click="handleAdd">添加</el-button>
+    <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
   </el-row>
   <div class="space"></div>
 
-  <el-table :data="shares" border style="width: 100%">
-    <el-table-column prop="id" label="ID" width="70"/>
+  <el-table :data="shares" border @selection-change="handleSelectionChange" style="width: 100%">
+    <el-table-column prop="id" type="selection" label="ID" width="70"/>
     <el-table-column prop="path" label="路径"/>
     <el-table-column prop="url" label="分享连接" width="350">
       <template #default="scope">
@@ -50,12 +52,47 @@
   </el-dialog>
 
   <el-dialog v-model="dialogVisible" title="删除分享" width="30%">
-    <p>是否删除分享 - {{ form.shareId }}</p>
-    <p>{{ form.path }}</p>
+    <div v-if="batch">
+      <p>是否删除选中的{{ multipleSelection.length }}个分享?</p>
+    </div>
+    <div v-else>
+      <p>是否删除分享 - {{ form.shareId }}</p>
+      <p>{{ form.path }}</p>
+    </div>
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="danger" @click="deleteSub">删除</el-button>
+      </span>
+    </template>
+  </el-dialog>
+
+  <el-dialog v-model="uploadVisible" title="上传分享文件" width="30%">
+    <el-upload
+      ref="upload"
+      class="upload"
+      action="/import-shares"
+      accept=".txt"
+      :limit="1"
+      :headers="{'X-ACCESS-TOKEN': token}"
+      :on-exceed="handleExceed"
+      :on-success="uploadSuccess"
+      :on-error="uploadError"
+      :auto-upload="false"
+    >
+      <template #trigger>
+        <el-button type="primary">选择文件</el-button>
+      </template>
+
+      <template #tip>
+        <div class="el-upload__tip text-red">
+          选择1个txt文件，挂载路径，分享ID，目录ID，空格分隔。
+        </div>
+      </template>
+    </el-upload>
+    <template #footer>
+      <span class="dialog-footer">
+        <el-button class="ml-3" type="success" @click="submitUpload">上传</el-button>
       </span>
     </template>
   </el-dialog>
@@ -85,6 +122,12 @@
 <script setup lang="ts">
 import {onMounted, ref} from "vue";
 import axios from "axios";
+import type {UploadInstance, UploadProps, UploadRawFile} from 'element-plus'
+import {ElMessage, genFileId} from 'element-plus'
+import accountService from "@/services/account.service";
+
+const token = accountService.getToken()
+const upload = ref<UploadInstance>()
 
 interface ShareInfo {
   id: string
@@ -95,6 +138,7 @@ interface ShareInfo {
   status: string
 }
 
+const multipleSelection = ref<ShareInfo[]>([])
 const page = ref(1)
 const size = ref(20)
 const total = ref(0)
@@ -105,8 +149,10 @@ const resources = ref([])
 const shares = ref([])
 const dialogTitle = ref('')
 const formVisible = ref(false)
+const uploadVisible = ref(false)
 const dialogVisible = ref(false)
 const updateAction = ref(false)
+const batch = ref(false)
 const form = ref({
   id: '',
   path: '',
@@ -142,15 +188,27 @@ const handleEdit = (data: ShareInfo) => {
 }
 
 const handleDelete = (data: any) => {
+  batch.value = false
   form.value = data
+  dialogVisible.value = true
+}
+
+const handleDeleteBatch = () => {
+  batch.value = true
   dialogVisible.value = true
 }
 
 const deleteSub = () => {
   dialogVisible.value = false
-  axios.delete('/shares/' + form.value.id).then(() => {
-    loadShares(page.value)
-  })
+  if (batch) {
+    axios.post('/delete-shares', multipleSelection.value.map(s => s.id)).then(() => {
+      loadShares(page.value)
+    })
+  } else {
+    axios.delete('/shares/' + form.value.id).then(() => {
+      loadShares(page.value)
+    })
+  }
 }
 
 const handleCancel = () => {
@@ -189,6 +247,31 @@ const loadShares = (value: number) => {
     shares.value = data.content
     total.value = data.totalElements
   })
+}
+
+const handleExceed: UploadProps['onExceed'] = (files, uploadFiles) => {
+  upload.value!.clearFiles()
+  const file = files[0] as UploadRawFile
+  file.uid = genFileId()
+  upload.value!.handleStart(file)
+}
+
+const submitUpload = () => {
+  upload.value!.submit()
+}
+
+const uploadSuccess = (response: any) => {
+  uploadVisible.value = false
+  loadShares(page.value)
+  ElMessage.success('成功导入' + response + '个分享')
+}
+
+const uploadError = (error: Error) => {
+  ElMessage.error('导入失败：' + error)
+}
+
+const handleSelectionChange = (val: ShareInfo[]) => {
+  multipleSelection.value = val
 }
 
 onMounted(() => {
