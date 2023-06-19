@@ -43,7 +43,7 @@ EOF
 
 站点名称可以加前缀，通过订阅URL前面加前缀，使用`@`分割。比如：饭@http://饭太硬.top/tv,菜@https://tvbox.cainisi.cf
 
-![订阅预览](https://raw.githubusercontent.com/power721/alist-tvbox/master/screenshots/atv_sub_data.png)
+![订阅预览](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub_data.png)
 
 ### 资源
 第一次启动会自动读取/data/alishare_list.txt文件里面的分享内容，并保存到数据库，以后这个文件就不再生效。
