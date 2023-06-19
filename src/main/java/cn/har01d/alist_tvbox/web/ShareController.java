@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.model.StorageInfo;
 import cn.har01d.alist_tvbox.service.ShareService;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,8 +20,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
-import java.util.List;
+import java.time.LocalTime;
 
+@Profile("xiaoya")
 @RestController
 public class ShareController {
     private final ShareService shareService;
@@ -49,11 +51,6 @@ public class ShareController {
     @DeleteMapping("/shares/{id}")
     public void delete(@PathVariable Integer id) {
         shareService.delete(id);
-    }
-
-    @GetMapping("/profiles")
-    public List<String> getProfiles() {
-        return shareService.getProfiles();
     }
 
     @GetMapping("/resources")
@@ -104,5 +101,10 @@ public class ShareController {
     @GetMapping("/show-my-ali")
     public boolean showMyAli() {
         return settingRepository.findById("show_my_ali").map(Setting::getValue).map(Boolean::parseBoolean).orElse(false);
+    }
+
+    @PostMapping("/schedule")
+    public LocalTime updateScheduleTime(@RequestBody Instant time) {
+        return shareService.updateScheduleTime(time);
     }
 }

@@ -1,6 +1,5 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.dto.AListLogin;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
@@ -15,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
 import java.net.URLDecoder;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -55,6 +55,11 @@ public class TvBoxController {
         } else {
             return tvBoxService.getCategoryList();
         }
+    }
+
+    @GetMapping("/profiles")
+    public List<String> getProfiles() {
+        return subscriptionService.getProfiles();
     }
 
     @GetMapping("/token")

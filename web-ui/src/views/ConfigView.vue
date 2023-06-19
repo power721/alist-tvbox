@@ -87,7 +87,10 @@
           active-text="开启"
           inactive-text="关闭"
         />
-        <span class="hint">每天9点自动签到</span>
+      </el-form-item>
+      <el-form-item label="自动签到时间">
+        <el-time-picker v-model="scheduleTime" />
+        <el-button type="primary" @click="updateScheduleTime">更新</el-button>
       </el-form-item>
       <el-form-item label="上次签到时间">
         <el-input :model-value="formatTime(checkinTime)" readonly/>
@@ -111,6 +114,7 @@ const forceCheckin = ref(false)
 const autoCheckin = ref(false)
 const showMyAli = ref(false)
 const checkinTime = ref('')
+const scheduleTime = ref(new Date(2023, 6, 20, 9, 0))
 const iat = ref(0)
 const exp = ref(0)
 const login = ref({
@@ -191,6 +195,12 @@ const checkin = () => {
   })
 }
 
+const updateScheduleTime = () => {
+  axios.post('/schedule', scheduleTime.value).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 onMounted(() => {
   axios.get("/profiles").then(({data}) => {
     showLogin.value = data.includes('xiaoya')
@@ -198,6 +208,7 @@ onMounted(() => {
       axios.get('/settings').then(({data}) => {
         form.value.token = data.token
         form.value.enabledToken = data.token != ''
+        scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
         checkinTime.value = data.checkin_time
         autoCheckin.value = data.auto_checkin === 'true'
         showMyAli.value = data.show_my_ali === 'true'

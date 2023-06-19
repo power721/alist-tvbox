@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.env.Environment;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -29,7 +29,8 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -46,28 +47,28 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
+@Profile("xiaoya")
 public class ShareService {
     public static final String DB_URL = "jdbc:sqlite:/opt/alist/data/data.db";
-    private final Environment environment;
     private final ObjectMapper objectMapper;
     private final ShareRepository shareRepository;
     private final SettingRepository settingRepository;
     private final RestTemplate restTemplate;
-    private final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+    private final TaskScheduler scheduler;
+    private ScheduledFuture scheduledFuture;
 
     private String refreshToken;
     private String openToken;
@@ -75,32 +76,61 @@ public class ShareService {
     private volatile boolean started;
     private volatile int shareId = 5000;
 
-    public ShareService(Environment environment, ObjectMapper objectMapper, ShareRepository shareRepository, SettingRepository settingRepository, RestTemplateBuilder builder) {
-        this.environment = environment;
+    public ShareService(ObjectMapper objectMapper,
+                        ShareRepository shareRepository,
+                        SettingRepository settingRepository,
+                        RestTemplateBuilder builder,
+                        TaskScheduler scheduler) {
         this.objectMapper = objectMapper;
         this.shareRepository = shareRepository;
         this.settingRepository = settingRepository;
         this.restTemplate = builder.build();
+        this.scheduler = scheduler;
     }
 
     @PostConstruct
     public void setup() {
-        if (getProfiles().contains("xiaoya")) {
-            readAccessToken();
-            readOpenToken();
-            readFolderId();
+        scheduleAutoCheckinTime();
 
-            boolean auto = settingRepository.findById("auto_checkin").map(Setting::getValue).map(Boolean::valueOf).orElse(false);
-            if (!auto) {
-                new Thread(() -> checkin(false)).start();
-            }
+        readAccessToken();
+        readOpenToken();
+        readFolderId();
 
-            List<Share> list = shareRepository.findAll();
-            loadAList(list);
+        boolean auto = settingRepository.findById("auto_checkin").map(Setting::getValue).map(Boolean::valueOf).orElse(false);
+        if (!auto) {
+            new Thread(() -> checkin(false)).start();
+        }
+
+        List<Share> list = shareRepository.findAll();
+        if (list.isEmpty()) {
+            list = loadShares();
+        }
+        loadAList(list);
+    }
+
+    private void scheduleAutoCheckinTime() {
+        try {
+            LocalTime localTime = getScheduleTime();
+            log.info("schedule time: {}", localTime);
+            scheduledFuture = scheduler.schedule(this::autoCheckin, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
+        } catch (Exception e) {
+            log.warn("", e);
         }
     }
 
-    @Scheduled(cron = "${checkin.cron.expression: 0 0 9 * * ?}", zone = "Asia/Shanghai")
+    private LocalTime getScheduleTime() {
+        String time = settingRepository.findById("schedule_time").map(Setting::getValue).orElse(null);
+        LocalTime localTime = LocalTime.of(9, 0, 0);
+        if (time != null) {
+            try {
+                localTime = LocalTime.parse(time);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+        return localTime;
+    }
+
     public void autoCheckin() {
         boolean auto = settingRepository.findById("auto_checkin").map(Setting::getValue).map(Boolean::valueOf).orElse(false);
         if (auto) {
@@ -124,6 +154,7 @@ public class ShareService {
                 if (openToken != null) {
                     log.info("update open token: {}", time);
                     openToken = getAliOpenToken(openToken);
+                    settingRepository.save(new Setting("open_token_time", Instant.now().toString()));
                 }
             }
         } catch (Exception e) {
@@ -136,6 +167,7 @@ public class ShareService {
                 if (refreshToken != null) {
                     log.info("update refresh token: {}", time);
                     refreshToken = (String) getAliToken(refreshToken).get("refresh_token");
+                    settingRepository.save(new Setting("refresh_token_time", Instant.now().toString()));
                 }
             }
         } catch (Exception e) {
@@ -143,7 +175,37 @@ public class ShareService {
         }
     }
 
+    private List<Share> loadShares() {
+        List<Share> list = new ArrayList<>();
+
+        Path path = Paths.get("/data/alishare_list.txt");
+        if (Files.exists(path)) {
+            try {
+                log.info("loading share list from file");
+                List<String> lines = Files.readAllLines(path);
+                for (String line : lines) {
+                    String[] parts = line.trim().split("\\s+", 3);
+                    Share share = new Share();
+                    share.setId(shareId++);
+                    share.setPath(parts[0]);
+                    share.setShareId(parts[1]);
+                    share.setFolderId(parts[2]);
+                    list.add(share);
+                }
+                shareRepository.saveAll(list);
+            } catch (IOException e) {
+                log.warn("", e);
+            }
+        }
+
+        return list;
+    }
+
     private void loadAList(List<Share> list) {
+        if (list.isEmpty()) {
+            return;
+        }
+
         Connection connection = null;
         try {
             connection = DriverManager.getConnection(DB_URL);
@@ -476,15 +538,7 @@ public class ShareService {
         log.info("delete storage response: {}", response.getBody());
     }
 
-    public List<String> getProfiles() {
-        return Arrays.asList(environment.getActiveProfiles());
-    }
-
     public Page<ShareInfo> listResources(Pageable pageable) {
-        if (!getProfiles().contains("xiaoya")) {
-            return new PageImpl<>(new ArrayList<>());
-        }
-
         int total = 0;
         List<ShareInfo> list = new ArrayList<>();
         int size = pageable.getPageSize();
@@ -821,5 +875,14 @@ public class ShareService {
                 }
             }
         }
+    }
+
+    public LocalTime updateScheduleTime(Instant time) {
+        LocalTime localTime = time.atZone(ZoneId.of("Asia/Shanghai")).toLocalTime();
+        settingRepository.save(new Setting("schedule_time", localTime.toString()));
+        scheduledFuture.cancel(true);
+        scheduledFuture = scheduler.schedule(this::autoCheckin, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
+        log.info("update schedule time: {}", localTime);
+        return localTime;
     }
 }

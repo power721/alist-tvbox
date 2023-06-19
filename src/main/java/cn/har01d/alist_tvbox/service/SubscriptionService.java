@@ -105,6 +105,10 @@ public class SubscriptionService {
         return token;
     }
 
+    public List<String> getProfiles() {
+        return Arrays.asList(environment.getActiveProfiles());
+    }
+
     public Map<String, Object> subscription(int id) {
         String apiUrl = "";
         String override = "";
