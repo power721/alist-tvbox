@@ -15,7 +15,7 @@ curl -s http://d.har01d.cn/update_xiaoya.sh | sudo bash
 ### 站点
 ![站点列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sites.png)
 
-小雅版默认添加了站点：http://localhost。
+小雅版默认添加了站点：http://localhost，如果配置有域名，自行修改地址。
 
 自己可以添加三方站点，取代了xiaoya的套娃。会自动识别版本，如果不能正确识别，请手动配置版本。
 
