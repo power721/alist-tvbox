@@ -1,6 +1,6 @@
 <template>
   <div id="config">
-    <el-card class="box-card">
+    <el-card class="box-card" v-if="showLogin">
       <template #header>
         <div class="card-header">
           <span>AList运行状态</span>
@@ -48,7 +48,7 @@
       </el-form>
     </el-card>
 
-    <el-card class="box-card">
+    <el-card class="box-card" v-if="showLogin">
       <el-form :model="login" label-width="120px" v-if="showLogin">
         <el-form-item prop="token" label="强制登录AList">
           <el-switch
@@ -70,7 +70,7 @@
       </el-form>
     </el-card>
 
-    <el-card class="box-card">
+    <el-card class="box-card" v-if="showLogin">
       <el-form :model="storage" label-width="120px" v-if="showLogin">
         <el-form-item prop="accessToken" label="阿里token">
           <el-input v-model="storage.refreshToken" maxlength="128" placeholder="长度32位"/>
@@ -104,7 +104,7 @@
       </el-form>
     </el-card>
 
-    <el-card class="box-card">
+    <el-card class="box-card" v-if="showLogin">
       <el-form label-width="120px" v-if="showLogin">
         <el-form-item label="自动签到">
           <el-switch
