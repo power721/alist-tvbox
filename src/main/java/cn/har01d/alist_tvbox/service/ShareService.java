@@ -322,10 +322,16 @@ public class ShareService {
     }
 
     private void waitAListStart() throws InterruptedException {
+        int count = 0;
         for (int i = 0; i < 60; ++i) {
             ResponseEntity<SettingResponse> response = restTemplate.getForEntity("http://localhost:5244/api/public/settings", SettingResponse.class);
             if (response.getBody() != null && response.getBody().getCode() == 200) {
-                break;
+                count++;
+            } else {
+                count = 0;
+            }
+            if (count > 1) {
+                return;
             }
             Thread.sleep(500);
         }

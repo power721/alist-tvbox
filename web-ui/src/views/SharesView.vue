@@ -201,7 +201,7 @@ const handleDeleteBatch = () => {
 
 const deleteSub = () => {
   dialogVisible.value = false
-  if (batch) {
+  if (batch.value) {
     axios.post('/delete-shares', multipleSelection.value.map(s => s.id)).then(() => {
       loadShares(page.value)
     })
