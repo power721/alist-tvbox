@@ -8,7 +8,8 @@
   <div class="space"></div>
 
   <el-table :data="shares" border @selection-change="handleSelectionChange" style="width: 100%">
-    <el-table-column prop="id" type="selection" label="ID" width="70"/>
+    <el-table-column type="selection" width="55"/>
+    <el-table-column prop="id" label="ID" width="70"/>
     <el-table-column prop="path" label="路径"/>
     <el-table-column prop="url" label="分享连接" width="350">
       <template #default="scope">

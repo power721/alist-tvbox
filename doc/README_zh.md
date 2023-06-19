@@ -48,8 +48,9 @@ EOF
 ### 资源
 第一次启动会自动读取/data/alishare_list.txt文件里面的分享内容，并保存到数据库，以后这个文件就不再生效。
 
-![分享列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_shares.png)
+可以在界面批量导入文件里面的分享内容，批量删除分享。
 
+![分享列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_shares.png)
 
 ### 配置
 ![配置页面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_config.png)
