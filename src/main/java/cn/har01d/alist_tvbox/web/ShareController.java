@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
-import java.time.LocalTime;
 
 @Profile("xiaoya")
 @RestController
@@ -104,7 +103,7 @@ public class ShareController {
     }
 
     @PostMapping("/schedule")
-    public LocalTime updateScheduleTime(@RequestBody Instant time) {
+    public Instant updateScheduleTime(@RequestBody Instant time) {
         return shareService.updateScheduleTime(time);
     }
 }

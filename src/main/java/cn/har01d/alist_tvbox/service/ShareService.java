@@ -123,9 +123,11 @@ public class ShareService {
         LocalTime localTime = LocalTime.of(9, 0, 0);
         if (time != null) {
             try {
-                localTime = LocalTime.parse(time);
+                localTime = Instant.parse(time).atZone(ZoneId.of("Asia/Shanghai")).toLocalTime();
+                ;
             } catch (Exception e) {
                 log.warn("", e);
+                settingRepository.save(new Setting("schedule_time", "2023-06-20T00:00:00.000Z"));
             }
         }
         return localTime;
@@ -185,15 +187,17 @@ public class ShareService {
                 List<String> lines = Files.readAllLines(path);
                 for (String line : lines) {
                     String[] parts = line.trim().split("\\s+", 3);
-                    Share share = new Share();
-                    share.setId(shareId++);
-                    share.setPath(parts[0]);
-                    share.setShareId(parts[1]);
-                    share.setFolderId(parts[2]);
-                    list.add(share);
+                    if (parts.length == 3) {
+                        Share share = new Share();
+                        share.setId(shareId++);
+                        share.setPath(parts[0]);
+                        share.setShareId(parts[1]);
+                        share.setFolderId(parts[2]);
+                        list.add(share);
+                    }
                 }
                 shareRepository.saveAll(list);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 log.warn("", e);
             }
         }
@@ -260,7 +264,7 @@ public class ShareService {
         statement.executeUpdate("update x_storages set addition = json_set(addition, '$.RefreshToken', '" + refreshToken + "') where driver = 'AliyundriveShare2Open'");
         statement.executeUpdate("update x_storages set addition = json_set(addition, '$.RefreshTokenOpen', '" + openToken + "') where driver = 'AliyundriveShare2Open'");
         statement.executeUpdate("update x_storages set addition = json_set(addition, '$.TempTransferFolderID', '" + folderId + "') where driver = 'AliyundriveShare2Open'");
-        log.info("update tokens to AList");
+        log.info("update tokens to AList database");
     }
 
     private void startAListServer(boolean wait) {
@@ -372,7 +376,7 @@ public class ShareService {
                     settingRepository.save(new Setting("refresh_token", token));
                     refreshToken = token;
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
                 log.warn("", e);
             }
         }
@@ -393,7 +397,7 @@ public class ShareService {
                     settingRepository.save(new Setting("open_token", token));
                     openToken = token;
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
                 log.warn("", e);
             }
         }
@@ -414,7 +418,7 @@ public class ShareService {
                     settingRepository.save(new Setting("folder_id", token));
                     folderId = token;
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
                 log.warn("", e);
             }
         }
@@ -704,11 +708,20 @@ public class ShareService {
         if (StringUtils.isBlank(dto.getRefreshToken())) {
             throw new BadRequestException("阿里token不能为空");
         }
+        if (dto.getRefreshToken().length() > 128) {
+            throw new BadRequestException("阿里token长度太长");
+        }
         if (StringUtils.isBlank(dto.getOpenToken())) {
             throw new BadRequestException("开放token不能为空");
         }
+        if (dto.getOpenToken().length() < 128) {
+            throw new BadRequestException("开放token长度太短");
+        }
         if (StringUtils.isBlank(dto.getFolderId())) {
             throw new BadRequestException("转存文件夹ID不能为空");
+        }
+        if (dto.getFolderId().length() > 64) {
+            throw new BadRequestException("转存文件夹ID长度太长");
         }
 
         refreshToken = (String) getAliToken(dto.getRefreshToken()).get("refresh_token");
@@ -877,12 +890,12 @@ public class ShareService {
         }
     }
 
-    public LocalTime updateScheduleTime(Instant time) {
+    public Instant updateScheduleTime(Instant time) {
         LocalTime localTime = time.atZone(ZoneId.of("Asia/Shanghai")).toLocalTime();
-        settingRepository.save(new Setting("schedule_time", localTime.toString()));
+        settingRepository.save(new Setting("schedule_time", time.toString()));
         scheduledFuture.cancel(true);
         scheduledFuture = scheduler.schedule(this::autoCheckin, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
         log.info("update schedule time: {}", localTime);
-        return localTime;
+        return time;
     }
 }

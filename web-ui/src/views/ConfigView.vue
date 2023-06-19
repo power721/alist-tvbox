@@ -43,26 +43,23 @@
 
     <el-form :model="storage" label-width="120px" v-if="showLogin">
       <el-form-item prop="accessToken" label="阿里token">
-        <el-input v-model="storage.refreshToken" placeholder="长度32位"/>
+        <el-input v-model="storage.refreshToken" maxlength="128" placeholder="长度32位"/>
         <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
         <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
-      </el-form-item>
-      <el-form-item prop="updateTime" label="更新时间">
-        <el-input :model-value="formatTime(storage.refreshTokenTime)" readonly/>
+        <span class="hint">更新时间： {{formatTime(storage.refreshTokenTime)}}</span>
       </el-form-item>
       <el-form-item prop="openToken" label="开放token">
-        <el-input v-model="storage.openToken" type="textarea" rows="3" placeholder="长度280位"/>
+        <el-input v-model="storage.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"/>
         <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
+        <span class="hint">创建时间： {{formatTime(iat)}}</span>
+        <span class="hint">更新时间： {{formatTime(storage.openTokenTime)}}</span>
         <span class="hint">过期时间： {{formatTime(exp)}}</span>
       </el-form-item>
-      <el-form-item prop="updateTime" label="创建时间">
-        <el-input :model-value="formatTime(iat)" readonly/>
-      </el-form-item>
       <el-form-item prop="folderId" label="转存文件夹ID">
-        <el-input v-model="storage.folderId"/>
+        <el-input v-model="storage.folderId" placeholder="长度40位"/>
         <a href="https://www.aliyundrive.com/drive" target="_blank">阿里云盘</a>
       </el-form-item>
-      <el-form-item label="加载我的云盘">
+      <el-form-item label="加载我的云盘" v-if="storage.openToken">
         <el-switch
           v-model="showMyAli"
           @change="updateMyAli"
@@ -88,7 +85,7 @@
           inactive-text="关闭"
         />
       </el-form-item>
-      <el-form-item label="自动签到时间">
+      <el-form-item label="自动签到时间" v-if="autoCheckin">
         <el-time-picker v-model="scheduleTime" />
         <el-button type="primary" @click="updateScheduleTime">更新</el-button>
       </el-form-item>
@@ -114,7 +111,7 @@ const forceCheckin = ref(false)
 const autoCheckin = ref(false)
 const showMyAli = ref(false)
 const checkinTime = ref('')
-const scheduleTime = ref(new Date(2023, 6, 20, 9, 0))
+const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const iat = ref(0)
 const exp = ref(0)
 const login = ref({
@@ -235,6 +232,6 @@ onMounted(() => {
 }
 
 .hint {
-  margin-left: 12px;
+  margin-left: 16px;
 }
 </style>
