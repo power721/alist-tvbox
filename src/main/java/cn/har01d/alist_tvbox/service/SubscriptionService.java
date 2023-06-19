@@ -82,6 +82,10 @@ public class SubscriptionService {
             sub.setName("饭太硬");
             sub.setUrl("http://饭太硬.top/tv");
             subscriptionRepository.save(sub);
+            sub = new Subscription();
+            sub.setName("菜妮丝");
+            sub.setUrl("https://tvbox.cainisi.cf");
+            subscriptionRepository.save(sub);
         }
     }
 

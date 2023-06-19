@@ -39,6 +39,7 @@ export default defineConfig({
       "/parse": API,
       "/play": API,
       "/playlist": API,
+      "/alist": API,
     }
   }
 })

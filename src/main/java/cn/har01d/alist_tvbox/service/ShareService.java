@@ -36,7 +36,6 @@ import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -219,7 +218,7 @@ public class ShareService {
                 sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                 int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share.getPath()), refreshToken, openToken, folderId, share.getShareId(), share.getPassword(), share.getFolderId()));
                 log.info("insert {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share.getPath()), count);
-                shareId++;
+                shareId = Math.max(shareId, share.getId() + 1);
             }
 
             sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0);";
@@ -267,7 +266,7 @@ public class ShareService {
         log.info("update tokens to AList database");
     }
 
-    private void startAListServer(boolean wait) {
+    public void startAListServer(boolean wait) {
         try {
             log.info("start AList server");
             ProcessBuilder builder = new ProcessBuilder();
@@ -294,6 +293,45 @@ public class ShareService {
             }
             Thread.sleep(500);
         }
+    }
+
+    public void stopAListServer() {
+        log.info("stop AList server");
+        try {
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.inheritIO();
+            builder.command("pkill", "-f", "/opt/alist/alist");
+            builder.directory(new File("/opt/alist"));
+            Process process = builder.start();
+            process.waitFor(1, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    public void restartAListServer() {
+        stopAListServer();
+        startAListServer(false);
+    }
+
+    public int getAListStatus() {
+        try {
+            ResponseEntity<SettingResponse> response = restTemplate.getForEntity("http://localhost:5244/api/public/settings", SettingResponse.class);
+            if (response.getBody() != null) {
+                if (response.getBody().getCode() == 200) {
+                    started = true;
+                    return 2;
+                } else if (response.getBody().getCode() == 500) {
+                    started = true;
+                    return 1;
+                }
+            } else {
+                started = false;
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return 0;
     }
 
     private void enableMyAli(Connection connection) {

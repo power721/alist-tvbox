@@ -106,4 +106,25 @@ public class ShareController {
     public Instant updateScheduleTime(@RequestBody Instant time) {
         return shareService.updateScheduleTime(time);
     }
+
+    @GetMapping("/alist/status")
+    public int getAListStatus() {
+        return shareService.getAListStatus();
+    }
+
+    @PostMapping("/alist/stop")
+    public void stopAListServer() {
+        shareService.stopAListServer();
+    }
+
+    @PostMapping("/alist/start")
+    public void startAListServer() {
+        shareService.startAListServer(false);
+    }
+
+    @PostMapping("/alist/restart")
+    public void restartAListServer() {
+        shareService.restartAListServer();
+    }
+
 }
