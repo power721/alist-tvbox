@@ -15,7 +15,7 @@ curl -s http://d.har01d.cn/update_xiaoya.sh | sudo bash
 ### 站点
 ![站点列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sites.png)
 
-小雅版默认添加了站点：http://localhost，如果配置有域名，自行修改地址。
+小雅版默认添加了站点：`http://localhost`，如果配置有域名，自行修改地址。
 
 自己可以添加三方站点，取代了xiaoya的套娃。会自动识别版本，如果不能正确识别，请手动配置版本。
 
@@ -39,9 +39,9 @@ EOF
 
 添加订阅支持多个URL，用逗号隔开。定制部分基本和TvBox的配置json一致，添加了站点白名单`sites-whitelist`和黑名单`sites-blacklist`。
 
-站点`key`是必须的，其它字段可选。对于lives，rules，parses，doh，`name`字段是必须的。
+站点`key`是必须的，其它字段可选。对于lives，rules，parses，doh类型，`name`字段是必须的。
 
-站点名称可以加前缀，通过订阅URL前面加前缀，使用`@`分割。比如：饭@http://饭太硬.top/tv,菜@https://tvbox.cainisi.cf
+站点名称可以加前缀，通过订阅URL前面加前缀，使用`@`分割。比如：`饭@http://饭太硬.top/tv,菜@https://tvbox.cainisi.cf`
 
 ![订阅预览](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub_data.png)
 
@@ -63,12 +63,12 @@ EOF
 ### 其它
 不再生效的文件都可以删除。
 
-guestpass.txt和guestlogin.txt不使用，请在界面配置用户名和密码。
+guestpass.txt和guestlogin.txt不再生效，请在界面配置用户名和密码。
 
-show_my_ali.txt不使用，请在界面配置是否加载阿里云盘。
+show_my_ali.txt不再生效，请在界面配置是否加载阿里云盘。
 
-docker_address.txt不使用，请使用订阅API。
+docker_address.txt不再生效，请使用订阅API。
 
-alist_list.txt不使用，请在界面添加站点。
+alist_list.txt不再生效，请在界面添加站点。
 
 proxy.txt还是生效的。
