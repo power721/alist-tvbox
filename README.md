@@ -1,7 +1,7 @@
 # alist-tvbox
 AList proxy server for TvBox, support playlist and search.
 
-[中文文档](doc/README_ZH.md)
+[中文文档](doc/README_zh.md)
 
 # Build
 ```bash
