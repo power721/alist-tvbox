@@ -5,6 +5,8 @@ AList代理，支持xioaya版AList界面管理。
 ```bash
 curl -s http://d.har01d.cn/update_xiaoya.sh | sudo bash
 ```
+对于群辉系统，请挂载Docker的/data目录到群辉文件系统。
+
 ## 管理
 打开管理网页：http://your-ip:5678/ 
 

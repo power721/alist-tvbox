@@ -195,6 +195,7 @@ public class ShareService {
             AListLogin login = new AListLogin();
             Path pass = Paths.get("/data/guestpass.txt");
             if (Files.exists(pass)) {
+                log.info("read guest password from file");
                 List<String> lines = Files.readAllLines(pass);
                 if (!lines.isEmpty()) {
                     login.setUsername("guest");
@@ -205,6 +206,7 @@ public class ShareService {
 
             Path guest = Paths.get("/data/guestlogin.txt");
             if (Files.exists(guest)) {
+                log.info("guestlogin.txt");
                 login.setUsername("dav");
                 login.setEnabled(true);
             }
@@ -220,6 +222,7 @@ public class ShareService {
     private void readShowMyAli() {
         Path show = Paths.get("/data/show_my_ali.txt");
         if (Files.exists(show)) {
+            log.info("show_my_ali.txt");
             showMyAli(true);
         }
     }
@@ -281,10 +284,6 @@ public class ShareService {
     }
 
     private void loadAList(List<Share> list) {
-        if (list.isEmpty()) {
-            return;
-        }
-
         Connection connection = null;
         try {
             connection = DriverManager.getConnection(DB_URL);
@@ -495,6 +494,7 @@ public class ShareService {
         Path path = Paths.get("/data/mytoken.txt");
         if (Files.exists(path)) {
             try {
+                log.info("read refresh token from file");
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
                     String token = lines.get(0).trim();
@@ -518,6 +518,7 @@ public class ShareService {
         Path path = Paths.get("/data/myopentoken.txt");
         if (Files.exists(path)) {
             try {
+                log.info("read open token from file");
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
                     String token = lines.get(0).trim();
@@ -539,6 +540,7 @@ public class ShareService {
         Path path = Paths.get("/data/temp_transfer_folder_id.txt");
         if (Files.exists(path)) {
             try {
+                log.info("read temp transfer folder id from file");
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
                     String token = lines.get(0).trim();
@@ -895,8 +897,10 @@ public class ShareService {
     private void updateAList() {
         Connection connection = null;
         try {
+            log.info("update storage driver");
             connection = DriverManager.getConnection(DB_URL);
             Statement statement = connection.createStatement();
+            statement.executeUpdate("update x_storages set driver = 'AliyundriveShare2Open' where driver = 'AliyundriveShare'");
             String sql = "update x_storages set addition = json_set(addition, '$.RefreshToken', '" + refreshToken + "') where driver = 'AliyundriveShare2Open'";
             statement.executeUpdate(String.format(sql));
             sql = "update x_storages set addition = json_set(addition, '$.RefreshTokenOpen', '" + openToken + "') where driver = 'AliyundriveShare2Open'";
@@ -932,6 +936,7 @@ public class ShareService {
             validateCheckinTime();
         }
 
+        log.info("checkin");
         Map<Object, Object> map = getAliToken(refreshToken);
         String accessToken = (String) map.get("access_token");
         String nickName = (String) map.get("nick_name");
