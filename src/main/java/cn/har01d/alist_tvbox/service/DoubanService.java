@@ -6,6 +6,8 @@ import cn.har01d.alist_tvbox.entity.Meta;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
 import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.entity.MovieRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
@@ -17,6 +19,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import javax.annotation.PostConstruct;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,18 +35,44 @@ public class DoubanService {
     private final MetaRepository metaRepository;
     private final MovieRepository movieRepository;
     private final AliasRepository aliasRepository;
+    private final SettingRepository settingRepository;
 
     private final RestTemplate restTemplate;
 
 
-    public DoubanService(MetaRepository metaRepository, MovieRepository movieRepository, AliasRepository aliasRepository, RestTemplateBuilder builder) {
+    public DoubanService(MetaRepository metaRepository, MovieRepository movieRepository, AliasRepository aliasRepository, SettingRepository settingRepository, RestTemplateBuilder builder) {
         this.metaRepository = metaRepository;
         this.movieRepository = movieRepository;
         this.aliasRepository = aliasRepository;
+        this.settingRepository = settingRepository;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
+    }
+
+    @PostConstruct
+    public void setup() {
+        try {
+            Path path = Paths.get("data/movie_version");
+            if (Files.exists(path)) {
+                List<String> lines = Files.readAllLines(path);
+                if (!lines.isEmpty()) {
+                    settingRepository.save(new Setting("movie_version", lines.get(0).trim()));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    public String getRemoteVersion() {
+        try {
+            return restTemplate.getForObject("http://d.har01d.cn/version", String.class);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return "";
     }
 
     public Movie getByPath(String path) {

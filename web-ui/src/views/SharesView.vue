@@ -11,6 +11,11 @@
     <el-table-column type="selection" width="55"/>
     <el-table-column prop="id" label="ID" width="70"/>
     <el-table-column prop="path" label="路径"/>
+    <el-table-column label="完整路径">
+      <template #default="scope">
+        {{fullPath(scope.row.path)}}
+      </template>
+    </el-table-column>
     <el-table-column prop="url" label="分享连接" width="350">
       <template #default="scope">
         <a :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
@@ -43,6 +48,7 @@
       <el-form-item label="文件夹ID" label-width="140">
         <el-input v-model="form.folderId" autocomplete="off"/>
       </el-form-item>
+      <span v-if="form.path">完整路径： {{fullPath(form.path)}}</span>
     </el-form>
     <template #footer>
       <span class="dialog-footer">
@@ -214,6 +220,13 @@ const deleteSub = () => {
 
 const handleCancel = () => {
   formVisible.value = false
+}
+
+const fullPath = (path: string) => {
+  if (path.startsWith('/')) {
+    return path
+  }
+  return '\uD83C\uDE34我的阿里分享/' + path
 }
 
 const handleConfirm = () => {

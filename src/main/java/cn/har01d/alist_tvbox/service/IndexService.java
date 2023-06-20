@@ -1,12 +1,19 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
+import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,6 +25,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -25,11 +33,67 @@ import java.util.zip.ZipFile;
 @Service
 public class IndexService {
     private final SiteService siteService;
+    private final SettingRepository settingRepository;
+
+    private final RestTemplate restTemplate;
 
 
-    public IndexService(SiteService siteService) {
+    public IndexService(SiteService siteService, SettingRepository settingRepository, RestTemplateBuilder builder) {
         this.siteService = siteService;
+        this.settingRepository = settingRepository;
+        this.restTemplate = builder
+                .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
+                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
+                .build();
         updateIndexFile();
+    }
+
+    @PostConstruct
+    public void setup() {
+        try {
+            Path path = Paths.get("/version.txt");
+            if (Files.exists(path)) {
+                List<String> lines = Files.readAllLines(path);
+                if (!lines.isEmpty()) {
+                    settingRepository.save(new Setting("index_version", lines.get(0).trim()));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        try {
+            Path path = Paths.get("/docker.version");
+            if (Files.exists(path)) {
+                List<String> lines = Files.readAllLines(path);
+                if (!lines.isEmpty()) {
+                    settingRepository.save(new Setting("docker_version", lines.get(0).trim()));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        try {
+            Path path = Paths.get("data/app_version");
+            if (Files.exists(path)) {
+                List<String> lines = Files.readAllLines(path);
+                if (!lines.isEmpty()) {
+                    settingRepository.save(new Setting("app_version", lines.get(0).trim()));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    public String getRemoteVersion() {
+        try {
+            return restTemplate.getForObject("http://docker.xiaoya.pro/update/version.txt", String.class);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return "";
     }
 
     public void updateIndexFile() {

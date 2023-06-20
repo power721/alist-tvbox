@@ -113,6 +113,16 @@ public class SubscriptionService {
         return Arrays.asList(environment.getActiveProfiles());
     }
 
+    public List<Subscription> findAll() {
+        List<Subscription> list = subscriptionRepository.findAll();
+        Subscription sub = new Subscription();
+        sub.setId(0);
+        sub.setName("默认");
+        sub.setUrl("");
+        list.add(0, sub);
+        return list;
+    }
+
     public Map<String, Object> subscription(int id) {
         String apiUrl = "";
         String override = "";

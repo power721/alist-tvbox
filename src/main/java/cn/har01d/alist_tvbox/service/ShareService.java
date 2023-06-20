@@ -354,6 +354,7 @@ public class ShareService {
             builder.command("/opt/alist/alist", "server", "--no-prefix");
             builder.directory(new File("/opt/alist"));
             Process process = builder.start();
+            settingRepository.save(new Setting("alist_start_time", Instant.now().toString()));
             if (wait) {
                 process.waitFor(30, TimeUnit.SECONDS);
                 waitAListStart();
@@ -972,6 +973,7 @@ public class ShareService {
         }
 
         log.info("{}  签到成功, 本月累计{}天", nickName, response.getBody().getResult().getSignInCount());
+        settingRepository.save(new Setting("checkin_days", String.valueOf(response.getBody().getResult().getSignInCount())));
         response.getBody().getResult().setSignInLogs(null);
         return response.getBody().getResult();
     }

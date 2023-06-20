@@ -29,6 +29,8 @@ COPY config/nginx.conf /var/lib/nginx.conf
 
 COPY target/alist-tvbox-1.0.jar ./alist-tvbox.jar
 
+COPY data/version data/app_version
+
 EXPOSE 8080
 EXPOSE 80
 

@@ -1,134 +1,173 @@
 <template>
   <div id="config">
-    <el-card class="box-card" v-if="showLogin">
-      <template #header>
-        <div class="card-header">
-          <span>AList运行状态</span>
-          <div>
-            <el-button type="primary" v-if="aListStatus===0" @click="handleAList('start')">启动</el-button>
-            <el-button type="warning" v-if="aListStatus===2" @click="handleAList('restart')">重启</el-button>
-            <el-button type="danger" v-if="aListStatus===2" @click="handleAList('stop')">停止</el-button>
+    <el-row>
+      <el-col :span="11">
+        <el-card class="box-card" v-if="showLogin">
+          <template #header>
+            <div class="card-header">
+              <span>AList运行状态</span>
+              <div>
+                <el-button type="primary" v-if="aListStatus===0" @click="handleAList('start')">启动</el-button>
+                <el-button type="warning" v-if="aListStatus===2" @click="handleAList('restart')">重启</el-button>
+                <el-button type="danger" v-if="aListStatus===2" @click="handleAList('stop')">停止</el-button>
+              </div>
+            </div>
+          </template>
+          <el-switch
+            v-model="aListStarted"
+            inline-prompt
+            :disabled="true"
+            :active-text="aListStatus===2?'运行中':'启动中'"
+            inactive-text="停止中"
+          />
+          <span class="hint" v-if="aListStartTime">启动时间：{{ formatTime(aListStartTime) }}</span>
+          <el-progress
+            :percentage="percentage"
+            :stroke-width="15"
+            status="success"
+            striped
+            striped-flow
+            :duration="duration"
+            v-if="intervalId"
+          />
+        </el-card>
+
+        <el-card class="box-card" v-if="showLogin&&aListStatus">
+          <el-form :model="login" label-width="120px" v-if="showLogin">
+            <el-form-item prop="token" label="强制登录AList">
+              <el-switch
+                v-model="login.enabled"
+                inline-prompt
+                active-text="开启"
+                inactive-text="关闭"
+              />
+            </el-form-item>
+            <el-form-item prop="username" label="用户名">
+              <el-input v-model="login.username"/>
+            </el-form-item>
+            <el-form-item prop="password" label="密码">
+              <el-input v-model="login.password" type="password" show-password/>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="updateLogin">保存</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
+        <el-card class="box-card" v-if="showLogin">
+          <el-form :model="storage" label-width="120px" v-if="showLogin">
+            <el-form-item prop="accessToken" label="阿里token">
+              <el-input v-model="storage.refreshToken" maxlength="128" placeholder="长度32位"/>
+              <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
+              <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
+              <span class="hint">更新时间： {{ formatTime(storage.refreshTokenTime) }}</span>
+            </el-form-item>
+            <el-form-item prop="openToken" label="开放token">
+              <el-input v-model="storage.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"/>
+              <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
+              <span class="hint">创建时间： {{ formatTime(iat) }}</span>
+              <span class="hint">更新时间： {{ formatTime(storage.openTokenTime) }}</span>
+              <span class="hint">过期时间： {{ formatTime(exp) }}</span>
+            </el-form-item>
+            <el-form-item prop="folderId" label="转存文件夹ID">
+              <el-input v-model="storage.folderId" placeholder="长度40位"/>
+              <a href="https://www.aliyundrive.com/drive" target="_blank">阿里云盘</a>
+            </el-form-item>
+            <el-form-item label="加载我的云盘" v-if="storage.openToken">
+              <el-switch
+                v-model="showMyAli"
+                @change="updateMyAli"
+                inline-prompt
+                active-text="加载"
+                inactive-text="关闭"
+              />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="updateStorage"
+                         :disabled="!(storage.refreshToken||storage.openToken||storage.folderId)">
+                更新
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-col>
+
+      <el-col :span="11">
+        <el-card class="box-card">
+          <el-form :model="form" label-width="120px">
+            <el-form-item prop="enabledToken" label="安全订阅">
+              <el-switch
+                v-model="form.enabledToken"
+                inline-prompt
+                active-text="开启"
+                inactive-text="关闭"
+              />
+            </el-form-item>
+            <el-form-item prop="token" label="安全Token" v-if="form.enabledToken">
+              <el-input v-model="form.token"/>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="updateToken">更新</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
+        <el-card class="box-card" v-if="showLogin&&storage.refreshToken">
+          <el-form label-width="120px" v-if="showLogin">
+            <el-form-item label="自动签到">
+              <el-switch
+                v-model="autoCheckin"
+                @change="updateAutoCheckin"
+                inline-prompt
+                active-text="开启"
+                inactive-text="关闭"
+              />
+            </el-form-item>
+            <el-form-item label="计划时间">
+              <el-time-picker v-model="scheduleTime"/>
+              <el-button type="primary" @click="updateScheduleTime">更新</el-button>
+            </el-form-item>
+            <el-form-item label="上次签到时间">
+              <el-input :model-value="formatTime(checkinTime)" readonly/>
+              <span class="hint" v-if="checkinDays">签到次数： {{ checkinDays }}</span>
+            </el-form-item>
+            <el-checkbox v-model="forceCheckin" label="强制签到"/>
+            <el-form-item>
+              <el-button type="primary" @click="checkin">签到</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
+        <el-card class="box-card" v-if="dockerVersion||appVersion">
+          <template #header>
+            <div class="card-header">应用数据</div>
+          </template>
+          <div v-if="dockerVersion">Docker版本：{{ dockerVersion }}</div>
+          <div v-if="appVersion">应用版本：{{ appVersion }}</div>
+        </el-card>
+
+        <el-card class="box-card" v-if="indexVersion">
+          <template #header>
+            <div class="card-header">索引数据</div>
+          </template>
+          <div>本地版本：{{ indexVersion }}</div>
+          <div v-if="indexRemoteVersion&&indexRemoteVersion!=indexVersion">
+            最新版本：{{ indexRemoteVersion }}，请重启更新。
           </div>
-        </div>
-      </template>
-      <el-switch
-        v-model="aListStarted"
-        inline-prompt
-        :disabled="true"
-        :active-text="aListStatus===2?'运行中':'启动中'"
-        inactive-text="停止中"
-      />
-      <el-progress
-        :percentage="percentage"
-        :stroke-width="15"
-        status="success"
-        striped
-        striped-flow
-        :duration="duration"
-        v-if="intervalId"
-      />
-    </el-card>
+        </el-card>
 
-    <el-card class="box-card">
-      <el-form :model="form" label-width="120px">
-        <el-form-item prop="enabledToken" label="安全订阅">
-          <el-switch
-            v-model="form.enabledToken"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-          />
-        </el-form-item>
-        <el-form-item prop="token" label="安全Token" v-if="form.enabledToken">
-          <el-input v-model="form.token"/>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateToken">更新</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+        <el-card class="box-card" v-if="movieVersion">
+          <template #header>
+            <div class="card-header">豆瓣电影数据</div>
+          </template>
+          <div>本地版本：{{ movieVersion }}</div>
+          <div v-if="movieRemoteVersion&&movieRemoteVersion!=movieVersion">
+            最新版本：{{ movieRemoteVersion }}，请重启更新。
+          </div>
+        </el-card>
 
-    <el-card class="box-card" v-if="showLogin&&aListStatus">
-      <el-form :model="login" label-width="120px" v-if="showLogin">
-        <el-form-item prop="token" label="强制登录AList">
-          <el-switch
-            v-model="login.enabled"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-          />
-        </el-form-item>
-        <el-form-item prop="username" label="用户名">
-          <el-input v-model="login.username"/>
-        </el-form-item>
-        <el-form-item prop="password" label="密码">
-          <el-input v-model="login.password" type="password" show-password/>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateLogin">保存</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
-    <el-card class="box-card" v-if="showLogin">
-      <el-form :model="storage" label-width="120px" v-if="showLogin">
-        <el-form-item prop="accessToken" label="阿里token">
-          <el-input v-model="storage.refreshToken" maxlength="128" placeholder="长度32位"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
-          <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
-          <span class="hint">更新时间： {{ formatTime(storage.refreshTokenTime) }}</span>
-        </el-form-item>
-        <el-form-item prop="openToken" label="开放token">
-          <el-input v-model="storage.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
-          <span class="hint">创建时间： {{ formatTime(iat) }}</span>
-          <span class="hint">更新时间： {{ formatTime(storage.openTokenTime) }}</span>
-          <span class="hint">过期时间： {{ formatTime(exp) }}</span>
-        </el-form-item>
-        <el-form-item prop="folderId" label="转存文件夹ID">
-          <el-input v-model="storage.folderId" placeholder="长度40位"/>
-          <a href="https://www.aliyundrive.com/drive" target="_blank">阿里云盘</a>
-        </el-form-item>
-        <el-form-item label="加载我的云盘" v-if="storage.openToken">
-          <el-switch
-            v-model="showMyAli"
-            @change="updateMyAli"
-            inline-prompt
-            active-text="加载"
-            inactive-text="关闭"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateStorage">更新</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
-    <el-card class="box-card" v-if="showLogin&&storage.refreshToken">
-      <el-form label-width="120px" v-if="showLogin">
-        <el-form-item label="自动签到">
-          <el-switch
-            v-model="autoCheckin"
-            @change="updateAutoCheckin"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-          />
-        </el-form-item>
-        <el-form-item label="计划时间">
-          <el-time-picker v-model="scheduleTime"/>
-          <el-button type="primary" @click="updateScheduleTime">更新</el-button>
-        </el-form-item>
-        <el-form-item label="上次签到时间">
-          <el-input :model-value="formatTime(checkinTime)" readonly/>
-        </el-form-item>
-        <el-checkbox v-model="forceCheckin" label="强制签到"/>
-        <el-form-item>
-          <el-button type="primary" @click="checkin">签到</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -154,7 +193,15 @@ const showLogin = ref(false)
 const forceCheckin = ref(false)
 const autoCheckin = ref(false)
 const showMyAli = ref(false)
+const appVersion = ref('')
+const dockerVersion = ref('')
+const indexVersion = ref('')
+const indexRemoteVersion = ref('')
+const movieVersion = ref('')
+const movieRemoteVersion = ref('')
+const aListStartTime = ref('')
 const checkinTime = ref('')
+const checkinDays = ref(0)
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const iat = ref(0)
 const exp = ref(0)
@@ -273,6 +320,12 @@ onMounted(() => {
         form.value.enabledToken = data.token != ''
         scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
         checkinTime.value = data.checkin_time
+        checkinDays.value = data.checkin_days
+        aListStartTime.value = data.alist_start_time
+        movieVersion.value = data.movie_version
+        indexVersion.value = data.index_version
+        dockerVersion.value = data.docker_version
+        appVersion.value = data.app_version
         autoCheckin.value = data.auto_checkin === 'true'
         showMyAli.value = data.show_my_ali === 'true'
         login.value.username = data.alist_username
@@ -295,14 +348,20 @@ onMounted(() => {
           intervalId = setInterval(getAListStatus, 1000)
         }
       })
+      axios.get('/movie/version').then(({data}) => {
+        movieRemoteVersion.value = data.version
+      })
+      axios.get('/index/version').then(({data}) => {
+        indexRemoteVersion.value = data.version
+      })
     }
   })
 })
 </script>
 
 <style>
-#config {
-  max-width: 1080px;
+.el-col {
+  margin-left: 24px;
 }
 
 .hint {

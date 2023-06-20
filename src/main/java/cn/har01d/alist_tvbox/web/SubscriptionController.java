@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.Subscription;
 import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
+import cn.har01d.alist_tvbox.service.SubscriptionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,9 +19,11 @@ import java.util.List;
 @RequestMapping("/subscriptions")
 public class SubscriptionController {
     private final SubscriptionRepository subscriptionRepository;
+    private final SubscriptionService subscriptionService;
 
-    public SubscriptionController(SubscriptionRepository subscriptionRepository) {
+    public SubscriptionController(SubscriptionRepository subscriptionRepository, SubscriptionService subscriptionService) {
         this.subscriptionRepository = subscriptionRepository;
+        this.subscriptionService = subscriptionService;
     }
 
     @PostMapping
@@ -30,11 +33,14 @@ public class SubscriptionController {
 
     @GetMapping
     public List<Subscription> findAll() {
-        return subscriptionRepository.findAll();
+        return subscriptionService.findAll();
     }
 
     @DeleteMapping("/{id}")
     public void deleteById(@PathVariable Integer id) {
+        if (id == 0) {
+            return;
+        }
         subscriptionRepository.deleteById(id);
     }
 
