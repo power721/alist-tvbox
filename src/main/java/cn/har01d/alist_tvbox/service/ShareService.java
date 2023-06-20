@@ -940,6 +940,7 @@ public class ShareService {
         Map<Object, Object> map = getAliToken(refreshToken);
         String accessToken = (String) map.get("access_token");
         String nickName = (String) map.get("nick_name");
+        settingRepository.save(new Setting("nick_name", nickName));
 
         refreshToken = (String) map.get("refresh_token");
         settingRepository.save(new Setting("refresh_token", refreshToken));

@@ -34,16 +34,14 @@ import java.util.zip.ZipFile;
 public class IndexService {
     private final SiteService siteService;
     private final SettingRepository settingRepository;
-
     private final RestTemplate restTemplate;
-
 
     public IndexService(SiteService siteService, SettingRepository settingRepository, RestTemplateBuilder builder) {
         this.siteService = siteService;
         this.settingRepository = settingRepository;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
-                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
+                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT1)
                 .build();
         updateIndexFile();
     }

@@ -6,6 +6,10 @@
       <a href="https://github.com/power721/alist-tvbox" target="_blank">https://github.com/power721/alist-tvbox</a>
     </p>
     <p>
+      中文文档：
+      <a href="https://github.com/power721/alist-tvbox/blob/master/doc/README_zh.md" target="_blank">https://github.com/power721/alist-tvbox/blob/master/doc/README_zh.md</a>
+    </p>
+    <p>
       AList：
       <a href="https://alist.nn.ci/" target="_blank">https://alist.nn.ci/</a>
     </p>

@@ -129,7 +129,7 @@
             </el-form-item>
             <el-form-item label="上次签到时间">
               <el-input :model-value="formatTime(checkinTime)" readonly/>
-              <span class="hint" v-if="checkinDays">签到次数： {{ checkinDays }}</span>
+              <span class="hint" v-if="checkinDays">{{nickname}} 本月签到{{ checkinDays }}次</span>
             </el-form-item>
             <el-checkbox v-model="forceCheckin" label="强制签到"/>
             <el-form-item>
@@ -193,6 +193,7 @@ const showLogin = ref(false)
 const forceCheckin = ref(false)
 const autoCheckin = ref(false)
 const showMyAli = ref(false)
+const nickname = ref('')
 const appVersion = ref('')
 const dockerVersion = ref('')
 const indexVersion = ref('')
@@ -326,6 +327,7 @@ onMounted(() => {
         indexVersion.value = data.index_version
         dockerVersion.value = data.docker_version
         appVersion.value = data.app_version
+        nickname.value = data.nick_name
         autoCheckin.value = data.auto_checkin === 'true'
         showMyAli.value = data.show_my_ali === 'true'
         login.value.username = data.alist_username
