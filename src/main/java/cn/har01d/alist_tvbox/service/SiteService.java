@@ -15,6 +15,9 @@ import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
 import java.io.File;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -39,11 +42,10 @@ public class SiteService {
 
     @PostConstruct
     public void init() {
+        boolean sp = Arrays.asList(environment.getActiveProfiles()).contains("xiaoya");
         if (siteRepository.count() > 0) {
-            if (Arrays.asList(environment.getActiveProfiles()).contains("xiaoya")) {
-                siteRepository.findById(1).ifPresent(site -> {
-                    updateUserToken(site);
-                });
+            if (sp) {
+                siteRepository.findById(1).ifPresent(this::updateUserToken);
             }
             return;
         }
@@ -61,6 +63,38 @@ public class SiteService {
             site.setOrder(order++);
             siteRepository.save(site);
             log.info("save site to database: {}", site);
+        }
+
+        if (sp) {
+            readAList(order);
+        }
+    }
+
+    private void readAList(int order) {
+        Path path = Paths.get("/data/alist_list.txt");
+        if (Files.exists(path)) {
+            try {
+                log.info("loading site list from file");
+                List<String> lines = Files.readAllLines(path);
+                for (String line : lines) {
+                    String[] parts = line.trim().split("\\s+");
+                    if (parts.length == 4) {
+                        try {
+                            Site site = new Site();
+                            site.setName(parts[0]);
+                            site.setVersion(Integer.parseInt(parts[1].replace("v", "")));
+                            site.setUrl(parts[2]);
+                            site.setOrder(order++);
+                            siteRepository.save(site);
+                            log.info("save site to database: {}", site);
+                        } catch (Exception e) {
+                            log.warn("", e);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
         }
     }
 

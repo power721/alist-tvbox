@@ -202,6 +202,7 @@ public class SubscriptionService {
                 Set<String> set = new HashSet<>((List<String>) obj1);
                 list = list.stream().filter(e -> !set.contains(e.get("key"))).collect(Collectors.toList());
                 config.put("sites", list);
+                log.info("remove sites: {}", set);
             }
             config.remove("sites-blacklist");
         } catch (Exception e) {

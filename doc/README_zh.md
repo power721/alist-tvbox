@@ -64,12 +64,12 @@ EOF
 ### 其它
 不再生效的文件都可以删除。
 
-guestpass.txt和guestlogin.txt不再生效，请在界面配置用户名和密码。
+guestpass.txt和guestlogin.txt第一次启动时加载，以后不再生效，请在界面配置。
 
-show_my_ali.txt不再生效，请在界面配置是否加载阿里云盘。
+show_my_ali.txt第一次启动时加载，以后不再生效，请在界面配置是否加载阿里云盘。
 
 docker_address.txt不再生效，请使用订阅API。
 
-alist_list.txt不再生效，请在界面添加站点。
+alist_list.txt第一次启动时加载，以后不再生效，请在界面添加站点。
 
 proxy.txt还是生效的。

@@ -67,7 +67,7 @@ public class TextUtils {
             m = NUMBER2.matcher(newName);
             if (m.find()) {
                 String text = m.group(1);
-                if (newName.charAt(m.start() - 1) != ' ') {
+                if (newName.length() > m.start() -1 && newName.charAt(m.start() - 1) != ' ') {
                     newName = newName.replace(text, " " + text);
                 }
             }

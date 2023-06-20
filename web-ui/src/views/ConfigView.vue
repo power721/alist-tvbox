@@ -48,7 +48,7 @@
       </el-form>
     </el-card>
 
-    <el-card class="box-card" v-if="showLogin">
+    <el-card class="box-card" v-if="showLogin&&aListStatus">
       <el-form :model="login" label-width="120px" v-if="showLogin">
         <el-form-item prop="token" label="强制登录AList">
           <el-switch
@@ -104,7 +104,7 @@
       </el-form>
     </el-card>
 
-    <el-card class="box-card" v-if="showLogin">
+    <el-card class="box-card" v-if="showLogin&&storage.refreshToken">
       <el-form label-width="120px" v-if="showLogin">
         <el-form-item label="自动签到">
           <el-switch

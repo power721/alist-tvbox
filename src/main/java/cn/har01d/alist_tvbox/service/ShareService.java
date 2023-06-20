@@ -95,13 +95,18 @@ public class ShareService {
     public void setup() {
         scheduleAutoCheckinTime();
 
-        readAccessToken();
+        boolean init = readAccessToken();
         readOpenToken();
         readFolderId();
 
         boolean auto = settingRepository.findById("auto_checkin").map(Setting::getValue).map(Boolean::valueOf).orElse(false);
-        if (!auto) {
+        if (!init && !auto) {
             new Thread(() -> checkin(false)).start();
+        }
+
+        if (init) {
+            readLogin();
+            readShowMyAli();
         }
 
         List<Share> list = shareRepository.findAll();
@@ -177,6 +182,45 @@ public class ShareService {
             }
         } catch (Exception e) {
             log.warn("", e);
+        }
+    }
+
+    private void readLogin() {
+        try {
+            String password = settingRepository.findById("alist_password").map(Setting::getValue).orElse(null);
+            if (password != null) {
+                return;
+            }
+
+            AListLogin login = new AListLogin();
+            Path pass = Paths.get("/data/guestpass.txt");
+            if (Files.exists(pass)) {
+                List<String> lines = Files.readAllLines(pass);
+                if (!lines.isEmpty()) {
+                    login.setUsername("guest");
+                    login.setPassword(lines.get(0));
+                    login.setEnabled(true);
+                }
+            }
+
+            Path guest = Paths.get("/data/guestlogin.txt");
+            if (Files.exists(guest)) {
+                login.setUsername("dav");
+                login.setEnabled(true);
+            }
+
+            if (login.isEnabled()) {
+                updateLogin(login);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    private void readShowMyAli() {
+        Path show = Paths.get("/data/show_my_ali.txt");
+        if (Files.exists(show)) {
+            showMyAli(true);
         }
     }
 
@@ -441,10 +485,10 @@ public class ShareService {
         return "\uD83C\uDE34我的阿里分享/" + path;
     }
 
-    private void readAccessToken() {
+    private boolean readAccessToken() {
         refreshToken = settingRepository.findById("refresh_token").map(Setting::getValue).orElse(null);
         if (refreshToken != null) {
-            return;
+            return false;
         }
 
         Path path = Paths.get("/data/mytoken.txt");
@@ -455,11 +499,13 @@ public class ShareService {
                     String token = lines.get(0).trim();
                     settingRepository.save(new Setting("refresh_token", token));
                     refreshToken = token;
+                    return true;
                 }
             } catch (Exception e) {
                 log.warn("", e);
             }
         }
+        return false;
     }
 
     private void readOpenToken() {
@@ -878,6 +924,9 @@ public class ShareService {
     }
 
     public CheckinResult checkin(boolean force) {
+        if (StringUtils.isBlank(refreshToken)) {
+            return null;
+        }
         if (!force) {
             validateCheckinTime();
         }
