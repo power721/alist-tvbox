@@ -1,14 +1,31 @@
-FROM amazoncorretto:11-alpine as corretto-jdk
+FROM amazoncorretto:17-alpine as corretto-deps
 
-RUN apk add --no-cache binutils
+COPY target/alist-tvbox-1.0.jar /app/app.jar
 
-RUN jlink \
---add-modules ALL-MODULE-PATH \
---strip-debug \
---no-man-pages \
---no-header-files \
---compress=2 \
---output /jre
+RUN unzip /app/app.jar -d temp &&  \
+    jdeps  \
+      --print-module-deps \
+      --ignore-missing-deps \
+      --recursive \
+      --multi-release 17 \
+      --class-path="./temp/BOOT-INF/lib/*" \
+      --module-path="./temp/BOOT-INF/lib/*" \
+      /app/app.jar > /modules.txt
+
+FROM amazoncorretto:17-alpine as corretto-jdk
+
+COPY --from=corretto-deps /modules.txt /modules.txt
+
+# hadolint ignore=DL3018,SC2046
+RUN apk add --no-cache binutils && \
+    jlink \
+     --verbose \
+     --add-modules "$(cat /modules.txt),jdk.crypto.ec,jdk.crypto.cryptoki" \
+     --strip-debug \
+     --no-man-pages \
+     --no-header-files \
+     --compress=2 \
+     --output /jre
 
 FROM xiaoyaliu/alist:latest
 
@@ -23,7 +40,7 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY docker-entrypoint.sh /entrypoint.sh
+COPY entrypoint.sh /
 
 COPY config/nginx.conf /var/lib/nginx.conf
 

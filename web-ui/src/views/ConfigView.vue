@@ -1,6 +1,6 @@
 <template>
   <div id="config">
-    <el-row>
+    <el-row v-if="showLogin">
       <el-col :span="11">
         <el-card class="box-card" v-if="showLogin">
           <template #header>
@@ -129,7 +129,7 @@
             </el-form-item>
             <el-form-item label="上次签到时间">
               <el-input :model-value="formatTime(checkinTime)" readonly/>
-              <span class="hint" v-if="checkinDays">{{nickname}} 本月签到{{ checkinDays }}次</span>
+              <span class="hint" v-if="checkinDays">{{ nickname }} 本月签到{{ checkinDays }}次</span>
             </el-form-item>
             <el-checkbox v-model="forceCheckin" label="强制签到"/>
             <el-form-item>
@@ -144,6 +144,9 @@
           </template>
           <div v-if="dockerVersion">Docker版本：{{ dockerVersion }}</div>
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
+          <div v-if="appRemoteVersion&&appRemoteVersion!=appVersion">
+            最新版本：{{ appRemoteVersion }}，请升级应用。
+          </div>
         </el-card>
 
         <el-card class="box-card" v-if="indexVersion">
@@ -162,12 +165,34 @@
           </template>
           <div>本地版本：{{ movieVersion }}</div>
           <div v-if="movieRemoteVersion&&movieRemoteVersion!=movieVersion">
-            最新版本：{{ movieRemoteVersion }}，请重启更新。
+            最新版本：{{ movieRemoteVersion }}，请升级应用。
           </div>
         </el-card>
 
       </el-col>
     </el-row>
+
+    <div class="main" v-else>
+      <el-card class="box-card">
+        <el-form :model="form" label-width="120px">
+          <el-form-item prop="enabledToken" label="安全订阅">
+            <el-switch
+              v-model="form.enabledToken"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+            />
+          </el-form-item>
+          <el-form-item prop="token" label="安全Token" v-if="form.enabledToken">
+            <el-input v-model="form.token"/>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="updateToken">更新</el-button>
+          </el-form-item>
+        </el-form>
+      </el-card>
+    </div>
+
   </div>
 </template>
 
@@ -195,6 +220,7 @@ const autoCheckin = ref(false)
 const showMyAli = ref(false)
 const nickname = ref('')
 const appVersion = ref('')
+const appRemoteVersion = ref('')
 const dockerVersion = ref('')
 const indexVersion = ref('')
 const indexRemoteVersion = ref('')
@@ -350,11 +376,10 @@ onMounted(() => {
           intervalId = setInterval(getAListStatus, 1000)
         }
       })
-      axios.get('/movie/version').then(({data}) => {
-        movieRemoteVersion.value = data.version
-      })
-      axios.get('/index/version').then(({data}) => {
-        indexRemoteVersion.value = data.version
+      axios.get('/versions').then(({data}) => {
+        movieRemoteVersion.value = data.movie
+        indexRemoteVersion.value = data.index
+        appRemoteVersion.value = data.app
       })
     }
   })
@@ -362,6 +387,10 @@ onMounted(() => {
 </script>
 
 <style>
+.main {
+  max-width: 1080px;
+}
+
 .el-col {
   margin-left: 24px;
 }

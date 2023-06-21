@@ -11,6 +11,7 @@ npm run build || exit 1
 cd .. && \
 git add src/main/resources/static
 
+cp data/data.sql src/main/resources/
 cp src/main/resources/application.yaml application-backup.yaml
 sed -i '/- name: 本地/,+2d' src/main/resources/application.yaml
 sed -i '/sites:/r add.txt' src/main/resources/application.yaml
@@ -18,6 +19,7 @@ sed -i '/- name: 本地/,+3d' src/main/resources/application.yaml
 mvn clean package || exit 1
 
 mv application-backup.yaml src/main/resources/application.yaml
+rm -f src/main/resources/data.sql
 
 date +%j.%H.%M > data/version
 docker build --tag=haroldli/alist-tvbox:latest .

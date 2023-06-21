@@ -25,9 +25,9 @@ if [[ -f /data/proxy.txt ]] && [[ -s /data/proxy.txt ]]; then
 fi
 
 echo "download data.zip" && \
-wget http://d.har01d.cn/data.zip -O /tmp/data.zip && \
-unzip -q -o /tmp/data.zip && \
-mv data/data.sql config && \
-mv data/version data/movie_version
+wget http://d.har01d.cn/data.zip -O data.zip && \
+unzip -q -o data.zip && \
+cat data/movie_version && \
+rm -f data.zip
 
 java -jar alist-tvbox.jar --spring.profiles.active=production,xiaoya

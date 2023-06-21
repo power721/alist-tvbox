@@ -64,11 +64,22 @@ public class DoubanService {
         } catch (Exception e) {
             log.warn("", e);
         }
+        log.info("total {} metas", metaRepository.count());
+        log.info("total {} movies", movieRepository.count());
     }
 
     public String getRemoteVersion() {
         try {
-            return restTemplate.getForObject("http://d.har01d.cn/version", String.class);
+            return restTemplate.getForObject("http://d.har01d.cn/movie_version", String.class);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return "";
+    }
+
+    public String getAppRemoteVersion() {
+        try {
+            return restTemplate.getForObject("http://d.har01d.cn/app_version", String.class);
         } catch (Exception e) {
             log.warn("", e);
         }

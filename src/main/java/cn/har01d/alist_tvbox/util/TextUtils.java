@@ -43,7 +43,15 @@ public class TextUtils {
             }
         }
 
-        newName = newName.replace("普通话版", "");
+        int start = newName.indexOf('《');
+        if (start > -1) {
+            int end = newName.indexOf('》', index + 1);
+            if (end > start) {
+                newName = newName.substring(start + 1, end);
+            }
+        }
+
+        newName = newName.replace("普通话版", "").replace("合集", "");
 
         Matcher m = NUMBER.matcher(newName);
         if (m.find()) {
@@ -67,7 +75,7 @@ public class TextUtils {
             m = NUMBER2.matcher(newName);
             if (m.find()) {
                 String text = m.group(1);
-                if (newName.length() > m.start() -1 && newName.charAt(m.start() - 1) != ' ') {
+                if (newName.charAt(m.start() - 1) != ' ') {
                     newName = newName.replace(text, " " + text);
                 }
             }
