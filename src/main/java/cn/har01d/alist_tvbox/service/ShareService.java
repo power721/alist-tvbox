@@ -77,6 +77,7 @@ public class ShareService {
     private String openToken;
     private String folderId;
     private volatile boolean started;
+    private volatile int aListStatus;
     private volatile int shareId = 5000;
 
     public ShareService(ObjectMapper objectMapper,
@@ -269,6 +270,9 @@ public class ShareService {
                         share.setPath(parts[0]);
                         share.setShareId(parts[1]);
                         share.setFolderId(parts[2]);
+                        if (shareRepository.existsByPath(share.getPath())) {
+                            continue;
+                        }
                         create(share);
                         count++;
                         shareId++;
@@ -360,6 +364,7 @@ public class ShareService {
             }
             log.info("AList server started");
             started = true;
+            aListStatus = 1;
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
@@ -406,9 +411,11 @@ public class ShareService {
             if (response.getBody() != null) {
                 if (response.getBody().getCode() == 200) {
                     started = true;
+                    aListStatus = 2;
                     return 2;
                 } else if (response.getBody().getCode() == 500) {
                     started = true;
+                    aListStatus = 2;
                     return 1;
                 }
             } else {
@@ -417,6 +424,7 @@ public class ShareService {
         } catch (Exception e) {
             log.warn("", e);
         }
+        aListStatus = 0;
         return 0;
     }
 
@@ -557,7 +565,17 @@ public class ShareService {
         return shareRepository.findAll(pageable);
     }
 
+    private void validateAListStatus() {
+        if (aListStatus == 1) {
+            throw new BadRequestException("AList服务启动中");
+        }
+        if (aListStatus == 0) {
+            throw new BadRequestException("AList服务未启动");
+        }
+    }
+
     public Share create(Share share) {
+        validateAListStatus();
         validate(share);
 
         Connection connection = null;
@@ -587,6 +605,7 @@ public class ShareService {
     }
 
     public Share update(Integer id, Share share) {
+        validateAListStatus();
         validate(share);
 
         share.setId(id);
@@ -658,6 +677,7 @@ public class ShareService {
     }
 
     public void deleteShares(List<Integer> ids) {
+        validateAListStatus();
         for (Integer id : ids) {
             try {
                 shareRepository.deleteById(id);
@@ -670,6 +690,7 @@ public class ShareService {
     }
 
     public void delete(Integer id) {
+        validateAListStatus();
         shareRepository.deleteById(id);
         String token = login();
         deleteStorage(id, token);
@@ -760,6 +781,7 @@ public class ShareService {
     }
 
     public void updateLogin(AListLogin login) {
+        validateAListStatus();
         if (login.isEnabled()) {
             if (StringUtils.isBlank(login.getUsername())) {
                 throw new BadRequestException("缺少用户名");
@@ -921,6 +943,7 @@ public class ShareService {
     }
 
     public Object listStorages(Pageable pageable) {
+        validateAListStatus();
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(login()));
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
@@ -1003,6 +1026,7 @@ public class ShareService {
     }
 
     public void showMyAli(boolean enabled, boolean start) {
+        validateAListStatus();
         settingRepository.save(new Setting("show_my_ali", String.valueOf(enabled)));
 
         String token = start ? "" : login();

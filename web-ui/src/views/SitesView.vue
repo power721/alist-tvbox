@@ -173,7 +173,7 @@ const form = ref({
   xiaoya: false,
   indexFile: '',
   disabled: false,
-  order: 0,
+  order: 1,
   version: null,
 })
 

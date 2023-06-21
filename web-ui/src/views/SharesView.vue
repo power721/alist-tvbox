@@ -46,7 +46,7 @@
         <el-input v-model="form.password" autocomplete="off"/>
       </el-form-item>
       <el-form-item label="文件夹ID" label-width="140">
-        <el-input v-model="form.folderId" autocomplete="off"/>
+        <el-input v-model="form.folderId" autocomplete="off" placeholder="默认为根目录"/>
       </el-form-item>
       <span v-if="form.path">完整路径： {{fullPath(form.path)}}</span>
     </el-form>
