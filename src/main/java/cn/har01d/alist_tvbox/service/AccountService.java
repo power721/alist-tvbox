@@ -581,7 +581,7 @@ public class AccountService {
     }
 
     public Account create(AccountDto dto) {
-        long count = validate(dto);
+        long count = validateCreate(dto);
         Account account = new Account();
         account.setId((int) count + 1);
         account.setRefreshToken(dto.getRefreshToken());
@@ -599,6 +599,14 @@ public class AccountService {
         log.info("refresh tokens for account {}", account);
         refreshAccountTokens(account);
         return account;
+    }
+
+    private long validateCreate(AccountDto dto) {
+        long count = validate(dto);
+        if (StringUtils.isNotBlank(dto.getRefreshToken()) && (accountRepository.existsByRefreshToken(dto.getRefreshToken()))) {
+            throw new BadRequestException("阿里token重复");
+        }
+        return count;
     }
 
     private void refreshAccountTokens(Account account) {
@@ -676,9 +684,9 @@ public class AccountService {
     }
 
     public Account update(Integer id, AccountDto dto) {
-        validate(dto);
-        Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
+        validateUpdate(id, dto);
 
+        Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
         if (account.isShowMyAli() != dto.isShowMyAli()) {
             showMyAli(account, dto.isShowMyAli());
         }
@@ -705,6 +713,16 @@ public class AccountService {
         }
 
         return accountRepository.save(account);
+    }
+
+    private void validateUpdate(Integer id, AccountDto dto) {
+        validate(dto);
+        if (StringUtils.isNotBlank(dto.getRefreshToken())) {
+            Account other = accountRepository.findByRefreshToken(dto.getRefreshToken());
+            if (other != null && !id.equals(other.getId())) {
+                throw new BadRequestException("阿里token重复");
+            }
+        }
     }
 
     public void showMyAli(Account account, boolean enabled) {

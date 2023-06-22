@@ -93,7 +93,7 @@
           </template>
           <div v-if="dockerVersion">小雅版本：{{ dockerVersion }}</div>
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
-          <div v-if="appRemoteVersion&&appRemoteVersion!=appVersion">
+          <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
             最新版本：{{ appRemoteVersion }}，请升级应用。
           </div>
         </el-card>
@@ -103,7 +103,7 @@
             <div class="card-header">索引数据</div>
           </template>
           <div>本地版本：{{ indexVersion }}</div>
-          <div v-if="indexRemoteVersion&&indexRemoteVersion!=indexVersion">
+          <div v-if="indexRemoteVersion&&indexRemoteVersion>indexVersion">
             最新版本：{{ indexRemoteVersion }}，请重启更新。
           </div>
         </el-card>
@@ -113,7 +113,7 @@
             <div class="card-header">豆瓣电影数据</div>
           </template>
           <div>本地版本：{{ movieVersion }}</div>
-          <div v-if="movieRemoteVersion&&movieRemoteVersion!=movieVersion">
+          <div v-if="movieRemoteVersion&&movieRemoteVersion>movieVersion">
             最新版本：{{ movieRemoteVersion }}，请升级应用。
           </div>
         </el-card>
@@ -144,13 +144,13 @@ const aListStatus = ref(0)
 const aListStarted = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
-const appVersion = ref('')
-const appRemoteVersion = ref('')
-const dockerVersion = ref('')
-const indexVersion = ref('')
-const indexRemoteVersion = ref('')
-const movieVersion = ref('')
-const movieRemoteVersion = ref('')
+const appVersion = ref(0)
+const appRemoteVersion = ref(0)
+const dockerVersion = ref(0)
+const indexVersion = ref(0)
+const indexRemoteVersion = ref(0)
+const movieVersion = ref(0)
+const movieRemoteVersion = ref(0)
 const aListStartTime = ref('')
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const login = ref({
@@ -225,10 +225,10 @@ onMounted(() => {
         form.value.enabledToken = data.token != ''
         scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
         aListStartTime.value = data.alist_start_time
-        movieVersion.value = data.movie_version
-        indexVersion.value = data.index_version
-        dockerVersion.value = data.docker_version
-        appVersion.value = data.app_version
+        movieVersion.value = +data.movie_version
+        indexVersion.value = +data.index_version
+        dockerVersion.value = +data.docker_version
+        appVersion.value = +data.app_version
         autoCheckin.value = data.auto_checkin === 'true'
         login.value.username = data.alist_username
         login.value.password = data.alist_password
@@ -243,9 +243,9 @@ onMounted(() => {
         }
       })
       axios.get('/versions').then(({data}) => {
-        movieRemoteVersion.value = data.movie
-        indexRemoteVersion.value = data.index
-        appRemoteVersion.value = data.app
+        movieRemoteVersion.value = +data.movie
+        indexRemoteVersion.value = +data.index
+        appRemoteVersion.value = +data.app
       })
     }
   })
