@@ -23,7 +23,9 @@ public class SettingController {
 
     @GetMapping
     public Map<String, String> findAll() {
-        return settingRepository.findAll().stream().collect(Collectors.toMap(Setting::getName, Setting::getValue));
+        Map<String, String> map = settingRepository.findAll().stream().collect(Collectors.toMap(Setting::getName, Setting::getValue));
+        map.remove("atv_password");
+        return map;
     }
 
     @GetMapping("/{name}")

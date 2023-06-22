@@ -19,6 +19,8 @@ curl -s http://d.har01d.cn/update_xiaoya.sh | sudo bash
 
 小雅版默认添加了站点：`http://localhost`，如果配置有域名，自行修改地址。
 
+访问AList，请加端口5244，http://your-ip:5244/
+
 自己可以添加三方站点，取代了xiaoya的套娃。会自动识别版本，如果不能正确识别，请手动配置版本。
 
 ![添加站点](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_site_config.png)
@@ -33,6 +35,13 @@ EOF
 ```
 
 ![站点数据](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_site_data.png)
+
+### 账号
+![账号列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account.png)
+
+第一次启动会自动读取/data/mytoken.txt,/data/myopentoken.txt,/data/temp_transfer_folder_id.txt里面的内容，以后这些文件不再生效。
+
+![账号详情](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_detail.png)
 
 ### 订阅
 ![订阅列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub.png)
@@ -59,12 +68,12 @@ EOF
 
 开启安全订阅，在订阅URL、点播API、播放API加上Token，防止被别人扫描。
 
-第一次启动会自动读取/data/mytoken.txt,/data/myopentoken.txt,/data/temp_transfer_folder_id.txt里面的内容，以后这些文件不再生效。
+强制登录AList后，连接webdav需要使用下面的用户名和密码。
 
 阿里token和开放token每天会刷新，时间和自动签到时间一致。即使没有开启自动签到，也会刷新。
 
 ### 其它
-不再生效的文件都可以删除。
+不再生效的文件可以保留，以后删除数据库后可以恢复。
 
 guestpass.txt和guestlogin.txt第一次启动时加载，以后不再生效，请在界面配置。
 
@@ -74,4 +83,4 @@ docker_address.txt不再生效，请使用订阅API。
 
 alist_list.txt第一次启动时加载，以后不再生效，请在界面添加站点。
 
-proxy.txt还是生效的。
+proxy.txt、pikpak.txt、my.json、iptv.m3u还是生效的。

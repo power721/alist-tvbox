@@ -144,10 +144,10 @@ public class AccountService {
     }
 
     private String generatePassword() {
-        Setting setting = settingRepository.findById("user_password").orElse(null);
+        Setting setting = settingRepository.findById("atv_password").orElse(null);
         if (setting == null) {
             log.info("generate new password");
-            setting = new Setting("user_password", IdUtils.generate(12));
+            setting = new Setting("atv_password", IdUtils.generate(12));
             settingRepository.save(setting);
         }
         return setting.getValue();
@@ -209,6 +209,8 @@ public class AccountService {
             }
 
             AListLogin login = new AListLogin();
+            login.setUsername("guest");
+            login.setPassword("guest_Api789");
             Path pass = Paths.get("/data/guestpass.txt");
             if (Files.exists(pass)) {
                 log.info("read guest password from file");
@@ -227,9 +229,9 @@ public class AccountService {
                 login.setEnabled(true);
             }
 
-            if (login.isEnabled()) {
-                updateLogin(login);
-            }
+            settingRepository.save(new Setting("alist_username", login.getUsername()));
+            settingRepository.save(new Setting("alist_password", login.getPassword()));
+            settingRepository.save(new Setting("alist_login", String.valueOf(login.isEnabled())));
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -376,7 +378,7 @@ public class AccountService {
                         name += (id - 9999);
                     }
                     if (account.isShowMyAli()) {
-                        log.info("enable ali for account: {}");
+                        log.info("enable AList storage {}", id, name);
                         sql = "INSERT INTO x_storages VALUES(" + id + ",'/" + name + "',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         log.info("add AList storage {} {}", id, name);
                     } else {
@@ -435,7 +437,7 @@ public class AccountService {
 
     public String login() {
         String username = "atv";
-        String password = settingRepository.findById("user_password").map(Setting::getValue).orElseThrow(BadRequestException::new);
+        String password = settingRepository.findById("atv_password").map(Setting::getValue).orElseThrow(BadRequestException::new);
         LoginRequest request = new LoginRequest();
         request.setUsername(username);
         request.setPassword(password);
