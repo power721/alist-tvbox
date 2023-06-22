@@ -113,7 +113,6 @@ public class AccountService {
             if (!StringUtils.isAllBlank(refreshToken, openToken, folderId)) {
                 accountRepository.save(account);
             }
-            addAdminUser();
             readLogin();
         }
 
@@ -131,6 +130,7 @@ public class AccountService {
             }
         }
         enableLogin();
+        addAdminUser();
     }
 
     private void addAdminUser() {
@@ -583,6 +583,7 @@ public class AccountService {
     public Account create(AccountDto dto) {
         long count = validate(dto);
         Account account = new Account();
+        account.setId((int) count + 1);
         account.setRefreshToken(dto.getRefreshToken());
         account.setOpenToken(dto.getOpenToken());
         account.setFolderId(dto.getFolderId());
@@ -594,6 +595,7 @@ public class AccountService {
         }
 
         accountRepository.save(account);
+        showMyAli(account, account.isShowMyAli());
         log.info("refresh tokens for account {}", account);
         refreshAccountTokens(account);
         return account;
@@ -601,21 +603,25 @@ public class AccountService {
 
     private void refreshAccountTokens(Account account) {
         try {
-            if (account.getOpenToken() != null) {
+            if (StringUtils.isNotBlank(account.getOpenToken())) {
                 log.info("update open token: {}", account.getId());
                 account.setOpenToken(getAliOpenToken(account.getOpenToken()));
                 account.setOpenTokenTime(Instant.now());
             }
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            throw e;
         } catch (Exception e) {
             log.warn("", e);
         }
 
         try {
-            if (account.getRefreshToken() != null) {
+            if (StringUtils.isNotBlank(account.getRefreshToken())) {
                 log.info("update refresh token: {}", account.getId());
                 account.setRefreshToken((String) getAliToken(account.getRefreshToken()).get("refresh_token"));
                 account.setRefreshTokenTime(Instant.now());
             }
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            throw e;
         } catch (Exception e) {
             log.warn("", e);
         }

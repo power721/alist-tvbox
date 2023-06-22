@@ -4,6 +4,9 @@ spring:
     username: sa
     password: password
     driverClassName: org.h2.Driver
+  sql:
+    init:
+      data-locations: file:/opt/atv/data/data.sql
 
 app:
   sites:

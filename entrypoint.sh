@@ -2,6 +2,7 @@
 
 /updateall
 
+ln -sf /data/config
 mv /var/lib/nginx.conf /etc/nginx/http.d/default.conf
 
 /bin/busybox-extras httpd -p 81 -h /www
@@ -30,4 +31,10 @@ unzip -q -o data.zip && \
 cat data/movie_version && \
 rm -f data.zip
 
-java -jar alist-tvbox.jar --spring.profiles.active=production,xiaoya
+if [ -f /data/cmd.sql ]; then
+  cat /data/cmd.sql >> data/data.sql
+  rm -f /data/cmd.sql
+fi
+
+unzip -q -o app.jar && rm -f app.jar
+java -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication --spring.profiles.active=production,xiaoya

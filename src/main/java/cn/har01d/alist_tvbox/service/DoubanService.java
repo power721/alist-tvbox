@@ -64,8 +64,6 @@ public class DoubanService {
         } catch (Exception e) {
             log.warn("", e);
         }
-        log.info("total {} metas", metaRepository.count());
-        log.info("total {} movies", movieRepository.count());
     }
 
     public String getRemoteVersion() {

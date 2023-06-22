@@ -21,7 +21,11 @@
         </template>
       </el-table-column>
       <el-table-column prop="checkinDays" label="签到次数" width="90"/>
-      <el-table-column prop="checkinTime" label="上次签到时间"/>
+      <el-table-column prop="checkinTime" label="上次签到时间">
+        <template #default="scope">
+          {{formatTime(scope.row.checkinTime)}}
+        </template>
+      </el-table-column>
       <el-table-column prop="showMyAli" label="加载我的云盘？" width="150">
         <template #default="scope">
           <el-icon v-if="scope.row.showMyAli">
@@ -44,10 +48,13 @@
       <el-form :model="form">
         <el-form-item label="阿里token" label-width="140">
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位" autocomplete="off"/>
+          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
+          <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
         </el-form-item>
         <el-form-item label="开放token" label-width="140">
           <el-input v-model="form.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"
                     autocomplete="off"/>
+          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
         </el-form-item>
         <el-form-item label="转存文件夹ID" label-width="140">
           <el-input v-model="form.folderId" placeholder="长度40位" autocomplete="off"/>

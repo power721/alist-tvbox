@@ -85,6 +85,7 @@ public class AListLocalService {
     }
 
     public void validateAListStatus() {
+        getAListStatus();
         if (aListStatus == 1) {
             throw new BadRequestException("AList服务启动中");
         }
@@ -101,7 +102,7 @@ public class AListLocalService {
                     aListStatus = 2;
                     return 2;
                 } else if (response.getBody().getCode() == 500) {
-                    aListStatus = 2;
+                    aListStatus = 1;
                     return 1;
                 }
             }
