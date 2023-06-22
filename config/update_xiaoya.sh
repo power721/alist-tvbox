@@ -25,10 +25,12 @@ fi
 
 docker image prune -f
 
+echo "下载最新Docker镜像"
 for i in 1 2 3 4 5
 do
    docker pull haroldli/xiaoya-tvbox:latest && break
 done
 
+echo "重启应用"
 docker rm -f xiaoya-tvbox && \
 docker run -d -p $PORT1:8080 -p $PORT2:80 -v $BASE_DIR:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest

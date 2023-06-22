@@ -3,6 +3,8 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.dto.ShareInfo;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
@@ -46,6 +48,7 @@ public class ShareService {
 
     private final ObjectMapper objectMapper;
     private final ShareRepository shareRepository;
+    private final SettingRepository settingRepository;
     private final AccountRepository accountRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
@@ -55,12 +58,14 @@ public class ShareService {
 
     public ShareService(ObjectMapper objectMapper,
                         ShareRepository shareRepository,
+                        SettingRepository settingRepository,
                         AccountRepository accountRepository,
                         AccountService accountService,
                         AListLocalService aListLocalService,
                         RestTemplateBuilder builder) {
         this.objectMapper = objectMapper;
         this.shareRepository = shareRepository;
+        this.settingRepository = settingRepository;
         this.accountRepository = accountRepository;
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
@@ -70,6 +75,7 @@ public class ShareService {
     @PostConstruct
     public void setup() {
         updateAListDriverType();
+        loadOpenTokenUrl();
 
         List<Share> list = shareRepository.findAll();
         if (list.isEmpty()) {
@@ -80,6 +86,35 @@ public class ShareService {
 
         if (accountRepository.count() > 0) {
             aListLocalService.startAListServer(true);
+        }
+    }
+
+    private void loadOpenTokenUrl() {
+        try {
+            Path path = Paths.get("/opt/alist/data/config.json");
+            if (Files.exists(path)) {
+                String text = Files.readString(path);
+                Map<String, Object> json = objectMapper.readValue(text, Map.class);
+                settingRepository.save(new Setting("open_token_url", (String) json.get("opentoken_auth_url")));
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    public void updateOpenTokenUrl(String url) {
+        try {
+            Path path = Paths.get("/opt/alist/data/config.json");
+            if (Files.exists(path)) {
+                String text = Files.readString(path);
+                Map<String, Object> json = objectMapper.readValue(text, Map.class);
+                json.put("opentoken_auth_url", url);
+                settingRepository.save(new Setting("open_token_url", url));
+                text = objectMapper.writeValueAsString(json);
+                Files.writeString(path, text);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
         }
     }
 
@@ -151,7 +186,7 @@ public class ShareService {
 
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
             Statement statement = connection.createStatement();
-            Account account = accountRepository.findById(1).orElse(null);
+            Account account = accountRepository.findById(1).orElse(new Account());
             for (Share share : list) {
                 try {
                     String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
@@ -191,10 +226,25 @@ public class ShareService {
         return shareRepository.findAll(pageable);
     }
 
+    private void parseShare(Share share) {
+        String url = share.getShareId();
+        if (url.startsWith("https://www.aliyundrive.com/s/")) {
+            url = url.substring(30);
+        }
+        String[] parts = url.split("/");
+        if (parts.length == 3 && "folder".equals(parts[1])) {
+            share.setShareId(parts[0]);
+            share.setFolderId(parts[2]);
+        } else {
+            share.setShareId(parts[0]);
+        }
+    }
+
     public Share create(Share share) {
         aListLocalService.validateAListStatus();
         validate(share);
         Account account = accountRepository.findById(1).orElseThrow(BadRequestException::new);
+        parseShare(share);
 
         String token = accountService.login();
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
@@ -217,6 +267,7 @@ public class ShareService {
         aListLocalService.validateAListStatus();
         validate(share);
         Account account = accountRepository.findById(1).orElseThrow(BadRequestException::new);
+        parseShare(share);
 
         share.setId(id);
         shareRepository.save(share);

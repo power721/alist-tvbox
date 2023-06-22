@@ -107,7 +107,7 @@ public class AListLocalService {
                 }
             }
         } catch (Exception e) {
-            log.warn("", e);
+            log.warn("{}", e.getMessage());
         }
         aListStatus = 0;
         return 0;

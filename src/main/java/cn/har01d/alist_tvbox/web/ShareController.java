@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.ShareInfo;
+import cn.har01d.alist_tvbox.dto.UrlDto;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.service.ShareService;
 import org.springframework.context.annotation.Profile;
@@ -67,4 +68,8 @@ public class ShareController {
         return shareService.importShares(file);
     }
 
+    @PostMapping("/open-token-url")
+    public void updateOpenTokenUrl(@RequestBody UrlDto dto) {
+        shareService.updateOpenTokenUrl(dto.getUrl());
+    }
 }
