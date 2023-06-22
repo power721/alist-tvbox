@@ -16,4 +16,5 @@ public class AccountDto {
     private int checkinDays;
     private boolean autoCheckin;
     private boolean showMyAli;
+    private boolean master;
 }

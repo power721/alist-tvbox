@@ -33,4 +33,7 @@ done
 
 echo "重启应用"
 docker rm -f xiaoya-tvbox && \
-docker run -d -p $PORT1:8080 -p $PORT2:80 -v $BASE_DIR:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+docker run -d -p $PORT1:8080 -p $PORT2:80 -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+
+echo "请尝试用以下IP访问："
+ip a | grep inet | grep -v inet6 | awk '{print $2}' | awk -F/ '{print $1}'

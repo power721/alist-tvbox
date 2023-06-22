@@ -38,4 +38,6 @@ public class Account {
     private int checkinDays;
     private boolean autoCheckin;
     private boolean showMyAli;
+    @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean master;
 }

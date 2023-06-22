@@ -148,6 +148,7 @@
 import {computed, onMounted, ref} from "vue";
 import {ElMessage} from "element-plus";
 import axios from "axios";
+import {onUnmounted} from "@vue/runtime-core";
 
 let intervalId = 0
 const percentage = ref<number>(0)
@@ -279,6 +280,10 @@ onMounted(() => {
       })
     }
   })
+})
+
+onUnmounted(() => {
+  clearInterval(intervalId)
 })
 </script>
 

@@ -36,6 +36,16 @@
           </el-icon>
         </template>
       </el-table-column>
+      <el-table-column prop="master" label="主账号？" width="120">
+        <template #default="scope">
+          <el-icon v-if="scope.row.master">
+            <Check/>
+          </el-icon>
+          <el-icon v-else>
+            <Close/>
+          </el-icon>
+        </template>
+      </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">详情</el-button>
@@ -59,17 +69,25 @@
         <el-form-item label="转存文件夹ID" label-width="140">
           <el-input v-model="form.folderId" placeholder="长度40位" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="自动签到" label-width="140">
+        <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
           <el-switch
-            v-model="form.autoCheckin"
+            v-model="form.showMyAli"
             inline-prompt
             active-text="开启"
             inactive-text="关闭"
           />
         </el-form-item>
-        <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
+        <el-form-item label="主账号" label-width="140">
           <el-switch
-            v-model="form.showMyAli"
+            v-model="form.master"
+            inline-prompt
+            active-text="是"
+            inactive-text="否"
+          />
+        </el-form-item>
+        <el-form-item label="自动签到" label-width="140">
+          <el-switch
+            v-model="form.autoCheckin"
             inline-prompt
             active-text="开启"
             inactive-text="关闭"
@@ -120,6 +138,14 @@
             inline-prompt
             active-text="加载"
             inactive-text="关闭"
+          />
+        </el-form-item>
+        <el-form-item label="主账号">
+          <el-switch
+            v-model="form.master"
+            inline-prompt
+            active-text="是"
+            inactive-text="否"
           />
         </el-form-item>
         <el-form-item label="自动签到">
@@ -176,6 +202,7 @@ const form = ref({
   folderId: '',
   autoCheckin: false,
   showMyAli: false,
+  master: false,
   refreshTokenTime: '',
   openTokenTime: '',
   checkinTime: '',
@@ -218,6 +245,7 @@ const handleAdd = () => {
     folderId: '',
     autoCheckin: false,
     showMyAli: false,
+    master: false,
     refreshTokenTime: '',
     openTokenTime: '',
     checkinTime: '',

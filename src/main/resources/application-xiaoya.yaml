@@ -8,6 +8,10 @@ spring:
     init:
       data-locations: file:/opt/atv/data/data.sql
 
+logging:
+  file:
+    name: log/app.log
+
 app:
   sites:
     - name: 丫仙女

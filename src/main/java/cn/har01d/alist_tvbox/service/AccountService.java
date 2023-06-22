@@ -108,6 +108,7 @@ public class AccountService {
             account.setRefreshToken(refreshToken);
             account.setOpenToken(openToken);
             account.setFolderId(folderId);
+            account.setMaster(true);
             account.setUser(userRepository.findById(1).orElse(null));
 
             if (!StringUtils.isAllBlank(refreshToken, openToken, folderId)) {
@@ -399,9 +400,11 @@ public class AccountService {
 
     public void updateTokens() {
         List<Account> list = accountRepository.findAll();
-        if (!list.isEmpty()) {
-            Account account = list.get(0);
-            updateAList(account);
+        for (Account account : list) {
+            if (account.isMaster()) {
+                updateAList(account);
+                return;
+            }
         }
     }
 
@@ -592,12 +595,15 @@ public class AccountService {
         account.setAutoCheckin(dto.isAutoCheckin());
         account.setShowMyAli(dto.isShowMyAli());
         if (count == 0) {
+            account.setMaster(true);
             updateAList(account);
             aListLocalService.startAListServer(false);
+            showMyAli(account);
+        } else {
+            showMyAliWithAPI(account);
         }
 
         accountRepository.save(account);
-        showMyAli(account, account.isShowMyAli());
         log.info("refresh tokens for account {}", account);
         refreshAccountTokens(account);
         return account;
@@ -665,6 +671,7 @@ public class AccountService {
 
     private void updateAList(Account account) {
         if (account == null || StringUtils.isAnyBlank(account.getRefreshToken(), account.getOpenToken(), account.getFolderId())) {
+            log.warn("cannot update AList: {}", account);
             return;
         }
 
@@ -690,11 +697,11 @@ public class AccountService {
 
         Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
         if (account.isShowMyAli() != dto.isShowMyAli()) {
-            showMyAli(account, dto.isShowMyAli());
+            showMyAliWithAPI(account);
         }
 
         boolean tokenChanged = !Objects.equals(account.getRefreshToken(), dto.getRefreshToken()) || !Objects.equals(account.getOpenToken(), dto.getOpenToken());
-        boolean changed = tokenChanged;
+        boolean changed = tokenChanged || account.isMaster() != dto.isMaster();
         if (!Objects.equals(account.getFolderId(), dto.getFolderId())) {
             changed = true;
         }
@@ -704,8 +711,11 @@ public class AccountService {
         account.setFolderId(dto.getFolderId());
         account.setAutoCheckin(dto.isAutoCheckin());
         account.setShowMyAli(dto.isShowMyAli());
+        account.setMaster(dto.isMaster());
 
-        if (changed) {
+        if (changed && account.isMaster()) {
+            updateMaster();
+            account.setMaster(true);
             updateAList(account);
         }
 
@@ -715,6 +725,15 @@ public class AccountService {
         }
 
         return accountRepository.save(account);
+    }
+
+    private void updateMaster() {
+        log.info("reset account master");
+        List<Account> list = accountRepository.findAll();
+        for (Account a : list) {
+            a.setMaster(false);
+        }
+        accountRepository.saveAll(list);
     }
 
     private void validateUpdate(Integer id, AccountDto dto) {
@@ -727,12 +746,36 @@ public class AccountService {
         }
     }
 
-    public void showMyAli(Account account, boolean enabled) {
-        aListLocalService.validateAListStatus();
-
-        String token = login();
+    public void showMyAli(Account account) {
         int storageId = 9999 + account.getId();
-        deleteStorage(storageId, token);
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
+            Statement statement = connection.createStatement();
+            String name = "\uD83D\uDCC0我的阿里云盘";
+            if (account.getId() > 1) {
+                name += account.getId();
+            }
+            if (account.isShowMyAli()) {
+                String sql = "INSERT INTO x_storages VALUES(" + storageId + ",'/" + name + "',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
+                statement.executeUpdate(sql);
+                log.info("add AList storage {}", name);
+            }
+        } catch (Exception e) {
+            throw new BadRequestException(e);
+        }
+        // ignore
+    }
+
+    public void showMyAliWithAPI(Account account) {
+        int status = aListLocalService.getAListStatus();
+        if (status == 1) {
+            throw new BadRequestException("AList服务启动中");
+        }
+
+        String token = status == 2 ? login() : "";
+        int storageId = 9999 + account.getId();
+        if (status == 2) {
+            deleteStorage(storageId, token);
+        }
 
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
             Statement statement = connection.createStatement();
@@ -740,11 +783,13 @@ public class AccountService {
             if (account.getId() > 1) {
                 name += account.getId();
             }
-            if (enabled) {
+            if (account.isShowMyAli()) {
                 String sql = "INSERT INTO x_storages VALUES(" + storageId + ",'/" + name + "',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
                 statement.executeUpdate(sql);
                 log.info("add AList storage {}", name);
-                enableStorage(storageId, token);
+                if (status == 2) {
+                    enableStorage(storageId, token);
+                }
             } else {
                 log.info("remove AList storage {}", name);
             }
@@ -771,13 +816,14 @@ public class AccountService {
     }
 
     public void delete(Integer id) {
-        if (id == 1) {
-            throw new BadRequestException("不能删除主账号");
-        }
         Account account = accountRepository.findById(id).orElse(null);
         if (account != null) {
+            if (account.isMaster()) {
+                throw new BadRequestException("不能删除主账号");
+            }
             accountRepository.deleteById(id);
-            showMyAli(account, false);
+            account.setShowMyAli(false);
+            showMyAliWithAPI(account);
         }
     }
 }

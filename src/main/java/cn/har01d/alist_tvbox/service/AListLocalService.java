@@ -39,7 +39,7 @@ public class AListLocalService {
             Process process = builder.start();
             settingRepository.save(new Setting("alist_start_time", Instant.now().toString()));
             if (wait) {
-                process.waitFor(30, TimeUnit.SECONDS);
+                process.waitFor(5, TimeUnit.SECONDS);
                 waitAListStart();
             }
             log.info("AList server started");
@@ -50,16 +50,10 @@ public class AListLocalService {
     }
 
     private void waitAListStart() throws InterruptedException {
-        int count = 0;
-        for (int i = 0; i < 60; ++i) {
+        for (int i = 0; i < 100; ++i) {
             ResponseEntity<SettingResponse> response = restTemplate.getForEntity("http://localhost:5244/api/public/settings", SettingResponse.class);
             if (response.getBody() != null && response.getBody().getCode() == 200) {
-                count++;
-            } else {
-                count = 0;
-            }
-            if (count > 1) {
-                return;
+               return;
             }
             Thread.sleep(500);
         }
