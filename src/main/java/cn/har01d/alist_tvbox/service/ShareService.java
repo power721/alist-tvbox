@@ -1,22 +1,12 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.dto.AListLogin;
-import cn.har01d.alist_tvbox.dto.CheckinResponse;
-import cn.har01d.alist_tvbox.dto.CheckinResult;
-import cn.har01d.alist_tvbox.dto.RewardResponse;
 import cn.har01d.alist_tvbox.dto.ShareInfo;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.Account;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
-import cn.har01d.alist_tvbox.model.AListUser;
-import cn.har01d.alist_tvbox.model.LoginRequest;
-import cn.har01d.alist_tvbox.model.LoginResponse;
-import cn.har01d.alist_tvbox.model.SettingResponse;
-import cn.har01d.alist_tvbox.model.StorageInfo;
-import cn.har01d.alist_tvbox.model.UserResponse;
-import cn.har01d.alist_tvbox.util.IdUtils;
+import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -29,15 +19,12 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.PostConstruct;
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
@@ -46,191 +33,58 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Statement;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
 @Profile("xiaoya")
 public class ShareService {
-    public static final String DB_URL = "jdbc:sqlite:/opt/alist/data/data.db";
+
     private final ObjectMapper objectMapper;
     private final ShareRepository shareRepository;
-    private final SettingRepository settingRepository;
+    private final AccountRepository accountRepository;
+    private final AccountService accountService;
+    private final AListLocalService aListLocalService;
     private final RestTemplate restTemplate;
-    private final TaskScheduler scheduler;
-    private ScheduledFuture scheduledFuture;
 
-    private String refreshToken;
-    private String openToken;
-    private String folderId;
-    private volatile boolean started;
-    private volatile int aListStatus;
     private volatile int shareId = 5000;
 
     public ShareService(ObjectMapper objectMapper,
                         ShareRepository shareRepository,
-                        SettingRepository settingRepository,
-                        RestTemplateBuilder builder,
-                        TaskScheduler scheduler) {
+                        AccountRepository accountRepository,
+                        AccountService accountService,
+                        AListLocalService aListLocalService,
+                        RestTemplateBuilder builder) {
         this.objectMapper = objectMapper;
         this.shareRepository = shareRepository;
-        this.settingRepository = settingRepository;
+        this.accountRepository = accountRepository;
+        this.accountService = accountService;
+        this.aListLocalService = aListLocalService;
         this.restTemplate = builder.build();
-        this.scheduler = scheduler;
     }
 
     @PostConstruct
     public void setup() {
-        scheduleAutoCheckinTime();
-
-        boolean init = readAccessToken();
-        readOpenToken();
-        readFolderId();
-
-        boolean auto = settingRepository.findById("auto_checkin").map(Setting::getValue).map(Boolean::valueOf).orElse(false);
-        if (!init && !auto) {
-            new Thread(() -> checkin(false)).start();
-        }
-
-        if (init) {
-            readLogin();
-            readShowMyAli();
-        }
+        updateAListDriverType();
 
         List<Share> list = shareRepository.findAll();
         if (list.isEmpty()) {
-            list = loadShares();
+            list = loadSharesFromFile();
         }
-        loadAList(list);
-    }
 
-    private void scheduleAutoCheckinTime() {
-        try {
-            LocalTime localTime = getScheduleTime();
-            log.info("schedule time: {}", localTime);
-            scheduledFuture = scheduler.schedule(this::autoCheckin, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
-        } catch (Exception e) {
-            log.warn("", e);
+        loadAListShares(list);
+
+        if (accountRepository.count() > 0) {
+            aListLocalService.startAListServer(true);
         }
     }
 
-    private LocalTime getScheduleTime() {
-        String time = settingRepository.findById("schedule_time").map(Setting::getValue).orElse(null);
-        LocalTime localTime = LocalTime.of(9, 0, 0);
-        if (time != null) {
-            try {
-                localTime = Instant.parse(time).atZone(ZoneId.of("Asia/Shanghai")).toLocalTime();
-                ;
-            } catch (Exception e) {
-                log.warn("", e);
-                settingRepository.save(new Setting("schedule_time", "2023-06-20T00:00:00.000Z"));
-            }
-        }
-        return localTime;
-    }
-
-    public void autoCheckin() {
-        boolean auto = settingRepository.findById("auto_checkin").map(Setting::getValue).map(Boolean::valueOf).orElse(false);
-        if (auto) {
-            log.info("auto checkin");
-            try {
-                checkin(true);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-
-        refreshTokens();
-    }
-
-    private void refreshTokens() {
-        Instant now = Instant.now();
-        Instant time;
-        try {
-            time = settingRepository.findById("open_token_time").map(Setting::getValue).map(Instant::parse).orElse(null);
-            if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now)) {
-                if (openToken != null) {
-                    log.info("update open token: {}", time);
-                    openToken = getAliOpenToken(openToken);
-                    settingRepository.save(new Setting("open_token_time", Instant.now().toString()));
-                }
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            time = settingRepository.findById("refresh_token_time").map(Setting::getValue).map(Instant::parse).orElse(null);
-            if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now)) {
-                if (refreshToken != null) {
-                    log.info("update refresh token: {}", time);
-                    refreshToken = (String) getAliToken(refreshToken).get("refresh_token");
-                    settingRepository.save(new Setting("refresh_token_time", Instant.now().toString()));
-                }
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-    }
-
-    private void readLogin() {
-        try {
-            String password = settingRepository.findById("alist_password").map(Setting::getValue).orElse(null);
-            if (password != null) {
-                return;
-            }
-
-            AListLogin login = new AListLogin();
-            Path pass = Paths.get("/data/guestpass.txt");
-            if (Files.exists(pass)) {
-                log.info("read guest password from file");
-                List<String> lines = Files.readAllLines(pass);
-                if (!lines.isEmpty()) {
-                    login.setUsername("guest");
-                    login.setPassword(lines.get(0));
-                    login.setEnabled(true);
-                }
-            }
-
-            Path guest = Paths.get("/data/guestlogin.txt");
-            if (Files.exists(guest)) {
-                log.info("guestlogin.txt");
-                login.setUsername("dav");
-                login.setEnabled(true);
-            }
-
-            if (login.isEnabled()) {
-                updateLogin(login);
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-    }
-
-    private void readShowMyAli() {
-        Path show = Paths.get("/data/show_my_ali.txt");
-        if (Files.exists(show)) {
-            log.info("show_my_ali.txt");
-            showMyAli(true);
-        }
-    }
-
-    private List<Share> loadShares() {
+    private List<Share> loadSharesFromFile() {
         List<Share> list = new ArrayList<>();
-
         Path path = Paths.get("/data/alishare_list.txt");
         if (Files.exists(path)) {
             try {
@@ -239,12 +93,16 @@ public class ShareService {
                 for (String line : lines) {
                     String[] parts = line.trim().split("\\s+");
                     if (parts.length == 3) {
-                        Share share = new Share();
-                        share.setId(shareId++);
-                        share.setPath(parts[0]);
-                        share.setShareId(parts[1]);
-                        share.setFolderId(parts[2]);
-                        list.add(share);
+                        try {
+                            Share share = new Share();
+                            share.setId(shareId++);
+                            share.setPath(parts[0]);
+                            share.setShareId(parts[1]);
+                            share.setFolderId(parts[2]);
+                            list.add(share);
+                        } catch (Exception e) {
+                            log.warn("", e);
+                        }
                     }
                 }
                 shareRepository.saveAll(list);
@@ -252,14 +110,13 @@ public class ShareService {
                 log.warn("", e);
             }
         }
-
         return list;
     }
 
     public int importShares(MultipartFile file) throws IOException {
         int count = 0;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
-            log.info("loading share list from file");
+            log.info("import share list from file");
             while (reader.ready()) {
                 String line = reader.readLine();
                 String[] parts = line.trim().split("\\s+");
@@ -287,16 +144,18 @@ public class ShareService {
         return count;
     }
 
-    private void loadAList(List<Share> list) {
-        Connection connection = null;
-        try {
-            connection = DriverManager.getConnection(DB_URL);
+    private void loadAListShares(List<Share> list) {
+        if (list.isEmpty()) {
+            return;
+        }
+
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
             Statement statement = connection.createStatement();
-            String sql = "";
+            Account account = accountRepository.findById(1).orElse(null);
             for (Share share : list) {
                 try {
-                    sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                    int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share.getPath()), refreshToken, openToken, folderId, share.getShareId(), share.getPassword(), share.getFolderId()));
+                    String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+                    int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share.getPath()), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
                     log.info("insert {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share.getPath()), count);
                     shareId = Math.max(shareId, share.getId() + 1);
                 } catch (Exception e) {
@@ -304,186 +163,21 @@ public class ShareService {
                 }
             }
 
-            sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0);";
-            statement.executeUpdate(sql);
-
-            try {
-                enableMyAli(connection);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-
-            try {
-                enableLogin(connection);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-
-            if (!StringUtils.isAnyBlank(openToken, refreshToken, folderId)) {
-                try {
-                    updateTokens(connection);
-                } catch (Exception e) {
-                    log.warn("", e);
-                }
-                startAListServer(true);
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    // ignore
-                }
-            }
-        }
-    }
-
-    private void updateTokens(Connection connection) throws SQLException {
-        Statement statement = connection.createStatement();
-        statement.executeUpdate("update x_storages set driver = 'AliyundriveShare2Open' where driver = 'AliyundriveShare'");
-        statement.executeUpdate("update x_storages set addition = json_set(addition, '$.RefreshToken', '" + refreshToken + "') where driver = 'AliyundriveShare2Open'");
-        statement.executeUpdate("update x_storages set addition = json_set(addition, '$.RefreshTokenOpen', '" + openToken + "') where driver = 'AliyundriveShare2Open'");
-        statement.executeUpdate("update x_storages set addition = json_set(addition, '$.TempTransferFolderID', '" + folderId + "') where driver = 'AliyundriveShare2Open'");
-        log.info("update tokens to AList database");
-    }
-
-    public void startAListServer(boolean wait) {
-        try {
-            log.info("start AList server");
-            ProcessBuilder builder = new ProcessBuilder();
-            builder.inheritIO();
-            builder.command("/opt/alist/alist", "server", "--no-prefix");
-            builder.directory(new File("/opt/alist"));
-            Process process = builder.start();
-            settingRepository.save(new Setting("alist_start_time", Instant.now().toString()));
-            if (wait) {
-                process.waitFor(30, TimeUnit.SECONDS);
-                waitAListStart();
-            }
-            log.info("AList server started");
-            started = true;
-            aListStatus = 1;
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private void waitAListStart() throws InterruptedException {
-        int count = 0;
-        for (int i = 0; i < 60; ++i) {
-            ResponseEntity<SettingResponse> response = restTemplate.getForEntity("http://localhost:5244/api/public/settings", SettingResponse.class);
-            if (response.getBody() != null && response.getBody().getCode() == 200) {
-                count++;
-            } else {
-                count = 0;
-            }
-            if (count > 1) {
-                return;
-            }
-            Thread.sleep(500);
-        }
-    }
-
-    public void stopAListServer() {
-        log.info("stop AList server");
-        try {
-            ProcessBuilder builder = new ProcessBuilder();
-            builder.inheritIO();
-            builder.command("pkill", "-f", "/opt/alist/alist");
-            builder.directory(new File("/opt/alist"));
-            Process process = builder.start();
-            process.waitFor(1, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    public void restartAListServer() {
-        stopAListServer();
-        startAListServer(false);
-    }
-
-    public int getAListStatus() {
-        try {
-            ResponseEntity<SettingResponse> response = restTemplate.getForEntity("http://localhost:5244/api/public/settings", SettingResponse.class);
-            if (response.getBody() != null) {
-                if (response.getBody().getCode() == 200) {
-                    started = true;
-                    aListStatus = 2;
-                    return 2;
-                } else if (response.getBody().getCode() == 500) {
-                    started = true;
-                    aListStatus = 2;
-                    return 1;
-                }
-            } else {
-                started = false;
-            }
         } catch (Exception e) {
             log.warn("", e);
         }
-        aListStatus = 0;
-        return 0;
+        // ignore
     }
 
-    private void enableMyAli(Connection connection) {
-        String show = settingRepository.findById("show_my_ali").map(Setting::getValue).orElse("");
-        if (show.equals("true") || show.equals("false")) {
-            boolean enabled = Boolean.valueOf(show);
-
-            try {
-                String sql;
-                Statement statement = connection.createStatement();
-                if (enabled) {
-                    sql = "INSERT INTO x_storages VALUES(10000,'/\uD83D\uDCC0我的阿里云盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + openToken + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                    log.info("add storage \uD83D\uDCC0我的阿里云盘");
-                } else {
-                    sql = "DELETE FROM x_storages WHERE id = 10000;";
-                    log.info("remove storage \uD83D\uDCC0我的阿里云盘");
-                }
-                statement.executeUpdate(sql);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
-    private void enableLogin(Connection connection) {
-        AListLogin login = new AListLogin();
-        login.setEnabled(settingRepository.findById("alist_login").map(Setting::getValue).orElse("").equals("true"));
-        login.setUsername(settingRepository.findById("alist_username").map(Setting::getValue).orElse(""));
-        login.setPassword(settingRepository.findById("alist_password").map(Setting::getValue).orElse(""));
-
-        try {
+    private void updateAListDriverType() {
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
+            log.info("update storage driver type");
             Statement statement = connection.createStatement();
-            String sql = "";
-            if (login.isEnabled()) {
-                sql = "update x_users set disabled = 1 where id = 2";
-                statement.executeUpdate(sql);
-                sql = "INSERT INTO x_users VALUES(3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,368,'',0,0);";
-                statement.executeUpdate(sql);
-            } else {
-                sql = "update x_users set disabled = 0, permission = '368' where id = 2;";
-                statement.executeUpdate(sql);
-                sql = "delete from x_users where id = 3;";
-                statement.executeUpdate(sql);
-            }
+            statement.executeUpdate("update x_storages set driver = 'AliyundriveShare2Open' where driver = 'AliyundriveShare'");
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new BadRequestException(e);
         }
-        log.info("{} user {}", login.isEnabled() ? "enable" : "disable", login.getUsername());
-    }
-
-    private String generatePassword() {
-        Setting setting = settingRepository.findById("user_password").orElse(null);
-        if (setting == null) {
-            log.info("generate new password");
-            setting = new Setting("user_password", IdUtils.generate(12));
-            settingRepository.save(setting);
-        }
-        return setting.getValue();
+        // ignore
     }
 
     private String getMountPath(String path) {
@@ -493,152 +187,54 @@ public class ShareService {
         return "\uD83C\uDE34我的阿里分享/" + path;
     }
 
-    private boolean readAccessToken() {
-        refreshToken = settingRepository.findById("refresh_token").map(Setting::getValue).orElse(null);
-        if (refreshToken != null) {
-            return false;
-        }
-
-        Path path = Paths.get("/data/mytoken.txt");
-        if (Files.exists(path)) {
-            try {
-                log.info("read refresh token from file");
-                List<String> lines = Files.readAllLines(path);
-                if (!lines.isEmpty()) {
-                    String token = lines.get(0).trim();
-                    settingRepository.save(new Setting("refresh_token", token));
-                    refreshToken = token;
-                    return true;
-                }
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-        return false;
-    }
-
-    private void readOpenToken() {
-        openToken = settingRepository.findById("open_token").map(Setting::getValue).orElse(null);
-        if (openToken != null) {
-            return;
-        }
-
-        Path path = Paths.get("/data/myopentoken.txt");
-        if (Files.exists(path)) {
-            try {
-                log.info("read open token from file");
-                List<String> lines = Files.readAllLines(path);
-                if (!lines.isEmpty()) {
-                    String token = lines.get(0).trim();
-                    settingRepository.save(new Setting("open_token", token));
-                    openToken = token;
-                }
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-    }
-
-    private void readFolderId() {
-        folderId = settingRepository.findById("folder_id").map(Setting::getValue).orElse(null);
-        if (folderId != null) {
-            return;
-        }
-
-        Path path = Paths.get("/data/temp_transfer_folder_id.txt");
-        if (Files.exists(path)) {
-            try {
-                log.info("read temp transfer folder id from file");
-                List<String> lines = Files.readAllLines(path);
-                if (!lines.isEmpty()) {
-                    String token = lines.get(0).trim();
-                    settingRepository.save(new Setting("folder_id", token));
-                    folderId = token;
-                }
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-    }
-
     public Page<Share> list(Pageable pageable) {
         return shareRepository.findAll(pageable);
     }
 
-    private void validateAListStatus() {
-        if (aListStatus == 1) {
-            throw new BadRequestException("AList服务启动中");
-        }
-        if (aListStatus == 0) {
-            throw new BadRequestException("AList服务未启动");
-        }
-    }
-
     public Share create(Share share) {
-        validateAListStatus();
+        aListLocalService.validateAListStatus();
         validate(share);
+        Account account = accountRepository.findById(1).orElseThrow(BadRequestException::new);
 
-        Connection connection = null;
-        String token = login();
-        try {
-            connection = DriverManager.getConnection(DB_URL);
+        String token = accountService.login();
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
             Statement statement = connection.createStatement();
             share.setId(shareId++);
             shareRepository.save(share);
 
             String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
-            statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share.getPath()), refreshToken, openToken, folderId, share.getShareId(), share.getPassword(), share.getFolderId()));
+            statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share.getPath()), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
 
             enableStorage(share.getId(), token);
         } catch (Exception e) {
-            throw new RuntimeException(e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    // ignore
-                }
-            }
+            throw new BadRequestException(e);
         }
+        // ignore
         return share;
     }
 
     public Share update(Integer id, Share share) {
-        validateAListStatus();
+        aListLocalService.validateAListStatus();
         validate(share);
+        Account account = accountRepository.findById(1).orElseThrow(BadRequestException::new);
 
         share.setId(id);
         shareRepository.save(share);
 
-        if (StringUtils.isAnyBlank(refreshToken, openToken, folderId)) {
-            throw new BadRequestException("token参数缺失");
-        }
-
-        Connection connection = null;
-
-        String token = login();
-        try {
-            connection = DriverManager.getConnection(DB_URL);
+        String token = accountService.login();
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
             Statement statement = connection.createStatement();
 
             deleteStorage(id, token);
 
             String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
-            statement.executeUpdate(String.format(sql, id, getMountPath(share.getPath()), refreshToken, openToken, folderId, share.getShareId(), share.getPassword(), share.getFolderId()));
+            statement.executeUpdate(String.format(sql, id, getMountPath(share.getPath()), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
 
             enableStorage(id, token);
         } catch (Exception e) {
-            throw new RuntimeException(e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    // ignore
-                }
-            }
+            throw new BadRequestException(e);
         }
+        // ignore
         return share;
     }
 
@@ -649,23 +245,9 @@ public class ShareService {
         if (StringUtils.isBlank(share.getPath())) {
             throw new BadRequestException("挂载路径不能为空");
         }
-        if (StringUtils.isAnyBlank(refreshToken, openToken, folderId)) {
-            throw new BadRequestException("token参数缺失");
-        }
         if (StringUtils.isBlank(share.getFolderId())) {
             share.setFolderId("root");
         }
-    }
-
-    private String login() {
-        String username = "atv";
-        String password = settingRepository.findById("user_password").map(Setting::getValue).orElseThrow(BadRequestException::new);
-        LoginRequest request = new LoginRequest();
-        request.setUsername(username);
-        request.setPassword(password);
-        LoginResponse response = restTemplate.postForObject("http://localhost:5244/api/auth/login", request, LoginResponse.class);
-        log.info("login response: {}", response.getData());
-        return response.getData().getToken();
     }
 
     private void enableStorage(Integer id, String token) {
@@ -677,11 +259,11 @@ public class ShareService {
     }
 
     public void deleteShares(List<Integer> ids) {
-        validateAListStatus();
+        aListLocalService.validateAListStatus();
         for (Integer id : ids) {
             try {
                 shareRepository.deleteById(id);
-                String token = login();
+                String token = accountService.login();
                 deleteStorage(id, token);
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());
@@ -689,10 +271,10 @@ public class ShareService {
         }
     }
 
-    public void delete(Integer id) {
-        validateAListStatus();
+    public void deleteShare(Integer id) {
+        aListLocalService.validateAListStatus();
         shareRepository.deleteById(id);
-        String token = login();
+        String token = accountService.login();
         deleteStorage(id, token);
     }
 
@@ -709,9 +291,7 @@ public class ShareService {
         List<ShareInfo> list = new ArrayList<>();
         int size = pageable.getPageSize();
         int offset = pageable.getPageNumber() * size;
-        Connection connection = null;
-        try {
-            connection = DriverManager.getConnection(DB_URL);
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
             Statement statement = connection.createStatement();
             String sql = "select count(*) from x_storages where driver = 'AliyundriveShare2Open'";
             ResultSet rs = statement.executeQuery(sql);
@@ -733,342 +313,20 @@ public class ShareService {
                 list.add(shareInfo);
             }
         } catch (Exception e) {
-            throw new RuntimeException(e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    // ignore
-                }
-            }
+            throw new BadRequestException(e);
         }
+        // ignore
 
         return new PageImpl<>(list, pageable, total);
     }
 
-    private AListUser getUser(Integer id, String token) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(token));
-        HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<UserResponse> response = restTemplate.exchange("http://localhost:5244/api/admin/user/get?id=" + id, HttpMethod.GET, entity, UserResponse.class);
-        log.info("get user {} response: {}", id, response.getBody());
-        return response.getBody().getData();
-    }
-
-    private void deleteUser(Integer id, String token) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(token));
-        HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/user/delete?id=" + id, HttpMethod.POST, entity, String.class);
-        log.info("delete user {} response: {}", id, response.getBody());
-    }
-
-    private void updateUser(AListUser user, String token) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(token));
-        HttpEntity<AListUser> entity = new HttpEntity<>(user, headers);
-        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/user/update", HttpMethod.POST, entity, String.class);
-        log.info("update user {} response: {}", user.getId(), response.getBody());
-    }
-
-    private void createUser(AListUser user, String token) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(token));
-        HttpEntity<AListUser> entity = new HttpEntity<>(user, headers);
-        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/user/create", HttpMethod.POST, entity, String.class);
-        log.info("create user response: {}", response.getBody());
-    }
-
-    public void updateLogin(AListLogin login) {
-        validateAListStatus();
-        if (login.isEnabled()) {
-            if (StringUtils.isBlank(login.getUsername())) {
-                throw new BadRequestException("缺少用户名");
-            }
-            if (StringUtils.isBlank(login.getPassword())) {
-                throw new BadRequestException("缺少密码");
-            }
-        }
-
-        settingRepository.save(new Setting("alist_username", login.getUsername()));
-        settingRepository.save(new Setting("alist_password", login.getPassword()));
-        settingRepository.save(new Setting("alist_login", String.valueOf(login.isEnabled())));
-
-        String token = login();
-        AListUser guest = getUser(2, token);
-        guest.setDisabled(login.isEnabled());
-        updateUser(guest, token);
-
-        deleteUser(3, token);
-        if (login.isEnabled()) {
-            AListUser user = new AListUser();
-            user.setId(3);
-            user.setUsername(login.getUsername());
-            user.setPassword(login.getPassword());
-            createUser(user, token);
-        }
-    }
-
-    public AListLogin getLoginInfo() {
-        String username = settingRepository.findById("alist_username").map(Setting::getValue).orElse("");
-        String password = settingRepository.findById("alist_password").map(Setting::getValue).orElse("");
-        String enabled = settingRepository.findById("alist_login").map(Setting::getValue).orElse("");
-        AListLogin login = new AListLogin();
-        login.setUsername(username);
-        login.setPassword(password);
-        login.setEnabled("true".equals(enabled));
-        return login;
-    }
-
-    public StorageInfo getStorageInfo() {
-        StorageInfo storageInfo = new StorageInfo();
-        storageInfo.setRefreshToken(refreshToken);
-        storageInfo.setOpenToken(openToken);
-        storageInfo.setFolderId(folderId);
-        String time = settingRepository.findById("refresh_token_time").map(Setting::getValue).orElse(null);
-        if (time != null) {
-            storageInfo.setRefreshToken(time);
-        }
-        time = settingRepository.findById("open_token_time").map(Setting::getValue).orElse(null);
-        if (time != null) {
-            storageInfo.setOpenTokenTime(time);
-        }
-        return storageInfo;
-    }
-
-    private Map<Object, Object> getAliToken(String token) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("User-Agent", Collections.singletonList("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
-        headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
-        Map<String, String> body = new HashMap<>();
-        body.put("refresh_token", token);
-        body.put("grant_type", "refresh_token");
-        log.debug("body: {}", body);
-        HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> response = restTemplate.exchange("https://auth.aliyundrive.com/v2/account/token", HttpMethod.POST, entity, Map.class);
-        log.debug("get Ali token response: {}", response.getBody());
-        String driveID = (String) response.getBody().get("default_drive_id");
-        settingRepository.save(new Setting("ali_drive_id", driveID));
-        return response.getBody();
-    }
-
-    private String getAliOpenToken(String token) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("User-Agent", Collections.singletonList("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
-        headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
-        Map<String, String> body = new HashMap<>();
-        body.put("refresh_token", token);
-        body.put("grant_type", "refresh_token");
-        log.debug("body: {}", body);
-        HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> response = restTemplate.exchange("https://api.xhofe.top/alist/ali_open/token", HttpMethod.POST, entity, Map.class);
-        log.debug("get open token response: {}", response.getBody());
-        return (String) response.getBody().get("refresh_token");
-    }
-
-    public StorageInfo updateStorageInfo(StorageInfo dto) {
-        if (StringUtils.isBlank(dto.getRefreshToken())) {
-            throw new BadRequestException("阿里token不能为空");
-        }
-        if (dto.getRefreshToken().length() > 128) {
-            throw new BadRequestException("阿里token长度太长");
-        }
-        if (StringUtils.isBlank(dto.getOpenToken())) {
-            throw new BadRequestException("开放token不能为空");
-        }
-        if (dto.getOpenToken().length() < 128) {
-            throw new BadRequestException("开放token长度太短");
-        }
-        if (StringUtils.isBlank(dto.getFolderId())) {
-            throw new BadRequestException("转存文件夹ID不能为空");
-        }
-        if (dto.getFolderId().length() > 64) {
-            throw new BadRequestException("转存文件夹ID长度太长");
-        }
-
-        refreshToken = (String) getAliToken(dto.getRefreshToken()).get("refresh_token");
-        openToken = getAliOpenToken(dto.getOpenToken());
-        folderId = dto.getFolderId();
-
-        String now = saveSettings();
-        updateAList();
-
-        if (!started) {
-            startAListServer(false);
-        }
-
-        dto.setRefreshToken(refreshToken);
-        dto.setOpenToken(openToken);
-        dto.setFolderId(folderId);
-        dto.setRefreshToken(now);
-        dto.setOpenTokenTime(now);
-        return dto;
-    }
-
-    private String saveSettings() {
-        String now = Instant.now().toString();
-        settingRepository.save(new Setting("refresh_token", refreshToken));
-        settingRepository.save(new Setting("refresh_token_time", now));
-        settingRepository.save(new Setting("open_token", openToken));
-        settingRepository.save(new Setting("open_token_time", now));
-        settingRepository.save(new Setting("folder_id", folderId));
-        return now;
-    }
-
-    private void updateAList() {
-        Connection connection = null;
-        try {
-            log.info("update storage driver");
-            connection = DriverManager.getConnection(DB_URL);
-            Statement statement = connection.createStatement();
-            statement.executeUpdate("update x_storages set driver = 'AliyundriveShare2Open' where driver = 'AliyundriveShare'");
-            String sql = "update x_storages set addition = json_set(addition, '$.RefreshToken', '" + refreshToken + "') where driver = 'AliyundriveShare2Open'";
-            statement.executeUpdate(String.format(sql));
-            sql = "update x_storages set addition = json_set(addition, '$.RefreshTokenOpen', '" + openToken + "') where driver = 'AliyundriveShare2Open'";
-            statement.executeUpdate(String.format(sql));
-            sql = "update x_storages set addition = json_set(addition, '$.TempTransferFolderID', '" + folderId + "') where driver = 'AliyundriveShare2Open'";
-            statement.executeUpdate(String.format(sql));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    // ignore
-                }
-            }
-        }
-    }
-
     public Object listStorages(Pageable pageable) {
-        validateAListStatus();
+        aListLocalService.validateAListStatus();
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(login()));
+        headers.put("Authorization", Collections.singletonList(accountService.login()));
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
         ResponseEntity<Object> response = restTemplate.exchange("http://localhost:5244/api/admin/storage/list?page=" + pageable.getPageNumber() + "&per_page=" + pageable.getPageSize(), HttpMethod.GET, entity, Object.class);
         return response.getBody();
     }
 
-    public CheckinResult checkin(boolean force) {
-        if (StringUtils.isBlank(refreshToken)) {
-            return null;
-        }
-        if (!force) {
-            validateCheckinTime();
-        }
-
-        log.info("checkin");
-        Map<Object, Object> map = getAliToken(refreshToken);
-        String accessToken = (String) map.get("access_token");
-        String nickName = (String) map.get("nick_name");
-        settingRepository.save(new Setting("nick_name", nickName));
-
-        refreshToken = (String) map.get("refresh_token");
-        settingRepository.save(new Setting("refresh_token", refreshToken));
-        settingRepository.save(new Setting("refresh_token_time", Instant.now().toString()));
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("refresh_token", refreshToken);
-        body.put("grant_type", "refresh_token");
-        log.debug("body: {}", body);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("User-Agent", Collections.singletonList("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
-        headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
-        headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<CheckinResponse> response = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_list", HttpMethod.POST, entity, CheckinResponse.class);
-
-        Instant now = Instant.now();
-        response.getBody().getResult().setCheckinTime(now);
-        settingRepository.save(new Setting("checkin_time", now.toString()));
-
-        for (Map<String, Object> signInLog : response.getBody().getResult().getSignInLogs()) {
-            if (signInLog.get("status").equals("normal") && !signInLog.get("isReward").equals(true)) {
-                body = new HashMap<>();
-                body.put("signInDay", signInLog.get("day"));
-                log.debug("body: {}", body);
-
-                headers = new HttpHeaders();
-                headers.put("User-Agent", Collections.singletonList("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
-                headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
-                headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
-                entity = new HttpEntity<>(body, headers);
-                ResponseEntity<RewardResponse> res = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_reward?_rx-s=mobile", HttpMethod.POST, entity, RewardResponse.class);
-                log.info("今日签到获得 {} {}", res.getBody().getResult().getName(), res.getBody().getResult().getDescription());
-            }
-        }
-
-        log.info("{}  签到成功, 本月累计{}天", nickName, response.getBody().getResult().getSignInCount());
-        settingRepository.save(new Setting("checkin_days", String.valueOf(response.getBody().getResult().getSignInCount())));
-        response.getBody().getResult().setSignInLogs(null);
-        return response.getBody().getResult();
-    }
-
-    private void validateCheckinTime() {
-        Instant checkinTime = getCheckinTime();
-        if (checkinTime != null) {
-            LocalDate time = checkinTime.atZone(ZoneId.of("Asia/Shanghai")).toLocalDate();
-            if (LocalDate.now().isEqual(time)) {
-                throw new BadRequestException("今日已签到");
-            }
-        }
-    }
-
-    public Instant getCheckinTime() {
-        return settingRepository.findById("checkin_time").map(Setting::getValue).map(Instant::parse).orElse(null);
-    }
-
-    public void showMyAli(boolean enabled) {
-        showMyAli(enabled, false);
-    }
-
-    public void showMyAli(boolean enabled, boolean start) {
-        validateAListStatus();
-        settingRepository.save(new Setting("show_my_ali", String.valueOf(enabled)));
-
-        String token = start ? "" : login();
-        if (!start) {
-            deleteStorage(10000, token);
-        }
-
-        Connection connection = null;
-
-        try {
-            connection = DriverManager.getConnection(DB_URL);
-            Statement statement = connection.createStatement();
-
-            if (enabled) {
-                String sql = "INSERT INTO x_storages VALUES(10000,'/\uD83D\uDCC0我的阿里云盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + openToken + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
-                statement.executeUpdate(sql);
-                log.info("add storage \uD83D\uDCC0我的阿里云盘");
-                if (!start) {
-                    enableStorage(10000, token);
-                }
-            } else {
-                log.info("remove storage \uD83D\uDCC0我的阿里云盘");
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    // ignore
-                }
-            }
-        }
-    }
-
-    public Instant updateScheduleTime(Instant time) {
-        LocalTime localTime = time.atZone(ZoneId.of("Asia/Shanghai")).toLocalTime();
-        settingRepository.save(new Setting("schedule_time", time.toString()));
-        scheduledFuture.cancel(true);
-        scheduledFuture = scheduler.schedule(this::autoCheckin, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
-        log.info("update schedule time: {}", localTime);
-        return time;
-    }
 }

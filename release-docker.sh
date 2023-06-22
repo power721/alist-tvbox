@@ -21,7 +21,7 @@ mvn clean package || exit 1
 mv application-backup.yaml src/main/resources/application.yaml
 rm -f src/main/resources/data.sql
 
-date +%j.%H.%M > data/version
+date +%j.%H%M > data/version
 docker build --tag=haroldli/alist-tvbox:latest .
 docker rm -f alist-tvbox
 docker run -d -p 18080:8080 --rm --name=alist-tvbox haroldli/alist-tvbox:latest

@@ -51,7 +51,7 @@ public class TextUtils {
             }
         }
 
-        newName = newName.replace("普通话版", "").replace("合集", "");
+        newName = newName.replace("普通话版", "").replace("日语版", "").replace("合集", "");
 
         Matcher m = NUMBER.matcher(newName);
         if (m.find()) {

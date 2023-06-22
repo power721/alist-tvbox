@@ -11,7 +11,7 @@ mvn clean package || exit 1
 
 mv application-backup.yaml src/main/resources/application.yaml
 
-date +%j.%H.%M > data/version
+date +%j.%H%M > data/version
 docker build --tag=alist-tvbox:latest .
 
 docker images | grep alist-tvbox

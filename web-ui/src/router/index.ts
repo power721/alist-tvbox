@@ -10,6 +10,7 @@ import UserView from "@/views/UserView.vue";
 import SearchView from "@/views/SearchView.vue";
 import VodView from "@/views/VodView.vue";
 import SharesView from "@/views/SharesView.vue";
+import AccountsView from "@/views/AccountsView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -19,6 +20,12 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeView,
+      meta: {auth: true}
+    },
+    {
+      path: '/accounts',
+      name: 'accounts',
+      component: AccountsView,
       meta: {auth: true}
     },
     {

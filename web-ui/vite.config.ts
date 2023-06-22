@@ -19,6 +19,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/accounts": API,
+      "/ali-accounts": API,
       "/login": API,
       "/checkin": API,
       "/sites": API,

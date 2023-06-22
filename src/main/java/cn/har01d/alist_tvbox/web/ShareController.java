@@ -1,12 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.dto.AListLogin;
-import cn.har01d.alist_tvbox.dto.CheckinResult;
 import cn.har01d.alist_tvbox.dto.ShareInfo;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
-import cn.har01d.alist_tvbox.model.StorageInfo;
 import cn.har01d.alist_tvbox.service.ShareService;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
@@ -21,18 +16,15 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 
 @Profile("xiaoya")
 @RestController
 public class ShareController {
     private final ShareService shareService;
-    private final SettingRepository settingRepository;
 
-    public ShareController(ShareService shareService, SettingRepository settingRepository) {
+    public ShareController(ShareService shareService) {
         this.shareService = shareService;
-        this.settingRepository = settingRepository;
     }
 
     @GetMapping("/shares")
@@ -52,7 +44,7 @@ public class ShareController {
 
     @DeleteMapping("/shares/{id}")
     public void delete(@PathVariable Integer id) {
-        shareService.delete(id);
+        shareService.deleteShare(id);
     }
 
     @PostMapping("/delete-shares")
@@ -65,74 +57,9 @@ public class ShareController {
         return shareService.listResources(pageable);
     }
 
-    @PostMapping("/login")
-    public void updateLogin(@RequestBody AListLogin login) {
-        shareService.updateLogin(login);
-    }
-
-    @GetMapping("/login")
-    public AListLogin getLogin() {
-        return shareService.getLoginInfo();
-    }
-
-    @GetMapping("/storage")
-    public StorageInfo getStorageInfo() {
-        return shareService.getStorageInfo();
-    }
-
-    @PostMapping("/storage")
-    public StorageInfo updateStorageInfo(@RequestBody StorageInfo dto) {
-        return shareService.updateStorageInfo(dto);
-    }
-
     @GetMapping("/storages")
     public Object listStorages(Pageable pageable) {
         return shareService.listStorages(pageable);
-    }
-
-    @PostMapping("/checkin")
-    public CheckinResult checkin(@RequestParam(required = false) boolean force) {
-        return shareService.checkin(force);
-    }
-
-    @GetMapping("/checkin")
-    public Instant getCheckinTime() {
-        return shareService.getCheckinTime();
-    }
-
-    @PostMapping("/show-my-ali")
-    public void showMyAli(@RequestParam(required = false) boolean enabled) {
-        shareService.showMyAli(enabled);
-    }
-
-    @GetMapping("/show-my-ali")
-    public boolean showMyAli() {
-        return settingRepository.findById("show_my_ali").map(Setting::getValue).map(Boolean::parseBoolean).orElse(false);
-    }
-
-    @PostMapping("/schedule")
-    public Instant updateScheduleTime(@RequestBody Instant time) {
-        return shareService.updateScheduleTime(time);
-    }
-
-    @GetMapping("/alist/status")
-    public int getAListStatus() {
-        return shareService.getAListStatus();
-    }
-
-    @PostMapping("/alist/stop")
-    public void stopAListServer() {
-        shareService.stopAListServer();
-    }
-
-    @PostMapping("/alist/start")
-    public void startAListServer() {
-        shareService.startAListServer(false);
-    }
-
-    @PostMapping("/alist/restart")
-    public void restartAListServer() {
-        shareService.restartAListServer();
     }
 
     @PostMapping("/import-shares")
