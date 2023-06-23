@@ -43,12 +43,20 @@ EOF
 
 ![账号详情](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_detail.png)
 
+#### 转存文件夹ID
+在阿里网盘网页版上创建一个转存目录，比如“temp”.
+
+然后点击目录，浏览器显示的 URL
+https://www.aliyundrive.com/drive/folder/640xxxxxxxxxxxxxxxxxxxca8a 最后一串就是。
+
 ### 订阅
 ![订阅列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub.png)
 
 ![添加订阅](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub_config.png)
 
 添加订阅支持多个URL，用逗号隔开。定制部分基本和TvBox的配置json一致，添加了站点白名单`sites-whitelist`和黑名单`sites-blacklist`。
+
+定制属于高级功能，不懂TvBox配置格式不要轻易改动。
 
 站点`key`是必须的，其它字段可选。对于lives，rules，parses，doh类型，`name`字段是必须的。
 

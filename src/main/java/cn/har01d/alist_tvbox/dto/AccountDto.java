@@ -7,11 +7,11 @@ import java.time.Instant;
 @Data
 public class AccountDto {
     private String nickname;
-    private String refreshToken;
+    private String refreshToken = "";
     private Instant refreshTokenTime;
-    private String openToken;
+    private String openToken = "";
     private Instant openTokenTime;
-    private String folderId;
+    private String folderId = "";
     private Instant checkinTime;
     private int checkinDays;
     private boolean autoCheckin;

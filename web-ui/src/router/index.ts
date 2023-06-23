@@ -11,6 +11,7 @@ import SearchView from "@/views/SearchView.vue";
 import VodView from "@/views/VodView.vue";
 import SharesView from "@/views/SharesView.vue";
 import AccountsView from "@/views/AccountsView.vue";
+import FilesView from "@/views/FilesView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -32,6 +33,12 @@ const router = createRouter({
       path: '/sites',
       name: 'sites',
       component: SitesView,
+      meta: {auth: true}
+    },
+    {
+      path: '/files',
+      name: 'files',
+      component: FilesView,
       meta: {auth: true}
     },
     {

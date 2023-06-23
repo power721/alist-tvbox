@@ -22,6 +22,7 @@ export default defineConfig({
       "/ali-accounts": API,
       "/login": API,
       "/checkin": API,
+      "/files": API,
       "/sites": API,
       "/shares": API,
       "/resources": API,

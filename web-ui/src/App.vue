@@ -31,6 +31,7 @@ onMounted(() => {
           <el-menu-item index="/subscriptions" v-if="account.authenticated">订阅</el-menu-item>
 <!--          <el-menu-item index="/sub/0" v-if="account.authenticated">订阅0</el-menu-item>-->
           <el-menu-item index="/shares" v-if="account.authenticated&&shares">资源</el-menu-item>
+          <el-menu-item index="/files" v-if="account.authenticated&&shares">文件</el-menu-item>
           <el-menu-item index="/config" v-if="account.authenticated">配置</el-menu-item>
           <el-menu-item index="/vod" v-if="account.authenticated">vod</el-menu-item>
           <el-menu-item index="/search" v-if="account.authenticated">搜索</el-menu-item>

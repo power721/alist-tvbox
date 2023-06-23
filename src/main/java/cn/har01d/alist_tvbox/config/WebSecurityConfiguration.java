@@ -25,7 +25,7 @@ public class WebSecurityConfiguration {
                 .authorizeRequests()
                 .antMatchers(HttpMethod.POST, "/accounts/login", "/accounts/logout").permitAll()
                 .antMatchers(HttpMethod.OPTIONS).permitAll()
-                .antMatchers("/ali-accounts/**", "/sites/**", "/shares/**", "/subscriptions/**", "/settings/**").authenticated()
+                .antMatchers("/ali-accounts/**", "/files/**", "/sites/**", "/shares/**", "/subscriptions/**", "/settings/**").authenticated()
                 .antMatchers("/login", "/storage", "/storages", "/token", "/resources", "/checkin").authenticated()
                 .antMatchers(HttpMethod.POST).authenticated()
                 .antMatchers(HttpMethod.PUT).authenticated()

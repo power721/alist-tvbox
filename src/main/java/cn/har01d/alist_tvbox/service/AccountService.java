@@ -589,9 +589,9 @@ public class AccountService {
         long count = validateCreate(dto);
         Account account = new Account();
         account.setId((int) count + 1);
-        account.setRefreshToken(dto.getRefreshToken());
-        account.setOpenToken(dto.getOpenToken());
-        account.setFolderId(dto.getFolderId());
+        account.setRefreshToken(dto.getRefreshToken().trim());
+        account.setOpenToken(dto.getOpenToken().trim());
+        account.setFolderId(dto.getFolderId().trim());
         account.setAutoCheckin(dto.isAutoCheckin());
         account.setShowMyAli(dto.isShowMyAli());
         if (count == 0) {
@@ -706,9 +706,9 @@ public class AccountService {
             changed = true;
         }
 
-        account.setRefreshToken(dto.getRefreshToken());
-        account.setOpenToken(dto.getOpenToken());
-        account.setFolderId(dto.getFolderId());
+        account.setRefreshToken(dto.getRefreshToken().trim());
+        account.setOpenToken(dto.getOpenToken().trim());
+        account.setFolderId(dto.getFolderId().trim());
         account.setAutoCheckin(dto.isAutoCheckin());
         account.setShowMyAli(dto.isShowMyAli());
         account.setMaster(dto.isMaster());
