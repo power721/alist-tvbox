@@ -29,7 +29,7 @@ public class AListLocalService {
         this.restTemplate = builder.build();
     }
 
-    public void startAListServer(boolean wait) {
+    public void startAListServer() {
         try {
             log.info("start AList server");
             ProcessBuilder builder = new ProcessBuilder();
@@ -38,24 +38,10 @@ public class AListLocalService {
             builder.directory(new File("/opt/alist"));
             Process process = builder.start();
             settingRepository.save(new Setting("alist_start_time", Instant.now().toString()));
-            if (wait) {
-                process.waitFor(5, TimeUnit.SECONDS);
-                waitAListStart();
-            }
-            log.info("AList server started");
+            log.info("AList server starting, PID: {}", process.pid());
             aListStatus = 1;
         } catch (Exception e) {
             throw new IllegalStateException(e);
-        }
-    }
-
-    private void waitAListStart() throws InterruptedException {
-        for (int i = 0; i < 100; ++i) {
-            ResponseEntity<SettingResponse> response = restTemplate.getForEntity("http://localhost:5244/api/public/settings", SettingResponse.class);
-            if (response.getBody() != null && response.getBody().getCode() == 200) {
-               return;
-            }
-            Thread.sleep(500);
         }
     }
 
@@ -75,7 +61,7 @@ public class AListLocalService {
 
     public void restartAListServer() {
         stopAListServer();
-        startAListServer(false);
+        startAListServer();
     }
 
     public void validateAListStatus() {

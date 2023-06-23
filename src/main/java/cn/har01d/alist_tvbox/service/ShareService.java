@@ -85,7 +85,7 @@ public class ShareService {
         loadAListShares(list);
 
         if (accountRepository.count() > 0) {
-            aListLocalService.startAListServer(true);
+            aListLocalService.startAListServer();
         }
     }
 

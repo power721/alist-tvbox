@@ -597,7 +597,7 @@ public class AccountService {
         if (count == 0) {
             account.setMaster(true);
             updateAList(account);
-            aListLocalService.startAListServer(false);
+            aListLocalService.startAListServer();
             showMyAli(account);
         } else {
             showMyAliWithAPI(account);

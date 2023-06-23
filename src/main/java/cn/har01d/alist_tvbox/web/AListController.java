@@ -29,12 +29,11 @@ public class AListController {
 
     @PostMapping("/start")
     public void startAListServer() {
-        service.startAListServer(false);
+        service.startAListServer();
     }
 
     @PostMapping("/restart")
     public void restartAListServer() {
         service.restartAListServer();
     }
-
 }

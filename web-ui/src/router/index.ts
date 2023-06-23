@@ -12,6 +12,7 @@ import VodView from "@/views/VodView.vue";
 import SharesView from "@/views/SharesView.vue";
 import AccountsView from "@/views/AccountsView.vue";
 import FilesView from "@/views/FilesView.vue";
+import WaitAList from "@/views/WaitAList.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -21,6 +22,12 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeView,
+      meta: {auth: true}
+    },
+    {
+      path: '/wait',
+      name: 'wait',
+      component: WaitAList,
       meta: {auth: true}
     },
     {
