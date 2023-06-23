@@ -278,6 +278,11 @@ onMounted(() => {
         indexRemoteVersion.value = data.index
         appRemoteVersion.value = +data.app
       })
+    } else {
+      axios.get('/token').then(({data}) => {
+        form.value.token = data
+        form.value.enabledToken = data != ''
+      })
     }
   })
 })

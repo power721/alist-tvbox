@@ -37,3 +37,4 @@ docker run -d -p $PORT1:8080 -p $PORT2:80 -v "$BASE_DIR":/data --restart=always 
 
 echo "请尝试用以下IP访问："
 ip a | grep inet | grep -v inet6 | awk '{print $2}' | awk -F/ '{print $1}'
+echo "云服务器请用公网IP访问"
