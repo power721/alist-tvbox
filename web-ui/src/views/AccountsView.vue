@@ -200,7 +200,7 @@ const form = ref({
   refreshToken: '',
   openToken: '',
   folderId: '',
-  autoCheckin: false,
+  autoCheckin: true,
   showMyAli: false,
   master: false,
   refreshTokenTime: '',
@@ -243,7 +243,7 @@ const handleAdd = () => {
     refreshToken: '',
     openToken: '',
     folderId: '',
-    autoCheckin: false,
+    autoCheckin: true,
     showMyAli: false,
     master: false,
     refreshTokenTime: '',
@@ -251,13 +251,6 @@ const handleAdd = () => {
     checkinTime: '',
     checkinDays: 0,
   }
-  formVisible.value = true
-}
-
-const handleEdit = (data: any) => {
-  dialogTitle.value = '更新账号 - ' + data.id
-  updateAction.value = true
-  form.value = data
   formVisible.value = true
 }
 

@@ -82,7 +82,7 @@
               <el-button type="primary" @click="updateScheduleTime">更新</el-button>
             </el-form-item>
             <el-form-item class="bottom">
-              <span>自动签到和刷新Token的时间</span>
+              <span>自动签到和刷新阿里Token的时间</span>
             </el-form-item>
           </el-form>
         </el-card>
