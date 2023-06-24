@@ -27,7 +27,7 @@ curl -s http://d.har01d.cn/update_xiaoya.sh | sudo bash
 
 如果AList开启了强制登录，xiaoya版会自动填写认证token。
 
-对于独立版需要手动获取Token，执行命令：
+对于独立版需要手动获取认证Token，执行命令：
 ```bash
 docker exec -i xiaoya sqlite3 /opt/alist/data/data.db <<EOF
 select value from x_setting_items where key = "token"; 
@@ -91,4 +91,4 @@ docker_address.txt不再生效，请使用订阅API。
 
 alist_list.txt第一次启动时加载，以后不再生效，请在界面添加站点。
 
-proxy.txt、pikpak.txt、my.json、iptv.m3u还是生效的。
+proxy.txt、tv.txt、pikpak.txt、my.json、iptv.m3u还是生效的，可以在文件页面编辑。

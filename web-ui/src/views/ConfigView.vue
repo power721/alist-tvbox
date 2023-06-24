@@ -119,7 +119,7 @@
           </template>
           <div>本地版本：{{ movieVersion }}</div>
           <div v-if="movieRemoteVersion&&movieRemoteVersion>movieVersion">
-            最新版本：{{ movieRemoteVersion }}，请升级应用。
+            最新版本：{{ movieRemoteVersion }}，请重启更新。
           </div>
         </el-card>
       </el-col>

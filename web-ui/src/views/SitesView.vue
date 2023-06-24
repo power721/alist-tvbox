@@ -74,7 +74,7 @@
         <el-form-item label="访问密码" label-width="140">
           <el-input v-model="form.password" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="Token" label-width="140">
+        <el-form-item label="认证Token" label-width="140">
           <el-input v-model="form.token" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="可搜索？">
