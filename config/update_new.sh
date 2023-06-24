@@ -1,4 +1,4 @@
-if docker ps | grep -q xiaoya; then
+if docker ps | grep -v xiaoya-hostmode | grep -q xiaoya; then
   echo -e "\e[33m其它版本小雅Docker容器运行中。\e[0m"
   while true; do
       read -r -p "是否停止小雅Docker容器？[Y/N] " yn
