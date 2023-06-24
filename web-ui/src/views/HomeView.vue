@@ -30,7 +30,7 @@ onMounted(() => {
     </h1>
     <h3 v-if="store.xiaoya">小雅集成版</h3>
     <h3 v-else>独立版</h3>
-    <iframe v-if="store.xiaoya" :src="url" :width="width" :height="height">
+    <iframe v-if="store.xiaoya&&store.aListStatus" :src="url" :width="width" :height="height">
     </iframe>
   </div>
 </template>

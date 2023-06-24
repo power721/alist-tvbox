@@ -80,6 +80,7 @@ public class SiteService {
                             site.setName(parts[0]);
                             site.setVersion(Integer.parseInt(parts[1].replace("v", "")));
                             site.setUrl(parts[2]);
+                            site.setFolder(parts[3]);
                             site.setOrder(order++);
                             siteRepository.save(site);
                             log.info("save site to database: {}", site);
