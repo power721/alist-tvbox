@@ -66,7 +66,12 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService, IndexService indexService, SiteService siteService, AppProperties appProperties, DoubanService doubanService, SubscriptionService subscriptionService) {
+    public TvBoxService(AListService aListService,
+                        IndexService indexService,
+                        SiteService siteService,
+                        AppProperties appProperties,
+                        DoubanService doubanService,
+                        SubscriptionService subscriptionService) {
         this.aListService = aListService;
         this.indexService = indexService;
         this.siteService = siteService;
@@ -150,6 +155,12 @@ public class TvBoxService {
             indexFile = indexService.downloadIndexFile(site);
         }
 
+        List<MovieDetail> list = searchFromIndexFile(site, keyword, indexFile);
+        log.debug("search \"{}\" from site {}:{}, result: {}", keyword, site.getId(), site.getName(), list.size());
+        return list;
+    }
+
+    private List<MovieDetail> searchFromIndexFile(Site site, String keyword, String indexFile) throws IOException {
         log.info("search \"{}\" from site {}:{}, index file: {}", keyword, site.getId(), site.getName(), indexFile);
         Set<String> keywords = Arrays.stream(keyword.split("\\s+")).collect(Collectors.toSet());
         Set<String> lines = Files.readAllLines(Paths.get(indexFile))
@@ -172,8 +183,6 @@ public class TvBoxService {
             list.add(movieDetail);
         }
         list.sort(Comparator.comparing(MovieDetail::getVod_id));
-
-        log.debug("search \"{}\" from site {}:{}, result: {}", keyword, site.getId(), site.getName(), list.size());
         return list;
     }
 
@@ -203,6 +212,10 @@ public class TvBoxService {
     }
 
     private List<MovieDetail> searchByXiaoya(Site site, String keyword) throws IOException {
+        if (site.getId() == 1 && appProperties.isXiaoya()) {
+            return searchFromIndexFile(site, keyword, "/index/index.video.txt");
+        }
+
         log.info("search \"{}\" from xiaoya {}:{}", keyword, site.getId(), site.getName());
         String url = site.getUrl() + "/search?url=&type=video&box=" + keyword;
         Document doc = Jsoup.connect(url).get();

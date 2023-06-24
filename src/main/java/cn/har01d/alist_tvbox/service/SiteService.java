@@ -8,7 +8,6 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
@@ -23,7 +22,6 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,17 +30,15 @@ import java.util.Optional;
 public class SiteService {
     private final AppProperties appProperties;
     private final SiteRepository siteRepository;
-    private final Environment environment;
 
-    public SiteService(AppProperties appProperties, SiteRepository siteRepository, Environment environment) {
+    public SiteService(AppProperties appProperties, SiteRepository siteRepository) {
         this.appProperties = appProperties;
         this.siteRepository = siteRepository;
-        this.environment = environment;
     }
 
     @PostConstruct
     public void init() {
-        boolean sp = Arrays.asList(environment.getActiveProfiles()).contains("xiaoya");
+        boolean sp = appProperties.isXiaoya();
         if (siteRepository.count() > 0) {
             if (sp) {
                 siteRepository.findById(1).ifPresent(this::updateUserToken);
@@ -226,7 +222,7 @@ public class SiteService {
     }
 
     public void delete(int id) {
-        if (id == 1 && Arrays.asList(environment.getActiveProfiles()).contains("xiaoya")) {
+        if (id == 1 && appProperties.isXiaoya()) {
             throw new BadRequestException("不能删除默认站点");
         }
         siteRepository.deleteById(id);

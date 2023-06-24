@@ -13,6 +13,7 @@ logging:
     name: log/app.log
 
 app:
+  xiaoya: true
   sites:
     - name: 丫仙女
       url: http://localhost

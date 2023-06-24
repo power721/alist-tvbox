@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -50,6 +51,7 @@ import java.util.stream.Collectors;
 @SuppressWarnings("unchecked")
 public class SubscriptionService {
     private final Environment environment;
+    private final AppProperties appProperties;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final SettingRepository settingRepository;
@@ -57,11 +59,12 @@ public class SubscriptionService {
 
     private String token = "";
 
-    public SubscriptionService(Environment environment, RestTemplateBuilder builder,
+    public SubscriptionService(Environment environment, AppProperties appProperties, RestTemplateBuilder builder,
                                ObjectMapper objectMapper,
                                SettingRepository settingRepository,
                                SubscriptionRepository subscriptionRepository) {
         this.environment = environment;
+        this.appProperties = appProperties;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.OK_USER_AGENT)
@@ -410,7 +413,7 @@ public class SubscriptionService {
 
     private String loadConfigJson(String url) {
         if (url == null || url.isEmpty()) {
-            if (Arrays.asList(environment.getActiveProfiles()).contains("xiaoya")) {
+            if (appProperties.isXiaoya()) {
                 return loadConfigJsonXiaoya();
             }
             return null;

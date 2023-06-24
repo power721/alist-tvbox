@@ -10,6 +10,7 @@ import java.util.Set;
 @Data
 @ConfigurationProperties("app")
 public class AppProperties {
+    private boolean xiaoya;
     private boolean sort;
     private int pageSize = 100;
     private Set<String> formats;

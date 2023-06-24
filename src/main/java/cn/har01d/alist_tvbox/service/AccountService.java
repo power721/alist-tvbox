@@ -374,13 +374,13 @@ public class AccountService {
                 try {
                     String sql;
                     Statement statement = connection.createStatement();
-                    String name = "\uD83D\uDCC0我的阿里云盘";
-                    if (id > 10000) {
-                        name += (id - 9999);
+                    String name = account.getNickname();
+                    if (StringUtils.isBlank(name)) {
+                        name = String.valueOf(account.getId());
                     }
                     if (account.isShowMyAli()) {
                         log.info("enable AList storage {}", id, name);
-                        sql = "INSERT INTO x_storages VALUES(" + id + ",'/" + name + "',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+                        sql = "INSERT INTO x_storages VALUES(" + id + ",'/\uD83D\uDCC0我的阿里云盘/" + name + "',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         log.info("add AList storage {} {}", id, name);
                     } else {
                         sql = "DELETE FROM x_storages WHERE id = " + id;
@@ -751,12 +751,12 @@ public class AccountService {
         int storageId = 9999 + account.getId();
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
             Statement statement = connection.createStatement();
-            String name = "\uD83D\uDCC0我的阿里云盘";
-            if (account.getId() > 1) {
-                name += account.getId();
+            String name = account.getNickname();
+            if (StringUtils.isBlank(name)) {
+                name = String.valueOf(account.getId());
             }
             if (account.isShowMyAli()) {
-                String sql = "INSERT INTO x_storages VALUES(" + storageId + ",'/" + name + "',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
+                String sql = "INSERT INTO x_storages VALUES(" + storageId + ",'/\uD83D\uDCC0我的阿里云盘/" + name + "',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                 statement.executeUpdate(sql);
                 log.info("add AList storage {}", name);
             }
@@ -780,12 +780,12 @@ public class AccountService {
 
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
             Statement statement = connection.createStatement();
-            String name = "\uD83D\uDCC0我的阿里云盘";
-            if (account.getId() > 1) {
-                name += account.getId();
+            String name = account.getNickname();
+            if (StringUtils.isBlank(name)) {
+                name = String.valueOf(account.getId());
             }
             if (account.isShowMyAli()) {
-                String sql = "INSERT INTO x_storages VALUES(" + storageId + ",'/" + name + "',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
+                String sql = "INSERT INTO x_storages VALUES(" + storageId + ",'/\uD83D\uDCC0我的阿里云盘/" + name + "',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
                 statement.executeUpdate(sql);
                 log.info("add AList storage {}", name);
                 if (status == 2) {
