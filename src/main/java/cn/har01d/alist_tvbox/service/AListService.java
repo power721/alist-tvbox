@@ -76,7 +76,6 @@ public class AListService {
     }
 
     private String fixPath(String path) {
-        path = "/" + path;
         return path.replaceAll("/+", "/");
     }
 
@@ -85,7 +84,10 @@ public class AListService {
         String url = site.getUrl() + (version == 2 ? "/api/public/path" : "/api/fs/list");
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
-        request.setPath(fixPath(site.getFolder() + path));
+        request.setPath(path);
+        if (StringUtils.isNotBlank(site.getFolder())) {
+            request.setPath(fixPath(site.getFolder() + "/" + path));
+        }
         request.setPage(page);
         request.setSize(size);
         log.debug("call api: {} request: {}", url, request);
