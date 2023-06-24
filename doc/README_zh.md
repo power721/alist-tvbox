@@ -1,9 +1,29 @@
-# alist-tvbox
+# AList-TvBox
 AList代理，支持xioaya版AList界面管理。
+## 功能
+- 管理界面
+- 海报墙
+- 多个AList站点
+- 多个阿里云盘账号
+- 挂载我的云盘
+- 自动签到
+- 自动刷新阿里Token
+- 自定义TvBox配置
+- 安全订阅配置
+- TvBox配置聚合
+- 添加阿里云盘分享
+- 管理AList服务
+- 小雅配置文件管理
+
 ## 安装
 ### 一键安装
+小雅集成版（不需要再安装小雅版Docker）：
 ```bash
 curl -s http://d.har01d.cn/update_xiaoya.sh | sudo bash
+```
+独立版：
+```bash
+curl -s http://d.har01d.cn/update_new.sh | sudo bash
 ```
 对于群辉系统，请挂载Docker的/data目录到群辉文件系统。
 

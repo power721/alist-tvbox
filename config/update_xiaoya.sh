@@ -1,6 +1,19 @@
+if docker ps | grep -v xiaoya-tvbox | grep -q xiaoya; then
+  echo -e "\e[33m原版小雅Docker容器运行中。\e[0m"
+  while true; do
+      read -r -p "是否停止小雅Docker容器？[Y/N] " yn
+      case $yn in
+          [Yy]* ) docker rm -f xiaoya; break;;
+          [Nn]* ) exit 1;;
+          * ) echo "请输入Y或者N";;
+      esac
+  done
+fi
+
 BASE_DIR=/etc/xiaoya
 PORT1=5678
 PORT2=5244
+
 if [ $# -gt 0 ]; then
 	BASE_DIR=$1
 fi
@@ -13,8 +26,8 @@ if [ $# -gt 2 ]; then
 	PORT2=$3
 fi
 
-echo "config dir: $BASE_DIR"
-echo "Port mappings: $PORT1:8080 $PORT2:80"
+echo -e "[36m使用配置目录：\e[0m $BASE_DIR"
+echo -e "[36m端口映射：\e[0m $PORT1:8080 $PORT2:80"
 
 mkdir -p $BASE_DIR
 
@@ -31,10 +44,16 @@ do
    docker pull haroldli/xiaoya-tvbox:latest && break
 done
 
-echo "重启应用"
+echo -e "\e[33m重启应用\e[0m"
 docker rm -f xiaoya-tvbox && \
 docker run -d -p $PORT1:8080 -p $PORT2:80 -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 
-echo "请尝试用以下IP访问："
-ip a | grep inet | grep -v inet6 | awk '{print $2}' | awk -F/ '{print $1}'
-echo "云服务器请用公网IP访问"
+IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head -1)
+if [ -n "$IP" ]; then
+  echo -e "\e[32m请用以下地址访问：\e[0m"
+  echo -e "    \e[32m管理界面\e[0m： http://$IP:$PORT1/"
+  echo -e "    \e[32m小雅AList\e[0m： http://$IP:$PORT2/"
+else
+  echo -e "\e[32m云服务器请用公网IP访问\e[0m"
+fi
+echo ""
