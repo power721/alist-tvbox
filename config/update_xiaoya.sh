@@ -3,9 +3,9 @@ if docker ps | grep -v xiaoya-tvbox | grep -q xiaoya; then
   while true; do
       read -r -p "是否停止小雅Docker容器？[Y/N] " yn
       case $yn in
-          [Yy]* ) docker rm -f xiaoya; break;;
+          [Yy]* ) docker rm -f xiaoya 2>/dev/null; break;;
           [Nn]* ) exit 1;;
-          * ) echo "请输入Y或者N";;
+          * ) echo "请输入'Y'或者'N'";;
       esac
   done
 fi
@@ -26,8 +26,8 @@ if [ $# -gt 2 ]; then
 	PORT2=$3
 fi
 
-echo -e "[36m使用配置目录：\e[0m $BASE_DIR"
-echo -e "[36m端口映射：\e[0m $PORT1:8080 $PORT2:80"
+echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
+echo -e "\e[36m端口映射：\e[0m $PORT1:8080  $PORT2:80"
 
 mkdir -p $BASE_DIR
 
@@ -45,7 +45,7 @@ do
 done
 
 echo -e "\e[33m重启应用\e[0m"
-docker rm -f xiaoya-tvbox && \
+docker rm -f xiaoya-tvbox 2>/dev/null && \
 docker run -d -p $PORT1:8080 -p $PORT2:80 -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 
 IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head -1)

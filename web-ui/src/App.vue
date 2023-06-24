@@ -3,6 +3,7 @@ import {RouterView, useRouter} from 'vue-router'
 import accountService from "@/services/account.service";
 import {onMounted, ref} from "vue";
 import axios from "axios";
+import {store} from "@/services/store";
 
 const account = accountService.account
 const router = useRouter()
@@ -16,8 +17,10 @@ const logout = () => {
 onMounted(() => {
   axios.get("/profiles").then(({data}) => {
     show.value = data.includes('xiaoya')
+    store.xiaoya = data.includes('xiaoya')
     if (show.value) {
       axios.get('/alist/status').then(({data}) => {
+        store.aListStatus = data
         show.value = show.value && data != 1
         if (data === 1) {
          router.push('/wait')

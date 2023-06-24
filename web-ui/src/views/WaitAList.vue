@@ -4,6 +4,7 @@ import {computed, onMounted, ref} from "vue";
 import axios from "axios";
 import {onUnmounted} from "@vue/runtime-core";
 import {useRouter} from "vue-router";
+import {store} from "@/services/store";
 
 const router = useRouter()
 
@@ -18,13 +19,12 @@ const increase = () => {
   }
 }
 
-const aListStatus = ref(0)
 const aListStarted = ref(false)
 
 const getAListStatus = () => {
   axios.get('/alist/status').then(({data}) => {
     increase()
-    aListStatus.value = data
+    store.aListStatus = data
     aListStarted.value = data != 0
     if (data !== 1) {
       clearInterval(intervalId)
@@ -39,7 +39,7 @@ const getAListStatus = () => {
 
 onMounted(() => {
   axios.get('/alist/status').then(({data}) => {
-    aListStatus.value = data
+    store.aListStatus = data
     aListStarted.value = data != 0
     if (data === 1) {
       percentage.value = 0
@@ -67,7 +67,7 @@ onUnmounted(() => {
         v-model="aListStarted"
         inline-prompt
         :disabled="true"
-        :active-text="aListStatus===2?'运行中':'启动中'"
+        :active-text="store.aListStatus===2?'运行中':'启动中'"
         inactive-text="停止中"
       />
       <el-progress

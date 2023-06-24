@@ -7,9 +7,9 @@
             <div class="card-header">
               <span>AList运行状态</span>
               <div>
-                <el-button type="primary" v-if="aListStatus===0" @click="handleAList('start')">启动</el-button>
-                <el-button type="warning" v-if="aListStatus===2" @click="handleAList('restart')">重启</el-button>
-                <el-button type="danger" v-if="aListStatus===2" @click="handleAList('stop')">停止</el-button>
+                <el-button type="primary" v-if="store.aListStatus===0" @click="handleAList('start')">启动</el-button>
+                <el-button type="warning" v-if="store.aListStatus===2" @click="handleAList('restart')">重启</el-button>
+                <el-button type="danger" v-if="store.aListStatus===2" @click="handleAList('stop')">停止</el-button>
               </div>
             </div>
           </template>
@@ -17,7 +17,7 @@
             v-model="aListStarted"
             inline-prompt
             :disabled="true"
-            :active-text="aListStatus===2?'运行中':'启动中'"
+            :active-text="store.aListStatus===2?'运行中':'启动中'"
             inactive-text="停止中"
           />
           <span class="hint" v-if="aListStartTime">启动时间：{{ formatTime(aListStartTime) }}</span>
@@ -32,7 +32,7 @@
           />
         </el-card>
 
-        <el-card class="box-card" v-if="showLogin&&aListStatus">
+        <el-card class="box-card" v-if="showLogin&&store.aListStatus">
           <el-form :model="login" label-width="120px" v-if="showLogin">
             <el-form-item prop="token" label="强制登录AList">
               <el-switch
@@ -149,6 +149,7 @@ import {computed, onMounted, ref} from "vue";
 import {ElMessage} from "element-plus";
 import axios from "axios";
 import {onUnmounted} from "@vue/runtime-core";
+import {store} from "@/services/store";
 
 let intervalId = 0
 const percentage = ref<number>(0)
@@ -161,7 +162,6 @@ const increase = () => {
   }
 }
 
-const aListStatus = ref(0)
 const aListStarted = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
@@ -234,7 +234,7 @@ const handleAList = (op: string) => {
 const getAListStatus = () => {
   axios.get('/alist/status').then(({data}) => {
     increase()
-    aListStatus.value = data
+    store.aListStatus = data
     aListStarted.value = data != 0
     if (data !== 1) {
       clearInterval(intervalId)
@@ -247,44 +247,43 @@ const getAListStatus = () => {
 }
 
 onMounted(() => {
-  axios.get("/profiles").then(({data}) => {
-    showLogin.value = data.includes('xiaoya')
-    if (showLogin.value) {
-      axios.get('/settings').then(({data}) => {
-        form.value.token = data.token
-        form.value.enabledToken = data.token != ''
-        scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
-        aListStartTime.value = data.alist_start_time
-        movieVersion.value = +data.movie_version
-        indexVersion.value = data.index_version
-        dockerVersion.value = data.docker_version
-        appVersion.value = +data.app_version
-        openTokenUrl.value = data.open_token_url
-        autoCheckin.value = data.auto_checkin === 'true'
-        login.value.username = data.alist_username
-        login.value.password = data.alist_password
-        login.value.enabled = data.alist_login === 'true'
-      })
-      axios.get('/alist/status').then(({data}) => {
-        aListStatus.value = data
-        aListStarted.value = data != 0
-        if (data === 1) {
-          percentage.value = 0
-          intervalId = setInterval(getAListStatus, 1000)
-        }
-      })
-      axios.get('/versions').then(({data}) => {
-        movieRemoteVersion.value = +data.movie
-        indexRemoteVersion.value = data.index
-        appRemoteVersion.value = +data.app
-      })
-    } else {
-      axios.get('/token').then(({data}) => {
-        form.value.token = data
-        form.value.enabledToken = data != ''
-      })
-    }
-  })
+  showLogin.value = store.xiaoya
+  if (store.xiaoya) {
+
+    axios.get('/settings').then(({data}) => {
+      form.value.token = data.token
+      form.value.enabledToken = data.token != ''
+      scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
+      aListStartTime.value = data.alist_start_time
+      movieVersion.value = +data.movie_version
+      indexVersion.value = data.index_version
+      dockerVersion.value = data.docker_version
+      appVersion.value = +data.app_version
+      openTokenUrl.value = data.open_token_url
+      autoCheckin.value = data.auto_checkin === 'true'
+      login.value.username = data.alist_username
+      login.value.password = data.alist_password
+      login.value.enabled = data.alist_login === 'true'
+    })
+    axios.get('/alist/status').then(({data}) => {
+      store.aListStatus = data
+      aListStarted.value = data != 0
+      if (data === 1) {
+        percentage.value = 0
+        intervalId = setInterval(getAListStatus, 1000)
+      }
+    })
+    axios.get('/versions').then(({data}) => {
+      movieRemoteVersion.value = +data.movie
+      indexRemoteVersion.value = data.index
+      appRemoteVersion.value = +data.app
+    })
+  } else {
+    axios.get('/token').then(({data}) => {
+      form.value.token = data
+      form.value.enabledToken = data != ''
+    })
+  }
 })
 
 onUnmounted(() => {
