@@ -28,6 +28,7 @@ public class Site {
     private String password = "";
     private String token = "";
     private String indexFile;
+    private String folder;
     private boolean searchable;
     private boolean disabled;
     @Column(columnDefinition = "boolean default false")

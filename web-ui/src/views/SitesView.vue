@@ -16,6 +16,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="version" label="版本" width="70"/>
+      <el-table-column prop="folder" label="根目录" width="180"/>
       <el-table-column prop="password" label="访问密码" width="120"/>
       <el-table-column prop="xiaoya" label="小雅版？" width="90"/>
       <el-table-column prop="searchable" label="可搜索？" width="90">
@@ -66,6 +67,9 @@
         </el-form-item>
         <el-form-item label="版本" label-width="140">
           <el-input-number v-model="form.version" min="2" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="根目录" label-width="140">
+          <el-input v-model="form.folder" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="访问密码" label-width="140">
           <el-input v-model="form.password" autocomplete="off"/>
@@ -167,6 +171,7 @@ const form = ref({
   id: 0,
   name: '',
   url: '',
+  folder: '',
   password: '',
   token: '',
   searchable: false,
@@ -184,6 +189,7 @@ const handleAdd = () => {
     id: 0,
     name: '',
     url: '',
+    folder: '',
     password: '',
     token: '',
     searchable: false,

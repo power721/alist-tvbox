@@ -696,10 +696,7 @@ public class AccountService {
         validateUpdate(id, dto);
 
         Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
-        if (account.isShowMyAli() != dto.isShowMyAli()) {
-            showMyAliWithAPI(account);
-        }
-
+        boolean aliChanged = account.isShowMyAli() != dto.isShowMyAli();
         boolean tokenChanged = !Objects.equals(account.getRefreshToken(), dto.getRefreshToken()) || !Objects.equals(account.getOpenToken(), dto.getOpenToken());
         boolean changed = tokenChanged || account.isMaster() != dto.isMaster();
         if (!Objects.equals(account.getFolderId(), dto.getFolderId())) {
@@ -717,6 +714,10 @@ public class AccountService {
             updateMaster();
             account.setMaster(true);
             updateAList(account);
+        }
+
+        if (aliChanged) {
+            showMyAliWithAPI(account);
         }
 
         if (tokenChanged) {

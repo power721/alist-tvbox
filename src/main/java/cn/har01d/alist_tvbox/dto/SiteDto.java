@@ -9,6 +9,7 @@ public class SiteDto {
     private String password;
     private String token;
     private String indexFile;
+    private String folder;
     private boolean searchable;
     private boolean disabled;
     private boolean xiaoya;

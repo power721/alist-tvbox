@@ -156,6 +156,7 @@ public class SiteService {
         site.setUrl(dto.getUrl());
         site.setPassword(dto.getPassword());
         site.setToken(dto.getToken());
+        site.setFolder(dto.getFolder());
         site.setOrder(dto.getOrder());
         site.setSearchable(dto.isSearchable());
         site.setXiaoya(dto.isXiaoya());
@@ -181,6 +182,7 @@ public class SiteService {
         site.setUrl(dto.getUrl());
         site.setPassword(dto.getPassword());
         site.setToken(dto.getToken());
+        site.setFolder(dto.getFolder());
         site.setOrder(dto.getOrder());
         site.setSearchable(dto.isSearchable());
         site.setXiaoya(dto.isXiaoya());
