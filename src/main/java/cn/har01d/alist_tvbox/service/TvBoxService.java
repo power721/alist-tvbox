@@ -182,7 +182,10 @@ public class TvBoxService {
             movieDetail.setVod_id(site.getId() + "$" + path);
             movieDetail.setVod_name(site.getName() + ":" + line);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
-            movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
+            movieDetail.setVod_tag(FILE);
+            if (!isMediaFile) {
+                setDoubanInfo(site, movieDetail, getParent(path), false);
+            }
             list.add(movieDetail);
         }
         list.sort(Comparator.comparing(MovieDetail::getVod_id));
@@ -208,7 +211,10 @@ public class TvBoxService {
                     movieDetail.setVod_id(site.getId() + "$" + path);
                     movieDetail.setVod_name(e.getName());
                     movieDetail.setVod_pic(Constants.ALIST_PIC);
-                    movieDetail.setVod_tag(isMediaFile ? FILE : FOLDER);
+                    movieDetail.setVod_tag(FILE);
+                    if (!isMediaFile) {
+                        setDoubanInfo(site, movieDetail, getParent(path), false);
+                    }
                     return movieDetail;
                 })
                 .collect(Collectors.toList());
