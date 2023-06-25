@@ -41,6 +41,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
+
 @Slf4j
 @Service
 @Profile("xiaoya")
@@ -95,7 +97,7 @@ public class ShareService {
             if (Files.exists(path)) {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);
-                settingRepository.save(new Setting("open_token_url", (String) json.get("opentoken_auth_url")));
+                settingRepository.save(new Setting(OPEN_TOKEN_URL, (String) json.get("opentoken_auth_url")));
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -109,7 +111,7 @@ public class ShareService {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);
                 json.put("opentoken_auth_url", url);
-                settingRepository.save(new Setting("open_token_url", url));
+                settingRepository.save(new Setting(OPEN_TOKEN_URL, url));
                 text = objectMapper.writeValueAsString(json);
                 Files.writeString(path, text);
             }
@@ -184,8 +186,8 @@ public class ShareService {
             return;
         }
 
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
-            Statement statement = connection.createStatement();
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             Account account = accountRepository.findById(1).orElse(new Account());
             for (Share share : list) {
                 try {
@@ -201,18 +203,16 @@ public class ShareService {
         } catch (Exception e) {
             log.warn("", e);
         }
-        // ignore
     }
 
     private void updateAListDriverType() {
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             log.info("update storage driver type");
-            Statement statement = connection.createStatement();
             statement.executeUpdate("update x_storages set driver = 'AliyundriveShare2Open' where driver = 'AliyundriveShare'");
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
-        // ignore
     }
 
     private String getMountPath(String path) {
@@ -247,8 +247,8 @@ public class ShareService {
         parseShare(share);
 
         String token = accountService.login();
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
-            Statement statement = connection.createStatement();
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             share.setId(shareId++);
             shareRepository.save(share);
 
@@ -259,7 +259,6 @@ public class ShareService {
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
-        // ignore
         return share;
     }
 
@@ -273,9 +272,8 @@ public class ShareService {
         shareRepository.save(share);
 
         String token = accountService.login();
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
-            Statement statement = connection.createStatement();
-
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             deleteStorage(id, token);
 
             String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
@@ -285,7 +283,6 @@ public class ShareService {
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
-        // ignore
         return share;
     }
 
@@ -342,8 +339,8 @@ public class ShareService {
         List<ShareInfo> list = new ArrayList<>();
         int size = pageable.getPageSize();
         int offset = pageable.getPageNumber() * size;
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
-            Statement statement = connection.createStatement();
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             String sql = "select count(*) from x_storages where driver = 'AliyundriveShare2Open'";
             ResultSet rs = statement.executeQuery(sql);
             total = rs.getInt(1);
@@ -366,7 +363,6 @@ public class ShareService {
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
-        // ignore
 
         return new PageImpl<>(list, pageable, total);
     }

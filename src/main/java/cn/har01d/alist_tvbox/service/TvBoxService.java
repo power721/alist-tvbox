@@ -170,6 +170,9 @@ public class TvBoxService {
 
         List<MovieDetail> list = new ArrayList<>();
         for (String line : lines) {
+            if (line.startsWith("./")) {
+                line = line.substring(1);
+            }
             boolean isMediaFile = isMediaFile(line);
             if (isMediaFile && lines.contains(getParent(line))) {
                 continue;

@@ -124,12 +124,6 @@ public class AListService {
         return true;
     }
 
-    public String readFileContent(Site site, String path) {
-        // TODO: fix it
-        String url = site.getUrl() + "/p" + path;
-        return get(site, url, String.class);
-    }
-
     public FsDetail getFile(Site site, String path) {
         int version = getVersion(site);
         if (version == 2) {

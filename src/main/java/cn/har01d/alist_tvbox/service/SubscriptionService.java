@@ -38,13 +38,14 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 
 @Slf4j
 @Service
@@ -76,7 +77,7 @@ public class SubscriptionService {
 
     @PostConstruct
     public void init() {
-        token = settingRepository.findById("token")
+        token = settingRepository.findById(TOKEN)
                 .map(Setting::getValue)
                 .orElse("");
 
@@ -98,7 +99,7 @@ public class SubscriptionService {
 
     public void deleteToken() {
         token = "";
-        settingRepository.save(new Setting("token", token));
+        settingRepository.save(new Setting(TOKEN, token));
     }
 
     public String createToken(TokenDto dto) {
@@ -108,7 +109,7 @@ public class SubscriptionService {
             token = dto.getToken();
         }
 
-        settingRepository.save(new Setting("token", token));
+        settingRepository.save(new Setting(TOKEN, token));
         return token;
     }
 
@@ -168,7 +169,7 @@ public class SubscriptionService {
 
     private void sortSites(Map<String, Object> config) {
         List<Map<String, String>> list = (List<Map<String, String>>) config.get("sites");
-        Collections.sort(list, Comparator.comparing(a -> a.get("name")));
+        list.sort(Comparator.comparing(a -> a.get("name")));
     }
 
     private Map<String, Object> getConfigData(String apiUrl) {
@@ -185,9 +186,8 @@ public class SubscriptionService {
         }
 
         String json = loadConfigJson(configUrl);
-        Map<String, Object> config = convertResult(json, configKey);
 
-        return config;
+        return convertResult(json, configKey);
     }
 
     private void handleWhitelist(Map<String, Object> config) {
@@ -366,12 +366,7 @@ public class SubscriptionService {
         String key = "Alist";
         Map<String, Object> site = buildSite(key);
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
-        for (Iterator<Map<String, Object>> it = sites.iterator(); it.hasNext(); ) {
-            Map<String, Object> item = it.next();
-            if (key.equals(item.get("key"))) {
-                it.remove();
-            }
-        }
+        sites.removeIf(item -> key.equals(item.get("key")));
         sites.add(0, site);
     }
 
@@ -468,14 +463,14 @@ public class SubscriptionService {
             return map;
         }
 
-        String content = json;
         try {
-            try {
-                return objectMapper.readValue(json, Map.class);
-            } catch (Exception e) {
-                // ignore
-            }
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception e) {
+            // ignore
+        }
 
+        try {
+            String content = json;
             Pattern pattern = Pattern.compile("[A-Za-z0]{8}\\*\\*");
             Matcher matcher = pattern.matcher(content);
             if (matcher.find()) {
@@ -523,11 +518,7 @@ public class SubscriptionService {
         } else if (curLength == Length) {
             strReturn = key.trim();
         } else {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < (Length - curLength); i++) {
-                sb.append(replace);
-            }
-            strReturn = key.trim() + sb;
+            strReturn = key.trim() + String.valueOf(replace).repeat((Length - curLength));
         }
         return strReturn;
     }

@@ -29,6 +29,10 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+import static cn.har01d.alist_tvbox.util.Constants.APP_VERSION;
+import static cn.har01d.alist_tvbox.util.Constants.DOCKER_VERSION;
+import static cn.har01d.alist_tvbox.util.Constants.INDEX_VERSION;
+
 @Slf4j
 @Service
 public class IndexService {
@@ -53,7 +57,7 @@ public class IndexService {
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
-                    settingRepository.save(new Setting("index_version", lines.get(0).trim()));
+                    settingRepository.save(new Setting(INDEX_VERSION, lines.get(0).trim()));
                 }
             }
         } catch (Exception e) {
@@ -65,7 +69,7 @@ public class IndexService {
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
-                    settingRepository.save(new Setting("docker_version", lines.get(0).trim()));
+                    settingRepository.save(new Setting(DOCKER_VERSION, lines.get(0).trim()));
                 }
             }
         } catch (Exception e) {
@@ -77,7 +81,7 @@ public class IndexService {
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
-                    settingRepository.save(new Setting("app_version", lines.get(0).trim()));
+                    settingRepository.save(new Setting(APP_VERSION, lines.get(0).trim()));
                 }
             }
         } catch (Exception e) {

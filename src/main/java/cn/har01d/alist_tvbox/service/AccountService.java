@@ -51,6 +51,23 @@ import java.util.Objects;
 import java.util.concurrent.ScheduledFuture;
 import java.util.stream.Collectors;
 
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_LOGIN;
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_PASSWORD;
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_USERNAME;
+import static cn.har01d.alist_tvbox.util.Constants.ALI_DRIVE_ID;
+import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
+import static cn.har01d.alist_tvbox.util.Constants.AUTO_CHECKIN;
+import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_DAYS;
+import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_TIME;
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER_ID;
+import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN;
+import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_TIME;
+import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN;
+import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN_TIME;
+import static cn.har01d.alist_tvbox.util.Constants.SCHEDULE_TIME;
+import static cn.har01d.alist_tvbox.util.Constants.SHOW_MY_ALI;
+import static cn.har01d.alist_tvbox.util.Constants.ZONE_ID;
+
 @Slf4j
 @Service
 @Profile("xiaoya")
@@ -82,9 +99,9 @@ public class AccountService {
         scheduleAutoCheckinTime();
 
         if (accountRepository.count() == 0) {
-            String refreshToken = settingRepository.findById("refresh_token").map(Setting::getValue).orElse("");
-            String openToken = settingRepository.findById("open_token").map(Setting::getValue).orElse("");
-            String folderId = settingRepository.findById("folder_id").map(Setting::getValue).orElse("");
+            String refreshToken = settingRepository.findById(REFRESH_TOKEN).map(Setting::getValue).orElse("");
+            String openToken = settingRepository.findById(OPEN_TOKEN).map(Setting::getValue).orElse("");
+            String folderId = settingRepository.findById(FOLDER_ID).map(Setting::getValue).orElse("");
             Account account = new Account();
 
             if (StringUtils.isAllBlank(refreshToken, openToken, folderId)) {
@@ -94,15 +111,15 @@ public class AccountService {
                 folderId = readFolderId();
             } else {
                 log.info("load account from settings");
-                settingRepository.deleteById("refresh_token");
-                settingRepository.deleteById("open_token");
-                settingRepository.deleteById("folder_id");
-                account.setRefreshTokenTime(settingRepository.findById("refresh_token_time").map(Setting::getValue).map(Instant::parse).orElse(null));
-                account.setOpenTokenTime(settingRepository.findById("open_token_time").map(Setting::getValue).map(Instant::parse).orElse(null));
-                account.setCheckinTime(settingRepository.findById("checkin_time").map(Setting::getValue).map(Instant::parse).orElse(null));
-                account.setCheckinDays(settingRepository.findById("checkin_days").map(Setting::getValue).map(Integer::parseInt).orElse(0));
-                account.setAutoCheckin(settingRepository.findById("auto_checkin").map(Setting::getValue).map(Boolean::valueOf).orElse(false));
-                account.setShowMyAli(settingRepository.findById("show_my_ali").map(Setting::getValue).map(Boolean::valueOf).orElse(false));
+                settingRepository.deleteById(REFRESH_TOKEN);
+                settingRepository.deleteById(OPEN_TOKEN);
+                settingRepository.deleteById(FOLDER_ID);
+                account.setRefreshTokenTime(settingRepository.findById(REFRESH_TOKEN_TIME).map(Setting::getValue).map(Instant::parse).orElse(null));
+                account.setOpenTokenTime(settingRepository.findById(OPEN_TOKEN_TIME).map(Setting::getValue).map(Instant::parse).orElse(null));
+                account.setCheckinTime(settingRepository.findById(CHECKIN_TIME).map(Setting::getValue).map(Instant::parse).orElse(null));
+                account.setCheckinDays(settingRepository.findById(CHECKIN_DAYS).map(Setting::getValue).map(Integer::parseInt).orElse(0));
+                account.setAutoCheckin(settingRepository.findById(AUTO_CHECKIN).map(Setting::getValue).map(Boolean::valueOf).orElse(false));
+                account.setShowMyAli(settingRepository.findById(SHOW_MY_ALI).map(Setting::getValue).map(Boolean::valueOf).orElse(false));
             }
 
             account.setRefreshToken(refreshToken);
@@ -145,10 +162,10 @@ public class AccountService {
     }
 
     private String generatePassword() {
-        Setting setting = settingRepository.findById("atv_password").orElse(null);
+        Setting setting = settingRepository.findById(ATV_PASSWORD).orElse(null);
         if (setting == null) {
             log.info("generate new password");
-            setting = new Setting("atv_password", IdUtils.generate(12));
+            setting = new Setting(ATV_PASSWORD, IdUtils.generate(12));
             settingRepository.save(setting);
         }
         return setting.getValue();
@@ -204,7 +221,7 @@ public class AccountService {
 
     private void readLogin() {
         try {
-            String password = settingRepository.findById("alist_password").map(Setting::getValue).orElse(null);
+            String password = settingRepository.findById(ALIST_PASSWORD).map(Setting::getValue).orElse(null);
             if (password != null) {
                 return;
             }
@@ -230,9 +247,9 @@ public class AccountService {
                 login.setEnabled(true);
             }
 
-            settingRepository.save(new Setting("alist_username", login.getUsername()));
-            settingRepository.save(new Setting("alist_password", login.getPassword()));
-            settingRepository.save(new Setting("alist_login", String.valueOf(login.isEnabled())));
+            settingRepository.save(new Setting(ALIST_USERNAME, login.getUsername()));
+            settingRepository.save(new Setting(ALIST_PASSWORD, login.getPassword()));
+            settingRepository.save(new Setting(ALIST_LOGIN, String.valueOf(login.isEnabled())));
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -249,21 +266,21 @@ public class AccountService {
     }
 
     private LocalTime getScheduleTime() {
-        String time = settingRepository.findById("schedule_time").map(Setting::getValue).orElse(null);
+        String time = settingRepository.findById(SCHEDULE_TIME).map(Setting::getValue).orElse(null);
         LocalTime localTime = LocalTime.of(9, 0, 0);
         if (time != null) {
             try {
-                localTime = Instant.parse(time).atZone(ZoneId.of("Asia/Shanghai")).toLocalTime();
+                localTime = Instant.parse(time).atZone(ZoneId.of(ZONE_ID)).toLocalTime();
             } catch (Exception e) {
                 log.warn("", e);
-                settingRepository.save(new Setting("schedule_time", "2023-06-20T00:00:00.000Z"));
+                settingRepository.save(new Setting(SCHEDULE_TIME, "2023-06-20T00:00:00.000Z"));
             }
         }
         return localTime;
     }
 
     public void autoCheckin() {
-        boolean auto = settingRepository.findById("auto_checkin").map(Setting::getValue).map(Boolean::valueOf).orElse(false);
+        boolean auto = settingRepository.findById(AUTO_CHECKIN).map(Setting::getValue).map(Boolean::valueOf).orElse(false);
         if (auto) {
             log.info("auto checkin");
             try {
@@ -283,12 +300,10 @@ public class AccountService {
         Instant time;
         try {
             time = account.getOpenTokenTime();
-            if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now)) {
-                if (account.getOpenToken() != null) {
-                    log.info("update open token: {}", time);
-                    account.setOpenToken(getAliOpenToken(account.getOpenToken()));
-                    account.setOpenTokenTime(Instant.now());
-                }
+            if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now) && (account.getOpenToken() != null)) {
+                log.info("update open token: {}", time);
+                account.setOpenToken(getAliOpenToken(account.getOpenToken()));
+                account.setOpenTokenTime(Instant.now());
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -296,12 +311,10 @@ public class AccountService {
 
         try {
             time = account.getRefreshTokenTime();
-            if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now)) {
-                if (account.getRefreshToken() != null) {
-                    log.info("update refresh token: {}", time);
-                    account.setRefreshToken((String) getAliToken(account.getRefreshToken()).get("refresh_token"));
-                    account.setRefreshTokenTime(Instant.now());
-                }
+            if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now) && (account.getRefreshToken() != null)) {
+                log.info("update refresh token: {}", time);
+                account.setRefreshToken((String) getAliToken(account.getRefreshToken()).get(REFRESH_TOKEN));
+                account.setRefreshTokenTime(Instant.now());
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -313,14 +326,14 @@ public class AccountService {
         headers.put("User-Agent", Collections.singletonList("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
         headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
         Map<String, String> body = new HashMap<>();
-        body.put("refresh_token", token);
-        body.put("grant_type", "refresh_token");
+        body.put(REFRESH_TOKEN, token);
+        body.put("grant_type", REFRESH_TOKEN);
         log.debug("body: {}", body);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<Map> response = restTemplate.exchange("https://auth.aliyundrive.com/v2/account/token", HttpMethod.POST, entity, Map.class);
         log.debug("get Ali token response: {}", response.getBody());
         String driveID = (String) response.getBody().get("default_drive_id");
-        settingRepository.save(new Setting("ali_drive_id", driveID));
+        settingRepository.save(new Setting(ALI_DRIVE_ID, driveID));
         return response.getBody();
     }
 
@@ -329,23 +342,23 @@ public class AccountService {
         headers.put("User-Agent", Collections.singletonList("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
         headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
         Map<String, String> body = new HashMap<>();
-        body.put("refresh_token", token);
-        body.put("grant_type", "refresh_token");
+        body.put(REFRESH_TOKEN, token);
+        body.put("grant_type", REFRESH_TOKEN);
         log.debug("body: {}", body);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<Map> response = restTemplate.exchange("https://api.xhofe.top/alist/ali_open/token", HttpMethod.POST, entity, Map.class);
         log.debug("get open token response: {}", response.getBody());
-        return (String) response.getBody().get("refresh_token");
+        return (String) response.getBody().get(REFRESH_TOKEN);
     }
 
     public void enableLogin() {
         AListLogin login = new AListLogin();
-        login.setEnabled(settingRepository.findById("alist_login").map(Setting::getValue).orElse("").equals("true"));
-        login.setUsername(settingRepository.findById("alist_username").map(Setting::getValue).orElse(""));
-        login.setPassword(settingRepository.findById("alist_password").map(Setting::getValue).orElse(""));
+        login.setEnabled(settingRepository.findById(ALIST_LOGIN).map(Setting::getValue).orElse("").equals("true"));
+        login.setUsername(settingRepository.findById(ALIST_USERNAME).map(Setting::getValue).orElse(""));
+        login.setPassword(settingRepository.findById(ALIST_PASSWORD).map(Setting::getValue).orElse(""));
 
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
-            Statement statement = connection.createStatement();
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             String sql = "";
             if (login.isEnabled()) {
                 log.info("enable AList login");
@@ -369,11 +382,11 @@ public class AccountService {
     public void enableMyAli() {
         List<Account> list = accountRepository.findAll().stream().filter(Account::isShowMyAli).collect(Collectors.toList());
         int id = 10000;
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             for (Account account : list) {
                 try {
                     String sql;
-                    Statement statement = connection.createStatement();
                     String name = account.getNickname();
                     if (StringUtils.isBlank(name)) {
                         name = String.valueOf(account.getId());
@@ -395,7 +408,6 @@ public class AccountService {
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
-        // ignore
     }
 
     public void updateTokens() {
@@ -419,9 +431,9 @@ public class AccountService {
             }
         }
 
-        settingRepository.save(new Setting("alist_username", login.getUsername()));
-        settingRepository.save(new Setting("alist_password", login.getPassword()));
-        settingRepository.save(new Setting("alist_login", String.valueOf(login.isEnabled())));
+        settingRepository.save(new Setting(ALIST_USERNAME, login.getUsername()));
+        settingRepository.save(new Setting(ALIST_PASSWORD, login.getPassword()));
+        settingRepository.save(new Setting(ALIST_LOGIN, String.valueOf(login.isEnabled())));
 
         String token = login();
         AListUser guest = getUser(2, token);
@@ -440,7 +452,7 @@ public class AccountService {
 
     public String login() {
         String username = "atv";
-        String password = settingRepository.findById("atv_password").map(Setting::getValue).orElseThrow(BadRequestException::new);
+        String password = settingRepository.findById(ATV_PASSWORD).map(Setting::getValue).orElseThrow(BadRequestException::new);
         LoginRequest request = new LoginRequest();
         request.setUsername(username);
         request.setPassword(password);
@@ -483,9 +495,9 @@ public class AccountService {
     }
 
     public AListLogin getLoginInfo() {
-        String username = settingRepository.findById("alist_username").map(Setting::getValue).orElse("");
-        String password = settingRepository.findById("alist_password").map(Setting::getValue).orElse("");
-        String enabled = settingRepository.findById("alist_login").map(Setting::getValue).orElse("");
+        String username = settingRepository.findById(ALIST_USERNAME).map(Setting::getValue).orElse("");
+        String password = settingRepository.findById(ALIST_PASSWORD).map(Setting::getValue).orElse("");
+        String enabled = settingRepository.findById(ALIST_LOGIN).map(Setting::getValue).orElse("");
         AListLogin login = new AListLogin();
         login.setUsername(username);
         login.setPassword(password);
@@ -517,16 +529,16 @@ public class AccountService {
         log.info("checkin for account {}:{}", account.getId(), account.getNickname());
         Map<Object, Object> map = getAliToken(account.getRefreshToken());
         String accessToken = (String) map.get("access_token");
-        String refreshToken = (String) map.get("refresh_token");
+        String refreshToken = (String) map.get(REFRESH_TOKEN);
         account.setNickname((String) map.get("nick_name"));
         account.setRefreshToken(refreshToken);
         account.setRefreshTokenTime(Instant.now());
 
-        settingRepository.save(new Setting("refresh_token_time", Instant.now().toString()));
+        settingRepository.save(new Setting(REFRESH_TOKEN_TIME, Instant.now().toString()));
 
         Map<String, Object> body = new HashMap<>();
-        body.put("refresh_token", refreshToken);
-        body.put("grant_type", "refresh_token");
+        body.put(REFRESH_TOKEN, refreshToken);
+        body.put("grant_type", REFRESH_TOKEN);
         log.debug("body: {}", body);
 
         HttpHeaders headers = new HttpHeaders();
@@ -568,17 +580,16 @@ public class AccountService {
     private void validateCheckinTime(Account account) {
         Instant checkinTime = account.getCheckinTime();
         if (checkinTime != null) {
-            LocalDate time = checkinTime.atZone(ZoneId.of("Asia/Shanghai")).toLocalDate();
+            LocalDate time = checkinTime.atZone(ZoneId.of(ZONE_ID)).toLocalDate();
             if (LocalDate.now().isEqual(time)) {
                 throw new BadRequestException("今日已签到");
             }
         }
     }
 
-
     public Instant updateScheduleTime(Instant time) {
-        LocalTime localTime = time.atZone(ZoneId.of("Asia/Shanghai")).toLocalTime();
-        settingRepository.save(new Setting("schedule_time", time.toString()));
+        LocalTime localTime = time.atZone(ZoneId.of(ZONE_ID)).toLocalTime();
+        settingRepository.save(new Setting(SCHEDULE_TIME, time.toString()));
         scheduledFuture.cancel(true);
         scheduledFuture = scheduler.schedule(this::autoCheckin, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
         log.info("update schedule time: {}", localTime);
@@ -633,7 +644,7 @@ public class AccountService {
         try {
             if (StringUtils.isNotBlank(account.getRefreshToken())) {
                 log.info("update refresh token: {}", account.getId());
-                account.setRefreshToken((String) getAliToken(account.getRefreshToken()).get("refresh_token"));
+                account.setRefreshToken((String) getAliToken(account.getRefreshToken()).get(REFRESH_TOKEN));
                 account.setRefreshTokenTime(Instant.now());
             }
         } catch (org.springframework.web.client.HttpClientErrorException e) {
@@ -675,9 +686,9 @@ public class AccountService {
             return;
         }
 
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             log.info("update AList storage driver tokens by account: {}", account.getId());
-            Statement statement = connection.createStatement();
             statement.executeUpdate("update x_storages set driver = 'AliyundriveShare2Open' where driver = 'AliyundriveShare'");
 
             String sql = "update x_storages set addition = json_set(addition, '$.RefreshToken', '" + account.getRefreshToken() + "') where driver = 'AliyundriveShare2Open'";
@@ -689,7 +700,6 @@ public class AccountService {
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
-        // ignore
     }
 
     public Account update(Integer id, AccountDto dto) {
@@ -749,8 +759,8 @@ public class AccountService {
 
     public void showMyAli(Account account) {
         int storageId = 9999 + account.getId();
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
-            Statement statement = connection.createStatement();
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             String name = account.getNickname();
             if (StringUtils.isBlank(name)) {
                 name = String.valueOf(account.getId());
@@ -763,7 +773,6 @@ public class AccountService {
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
-        // ignore
     }
 
     public void showMyAliWithAPI(Account account) {
@@ -778,8 +787,8 @@ public class AccountService {
             deleteStorage(storageId, token);
         }
 
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
-            Statement statement = connection.createStatement();
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             String name = account.getNickname();
             if (StringUtils.isBlank(name)) {
                 name = String.valueOf(account.getId());
@@ -797,7 +806,6 @@ public class AccountService {
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
-        // ignore
     }
 
     private void enableStorage(Integer id, String token) {

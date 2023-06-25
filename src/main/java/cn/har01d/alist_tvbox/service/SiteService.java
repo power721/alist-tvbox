@@ -20,7 +20,6 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Optional;
@@ -75,18 +74,7 @@ public class SiteService {
                 for (String line : lines) {
                     String[] parts = line.trim().split("\\s+");
                     if (parts.length == 4) {
-                        try {
-                            Site site = new Site();
-                            site.setName(parts[0]);
-                            site.setVersion(Integer.parseInt(parts[1].replace("v", "")));
-                            site.setUrl(parts[2]);
-                            site.setFolder(parts[3]);
-                            site.setOrder(order++);
-                            siteRepository.save(site);
-                            log.info("save site to database: {}", site);
-                        } catch (Exception e) {
-                            log.warn("", e);
-                        }
+                        readAList(order++, parts);
                     }
                 }
             } catch (Exception e) {
@@ -95,10 +83,23 @@ public class SiteService {
         }
     }
 
-    private void updateUserToken(Site site) {
-        Connection connection = null;
+    private void readAList(int order, String[] parts) {
         try {
-            connection = DriverManager.getConnection("jdbc:sqlite:/opt/alist/data/data.db");
+            Site site = new Site();
+            site.setName(parts[0]);
+            site.setVersion(Integer.parseInt(parts[1].replace("v", "")));
+            site.setUrl(parts[2]);
+            site.setFolder(parts[3]);
+            site.setOrder(order);
+            siteRepository.save(site);
+            log.info("save site to database: {}", site);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    private void updateUserToken(Site site) {
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:/opt/alist/data/data.db")) {
             Statement statement = connection.createStatement();
             String sql = "select value from x_setting_items where key = 'token'";
             ResultSet rs = statement.executeQuery(sql);
@@ -110,15 +111,8 @@ public class SiteService {
             }
         } catch (Exception e) {
             log.warn("", e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    // ignore
-                }
-            }
         }
+        // ignore
     }
 
     public Site getById(Integer id) {

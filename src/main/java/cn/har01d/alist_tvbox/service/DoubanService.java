@@ -28,6 +28,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static cn.har01d.alist_tvbox.util.Constants.MOVIE_VERSION;
+
 @Slf4j
 @Service
 public class DoubanService {
@@ -58,7 +60,7 @@ public class DoubanService {
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
-                    settingRepository.save(new Setting("movie_version", lines.get(0).trim()));
+                    settingRepository.save(new Setting(MOVIE_VERSION, lines.get(0).trim()));
                 }
             }
         } catch (Exception e) {

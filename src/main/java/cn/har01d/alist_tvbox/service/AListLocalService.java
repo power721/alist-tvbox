@@ -15,10 +15,13 @@ import java.io.File;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_START_TIME;
+
 @Slf4j
 @Service
 @Profile("xiaoya")
 public class AListLocalService {
+
     private final SettingRepository settingRepository;
     private final RestTemplate restTemplate;
 
@@ -37,7 +40,7 @@ public class AListLocalService {
             builder.command("/opt/alist/alist", "server", "--no-prefix");
             builder.directory(new File("/opt/alist"));
             Process process = builder.start();
-            settingRepository.save(new Setting("alist_start_time", Instant.now().toString()));
+            settingRepository.save(new Setting(ALIST_START_TIME, Instant.now().toString()));
             log.info("AList server starting, PID: {}", process.pid());
             aListStatus = 1;
         } catch (Exception e) {
