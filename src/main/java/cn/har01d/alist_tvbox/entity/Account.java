@@ -40,4 +40,6 @@ public class Account {
     private boolean showMyAli;
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean master;
+    @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean clean;
 }

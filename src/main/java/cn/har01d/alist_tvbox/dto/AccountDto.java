@@ -17,4 +17,5 @@ public class AccountDto {
     private boolean autoCheckin;
     private boolean showMyAli;
     private boolean master;
+    private boolean clean;
 }

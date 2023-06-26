@@ -29,7 +29,6 @@ public final class Constants {
     public static final String ALIST_LOGIN = "alist_login";
     public static final String SCHEDULE_TIME = "schedule_time";
     public static final String ZONE_ID = "Asia/Shanghai";
-    public static final String ALI_DRIVE_ID = "ali_drive_id";
     public static final String ALIST_START_TIME = "alist_start_time";
     public static final String MOVIE_VERSION = "movie_version";
     public static final String OPEN_TOKEN_URL = "open_token_url";

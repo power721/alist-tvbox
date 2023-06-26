@@ -2,6 +2,12 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.dto.AListLogin;
 import cn.har01d.alist_tvbox.dto.AccountDto;
+import cn.har01d.alist_tvbox.dto.AliBatchRequest;
+import cn.har01d.alist_tvbox.dto.AliBatchResponse;
+import cn.har01d.alist_tvbox.dto.AliFileItem;
+import cn.har01d.alist_tvbox.dto.AliFileList;
+import cn.har01d.alist_tvbox.dto.AliRequest;
+import cn.har01d.alist_tvbox.dto.AliResponse;
 import cn.har01d.alist_tvbox.dto.CheckinResponse;
 import cn.har01d.alist_tvbox.dto.CheckinResult;
 import cn.har01d.alist_tvbox.dto.RewardResponse;
@@ -54,7 +60,6 @@ import java.util.stream.Collectors;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_LOGIN;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_PASSWORD;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_USERNAME;
-import static cn.har01d.alist_tvbox.util.Constants.ALI_DRIVE_ID;
 import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
 import static cn.har01d.alist_tvbox.util.Constants.AUTO_CHECKIN;
 import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_DAYS;
@@ -66,6 +71,7 @@ import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN_TIME;
 import static cn.har01d.alist_tvbox.util.Constants.SCHEDULE_TIME;
 import static cn.har01d.alist_tvbox.util.Constants.SHOW_MY_ALI;
+import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 import static cn.har01d.alist_tvbox.util.Constants.ZONE_ID;
 
 @Slf4j
@@ -259,7 +265,7 @@ public class AccountService {
         try {
             LocalTime localTime = getScheduleTime();
             log.info("schedule time: {}", localTime);
-            scheduledFuture = scheduler.schedule(this::autoCheckin, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
+            scheduledFuture = scheduler.schedule(this::handleScheduleTask, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -279,7 +285,7 @@ public class AccountService {
         return localTime;
     }
 
-    public void autoCheckin() {
+    public void handleScheduleTask() {
         boolean auto = settingRepository.findById(AUTO_CHECKIN).map(Setting::getValue).map(Boolean::valueOf).orElse(false);
         if (auto) {
             log.info("auto checkin");
@@ -291,11 +297,16 @@ public class AccountService {
         }
 
         for (Account account : accountRepository.findAll()) {
-            refreshTokens(account);
+            Map<Object, Object> response = refreshTokens(account);
+            if (account.isClean()) {
+                clean(account, response);
+            }
         }
     }
 
-    private void refreshTokens(Account account) {
+    private Map<Object, Object> refreshTokens(Account account) {
+        boolean changed = false;
+        Map<Object, Object> response = null;
         Instant now = Instant.now();
         Instant time;
         try {
@@ -304,6 +315,7 @@ public class AccountService {
                 log.info("update open token: {}", time);
                 account.setOpenToken(getAliOpenToken(account.getOpenToken()));
                 account.setOpenTokenTime(Instant.now());
+                changed = true;
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -313,12 +325,20 @@ public class AccountService {
             time = account.getRefreshTokenTime();
             if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now) && (account.getRefreshToken() != null)) {
                 log.info("update refresh token: {}", time);
-                account.setRefreshToken((String) getAliToken(account.getRefreshToken()).get(REFRESH_TOKEN));
+                response = getAliToken(account.getRefreshToken());
+                account.setRefreshToken((String) response.get(REFRESH_TOKEN));
                 account.setRefreshTokenTime(Instant.now());
+                changed = true;
             }
         } catch (Exception e) {
             log.warn("", e);
         }
+
+        if (changed) {
+            accountRepository.save(account);
+        }
+
+        return response;
     }
 
     public Map<Object, Object> getAliToken(String token) {
@@ -332,8 +352,6 @@ public class AccountService {
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<Map> response = restTemplate.exchange("https://auth.aliyundrive.com/v2/account/token", HttpMethod.POST, entity, Map.class);
         log.debug("get Ali token response: {}", response.getBody());
-        String driveID = (String) response.getBody().get("default_drive_id");
-        settingRepository.save(new Setting(ALI_DRIVE_ID, driveID));
         return response.getBody();
     }
 
@@ -591,7 +609,7 @@ public class AccountService {
         LocalTime localTime = time.atZone(ZoneId.of(ZONE_ID)).toLocalTime();
         settingRepository.save(new Setting(SCHEDULE_TIME, time.toString()));
         scheduledFuture.cancel(true);
-        scheduledFuture = scheduler.schedule(this::autoCheckin, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
+        scheduledFuture = scheduler.schedule(this::handleScheduleTask, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
         log.info("update schedule time: {}", localTime);
         return time;
     }
@@ -614,9 +632,9 @@ public class AccountService {
             showMyAliWithAPI(account);
         }
 
-        accountRepository.save(account);
         log.info("refresh tokens for account {}", account);
         refreshAccountTokens(account);
+        accountRepository.save(account);
         return account;
     }
 
@@ -644,7 +662,8 @@ public class AccountService {
         try {
             if (StringUtils.isNotBlank(account.getRefreshToken())) {
                 log.info("update refresh token: {}", account.getId());
-                account.setRefreshToken((String) getAliToken(account.getRefreshToken()).get(REFRESH_TOKEN));
+                Map<Object, Object> map = getAliToken(account.getRefreshToken());
+                account.setRefreshToken((String) map.get(REFRESH_TOKEN));
                 account.setRefreshTokenTime(Instant.now());
             }
         } catch (org.springframework.web.client.HttpClientErrorException e) {
@@ -834,5 +853,89 @@ public class AccountService {
             account.setShowMyAli(false);
             showMyAliWithAPI(account);
         }
+    }
+
+    public int clean(Integer id) {
+        Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
+        return clean(account);
+    }
+
+    private int clean(Account account) {
+        Map<Object, Object> map = getAliToken(account.getRefreshToken());
+        return clean(account, map);
+    }
+
+    private int clean(Account account, Map<Object, Object> map) {
+        log.info("clean files for account {}:{}", account.getId(), account.getNickname());
+        if (map == null) {
+            map = getAliToken(account.getRefreshToken());
+        }
+        String accessToken = (String) map.get("access_token");
+        String driveId = (String) map.get("default_drive_id");
+
+        AliFileList list = getFileList(driveId, account.getFolderId(), accessToken);
+        List<AliFileItem> files = list.getItems().stream().filter(file -> !file.isHidden() && "file".equals(file.getType())).collect(Collectors.toList());
+        return deleteFiles(driveId, files, accessToken);
+    }
+
+    private AliFileList getFileList(String driveId, String fileId, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("User-Agent", Collections.singletonList(USER_AGENT));
+        headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
+        headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
+        Map<String, Object> body = new HashMap<>();
+        body.put("drive_id", driveId);
+        body.put("parent_file_id", fileId);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+        ResponseEntity<AliFileList> response = restTemplate.exchange("https://api.aliyundrive.com/adrive/v3/file/list", HttpMethod.POST, entity, AliFileList.class);
+        return response.getBody();
+    }
+
+    private Map getFilePath(String driveId, AliFileItem file, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("User-Agent", Collections.singletonList(USER_AGENT));
+        headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
+        headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
+        Map<String, Object> body = new HashMap<>();
+        body.put("drive_id", driveId);
+        body.put("file_id", file.getFileId());
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+        ResponseEntity<Map> response = restTemplate.exchange("https://api.aliyundrive.com/adrive/v1/file/get_path", HttpMethod.POST, entity, Map.class);
+        return response.getBody();
+    }
+
+    private int deleteFiles(String driveId, List<AliFileItem> files, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("User-Agent", Collections.singletonList(USER_AGENT));
+        headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
+        headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
+
+        Instant now = Instant.now();
+        Map<String, AliFileItem> map = new HashMap<>();
+        AliBatchRequest body = new AliBatchRequest();
+        for (AliFileItem file : files) {
+            if (file.getUpdatedAt().plus(24, ChronoUnit.HOURS).isAfter(now)) {
+                log.info("跳过文件'{}'，更新于{}", file.getName(), file.getUpdatedAt());
+                continue;
+            }
+            map.put(file.getFileId(), file);
+            AliRequest request = new AliRequest();
+            request.setId(file.getFileId());
+            request.getBody().put("drive_id", driveId);
+            request.getBody().put("file_id", file.getFileId());
+            body.getRequests().add(request);
+        }
+
+        int count = 0;
+        HttpEntity<AliBatchRequest> entity = new HttpEntity<>(body, headers);
+        ResponseEntity<AliBatchResponse> response = restTemplate.exchange("https://api.aliyundrive.com/v3/batch", HttpMethod.POST, entity, AliBatchResponse.class);
+        for (AliResponse item : response.getBody().getResponses()) {
+            AliFileItem file = map.get(item.getId());
+            if (item.getStatus() == 204) {
+                count++;
+            }
+            log.info("删除文件'{}'{}, 创建于{}, 文件大小：{}", file.getName(), item.getStatus() == 204 ? "成功" : "失败", file.getCreatedAt(), file.getSize());
+        }
+        return count;
     }
 }

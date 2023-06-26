@@ -44,6 +44,11 @@ public class AccountController {
         return accountService.checkin(id, force);
     }
 
+    @PostMapping("/ali-accounts/{id}/clean")
+    public int clean(@PathVariable Integer id) {
+        return accountService.clean(id);
+    }
+
     @PostMapping("/ali-accounts/{id}")
     public Account update(@PathVariable Integer id, @RequestBody AccountDto account) {
         return accountService.update(id, account);
