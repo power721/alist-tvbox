@@ -623,6 +623,7 @@ public class AccountService {
         account.setFolderId(dto.getFolderId().trim());
         account.setAutoCheckin(dto.isAutoCheckin());
         account.setShowMyAli(dto.isShowMyAli());
+        account.setClean(dto.isClean());
         if (count == 0) {
             account.setMaster(true);
             updateAList(account);
@@ -738,6 +739,7 @@ public class AccountService {
         account.setAutoCheckin(dto.isAutoCheckin());
         account.setShowMyAli(dto.isShowMyAli());
         account.setMaster(dto.isMaster());
+        account.setClean(dto.isClean());
 
         if (changed && account.isMaster()) {
             updateMaster();
@@ -891,19 +893,6 @@ public class AccountService {
         return response.getBody();
     }
 
-    private Map getFilePath(String driveId, AliFileItem file, String accessToken) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("User-Agent", Collections.singletonList(USER_AGENT));
-        headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
-        headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
-        Map<String, Object> body = new HashMap<>();
-        body.put("drive_id", driveId);
-        body.put("file_id", file.getFileId());
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> response = restTemplate.exchange("https://api.aliyundrive.com/adrive/v1/file/get_path", HttpMethod.POST, entity, Map.class);
-        return response.getBody();
-    }
-
     private int deleteFiles(String driveId, List<AliFileItem> files, String accessToken) {
         HttpHeaders headers = new HttpHeaders();
         headers.put("User-Agent", Collections.singletonList(USER_AGENT));
@@ -913,8 +902,11 @@ public class AccountService {
         Instant now = Instant.now();
         Map<String, AliFileItem> map = new HashMap<>();
         AliBatchRequest body = new AliBatchRequest();
+        int hours = settingRepository.findById("file_expire_hour").map(Setting::getValue).map(Integer::parseInt).orElse(24);
+        hours = hours > 0 ? hours : 1;
+        log.info("expire time: {} hours", hours);
         for (AliFileItem file : files) {
-            if (file.getUpdatedAt().plus(24, ChronoUnit.HOURS).isAfter(now)) {
+            if (file.getUpdatedAt().plus(hours, ChronoUnit.HOURS).isAfter(now)) {
                 log.info("跳过文件'{}'，更新于{}", file.getName(), file.getUpdatedAt());
                 continue;
             }

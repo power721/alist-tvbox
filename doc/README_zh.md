@@ -21,6 +21,14 @@ AList代理，支持xioaya版AList界面管理。
 ```bash
 curl -s http://d.har01d.cn/update_xiaoya.sh | sudo bash
 ```
+使用其它配置目录：
+```bash
+curl -s http://d.har01d.cn/update_xiaoya.sh | sudo bash -s /home/user/atv
+```
+使用其它端口：
+```bash
+curl -s http://d.har01d.cn/update_xiaoya.sh | sudo bash -s /etc/xiaoya 8080
+```
 独立版：
 ```bash
 curl -s http://d.har01d.cn/update_new.sh | sudo bash

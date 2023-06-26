@@ -80,9 +80,15 @@
             <el-form-item label="计划时间">
               <el-time-picker v-model="scheduleTime"/>
               <el-button type="primary" @click="updateScheduleTime">更新</el-button>
+              <span class="hint">自动签到和刷新阿里Token的时间</span>
             </el-form-item>
-            <el-form-item class="bottom">
-              <span>自动签到和刷新阿里Token的时间</span>
+          </el-form>
+
+          <el-form label-width="140px">
+            <el-form-item label="文件过期时间">
+              <el-input-number v-model="fileExpireHour" :min="1"/>
+              <span class="append">小时</span>
+              <el-button type="primary" @click="updateFileExpireHour">更新</el-button>
             </el-form-item>
           </el-form>
         </el-card>
@@ -173,6 +179,7 @@ const indexVersion = ref('')
 const indexRemoteVersion = ref('')
 const movieVersion = ref(0)
 const movieRemoteVersion = ref(0)
+const fileExpireHour = ref(24)
 const aListStartTime = ref('')
 const openTokenUrl = ref('')
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
@@ -224,6 +231,12 @@ const updateScheduleTime = () => {
   })
 }
 
+const updateFileExpireHour = () => {
+  axios.post('/settings', {name: 'file_expire_hour', value: '' + fileExpireHour.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const handleAList = (op: string) => {
   axios.post('/alist/' + op).then(() => {
     ElMessage.success('操作成功')
@@ -252,9 +265,10 @@ onMounted(() => {
 
     axios.get('/settings').then(({data}) => {
       form.value.token = data.token
-      form.value.enabledToken = data.token != ''
+      form.value.enabledToken = !!data.token
       scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
       aListStartTime.value = data.alist_start_time
+      fileExpireHour.value = +data.file_expire_hour || 24
       movieVersion.value = +data.movie_version
       indexVersion.value = data.index_version
       dockerVersion.value = data.docker_version
@@ -302,6 +316,11 @@ onUnmounted(() => {
 
 .bottom {
   margin-bottom: 0px;
+}
+
+.append {
+  margin-left: 6px;
+  margin-right: 6px;
 }
 
 .hint {
