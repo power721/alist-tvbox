@@ -27,11 +27,11 @@
     </p>
     <p>
       一键部署(小雅版)：
-      <code>curl -s http://d.har01d.cn/update_xiaoya.sh | sudo bash</code><br>
+      <code>curl -s https://d.har01d.cn/update_xiaoya.sh | sudo bash</code><br>
     </p>
     <p>
       一键部署(NAS)：
-      <code>wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sudo bash update_xiaoya.sh /volume2/docker/xiaoya</code>
+      <code>curl -s https://d.har01d.cn/update_xiaoya.sh | sudo bash -s /volume2/docker/xiaoya</code>
     </p>
   </div>
 </template>

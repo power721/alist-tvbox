@@ -1,15 +1,3 @@
-if docker ps | grep -v xiaoya-tvbox | grep -v xiaoya-hostmode | grep -q xiaoya; then
-  echo -e "\e[33m原版小雅Docker容器运行中。\e[0m"
-  while true; do
-      read -r -p "是否停止小雅Docker容器？[Y/N] " yn
-      case $yn in
-          [Yy]* ) docker rm -f xiaoya 2>/dev/null; break;;
-          [Nn]* ) exit 1;;
-          * ) echo "请输入'Y'或者'N'";;
-      esac
-  done
-fi
-
 BASE_DIR=/etc/xiaoya
 PORT1=5678
 PORT2=5244
@@ -24,6 +12,18 @@ fi
 
 if [ $# -gt 2 ]; then
 	PORT2=$3
+fi
+
+if docker ps | grep -v xiaoya-tvbox | grep -v xiaoya-hostmode | grep -q xiaoya; then
+  echo -e "\e[33m原版小雅Docker容器运行中。\e[0m"
+  while true; do
+      read -r -p "是否停止小雅Docker容器？[Y/N] " yn
+      case $yn in
+          [Yy]* ) docker rm -f xiaoya 2>/dev/null; break;;
+          [Nn]* ) exit 1;;
+          * ) echo "请输入'Y'或者'N'";;
+      esac
+  done
 fi
 
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
