@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
@@ -29,12 +30,16 @@ public class TvBoxController {
     }
 
     @GetMapping("/vod")
-    public Object api(String t, String ids, String wd, String sort, Integer pg, HttpServletRequest request) {
+    public Object api(String t, String ids, String wd, String sort,
+                      @RequestParam(required = false, defaultValue = "1") Integer pg,
+                      HttpServletRequest request) {
         return api("", t, ids, wd, sort, pg, request);
     }
 
     @GetMapping("/vod/{token}")
-    public Object api(@PathVariable String token, String t, String ids, String wd, String sort, Integer pg, HttpServletRequest request) {
+    public Object api(@PathVariable String token, String t, String ids, String wd, String sort,
+                      @RequestParam(required = false, defaultValue = "1") Integer pg,
+                      HttpServletRequest request) {
         if (!subscriptionService.getToken().equals(token)) {
             throw new BadRequestException();
         }

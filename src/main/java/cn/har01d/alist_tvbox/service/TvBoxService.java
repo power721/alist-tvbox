@@ -14,6 +14,7 @@ import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.TextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
@@ -112,7 +113,8 @@ public class TvBoxService {
     }
 
     public MovieList msearch(String keyword) {
-        MovieList result = search(keyword);
+        String name = TextUtils.fixName(keyword);
+        MovieList result = search(name);
         if (result.getTotal() > 0) {
             return getDetail(result.getList().get(0).getVod_id());
         }
