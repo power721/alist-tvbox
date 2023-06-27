@@ -162,7 +162,7 @@ public class SubscriptionService {
         removeBlacklist(config);
 
         addSite(config);
-        addRules(config);
+//        addRules(config);
 
         return config;
     }

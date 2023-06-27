@@ -138,6 +138,9 @@ public class AListService {
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
         request.setPath(path);
+        if (StringUtils.isNotBlank(site.getFolder())) {
+            request.setPath(fixPath(site.getFolder() + "/" + path));
+        }
         log.debug("call api: {} request: {}", url, request);
         FsDetailResponse response = post(site, url, request, FsDetailResponse.class);
         logError(response);
@@ -150,6 +153,9 @@ public class AListService {
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
         request.setPath(path);
+        if (StringUtils.isNotBlank(site.getFolder())) {
+            request.setPath(fixPath(site.getFolder() + "/" + path));
+        }
         log.debug("call api: {}", url);
         FsListResponseV2 response = post(site, url, request, FsListResponseV2.class);
         logError(response);

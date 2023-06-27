@@ -180,6 +180,9 @@ public class TvBoxService {
                 continue;
             }
             String path = fixPath("/" + line + (isMediaFile ? "" : PLAYLIST));
+            if (StringUtils.isNotBlank(site.getFolder()) && !"/".equals(site.getFolder()) && path.startsWith(site.getFolder())) {
+                path = path.substring(site.getFolder().length());
+            }
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site.getId() + "$" + path);
             movieDetail.setVod_name(site.getName() + ":" + line);
@@ -209,6 +212,9 @@ public class TvBoxService {
                 .map(e -> {
                     boolean isMediaFile = isMediaFile(e.getName());
                     String path = fixPath(e.getParent() + "/" + e.getName() + (isMediaFile ? "" : PLAYLIST));
+                    if (StringUtils.isNotBlank(site.getFolder()) && !"/".equals(site.getFolder()) && path.startsWith(site.getFolder())) {
+                        path = path.substring(site.getFolder().length());
+                    }
                     MovieDetail movieDetail = new MovieDetail();
                     movieDetail.setVod_id(site.getId() + "$" + path);
                     movieDetail.setVod_name(e.getName());
@@ -239,6 +245,9 @@ public class TvBoxService {
             String name = path;
             boolean isMediaFile = isMediaFile(name);
             path = fixPath(path + (isMediaFile ? "" : PLAYLIST));
+            if (StringUtils.isNotBlank(site.getFolder()) && !"/".equals(site.getFolder()) && path.startsWith(site.getFolder())) {
+                path = path.substring(site.getFolder().length());
+            }
             movieDetail.setVod_id(site.getId() + "$" + path);
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
