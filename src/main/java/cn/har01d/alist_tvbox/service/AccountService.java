@@ -24,6 +24,7 @@ import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.UserResponse;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
+import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -312,7 +313,7 @@ public class AccountService {
         try {
             time = account.getOpenTokenTime();
             if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now) && (account.getOpenToken() != null)) {
-                log.info("update open token: {}", time);
+                log.info("update open token {}: {}", account.getId(), time);
                 account.setOpenToken(getAliOpenToken(account.getOpenToken()));
                 account.setOpenTokenTime(Instant.now());
                 changed = true;
@@ -324,7 +325,7 @@ public class AccountService {
         try {
             time = account.getRefreshTokenTime();
             if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now) && (account.getRefreshToken() != null)) {
-                log.info("update refresh token: {}", time);
+                log.info("update refresh token {}: {}", account.getId(), time);
                 response = getAliToken(account.getRefreshToken());
                 account.setRefreshToken((String) response.get(REFRESH_TOKEN));
                 account.setRefreshTokenTime(Instant.now());
@@ -926,7 +927,7 @@ public class AccountService {
             if (item.getStatus() == 204) {
                 count++;
             }
-            log.info("删除文件'{}'{}, 创建于{}, 文件大小：{}", file.getName(), item.getStatus() == 204 ? "成功" : "失败", file.getCreatedAt(), file.getSize());
+            log.info("删除文件'{}'{}, 创建于{}, 文件大小：{}", file.getName(), item.getStatus() == 204 ? "成功" : "失败", file.getCreatedAt(), Utils.byte2size(file.getSize()));
         }
         return count;
     }
