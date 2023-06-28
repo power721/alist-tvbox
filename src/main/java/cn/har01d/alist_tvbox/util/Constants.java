@@ -14,6 +14,7 @@ public final class Constants {
     public static final String FOLDER = "folder";
     public static final String DB_URL = "jdbc:sqlite:/opt/alist/data/data.db";
 
+    public static final String ACCESS_TOKEN = "access_token";
     public static final String REFRESH_TOKEN = "refresh_token";
     public static final String OPEN_TOKEN = "open_token";
     public static final String FOLDER_ID = "folder_id";

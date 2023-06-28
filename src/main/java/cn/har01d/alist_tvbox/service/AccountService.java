@@ -58,6 +58,7 @@ import java.util.Objects;
 import java.util.concurrent.ScheduledFuture;
 import java.util.stream.Collectors;
 
+import static cn.har01d.alist_tvbox.util.Constants.ACCESS_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_LOGIN;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_PASSWORD;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_USERNAME;
@@ -159,8 +160,8 @@ public class AccountService {
     }
 
     private void addAdminUser() {
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL)) {
-            Statement statement = connection.createStatement();
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
             String sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0);";
             statement.executeUpdate(sql);
         } catch (Exception e) {
@@ -287,20 +288,30 @@ public class AccountService {
     }
 
     public void handleScheduleTask() {
-        boolean auto = settingRepository.findById(AUTO_CHECKIN).map(Setting::getValue).map(Boolean::valueOf).orElse(false);
-        if (auto) {
-            log.info("auto checkin");
+        log.info("auto checkin");
+        List<Account> accounts = accountRepository.findAll();
+        autoCheckin(accounts);
+
+        for (Account account : accounts) {
             try {
-                checkin(true);
+                Map<Object, Object> response = refreshTokens(account);
+                if (account.isClean()) {
+                    clean(account, response);
+                }
             } catch (Exception e) {
                 log.warn("", e);
             }
         }
+    }
 
-        for (Account account : accountRepository.findAll()) {
-            Map<Object, Object> response = refreshTokens(account);
-            if (account.isClean()) {
-                clean(account, response);
+    public void autoCheckin(List<Account> accounts) {
+        for (Account account : accounts) {
+            if (account.isAutoCheckin()) {
+                try {
+                    checkin(account, true);
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
             }
         }
     }
@@ -344,7 +355,7 @@ public class AccountService {
 
     public Map<Object, Object> getAliToken(String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("User-Agent", Collections.singletonList("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
+        headers.put("User-Agent", Collections.singletonList(USER_AGENT));
         headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
         Map<String, String> body = new HashMap<>();
         body.put(REFRESH_TOKEN, token);
@@ -358,7 +369,7 @@ public class AccountService {
 
     public String getAliOpenToken(String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("User-Agent", Collections.singletonList("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
+        headers.put("User-Agent", Collections.singletonList(USER_AGENT));
         headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
         Map<String, String> body = new HashMap<>();
         body.put(REFRESH_TOKEN, token);
@@ -524,14 +535,6 @@ public class AccountService {
         return login;
     }
 
-    public void checkin(boolean force) {
-        for (Account account : accountRepository.findAll()) {
-            if (account.isAutoCheckin()) {
-                checkin(account, force);
-            }
-        }
-    }
-
     public CheckinResult checkin(Integer id, boolean force) {
         Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
         return checkin(account, force);
@@ -547,7 +550,7 @@ public class AccountService {
 
         log.info("checkin for account {}:{}", account.getId(), account.getNickname());
         Map<Object, Object> map = getAliToken(account.getRefreshToken());
-        String accessToken = (String) map.get("access_token");
+        String accessToken = (String) map.get(ACCESS_TOKEN);
         String refreshToken = (String) map.get(REFRESH_TOKEN);
         account.setNickname((String) map.get("nick_name"));
         account.setRefreshToken(refreshToken);
@@ -561,7 +564,7 @@ public class AccountService {
         log.debug("body: {}", body);
 
         HttpHeaders headers = new HttpHeaders();
-        headers.put("User-Agent", Collections.singletonList("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
+        headers.put("User-Agent", Collections.singletonList(USER_AGENT));
         headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
         headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
@@ -579,7 +582,7 @@ public class AccountService {
                 log.debug("body: {}", body);
 
                 headers = new HttpHeaders();
-                headers.put("User-Agent", Collections.singletonList("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
+                headers.put("User-Agent", Collections.singletonList(USER_AGENT));
                 headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
                 headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
                 entity = new HttpEntity<>(body, headers);
@@ -873,7 +876,7 @@ public class AccountService {
         if (map == null) {
             map = getAliToken(account.getRefreshToken());
         }
-        String accessToken = (String) map.get("access_token");
+        String accessToken = (String) map.get(ACCESS_TOKEN);
         String driveId = (String) map.get("default_drive_id");
 
         AliFileList list = getFileList(driveId, account.getFolderId(), accessToken);
