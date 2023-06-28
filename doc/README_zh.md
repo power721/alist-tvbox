@@ -17,7 +17,8 @@ AList代理，支持xioaya版AList界面管理。
 
 ## 安装
 ### 一键安装
-小雅集成版（不需要再安装小雅版Docker）：
+#### 小雅集成版
+（不需要再安装小雅版Docker）
 ```bash
 curl -s https://d.har01d.cn/update_xiaoya.sh | sudo bash
 ```
@@ -33,14 +34,15 @@ OpenWrt去掉sudo，或者已经是root账号：
 ```bash
 curl -s https://d.har01d.cn/update_xiaoya.sh | bash
 ```
-独立版：
+
+#### 独立版
 ```bash
-curl -s https://d.har01d.cn/update_new.sh | sudo bash
+curl -s https://d.har01d.cn/update_new.sh | bash
 ```
 独立版请使用小雅搜索索引文件： http://d.har01d.cn/index.video.zip
 
 #### NAS
-对于群辉系统，请挂载Docker的/data目录到群辉文件系统。
+对于群辉等NAS系统，请挂载Docker的/data目录到群辉文件系统。
 
 ## 管理
 打开管理网页：http://your-ip:5678/ 
