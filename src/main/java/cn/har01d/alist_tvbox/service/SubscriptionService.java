@@ -368,6 +368,7 @@ public class SubscriptionService {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         sites.removeIf(item -> key.equals(item.get("key")));
         sites.add(0, site);
+        log.debug("add AList site: {}", site);
     }
 
     private Map<String, Object> buildSite(String key) {

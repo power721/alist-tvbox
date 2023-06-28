@@ -81,6 +81,11 @@ public class TextUtils {
             }
         }
 
+        index = newName.indexOf('.');
+        if (index > 0 && newName.substring(0, index).codePoints().allMatch(Character::isDigit)) {
+            newName = newName.substring(index + 1);
+        }
+
         newName = newName.trim();
         if (!name.equals(newName)) {
             log.debug("name: {} -> {}", name, newName);

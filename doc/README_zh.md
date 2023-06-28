@@ -37,6 +37,9 @@ curl -s https://d.har01d.cn/update_xiaoya.sh | bash
 ```bash
 curl -s https://d.har01d.cn/update_new.sh | sudo bash
 ```
+独立版请使用小雅搜索索引文件： http://d.har01d.cn/index.video.zip
+
+#### NAS
 对于群辉系统，请挂载Docker的/data目录到群辉文件系统。
 
 ## 管理
