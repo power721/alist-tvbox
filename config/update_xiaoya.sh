@@ -38,15 +38,25 @@ fi
 
 docker image prune -f
 
+platform="linux/amd64"
+tag="latest"
+ARCH=$(uname -m)
+if [ "$ARCH" = "armv7l" ]; then
+  platform="linux/arm/v7"
+  tag="arm-v7"
+elif [ "$ARCH" = "aarch64" ]; then
+    platform="linux/arm64"
+fi
+
 echo -e "\e[32m下载最新Docker镜像\e[0m"
 for i in 1 2 3 4 5
 do
-   docker pull haroldli/xiaoya-tvbox:latest && break
+   docker pull --platform ${platform} haroldli/xiaoya-tvbox:${tag} && break
 done
 
 echo -e "\e[33m重启应用\e[0m"
 docker rm -f xiaoya-tvbox 2>/dev/null && \
-docker run -d -p $PORT1:8080 -p $PORT2:80 -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+docker run -d -p $PORT1:8080 -p $PORT2:80 -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${tag}
 
 IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head -1)
 if [ -n "$IP" ]; then

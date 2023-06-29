@@ -2,6 +2,12 @@ name: release-xiaoya
 
 on:
   workflow_dispatch:
+  push:
+    paths-ignore:
+      - 'build*'
+      - 'release*'
+      - 'config/**'
+      - 'doc/**'
 
 jobs:
   release:
