@@ -51,6 +51,14 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
+      - name: Build arm v7 docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-arm
+          platforms: linux/arm/v7
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:arm-v7
       - name: copy file via ssh password
         uses: appleboy/scp-action@v0.1.4
         with:
