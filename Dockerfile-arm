@@ -1,0 +1,35 @@
+FROM eclipse-temurin:11 as jre-build
+
+# Create a custom Java runtime
+RUN $JAVA_HOME/bin/jlink \
+         --add-modules java.base \
+         --strip-debug \
+         --no-man-pages \
+         --no-header-files \
+         --compress=2 \
+         --output /jre
+
+FROM xiaoyaliu/alist:latest
+
+LABEL MAINTAINER="Har01d"
+
+ENV JAVA_HOME=/jre
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+COPY --from=jre-build /jre $JAVA_HOME
+
+VOLUME /opt/atv/data/
+
+WORKDIR /opt/atv/
+
+COPY entrypoint.sh /
+
+COPY config/nginx.conf /var/lib/nginx.conf
+
+COPY target/alist-tvbox-1.0.jar ./app.jar
+
+COPY data/version data/app_version
+
+EXPOSE 8080 80
+
+ENTRYPOINT ["/entrypoint.sh"]
