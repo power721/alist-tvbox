@@ -68,10 +68,11 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:arm-v7
       - name: Download data file
-        run: -|
-          wget http://d.har01d.cn/data.zip -O data.zip
-          unzip -q -o data.zip
-          mv data/data.sql src/main/resources/
+        run: wget https://d.har01d.cn/data.zip -O data.zip
+      - name: Unzip data file
+        run: unzip -q -o data.zip
+      - name: Move data file
+        run: mv data/data.sql src/main/resources/
       - name: Build standalone with Maven
         run: mvn -B package --file pom.xml
       - name: Build standalone docker and push
