@@ -37,7 +37,7 @@ jobs:
       - name: Build with Maven
         run: mvn -B package --file pom.xml
       - name: Set APP version
-        run: date +%j.%H%M > app_version
+        run: mkdir data && date +%j.%H%M > data/version
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
