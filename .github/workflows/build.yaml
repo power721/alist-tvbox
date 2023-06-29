@@ -17,11 +17,11 @@ jobs:
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Setup node
-        working-directory: ./web-ui
         uses: actions/setup-node@v3
         with:
           node-version: 18.16.x
           cache: npm
+          cache-dependency-path: ./web-ui
       - name: Install npm
         working-directory: ./web-ui
         run: npm ci
