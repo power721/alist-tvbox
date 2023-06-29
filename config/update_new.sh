@@ -19,9 +19,20 @@ fi
 echo -e "\e[36m端口映射：\e[0m $PORT:8080"
 
 docker image prune -f
-docker pull haroldli/alist-tvbox && \
+
+platform="linux/amd64"
+tag="latest"
+ARCH=$(uname -m)
+if [ "$ARCH" = "armv7l" ]; then
+  platform="linux/arm/v7"
+  tag="arm-v7"
+elif [ "$ARCH" = "aarch64" ]; then
+    platform="linux/arm64"
+fi
+
+docker pull --platform ${platform} haroldli/alist-tvbox:${tag} && \
 docker rm -f alist-tvbox && \
-docker run -d -p $PORT:8080 --restart=always --name=alist-tvbox haroldli/alist-tvbox
+docker run -d -p $PORT:8080 --restart=always --name=alist-tvbox haroldli/alist-tvbox:${tag}
 
 IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head -1)
 if [ -n "$IP" ]; then
