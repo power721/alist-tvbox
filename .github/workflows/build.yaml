@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,12 +31,6 @@ jobs:
         run: mvn -B package --file pom.xml
       - name: Set APP version
         run: mkdir data && date +%j.%H%M > data/version
-
-  release:
-    runs-on: ubuntu-latest
-    needs:
-      - build
-    steps:
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -57,13 +51,6 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
-
-  version:
-    runs-on: ubuntu-latest
-    needs:
-      - build
-      - release
-    steps:
       - name: copy file via ssh password
         uses: appleboy/scp-action@v0.1.4
         with:
