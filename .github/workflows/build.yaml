@@ -14,8 +14,6 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    env:
-      ssh_key: ${{ secrets.SSH_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -93,8 +91,10 @@ jobs:
           platforms: linux/arm/v7
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:arm-v7
-      - name: copy file via ssh password
-        if: ${{ env.ssh_key != '' }}
+      - name: Send version file
+        env:
+          ssh_host: ${{ secrets.SSH_HOST }}
+        if: ${{ env.ssh_host != '' }}
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.SSH_HOST }}
