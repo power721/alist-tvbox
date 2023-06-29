@@ -50,4 +50,4 @@ jobs:
           file: Dockerfile-arm
           platforms: linux/arm/v7
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:arm-v7

@@ -1,4 +1,4 @@
-FROM eclipse-temurin:17 as jdk-deps
+FROM amazoncorretto:17-alpine as corretto-deps
 
 COPY target/alist-tvbox-1.0.jar /app/app.jar
 
@@ -12,12 +12,13 @@ RUN unzip /app/app.jar -d temp &&  \
       --module-path="./temp/BOOT-INF/lib/*" \
       /app/app.jar > /modules.txt
 
-FROM eclipse-temurin:17 as open-jdk
+FROM amazoncorretto:17-alpine as corretto-jdk
 
-COPY --from=jdk-deps /modules.txt /modules.txt
+COPY --from=corretto-deps /modules.txt /modules.txt
 
 # hadolint ignore=DL3018,SC2046
-RUN jlink \
+RUN apk add --no-cache binutils && \
+    jlink \
      --verbose \
      --add-modules "$(cat /modules.txt),jdk.crypto.ec,jdk.crypto.cryptoki" \
      --strip-debug \
@@ -33,7 +34,7 @@ LABEL MAINTAINER="Har01d"
 ENV JAVA_HOME=/jre
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
-COPY --from=open-jdk /jre $JAVA_HOME
+COPY --from=corretto-jdk /jre $JAVA_HOME
 
 VOLUME /opt/atv/data/
 
