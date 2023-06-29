@@ -138,9 +138,6 @@ public class SiteService {
         if (siteRepository.existsByName(dto.getName())) {
             throw new BadRequestException("站点名字重复");
         }
-        if (siteRepository.existsByUrl(dto.getUrl())) {
-            throw new BadRequestException("站点地址重复");
-        }
 
         Site site = new Site();
         site.setName(dto.getName());
