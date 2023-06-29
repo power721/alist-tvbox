@@ -24,7 +24,7 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
-          java-version: '11'
+          java-version: '17'
           distribution: 'corretto'
           cache: 'maven'
       - name: Build with Maven
@@ -48,7 +48,7 @@ jobs:
         with:
           context: .
           file: Dockerfile-xiaoya
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
       - name: copy file via ssh password
