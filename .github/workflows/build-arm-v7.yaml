@@ -1,4 +1,4 @@
-name: release-xiaoya
+name: release-xiaoya-arm
 
 on:
   workflow_dispatch:
