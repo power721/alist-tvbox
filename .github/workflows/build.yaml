@@ -1,0 +1,57 @@
+name: release-xiaoya
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.16.x
+          cache: npm
+      - name: Install npm
+        working-directory: ./web-ui
+        run: npm ci
+      - name: Build web UI
+        working-directory: ./web-ui
+        run: npm run build
+      - name: Set up JDK
+        uses: actions/setup-java@v2
+        with:
+          java-version: '17'
+      - name: Build with Maven
+        run: mvn clean install
+      - name: Set APP version
+        run: date +%j.%H%M > app_version
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      -
+        name: Build docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-xiaoya
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: haroldli/xiaoya-tvbox:latest
+      - name: copy file via ssh password
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.APP_HOST }}
+          port: 22
+          username: ${{ secrets.APP_USERNAME }}
+          key: ${{ secrets.APP_KEY }}
+          source: app_version
+          target: /var/www/alist/
