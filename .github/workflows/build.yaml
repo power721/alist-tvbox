@@ -30,7 +30,7 @@ jobs:
       - name: Build with Maven
         run: mvn -B package --file pom.xml
       - name: Set APP version
-        run: mkdir data && date +%j.%H%M > data/version
+        run: mkdir data && TZ=Asia/Shanghai date +%j.%H%M > data/version && cp data/version app_version
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v2
