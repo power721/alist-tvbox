@@ -139,6 +139,12 @@
         <el-form-item>
           <el-button type="primary" @click="updateOpenTokenUrl">更新</el-button>
         </el-form-item>
+        <el-form-item label="小雅外网地址">
+          <el-input v-model="dockerAddress"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateDockerAddress">更新</el-button>
+        </el-form-item>
       </el-form>
       <template #footer>
       <span class="dialog-footer">
@@ -182,6 +188,7 @@ const movieRemoteVersion = ref(0)
 const fileExpireHour = ref(24)
 const aListStartTime = ref('')
 const openTokenUrl = ref('')
+const dockerAddress = ref('')
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const login = ref({
   username: '',
@@ -213,8 +220,13 @@ const updateToken = () => {
 }
 
 const updateOpenTokenUrl = () => {
-  axios.post('/open-token-url', {url: openTokenUrl.value}).then(({data}) => {
-    form.value.token = data
+  axios.post('/open-token-url', {url: openTokenUrl.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateDockerAddress = () => {
+  axios.post('/settings', {name: 'docker_address', value: dockerAddress.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -274,6 +286,7 @@ onMounted(() => {
       dockerVersion.value = data.docker_version
       appVersion.value = +data.app_version
       openTokenUrl.value = data.open_token_url
+      dockerAddress.value = data.docker_address
       autoCheckin.value = data.auto_checkin === 'true'
       login.value.username = data.alist_username
       login.value.password = data.alist_password

@@ -19,6 +19,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.web.util.UriComponents;
 
 import javax.annotation.PostConstruct;
 import javax.crypto.Cipher;
@@ -440,13 +441,24 @@ public class SubscriptionService {
         return null;
     }
 
-    private static String readHostAddress() throws IOException {
-        String address;
-        File file = new File("/data/docker_address.txt");
-        if (file.exists()) {
-            address = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-        } else {
-            address = ServletUriComponentsBuilder.fromCurrentRequest().port(5244).replacePath("/").build().toUriString();
+    private String readHostAddress() throws IOException {
+        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest().port(5244).replacePath("/").build();
+        String address = null;
+        if (!isIntranet(uriComponents)) {
+            address = getAddress();
+            if (StringUtils.isBlank(address)) {
+                File file = new File("/data/docker_address.txt");
+                if (file.exists()) {
+                    address = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+                    if (StringUtils.isNotBlank(address)) {
+                        settingRepository.save(new Setting("docker_address", address));
+                    }
+                }
+            }
+        }
+
+        if (StringUtils.isBlank(address)) {
+            address = uriComponents.toUriString();
         }
 
         if (address.endsWith("/")) {
@@ -454,6 +466,20 @@ public class SubscriptionService {
         }
 
         return address;
+    }
+
+    private boolean isIntranet(UriComponents uriComponents) {
+        try {
+            String host = uriComponents.getHost();
+            return host != null && (host.equals("localhost") || host.equals("127.0.0.1") || host.startsWith("192.168."));
+        } catch (Exception e) {
+            log.warn("{}", e.getMessage());
+        }
+        return false;
+    }
+
+    private String getAddress() {
+        return settingRepository.findById("docker_address").map(Setting::getValue).orElse(null);
     }
 
     public Map<String, Object> convertResult(String json, String configKey) {
