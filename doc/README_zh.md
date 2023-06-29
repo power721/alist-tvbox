@@ -18,7 +18,12 @@ AList代理，支持xioaya版AList界面管理。
 ## 安装
 ### 一键安装
 #### 小雅集成版
-（不需要再安装小雅版Docker）
+不需要再安装小雅版Docker。
+
+如果找不到bash就替换为sh。
+
+如果找不到sudo，就用root账号登录，去掉sudo后运行。
+
 ```bash
 curl -s https://d.har01d.cn/update_xiaoya.sh | sudo bash
 ```

@@ -205,7 +205,7 @@ const handleAdd = () => {
 const handleEdit = (data: any) => {
   dialogTitle.value = '更新站点 - ' + data.name
   updateAction.value = true
-  form.value = data
+  form.value = Object.assign({}, data)
   formVisible.value = true
 }
 

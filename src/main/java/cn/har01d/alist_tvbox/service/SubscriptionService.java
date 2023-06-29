@@ -228,6 +228,7 @@ public class SubscriptionService {
         try {
             json = Pattern.compile("^\\s*#.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
             json = Pattern.compile("^\\s*//.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
+            json = json.replace("DOCKER_ADDRESS", readHostAddress());
             Map<String, Object> override = objectMapper.readValue(json, Map.class);
             overrideConfig(config, "", "", override);
         } catch (Exception e) {

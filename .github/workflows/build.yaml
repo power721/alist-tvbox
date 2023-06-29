@@ -68,6 +68,19 @@ jobs:
           platforms: linux/arm/v7
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:arm-v7
+      - name: Send version file
+        env:
+          ssh_host: ${{ secrets.SSH_HOST }}
+        if: ${{ env.ssh_host != '' }}
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: 22
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "app_version,config/update_new.sh,config/update_xiaoya.sh"
+          strip_components: 1
+          target: /var/www/alist/
       - name: Download data file
         run: |
           wget https://d.har01d.cn/data.zip -O data.zip
@@ -91,16 +104,3 @@ jobs:
           platforms: linux/arm/v7
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:arm-v7
-      - name: Send version file
-        env:
-          ssh_host: ${{ secrets.SSH_HOST }}
-        if: ${{ env.ssh_host != '' }}
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          port: 22
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "app_version,config/update_new.sh,config/update_xiaoya.sh"
-          strip_components: 1
-          target: /var/www/alist/

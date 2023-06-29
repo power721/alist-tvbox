@@ -242,7 +242,7 @@ const formatTime = (value: string | number) => {
 }
 
 const showDetails = (data: any) => {
-  form.value = data
+  form.value = Object.assign({}, data)
   updateAction.value = true
   if (data.openToken) {
     let details = JSON.parse(atob(data.openToken.split('.')[1]))
