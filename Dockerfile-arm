@@ -1,11 +1,8 @@
-FROM eclipse-temurin:11 as corretto-jdk
+FROM eclipse-temurin:11 as jre-build
 
-# required for strip-debug to work
-RUN apk add --no-cache binutils
-
-# Build small JRE image
-RUN jlink \
-         --add-modules ALL-MODULE-PATH \
+# Create a custom Java runtime
+RUN $JAVA_HOME/bin/jlink \
+         --add-modules java.base \
          --strip-debug \
          --no-man-pages \
          --no-header-files \
@@ -19,7 +16,7 @@ LABEL MAINTAINER="Har01d"
 ENV JAVA_HOME=/jre
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
-COPY --from=corretto-jdk /jre $JAVA_HOME
+COPY --from=jre-build /jre $JAVA_HOME
 
 VOLUME /opt/atv/data/
 
