@@ -29,11 +29,13 @@ jobs:
         working-directory: ./web-ui
         run: npm run build
       - name: Set up JDK
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v3
         with:
           java-version: '17'
+          distribution: 'corretto'
+          cache: 'maven'
       - name: Build with Maven
-        run: mvn clean install
+        run: mvn -B package --file pom.xml
       - name: Set APP version
         run: date +%j.%H%M > app_version
       - name: Login to Docker Hub
