@@ -64,8 +64,8 @@ public class ShareController {
     }
 
     @PostMapping("/import-shares")
-    public int handleFileUpload(@RequestParam("file") MultipartFile file) throws IOException {
-        return shareService.importShares(file);
+    public int handleFileUpload(@RequestParam("file") MultipartFile file, int type) throws IOException {
+        return shareService.importShares(file, type);
     }
 
     @PostMapping("/open-token-url")

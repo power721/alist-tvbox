@@ -123,6 +123,8 @@ https://www.aliyundrive.com/drive/folder/640xxxxxxxxxxxxxxxxxxxca8a 最后一串
 阿里token和开放token每天会刷新，时间和自动签到时间一致。即使没有开启自动签到，也会刷新。
 
 ### 别名
+把一些路径合并成一个路径。
+
 ![别名页面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_alias.png)
 
 ### 其它

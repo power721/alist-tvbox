@@ -24,6 +24,7 @@ public class Share {
     private String shareId;
     private String folderId = "root";
     private String password = "";
+    private Integer type;
 
     @Override
     public boolean equals(Object o) {

@@ -29,14 +29,12 @@ public class ConfigFileService {
 
     @PostConstruct
     public void setup() {
-        if (repository.count() > 0) {
-            writeFiles();
-        } else {
+        if (repository.count() == 0) {
             readFiles();
         }
     }
 
-    private void writeFiles() {
+    public void writeFiles() {
         for (ConfigFile file : repository.findAll()) {
             try {
                 writeFileContent(file);

@@ -5,6 +5,8 @@ import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.PikPakAccount;
+import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
@@ -56,8 +58,10 @@ public class ShareService {
     private final AListAliasRepository aliasRepository;
     private final SettingRepository settingRepository;
     private final AccountRepository accountRepository;
+    private final PikPakAccountRepository pikPakAccountRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
+    private final ConfigFileService configFileService;
     private final RestTemplate restTemplate;
 
     private volatile int shareId = 5000;
@@ -67,16 +71,20 @@ public class ShareService {
                         AListAliasRepository aliasRepository,
                         SettingRepository settingRepository,
                         AccountRepository accountRepository,
+                        PikPakAccountRepository pikPakAccountRepository,
                         AccountService accountService,
                         AListLocalService aListLocalService,
+                        ConfigFileService configFileService,
                         RestTemplateBuilder builder) {
         this.objectMapper = objectMapper;
         this.shareRepository = shareRepository;
         this.aliasRepository = aliasRepository;
         this.settingRepository = settingRepository;
         this.accountRepository = accountRepository;
+        this.pikPakAccountRepository = pikPakAccountRepository;
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
+        this.configFileService = configFileService;
         this.restTemplate = builder.build();
     }
 
@@ -85,6 +93,8 @@ public class ShareService {
         updateAListDriverType();
         loadOpenTokenUrl();
 
+        readPikPak();
+
         List<Share> list = shareRepository.findAll();
         if (list.isEmpty()) {
             list = loadSharesFromFile();
@@ -92,6 +102,8 @@ public class ShareService {
 
         loadAListShares(list);
         loadAListAlias();
+        loadPikPak();
+        configFileService.writeFiles();
         readTvTxt();
 
         if (accountRepository.count() > 0) {
@@ -166,6 +178,39 @@ public class ShareService {
                             share.setPath(parts[0]);
                             share.setShareId(parts[1]);
                             share.setFolderId(parts[2]);
+                            share.setType(0);
+                            list.add(share);
+                        } catch (Exception e) {
+                            log.warn("", e);
+                        }
+                    }
+                }
+                shareRepository.saveAll(list);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+        list.addAll(loadPikPakFromFile());
+        return list;
+    }
+
+    private List<Share> loadPikPakFromFile() {
+        List<Share> list = new ArrayList<>();
+        Path path = Paths.get("/data/pikpakshare_list.txt");
+        if (Files.exists(path)) {
+            try {
+                log.info("loading PikPak share list from file");
+                List<String> lines = Files.readAllLines(path);
+                for (String line : lines) {
+                    String[] parts = line.trim().split("\\s+");
+                    if (parts.length == 3) {
+                        try {
+                            Share share = new Share();
+                            share.setId(shareId++);
+                            share.setPath(parts[0]);
+                            share.setShareId(parts[1]);
+                            share.setFolderId(parts[2]);
+                            share.setType(1);
                             list.add(share);
                         } catch (Exception e) {
                             log.warn("", e);
@@ -180,7 +225,7 @@ public class ShareService {
         return list;
     }
 
-    public int importShares(MultipartFile file) throws IOException {
+    public int importShares(MultipartFile file, int type) throws IOException {
         int count = 0;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             log.info("import share list from file");
@@ -194,6 +239,7 @@ public class ShareService {
                         share.setPath(parts[0]);
                         share.setShareId(parts[1]);
                         share.setFolderId(parts[2]);
+                        share.setType(type);
                         if (shareRepository.existsByPath(share.getPath())) {
                             continue;
                         }
@@ -218,18 +264,24 @@ public class ShareService {
 
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
-            Account account = accountRepository.findById(1).orElse(new Account());
             for (Share share : list) {
                 try {
-                    String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                    int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share.getPath()), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
-                    log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share.getPath()), count);
+                    int count;
+                    if (share.getType() == 0) {
+                        Account account = accountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
+                        String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+                        count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
+                    } else {
+                        PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
+                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+                        count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+                    }
+                    log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     shareId = Math.max(shareId, share.getId() + 1);
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
                 }
             }
-
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -245,11 +297,94 @@ public class ShareService {
         }
     }
 
-    private String getMountPath(String path) {
+    private String getMountPath(Share share) {
+        String path = share.getPath();
         if (path.startsWith("/")) {
             return path;
         }
-        return "\uD83C\uDE34我的阿里分享/" + path;
+        if (share.getType() == 0) {
+            return "/\uD83C\uDE34我的阿里分享/" + path;
+        } else {
+            return "/\uD83D\uDD78\uFE0F我的PikPak分享/" + path;
+        }
+    }
+
+    private void readPikPak() {
+        if (pikPakAccountRepository.count() > 0) {
+            return;
+        }
+
+        Path file = Paths.get("/data/pikpak.txt");
+        if (Files.exists(file)) {
+            log.info("read PikPak account from file");
+            try {
+                String line = Files.readString(file);
+                String[] parts = line.split("\\s+");
+                if (parts.length == 2) {
+                    PikPakAccount account = new PikPakAccount();
+                    account.setNickname("PikPak");
+                    account.setUsername(fix(parts[0]));
+                    account.setPassword(fix(parts[1]));
+                    account.setMaster(true);
+                    pikPakAccountRepository.save(account);
+                    log.info("add PikPak account {} {}: {}", account.getId(), account.getNickname(), account.getUsername());
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+
+        readPikPakAccounts();
+    }
+
+    private void readPikPakAccounts() {
+        Path file = Paths.get("/data/pikpak_list.txt");
+        if (Files.exists(file)) {
+            log.info("read PikPak accounts from file");
+            try {
+                List<String> lines = Files.readAllLines(file);
+                for (String line : lines) {
+                    String[] parts = line.split("\\s+");
+                    if (parts.length == 3) {
+                        String path = parts[0];
+                        String username = fix(parts[1]);
+                        String password = fix(parts[2]);
+
+                        PikPakAccount account = new PikPakAccount();
+                        account.setNickname(path);
+                        account.setUsername(username);
+                        account.setPassword(password);
+                        pikPakAccountRepository.save(account);
+                        log.info("add PikPak account {} {}: {}", account.getId(), account.getNickname(), account.getUsername());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+    }
+
+    private void loadPikPak() {
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
+            List<PikPakAccount> list = pikPakAccountRepository.findAll();
+            for (PikPakAccount account : list) {
+                String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F\uFE0F我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'','','',0,'302_redirect','');";
+                statement.executeUpdate(String.format(sql, 8000 + account.getId(), account.getNickname(), account.getUsername(), account.getPassword()));
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    private String fix(String text) {
+        if (text.startsWith("\"")) {
+            text = text.substring(1);
+        }
+        if (text.endsWith("\"")) {
+            text = text.substring(0, text.length() - 1);
+        }
+        return text;
     }
 
     private void readTvTxt() {
@@ -305,17 +440,24 @@ public class ShareService {
     public Share create(Share share) {
         aListLocalService.validateAListStatus();
         validate(share);
-        Account account = accountRepository.findById(1).orElseThrow(BadRequestException::new);
         parseShare(share);
 
         String token = accountService.login();
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
             share.setId(shareId++);
-            shareRepository.save(share);
 
-            String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
-            statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share.getPath()), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
+            if (share.getType() == 0) {
+                Account account = accountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
+                String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
+                statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
+            } else {
+                PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
+                statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+            }
+
+            shareRepository.save(share);
 
             enableStorage(share.getId(), token);
         } catch (Exception e) {
@@ -327,7 +469,6 @@ public class ShareService {
     public Share update(Integer id, Share share) {
         aListLocalService.validateAListStatus();
         validate(share);
-        Account account = accountRepository.findById(1).orElseThrow(BadRequestException::new);
         parseShare(share);
 
         share.setId(id);
@@ -338,8 +479,15 @@ public class ShareService {
              Statement statement = connection.createStatement()) {
             deleteStorage(id, token);
 
-            String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
-            statement.executeUpdate(String.format(sql, id, getMountPath(share.getPath()), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
+            if (share.getType() == 0) {
+                Account account = accountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
+                String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
+                statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
+            } else {
+                PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
+                statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+            }
 
             enableStorage(id, token);
         } catch (Exception e) {
@@ -403,16 +551,17 @@ public class ShareService {
         int offset = pageable.getPageNumber() * size;
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
-            String sql = "select count(*) from x_storages where driver = 'AliyundriveShare2Open'";
+            String sql = "select count(*) from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare'";
             ResultSet rs = statement.executeQuery(sql);
             total = rs.getInt(1);
-            sql = "select * from x_storages where driver = 'AliyundriveShare2Open' LIMIT " + size + " OFFSET " + offset;
+            sql = "select * from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare' LIMIT " + size + " OFFSET " + offset;
             rs = statement.executeQuery(sql);
             while (rs.next()) {
                 ShareInfo shareInfo = new ShareInfo();
                 shareInfo.setId(rs.getInt("id"));
                 shareInfo.setPath(rs.getString("mount_path"));
                 shareInfo.setStatus(rs.getString("status"));
+                shareInfo.setType(rs.getString("driver").equals("PikPakShare") ? 1 : 0);
                 String addition = rs.getString("addition");
                 if (StringUtils.isNotBlank(addition)) {
                     Map<String, String> map = objectMapper.readValue(addition, Map.class);

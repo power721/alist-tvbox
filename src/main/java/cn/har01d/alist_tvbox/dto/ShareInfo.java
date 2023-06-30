@@ -10,4 +10,5 @@ public class ShareInfo {
     private String folderId;
     private String status;
     private String password;
+    private int type;
 }
