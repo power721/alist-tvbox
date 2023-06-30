@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.dto.ShareInfo;
+import cn.har01d.alist_tvbox.entity.AListAlias;
+import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
@@ -9,6 +11,7 @@ import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -50,6 +53,7 @@ public class ShareService {
 
     private final ObjectMapper objectMapper;
     private final ShareRepository shareRepository;
+    private final AListAliasRepository aliasRepository;
     private final SettingRepository settingRepository;
     private final AccountRepository accountRepository;
     private final AccountService accountService;
@@ -60,6 +64,7 @@ public class ShareService {
 
     public ShareService(ObjectMapper objectMapper,
                         ShareRepository shareRepository,
+                        AListAliasRepository aliasRepository,
                         SettingRepository settingRepository,
                         AccountRepository accountRepository,
                         AccountService accountService,
@@ -67,6 +72,7 @@ public class ShareService {
                         RestTemplateBuilder builder) {
         this.objectMapper = objectMapper;
         this.shareRepository = shareRepository;
+        this.aliasRepository = aliasRepository;
         this.settingRepository = settingRepository;
         this.accountRepository = accountRepository;
         this.accountService = accountService;
@@ -85,10 +91,33 @@ public class ShareService {
         }
 
         loadAListShares(list);
+        loadAListAlias();
         readTvTxt();
 
         if (accountRepository.count() > 0) {
             aListLocalService.startAListServer();
+        }
+    }
+
+    public void loadAListAlias() {
+        List<AListAlias> list = aliasRepository.findAll();
+        if (list.isEmpty()) {
+            return;
+        }
+
+        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+             Statement statement = connection.createStatement()) {
+            for (AListAlias alias : list) {
+                try {
+                    String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'name','asc','front',0,'302_redirect','');";
+                    int count = statement.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getPaths(alias.getContent())));
+                    log.info("insert Alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
+                } catch (Exception e) {
+                    log.warn("{}", e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("", e);
         }
     }
 
@@ -194,7 +223,7 @@ public class ShareService {
                 try {
                     String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                     int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share.getPath()), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
-                    log.info("insert {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share.getPath()), count);
+                    log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share.getPath()), count);
                     shareId = Math.max(shareId, share.getId() + 1);
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
@@ -228,27 +257,31 @@ public class ShareService {
         if (Files.exists(file)) {
             log.info("read tv from file");
             try {
-                List<String> lines = Files.readAllLines(file);
-                StringBuilder sb = new StringBuilder();
-                for (String line : lines) {
-                    String[] parts = line.trim().split(",");
-                    if ((parts.length == 1 || "#genre#".equals(parts[1])) && StringUtils.isNotBlank(parts[0])) {
-                        sb.append(parts[0] + ":\\n");
-                    } else if (parts.length == 2 && !StringUtils.isAnyBlank(parts[0], parts[1])) {
-                        sb.append("  " + parts[0] + ".m3u8:" + parts[1] + "\\n");
-                    } else {
-                        sb.append("\\n");
-                    }
-                }
+                StringBuilder sb = parseTvFile(file);
                 try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
                      Statement statement = connection.createStatement()) {
-                    log.info("insert tv: {}", sb);
                     statement.executeUpdate("INSERT INTO x_storages VALUES(2050,'/\uD83C\uDDF9\uD83C\uDDFB直播/我的自选',0,'UrlTree',0,'work','{\"url_structure\":\"" + sb + "\",\"head_size\":false}','','2023-06-20 12:00:00+00:00',0,'name','','',0,'302_redirect','');");
                 }
             } catch (Exception e) {
                 log.warn("", e);
             }
         }
+    }
+
+    private static StringBuilder parseTvFile(Path file) throws IOException {
+        List<String> lines = Files.readAllLines(file);
+        StringBuilder sb = new StringBuilder();
+        for (String line : lines) {
+            String[] parts = line.trim().split(",");
+            if ((parts.length == 1 || "#genre#".equals(parts[1])) && StringUtils.isNotBlank(parts[0])) {
+                sb.append(parts[0]).append(":\\n");
+            } else if (parts.length == 2 && !StringUtils.isAnyBlank(parts[0], parts[1])) {
+                sb.append("  ").append(parts[0]).append(".m3u8:").append(parts[1]).append("\\n");
+            } else {
+                sb.append("\\n");
+            }
+        }
+        return sb;
     }
 
     public Page<Share> list(Pageable pageable) {
@@ -327,7 +360,7 @@ public class ShareService {
         }
     }
 
-    private void enableStorage(Integer id, String token) {
+    public void enableStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
@@ -355,7 +388,7 @@ public class ShareService {
         deleteStorage(id, token);
     }
 
-    private void deleteStorage(Integer id, String token) {
+    public void deleteStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);

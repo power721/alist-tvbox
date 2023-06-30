@@ -29,4 +29,16 @@ public final class Utils {
         return result + " " + unit;
     }
 
+    public static String getPaths(String content) {
+        StringBuilder sb = new StringBuilder();
+        for (String line : content.split("\\n")) {
+            if (line.split(":").length == 2) {
+                sb.append(line).append("\\n");
+            } else {
+                sb.append("本地:").append(line).append("\\n");
+            }
+        }
+        return sb.toString();
+    }
+
 }
