@@ -85,6 +85,7 @@ public class ShareService {
         }
 
         loadAListShares(list);
+        readTvTxt();
 
         if (accountRepository.count() > 0) {
             aListLocalService.startAListServer();
@@ -220,6 +221,34 @@ public class ShareService {
             return path;
         }
         return "\uD83C\uDE34我的阿里分享/" + path;
+    }
+
+    private void readTvTxt() {
+        Path file = Paths.get("/data/tv.txt");
+        if (Files.exists(file)) {
+            log.info("read tv from file");
+            try {
+                List<String> lines = Files.readAllLines(file);
+                StringBuilder sb = new StringBuilder();
+                for (String line : lines) {
+                    String[] parts = line.trim().split(",");
+                    if ((parts.length == 1 || "#genre#".equals(parts[1])) && StringUtils.isNotBlank(parts[0])) {
+                        sb.append(parts[0] + ":\\n");
+                    } else if (parts.length == 2 && !StringUtils.isAnyBlank(parts[0], parts[1])) {
+                        sb.append("  " + parts[0] + ".m3u8:" + parts[1] + "\\n");
+                    } else {
+                        sb.append("\\n");
+                    }
+                }
+                try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+                     Statement statement = connection.createStatement()) {
+                    log.info("insert tv: {}", sb);
+                    statement.executeUpdate("INSERT INTO x_storages VALUES(2050,'/\uD83C\uDDF9\uD83C\uDDFB直播/我的自选',0,'UrlTree',0,'work','{\"url_structure\":\"" + sb + "\",\"head_size\":false}','','2023-06-20 12:00:00+00:00',0,'name','','',0,'302_redirect','');");
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
     }
 
     public Page<Share> list(Pageable pageable) {
