@@ -32,6 +32,8 @@ cat data/movie_version && \
 rm -f data.zip
 
 if [ -f /data/cmd.sql ]; then
+  echo "add cmd.sql"
+  wc /data/cmd.sql
   cat /data/cmd.sql >> data/data.sql
   rm -f /data/cmd.sql
 fi
