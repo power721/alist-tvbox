@@ -60,6 +60,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Send version file
         env:
           ssh_host: ${{ secrets.SSH_HOST }}
@@ -88,3 +90,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
