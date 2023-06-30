@@ -57,17 +57,17 @@ jobs:
         with:
           context: .
           file: Dockerfile-xiaoya
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
-      - name: Build arm v7 docker and push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: Dockerfile-arm
-          platforms: linux/arm/v7
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:arm-v7
+#      - name: Build arm v7 docker and push
+#        uses: docker/build-push-action@v4
+#        with:
+#          context: .
+#          file: Dockerfile-arm
+#          platforms: linux/arm/v7
+#          push: true
+#          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:arm-v7
       - name: Send version file
         env:
           ssh_host: ${{ secrets.SSH_HOST }}
@@ -93,14 +93,14 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
-      - name: Build standalone docker and push - arm v7
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: Dockerfile-armv7
-          platforms: linux/arm/v7
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:arm-v7
+#      - name: Build standalone docker and push - arm v7
+#        uses: docker/build-push-action@v4
+#        with:
+#          context: .
+#          file: Dockerfile-armv7
+#          platforms: linux/arm/v7
+#          push: true
+#          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:arm-v7

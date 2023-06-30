@@ -1,8 +1,22 @@
-FROM amazoncorretto:17-alpine as corretto-deps
+ARG TARGETPLATFORM
+ARG BASE_JDK="amazonjre:17-alpine"
+
+FROM alpine as base
+
+RUN echo "TARGET PLATFORM: $TARGETPLATFORM"
+
+RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
+        BASE_JDK="eclipse-temurin:11"; \
+    fi
+
+FROM ${BASE_JDK} as jre-deps
 
 COPY target/alist-tvbox-1.0.jar /app/app.jar
 
-RUN unzip /app/app.jar -d temp &&  \
+RUN touch /modules.txt
+
+RUN if [ "$TARGETPLATFORM" != "linux/arm/v7" ]; then \
+    unzip /app/app.jar -d temp &&  \
     jdeps  \
       --print-module-deps \
       --ignore-missing-deps \
@@ -10,22 +24,33 @@ RUN unzip /app/app.jar -d temp &&  \
       --multi-release 17 \
       --class-path="./temp/BOOT-INF/lib/*" \
       --module-path="./temp/BOOT-INF/lib/*" \
-      /app/app.jar > /modules.txt
+      /app/app.jar > /modules.txt; \
+    fi
 
-FROM amazoncorretto:17-alpine as corretto-jdk
+FROM ${BASE_JDK} as jre-build
 
-COPY --from=corretto-deps /modules.txt /modules.txt
+COPY --from=jre-deps /modules.txt /modules.txt
 
-# hadolint ignore=DL3018,SC2046
-RUN apk add --no-cache binutils && \
-    jlink \
-     --verbose \
-     --add-modules "$(cat /modules.txt),jdk.crypto.ec,jdk.crypto.cryptoki" \
-     --strip-debug \
-     --no-man-pages \
-     --no-header-files \
-     --compress=2 \
-     --output /jre
+RUN if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
+    BASE_JDK="eclipse-temurin:11"; \
+    $JAVA_HOME/bin/jlink \
+         --add-modules java.base \
+         --strip-debug \
+         --no-man-pages \
+         --no-header-files \
+         --compress=2 \
+         --output /jre; \
+    else \
+        apk add --no-cache binutils && \
+        jlink \
+         --verbose \
+         --add-modules "$(cat /modules.txt),jdk.crypto.ec,jdk.crypto.cryptoki" \
+         --strip-debug \
+         --no-man-pages \
+         --no-header-files \
+         --compress=2 \
+         --output /jre; \
+    fi
 
 FROM xiaoyaliu/alist:latest
 
@@ -34,7 +59,7 @@ LABEL MAINTAINER="Har01d"
 ENV JAVA_HOME=/jre
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
-COPY --from=corretto-jdk /jre $JAVA_HOME
+COPY --from=jre-build /jre $JAVA_HOME
 
 VOLUME /opt/atv/data/
 
@@ -48,7 +73,6 @@ COPY target/alist-tvbox-1.0.jar ./app.jar
 
 COPY data/version data/app_version
 
-EXPOSE 8080
-EXPOSE 80
+EXPOSE 8080 80
 
 ENTRYPOINT ["/entrypoint.sh"]
