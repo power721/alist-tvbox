@@ -162,7 +162,9 @@ public class AccountService {
     private void addAdminUser() {
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
-            String sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0);";
+            String sql = "delete from x_users where id = 4;";
+            statement.executeUpdate(sql);
+            sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0);";
             statement.executeUpdate(sql);
         } catch (Exception e) {
             throw new BadRequestException(e);
