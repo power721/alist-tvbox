@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -20,6 +21,7 @@ import java.util.List;
 
 @Slf4j
 @Service
+@Profile("xiaoya")
 public class PikPakService {
     private final PikPakAccountRepository pikPakAccountRepository;
     private final AccountService accountService;
@@ -33,7 +35,7 @@ public class PikPakService {
 
     @PostConstruct
     public void setup() {
-        pikPakAccountRepository.getFirstByMasterTrue().ifPresent(account -> updateAList(account));
+        pikPakAccountRepository.getFirstByMasterTrue().ifPresent(this::updateAList);
     }
 
     public void readPikPak() {
@@ -96,7 +98,7 @@ public class PikPakService {
              Statement statement = connection.createStatement()) {
             List<PikPakAccount> list = pikPakAccountRepository.findAll();
             for (PikPakAccount account : list) {
-                String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F\uFE0F我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'','','',0,'302_redirect','');";
+                String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'','','',0,'302_redirect','');";
                 statement.executeUpdate(String.format(sql, 8000 + account.getId(), account.getNickname(), account.getUsername(), account.getPassword()));
             }
         } catch (Exception e) {
@@ -196,7 +198,7 @@ public class PikPakService {
             if (status == 2) {
                 accountService.deleteStorage(id, token);
             }
-            String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F\uFE0F我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',%d,'','','',0,'302_redirect','');";
+            String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',%d,'','','',0,'302_redirect','');";
             statement.executeUpdate(String.format(sql, id, account.getNickname(), account.getUsername(), account.getPassword(), disabled));
             log.info("add AList PikPak {} {}: {}", id, account.getNickname(), account.getUsername());
             if (status == 2) {

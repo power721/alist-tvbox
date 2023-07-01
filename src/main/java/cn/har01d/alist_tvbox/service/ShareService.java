@@ -325,7 +325,7 @@ public class ShareService {
         if (share.getType() == 0) {
             return "/\uD83C\uDE34我的阿里分享/" + path;
         } else {
-            return "/\uD83D\uDD78\uFE0F我的PikPak分享/" + path;
+            return "/\uD83D\uDD78️我的PikPak分享/" + path;
         }
     }
 

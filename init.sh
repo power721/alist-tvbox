@@ -7,6 +7,8 @@ mv data.db /opt/alist/data/data.db
 mv config.json /opt/alist/data/config.json
 mkdir -p /www/cgi-bin
 mkdir -p /index
+mv search /www/cgi-bin/search
+mv header.html /www/cgi-bin/header.html
 mv mobi.tgz /www/mobi.tgz
 cd /www/
 tar zxf mobi.tgz
