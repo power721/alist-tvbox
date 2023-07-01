@@ -16,14 +16,12 @@ fi
 
 if docker ps | grep -v xiaoya-tvbox | grep -v xiaoya-hostmode | grep -q xiaoya; then
   echo -e "\e[33m原版小雅Docker容器运行中。\e[0m"
-  while true; do
-      read -r -p "是否停止小雅Docker容器？[Y/N] " yn
-      case $yn in
-          [Yy]* ) docker rm -f xiaoya 2>/dev/null; break;;
-          [Nn]* ) exit 0;;
-          * ) exit 1;;
-      esac
-  done
+  read -r -p "是否停止小雅Docker容器？[Y/N] " yn
+  case $yn in
+      [Yy]* ) docker rm -f xiaoya 2>/dev/null;;
+      [Nn]* ) exit 0;;
+      * ) exit 1;;
+  esac
 fi
 
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
@@ -48,7 +46,7 @@ elif [ "$ARCH" = "aarch64" ]; then
     platform="linux/arm64"
 fi
 
-echo -e "\e[32m下载最新Docker镜像\e[0m"
+echo -e "\e[32m下载最新Docker镜像，平台：${platform}\e[0m"
 for i in 1 2 3 4 5
 do
    docker pull --platform ${platform} haroldli/xiaoya-tvbox:${tag} && break

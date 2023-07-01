@@ -9,9 +9,9 @@
 
   <el-table :data="shares" border @selection-change="handleSelectionChange" style="width: 100%">
     <el-table-column type="selection" width="55"/>
-    <el-table-column prop="id" label="ID" width="70"/>
-    <el-table-column prop="path" label="路径"/>
-    <el-table-column label="完整路径">
+    <el-table-column prop="id" label="ID" width="70" sortable/>
+    <el-table-column prop="path" label="路径" sortable/>
+    <el-table-column label="完整路径" sortable>
       <template #default="scope">
         {{fullPath(scope.row)}}
       </template>
@@ -23,7 +23,7 @@
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
-    <el-table-column prop="type" label="类型" width="150">
+    <el-table-column prop="type" label="类型" width="150" sortable>
       <template #default="scope">
         <span v-if="scope.row.type">PikPak分享</span>
         <span v-else>阿里云盘</span>
@@ -129,8 +129,8 @@
   <h2>资源列表</h2>
 
   <el-table :data="resources" border style="width: 100%">
-    <el-table-column prop="id" label="ID" width="70"/>
-    <el-table-column prop="path" label="路径"/>
+    <el-table-column prop="id" label="ID" width="70" sortable/>
+    <el-table-column prop="path" label="路径" sortable/>
     <el-table-column prop="url" label="分享链接" width="350">
       <template #default="scope">
         <a v-if="scope.row.type">{{scope.row.shareId}}</a>
@@ -138,7 +138,7 @@
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
-    <el-table-column prop="type" label="类型" width="150">
+    <el-table-column prop="type" label="类型" width="150" sortable>
       <template #default="scope">
         <span v-if="scope.row.type">PikPak分享</span>
         <span v-else>阿里云盘</span>
