@@ -394,6 +394,8 @@ public class AccountService {
                 log.info("enable AList login");
                 sql = "update x_users set disabled = 1 where id = 2";
                 statement.executeUpdate(sql);
+                sql = "delete from x_users where id = 3;";
+                statement.executeUpdate(sql);
                 sql = "INSERT INTO x_users VALUES(3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,368,'',0,0);";
                 statement.executeUpdate(sql);
             } else {
