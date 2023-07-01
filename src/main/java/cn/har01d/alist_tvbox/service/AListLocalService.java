@@ -33,6 +33,10 @@ public class AListLocalService {
     }
 
     public void startAListServer() {
+        if (aListStatus > 0) {
+            return;
+        }
+
         try {
             log.info("start AList server");
             ProcessBuilder builder = new ProcessBuilder();

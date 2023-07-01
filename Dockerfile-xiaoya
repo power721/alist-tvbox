@@ -13,9 +13,9 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY entrypoint.sh index.sh /
+COPY entrypoint.sh init.sh index.sh /
 
-COPY config/nginx.conf /var/lib/nginx.conf
+COPY config/nginx.conf /etc/nginx/http.d/default.conf
 
 COPY target/alist-tvbox-1.0.jar ./app.jar
 

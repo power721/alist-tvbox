@@ -23,10 +23,12 @@ import java.util.List;
 public class PikPakService {
     private final PikPakAccountRepository pikPakAccountRepository;
     private final AccountService accountService;
+    private final AListLocalService aListLocalService;
 
-    public PikPakService(PikPakAccountRepository pikPakAccountRepository, AccountService accountService) {
+    public PikPakService(PikPakAccountRepository pikPakAccountRepository, AccountService accountService, AListLocalService aListLocalService) {
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.accountService = accountService;
+        this.aListLocalService = aListLocalService;
     }
 
     @PostConstruct
@@ -140,6 +142,7 @@ public class PikPakService {
         if (pikPakAccountRepository.count() == 0) {
             dto.setMaster(true);
             updateIndexFile();
+            aListLocalService.startAListServer();
         } else {
             if (pikPakAccountRepository.existsByNickname(dto.getNickname())) {
                 throw new BadRequestException("账号昵称已结存在");
@@ -149,8 +152,8 @@ public class PikPakService {
             }
         }
 
-        pikPakAccountRepository.save(dto);
         updateMaster(dto);
+        pikPakAccountRepository.save(dto);
         updatePikPak(dto);
 
         return dto;
@@ -172,27 +175,33 @@ public class PikPakService {
                 || !account.getUsername().equals(dto.getUsername())
                 || !account.getPassword().equals(dto.getPassword());
         dto.setId(id);
-        pikPakAccountRepository.save(dto);
 
         if (changed && dto.isMaster()) {
             updateMaster(dto);
         }
 
+        pikPakAccountRepository.save(dto);
         updatePikPak(dto);
 
         return dto;
     }
 
-    private void updatePikPak(PikPakAccount account) {
+    public void updatePikPak(PikPakAccount account) {
+        int status = aListLocalService.getAListStatus();
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
             int id = 8000 + account.getId();
-            String token = accountService.login();
-            accountService.deleteStorage(id, token);
-            String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F\uFE0F我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'','','',0,'302_redirect','');";
-            statement.executeUpdate(String.format(sql, id, account.getNickname(), account.getUsername(), account.getPassword()));
+            int disabled = status == 0 ? 0 : 1;
+            String token = status == 2 ? accountService.login() : "";
+            if (status == 2) {
+                accountService.deleteStorage(id, token);
+            }
+            String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F\uFE0F我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',%d,'','','',0,'302_redirect','');";
+            statement.executeUpdate(String.format(sql, id, account.getNickname(), account.getUsername(), account.getPassword(), disabled));
             log.info("add AList PikPak {} {}: {}", id, account.getNickname(), account.getUsername());
-            accountService.enableStorage(id, token);
+            if (status == 2) {
+                accountService.enableStorage(id, token);
+            }
         } catch (Exception e) {
             throw new BadRequestException(e);
         }

@@ -208,6 +208,8 @@ import {onMounted, ref} from 'vue'
 import {Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
+import {store} from "@/services/store";
+import router from "@/router";
 
 interface Item {
   path: string
@@ -315,7 +317,16 @@ const handleConfirm = () => {
   const url = updateAction.value ? '/ali-accounts/' + form.value.id : '/ali-accounts'
   axios.post(url, form.value).then(() => {
     formVisible.value = false
-    ElMessage.success('更新成功')
+    if (accounts.value.length === 0) {
+      if (store.aListStatus) {
+        ElMessage.success('添加成功')
+      } else {
+        ElMessage.success('添加成功，AList服务重启中。')
+        setTimeout(() => router.push('/wait'), 3000)
+      }
+    } else {
+      ElMessage.success('更新成功')
+    }
     load()
   })
 }

@@ -23,7 +23,7 @@ public class PikPakAccount {
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
     private Integer id;
     private String nickname;
-    private String username;
-    private String password;
+    private String username = "";
+    private String password = "";
     private boolean master;
 }

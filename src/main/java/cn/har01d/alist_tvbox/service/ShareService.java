@@ -32,7 +32,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.PostConstruct;
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
@@ -110,7 +109,7 @@ public class ShareService {
         configFileService.writeFiles();
         readTvTxt();
 
-        if (accountRepository.count() > 0) {
+        if (accountRepository.count() > 0 || pikPakAccountRepository.count() > 0) {
             aListLocalService.startAListServer();
         }
     }
@@ -269,20 +268,20 @@ public class ShareService {
         boolean pikpak = false;
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
+            Account account1 = accountRepository.getFirstByMasterTrue().orElse(new Account());
+            PikPakAccount account2 = pikPakAccountRepository.getFirstByMasterTrue().orElse(new PikPakAccount());
             for (Share share : list) {
                 try {
-                    int count;
                     if (share.getType() == 0) {
-                        Account account = accountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
                         String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                        count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
+                        int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), account1.getRefreshToken(), account1.getOpenToken(), account1.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
+                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     } else {
-                        PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
                         String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                        count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+                        int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account2.getUsername(), account2.getPassword(), share.getShareId(), share.getPassword()));
                         pikpak = true;
+                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     }
-                    log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     shareId = Math.max(shareId, share.getId() + 1);
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
