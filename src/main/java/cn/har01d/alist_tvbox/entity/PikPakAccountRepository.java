@@ -6,4 +6,12 @@ import java.util.Optional;
 
 public interface PikPakAccountRepository extends JpaRepository<PikPakAccount, Integer> {
     Optional<PikPakAccount> getFirstByMasterTrue();
+
+    boolean existsByUsername(String username);
+
+    boolean existsByNickname(String nickname);
+
+    PikPakAccount findByUsername(String username);
+
+    PikPakAccount findByNickname(String nickname);
 }

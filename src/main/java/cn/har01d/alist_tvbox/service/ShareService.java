@@ -32,6 +32,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.PostConstruct;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
@@ -62,6 +63,7 @@ public class ShareService {
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
+    private final PikPakService pikPakService;
     private final RestTemplate restTemplate;
 
     private volatile int shareId = 5000;
@@ -75,6 +77,7 @@ public class ShareService {
                         AccountService accountService,
                         AListLocalService aListLocalService,
                         ConfigFileService configFileService,
+                        PikPakService pikPakService,
                         RestTemplateBuilder builder) {
         this.objectMapper = objectMapper;
         this.shareRepository = shareRepository;
@@ -85,6 +88,7 @@ public class ShareService {
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
+        this.pikPakService = pikPakService;
         this.restTemplate = builder.build();
     }
 
@@ -93,7 +97,7 @@ public class ShareService {
         updateAListDriverType();
         loadOpenTokenUrl();
 
-        readPikPak();
+        pikPakService.readPikPak();
 
         List<Share> list = shareRepository.findAll();
         if (list.isEmpty()) {
@@ -102,7 +106,7 @@ public class ShareService {
 
         loadAListShares(list);
         loadAListAlias();
-        loadPikPak();
+        pikPakService.loadPikPak();
         configFileService.writeFiles();
         readTvTxt();
 
@@ -262,6 +266,7 @@ public class ShareService {
             return;
         }
 
+        boolean pikpak = false;
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
             for (Share share : list) {
@@ -275,6 +280,7 @@ public class ShareService {
                         PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
                         String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+                        pikpak = true;
                     }
                     log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     shareId = Math.max(shareId, share.getId() + 1);
@@ -282,6 +288,21 @@ public class ShareService {
                     log.warn("{}", e.getMessage());
                 }
             }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        if (pikpak) {
+            updateIndexFile();
+        }
+    }
+
+    private void updateIndexFile() {
+        log.info("update PikPak index file");
+        ProcessBuilder builder = new ProcessBuilder();
+        builder.command("sh", "-c", "/index.sh");
+        try {
+            builder.start();
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -307,84 +328,6 @@ public class ShareService {
         } else {
             return "/\uD83D\uDD78\uFE0F我的PikPak分享/" + path;
         }
-    }
-
-    private void readPikPak() {
-        if (pikPakAccountRepository.count() > 0) {
-            return;
-        }
-
-        Path file = Paths.get("/data/pikpak.txt");
-        if (Files.exists(file)) {
-            log.info("read PikPak account from file");
-            try {
-                String line = Files.readString(file);
-                String[] parts = line.split("\\s+");
-                if (parts.length == 2) {
-                    PikPakAccount account = new PikPakAccount();
-                    account.setNickname("PikPak");
-                    account.setUsername(fix(parts[0]));
-                    account.setPassword(fix(parts[1]));
-                    account.setMaster(true);
-                    pikPakAccountRepository.save(account);
-                    log.info("add PikPak account {} {}: {}", account.getId(), account.getNickname(), account.getUsername());
-                }
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-
-        readPikPakAccounts();
-    }
-
-    private void readPikPakAccounts() {
-        Path file = Paths.get("/data/pikpak_list.txt");
-        if (Files.exists(file)) {
-            log.info("read PikPak accounts from file");
-            try {
-                List<String> lines = Files.readAllLines(file);
-                for (String line : lines) {
-                    String[] parts = line.split("\\s+");
-                    if (parts.length == 3) {
-                        String path = parts[0];
-                        String username = fix(parts[1]);
-                        String password = fix(parts[2]);
-
-                        PikPakAccount account = new PikPakAccount();
-                        account.setNickname(path);
-                        account.setUsername(username);
-                        account.setPassword(password);
-                        pikPakAccountRepository.save(account);
-                        log.info("add PikPak account {} {}: {}", account.getId(), account.getNickname(), account.getUsername());
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-    }
-
-    private void loadPikPak() {
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
-             Statement statement = connection.createStatement()) {
-            List<PikPakAccount> list = pikPakAccountRepository.findAll();
-            for (PikPakAccount account : list) {
-                String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F\uFE0F我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'','','',0,'302_redirect','');";
-                statement.executeUpdate(String.format(sql, 8000 + account.getId(), account.getNickname(), account.getUsername(), account.getPassword()));
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-    }
-
-    private String fix(String text) {
-        if (text.startsWith("\"")) {
-            text = text.substring(1);
-        }
-        if (text.endsWith("\"")) {
-            text = text.substring(0, text.length() - 1);
-        }
-        return text;
     }
 
     private void readTvTxt() {

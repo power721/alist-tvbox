@@ -94,8 +94,9 @@
             active-text="是"
             inactive-text="否"
           />
+          <span class="hint">主账号用来观看分享。</span>
         </el-form-item>
-        <el-form-item label="自动清理">
+        <el-form-item label="自动清理" label-width="140">
           <el-switch
             v-model="form.clean"
             inline-prompt
@@ -165,6 +166,7 @@
             active-text="是"
             inactive-text="否"
           />
+          <span class="hint">主账号用来观看分享。</span>
         </el-form-item>
         <el-form-item label="自动清理">
           <el-switch
@@ -191,9 +193,9 @@
       <template #footer>
           <span class="dialog-footer">
             <el-button @click="detailVisible = false">取消</el-button>
-          <el-button type="success" @click="clean">清理</el-button>
-          <el-button type="success" @click="checkin">签到</el-button>
-          <el-button type="primary" @click="handleConfirm">更新</el-button>
+            <el-button type="success" @click="clean">清理</el-button>
+            <el-button type="success" @click="checkin">签到</el-button>
+            <el-button type="primary" @click="handleConfirm">更新</el-button>
           </span>
       </template>
     </el-dialog>

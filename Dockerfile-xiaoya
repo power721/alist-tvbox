@@ -13,7 +13,7 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY entrypoint.sh /
+COPY entrypoint.sh index.sh /
 
 COPY config/nginx.conf /var/lib/nginx.conf
 

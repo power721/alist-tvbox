@@ -2,6 +2,7 @@
 
 /updateall
 
+chmod a+x /index.sh
 ln -sf /data/config
 mv /var/lib/nginx.conf /etc/nginx/http.d/default.conf
 

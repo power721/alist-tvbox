@@ -833,7 +833,7 @@ public class AccountService {
         }
     }
 
-    private void enableStorage(Integer id, String token) {
+    public void enableStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
@@ -841,7 +841,7 @@ public class AccountService {
         log.info("enable AList storage response: {}", response.getBody());
     }
 
-    private void deleteStorage(Integer id, String token) {
+    public void deleteStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);

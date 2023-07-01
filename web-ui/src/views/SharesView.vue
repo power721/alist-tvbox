@@ -118,6 +118,7 @@
     </el-form-item>
     <template #footer>
       <span class="dialog-footer">
+        <el-button @click="uploadVisible = false">取消</el-button>
         <el-button class="ml-3" type="success" @click="submitUpload">上传</el-button>
       </span>
     </template>
