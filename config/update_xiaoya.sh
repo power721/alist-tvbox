@@ -20,8 +20,8 @@ if docker ps | grep -v xiaoya-tvbox | grep -v xiaoya-hostmode | grep -q xiaoya; 
       read -r -p "是否停止小雅Docker容器？[Y/N] " yn
       case $yn in
           [Yy]* ) docker rm -f xiaoya 2>/dev/null; break;;
-          [Nn]* ) exit 1;;
-          * ) echo "请输入'Y'或者'N'";;
+          [Nn]* ) exit 0;;
+          * ) exit 1;;
       esac
   done
 fi
