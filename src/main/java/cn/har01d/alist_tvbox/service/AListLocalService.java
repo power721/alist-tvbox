@@ -15,6 +15,7 @@ import java.io.File;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_RESTART_REQUIRED;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_START_TIME;
 
 @Slf4j
@@ -44,6 +45,7 @@ public class AListLocalService {
             builder.command("/opt/alist/alist", "server", "--no-prefix");
             builder.directory(new File("/opt/alist"));
             Process process = builder.start();
+            settingRepository.save(new Setting(ALIST_RESTART_REQUIRED, "false"));
             settingRepository.save(new Setting(ALIST_START_TIME, Instant.now().toString()));
             log.info("AList server starting, PID: {}", process.pid());
             aListStatus = 1;
@@ -61,6 +63,7 @@ public class AListLocalService {
             builder.directory(new File("/opt/alist"));
             Process process = builder.start();
             process.waitFor(1, TimeUnit.SECONDS);
+            aListStatus = 0;
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }

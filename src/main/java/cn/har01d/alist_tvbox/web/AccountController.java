@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletResponse;
 import java.time.Instant;
 import java.util.List;
 
@@ -29,32 +30,32 @@ public class AccountController {
         this.accountService = accountService;
     }
 
-    @GetMapping("/ali-accounts")
+    @GetMapping("/ali/accounts")
     public List<Account> list() {
         return accountRepository.findAll();
     }
 
-    @PostMapping("/ali-accounts")
+    @PostMapping("/ali/accounts")
     public Account create(@RequestBody AccountDto account) {
         return accountService.create(account);
     }
 
-    @PostMapping("/ali-accounts/{id}/checkin")
+    @PostMapping("/ali/accounts/{id}/checkin")
     public CheckinResult checkin(@PathVariable Integer id, @RequestParam(required = false) boolean force) {
         return accountService.checkin(id, force);
     }
 
-    @PostMapping("/ali-accounts/{id}/clean")
+    @PostMapping("/ali/accounts/{id}/clean")
     public int clean(@PathVariable Integer id) {
         return accountService.clean(id);
     }
 
-    @PostMapping("/ali-accounts/{id}")
-    public Account update(@PathVariable Integer id, @RequestBody AccountDto account) {
-        return accountService.update(id, account);
+    @PostMapping("/ali/accounts/{id}")
+    public Account update(@PathVariable Integer id, @RequestBody AccountDto account, HttpServletResponse response) {
+        return accountService.update(id, account, response);
     }
 
-    @DeleteMapping("/ali-accounts/{id}")
+    @DeleteMapping("/ali/accounts/{id}")
     public void delete(@PathVariable Integer id) {
         accountService.delete(id);
     }

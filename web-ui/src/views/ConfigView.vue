@@ -21,6 +21,7 @@
             inactive-text="停止中"
           />
           <span class="hint" v-if="aListStartTime">启动时间：{{ formatTime(aListStartTime) }}</span>
+          <span class="hint warning" v-if="aListRestart">AList需要重启</span>
           <el-progress
             :percentage="percentage"
             :stroke-width="15"
@@ -175,6 +176,7 @@ const increase = () => {
 }
 
 const aListStarted = ref(false)
+const aListRestart = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -288,6 +290,7 @@ onMounted(() => {
       openTokenUrl.value = data.open_token_url
       dockerAddress.value = data.docker_address
       autoCheckin.value = data.auto_checkin === 'true'
+      aListRestart.value = data.alist_restart_required === 'true'
       login.value.username = data.alist_username
       login.value.password = data.alist_password
       login.value.enabled = data.alist_login === 'true'
@@ -329,6 +332,10 @@ onUnmounted(() => {
 
 .bottom {
   margin-bottom: 0px;
+}
+
+.warning {
+  color: #e6a23c;
 }
 
 .append {

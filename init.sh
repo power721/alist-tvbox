@@ -46,6 +46,10 @@ else
     rm /opt/alist/data/data.db-wal
   fi
 
+sqlite3 /opt/alist/data/data.db <<EOF
+select value from x_setting_items where key='version';
+EOF
+
   pass=$(tr -dc '_A-Za-z0-9' </dev/urandom | head -c 32)
   sqlite3 /opt/alist/data/data.db <<EOF
 drop table x_storages;

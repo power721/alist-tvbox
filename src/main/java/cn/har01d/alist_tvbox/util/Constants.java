@@ -31,6 +31,7 @@ public final class Constants {
     public static final String SCHEDULE_TIME = "schedule_time";
     public static final String ZONE_ID = "Asia/Shanghai";
     public static final String ALIST_START_TIME = "alist_start_time";
+    public static final String ALIST_RESTART_REQUIRED = "alist_restart_required";
     public static final String MOVIE_VERSION = "movie_version";
     public static final String OPEN_TOKEN_URL = "open_token_url";
     public static final String TOKEN = "token";
