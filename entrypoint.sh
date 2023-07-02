@@ -34,5 +34,4 @@ if [ -f /data/cmd.sql ]; then
   rm -f /data/cmd.sql
 fi
 
-unzip -q -o app.jar && rm -f app.jar
 java -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication --spring.profiles.active=production,xiaoya
