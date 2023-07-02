@@ -11,14 +11,14 @@
     <el-table-column type="selection" width="55"/>
     <el-table-column prop="id" label="ID" width="70" sortable/>
     <el-table-column prop="path" label="路径" sortable/>
-    <el-table-column label="完整路径" sortable>
+    <el-table-column label="完整路径" width="380" sortable>
       <template #default="scope">
         {{fullPath(scope.row)}}
       </template>
     </el-table-column>
-    <el-table-column prop="url" label="分享链接" width="350">
+    <el-table-column prop="url" label="分享链接">
       <template #default="scope">
-        <a v-if="scope.row.type">{{scope.row.shareId}}</a>
+        <a v-if="scope.row.type" :href="getShareLink(scope.row)" target="_blank">https://mypikpak.com/s/{{scope.row.shareId}}</a>
         <a v-else :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
       </template>
     </el-table-column>
@@ -130,10 +130,10 @@
 
   <el-table :data="resources" border style="width: 100%">
     <el-table-column prop="id" label="ID" width="70" sortable/>
-    <el-table-column prop="path" label="路径" sortable/>
-    <el-table-column prop="url" label="分享链接" width="350">
+    <el-table-column prop="path" label="路径" width="380" sortable/>
+    <el-table-column prop="url" label="分享链接">
       <template #default="scope">
-        <a v-if="scope.row.type">{{scope.row.shareId}}</a>
+        <a v-if="scope.row.type" :href="getShareLink(scope.row)" target="_blank">https://mypikpak.com/s/{{scope.row.shareId}}</a>
         <a v-else :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
       </template>
     </el-table-column>
@@ -274,7 +274,7 @@ const handleConfirm = () => {
 
 const getShareLink = (shareInfo: ShareInfo) => {
   if (shareInfo.type) {
-    return shareInfo.shareId
+    return 'https://mypikpak.com/s/' + shareInfo.shareId
   }
   let url = 'https://www.aliyundrive.com/s/' + shareInfo.shareId
   if (shareInfo.folderId) {

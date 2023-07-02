@@ -36,7 +36,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -423,19 +422,23 @@ public class SubscriptionService {
             rules = new ArrayList<>();
             config.put("rules", rules);
         }
+
         Map<String, Object> rule = new HashMap<>();
+        rule.put("name", "阿里云盘");
+        rule.put("hosts", List.of("pdsapi.aliyundrive.com"));
+        rule.put("regex", List.of("/redirect"));
+
         rule.put("host", "pdsapi.aliyundrive.com");
-        rule.put("rule", Collections.singletonList("/redirect"));
+        rule.put("rule", List.of("/redirect"));
         rules.add(rule);
 
         rule = new HashMap<>();
-        rule.put("host", "*");
-        rule.put("rule", Collections.singletonList("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*"));
-        rules.add(rule);
+        rule.put("name", "阿里云");
+        rule.put("hosts", List.of("*"));
+        rule.put("regex", List.of("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*", "http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
 
-        rule = new HashMap<>();
         rule.put("host", "*");
-        rule.put("rule", Collections.singletonList("http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
+        rule.put("rule", List.of("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*", "http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
         rules.add(rule);
     }
 
