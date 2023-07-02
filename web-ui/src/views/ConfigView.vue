@@ -105,7 +105,7 @@
           <div v-if="dockerVersion">小雅版本：{{ dockerVersion }}</div>
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
           <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
-            最新版本：{{ appRemoteVersion }}，请升级应用。
+            最新版本：{{ appRemoteVersion }}，请重新运行安装脚本，升级应用。
           </div>
         </el-card>
 
@@ -115,7 +115,7 @@
           </template>
           <div>本地版本：{{ indexVersion }}</div>
           <div v-if="indexRemoteVersion&&indexRemoteVersion!=indexVersion">
-            最新版本：{{ indexRemoteVersion }}，请重启更新。
+            最新版本：{{ indexRemoteVersion }}，请重启Docker更新。
           </div>
         </el-card>
 
@@ -125,7 +125,7 @@
           </template>
           <div>本地版本：{{ movieVersion }}</div>
           <div v-if="movieRemoteVersion&&movieRemoteVersion>movieVersion">
-            最新版本：{{ movieRemoteVersion }}，请重启更新。
+            最新版本：{{ movieRemoteVersion }}，请重启Docker更新。
           </div>
         </el-card>
       </el-col>
