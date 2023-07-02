@@ -37,6 +37,9 @@ jobs:
           cache: 'maven'
       - name: Build with Maven
         run: mvn -B package --file pom.xml
+      - name: Extract Spring Boot layers
+        working-directory: ./target
+        run: java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx

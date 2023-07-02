@@ -13,11 +13,17 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY entrypoint.sh init.sh index.sh /
-
 COPY config/nginx.conf /etc/nginx/http.d/default.conf
+COPY index.sh /
 
-COPY target/alist-tvbox-1.0.jar ./app.jar
+COPY target/dependencies/ ./
+COPY target/snapshot-dependencies/ ./
+COPY target/spring-boot-loader/ ./
+
+COPY init.sh /
+COPY entrypoint.sh /
+
+COPY target/application/ ./
 
 COPY data/version data/app_version
 
