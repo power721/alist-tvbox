@@ -427,12 +427,18 @@ public class SubscriptionService {
         rule.put("name", "阿里云盘");
         rule.put("hosts", List.of("pdsapi.aliyundrive.com"));
         rule.put("regex", List.of("/redirect"));
+
+        rule.put("host", "pdsapi.aliyundrive.com");
+        rule.put("rule", List.of("/redirect"));
         rules.add(rule);
 
         rule = new HashMap<>();
         rule.put("name", "阿里云");
         rule.put("hosts", List.of("*"));
         rule.put("regex", List.of("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*", "http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
+
+        rule.put("host", "*");
+        rule.put("rule", List.of("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*", "http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
         rules.add(rule);
     }
 
