@@ -12,7 +12,7 @@ RUN unzip /app/app.jar -d temp &&  \
       --module-path="./temp/BOOT-INF/lib/*" \
       /app/app.jar > /modules.txt
 
-FROM amazoncorretto:17-alpine
+FROM amazoncorretto:17-alpine as corretto-jdk
 
 COPY --from=corretto-deps /modules.txt /modules.txt
 
@@ -26,3 +26,7 @@ RUN apk add --no-cache binutils && \
      --no-header-files \
      --compress=2 \
      --output /jre
+
+FROM alpine:latest
+
+COPY --from=corretto-jdk /jre /jre

@@ -175,8 +175,15 @@ public class TvBoxService {
             if (line.startsWith("./")) {
                 line = line.substring(1);
             }
+
+            String raw = line;
+            String[] parts = line.split("\\$");
+            if (parts.length == 3) {
+                line = parts[0];
+            }
+
             boolean isMediaFile = isMediaFile(line);
-            if (isMediaFile && lines.contains(getParent(line))) {
+            if (isMediaFile && lines.contains(getParent(raw))) {
                 continue;
             }
             String path = fixPath("/" + line + (isMediaFile ? "" : PLAYLIST));

@@ -319,7 +319,7 @@ public class AccountService {
     private Map<Object, Object> refreshTokens(Account account) {
         boolean changed = false;
         Map<Object, Object> response = null;
-        Instant now = Instant.now();
+        Instant now = Instant.now().plusSeconds(60);
         Instant time;
         try {
             time = account.getOpenTokenTime();
