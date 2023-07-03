@@ -193,7 +193,7 @@ public class SiteService {
     }
 
     private static String fixPath(String path) {
-        if (path.endsWith("/")) {
+        if (path != null && path.endsWith("/")) {
             return path.substring(0, path.length() - 1);
         }
         return path;
