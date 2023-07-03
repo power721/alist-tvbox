@@ -1,7 +1,11 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.Account;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Movie;
+import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
+import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.FileNameInfo;
 import cn.har01d.alist_tvbox.model.Filter;
@@ -50,6 +54,9 @@ import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
 @Slf4j
 @Service
 public class TvBoxService {
+    private final AccountRepository accountRepository;
+    private final ShareRepository shareRepository;
+    private final PikPakAccountRepository pikPakAccountRepository;
 
     private final AListService aListService;
     private final IndexService indexService;
@@ -68,12 +75,18 @@ public class TvBoxService {
             new FilterValue("大小⬇️", "size,desc")
     );
 
-    public TvBoxService(AListService aListService,
+    public TvBoxService(AccountRepository accountRepository,
+                        ShareRepository shareRepository,
+                        PikPakAccountRepository pikPakAccountRepository,
+                        AListService aListService,
                         IndexService indexService,
                         SiteService siteService,
                         AppProperties appProperties,
                         DoubanService doubanService,
                         SubscriptionService subscriptionService) {
+        this.accountRepository = accountRepository;
+        this.shareRepository = shareRepository;
+        this.pikPakAccountRepository = pikPakAccountRepository;
         this.aListService = aListService;
         this.indexService = indexService;
         this.siteService = siteService;
@@ -85,12 +98,16 @@ public class TvBoxService {
     public CategoryList getCategoryList() {
         CategoryList result = new CategoryList();
 
+        int id = 1;
         for (Site site : siteService.list()) {
             Category category = new Category();
             category.setType_id(site.getId() + "$/");
             category.setType_name(site.getName());
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
+            if (id++ == 1 && appProperties.isXiaoya()) {
+                addMyFavorite(result);
+            }
         }
 
         List<MovieDetail> list = new ArrayList<>();
@@ -103,6 +120,34 @@ public class TvBoxService {
         result.setLimit(result.getCategories().size());
         log.debug("category: {}", result);
         return result;
+    }
+
+    private void addMyFavorite(CategoryList result) {
+        List<Account> list = accountRepository.findAll();
+        if (list.stream().anyMatch(Account::isShowMyAli)) {
+            Category category = new Category();
+            category.setType_id("1$/\uD83D\uDCC0我的阿里云盘");
+            category.setType_name("我的阿里");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
+        }
+
+        int pp = shareRepository.countByType(1);
+        if (shareRepository.count() > pp) {
+            Category category = new Category();
+            category.setType_id("1$/\uD83C\uDE34我的阿里分享");
+            category.setType_name("阿里分享");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
+        }
+
+        if (pp > 0) {
+            Category category = new Category();
+            category.setType_id("1$/\uD83D\uDD78\uFE0F我的PikPak分享");
+            category.setType_name("PikPak");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
+        }
     }
 
     public MovieList recommend() {
