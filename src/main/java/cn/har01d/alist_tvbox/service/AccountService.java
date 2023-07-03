@@ -415,7 +415,7 @@ public class AccountService {
                 statement.executeUpdate(sql);
             }
         } catch (Exception e) {
-            throw new BadRequestException(e);
+            log.warn("", e);
         }
         log.info("{} AList user {}", login.isEnabled() ? "enable" : "disable", login.getUsername());
     }
