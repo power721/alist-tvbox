@@ -177,7 +177,7 @@ public class TvBoxService {
             }
 
             String raw = line;
-            String[] parts = line.split("\\$");
+            String[] parts = line.split("#");
             if (parts.length > 1) {
                 line = parts[0];
             }
