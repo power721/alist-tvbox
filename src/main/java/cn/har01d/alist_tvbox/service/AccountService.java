@@ -393,16 +393,23 @@ public class AccountService {
              Statement statement = connection.createStatement()) {
             String sql = "";
             if (login.isEnabled()) {
-                log.info("enable AList login");
-                sql = "update x_users set disabled = 1 where id = 2";
-                statement.executeUpdate(sql);
-                sql = "delete from x_users where id = 3;";
-                statement.executeUpdate(sql);
-                sql = "INSERT INTO x_users VALUES(3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,368,'',0,0);";
-                statement.executeUpdate(sql);
+                log.info("enable AList login: {}", login.getUsername());
+                if (login.getUsername().equals("guest")) {
+                    sql = "delete from x_users where id = 3;";
+                    statement.executeUpdate(sql);
+                    sql = "update x_users set disabled = 0, username = '" + login.getUsername() + "' where id = 2";
+                    statement.executeUpdate(sql);
+                } else {
+                    sql = "update x_users set disabled = 1 where id = 2";
+                    statement.executeUpdate(sql);
+                    sql = "delete from x_users where id = 3;";
+                    statement.executeUpdate(sql);
+                    sql = "INSERT INTO x_users VALUES(3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,368,'',0,0);";
+                    statement.executeUpdate(sql);
+                }
             } else {
                 log.info("enable AList guest");
-                sql = "update x_users set disabled = 0, permission = '368' where id = 2;";
+                sql = "update x_users set disabled = 0, permission = '368', password = 'guest_Api789' where id = 2;";
                 statement.executeUpdate(sql);
                 sql = "delete from x_users where id = 3;";
                 statement.executeUpdate(sql);
