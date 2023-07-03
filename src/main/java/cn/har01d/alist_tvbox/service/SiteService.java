@@ -2,6 +2,8 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.SiteDto;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
@@ -9,6 +11,7 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Sort;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -29,10 +32,17 @@ import java.util.Optional;
 public class SiteService {
     private final AppProperties appProperties;
     private final SiteRepository siteRepository;
+    private final SettingRepository settingRepository;
+    private final JdbcTemplate jdbcTemplate;
 
-    public SiteService(AppProperties appProperties, SiteRepository siteRepository) {
+    public SiteService(AppProperties appProperties,
+                       SiteRepository siteRepository,
+                       SettingRepository settingRepository,
+                       JdbcTemplate jdbcTemplate) {
         this.appProperties = appProperties;
         this.siteRepository = siteRepository;
+        this.settingRepository = settingRepository;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @PostConstruct
@@ -42,6 +52,7 @@ public class SiteService {
             if (sp) {
                 siteRepository.findById(1).ifPresent(this::updateUserToken);
             }
+            fixId();
             return;
         }
 
@@ -62,6 +73,29 @@ public class SiteService {
 
         if (sp) {
             readAList(order);
+        }
+    }
+
+    private void fixId() {
+        String fixed = settingRepository.findById("fix_site_id").map(Setting::getValue).orElse(null);
+        if (fixed == null) {
+            log.warn("fix site id");
+            int id = 1;
+            int max = 1;
+
+            List<Site> list = siteRepository.findAll();
+            for (var item : list) {
+                max = Math.max(max, item.getId());
+                item.setId(id++);
+            }
+
+            if (max > list.size()) {
+                siteRepository.deleteAll();
+                jdbcTemplate.execute("update id_generator set next_id=0 where entity_name = 'site';");
+                siteRepository.saveAll(list);
+            }
+            jdbcTemplate.execute("update id_generator set next_id=" + list.size() + " where entity_name = 'site';");
+            settingRepository.save(new Setting("fix_site_id", "true"));
         }
     }
 

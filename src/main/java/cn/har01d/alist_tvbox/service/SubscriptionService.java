@@ -109,9 +109,9 @@ public class SubscriptionService {
             int id = 1;
             int max = 1;
 
-            for (var sub : list) {
-                max = Math.max(max, sub.getId());
-                sub.setId(id++);
+            for (var item : list) {
+                max = Math.max(max, item.getId());
+                item.setId(id++);
             }
 
             if (max > list.size()) {
@@ -119,6 +119,7 @@ public class SubscriptionService {
                 jdbcTemplate.execute("update id_generator set next_id=0 where entity_name = 'subscription';");
                 subscriptionRepository.saveAll(list);
             }
+            jdbcTemplate.execute("update id_generator set next_id=" + list.size() + " where entity_name = 'subscription';");
             settingRepository.save(new Setting("fix_sub_id", "true"));
         }
     }

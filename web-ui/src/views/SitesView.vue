@@ -196,7 +196,7 @@ const handleAdd = () => {
     xiaoya: false,
     indexFile: '',
     disabled: false,
-    order: 0,
+    order: sites.value.length + 1,
     version: null,
   }
   formVisible.value = true
