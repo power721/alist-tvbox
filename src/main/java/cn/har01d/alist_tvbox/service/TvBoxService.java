@@ -4,7 +4,6 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Movie;
-import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.FileNameInfo;
@@ -56,7 +55,6 @@ import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
 public class TvBoxService {
     private final AccountRepository accountRepository;
     private final ShareRepository shareRepository;
-    private final PikPakAccountRepository pikPakAccountRepository;
 
     private final AListService aListService;
     private final IndexService indexService;
@@ -77,7 +75,6 @@ public class TvBoxService {
 
     public TvBoxService(AccountRepository accountRepository,
                         ShareRepository shareRepository,
-                        PikPakAccountRepository pikPakAccountRepository,
                         AListService aListService,
                         IndexService indexService,
                         SiteService siteService,
@@ -86,7 +83,6 @@ public class TvBoxService {
                         SubscriptionService subscriptionService) {
         this.accountRepository = accountRepository;
         this.shareRepository = shareRepository;
-        this.pikPakAccountRepository = pikPakAccountRepository;
         this.aListService = aListService;
         this.indexService = indexService;
         this.siteService = siteService;
@@ -123,11 +119,10 @@ public class TvBoxService {
     }
 
     private void addMyFavorite(CategoryList result) {
-        List<Account> list = accountRepository.findAll();
-        if (list.stream().anyMatch(Account::isShowMyAli)) {
+        if (accountRepository.findAll().stream().anyMatch(Account::isShowMyAli)) {
             Category category = new Category();
             category.setType_id("1$/\uD83D\uDCC0我的阿里云盘");
-            category.setType_name("我的阿里");
+            category.setType_name("我的云盘");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
         }
@@ -143,7 +138,7 @@ public class TvBoxService {
 
         if (pp > 0) {
             Category category = new Category();
-            category.setType_id("1$/\uD83D\uDD78\uFE0F我的PikPak分享");
+            category.setType_id("1$/\uD83D\uDD78️我的PikPak分享");
             category.setType_name("PikPak");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
