@@ -15,7 +15,6 @@ if docker ps | grep -q xiaoya-tvbox; then
   case $yn in
       [Yy]* ) docker rm -f xiaoya-tvbox 2>/dev/null;;
       [Nn]* ) exit 0;;
-      * ) exit 1;;
   esac
 fi
 

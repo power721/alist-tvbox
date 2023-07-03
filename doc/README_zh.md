@@ -40,6 +40,10 @@ OpenWrt去掉sudo，或者已经是root账号：
 curl -s https://d.har01d.cn/update_xiaoya.sh | bash
 ```
 
+如果没有安装curl:
+```bash
+wget https://d.har01d.cn/update_xiaoya.sh; sh ./update_xiaoya.sh
+```
 #### 独立版
 ```bash
 curl -s https://d.har01d.cn/update_new.sh | bash

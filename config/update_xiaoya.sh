@@ -14,13 +14,12 @@ if [ $# -gt 2 ]; then
 	PORT2=$3
 fi
 
-if docker ps | grep -v xiaoya-tvbox | grep -v xiaoya-hostmode | grep -q xiaoya; then
+if docker ps | grep -v xiaoya-tvbox | grep -v xiaoya-hostmode | grep -v xiaoyakeeper | grep -v xiaoyaliu | grep -q xiaoya; then
   echo -e "\e[33m原版小雅Docker容器运行中。\e[0m"
   read -r -p "是否停止小雅Docker容器？[Y/N] " yn
   case $yn in
       [Yy]* ) docker rm -f xiaoya 2>/dev/null;;
       [Nn]* ) exit 0;;
-      * ) exit 1;;
   esac
 fi
 
