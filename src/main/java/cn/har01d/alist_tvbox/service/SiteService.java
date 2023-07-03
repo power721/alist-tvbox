@@ -89,7 +89,7 @@ public class SiteService {
             site.setName(parts[0]);
             site.setVersion(Integer.parseInt(parts[1].replace("v", "")));
             site.setUrl(parts[2]);
-            site.setFolder(parts[3]);
+            site.setFolder(fixPath(parts[3]));
             site.setOrder(order);
             siteRepository.save(site);
             log.info("save site to database: {}", site);
@@ -149,13 +149,20 @@ public class SiteService {
         site.setUrl(dto.getUrl());
         site.setPassword(dto.getPassword());
         site.setToken(dto.getToken());
-        site.setFolder(dto.getFolder());
+        site.setFolder(fixPath(dto.getFolder()));
         site.setOrder(dto.getOrder());
         site.setSearchable(dto.isSearchable());
         site.setXiaoya(dto.isXiaoya());
         site.setIndexFile(dto.getIndexFile());
         site.setDisabled(dto.isDisabled());
         site.setVersion(dto.getVersion());
+    }
+
+    private static String fixPath(String path) {
+        if (path.endsWith("/")) {
+            return path.substring(0, path.length() - 1);
+        }
+        return path;
     }
 
     public Site update(int id, SiteDto dto) {
