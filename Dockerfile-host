@@ -9,10 +9,6 @@ COPY target/application/ ./
 
 COPY data/version data/app_version
 
-RUN sed -i 's/5244/5234/' /etc/nginx/http.d/default.conf
-
-EXPOSE 8080 80
-
 ENTRYPOINT ["/entrypoint.sh"]
 
 CMD ["5233", "--spring.profiles.active=production,xiaoya,host"]
