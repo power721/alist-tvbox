@@ -17,6 +17,8 @@ sed -i '/sites:/r add.txt' src/main/resources/application.yaml
 sed -i '/- name: 本地/,+3d' src/main/resources/application.yaml
 mvn clean package || exit 1
 
+cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
+
 mv application-backup.yaml src/main/resources/application.yaml
 
 date +%j.%H%M > data/version

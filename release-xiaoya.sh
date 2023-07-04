@@ -13,6 +13,8 @@ git add src/main/resources/static
 
 mvn clean package || exit 1
 
+cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
+
 mv src/main/resources/data.sql data
 docker image prune -f
 docker pull xiaoyaliu/alist:latest

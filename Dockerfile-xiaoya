@@ -1,24 +1,6 @@
-FROM haroldli/java:17 as corretto-jdk
-
-FROM xiaoyaliu/alist:latest
+FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
-
-ENV JAVA_HOME=/jre
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
-
-COPY --from=corretto-jdk /jre $JAVA_HOME
-
-VOLUME /opt/atv/data/
-
-WORKDIR /opt/atv/
-
-COPY config/nginx.conf /etc/nginx/http.d/default.conf
-COPY index.sh /
-
-COPY target/dependencies/ ./
-COPY target/snapshot-dependencies/ ./
-COPY target/spring-boot-loader/ ./
 
 COPY init.sh /
 COPY entrypoint.sh /

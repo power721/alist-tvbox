@@ -1,0 +1,44 @@
+name: 'release java'
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - 'pom.xml'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'corretto'
+          cache: 'maven'
+      - name: Build with Maven
+        run: mvn -B package --file pom.xml
+      - name: Extract Spring Boot layers
+        working-directory: ./target
+        run: java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-base
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-base:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
