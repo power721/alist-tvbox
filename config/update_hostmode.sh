@@ -40,7 +40,7 @@ do
    docker pull --platform ${platform} haroldli/xiaoya-tvbox:${tag} && break
 done
 
-echo -e "\e[33m重启应用\e[0m"
+echo -e "\e[33m重启应用，host网络模式\e[0m"
 docker rm -f xiaoya-tvbox 2>/dev/null && \
 docker run -d --network host -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${tag}
 
@@ -48,7 +48,7 @@ IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head 
 if [ -n "$IP" ]; then
   echo -e "\e[32m请用以下地址访问：\e[0m"
   echo -e "    \e[32m管理界面\e[0m： http://$IP:5678/"
-  echo -e "    \e[32m小雅AList\e[0m： http://$IP:5234/"
+  echo -e "    \e[32m小雅AList\e[0m： http://$IP:6789/"
 else
   echo -e "\e[32m云服务器请用公网IP访问\e[0m"
 fi
