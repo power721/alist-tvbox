@@ -69,6 +69,7 @@ import static cn.har01d.alist_tvbox.util.Constants.AUTO_CHECKIN;
 import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_DAYS;
 import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_TIME;
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER_ID;
+import static cn.har01d.alist_tvbox.util.Constants.INDEX_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_TIME;
 import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN;
@@ -86,6 +87,7 @@ public class AccountService {
     private final SettingRepository settingRepository;
     private final UserRepository userRepository;
     private final AListLocalService aListLocalService;
+    private final IndexService indexService;
     private final RestTemplate restTemplate;
     private final TaskScheduler scheduler;
     private ScheduledFuture scheduledFuture;
@@ -94,12 +96,14 @@ public class AccountService {
                           SettingRepository settingRepository,
                           UserRepository userRepository,
                           AListLocalService aListLocalService,
+                          IndexService indexService,
                           TaskScheduler scheduler,
                           RestTemplateBuilder builder) {
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
         this.userRepository = userRepository;
         this.aListLocalService = aListLocalService;
+        this.indexService = indexService;
         this.scheduler = scheduler;
         this.restTemplate = builder.build();
     }
@@ -304,6 +308,8 @@ public class AccountService {
                 log.warn("", e);
             }
         }
+
+        indexService.checkIndexFile();
     }
 
     public void autoCheckin(List<Account> accounts) {
