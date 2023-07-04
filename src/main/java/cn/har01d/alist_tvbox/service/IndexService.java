@@ -91,8 +91,8 @@ public class IndexService {
 
     public String getRemoteVersion() {
         try {
-            String remote = restTemplate.getForObject("http://docker.xiaoya.pro/update/version.txt", String.class);
-            String local = settingRepository.findById(INDEX_VERSION).map(Setting::getValue).orElse("");
+            String remote = restTemplate.getForObject("http://docker.xiaoya.pro/update/version.txt", String.class).trim();
+            String local = settingRepository.findById(INDEX_VERSION).map(Setting::getValue).orElse("").trim();
             if (!local.equals(remote)) {
                 new Thread(() -> updateXiaoyaIndexFile(remote)).start();
             }
@@ -105,8 +105,8 @@ public class IndexService {
 
     public void checkIndexFile() {
         try {
-            String local = settingRepository.findById(INDEX_VERSION).map(Setting::getValue).orElse("");
-            String remote = getRemoteVersion();
+            String local = settingRepository.findById(INDEX_VERSION).map(Setting::getValue).orElse("").trim();
+            String remote = getRemoteVersion().trim();
             if (!local.equals(remote)) {
                 new Thread(() -> updateXiaoyaIndexFile(remote)).start();
             }
@@ -121,6 +121,8 @@ public class IndexService {
             ProcessBuilder builder = new ProcessBuilder();
             builder.command("sh", "-c", "/index.sh", remote);
             Process process = builder.start();
+            builder.inheritIO();
+            builder.directory(new File("/tmp"));
             int code = process.waitFor();
             if (code == 0) {
                 log.info("xiaoya index file updated");

@@ -65,6 +65,16 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build host mode docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-host
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:hostmode
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Send version file
         env:
           ssh_host: ${{ secrets.SSH_HOST }}
@@ -78,16 +88,6 @@ jobs:
           source: "data/app_version,config/update_new.sh,config/update_xiaoya.sh,config/update_hostmode.sh"
           strip_components: 1
           target: /var/www/alist/
-      - name: Build docker and push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: Dockerfile-host
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:hostmode
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
       - name: Download data file
         run: |
           wget https://d.har01d.cn/data.zip -O data.zip
