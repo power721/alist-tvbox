@@ -4,8 +4,9 @@ chmod a+x /init.sh /index.sh
 
 /init.sh
 
-/bin/busybox-extras httpd -p 81 -h /www
+/bin/busybox-extras httpd -p "$1" -h /www
 /usr/sbin/nginx
+shift
 
 version=$(head -n1 /docker.version)
 sqlite3 /opt/alist/data/data.db <<EOF
@@ -34,4 +35,4 @@ if [ -f /data/cmd.sql ]; then
   rm -f /data/cmd.sql
 fi
 
-java -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication --spring.profiles.active=production,xiaoya
+java -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication  "$@"

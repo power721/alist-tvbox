@@ -50,7 +50,7 @@ public class SiteService {
         boolean sp = appProperties.isXiaoya();
         if (siteRepository.count() > 0) {
             if (sp) {
-                siteRepository.findById(1).ifPresent(this::updateUserToken);
+                siteRepository.findById(1).ifPresent(this::updateSite);
             }
             fixId();
             return;
@@ -132,7 +132,14 @@ public class SiteService {
         }
     }
 
-    private void updateUserToken(Site site) {
+    private void updateSite(Site site) {
+        if (appProperties.isHostmode()) {
+            site.setUrl("http://localhost:6789");
+        } else {
+            site.setUrl("http://localhost");
+        }
+        log.info("set site url {}: {}", site.getName(), site.getUrl());
+
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:/opt/alist/data/data.db")) {
             Statement statement = connection.createStatement();
             String sql = "select value from x_setting_items where key = 'token'";
@@ -141,12 +148,11 @@ public class SiteService {
             if (!token.equals(site.getToken())) {
                 log.info("update user token: {}", token);
                 site.setToken(token);
-                siteRepository.save(site);
             }
         } catch (Exception e) {
             log.warn("", e);
         }
-        // ignore
+        siteRepository.save(site);
     }
 
     public Site getById(Integer id) {

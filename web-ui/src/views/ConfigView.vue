@@ -66,7 +66,7 @@
               />
             </el-form-item>
             <el-form-item prop="token" label="安全Token" v-if="form.enabledToken">
-              <el-input v-model="form.token"/>
+              <el-input v-model="form.token" type="password" show-password/>
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="updateToken">更新</el-button>

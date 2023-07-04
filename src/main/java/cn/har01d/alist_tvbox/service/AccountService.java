@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.AListLogin;
 import cn.har01d.alist_tvbox.dto.AccountDto;
 import cn.har01d.alist_tvbox.dto.AliBatchRequest;
@@ -69,7 +70,6 @@ import static cn.har01d.alist_tvbox.util.Constants.AUTO_CHECKIN;
 import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_DAYS;
 import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_TIME;
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER_ID;
-import static cn.har01d.alist_tvbox.util.Constants.INDEX_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_TIME;
 import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN;
@@ -89,6 +89,7 @@ public class AccountService {
     private final AListLocalService aListLocalService;
     private final IndexService indexService;
     private final RestTemplate restTemplate;
+    private final RestTemplate restTemplate1;
     private final TaskScheduler scheduler;
     private ScheduledFuture scheduledFuture;
 
@@ -97,6 +98,7 @@ public class AccountService {
                           UserRepository userRepository,
                           AListLocalService aListLocalService,
                           IndexService indexService,
+                          AppProperties appProperties,
                           TaskScheduler scheduler,
                           RestTemplateBuilder builder) {
         this.accountRepository = accountRepository;
@@ -105,7 +107,8 @@ public class AccountService {
         this.aListLocalService = aListLocalService;
         this.indexService = indexService;
         this.scheduler = scheduler;
-        this.restTemplate = builder.build();
+        this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
+        this.restTemplate1 = builder.build();
     }
 
     @PostConstruct
@@ -370,7 +373,7 @@ public class AccountService {
         body.put("grant_type", REFRESH_TOKEN);
         log.debug("body: {}", body);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> response = restTemplate.exchange("https://auth.aliyundrive.com/v2/account/token", HttpMethod.POST, entity, Map.class);
+        ResponseEntity<Map> response = restTemplate1.exchange("https://auth.aliyundrive.com/v2/account/token", HttpMethod.POST, entity, Map.class);
         log.debug("get Ali token response: {}", response.getBody());
         return response.getBody();
     }
@@ -384,7 +387,7 @@ public class AccountService {
         body.put("grant_type", REFRESH_TOKEN);
         log.debug("body: {}", body);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> response = restTemplate.exchange("https://api.xhofe.top/alist/ali_open/token", HttpMethod.POST, entity, Map.class);
+        ResponseEntity<Map> response = restTemplate1.exchange("https://api.xhofe.top/alist/ali_open/token", HttpMethod.POST, entity, Map.class);
         log.debug("get open token response: {}", response.getBody());
         return (String) response.getBody().get(REFRESH_TOKEN);
     }
@@ -476,6 +479,9 @@ public class AccountService {
             if (StringUtils.isBlank(login.getPassword())) {
                 throw new BadRequestException("缺少密码");
             }
+            if (login.getUsername().equals("atv") || login.getUsername().equals("admin")) {
+                throw new BadRequestException("用户名已被使用");
+            }
         }
 
         settingRepository.save(new Setting(ALIST_USERNAME, login.getUsername()));
@@ -503,7 +509,7 @@ public class AccountService {
         LoginRequest request = new LoginRequest();
         request.setUsername(username);
         request.setPassword(password);
-        LoginResponse response = restTemplate.postForObject("http://localhost:5244/api/auth/login", request, LoginResponse.class);
+        LoginResponse response = restTemplate.postForObject("/api/auth/login", request, LoginResponse.class);
         log.info("AList login response: {}", response.getData());
         return response.getData().getToken();
     }
@@ -512,7 +518,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<UserResponse> response = restTemplate.exchange("http://localhost:5244/api/admin/user/get?id=" + id, HttpMethod.GET, entity, UserResponse.class);
+        ResponseEntity<UserResponse> response = restTemplate.exchange("/api/admin/user/get?id=" + id, HttpMethod.GET, entity, UserResponse.class);
         log.info("get AList user {} response: {}", id, response.getBody());
         return response.getBody().getData();
     }
@@ -521,7 +527,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/user/delete?id=" + id, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = restTemplate.exchange("/api/admin/user/delete?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("delete AList user {} response: {}", id, response.getBody());
     }
 
@@ -529,7 +535,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<AListUser> entity = new HttpEntity<>(user, headers);
-        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/user/update", HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = restTemplate.exchange("/api/admin/user/update", HttpMethod.POST, entity, String.class);
         log.info("update AList user {} response: {}", user.getId(), response.getBody());
     }
 
@@ -537,7 +543,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<AListUser> entity = new HttpEntity<>(user, headers);
-        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/user/create", HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = restTemplate.exchange("/api/admin/user/create", HttpMethod.POST, entity, String.class);
         log.info("create AList user response: {}", response.getBody());
     }
 
@@ -585,7 +591,7 @@ public class AccountService {
         headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
         headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<CheckinResponse> response = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_list", HttpMethod.POST, entity, CheckinResponse.class);
+        ResponseEntity<CheckinResponse> response = restTemplate1.exchange("https://member.aliyundrive.com/v1/activity/sign_in_list", HttpMethod.POST, entity, CheckinResponse.class);
 
         CheckinResult result = response.getBody().getResult();
         Instant now = Instant.now();
@@ -603,7 +609,7 @@ public class AccountService {
                 headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
                 headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
                 entity = new HttpEntity<>(body, headers);
-                ResponseEntity<RewardResponse> res = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_reward?_rx-s=mobile", HttpMethod.POST, entity, RewardResponse.class);
+                ResponseEntity<RewardResponse> res = restTemplate1.exchange("https://member.aliyundrive.com/v1/activity/sign_in_reward?_rx-s=mobile", HttpMethod.POST, entity, RewardResponse.class);
                 log.info("今日签到获得 {} {}", res.getBody().getResult().getName(), res.getBody().getResult().getDescription());
             }
         }
@@ -856,7 +862,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = restTemplate.exchange("/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("enable AList storage {} response: {}", id, response.getBody());
     }
 
@@ -864,7 +870,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/storage/delete?id=" + id, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = restTemplate.exchange("/api/admin/storage/delete?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("delete AList storage {} response: {}", id, response.getBody());
     }
 
@@ -912,7 +918,7 @@ public class AccountService {
         body.put("drive_id", driveId);
         body.put("parent_file_id", fileId);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<AliFileList> response = restTemplate.exchange("https://api.aliyundrive.com/adrive/v3/file/list", HttpMethod.POST, entity, AliFileList.class);
+        ResponseEntity<AliFileList> response = restTemplate1.exchange("https://api.aliyundrive.com/adrive/v3/file/list", HttpMethod.POST, entity, AliFileList.class);
         return response.getBody();
     }
 
@@ -943,7 +949,7 @@ public class AccountService {
 
         int count = 0;
         HttpEntity<AliBatchRequest> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<AliBatchResponse> response = restTemplate.exchange("https://api.aliyundrive.com/v3/batch", HttpMethod.POST, entity, AliBatchResponse.class);
+        ResponseEntity<AliBatchResponse> response = restTemplate1.exchange("https://api.aliyundrive.com/v3/batch", HttpMethod.POST, entity, AliBatchResponse.class);
         for (AliResponse item : response.getBody().getResponses()) {
             AliFileItem file = map.get(item.getId());
             if (item.getStatus() == 204) {

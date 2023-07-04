@@ -477,7 +477,10 @@ public class SubscriptionService {
     }
 
     private String readHostAddress() throws IOException {
-        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest().port(5244).replacePath("/").build();
+        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
+                .port(appProperties.isHostmode() ? 5234 : 5244)
+                .replacePath("/")
+                .build();
         String address = null;
         if (!isIntranet(uriComponents)) {
             address = getAddress();

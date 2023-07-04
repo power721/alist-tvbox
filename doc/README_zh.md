@@ -44,6 +44,22 @@ curl -s https://d.har01d.cn/update_xiaoya.sh | bash
 ```bash
 wget https://d.har01d.cn/update_xiaoya.sh; sh ./update_xiaoya.sh
 ```
+
+#### host网络模式
+使用host网络模式运行：
+```bash
+curl -s https://d.har01d.cn/update_hostmode.sh | sudo bash
+```
+使用的端口：
+
+6789 - nginx
+
+5233 - httpd
+
+5234 - AList
+
+5678 - 管理应用
+
 #### 独立版
 ```bash
 curl -s https://d.har01d.cn/update_new.sh | bash

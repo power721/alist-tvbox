@@ -42,3 +42,15 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-base:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: TAG=latest
+      - name: Build hostmode docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-base
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-base:hostmode
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: TAG=hostmode

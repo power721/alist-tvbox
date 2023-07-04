@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
@@ -28,9 +29,9 @@ public class AListLocalService {
 
     private volatile int aListStatus;
 
-    public AListLocalService(SettingRepository settingRepository, RestTemplateBuilder builder) {
+    public AListLocalService(SettingRepository settingRepository, AppProperties appProperties, RestTemplateBuilder builder) {
         this.settingRepository = settingRepository;
-        this.restTemplate = builder.build();
+        this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
     }
 
     public void startAListServer() {
@@ -86,7 +87,7 @@ public class AListLocalService {
 
     public int getAListStatus() {
         try {
-            ResponseEntity<SettingResponse> response = restTemplate.getForEntity("http://localhost:5244/api/public/settings", SettingResponse.class);
+            ResponseEntity<SettingResponse> response = restTemplate.getForEntity("/api/public/settings", SettingResponse.class);
             if (response.getBody() != null) {
                 if (response.getBody().getCode() == 200) {
                     aListStatus = 2;

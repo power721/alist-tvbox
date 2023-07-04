@@ -17,7 +17,7 @@ cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 
 mv src/main/resources/data.sql data
 docker image prune -f
-docker pull xiaoyaliu/alist:latest
+docker pull haroldli/alist-base:latest
 date +%j.%H%M > data/version
 docker build -f Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest .
 scp data/version ubuntu@1.117.140.221:/var/www/alist/app_version

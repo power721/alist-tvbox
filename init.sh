@@ -9,6 +9,7 @@ mkdir -p /www/cgi-bin
 mkdir -p /index
 mv search /www/cgi-bin/search
 mv header.html /www/cgi-bin/header.html
+sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
 mv mobi.tgz /www/mobi.tgz
 cd /www/
 tar zxf mobi.tgz

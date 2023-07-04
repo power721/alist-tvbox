@@ -1,6 +1,8 @@
+ARG TAG=latest
+
 FROM haroldli/java:17 as corretto-jdk
 
-FROM xiaoyaliu/alist:latest
+FROM xiaoyaliu/alist:${TAG}
 
 LABEL MAINTAINER="Har01d"
 
@@ -13,7 +15,6 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY config/nginx.conf /etc/nginx/http.d/default.conf
 COPY index.sh /
 
 COPY target/dependencies/ ./

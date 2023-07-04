@@ -1,0 +1,12 @@
+app:
+  xiaoya: true
+  hostmode: true
+  sites:
+    - name: 丫仙女
+      url: http://localhost:6789
+      version: 3
+      searchable: true
+      xiaoya: true
+
+server:
+  port: 5678

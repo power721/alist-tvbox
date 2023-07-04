@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.ShareInfo;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
@@ -73,6 +74,7 @@ public class ShareService {
                         SettingRepository settingRepository,
                         AccountRepository accountRepository,
                         PikPakAccountRepository pikPakAccountRepository,
+                        AppProperties appProperties,
                         AccountService accountService,
                         AListLocalService aListLocalService,
                         ConfigFileService configFileService,
@@ -88,7 +90,7 @@ public class ShareService {
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
         this.pikPakService = pikPakService;
-        this.restTemplate = builder.build();
+        this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
     }
 
     @PostConstruct
@@ -454,7 +456,7 @@ public class ShareService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = restTemplate.exchange("/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("enable storage response: {}", response.getBody());
     }
 
@@ -482,7 +484,7 @@ public class ShareService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<String> response = restTemplate.exchange("http://localhost:5244/api/admin/storage/delete?id=" + id, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = restTemplate.exchange("/api/admin/storage/delete?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("delete storage response: {}", response.getBody());
     }
 
@@ -525,7 +527,7 @@ public class ShareService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(accountService.login()));
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<Object> response = restTemplate.exchange("http://localhost:5244/api/admin/storage/list?page=" + pageable.getPageNumber() + "&per_page=" + pageable.getPageSize(), HttpMethod.GET, entity, Object.class);
+        ResponseEntity<Object> response = restTemplate.exchange("/api/admin/storage/list?page=" + pageable.getPageNumber() + "&per_page=" + pageable.getPageSize(), HttpMethod.GET, entity, Object.class);
         return response.getBody();
     }
 
