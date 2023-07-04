@@ -120,9 +120,9 @@ public class IndexService {
             log.info("download xiaoya index file");
             ProcessBuilder builder = new ProcessBuilder();
             builder.command("sh", "-c", "/index.sh", remote);
-            Process process = builder.start();
             builder.inheritIO();
             builder.directory(new File("/tmp"));
+            Process process = builder.start();
             int code = process.waitFor();
             if (code == 0) {
                 log.info("xiaoya index file updated");
