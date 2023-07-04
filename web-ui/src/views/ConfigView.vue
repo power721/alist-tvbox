@@ -116,7 +116,7 @@
           </template>
           <div>本地版本：{{ indexVersion }}</div>
           <div v-if="indexRemoteVersion&&indexRemoteVersion!=indexVersion">
-            最新版本：{{ indexRemoteVersion }}，请重启Docker更新。
+            最新版本：{{ indexRemoteVersion }}，后台更新中。
           </div>
         </el-card>
 
