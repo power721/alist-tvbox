@@ -478,7 +478,7 @@ public class SubscriptionService {
 
     private String readHostAddress() throws IOException {
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
-                .port(appProperties.isHostmode() ? 5234 : 5244)
+                .port(appProperties.isHostmode() ? 6789 : 5244)
                 .replacePath("/")
                 .build();
         String address = null;
