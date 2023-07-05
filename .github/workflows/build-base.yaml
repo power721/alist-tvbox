@@ -1,4 +1,4 @@
-name: 'release java'
+name: 'release base'
 
 on:
   workflow_dispatch:
