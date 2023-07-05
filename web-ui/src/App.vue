@@ -8,6 +8,7 @@ import {store} from "@/services/store";
 const account = accountService.account
 const router = useRouter()
 const show = ref(false)
+const mounted = ref(false)
 
 const logout = () => {
   accountService.logout()
@@ -18,6 +19,7 @@ onMounted(() => {
   axios.get("/profiles").then(({data}) => {
     show.value = data.includes('xiaoya')
     store.xiaoya = data.includes('xiaoya')
+    mounted.value = true
     if (show.value) {
       axios.get('/alist/status').then(({data}) => {
         store.aListStatus = data
@@ -58,7 +60,7 @@ onMounted(() => {
         </el-menu>
       </el-header>
 
-      <el-main>
+      <el-main v-if="mounted">
         <RouterView/>
       </el-main>
     </el-container>

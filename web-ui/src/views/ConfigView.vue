@@ -276,7 +276,6 @@ const getAListStatus = () => {
 onMounted(() => {
   showLogin.value = store.xiaoya
   if (store.xiaoya) {
-
     axios.get('/settings').then(({data}) => {
       form.value.token = data.token
       form.value.enabledToken = !!data.token
