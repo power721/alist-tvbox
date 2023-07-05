@@ -14,7 +14,7 @@ if [ $# -gt 2 ]; then
 	PORT2=$3
 fi
 
-if docker ps | grep -v xiaoya-tvbox | grep -v xiaoya-hostmode | grep -v xiaoyakeeper | grep -v xiaoyaliu | grep -q xiaoya; then
+if docker ps | awk '{print $NF}' | grep -v xiaoya-tvbox | grep -v xiaoya-hostmode | grep -v xiaoyakeeper | grep -v xiaoyaliu | grep -q xiaoya; then
   echo -e "\e[33m原版小雅Docker容器运行中。\e[0m"
   read -r -p "是否停止小雅Docker容器？[Y/N] " yn
   case $yn in
@@ -54,6 +54,9 @@ done
 echo -e "\e[33m重启应用\e[0m"
 docker rm -f xiaoya-tvbox 2>/dev/null && \
 docker run -d -p $PORT1:8080 -p $PORT2:80 -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${tag}
+
+echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
+echo -e "    docker logs -f xiaoya-tvbox\n"
 
 IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head -1)
 if [ -n "$IP" ]; then

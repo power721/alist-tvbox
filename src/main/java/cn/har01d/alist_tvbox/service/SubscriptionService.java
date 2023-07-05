@@ -240,10 +240,14 @@ public class SubscriptionService {
     private void removeBlacklist(Map<String, Object> config) {
         try {
             Object obj1 = config.get("sites-blacklist");
+            if (obj1 == null) {
+                obj1 = new ArrayList<String>();
+            }
             Object obj2 = config.get("sites");
             if (obj1 instanceof List && obj2 instanceof List) {
                 List<Map<String, Object>> list = (List<Map<String, Object>>) obj2;
                 Set<String> set = new HashSet<>((List<String>) obj1);
+                set.add("Alist1");
                 list = list.stream().filter(e -> !set.contains(e.get("key"))).collect(Collectors.toList());
                 config.put("sites", list);
                 log.info("remove sites: {}", set);

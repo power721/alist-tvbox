@@ -9,7 +9,7 @@ if [ $# -gt 1 ]; then
 	PORT=$2
 fi
 
-if docker ps | grep -q xiaoya-tvbox; then
+if docker ps | awk '{print $NF}' | grep -q xiaoya-tvbox; then
   echo -e "\e[33m集成版Docker容器运行中。\e[0m"
   read -r -p "是否停止集成版Docker容器？[Y/N] " yn
   case $yn in
@@ -40,6 +40,9 @@ done
 
 docker rm -f alist-tvbox && \
 docker run -d -p $PORT:8080 --restart=always -v "$BASE_DIR":/data --name=alist-tvbox haroldli/alist-tvbox:${tag}
+
+echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
+echo -e "    docker logs -f alist-tvbox\n"
 
 IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head -1)
 if [ -n "$IP" ]; then
