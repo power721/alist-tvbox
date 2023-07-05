@@ -26,19 +26,19 @@ AList代理，支持xioaya版AList界面管理。
 如果找不到sudo，就用root账号登录，去掉sudo后运行。
 
 ```bash
-sudo bash -c "$(curl https://d.har01d.cn/update_xiaoya.sh)"
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
 ```
 使用其它配置目录：
 ```bash
-sudo bash -c "$(curl https://d.har01d.cn/update_xiaoya.sh)" -s /home/user/atv
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /home/user/atv
 ```
 使用其它端口：
 ```bash
-sudo bash -c "$(curl https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 8080
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 8080
 ```
 OpenWrt去掉sudo，或者已经是root账号：
 ```bash
-bash -c "$(curl https://d.har01d.cn/update_xiaoya.sh)"
+bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
 ```
 
 如果没有安装curl:
@@ -49,7 +49,7 @@ wget https://d.har01d.cn/update_xiaoya.sh; sh ./update_xiaoya.sh
 #### host网络模式
 使用host网络模式运行：
 ```bash
-sudo bash -c "$(curl https://d.har01d.cn/update_hostmode.sh)"
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 ```
 使用的端口：
 
@@ -63,7 +63,7 @@ sudo bash -c "$(curl https://d.har01d.cn/update_hostmode.sh)"
 
 #### 独立版
 ```bash
-bash -c "$(curl https://d.har01d.cn/update_new.sh)"
+bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 ```
 独立版请使用小雅搜索索引文件： http://d.har01d.cn/index.video.zip
 
