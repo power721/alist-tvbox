@@ -12,6 +12,7 @@ AList代理，支持xioaya版AList界面管理。
 - 安全订阅配置
 - TvBox配置聚合
 - 添加阿里云盘分享
+- 添加PikPak分享
 - 管理AList服务
 - 小雅配置文件管理
 

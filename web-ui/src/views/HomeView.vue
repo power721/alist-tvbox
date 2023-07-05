@@ -15,9 +15,12 @@ window.onresize = () => {
 onMounted(() => {
   if (store.xiaoya) {
     axios.get('/sites/1').then(({data}) => {
-      if (data.url != 'http://localhost') {
+      if (data.url === 'http://localhost:6789') {
+        url.value = 'http://' + window.location.hostname + ':6789'
+      } else if (data.url != 'http://localhost') {
         url.value = data.url
       }
+      console.log('load AList ' + url.value)
     })
   }
 })
