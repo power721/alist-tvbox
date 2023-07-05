@@ -18,7 +18,13 @@ onMounted(() => {
       const re = /http:\/\/localhost:(\d+)/.exec(data.url)
       if (re) {
         url.value = 'http://' + window.location.hostname + ':' + re[1]
-      } else if (data.url != 'http://localhost') {
+      } else if (data.url == 'http://localhost') {
+        axios.get('/alist/port').then(({data}) => {
+          if (data) {
+            url.value = 'http://' + window.location.hostname + ':' + data
+          }
+        })
+      } else {
         url.value = data.url
       }
       console.log('load AList ' + url.value)
