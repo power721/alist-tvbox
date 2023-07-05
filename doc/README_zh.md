@@ -70,8 +70,11 @@ bash -c "$(curl https://d.har01d.cn/update_new.sh)"
 对于群辉等NAS系统，请挂载Docker的/data目录到群辉文件系统。
 
 ### 海报展示
+#### 浏览目录
 ![浏览目录](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/poster1.jpg)
+#### 搜索界面
 ![搜索界面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/poster2.jpg)
+#### 播放界面
 ![播放界面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/poster3.jpg)
 
 ## 管理
