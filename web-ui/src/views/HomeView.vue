@@ -15,8 +15,9 @@ window.onresize = () => {
 onMounted(() => {
   if (store.xiaoya) {
     axios.get('/sites/1').then(({data}) => {
-      if (data.url === 'http://localhost:6789') {
-        url.value = 'http://' + window.location.hostname + ':6789'
+      const re = /http:\/\/localhost:(\d+)/.exec(data.url)
+      if (re) {
+        url.value = 'http://' + window.location.hostname + ':' + re[1]
       } else if (data.url != 'http://localhost') {
         url.value = data.url
       }
