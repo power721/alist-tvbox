@@ -133,12 +133,14 @@ public class SiteService {
     }
 
     private void updateSite(Site site) {
-        if (appProperties.isHostmode()) {
-            site.setUrl("http://localhost:6789");
-        } else {
-            site.setUrl("http://localhost");
+        if (site.getUrl().startsWith("http://localhost") {
+          if (appProperties.isHostmode()) {
+              site.setUrl("http://localhost:6789");
+          } else {
+              site.setUrl("http://localhost");
+          }
+          log.info("set site url {}: {}", site.getName(), site.getUrl());
         }
-        log.info("set site url {}: {}", site.getName(), site.getUrl());
 
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:/opt/alist/data/data.db")) {
             Statement statement = connection.createStatement();
