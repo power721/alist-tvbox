@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
@@ -185,7 +186,7 @@ public class SubscriptionService {
         sortSites(config);
 
         if (StringUtils.isNotBlank(override)) {
-            overrideConfig(config, override);
+            config = overrideConfig(config, override);
         }
 
         // should after overrideConfig
@@ -258,16 +259,41 @@ public class SubscriptionService {
         }
     }
 
-    private void overrideConfig(Map<String, Object> config, String json) {
+    private Map<String, Object> overrideConfig(Map<String, Object> config, String json) {
         try {
             json = Pattern.compile("^\\s*#.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
             json = Pattern.compile("^\\s*//.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
             json = json.replace("DOCKER_ADDRESS", readHostAddress());
             Map<String, Object> override = objectMapper.readValue(json, Map.class);
             overrideConfig(config, "", "", override);
+            return replaceString(config, override);
         } catch (Exception e) {
             log.warn("", e);
         }
+        return config;
+    }
+
+    private Map<String, Object> replaceString(Map<String, Object> config, Map<String, Object> override) throws JsonProcessingException {
+        try {
+            Object obj = override.get("replace");
+            if (obj instanceof Map) {
+                config.remove("replace");
+                Map<Object, Object> replace = (Map<Object, Object>) obj;
+                String configJson = objectMapper.writeValueAsString(config);
+                for (Map.Entry<Object, Object> entry : replace.entrySet()) {
+                    if (entry.getKey() instanceof String && entry.getValue() instanceof String) {
+                        String key = (String) entry.getKey();
+                        String value = (String) entry.getValue();
+                        log.info("replace text '{}' by '{}'", key, value);
+                        configJson = configJson.replace(key, value);
+                    }
+                }
+                return objectMapper.readValue(configJson, Map.class);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return config;
     }
 
     private static void overrideConfig(Map<String, Object> config, String url, String prefix, Map<String, Object> override) {
