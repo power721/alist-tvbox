@@ -1,6 +1,10 @@
 name: 'release base'
 
 on:
+  workflow_run:
+    workflows: [ "release java" ]
+    types:
+      - completed
   workflow_dispatch:
   push:
     branches:

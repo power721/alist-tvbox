@@ -1,12 +1,10 @@
 #!/bin/sh
 
-mkdir -p /var/lib/pxg
+mkdir -p /var/lib/pxg /www/cgi-bin /index
 cd /var/lib/pxg
 unzip -q /var/lib/data.zip
 mv data.db /opt/alist/data/data.db
 mv config.json /opt/alist/data/config.json
-mkdir -p /www/cgi-bin
-mkdir -p /index
 mv search /www/cgi-bin/search
 mv header.html /www/cgi-bin/header.html
 sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
@@ -34,7 +32,7 @@ wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/update.zip
 if [ ! -f update.zip ]; then
   echo "Failed to download update database file, the database upgrade process has aborted"
-  exit
+  exit 1
 else
   unzip -o -q -P abcd update.zip
   entries=$(grep -c 'INSERT INTO x_storages' update.sql)
@@ -57,10 +55,10 @@ drop table x_storages;
 drop table x_meta;
 drop table x_setting_items;
 update x_users set password = "$pass" where id = 1;
-update x_users set permission  = 368 where id = 2;
+update x_users set permission = 368 where id = 2;
 .read update.sql
 EOF
-  echo $(date) "update database succesfully, your new version is" $remote
+  echo $(date) "update database successfully"
   opentoken_url=$(cat opentoken_url.txt)
   sed -i "s#https://api.nn.ci/alist/ali_open/token#$opentoken_url#" /opt/alist/data/config.json
   rm update.zip update.sql opentoken_url.txt
@@ -90,14 +88,11 @@ else
       echo $(date) "update index succesfully, your new version.txt is" $remote
       echo $remote >/version.txt
     fi
-
   else
-    echo $(date) "your current version.txt is updated, no need to downgrade"
+    echo $(date) "your current version.txt is updated, no need to upgrade"
     echo $remote >/version.txt
   fi
-  rm index.* 2>/dev/null
-  rm update.* 2>/dev/null
-  rm version.txt
+  rm -f index.* update.* version.txt
 fi
 
 exec "$@"

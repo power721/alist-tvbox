@@ -10,18 +10,10 @@ mvn clean package
 
 # Run
 ```bash
-curl -s http://d.har01d.cn/update_new.sh | sudo bash
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
 ```
 ```bash
 java -jar target/alist-tvbox-1.0.jar --server.port=5678
-```
-
-# Deploy
-```bash
-scp target/alist-tvbox-1.0.jar user@your-server:~/atv.jar
-scp config/install-service.sh user@your-server:~
-# login to your server
-./install-service.sh
 ```
 
 # Docker

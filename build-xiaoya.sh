@@ -27,7 +27,7 @@ mvn clean package || exit 1
 
 cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 
-echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
+echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
 echo -e "\e[36m端口映射：\e[0m $PORT1:8080  $PORT2:80"
 
 docker image prune -f
