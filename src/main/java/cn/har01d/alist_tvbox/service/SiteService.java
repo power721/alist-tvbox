@@ -133,7 +133,7 @@ public class SiteService {
     }
 
     private void updateSite(Site site) {
-        if (site.getUrl().startsWith("http://localhost") {
+        if (site.getUrl().startsWith("http://localhost")) {
           if (appProperties.isHostmode()) {
               site.setUrl("http://localhost:6789");
           } else {
