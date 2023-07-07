@@ -165,6 +165,21 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 
 ![别名页面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_alias.png)
 
+### 日志
+Nginx代理/logs：
+```text
+    location /logs {
+        proxy_pass http://127.0.0.1:5678;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        chunked_transfer_encoding off;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_redirect off;
+        proxy_hide_header Cache-Control;
+    }
+```
+
 ### 其它
 不再生效的文件可以保留，以后删除数据库后可以恢复。
 

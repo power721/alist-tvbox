@@ -30,7 +30,7 @@ public class MonitoringFileService {
 
     private long lastModifiedTime;
 
-    public MonitoringFileService(@Value("${logging.file.name:log/app.log}") String fileName) throws IOException {
+    public MonitoringFileService(@Value("${logging.file.name:log/app.log}") String fileName) {
         this.monitoringDirectory = new FileSystemResource("/opt/atv/").getFile().toPath();
         this.file = monitoringDirectory.resolve(fileName);
 
@@ -46,10 +46,6 @@ public class MonitoringFileService {
     public long lastModifiedTime() throws IOException {
         BasicFileAttributes attr = Files.readAttributes(file, BasicFileAttributes.class);
         return attr.lastModifiedTime().toMillis();
-    }
-
-    public void setLastModifiedTime(long time) {
-        lastModifiedTime = time;
     }
 
     void monitor() {
