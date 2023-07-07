@@ -447,9 +447,9 @@ public class IndexService {
             context.write(path);
         }
 
-//        if (isSimilar(path, files, context.getStopWords())) {
-//            return;
-//        }
+        if (isSimilar(path, files, context.getStopWords())) {
+            return;
+        }
 
         for (String name : files) {
             String newPath = fixPath(path + "/" + name);
