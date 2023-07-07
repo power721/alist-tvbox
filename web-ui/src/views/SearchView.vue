@@ -6,7 +6,7 @@
     </div>
 
     <div>
-      <el-input v-model="keyword" autocomplete="off" @change="search"/>
+      <el-input v-model="keyword" autocomplete="off"/>
       <el-button type="primary" @click="search">搜索</el-button>
     </div>
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-mkdir -p /var/lib/pxg /www/cgi-bin /index
+mkdir -p /var/lib/pxg /www/cgi-bin /index /opt/atv/log
 cd /var/lib/pxg
 unzip -q /var/lib/data.zip
 mv data.db /opt/alist/data/data.db
@@ -89,10 +89,8 @@ else
       echo $remote >/version.txt
     fi
   else
-    echo $(date) "your current version.txt is updated, no need to upgrade"
+    echo $(date) "your current version.txt is updated, no need to downgrade"
     echo $remote >/version.txt
   fi
   rm -f index.* update.* version.txt
 fi
-
-exec "$@"

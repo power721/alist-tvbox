@@ -103,6 +103,7 @@ public class TextUtils {
                 .replace("系列合集", " ")
                 .replace("大合集", " ")
                 .replace("合集", " ")
+                .replace("更新中", " ")
                 .replace(".内嵌", " ")
                 .replace(".日配", " ")
                 .replace(".720p", " ")

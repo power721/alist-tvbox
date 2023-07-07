@@ -15,6 +15,7 @@ import FilesView from "@/views/FilesView.vue";
 import WaitAList from "@/views/WaitAList.vue";
 import AliasView from "@/views/AliasView.vue";
 import PikPakView from "@/views/PikPakView.vue";
+import LogsView from "@/views/LogsView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -30,6 +31,12 @@ const router = createRouter({
       path: '/wait',
       name: 'wait',
       component: WaitAList,
+      meta: {auth: true}
+    },
+    {
+      path: '/logs',
+      name: 'logs',
+      component: LogsView,
       meta: {auth: true}
     },
     {
