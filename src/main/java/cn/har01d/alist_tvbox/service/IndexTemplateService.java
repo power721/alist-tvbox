@@ -44,6 +44,7 @@ public class IndexTemplateService {
         template.setSiteId(dto.getSiteId());
         template.setName(dto.getName());
         template.setData(dto.getData());
+        template.setSleep(dto.getSleep());
         template.setCreatedTime(Instant.now());
         return indexTemplateRepository.save(template);
     }
