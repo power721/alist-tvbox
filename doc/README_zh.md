@@ -33,8 +33,13 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
 sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /home/user/atv
 ```
 使用其它端口：
+
+- 第一个参数是挂载的数据目录，默认是/etc/xiaoya。
+- 第二个参数是管理界面端口，默认是5678。
+- 第三个参数是小雅AList端口，默认是5244。
 ```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 8080
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 5721
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 5721 5678
 ```
 OpenWrt去掉sudo，或者已经是root账号：
 ```bash
@@ -90,7 +95,10 @@ bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 
 小雅版默认添加了站点：`http://localhost`，如果配置有域名，自行修改地址。
 
-访问AList，请加端口5244，http://your-ip:5244/
+为什么是`http://localhost`？ 因为小雅用80端口代理了容器内的AList 5244端口。
+管理程序运行在同一个容器内，能够直接访问80端口。
+
+访问AList，请加端口，http://your-ip:5244/ 。使用Docker映射的端口，默认是5244.
 
 自己可以添加三方站点，取代了xiaoya的套娃。会自动识别版本，如果不能正确识别，请手动配置版本。
 
@@ -164,8 +172,8 @@ guestpass.txt和guestlogin.txt第一次启动时加载，以后不再生效，�
 
 show_my_ali.txt第一次启动时加载，以后不再生效，请在界面配置是否加载阿里云盘。
 
-docker_address.txt不再生效，请使用订阅API。
+docker_address.txt不再生效，请配置->高级设置->小雅外网地址 里面设置。
 
 alist_list.txt第一次启动时加载，以后不再生效，请在界面添加站点。
 
-proxy.txt、tv.txt、pikpak.txt、my.json、iptv.m3u还是生效的，可以在文件页面编辑。
+proxy.txt、tv.txt、my.json、iptv.m3u还是生效的，可以在文件页面编辑。

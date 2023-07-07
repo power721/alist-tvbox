@@ -107,6 +107,7 @@
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
           <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
             最新版本：{{ appRemoteVersion }}，请重新运行安装脚本，升级应用。
+            <div v-if="changelog">更新日志： {{changelog}}</div>
           </div>
         </el-card>
 
@@ -180,6 +181,7 @@ const aListRestart = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
+const changelog = ref('')
 const appVersion = ref(0)
 const appRemoteVersion = ref(0)
 const dockerVersion = ref('')
@@ -306,6 +308,7 @@ onMounted(() => {
       movieRemoteVersion.value = +data.movie
       indexRemoteVersion.value = data.index
       appRemoteVersion.value = +data.app
+      changelog.value = data.changelog
     })
   } else {
     axios.get('/token').then(({data}) => {

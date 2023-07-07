@@ -58,6 +58,7 @@ jobs:
           mkdir data
           TZ=Asia/Shanghai date +%j.%H%M > data/version
           cp data/version data/app_version
+          echo "${{ github.event.head_commit.message }}" >>data/app_version
           cat data/version
       - name: Build docker and push
         uses: docker/build-push-action@v4

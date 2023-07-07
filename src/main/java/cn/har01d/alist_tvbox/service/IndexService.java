@@ -106,18 +106,6 @@ public class IndexService {
         return "";
     }
 
-    public void checkIndexFile() {
-        try {
-            String local = settingRepository.findById(INDEX_VERSION).map(Setting::getValue).orElse("").trim();
-            String remote = getRemoteVersion().trim();
-            if (!local.equals(remote)) {
-                executor.execute(() -> updateXiaoyaIndexFile(remote));
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-    }
-
     public void updateXiaoyaIndexFile(String remote) {
         try {
             log.info("download xiaoya index file");

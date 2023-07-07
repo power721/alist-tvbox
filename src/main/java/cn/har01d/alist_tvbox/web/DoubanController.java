@@ -21,7 +21,13 @@ public class DoubanController {
         Versions versions = new Versions();
         versions.setMovie(service.getRemoteVersion().trim());
         versions.setIndex(indexService.getRemoteVersion().trim());
-        versions.setApp(service.getAppRemoteVersion().trim());
+        String appVersion = service.getAppRemoteVersion().trim();
+        String[] parts = appVersion.split("\n");
+        if (parts.length > 1) {
+            appVersion = parts[0];
+            versions.setChangelog(parts[1]);
+        }
+        versions.setApp(appVersion);
         return versions;
     }
 }

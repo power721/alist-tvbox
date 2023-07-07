@@ -312,7 +312,7 @@ public class AccountService {
             }
         }
 
-        indexService.checkIndexFile();
+        indexService.getRemoteVersion();
     }
 
     public void autoCheckin(List<Account> accounts) {

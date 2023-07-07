@@ -34,6 +34,7 @@ public class SiteService {
     private final SiteRepository siteRepository;
     private final SettingRepository settingRepository;
     private final JdbcTemplate jdbcTemplate;
+    private String aListToken = "";
 
     public SiteService(AppProperties appProperties,
                        SiteRepository siteRepository,
@@ -146,10 +147,10 @@ public class SiteService {
             Statement statement = connection.createStatement();
             String sql = "select value from x_setting_items where key = 'token'";
             ResultSet rs = statement.executeQuery(sql);
-            String token = rs.getString(1);
-            if (!token.equals(site.getToken())) {
-                log.info("update user token: {}", token);
-                site.setToken(token);
+            aListToken = rs.getString(1);
+            if (!aListToken.equals(site.getToken())) {
+                log.info("update site token: {}", aListToken);
+                site.setToken(aListToken);
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -186,7 +187,7 @@ public class SiteService {
         return siteRepository.save(site);
     }
 
-    private static void syncSite(SiteDto dto, Site site) {
+    private void syncSite(SiteDto dto, Site site) {
         site.setName(dto.getName());
         site.setUrl(dto.getUrl());
         site.setPassword(dto.getPassword());
@@ -198,6 +199,20 @@ public class SiteService {
         site.setIndexFile(dto.getIndexFile());
         site.setDisabled(dto.isDisabled());
         site.setVersion(dto.getVersion());
+
+        if (StringUtils.isBlank(site.getUrl())) {
+            if (appProperties.isHostmode()) {
+                site.setUrl("http://localhost:6789");
+            } else {
+                site.setUrl("http://localhost");
+            }
+            log.info("set site url: {} {}", site.getName(), site.getUrl());
+        }
+
+        if (StringUtils.isBlank(site.getToken()) && StringUtils.isNotBlank(aListToken) && site.getUrl().startsWith("http://localhost")) {
+            site.setToken(aListToken);
+            log.info("update site token: {}", site.getName());
+        }
     }
 
     private static String fixPath(String path) {
@@ -224,14 +239,12 @@ public class SiteService {
             throw new BadRequestException("站点名称不能为空");
         }
 
-        if (StringUtils.isBlank(dto.getUrl())) {
-            throw new BadRequestException("站点地址不能为空");
-        }
-
-        try {
-            new URL(dto.getUrl());
-        } catch (Exception e) {
-            throw new BadRequestException("站点地址不正确", e);
+        if (StringUtils.isNotBlank(dto.getUrl())) {
+            try {
+                new URL(dto.getUrl());
+            } catch (Exception e) {
+                throw new BadRequestException("站点地址不正确", e);
+            }
         }
 
         if (dto.isSearchable() && StringUtils.isNotBlank(dto.getIndexFile())) {

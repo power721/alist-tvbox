@@ -8,4 +8,5 @@ public class Versions {
     private String docker;
     private String index;
     private String movie;
+    private String changelog;
 }
