@@ -26,6 +26,8 @@ fi
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
 echo -e "\e[36m端口映射：\e[0m $PORT1:8080  $PORT2:80"
 
+echo -e "\e[33m默认端口5678在未来将会变更为4567\e[0m"
+
 mkdir -p $BASE_DIR
 
 if ! grep "access.mypikpak.com" /etc/hosts >/dev/null
@@ -67,3 +69,5 @@ else
   echo -e "\e[32m云服务器请用公网IP访问\e[0m"
 fi
 echo ""
+
+echo -e "\e[33m默认端口5678在未来将会变更为4567\e[0m"

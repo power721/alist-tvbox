@@ -23,6 +23,7 @@ onUnmounted(() => {
   <pre>
     {{ logs }}
   </pre>
+  <el-backtop :right="60" :bottom="60" />
 </template>
 
 <style scoped>

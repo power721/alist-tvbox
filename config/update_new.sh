@@ -20,6 +20,8 @@ fi
 
 echo -e "\e[36m端口映射：\e[0m $PORT:8080"
 
+echo -e "\e[33m默认端口5678在未来将会变更为4567\e[0m"
+
 docker image prune -f
 
 platform="linux/amd64"
@@ -52,3 +54,5 @@ else
   echo -e "\e[32m云服务器请用公网IP访问\e[0m"
 fi
 echo ""
+
+echo -e "\e[33m默认端口5678在未来将会变更为4567\e[0m"
