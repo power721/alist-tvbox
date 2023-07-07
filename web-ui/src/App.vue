@@ -9,13 +9,19 @@ const account = accountService.account
 const router = useRouter()
 const show = ref(false)
 const mounted = ref(false)
+const showNotification = ref(true)
 
 const logout = () => {
   accountService.logout()
   router.push('/')
 }
 
+const close = () => {
+  localStorage.setItem('notification1', 'true')
+}
+
 onMounted(() => {
+  showNotification.value = localStorage.getItem('notification1') != 'true'
   axios.get("/profiles").then(({data}) => {
     show.value = data.includes('xiaoya')
     store.xiaoya = data.includes('xiaoya')
@@ -60,6 +66,7 @@ onMounted(() => {
           <el-menu-item index="/login" v-else>登录</el-menu-item>
         </el-menu>
       </el-header>
+      <el-alert title="默认端口5678在未来将会变更为4567" type="warning" v-if="showNotification" @close="close" />
 
       <el-main v-if="mounted">
         <RouterView/>
@@ -68,8 +75,23 @@ onMounted(() => {
   </div>
 </template>
 
-<style scoped>
+<style>
 .flex-grow {
   flex-grow: 1;
+}
+.el-alert {
+  width: 98%;
+  margin: 0 20px;
+}
+.el-alert__content {
+  width: 100%;
+}
+.el-alert .el-alert__close-btn {
+  font-size: var(--el-alert-close-font-size);
+  opacity: 1;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  cursor: pointer;
 }
 </style>
