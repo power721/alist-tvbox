@@ -61,7 +61,6 @@ import static cn.har01d.alist_tvbox.util.Constants.INDEX_VERSION;
 
 @Slf4j
 @Service
-@Profile("xiaoya")
 public class IndexService {
     private final AListService aListService;
     private final SiteService siteService;

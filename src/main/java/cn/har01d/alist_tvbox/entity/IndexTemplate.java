@@ -24,7 +24,7 @@ public class IndexTemplate {
     private String name;
     @Column(columnDefinition = "TEXT")
     private String data;
-    private int sleep;
+    private Integer sleep;
     private Instant createdTime;
 
     @Override

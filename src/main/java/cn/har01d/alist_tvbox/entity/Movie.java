@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
@@ -25,4 +26,7 @@ public class Movie {
     private String editors;
     private String actors;
     private String cover;
+    private String dbScore;
+    @Column(name = "`year`")
+    private Integer year;
 }
