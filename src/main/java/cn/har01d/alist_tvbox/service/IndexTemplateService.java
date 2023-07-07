@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import java.time.Instant;
 
 @Slf4j
 @Service
+@Profile("xiaoya")
 public class IndexTemplateService {
     private final IndexTemplateRepository indexTemplateRepository;
 

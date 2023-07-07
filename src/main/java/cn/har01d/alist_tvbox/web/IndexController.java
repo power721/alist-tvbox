@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.IndexResponse;
 import cn.har01d.alist_tvbox.dto.VersionDto;
 import cn.har01d.alist_tvbox.service.IndexService;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,6 +12,7 @@ import java.io.IOException;
 
 @RestController
 @RequestMapping("/index")
+@Profile("xiaoya")
 public class IndexController {
     private final IndexService indexService;
 

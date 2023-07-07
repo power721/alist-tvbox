@@ -201,6 +201,7 @@ public class TvBoxService {
 
         List<MovieDetail> list = searchFromIndexFile(site, keyword, indexFile);
         File customIndexFile = new File("/data/index/" + site.getId() + "/custom_index.txt");
+        log.debug("custom index file: {}", customIndexFile);
         if (customIndexFile.exists()) {
             list.addAll(searchFromIndexFile(site, keyword, customIndexFile.getAbsolutePath()));
         }
@@ -293,7 +294,13 @@ public class TvBoxService {
 
     private List<MovieDetail> searchByXiaoya(Site site, String keyword) throws IOException {
         if (site.getId() == 1 && appProperties.isXiaoya()) {
-            return searchFromIndexFile(site, keyword, "/index/index.video.txt");
+            List<MovieDetail> list = searchFromIndexFile(site, keyword, "/index/index.video.txt");
+            File customIndexFile = new File("/data/index/" + site.getId() + "/custom_index.txt");
+            log.debug("custom index file: {}", customIndexFile);
+            if (customIndexFile.exists()) {
+                list.addAll(searchFromIndexFile(site, keyword, customIndexFile.getAbsolutePath()));
+            }
+            return list;
         }
 
         log.info("search \"{}\" from xiaoya {}:{}", keyword, site.getId(), site.getName());

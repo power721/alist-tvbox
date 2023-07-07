@@ -9,8 +9,6 @@ on:
   push:
     branches:
       - master
-    paths:
-      - 'pom.xml'
 
 jobs:
   release:

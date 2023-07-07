@@ -21,6 +21,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.similarity.CosineSimilarity;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,7 @@ import static cn.har01d.alist_tvbox.util.Constants.INDEX_VERSION;
 
 @Slf4j
 @Service
+@Profile("xiaoya")
 public class IndexService {
     private final AListService aListService;
     private final SiteService siteService;

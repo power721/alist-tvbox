@@ -3,12 +3,14 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.IndexTemplateDto;
 import cn.har01d.alist_tvbox.entity.IndexTemplate;
 import cn.har01d.alist_tvbox.service.IndexTemplateService;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/index-templates")
+@Profile("xiaoya")
 public class IndexTemplateController {
     private final IndexTemplateService indexTemplateService;
 
