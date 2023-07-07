@@ -34,7 +34,7 @@ public class TextUtils {
     }
 
     public static boolean isAlphabetic(int c) {
-        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == ' ';
     }
 
     public static boolean isChinese(String text) {
@@ -75,9 +75,12 @@ public class TextUtils {
         }
 
         String[] parts = newName.replace("[", "").replace("]", " ").split("[. ]+");
-        if (parts.length > 4 && (parts[0].length() > 1 && parts[1].length() > 1 && isChinese(parts[0]) && isEnglish(parts[1]))) {
-            newName = parts[0];
-
+        if (parts.length > 4 && (parts[0].length() > 1 && parts[1].length() > 1 && isChinese(parts[0]))) {
+            if (isEnglish(parts[1])) {
+                newName = parts[0];
+            } else if (parts[1].trim().isEmpty() && isEnglish(parts[2])) {
+                newName = parts[0];
+            }
         }
 
         newName = newName
@@ -95,7 +98,10 @@ public class TextUtils {
                 .replace("国英", " ")
                 .replace("中配", " ")
                 .replace("粤语", " ")
+                .replace("国粤", " ")
+                .replace("配音版", " ")
                 .replace("台配", " ")
+                .replace("俄语", " ")
                 .replace(".中日双语", " ")
                 .replace(".日语", " ")
                 .replace("日语", " ")
@@ -103,6 +109,8 @@ public class TextUtils {
                 .replace("系列合集", " ")
                 .replace("大合集", " ")
                 .replace("合集", " ")
+                .replace("-系列", " ")
+                .replace("系列", " ")
                 .replace("更新中", " ")
                 .replace(".内嵌", " ")
                 .replace(".日配", " ")
@@ -117,13 +125,17 @@ public class TextUtils {
                 .replace(".2160p", " ")
                 .replace("2160p", " ")
                 .replace("2160P", " ")
+                .replace("蓝光", " ")
                 .replace(".4k", " ")
                 .replace("4K REMUX", " ")
                 .replace("REMUX", " ")
                 .replace("REMXU", " ")
+                .replace("RMVB", " ")
                 .replace("4K HDR", " ")
                 .replace("4K版", " ")
                 .replace("BluRay", " ")
+                .replace("H265", " ")
+                .replace("H264", " ")
                 .replace("x265", " ")
                 .replace("x264", " ")
                 .replace("4K收藏版", " ")
@@ -137,6 +149,7 @@ public class TextUtils {
                 .replace("+番外篇", " ")
                 .replace("+番外", " ")
                 .replace("+漫画", " ")
+                .replace("美漫", " ")
                 .replace("+剧场版", " ")
                 .replace("剧场版", " ")
                 .replace("+真人版", " ")
@@ -147,6 +160,7 @@ public class TextUtils {
                 .replace("收藏版", " ")
                 .replace("经典老剧", " ")
                 .replace("未删减", " ")
+                .replace("完结篇", " ")
                 .replace("+Q版", " ")
                 .replace("+OVA", " ")
                 .replace("+SP", " ")
@@ -165,9 +179,15 @@ public class TextUtils {
                 .replace("系列", " ")
                 .replace("全集", " ")
                 .replace("中字", " ")
+                .replace("外挂字幕", " ")
                 .replace("无字", " ")
+                .replace("OVA", " ")
                 .replace("GOTV", " ")
+                .replace("TVB版", " ")
+                .replace("TVB", " ")
+                .replace("BBC", " ")
                 .replace("DVD版", " ")
+                .replace("《单片》", " ")
                 .replace("[", " ")
                 .replace("]", " ")
                 .replace("【", " ")
@@ -208,6 +228,7 @@ public class TextUtils {
                 .replaceAll(".([季部])全", " ")
                 .replaceAll("[0-9.]+GB", " ")
                 .replaceAll("豆瓣评分：?[0-9.]+", " ")
+                .replaceAll("NO \\d+\\｜", " ")
                 .replaceAll("\\(\\d{4}\\)", " ")
         ;
 
@@ -259,20 +280,26 @@ public class TextUtils {
             newName = newName.substring(index + 1);
         }
 
-        if (newName.endsWith(".")) {
-            newName = newName.substring(0, newName.length() - 1);
-        }
+//        if (newName.endsWith(".")) {
+//            newName = newName.substring(0, newName.length() - 1);
+//        }
 
-        newName = newName.replaceAll("\\s+", " ").trim();
+        newName = newName
+                .replaceAll("\\s+", " ")
+                .replaceAll("\\.", " ")
+                .trim();
         if (!name.equals(newName)) {
             log.debug("name: {} -> {}", name, newName);
         }
         return newName;
     }
 
-    private static String number2text(String text) {
+    public static String number2text(String text) {
         if (text.startsWith("0") && text.length() > 1) {
             text = text.substring(1);
+        }
+        if (text.isEmpty()) {
+            return text;
         }
         int num = Integer.parseInt(text);
         String newNum;
@@ -291,8 +318,8 @@ public class TextUtils {
     public static String updateName(String name) {
         int n = name.length();
         if (n > 1 && (TextUtils.isEnglishChar(name.codePointAt(0)) && TextUtils.isChineseChar(name.codePointAt(1)))) {
-                name = name.substring(1);
-                n = name.length();
+            name = name.substring(1);
+            n = name.length();
 
         }
 

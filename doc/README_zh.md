@@ -160,6 +160,13 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 
 阿里token和开放token每天会刷新，时间和自动签到时间一致。即使没有开启自动签到，也会刷新。
 
+### 索引
+对于阿里云盘资源，建议使用文件数量少的路径，并限速，防止被封号。
+
+![索引页面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_index.png)
+
+![索引模板](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_index_template.png)
+
 ### 别名
 把一些路径合并成一个路径。
 

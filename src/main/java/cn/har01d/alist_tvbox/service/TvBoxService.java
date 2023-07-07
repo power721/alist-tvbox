@@ -27,6 +27,7 @@ import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -199,6 +200,10 @@ public class TvBoxService {
         }
 
         List<MovieDetail> list = searchFromIndexFile(site, keyword, indexFile);
+        File customIndexFile = new File("/data/index/" + site.getId() + "/custom_index.txt");
+        if (customIndexFile.exists()) {
+            list.addAll(searchFromIndexFile(site, keyword, customIndexFile.getAbsolutePath()));
+        }
         log.debug("search \"{}\" from site {}:{}, result: {}", keyword, site.getId(), site.getName(), list.size());
         return list;
     }

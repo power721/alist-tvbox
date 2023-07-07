@@ -30,7 +30,7 @@ public class LogsSseService {
                         .forEach(line ->
                                 template.broadcast(TOPIC, SseEmitter.event()
                                         .id(String.valueOf(COUNTER.incrementAndGet()))
-                                        .data(COUNTER.get() + ": " + line)));
+                                        .data(String.format("%03d: %s", COUNTER.get(), line))));
             } catch (Exception e) {
                 log.warn("", e);
             }
@@ -50,7 +50,7 @@ public class LogsSseService {
         for (String line : lines.subList(start, end)) {
             emitter.send(SseEmitter.event()
                     .id(String.valueOf(COUNTER.incrementAndGet()))
-                    .data(COUNTER.get() + ": " + line));
+                    .data(String.format("%03d: %s", COUNTER.get(), line)));
         }
         return emitter;
     }
