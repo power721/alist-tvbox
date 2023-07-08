@@ -295,6 +295,7 @@ const handleForm = () => {
     excludeExternal: form.excludeExternal,
     incremental: form.incremental,
     compress: form.compress,
+    sleep: form.sleep,
     maxDepth: form.maxDepth,
     paths: form.paths.map(e => e.value).filter(e => e),
     stopWords: form.stopWords ? form.stopWords.split(/\s*,\s*/) : [],

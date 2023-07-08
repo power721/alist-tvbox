@@ -13,15 +13,11 @@ import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
 import cn.har01d.alist_tvbox.util.Constants;
-import com.hankcs.hanlp.HanLP;
-import com.hankcs.hanlp.seg.common.Term;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.text.similarity.CosineSimilarity;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -44,9 +40,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -391,6 +385,7 @@ public class IndexService {
     private void index(IndexContext context, String path, int depth) throws IOException {
         log.debug("path: {}  depth: {}  context: {}", path, depth, context);
         if ((context.getMaxDepth() > 0 && depth == context.getMaxDepth()) || isCancelled(context)) {
+            log.debug("exit");
             return;
         }
 
@@ -409,7 +404,7 @@ public class IndexService {
             return;
         }
 
-        log.debug("get {} files", fsResponse.getFiles().size());
+        log.debug("{} get {} files", fsResponse.getProvider(), fsResponse.getFiles().size());
         List<String> files = new ArrayList<>();
         for (FsInfo fsInfo : fsResponse.getFiles()) {
             try {
@@ -423,6 +418,7 @@ public class IndexService {
                     }
 
                     if (context.getSleep() > 0) {
+                        log.debug("sleep {}", context.getSleep());
                         Thread.sleep(context.getSleep());
                     }
 
@@ -438,6 +434,8 @@ public class IndexService {
                     context.stats.files++;
                     log.debug("{}, add file: {}", path, fsInfo.getName());
                     files.add(fsInfo.getName());
+                } else {
+                    log.debug("ignore file: {}", fsInfo.getName());
                 }
             } catch (Exception e) {
                 log.warn("index error", e);
@@ -446,10 +444,6 @@ public class IndexService {
 
         if (!files.isEmpty() && !context.contains(path)) {
             context.write(path);
-        }
-
-        if (isSimilar(path, files, context.getStopWords())) {
-            return;
         }
 
         for (String name : files) {
@@ -497,57 +491,4 @@ public class IndexService {
         return path.replaceAll("/+", "/").replace("\n", "%20");
     }
 
-    private String getFolderName(String path) {
-        int index = path.lastIndexOf('/');
-        if (index > 0) {
-            return path.substring(index + 1);
-        }
-        return path;
-    }
-
-    public boolean isSimilar(String path, List<String> sentences, Set<String> stopWords) {
-        if (sentences.isEmpty()) {
-            return true;
-        }
-        if (sentences.size() == 1) {
-            String folderName = getFolderName(path);
-            List<String> list = new ArrayList<>(sentences);
-            list.add(folderName);
-            return isSimilar(path, list, stopWords);
-        }
-
-        double sum = 0.0;
-        CosineSimilarity cosineSimilarity = new CosineSimilarity();
-        Map<CharSequence, Integer> leftVector = getVector(stopWords, sentences.get(0));
-        for (int i = 1; i < sentences.size(); ++i) {
-            Map<CharSequence, Integer> rightVector = getVector(stopWords, sentences.get(i));
-            sum += cosineSimilarity.cosineSimilarity(leftVector, rightVector);
-            leftVector = rightVector;
-        }
-        double result = sum / (sentences.size() - 1);
-
-        log.debug("cosineSimilarity {} : {}", path, result);
-        return result > 0.9;
-    }
-
-    private Map<CharSequence, Integer> getVector(Set<String> stopWords, String text) {
-        Map<CharSequence, Integer> result = new HashMap<>();
-        for (String stopWord : stopWords) {
-            text = text.replaceAll(stopWord, "");
-        }
-        text = text.replaceAll("\\d+", " ").replaceAll("\\s+", " ");
-        List<Term> termList = HanLP.segment(text);
-        for (Term term : termList) {
-            int frequency = term.getFrequency();
-            if (frequency == 0) {
-                frequency = 1;
-            }
-            if (result.containsKey(term.word)) {
-                result.put(term.word, result.get(term.word) + frequency);
-            } else {
-                result.put(term.word, frequency);
-            }
-        }
-        return result;
-    }
 }
