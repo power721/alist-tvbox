@@ -69,6 +69,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: TAG=latest
       - name: Build host mode docker and push
         uses: docker/build-push-action@v4
         with:
@@ -79,6 +80,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:hostmode
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: TAG=hostmode
       - name: Send version file
         env:
           ssh_host: ${{ secrets.SSH_HOST }}
