@@ -25,6 +25,7 @@ onMounted(() => {
   axios.get("/profiles").then(({data}) => {
     show.value = data.includes('xiaoya')
     store.xiaoya = data.includes('xiaoya')
+    store.hostmode = data.includes('host')
     mounted.value = true
     if (show.value) {
       axios.get('/alist/status').then(({data}) => {

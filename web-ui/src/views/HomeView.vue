@@ -38,8 +38,11 @@ onMounted(() => {
     <h1>
       AList - TvBox
     </h1>
-    <h3 v-if="store.xiaoya">小雅集成版</h3>
-    <h3 v-else>独立版</h3>
+    <div v-if="store.xiaoya">
+      <el-text size="large">小雅集成版</el-text>
+      <el-text v-if="store.hostmode" size="small">host网络模式</el-text>
+    </div>
+    <el-text v-else size="large">独立版</el-text>
     <iframe v-if="store.xiaoya&&store.aListStatus" :src="url" :width="width" :height="height">
     </iframe>
   </div>
