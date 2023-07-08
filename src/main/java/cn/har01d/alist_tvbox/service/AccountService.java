@@ -277,8 +277,23 @@ public class AccountService {
             LocalTime localTime = getScheduleTime();
             log.info("schedule time: {}", localTime);
             scheduledFuture = scheduler.schedule(this::handleScheduleTask, new CronTrigger(String.format("%d %d %d * * ?", localTime.getSecond(), localTime.getMinute(), localTime.getHour())));
+            if (LocalTime.now().isAfter(localTime)) {
+                autoCheckin();
+            }
         } catch (Exception e) {
             log.warn("", e);
+        }
+    }
+
+    public void autoCheckin() {
+        for (Account account : accountRepository.findAll()) {
+            if (account.isAutoCheckin()) {
+                try {
+                    checkin(account, false);
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
+            }
         }
     }
 

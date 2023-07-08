@@ -17,6 +17,7 @@ mvn clean package || exit 1
 
 cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 
+docker pull xiaoyaliu/alist:hostmode
 docker image prune -f
 docker pull haroldli/alist-base:hostmode
 date +%j.%H%M > data/version

@@ -147,9 +147,6 @@
         <el-form-item>
           <el-button type="primary" @click="updateDockerAddress">更新</el-button>
         </el-form-item>
-        <el-form-item>
-          <el-button @click="goIndex">构建索引</el-button>
-        </el-form-item>
       </el-form>
       <template #footer>
       <span class="dialog-footer">
