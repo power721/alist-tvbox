@@ -128,6 +128,8 @@ public class DoubanService {
         if (movie != null) {
             detail.setVod_name(movie.getName());
             detail.setVod_pic(movie.getCover());
+            detail.setVod_year(String.valueOf(movie.getYear()));
+            detail.setVod_remarks(movie.getDbScore());
         }
     }
 
