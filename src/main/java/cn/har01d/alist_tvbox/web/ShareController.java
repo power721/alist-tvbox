@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 
@@ -64,8 +65,13 @@ public class ShareController {
     }
 
     @PostMapping("/import-shares")
-    public int handleFileUpload(@RequestParam("file") MultipartFile file, int type) throws IOException {
+    public int importShares(@RequestParam("file") MultipartFile file, int type) throws IOException {
         return shareService.importShares(file, type);
+    }
+
+    @GetMapping("/export-shares")
+    public String exportShare(HttpServletResponse response, int type) {
+        return shareService.exportShare(response, type);
     }
 
     @PostMapping("/open-token-url")

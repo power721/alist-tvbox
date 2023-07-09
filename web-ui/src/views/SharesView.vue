@@ -2,6 +2,7 @@
   <h2>分享列表</h2>
   <el-row justify="end">
     <el-button type="success" @click="uploadVisible=true">导入</el-button>
+    <el-button type="success" @click="exportVisible=true">导出</el-button>
     <el-button type="primary" @click="handleAdd">添加</el-button>
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
   </el-row>
@@ -124,6 +125,21 @@
     </template>
   </el-dialog>
 
+  <el-dialog v-model="exportVisible" title="导出分享" width="30%">
+    <el-form-item label="类型" label-width="140">
+      <el-radio-group v-model="form.type" class="ml-4">
+        <el-radio :label="0" size="large">阿里云盘</el-radio>
+        <el-radio :label="1" size="large">PikPak分享</el-radio>
+      </el-radio-group>
+    </el-form-item>
+    <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="exportVisible = false">取消</el-button>
+        <el-button class="ml-3" type="success" @click="exportShares">导出</el-button>
+      </span>
+    </template>
+  </el-dialog>
+
   <el-divider/>
 
   <h2>资源列表</h2>
@@ -185,6 +201,7 @@ const shares = ref([])
 const dialogTitle = ref('')
 const formVisible = ref(false)
 const uploadVisible = ref(false)
+const exportVisible = ref(false)
 const dialogVisible = ref(false)
 const updateAction = ref(false)
 const batch = ref(false)
@@ -311,6 +328,10 @@ const handleExceed: UploadProps['onExceed'] = (files, uploadFiles) => {
 
 const submitUpload = () => {
   upload.value!.submit()
+}
+
+const exportShares = () => {
+  window.location.href = '/export-shares?type=' + form.value.type + '&t=' + new Date().getTime();
 }
 
 const uploadSuccess = (response: any) => {

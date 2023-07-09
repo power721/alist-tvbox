@@ -291,7 +291,7 @@ public class AccountService {
                 try {
                     checkin(account, false);
                 } catch (Exception e) {
-                    log.warn("", e);
+                    log.warn("{}", e.getMessage());
                 }
             }
         }

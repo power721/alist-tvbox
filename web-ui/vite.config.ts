@@ -21,6 +21,7 @@ export default defineConfig({
       "/accounts": API,
       "/pikpak": API,
       "/ali": API,
+      "/export-shares": API,
       "/logs": API,
       "/login": API,
       "/checkin": API,

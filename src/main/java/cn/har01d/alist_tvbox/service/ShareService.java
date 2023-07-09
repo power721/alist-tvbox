@@ -32,9 +32,11 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.PostConstruct;
+import javax.servlet.http.HttpServletResponse;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -262,6 +264,27 @@ public class ShareService {
         return count;
     }
 
+    public String exportShare(HttpServletResponse response, int type) {
+        List<Share> list = shareRepository.findByType(type);
+        StringBuilder sb = new StringBuilder();
+        String fileName;
+        if (type == 1) {
+            fileName = "pikpakshare_list.txt";
+        } else {
+            fileName = "alishare_list.txt";
+        }
+
+        for (Share share : list) {
+            sb.append(share.getPath()).append("  ").append(share.getShareId()).append("  ").append(share.getFolderId()).append("\n");
+        }
+
+        log.info("export {} shares to file: {}", list.size(), fileName);
+        response.addHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+        response.setContentType("text/plain");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        return sb.toString();
+    }
+
     private void loadAListShares(List<Share> list) {
         if (list.isEmpty()) {
             return;
@@ -285,6 +308,10 @@ public class ShareService {
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     }
                     shareId = Math.max(shareId, share.getId() + 1);
+                    if (share.getType() == null) {
+                        share.setType(0);
+                        shareRepository.save(share);
+                    }
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
                 }
