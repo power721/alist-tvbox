@@ -17,6 +17,10 @@ const load = (pageNumber: number) => {
   })
 }
 
+const download = () => {
+  window.location.href = '/logs/download?t=' + new Date().getTime();
+}
+
 onMounted(() => {
   load(1)
 })
@@ -25,11 +29,14 @@ onMounted(() => {
 
 <template>
   <div>
-    <el-pagination layout="prev, pager, next" :page-size="50" :current-page="page" :total="total" @current-change="load" />
+    <el-button type="primary" @click="download">下载日志</el-button>
+    <el-pagination layout="prev, pager, next" :page-size="50" :current-page="page" :total="total"
+                   @current-change="load"/>
   </div>
   <div v-for="log of logs" v-html="log"></div>
   <div v-if="count >= 50">
-    <el-pagination layout="prev, pager, next" :page-size="50" :current-page="page" :total="total" @current-change="load" />
+    <el-pagination layout="prev, pager, next" :page-size="50" :current-page="page" :total="total"
+                   @current-change="load"/>
   </div>
 </template>
 

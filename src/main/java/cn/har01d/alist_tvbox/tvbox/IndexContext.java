@@ -15,7 +15,6 @@ public class IndexContext {
     private final cn.har01d.alist_tvbox.entity.Site site;
     private final FileWriter writer;
     private final Integer taskId;
-    private int sleep = 2000;
     private Set<String> set = new HashSet<>();
 
     public String getSiteName() {

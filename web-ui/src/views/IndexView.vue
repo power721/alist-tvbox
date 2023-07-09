@@ -32,6 +32,9 @@
       <el-form-item label="排除外部AList站点？" :label-width="labelWidth">
         <el-switch v-model="form.excludeExternal"/>
       </el-form-item>
+      <el-form-item label="包含文件？" :label-width="labelWidth">
+        <el-switch v-model="form.includeFiles"/>
+      </el-form-item>
       <el-form-item label="增量更新？" :label-width="labelWidth">
         <el-switch v-model="form.incremental"/>
       </el-form-item>
@@ -154,6 +157,7 @@ const form = reactive({
   indexName: 'custom_index',
   excludeExternal: false,
   incremental: true,
+  includeFiles: true,
   compress: false,
   sleep: 2000,
   maxDepth: 10,
@@ -205,6 +209,7 @@ const loadTemplate = (data: IndexTemplate) => {
   form.siteId = template.siteId
   form.indexName = template.indexName
   form.excludeExternal = template.excludeExternal
+  form.includeFiles = template.includeFiles
   form.incremental = template.incremental
   form.compress = template.compress
   form.sleep = template.sleep
@@ -225,6 +230,7 @@ const saveTemplates = () => {
     siteId: form.siteId,
     indexName: form.indexName,
     excludeExternal: form.excludeExternal,
+    includeFiles: form.includeFiles,
     incremental: form.incremental,
     compress: form.compress,
     maxDepth: form.maxDepth,
@@ -293,6 +299,7 @@ const handleForm = () => {
     siteId: form.siteId,
     indexName: form.indexName,
     excludeExternal: form.excludeExternal,
+    includeFiles: form.includeFiles,
     incremental: form.incremental,
     compress: form.compress,
     sleep: form.sleep,

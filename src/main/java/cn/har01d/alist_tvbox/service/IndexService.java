@@ -314,7 +314,6 @@ public class IndexService {
             taskService.startTask(task.getId());
             taskService.updateTaskData(task.getId(), file.getAbsolutePath());
             IndexContext context = new IndexContext(indexRequest, site, writer, task.getId());
-            context.setSleep(indexRequest.getSleep());
             for (String path : indexRequest.getPaths()) {
                 if (isCancelled(context)) {
                     break;
@@ -417,13 +416,13 @@ public class IndexService {
                         continue;
                     }
 
-                    if (context.getSleep() > 0) {
-                        log.debug("sleep {}", context.getSleep());
-                        Thread.sleep(context.getSleep());
+                    if (context.getIndexRequest().getSleep() > 0) {
+                        log.debug("sleep {}", context.getIndexRequest().getSleep());
+                        Thread.sleep(context.getIndexRequest().getSleep());
                     }
 
                     index(context, newPath, depth + 1);
-                } else if (isMediaFormat(fsInfo.getName())) { // file
+                } else if (context.getIndexRequest().isIncludeFiles() && isMediaFormat(fsInfo.getName())) { // file
                     String newPath = fixPath(path + "/" + fsInfo.getName());
                     if (exclude(context.getExcludes(), newPath)) {
                         log.warn("exclude file {}", newPath);

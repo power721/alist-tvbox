@@ -12,6 +12,7 @@ public class IndexRequest {
     private boolean excludeExternal;
     private boolean incremental;
     private boolean compress;
+    private boolean includeFiles;
     private int maxDepth = 10;
     private int sleep = 2000;
     private Set<String> paths = new HashSet<>();
