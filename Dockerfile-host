@@ -1,6 +1,14 @@
-FROM haroldli/alist-base:hostmode
+FROM haroldli/alist-base:hostmode as base
+
+FROM xiaoyaliu/alist:hostmode
 
 LABEL MAINTAINER="Har01d"
+
+COPY index.sh /
+
+COPY --from=base /jre /jre
+
+COPY --from=base /opt/atv/ ./
 
 COPY init.sh /
 COPY entrypoint.sh /
