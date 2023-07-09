@@ -1,8 +1,6 @@
-ARG TAG=latest
-
 FROM haroldli/alist-base:latest as base
 
-FROM xiaoyaliu/alist:${TAG}
+FROM xiaoyaliu/alist:latest
 
 LABEL MAINTAINER="Har01d"
 
