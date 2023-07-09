@@ -42,7 +42,9 @@ public class AListLocalService {
         try {
             log.info("start AList server");
             ProcessBuilder builder = new ProcessBuilder();
-            builder.inheritIO();
+            File outFile = new File("/opt/atv/log/app.log");
+            builder.redirectOutput(ProcessBuilder.Redirect.appendTo(outFile));
+            builder.redirectError(ProcessBuilder.Redirect.appendTo(outFile));
             builder.command("/opt/alist/alist", "server", "--no-prefix");
             builder.directory(new File("/opt/alist"));
             Process process = builder.start();
@@ -59,7 +61,9 @@ public class AListLocalService {
         log.info("stop AList server");
         try {
             ProcessBuilder builder = new ProcessBuilder();
-            builder.inheritIO();
+            File outFile = new File("/opt/atv/log/app.log");
+            builder.redirectOutput(ProcessBuilder.Redirect.appendTo(outFile));
+            builder.redirectError(ProcessBuilder.Redirect.appendTo(outFile));
             builder.command("pkill", "-f", "/opt/alist/alist");
             builder.directory(new File("/opt/alist"));
             Process process = builder.start();

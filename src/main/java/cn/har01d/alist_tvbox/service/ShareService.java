@@ -321,18 +321,7 @@ public class ShareService {
         }
 
         if (pikpak) {
-            updateIndexFile();
-        }
-    }
-
-    private void updateIndexFile() {
-        log.info("update PikPak index file");
-        ProcessBuilder builder = new ProcessBuilder();
-        builder.command("sh", "-c", "/index.sh");
-        try {
-            builder.start();
-        } catch (Exception e) {
-            log.warn("", e);
+            pikPakService.updateIndexFile();
         }
     }
 
