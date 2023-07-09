@@ -3,9 +3,11 @@
 span.info {
     color: #337ecc;
 }
+
 span.success {
     color: #67c23a;
 }
+
 span.error {
     color: #f56c6c;
 }

@@ -53,7 +53,7 @@ onMounted(() => {
           <el-menu-item index="/shares" v-if="account.authenticated&&show">资源</el-menu-item>
           <el-menu-item index="/config" v-if="account.authenticated">配置</el-menu-item>
           <el-menu-item index="/index" v-if="account.authenticated&&show">索引</el-menu-item>
-          <el-menu-item index="/logs" v-if="account.authenticated&&show">日志</el-menu-item>
+          <el-menu-item index="/logs" v-if="account.authenticated&&store.xiaoya">日志</el-menu-item>
           <el-menu-item index="/files" v-if="account.authenticated&&show">文件</el-menu-item>
           <el-menu-item index="/alias" v-if="account.authenticated&&show">别名</el-menu-item>
           <el-menu-item index="/vod" v-if="account.authenticated">vod</el-menu-item>

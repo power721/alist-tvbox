@@ -40,7 +40,7 @@ public class LogsService {
         Path file = Paths.get("/opt/atv/log/app.log");
         List<String> lines = Files.readAllLines(file);
         int size = pageable.getPageSize();
-        int start = (pageable.getPageNumber() - 1) * size;
+        int start = pageable.getPageNumber() * size;
         int end = start + size;
         if (end > lines.size()) {
             end = lines.size();
