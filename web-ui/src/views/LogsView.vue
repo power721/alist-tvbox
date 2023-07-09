@@ -1,38 +1,37 @@
 <script setup lang="ts">
 
 import {onMounted, ref} from "vue";
-import {onUnmounted} from "@vue/runtime-core";
+import axios from "axios";
 
-let source: EventSource;
-const logs = ref('')
+const page = ref(1)
+const count = ref(0)
+const total = ref(0)
+const logs = ref([])
+
+const load = (pageNumber: number) => {
+  page.value = pageNumber
+  axios.get('/logs?size=50&page=' + pageNumber).then(({data}) => {
+    logs.value = data.content
+    total.value = data.totalElements
+    count.value = data.numberOfElements
+  })
+}
 
 onMounted(() => {
-  source = new EventSource('/logs')
-  source.onmessage = function (event) {
-    logs.value += event.data + '\n'
-    window.scrollTo(0, document.body.scrollHeight)
-  }
+  load(1)
 })
 
-onUnmounted(() => {
-  source.close()
-})
 </script>
 
 <template>
-  <pre>
-    {{ logs }}
-  </pre>
-  <el-backtop :right="60" :bottom="60" />
+  <div>
+    <el-pagination layout="prev, pager, next" :page-size="50" :current-page="page" :total="total" @current-change="load" />
+  </div>
+  <div v-for="log of logs" v-html="log"></div>
+  <div v-if="count >= 50">
+    <el-pagination layout="prev, pager, next" :page-size="50" :current-page="page" :total="total" @current-change="load" />
+  </div>
 </template>
 
 <style scoped>
-pre {
-  overflow-x: auto;
-  white-space: pre-wrap;
-  white-space: -moz-pre-wrap;
-  white-space: -pre-wrap;
-  white-space: -o-pre-wrap;
-  word-wrap: break-word;
-}
 </style>

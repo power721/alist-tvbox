@@ -1,25 +1,25 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.log.LogsSseService;
+import cn.har01d.alist_tvbox.service.LogsService;
 import org.springframework.context.annotation.Profile;
-import org.springframework.http.MediaType;
-import org.springframework.stereotype.Controller;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 
-@Controller
+@RestController
 @Profile("xiaoya")
 public class LogController {
-    private final LogsSseService logsSseService;
+    private final LogsService logsService;
 
-    public LogController(LogsSseService logsSseService) {
-        this.logsSseService = logsSseService;
+    public LogController(LogsService logsService) {
+        this.logsService = logsService;
     }
 
-    @GetMapping(value = "/logs", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter logs() throws IOException {
-        return logsSseService.newSseEmitter();
+    @GetMapping("/logs")
+    public Page<String> logs(Pageable pageable) throws IOException {
+        return logsService.getLogs(pageable);
     }
 }
