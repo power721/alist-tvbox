@@ -51,11 +51,11 @@ onMounted(() => {
           <el-menu-item index="/pikpak" v-if="account.authenticated&&show">PikPak</el-menu-item>
           <el-menu-item index="/subscriptions" v-if="account.authenticated">订阅</el-menu-item>
           <el-menu-item index="/shares" v-if="account.authenticated&&show">资源</el-menu-item>
+          <el-menu-item index="/config" v-if="account.authenticated">配置</el-menu-item>
+          <el-menu-item index="/index" v-if="account.authenticated&&show">索引</el-menu-item>
+          <el-menu-item index="/logs" v-if="account.authenticated&&show">日志</el-menu-item>
           <el-menu-item index="/files" v-if="account.authenticated&&show">文件</el-menu-item>
           <el-menu-item index="/alias" v-if="account.authenticated&&show">别名</el-menu-item>
-          <el-menu-item index="/config" v-if="account.authenticated">配置</el-menu-item>
-          <el-menu-item index="/index" v-if="account.authenticated">索引</el-menu-item>
-          <el-menu-item index="/logs" v-if="account.authenticated">日志</el-menu-item>
           <el-menu-item index="/vod" v-if="account.authenticated">vod</el-menu-item>
           <el-menu-item index="/search" v-if="account.authenticated">搜索</el-menu-item>
           <el-menu-item index="/about" v-if="account.authenticated">关于</el-menu-item>
