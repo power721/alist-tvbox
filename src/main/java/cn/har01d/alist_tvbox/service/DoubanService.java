@@ -130,7 +130,7 @@ public class DoubanService {
             if (movie.getCover() != null && !movie.getCover().isEmpty()) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
                         .replacePath("/images")
-                        .queryParam("url", movie.getCover())
+                        .query("url=" + movie.getCover())
                         .build()
                         .toUriString();
                 log.debug("cover url: {}", cover);

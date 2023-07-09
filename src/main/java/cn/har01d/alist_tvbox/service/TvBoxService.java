@@ -26,7 +26,6 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-import org.springframework.web.util.UriComponents;
 
 import java.io.File;
 import java.io.IOException;
@@ -183,6 +182,12 @@ public class TvBoxService {
                 list.addAll(future.get());
             } catch (Exception e) {
                 log.warn("", e);
+            }
+        }
+
+        for (MovieDetail movie : list) {
+            if (movie.getVod_pic() != null && movie.getVod_pic().contains(".doubanio.com/")) {
+                fixCover(movie);
             }
         }
 
@@ -602,15 +607,7 @@ public class TvBoxService {
             }
 
             if (movie != null) {
-                if (movie.getCover() != null && !movie.getCover().isEmpty()) {
-                    String cover = ServletUriComponentsBuilder.fromCurrentRequest()
-                            .replacePath("/images")
-                            .queryParam("url", movie.getCover())
-                            .build()
-                            .toUriString();
-                    log.debug("cover url: {}", cover);
-                    movie.setCover(cover);
-                }
+                fixCover(movie);
                 movieDetail.setVod_pic(movie.getCover());
                 if (!details) {
                     return;
@@ -627,6 +624,38 @@ public class TvBoxService {
             }
         } catch (Exception e) {
             log.warn("", e);
+        }
+    }
+
+    private static void fixCover(MovieDetail movie) {
+        try {
+            if (movie.getVod_pic() != null && !movie.getVod_pic().isEmpty()) {
+                String cover = ServletUriComponentsBuilder.fromCurrentRequest()
+                        .replacePath("/images")
+                        .query("url=" + movie.getVod_pic())
+                        .build()
+                        .toUriString();
+                log.debug("cover url: {}", cover);
+                movie.setVod_pic(cover);
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+    }
+
+    private static void fixCover(Movie movie) {
+        try {
+            if (movie.getCover() != null && !movie.getCover().isEmpty()) {
+                String cover = ServletUriComponentsBuilder.fromCurrentRequest()
+                        .replacePath("/images")
+                        .query("url=" + movie.getCover())
+                        .build()
+                        .toUriString();
+                log.debug("cover url: {}", cover);
+                movie.setCover(cover);
+            }
+        } catch (Exception e) {
+            // ignore
         }
     }
 
