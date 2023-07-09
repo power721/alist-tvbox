@@ -24,6 +24,8 @@ public class Share {
     private String shareId;
     private String folderId = "root";
     private String password = "";
+    @Column(columnDefinition = "TEXT")
+    private String cookie;
     private Integer type;
 
     @Override

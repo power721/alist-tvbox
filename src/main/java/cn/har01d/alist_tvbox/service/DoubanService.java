@@ -18,6 +18,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.annotation.PostConstruct;
 import java.nio.file.Files;
@@ -126,6 +127,15 @@ public class DoubanService {
     private void setDoubanInfo(MovieDetail detail) {
         Movie movie = getByName(detail.getVod_name());
         if (movie != null) {
+            if (movie.getCover() != null && !movie.getCover().isEmpty()) {
+                String cover = ServletUriComponentsBuilder.fromCurrentRequest()
+                        .replacePath("/images")
+                        .queryParam("url", movie.getCover())
+                        .build()
+                        .toUriString();
+                log.debug("cover url: {}", cover);
+                movie.setCover(cover);
+            }
             detail.setVod_name(movie.getName());
             detail.setVod_pic(movie.getCover());
             detail.setVod_year(String.valueOf(movie.getYear()));

@@ -19,14 +19,15 @@
     </el-table-column>
     <el-table-column prop="url" label="分享链接">
       <template #default="scope">
-        <a v-if="scope.row.type" :href="getShareLink(scope.row)" target="_blank">https://mypikpak.com/s/{{scope.row.shareId}}</a>
-        <a v-else :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
+        <a v-if="scope.row.type==1" :href="getShareLink(scope.row)" target="_blank">https://mypikpak.com/s/{{scope.row.shareId}}</a>
+        <a v-else-if="scope.row.type!=2" :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
     <el-table-column prop="type" label="类型" width="150" sortable>
       <template #default="scope">
-        <span v-if="scope.row.type">PikPak分享</span>
+        <span v-if="scope.row.type==1">PikPak分享</span>
+        <span v-if="scope.row.type==2">夸克网盘</span>
         <span v-else>阿里云盘</span>
       </template>
     </el-table-column>
@@ -47,11 +48,14 @@
       <el-form-item label="挂载路径" label-width="140">
         <el-input v-model="form.path" autocomplete="off"/>
       </el-form-item>
-      <el-form-item label="分享ID" label-width="140">
+      <el-form-item v-if="form.type!=2" label="分享ID" label-width="140">
         <el-input v-model="form.shareId" autocomplete="off" placeholder="分享ID或者分享链接"/>
       </el-form-item>
-      <el-form-item label="密码" label-width="140">
+      <el-form-item v-if="form.type!=2" label="密码" label-width="140">
         <el-input v-model="form.password" autocomplete="off"/>
+      </el-form-item>
+      <el-form-item v-if="form.type==2" label="Cookie" label-width="140">
+        <el-input v-model="form.cookie" autocomplete="off"/>
       </el-form-item>
       <el-form-item label="文件夹ID" label-width="140">
         <el-input v-model="form.folderId" autocomplete="off" placeholder="默认为根目录或者从分享链接读取"/>
@@ -149,14 +153,16 @@
     <el-table-column prop="path" label="路径" width="380" sortable/>
     <el-table-column prop="url" label="分享链接">
       <template #default="scope">
-        <a v-if="scope.row.type" :href="getShareLink(scope.row)" target="_blank">https://mypikpak.com/s/{{scope.row.shareId}}</a>
+        <a v-if="scope.row.type==1" :href="getShareLink(scope.row)" target="_blank">https://mypikpak.com/s/{{scope.row.shareId}}</a>
+        <a v-else-if="scope.row.type==2" href="https://pan.quark.cn/" target="_blank">https://pan.quark.cn/</a>
         <a v-else :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
     <el-table-column prop="type" label="类型" width="150" sortable>
       <template #default="scope">
-        <span v-if="scope.row.type">PikPak分享</span>
+        <span v-if="scope.row.type==1">PikPak分享</span>
+        <span v-if="scope.row.type==2">夸克网盘</span>
         <span v-else>阿里云盘</span>
       </template>
     </el-table-column>
@@ -185,6 +191,7 @@ interface ShareInfo {
   shareId: string
   folderId: string
   password: string
+  cookie: string
   status: string
   type: number
 }
@@ -211,6 +218,7 @@ const form = ref({
   shareId: '',
   folderId: '',
   password: '',
+  cookie: '',
   type: 0
 })
 
@@ -223,6 +231,7 @@ const handleAdd = () => {
     shareId: '',
     folderId: '',
     password: '',
+    cookie: '',
     type: 0
   }
   formVisible.value = true
@@ -237,6 +246,7 @@ const handleEdit = (data: ShareInfo) => {
     shareId: data.shareId,
     folderId: data.folderId,
     password: data.password,
+    cookie: data.cookie,
     type: data.type
   }
   formVisible.value = true
@@ -275,8 +285,10 @@ const fullPath = (share: any) => {
   if (path.startsWith('/')) {
     return path
   }
-  if (share.type) {
+  if (share.type == 1) {
     return '/\uD83D\uDD78\uFE0F我的PikPak分享/' + path
+  } else if (share.type == 2) {
+    return '/我的夸克/' + path
   } else {
     return '/\uD83C\uDE34我的阿里分享/' + path
   }
@@ -290,7 +302,7 @@ const handleConfirm = () => {
 }
 
 const getShareLink = (shareInfo: ShareInfo) => {
-  if (shareInfo.type) {
+  if (shareInfo.type == 1) {
     return 'https://mypikpak.com/s/' + shareInfo.shareId
   }
   let url = 'https://www.aliyundrive.com/s/' + shareInfo.shareId

@@ -57,7 +57,11 @@ jobs:
       - name: Set APP version
         run: |
           mkdir data
-          TZ=Asia/Shanghai date +%j.%H%M > data/version
+          export TZ=Asia/Shanghai
+          num1=$(date +%Y)
+          num2=$(date +%j)
+          sum=$((($num1 - 2023) * 366 + $num2))
+          echo $sum.$(date +%H%M) > data/version
           cp data/version data/app_version
           cat data/version
       - name: Build docker and push

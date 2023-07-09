@@ -292,7 +292,7 @@ onMounted(() => {
       movieVersion.value = +data.movie_version
       indexVersion.value = data.index_version
       dockerVersion.value = data.docker_version
-      appVersion.value = +data.app_version
+      appVersion.value = data.app_version
       openTokenUrl.value = data.open_token_url
       dockerAddress.value = data.docker_address
       autoCheckin.value = data.auto_checkin === 'true'
@@ -310,9 +310,9 @@ onMounted(() => {
       }
     })
     axios.get('/versions').then(({data}) => {
-      movieRemoteVersion.value = +data.movie
+      movieRemoteVersion.value = data.movie
       indexRemoteVersion.value = data.index
-      appRemoteVersion.value = +data.app
+      appRemoteVersion.value = data.app
       changelog.value = data.changelog
     })
   } else {

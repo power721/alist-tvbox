@@ -26,6 +26,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.web.util.UriComponents;
 
 import java.io.File;
 import java.io.IOException;
@@ -601,6 +602,15 @@ public class TvBoxService {
             }
 
             if (movie != null) {
+                if (movie.getCover() != null && !movie.getCover().isEmpty()) {
+                    String cover = ServletUriComponentsBuilder.fromCurrentRequest()
+                            .replacePath("/images")
+                            .queryParam("url", movie.getCover())
+                            .build()
+                            .toUriString();
+                    log.debug("cover url: {}", cover);
+                    movie.setCover(cover);
+                }
                 movieDetail.setVod_pic(movie.getCover());
                 if (!details) {
                     return;

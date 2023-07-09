@@ -301,11 +301,15 @@ public class ShareService {
                         String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), account1.getRefreshToken(), account1.getOpenToken(), account1.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
-                    } else {
+                    } else if (share.getType() == 1) {
                         String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account2.getUsername(), account2.getPassword(), share.getShareId(), share.getPassword()));
                         pikpak = true;
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
+                    } else if (share.getType() == 2) {
+                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"root_folder_id\":\"%s\",\"cookie\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
+                        int count = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), share.getCookie()));
+                        log.info("insert Share {}: {}, result: {}", share.getId(), getMountPath(share), count);
                     }
                     shareId = Math.max(shareId, share.getId() + 1);
                     if (share.getType() == null) {
@@ -342,9 +346,12 @@ public class ShareService {
         }
         if (share.getType() == null || share.getType() == 0) {
             return "/\uD83C\uDE34我的阿里分享/" + path;
-        } else {
+        } else if (share.getType() == 1) {
             return "/\uD83D\uDD78️我的PikPak分享/" + path;
+        } else if (share.getType() == 2) {
+            return "/我的夸克/" + path;
         }
+        return path;
     }
 
     private void readTvTxt() {
@@ -407,15 +414,23 @@ public class ShareService {
              Statement statement = connection.createStatement()) {
             share.setId(shareId++);
 
+            int result = 0;
             if (share.getType() == null || share.getType() == 0) {
                 Account account = accountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
                 String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
-                statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else {
+                result = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
+            } else if (share.getType() == 1) {
                 PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
-                statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+                result = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+            } else if (share.getType() == 2) {
+                if (share.getFolderId().equals("root")) {
+                    share.setFolderId("");
+                }
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"root_folder_id\":\"%s\",\"cookie\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1'name','ASC','',0,'native_proxy','');";
+                result = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), share.getCookie()));
             }
+            log.info("insert result: {}", result);
 
             shareRepository.save(share);
 
@@ -439,15 +454,23 @@ public class ShareService {
              Statement statement = connection.createStatement()) {
             deleteStorage(id, token);
 
+            int result = 0;
             if (share.getType() == null || share.getType() == 0) {
                 Account account = accountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
                 String sql = "INSERT INTO x_storages VALUES(%d,\"%s\",0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"%s\",\"RefreshTokenOpen\":\"%s\",\"TempTransferFolderID\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
-                statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else {
+                result = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), account.getRefreshToken(), account.getOpenToken(), account.getFolderId(), share.getShareId(), share.getPassword(), share.getFolderId()));
+            } else if (share.getType() == 1) {
                 PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','');";
-                statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+                result = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+            } else if (share.getType() == 2) {
+                if (share.getFolderId().equals("root")) {
+                    share.setFolderId("");
+                }
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"root_folder_id\":\"%s\",\"cookie\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','');";
+                result = statement.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), share.getCookie()));
             }
+            log.info("insert result: {}", result);
 
             enableStorage(id, token);
         } catch (Exception e) {
@@ -457,11 +480,17 @@ public class ShareService {
     }
 
     private void validate(Share share) {
-        if (StringUtils.isBlank(share.getShareId())) {
-            throw new BadRequestException("分享ID不能为空");
-        }
-        if (StringUtils.isBlank(share.getPath())) {
-            throw new BadRequestException("挂载路径不能为空");
+        if (share.getType() == 2) {
+            if (StringUtils.isBlank(share.getCookie())) {
+                throw new BadRequestException("Cookie不能为空");
+            }
+        } else {
+            if (StringUtils.isBlank(share.getShareId())) {
+                throw new BadRequestException("分享ID不能为空");
+            }
+            if (StringUtils.isBlank(share.getPath())) {
+                throw new BadRequestException("挂载路径不能为空");
+            }
         }
         if (StringUtils.isBlank(share.getFolderId())) {
             share.setFolderId("root");
@@ -511,17 +540,17 @@ public class ShareService {
         int offset = pageable.getPageNumber() * size;
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
-            String sql = "select count(*) from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare'";
+            String sql = "select count(*) from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare' OR driver= 'Quark'";
             ResultSet rs = statement.executeQuery(sql);
             total = rs.getInt(1);
-            sql = "select * from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare' LIMIT " + size + " OFFSET " + offset;
+            sql = "select * from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare' OR driver= 'Quark' LIMIT " + size + " OFFSET " + offset;
             rs = statement.executeQuery(sql);
             while (rs.next()) {
                 ShareInfo shareInfo = new ShareInfo();
                 shareInfo.setId(rs.getInt("id"));
                 shareInfo.setPath(rs.getString("mount_path"));
                 shareInfo.setStatus(rs.getString("status"));
-                shareInfo.setType(rs.getString("driver").equals("PikPakShare") ? 1 : 0);
+                shareInfo.setType(getType(rs.getString("driver")));
                 String addition = rs.getString("addition");
                 if (StringUtils.isNotBlank(addition)) {
                     Map<String, String> map = objectMapper.readValue(addition, Map.class);
@@ -536,6 +565,17 @@ public class ShareService {
         }
 
         return new PageImpl<>(list, pageable, total);
+    }
+
+    private Integer getType(String driver) {
+        switch (driver) {
+            case "PikPakShare":
+                return 1;
+            case "Quark":
+                return 2;
+            default:
+                return 0;
+        }
     }
 
     public Object listStorages(Pageable pageable) {
