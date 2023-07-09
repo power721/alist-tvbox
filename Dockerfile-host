@@ -24,6 +24,8 @@ COPY target/application/ ./
 
 COPY data/version data/app_version
 
+EXPOSE 8080 80
+
 ENTRYPOINT ["/entrypoint.sh"]
 
 CMD ["5233", "--spring.profiles.active=production,xiaoya,host"]
