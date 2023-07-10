@@ -1,6 +1,8 @@
+ARG TAG=latest
+
 FROM haroldli/java:17 as corretto-jdk
 
-FROM xiaoyaliu/alist:latest
+FROM xiaoyaliu/alist:${TAG}
 
 LABEL MAINTAINER="Har01d"
 
