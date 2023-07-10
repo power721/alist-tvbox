@@ -35,11 +35,11 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /home/user/
 使用其它端口：
 
 - 第一个参数是挂载的数据目录，默认是/etc/xiaoya。
-- 第二个参数是管理界面端口，默认是5678。
-- 第三个参数是小雅AList端口，默认是5244。
+- 第二个参数是管理界面端口，默认是4567。
+- 第三个参数是小雅AList端口，默认是5344。
 ```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 5721
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 5721 5678
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 8080
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 8080 5344
 ```
 OpenWrt去掉sudo，或者已经是root账号：
 ```bash
@@ -84,7 +84,7 @@ bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 ![播放界面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/poster3.jpg)
 
 ## 管理
-打开管理网页：http://your-ip:5678/ 
+打开管理网页：http://your-ip:4567/ 
 
 默认用户名：admin 密码：admin
 
@@ -176,7 +176,7 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 Nginx代理/logs：
 ```text
     location /logs {
-        proxy_pass http://127.0.0.1:5678;
+        proxy_pass http://127.0.0.1:4567;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         chunked_transfer_encoding off;

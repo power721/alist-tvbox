@@ -9,4 +9,4 @@ app:
       xiaoya: true
 
 server:
-  port: 5678
+  port: 4567

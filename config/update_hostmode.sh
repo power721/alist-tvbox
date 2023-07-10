@@ -4,11 +4,11 @@ if [ $# -gt 0 ]; then
 	BASE_DIR=$1
 fi
 
-if docker ps | awk '{print $NF}' | grep -v xiaoya-tvbox | grep -v xiaoyakeeper | grep -v xiaoyaliu | grep -q xiaoya; then
-  echo -e "\e[33m原版小雅Docker容器运行中。\e[0m"
-  read -r -p "是否停止小雅Docker容器？[Y/N] " yn
+if docker ps | awk '{print $NF}' | grep -q alist-tvbox; then
+  echo -e "\e[33m独立版Docker容器运行中。\e[0m"
+  read -r -p "是否停止独立版Docker容器？[Y/N] " yn
   case $yn in
-      [Yy]* ) docker rm -f xiaoya xiaoya-hostmode 2>/dev/null;;
+      [Yy]* ) docker rm -f alist-tvbox 2>/dev/null;;
       [Nn]* ) exit 0;;
   esac
 fi
@@ -46,12 +46,13 @@ docker run -d --network host -v "$BASE_DIR":/data --restart=always --name=xiaoya
 
 IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head -1)
 if [ -n "$IP" ]; then
+  echo ""
   echo -e "\e[32m请用以下地址访问：\e[0m"
-  echo -e "    \e[32m管理界面\e[0m： http://$IP:5678/"
+  echo -e "    \e[32m管理界面\e[0m： http://$IP:4567/"
   echo -e "    \e[32m小雅AList\e[0m： http://$IP:6789/"
 else
   echo -e "\e[32m云服务器请用公网IP访问\e[0m"
 fi
 echo ""
 
-echo -e "\e[33m默认端口5678在未来将会变更为4567\e[0m"
+echo -e "\e[33m默认端口变更为4567\e[0m"

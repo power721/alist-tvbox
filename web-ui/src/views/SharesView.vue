@@ -27,7 +27,7 @@
     <el-table-column prop="type" label="类型" width="150" sortable>
       <template #default="scope">
         <span v-if="scope.row.type==1">PikPak分享</span>
-        <span v-if="scope.row.type==2">夸克网盘</span>
+        <span v-else-if="scope.row.type==2">夸克网盘</span>
         <span v-else>阿里云盘</span>
       </template>
     </el-table-column>
@@ -162,7 +162,7 @@
     <el-table-column prop="type" label="类型" width="150" sortable>
       <template #default="scope">
         <span v-if="scope.row.type==1">PikPak分享</span>
-        <span v-if="scope.row.type==2">夸克网盘</span>
+        <span v-else-if="scope.row.type==2">夸克网盘</span>
         <span v-else>阿里云盘</span>
       </template>
     </el-table-column>

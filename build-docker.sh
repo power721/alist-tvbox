@@ -1,3 +1,6 @@
+MOUNT=/etc/xiaoya
+PORT=4567
+
 rm -rf src/main/resources/static/assets && \
 cd web-ui && \
 npm run build || exit 1
@@ -12,19 +15,22 @@ mvn clean package || exit 1
 mv application-backup.yaml src/main/resources/application.yaml
 
 date +%j.%H%M > data/version
-docker build --tag=alist-tvbox:latest .
+docker build --tag=haroldli/alist-tvbox:latest .
 
-docker images | grep alist-tvbox
+echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
+echo -e "\e[36m端口映射：\e[0m $PORT:45670"
 
-docker run -d -p 18080:8080 --rm --name=alist-tvbox alist-tvbox
+docker run -d -p $PORT:4567 -v "$MOUNT":/data --name=alist-tvbox haroldli/alist-tvbox:latest
 
-docker image save alist-tvbox:latest > ~/alist-tvbox.tar
+sleep 1
 
-sleep 20
-
-docker logs alist-tvbox
-
-curl http://localhost:18080/vod
-
+IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head -1)
+if [ -n "$IP" ]; then
+  echo -e "\e[32m请用以下地址访问：\e[0m"
+  echo -e "    \e[32m管理界面\e[0m： http://$IP:$PORT/"
+else
+  echo -e "\e[32m云服务器请用公网IP访问\e[0m"
+fi
 echo ""
-docker rm -f alist-tvbox
+
+docker logs -f alist-tvbox

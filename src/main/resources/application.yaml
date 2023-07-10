@@ -22,6 +22,7 @@ spring:
 server:
   error:
     include-message: always
+  port: 4567
 
 app:
   sort: true

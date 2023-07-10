@@ -19,14 +19,14 @@ java -jar target/alist-tvbox-1.0.jar --server.port=5678
 # Docker
 ```bash
 ./build.sh
-docker run -d -p 5678:8080 --restart=always --name=alist-tvbox alist-tvbox
+docker run -d -p 5678:4567 --restart=always --name=alist-tvbox alist-tvbox
 ```
 Or run container from Docker hub.
 ```bash
-docker run -d -p 5678:8080 --restart=always --name=alist-tvbox haroldli/alist-tvbox
+docker run -d -p 5678:4567 --restart=always --name=alist-tvbox haroldli/alist-tvbox
 ```
 ```bash
-docker run -d -p 5678:8080 -p 5244:80 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+docker run -d -p 5678:4567 -p 5244:80 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 ```
 username: admin
 
@@ -36,7 +36,7 @@ password: admin
 ```json
 {
   "sites": [
-    {"key":"Alist","name":"AList","type":1,"api":"http://ip:5678/vod","searchable":1,"quickSearch":1,"filterable":1}
+    {"key":"Alist","name":"AList","type":1,"api":"http://ip:4567/vod","searchable":1,"quickSearch":1,"filterable":1}
   ],
   "rules": [
     {"host":"pdsapi.aliyundrive.com","rule":["/redirect"]},
@@ -46,7 +46,7 @@ password: admin
 }
 ```
 
-Or use this config url `http://ip:5678/sub/1`.
+Or use this config url `http://ip:4567/sub/1`.
 
 ### Customize
 Backed URL support multiple values, use comma as separator.
