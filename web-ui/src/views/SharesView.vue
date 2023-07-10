@@ -144,35 +144,6 @@
     </template>
   </el-dialog>
 
-  <el-divider/>
-
-  <h2>资源列表</h2>
-
-  <el-table :data="resources" border style="width: 100%">
-    <el-table-column prop="id" label="ID" width="70" sortable/>
-    <el-table-column prop="path" label="路径" width="380" sortable/>
-    <el-table-column prop="url" label="分享链接">
-      <template #default="scope">
-        <a v-if="scope.row.type==1" :href="getShareLink(scope.row)" target="_blank">https://mypikpak.com/s/{{scope.row.shareId}}</a>
-        <a v-else-if="scope.row.type==2" href="https://pan.quark.cn/" target="_blank">https://pan.quark.cn/</a>
-        <a v-else :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
-      </template>
-    </el-table-column>
-    <el-table-column prop="password" label="密码" width="180"/>
-    <el-table-column prop="type" label="类型" width="150" sortable>
-      <template #default="scope">
-        <span v-if="scope.row.type==1">PikPak分享</span>
-        <span v-else-if="scope.row.type==2">夸克网盘</span>
-        <span v-else>阿里云盘</span>
-      </template>
-    </el-table-column>
-    <el-table-column prop="status" label="状态" width="120"/>
-  </el-table>
-  <div>
-    <el-pagination layout="total, prev, pager, next" :current-page="page1" :page-size="size1" :total="total1"
-                   @current-change="loadResource"/>
-  </div>
-
 </template>
 
 <script setup lang="ts">
@@ -315,14 +286,6 @@ const getShareLink = (shareInfo: ShareInfo) => {
   return url
 }
 
-const loadResource = (value: number) => {
-  page1.value = value
-  axios.get('/resources?page=' + (page1.value - 1) + '&size=' + size1.value).then(({data}) => {
-    resources.value = data.content
-    total1.value = data.totalElements
-  })
-}
-
 const loadShares = (value: number) => {
   page.value = value
   axios.get('/shares?page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
@@ -362,7 +325,6 @@ const handleSelectionChange = (val: ShareInfo[]) => {
 
 onMounted(() => {
   loadShares(page.value)
-  loadResource(page.value)
 })
 </script>
 
