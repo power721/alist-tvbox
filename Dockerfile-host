@@ -1,21 +1,6 @@
-FROM haroldli/alist-base:hostmode as base
-
-FROM xiaoyaliu/alist:hostmode
+FROM haroldli/alist-base:hostmode
 
 LABEL MAINTAINER="Har01d"
-
-ENV JAVA_HOME=/jre
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
-
-VOLUME /opt/atv/data/
-
-WORKDIR /opt/atv/
-
-COPY index.sh /
-
-COPY --from=base /jre /jre
-
-COPY --from=base /opt/atv/ ./
 
 COPY init.sh /
 COPY entrypoint.sh /

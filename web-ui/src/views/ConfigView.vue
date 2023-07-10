@@ -147,6 +147,9 @@
         <el-form-item>
           <el-button type="primary" @click="updateDockerAddress">更新</el-button>
         </el-form-item>
+        <el-form-item>
+          <el-button @click="exportDatabase">导出数据库</el-button>
+        </el-form-item>
       </el-form>
       <template #footer>
       <span class="dialog-footer">
@@ -243,6 +246,12 @@ const updateDockerAddress = () => {
 const updateLogin = () => {
   axios.post('/login', login.value).then(() => {
     ElMessage.success('保存成功')
+  })
+}
+
+const exportDatabase = () => {
+  axios.post('/settings/export').then(() => {
+    ElMessage.success('导出数据库成功')
   })
 }
 

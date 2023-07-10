@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.service.SettingService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,9 +17,11 @@ import java.util.stream.Collectors;
 @RequestMapping("/settings")
 public class SettingController {
     private final SettingRepository settingRepository;
+    private final SettingService service;
 
-    public SettingController(SettingRepository settingRepository) {
+    public SettingController(SettingRepository settingRepository, SettingService service) {
         this.settingRepository = settingRepository;
+        this.service = service;
     }
 
     @GetMapping
@@ -37,4 +40,10 @@ public class SettingController {
     public Setting update(@RequestBody Setting setting) {
         return settingRepository.save(setting);
     }
+
+    @PostMapping("/export")
+    public void exportDatabase() {
+        service.exportDatabase();
+    }
+
 }
