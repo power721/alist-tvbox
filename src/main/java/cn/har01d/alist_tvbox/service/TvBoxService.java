@@ -609,6 +609,8 @@ public class TvBoxService {
             if (movie != null) {
                 fixCover(movie);
                 movieDetail.setVod_pic(movie.getCover());
+                movieDetail.setVod_year(String.valueOf(movie.getYear()));
+                movieDetail.setVod_remarks(movie.getDbScore());
                 if (!details) {
                     return;
                 }
@@ -616,8 +618,6 @@ public class TvBoxService {
                 movieDetail.setVod_director(movie.getDirectors());
                 movieDetail.setVod_area(movie.getCountry());
                 movieDetail.setType_name(movie.getGenre());
-                movieDetail.setVod_year(String.valueOf(movie.getYear()));
-                movieDetail.setVod_remarks(movie.getDbScore());
                 if (StringUtils.isNotEmpty(movie.getDescription())) {
                     movieDetail.setVod_content(movie.getDescription());
                 }

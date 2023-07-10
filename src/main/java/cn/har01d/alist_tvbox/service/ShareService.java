@@ -519,10 +519,10 @@ public class ShareService {
         int offset = pageable.getPageNumber() * size;
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
-            String sql = "select count(*) from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare' OR driver= 'Quark'";
+            String sql = "select count(*) from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare'";
             ResultSet rs = statement.executeQuery(sql);
             total = rs.getInt(1);
-            sql = "select * from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare' OR driver= 'Quark' LIMIT " + size + " OFFSET " + offset;
+            sql = "select * from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare' LIMIT " + size + " OFFSET " + offset;
             rs = statement.executeQuery(sql);
             while (rs.next()) {
                 ShareInfo shareInfo = new ShareInfo();
