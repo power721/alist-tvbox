@@ -13,20 +13,20 @@ mvn clean package
 sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
 ```
 ```bash
-java -jar target/alist-tvbox-1.0.jar --server.port=5678
+java -jar target/alist-tvbox-1.0.jar
 ```
 
 # Docker
 ```bash
 ./build.sh
-docker run -d -p 5678:4567 --restart=always --name=alist-tvbox alist-tvbox
+docker run -d -p 4567:4567 --restart=always --name=alist-tvbox alist-tvbox
 ```
 Or run container from Docker hub.
 ```bash
-docker run -d -p 5678:4567 --restart=always --name=alist-tvbox haroldli/alist-tvbox
+docker run -d -p 4567:4567 --restart=always --name=alist-tvbox haroldli/alist-tvbox
 ```
 ```bash
-docker run -d -p 5678:4567 -p 5244:80 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+docker run -d -p 4567:4567 -p 5344:80 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 ```
 username: admin
 

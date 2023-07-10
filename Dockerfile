@@ -15,6 +15,6 @@ WORKDIR /opt/atv/
 
 COPY target/alist-tvbox-1.0.jar ./alist-tvbox.jar
 
-EXPOSE 8080
+EXPOSE 4567
 
 ENTRYPOINT ["java", "-jar", "alist-tvbox.jar", "--spring.profiles.active=production,docker"]

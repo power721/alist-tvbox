@@ -64,7 +64,7 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 
 5234 - AList
 
-5678 - 管理应用
+4567 - 管理应用
 
 #### 独立版
 ```bash
