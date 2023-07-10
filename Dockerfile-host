@@ -1,4 +1,4 @@
-FROM haroldli/alist-base:hostmode
+FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 
