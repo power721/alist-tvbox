@@ -17,11 +17,11 @@ const logout = () => {
 }
 
 const close = () => {
-  localStorage.setItem('notification1', 'true')
+  localStorage.setItem('notification2', 'true')
 }
 
 onMounted(() => {
-  showNotification.value = localStorage.getItem('notification1') != 'true'
+  showNotification.value = localStorage.getItem('notification2') != 'true'
   axios.get("/profiles").then(({data}) => {
     show.value = data.includes('xiaoya')
     store.xiaoya = data.includes('xiaoya')
