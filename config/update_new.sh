@@ -43,6 +43,9 @@ done
 docker rm -f alist-tvbox && \
 docker run -d -p $PORT:4567 --restart=always -v "$BASE_DIR":/data --name=alist-tvbox haroldli/alist-tvbox:${tag}
 
+echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
+echo -e "    docker logs -f alist-tvbox\n"
+
 IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head -1)
 if [ -n "$IP" ]; then
   echo ""
