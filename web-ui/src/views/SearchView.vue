@@ -10,7 +10,7 @@
       <el-button type="primary" @click="search">搜索</el-button>
     </div>
 
-    <el-form-item label="类型" label-width="140">
+    <el-form-item label="类型" label-width="140" v-if="store.xiaoya">
       <el-radio-group v-model="type" class="ml-4">
         <el-radio label="" size="large">网盘模式</el-radio>
         <el-radio label="1" size="large">点播模式</el-radio>
@@ -27,6 +27,7 @@
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
 import axios from "axios"
+import {store} from "@/services/store";
 
 const token = ref('')
 const type = ref('')

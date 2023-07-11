@@ -106,7 +106,7 @@ public class TvBoxService {
 
         if (type != null && type == 1) {
             for (Site site : siteService.list()) {
-                if (type != null && type == 1 && (site.isXiaoya() && site.isSearchable() && !site.isDisabled())) {
+                if (site.isXiaoya() && site.isSearchable() && !site.isDisabled()) {
                     setTypes(result, site);
                     break;
                 }
@@ -479,7 +479,7 @@ public class TvBoxService {
 
         result.setPage(page);
         result.setTotal(total);
-        result.setLimit(size);
+        result.setLimit(result.getList().size());
         result.setPagecount((total + size - 1) / size);
         log.debug("list: {}", result);
         return result;
