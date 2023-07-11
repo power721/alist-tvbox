@@ -39,6 +39,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -144,11 +145,32 @@ public class TvBoxService {
         category.setType_name(site.getName());
         category.setType_flag(0);
         result.getCategories().add(category);
+
+        Path file = Paths.get("/data/category.txt");
+        if (Files.exists(file)) {
+            try {
+                for (String name : Files.readAllLines(file)) {
+                    if (StringUtils.isBlank(name)) {
+                        continue;
+                    }
+                    category = new Category();
+                    category.setType_id(site.getId() + "$/" + name);
+                    category.setType_name(name);
+                    category.setType_flag(0);
+                    result.getCategories().add(category);
+                }
+                return;
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+
         for (FsInfo fsInfo : aListService.listFiles(site, "/", 1, 20).getFiles()) {
             String name = fsInfo.getName();
             if (fsInfo.getType() != 1 || name.contains("v.") || name.contains("画质演示测试") || name.contains("指南") || name.contains("电子书") || name.contains("游戏")) {
                 continue;
             }
+            log.info("{}", name);
             category = new Category();
             category.setType_id(site.getId() + "$/" + name);
             category.setType_name(name);
