@@ -2,7 +2,7 @@
   <div class="search">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="currentUrl+'/vod'+token+'?wd=' + keyword" target="_blank">{{currentUrl}}/vod{{token}}?wd={{keyword}}</a>
+      <a :href="currentUrl+'/vod'+type+token+'?wd=' + keyword" target="_blank">{{currentUrl}}/vod{{type}}{{token}}?wd={{keyword}}</a>
     </div>
 
     <div>

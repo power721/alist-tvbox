@@ -151,6 +151,18 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 
 ![分享列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_shares.png)
 
+### 海报墙模式
+![海报](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_poster.jpg)
+
+添加一个小雅站点并打开搜索功能。
+
+订阅里面第二个源是海报墙模式。
+![源](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_source.jpg)
+
+可以自定义类别。在文件管理界面，添加一个文件/data/category.txt，内容是要显示的小雅目录。
+
+![类别](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_category.png)
+
 ### 配置
 ![配置页面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_config.png)
 

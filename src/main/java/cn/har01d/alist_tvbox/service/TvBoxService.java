@@ -33,7 +33,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -81,6 +80,17 @@ public class TvBoxService {
             new FilterValue("时间⬇️", "time,desc"),
             new FilterValue("大小⬆️", "size,asc"),
             new FilterValue("大小⬇️", "size,desc")
+    );
+    private final List<FilterValue> filters2 = Arrays.asList(
+            new FilterValue("原始顺序", ""),
+            new FilterValue("名字⬆️", "name,asc"),
+            new FilterValue("名字⬇️", "name,desc"),
+            new FilterValue("年份⬆️", "year,asc"),
+            new FilterValue("年份⬇️", "year,desc"),
+            new FilterValue("评分⬆️", "score,asc"),
+            new FilterValue("评分⬇️", "score,desc"),
+            new FilterValue("ID⬆️", "movie_id,asc"),
+            new FilterValue("ID⬇️", "movie_id,desc")
     );
 
     public TvBoxService(AccountRepository accountRepository,
@@ -147,9 +157,9 @@ public class TvBoxService {
         category.setType_flag(0);
         result.getCategories().add(category);
 
-        Path file = Paths.get("/data/category.txt");
-        if (Files.exists(file)) {
-            try {
+        try {
+            Path file = Paths.get("/data/category.txt");
+            if (Files.exists(file)) {
                 for (String name : Files.readAllLines(file)) {
                     if (StringUtils.isBlank(name)) {
                         continue;
@@ -159,24 +169,26 @@ public class TvBoxService {
                     category.setType_name(name);
                     category.setType_flag(0);
                     result.getCategories().add(category);
+                    result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters2));
                 }
                 return;
-            } catch (Exception e) {
-                log.warn("", e);
             }
+        } catch (Exception e) {
+            log.warn("", e);
         }
 
         for (FsInfo fsInfo : aListService.listFiles(site, "/", 1, 20).getFiles()) {
             String name = fsInfo.getName();
-            if (fsInfo.getType() != 1 || name.contains("v.") || name.contains("画质演示测试") || name.contains("指南") || name.contains("电子书") || name.contains("游戏")) {
+            if (fsInfo.getType() != 1 || name.contains("v.") || name.contains("画质演示测试") || name.contains("指南")
+                    || name.contains("电子书") || name.contains("游戏") || name.contains("我的")) {
                 continue;
             }
-            log.info("{}", name);
             category = new Category();
             category.setType_id(site.getId() + "$/" + name);
             category.setType_name(name);
             category.setType_flag(0);
             result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters2));
         }
     }
 

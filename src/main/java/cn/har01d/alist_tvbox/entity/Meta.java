@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
@@ -22,6 +23,10 @@ public class Meta {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
     private String path;
+    private String name;
+    @Column(name = "`year`")
+    private Integer year;
+    private Integer score;
     @OneToOne
     private Movie movie;
 }

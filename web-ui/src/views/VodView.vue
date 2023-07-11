@@ -2,7 +2,7 @@
   <div class="vod">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="url" target="_blank">{{ currentUrl }}/vod{{ token }}</a>
+      <a :href="url" target="_blank">{{ currentUrl }}/vod{{type}}{{ token }}</a>
     </div>
 
     <div>
