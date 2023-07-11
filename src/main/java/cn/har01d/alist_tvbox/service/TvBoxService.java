@@ -154,7 +154,7 @@ public class TvBoxService {
                         continue;
                     }
                     category = new Category();
-                    category.setType_id(site.getId() + "$/" + name);
+                    category.setType_id(site.getId() + "$" + fixPath("/" + name));
                     category.setType_name(name);
                     category.setType_flag(0);
                     result.getCategories().add(category);
