@@ -59,7 +59,7 @@ public class TvBoxController {
             throw new BadRequestException();
         }
 
-        log.info("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
+        log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("path: {}  folder: {} keyword: {}  sort: {}  page: {}", ids, t, wd, sort, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.startsWith("msearch:")) {

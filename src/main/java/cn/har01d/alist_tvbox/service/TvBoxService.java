@@ -101,9 +101,11 @@ public class TvBoxService {
             new FilterValue("ID⬇️", "movie_id,desc")
     );
     private final List<FilterValue> filters3 = Arrays.asList(
-            new FilterValue("普通", ""),
             new FilterValue("高分", "high"),
-            new FilterValue("全部", "all")
+            new FilterValue("普通", ""),
+            new FilterValue("全部", "all"),
+            new FilterValue("无分", "no"),
+            new FilterValue("低分", "low")
     );
 
     public TvBoxService(AccountRepository accountRepository,
@@ -652,6 +654,10 @@ public class TvBoxService {
             list = metaRepository.findByPathStartsWith(path, pageable);
         } else if ("high".equals(score)) {
             list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 80, pageable);
+        } else if ("low".equals(score)) {
+            list = metaRepository.findByPathStartsWithAndScoreLessThan(path, 60, pageable);
+        } else if ("no".equals(score)) {
+            list = metaRepository.findByPathStartsWithAndScoreIsNull(path, pageable);
         } else {
             list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 60, pageable);
         }
@@ -670,6 +676,7 @@ public class TvBoxService {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site.getId() + "$" + newPath);
             movieDetail.setVod_name(name);
+            movieDetail.setVod_pic(Constants.ALIST_PIC);
             setDoubanInfo(movieDetail, movie, false);
             files.add(movieDetail);
         }
