@@ -430,7 +430,9 @@ public class SubscriptionService {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         sites.removeIf(item -> key.equals(item.get("key")));
         sites.add(0, site);
-        sites.add(1, buildSite2());
+        if (appProperties.isXiaoya()) {
+            sites.add(1, buildSite2());
+        }
         log.debug("add AList site: {}", site);
     }
 

@@ -104,23 +104,25 @@ public class TvBoxService {
     public CategoryList getCategoryList(Integer type) {
         CategoryList result = new CategoryList();
 
-        int id = 1;
-        for (Site site : siteService.list()) {
-            Category category = new Category();
-            category.setType_id(site.getId() + "$/");
-            category.setType_name(site.getName());
-            result.getCategories().add(category);
-
-            if (type != null && type == 1) {
+        if (type != null && type == 1) {
+            for (Site site : siteService.list()) {
                 if (site.isXiaoya() && site.isSearchable() && !site.isDisabled()) {
-                    category.setType_flag(0);
+                    setTypes(result, site);
                     break;
                 }
             }
+        } else {
+            int id = 1;
+            for (Site site : siteService.list()) {
+                Category category = new Category();
+                category.setType_id(site.getId() + "$/");
+                category.setType_name(site.getName());
+                result.getCategories().add(category);
 
-            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
-            if (id++ == 1 && appProperties.isXiaoya()) {
-                addMyFavorite(result);
+                result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
+                if (id++ == 1 && appProperties.isXiaoya()) {
+                    addMyFavorite(result);
+                }
             }
         }
 
@@ -134,6 +136,25 @@ public class TvBoxService {
         result.setLimit(result.getCategories().size());
         log.debug("category: {}", result);
         return result;
+    }
+
+    private void setTypes(CategoryList result, Site site) {
+        Category category = new Category();
+        category.setType_id(site.getId() + "$/");
+        category.setType_name(site.getName());
+        category.setType_flag(0);
+        result.getCategories().add(category);
+        for (FsInfo fsInfo : aListService.listFiles(site, "/", 1, 20).getFiles()) {
+            String name = fsInfo.getName();
+            if (fsInfo.getType() != 1 || name.contains("v.") || name.contains("画质演示测试") || name.contains("指南") || name.contains("电子书") || name.contains("游戏")) {
+                continue;
+            }
+            category = new Category();
+            category.setType_id(site.getId() + "$/" + name);
+            category.setType_name(name);
+            category.setType_flag(0);
+            result.getCategories().add(category);
+        }
     }
 
     private void addMyFavorite(CategoryList result) {
@@ -458,7 +479,7 @@ public class TvBoxService {
 
         result.setPage(page);
         result.setTotal(total);
-        result.setLimit(size);
+        result.setLimit(result.getList().size());
         result.setPagecount((total + size - 1) / size);
         log.debug("list: {}", result);
         return result;
@@ -484,7 +505,7 @@ public class TvBoxService {
             pageable = PageRequest.of(page - 1, 30);
         }
 
-        Page<Meta> list = metaRepository.findAll(pageable);
+        Page<Meta> list = metaRepository.findByPathStartsWith(path, pageable);
 
         log.debug("{} {} {}", pageable, list, list.getContent().size());
         for (Meta meta : list) {
@@ -493,10 +514,7 @@ public class TvBoxService {
                 continue;
             }
 
-            String newPath = meta.getPath();
-            if (isMediaFile(newPath)) {
-                newPath = fixPath(newPath + "/" + PLAYLIST);
-            }
+            String newPath = fixPath(meta.getPath() + "/" + PLAYLIST);
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site.getId() + "$" + newPath);
             movieDetail.setVod_name(movie.getName());
