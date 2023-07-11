@@ -29,36 +29,51 @@ public class TvBoxController {
         this.subscriptionService = subscriptionService;
     }
 
+    @GetMapping("/vod1")
+    public Object api1(String t, String ids, String wd, String sort,
+                       @RequestParam(required = false, defaultValue = "1") Integer pg,
+                       HttpServletRequest request) {
+        return api("", t, ids, wd, sort, pg, 1, request);
+    }
+
+    @GetMapping("/vod1/{token}")
+    public Object api1(@PathVariable String token, String t, String ids, String wd, String sort,
+                       @RequestParam(required = false, defaultValue = "1") Integer pg,
+                       HttpServletRequest request) {
+        return api(token, t, ids, wd, sort, pg, 1, request);
+    }
+
     @GetMapping("/vod")
     public Object api(String t, String ids, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request) {
-        return api("", t, ids, wd, sort, pg, request);
+        return api("", t, ids, wd, sort, pg, 0, request);
     }
 
     @GetMapping("/vod/{token}")
     public Object api(@PathVariable String token, String t, String ids, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
+                      @RequestParam(required = false, defaultValue = "0") Integer type,
                       HttpServletRequest request) {
         if (!subscriptionService.getToken().equals(token)) {
             throw new BadRequestException();
         }
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        log.info("path: {}  folder: {} keyword: {}  sort: {}", ids, t, wd, sort);
+        log.info("path: {}  folder: {} keyword: {}  sort: {}  page: {}", ids, t, wd, sort, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.startsWith("msearch:")) {
-                return tvBoxService.msearch(ids.substring(8));
+                return tvBoxService.msearch(type, ids.substring(8));
             } else if (ids.equals("recommend")) {
                 return tvBoxService.recommend();
             }
-            return tvBoxService.getDetail(ids);
+            return tvBoxService.getDetail(type, ids);
         } else if (t != null && !t.isEmpty()) {
-            return tvBoxService.getMovieList(t, sort, pg);
+            return tvBoxService.getMovieList(type, t, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {
-            return tvBoxService.search(wd);
+            return tvBoxService.search(type, wd);
         } else {
-            return tvBoxService.getCategoryList();
+            return tvBoxService.getCategoryList(type);
         }
     }
 
