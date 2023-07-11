@@ -167,6 +167,7 @@ public class TvBoxService {
                     String name = path;
                     String[] parts = path.split(":");
                     if (parts.length == 2) {
+                        path = parts[0];
                         name = parts[1];
                     }
                     category = new Category();
