@@ -130,6 +130,7 @@ https://www.aliyundrive.com/drive/folder/640xxxxxxxxxxxxxxxxxxxca8a 最后一串
 
 ### 订阅
 tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
+
 ![订阅列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub.png)
 
 ![添加订阅](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub_config.png)
@@ -157,6 +158,7 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 添加一个小雅站点并打开搜索功能。
 
 订阅里面第二个源是海报墙模式。
+
 ![源](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_source.jpg)
 
 可以自定义类别。在文件管理界面，添加一个文件/data/category.txt，内容是要显示的小雅目录。
