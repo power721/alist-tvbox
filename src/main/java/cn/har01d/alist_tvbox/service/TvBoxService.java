@@ -83,12 +83,12 @@ public class TvBoxService {
     );
     private final List<FilterValue> filters2 = Arrays.asList(
             new FilterValue("原始顺序", ""),
-            new FilterValue("名字⬆️", "name,asc"),
-            new FilterValue("名字⬇️", "name,desc"),
-            new FilterValue("年份⬆️", "year,asc"),
-            new FilterValue("年份⬇️", "year,desc"),
-            new FilterValue("评分⬆️", "score,asc"),
-            new FilterValue("评分⬇️", "score,desc"),
+            new FilterValue("名字⬆️", "name,asc;year,asc"),
+            new FilterValue("名字⬇️", "name,desc;year,desc"),
+            new FilterValue("年份⬆️", "year,asc;name,asc"),
+            new FilterValue("年份⬇️", "year,desc;name,desc"),
+            new FilterValue("评分⬆️", "score,asc;name,asc"),
+            new FilterValue("评分⬇️", "score,desc;name,desc"),
             new FilterValue("ID⬆️", "movie_id,asc"),
             new FilterValue("ID⬇️", "movie_id,desc")
     );
@@ -160,12 +160,17 @@ public class TvBoxService {
         try {
             Path file = Paths.get("/data/category.txt");
             if (Files.exists(file)) {
-                for (String name : Files.readAllLines(file)) {
-                    if (StringUtils.isBlank(name)) {
+                for (String path : Files.readAllLines(file)) {
+                    if (StringUtils.isBlank(path)) {
                         continue;
                     }
+                    String name = path;
+                    String[] parts = path.split(":");
+                    if (parts.length == 2) {
+                        name = parts[1];
+                    }
                     category = new Category();
-                    category.setType_id(site.getId() + "$" + fixPath("/" + name));
+                    category.setType_id(site.getId() + "$" + fixPath("/" + path));
                     category.setType_name(name);
                     category.setType_flag(0);
                     result.getCategories().add(category);
@@ -533,8 +538,13 @@ public class TvBoxService {
 
         Pageable pageable;
         if (StringUtils.isNotBlank(sort)) {
-            String[] parts = sort.split(",");
-            Sort sort1 = Sort.by(parts[1].equals("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, parts[0]);
+            List<Sort.Order> orders = new ArrayList<>();
+            for (String item : sort.split(";")) {
+                String[] parts = item.split(",");
+                Sort.Order order = parts[1].equals("asc") ? Sort.Order.asc(parts[0]) : Sort.Order.desc(parts[0]);
+                orders.add(order);
+            }
+            Sort sort1 = Sort.by(orders);
             pageable = PageRequest.of(page - 1, 30, sort1);
         } else {
             pageable = PageRequest.of(page - 1, 30);

@@ -4,6 +4,8 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.entity.Subscription;
 import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
@@ -60,6 +62,7 @@ public class SubscriptionService {
     private final JdbcTemplate jdbcTemplate;
     private final SettingRepository settingRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final SiteRepository siteRepository;
 
     private String token = "";
 
@@ -69,7 +72,8 @@ public class SubscriptionService {
                                ObjectMapper objectMapper,
                                JdbcTemplate jdbcTemplate,
                                SettingRepository settingRepository,
-                               SubscriptionRepository subscriptionRepository) {
+                               SubscriptionRepository subscriptionRepository,
+                               SiteRepository siteRepository) {
         this.environment = environment;
         this.appProperties = appProperties;
         this.restTemplate = builder
@@ -80,6 +84,7 @@ public class SubscriptionService {
         this.jdbcTemplate = jdbcTemplate;
         this.settingRepository = settingRepository;
         this.subscriptionRepository = subscriptionRepository;
+        this.siteRepository = siteRepository;
     }
 
     @PostConstruct
@@ -431,7 +436,12 @@ public class SubscriptionService {
         sites.removeIf(item -> key.equals(item.get("key")));
         sites.add(0, site);
         if (appProperties.isXiaoya()) {
-            sites.add(1, buildSite2());
+            for (Site site1 : siteRepository.findAll()) {
+                if (site1.isSearchable() && !site1.isDisabled()) {
+                    sites.add(1, buildSite2(site1.getName()));
+                    break;
+                }
+            }
         }
         log.debug("add AList site: {}", site);
     }
@@ -450,12 +460,12 @@ public class SubscriptionService {
         return site;
     }
 
-    private Map<String, Object> buildSite2() {
+    private Map<String, Object> buildSite2(String name) {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
         builder.replacePath("/vod1" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
         site.put("key", "AListVod");
-        site.put("name", "小雅");
+        site.put("name", name);
         site.put("type", 1);
         site.put("api", builder.build().toUriString());
         site.put("searchable", 1);
