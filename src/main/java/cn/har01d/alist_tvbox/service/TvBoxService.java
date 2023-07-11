@@ -110,14 +110,15 @@ public class TvBoxService {
             category.setType_id(site.getId() + "$/");
             category.setType_name(site.getName());
             result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
 
             if (type != null && type == 1) {
                 if (site.isXiaoya() && site.isSearchable() && !site.isDisabled()) {
+                    category.setType_flag(0);
                     break;
                 }
             }
 
+            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
             if (id++ == 1 && appProperties.isXiaoya()) {
                 addMyFavorite(result);
             }
@@ -180,10 +181,6 @@ public class TvBoxService {
     }
 
     public MovieList search(Integer type, String keyword) {
-        if (type == 1) {
-
-        }
-
         MovieList result = new MovieList();
         List<Future<List<MovieDetail>>> futures = new ArrayList<>();
         for (Site site : siteService.list()) {
@@ -241,6 +238,7 @@ public class TvBoxService {
         Set<String> lines = Files.readAllLines(Paths.get(indexFile))
                 .stream()
                 .filter(path -> keywords.stream().allMatch(path::contains))
+                .limit(appProperties.getMaxSearchResult())
                 .collect(Collectors.toSet());
 
         List<MovieDetail> list = new ArrayList<>();
@@ -269,7 +267,7 @@ public class TvBoxService {
             }
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site.getId() + "$" + path);
-            movieDetail.setVod_name(site.getName() + ":" + line);
+            movieDetail.setVod_name(getNameFromPath(line));
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_tag(FILE);
             if (!isMediaFile) {
@@ -349,13 +347,16 @@ public class TvBoxService {
                 }
             }
             movieDetail.setVod_id(site.getId() + "$" + path);
-            movieDetail.setVod_name(name);
+            movieDetail.setVod_name(getNameFromPath(name));
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_tag(FILE);
             if (!isMediaFile) {
                 setDoubanInfo(site, movieDetail, getParent(path), false);
             }
             list.add(movieDetail);
+            if (list.size() > appProperties.getMaxSearchResult()) {
+                break;
+            }
         }
 
         log.debug("{}", list);
@@ -788,6 +789,18 @@ public class TvBoxService {
         int index = path.lastIndexOf('/');
         if (index > 0) {
             return path.substring(0, index);
+        }
+        return path;
+    }
+
+    private String getNameFromPath(String path) {
+        String[] parts = path.split("#");
+        if (parts.length > 1) {
+            return parts[1];
+        }
+        int index = path.lastIndexOf('/');
+        if (index > 0) {
+            return path.substring(index + 1);
         }
         return path;
     }
