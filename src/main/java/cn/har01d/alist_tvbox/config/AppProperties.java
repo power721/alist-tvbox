@@ -14,6 +14,7 @@ public class AppProperties {
     private boolean hostmode;
     private boolean sort;
     private int pageSize = 100;
+    private int maxSearchResult = 100;
     private String secretKey;
     private Set<String> formats;
     private List<Site> sites;

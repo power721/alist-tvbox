@@ -430,6 +430,7 @@ public class SubscriptionService {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         sites.removeIf(item -> key.equals(item.get("key")));
         sites.add(0, site);
+        sites.add(1, buildSite2());
         log.debug("add AList site: {}", site);
     }
 
@@ -439,6 +440,20 @@ public class SubscriptionService {
         builder.replacePath("/vod" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
         site.put("key", key);
         site.put("name", "AList");
+        site.put("type", 1);
+        site.put("api", builder.build().toUriString());
+        site.put("searchable", 1);
+        site.put("quickSearch", 1);
+        site.put("filterable", 1);
+        return site;
+    }
+
+    private Map<String, Object> buildSite2() {
+        Map<String, Object> site = new HashMap<>();
+        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
+        builder.replacePath("/vod1" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
+        site.put("key", "AListVod");
+        site.put("name", "小雅");
         site.put("type", 1);
         site.put("api", builder.build().toUriString());
         site.put("searchable", 1);
