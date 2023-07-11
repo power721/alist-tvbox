@@ -485,6 +485,7 @@ public class TvBoxService {
 
         Page<Meta> list = metaRepository.findAll(pageable);
 
+        log.debug("{} {} {}", pageable, list, list.getContent().size());
         for (Meta meta : list) {
             Movie movie = meta.getMovie();
             if (movie == null) {
@@ -498,7 +499,7 @@ public class TvBoxService {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site.getId() + "$" + newPath);
             movieDetail.setVod_name(movie.getName());
-            setDoubanInfo(movieDetail, movie, true);
+            setDoubanInfo(movieDetail, movie, false);
             files.add(movieDetail);
         }
 
@@ -729,7 +730,7 @@ public class TvBoxService {
 
     private static void fixCover(Movie movie) {
         try {
-            if (movie.getCover() != null && !movie.getCover().isEmpty()) {
+            if (movie.getCover() != null && !movie.getCover().isEmpty() && !movie.getCover().contains("/images")) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
                         .replacePath("/images")
                         .query("url=" + movie.getCover())
