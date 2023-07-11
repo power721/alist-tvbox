@@ -6,8 +6,10 @@ import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Meta;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
 import cn.har01d.alist_tvbox.entity.Movie;
+import cn.har01d.alist_tvbox.entity.MovieRepository;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.model.FileNameInfo;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
@@ -20,6 +22,7 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
@@ -33,6 +36,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -45,6 +49,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -64,6 +69,8 @@ public class TvBoxService {
     private final AccountRepository accountRepository;
     private final ShareRepository shareRepository;
     private final MetaRepository metaRepository;
+    private final MovieRepository movieRepository;
+    private final SiteRepository siteRepository;
 
     private final AListService aListService;
     private final IndexService indexService;
@@ -71,6 +78,7 @@ public class TvBoxService {
     private final AppProperties appProperties;
     private final DoubanService doubanService;
     private final SubscriptionService subscriptionService;
+    private final ObjectMapper objectMapper;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -92,25 +100,101 @@ public class TvBoxService {
             new FilterValue("ID⬆️", "movie_id,asc"),
             new FilterValue("ID⬇️", "movie_id,desc")
     );
+    private final List<FilterValue> filters3 = Arrays.asList(
+            new FilterValue("普通", ""),
+            new FilterValue("高分", "high"),
+            new FilterValue("全部", "all")
+    );
 
     public TvBoxService(AccountRepository accountRepository,
                         ShareRepository shareRepository,
                         MetaRepository metaRepository,
+                        MovieRepository movieRepository,
+                        SiteRepository siteRepository,
                         AListService aListService,
                         IndexService indexService,
                         SiteService siteService,
                         AppProperties appProperties,
                         DoubanService doubanService,
-                        SubscriptionService subscriptionService) {
+                        SubscriptionService subscriptionService,
+                        ObjectMapper objectMapper) {
         this.accountRepository = accountRepository;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
+        this.movieRepository = movieRepository;
+        this.siteRepository = siteRepository;
         this.aListService = aListService;
         this.indexService = indexService;
         this.siteService = siteService;
         this.appProperties = appProperties;
         this.doubanService = doubanService;
         this.subscriptionService = subscriptionService;
+        this.objectMapper = objectMapper;
+    }
+
+    @PostConstruct
+    public void setup() {
+        try {
+            loadMeta();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    private void loadMeta() throws IOException {
+        if (appProperties.isXiaoya()) {
+            for (Site site : siteRepository.findAll()) {
+                if (site.isSearchable() && !site.isDisabled()) {
+                    loadMeta(site);
+                    return;
+                }
+            }
+        }
+    }
+
+    private void loadMeta(Site site) throws IOException {
+        Path file = Paths.get("/data/index/" + site.getId() + "/custom_index.txt");
+        if (Files.exists(file)) {
+            loadMetaFromIndexFile(file);
+        }
+    }
+
+    private void loadMetaFromIndexFile(Path file) throws IOException {
+        List<String> lines = Files.readAllLines(file);
+        for (String line : lines) {
+            try {
+                String[] parts = line.split("#");
+                String path = line;
+                if (parts.length > 1) {
+                    path = parts[0];
+                }
+
+                if (metaRepository.existsByPath(path)) {
+                    continue;
+                }
+
+                Meta meta = new Meta();
+                meta.setPath(path);
+                Movie movie = null;
+                if (parts.length > 2) {
+                    movie = movieRepository.findById(Integer.parseInt(parts[2])).orElse(null);
+                } else if (parts.length > 1) {
+                    meta.setName(parts[1]);
+                }
+
+                if (movie != null) {
+                    meta.setMovie(movie);
+                    meta.setYear(movie.getYear());
+                    meta.setName(movie.getName());
+                    if (StringUtils.isNotBlank(movie.getDbScore())) {
+                        meta.setScore((int) (Double.parseDouble(movie.getDbScore()) * 10));
+                    }
+                }
+                metaRepository.save(meta);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
     }
 
     public CategoryList getCategoryList(Integer type) {
@@ -131,7 +215,7 @@ public class TvBoxService {
                 category.setType_name(site.getName());
                 result.getCategories().add(category);
 
-                result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
                 if (id++ == 1 && appProperties.isXiaoya()) {
                     addMyFavorite(result);
                 }
@@ -156,6 +240,7 @@ public class TvBoxService {
         category.setType_name(site.getName());
         category.setType_flag(0);
         result.getCategories().add(category);
+        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
 
         try {
             Path file = Paths.get("/data/category.txt");
@@ -175,7 +260,7 @@ public class TvBoxService {
                     category.setType_name(name);
                     category.setType_flag(0);
                     result.getCategories().add(category);
-                    result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters2));
+                    result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
                 }
                 return;
             }
@@ -194,7 +279,7 @@ public class TvBoxService {
             category.setType_name(name);
             category.setType_flag(0);
             result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters2));
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
         }
     }
 
@@ -204,7 +289,7 @@ public class TvBoxService {
             category.setType_id("1$/\uD83D\uDCC0我的阿里云盘");
             category.setType_name("我的云盘");
             result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
         int pp = shareRepository.countByType(1);
@@ -213,7 +298,7 @@ public class TvBoxService {
             category.setType_id("1$/\uD83C\uDE34我的阿里分享");
             category.setType_name("阿里分享");
             result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
         if (pp > 0) {
@@ -221,7 +306,7 @@ public class TvBoxService {
             category.setType_id("1$/\uD83D\uDD78️我的PikPak分享");
             category.setType_name("PikPak");
             result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), new Filter("sort", "排序", filters));
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
     }
 
@@ -463,9 +548,9 @@ public class TvBoxService {
         return siteService.getByName(id);
     }
 
-    public MovieList getMovieList(Integer type, String tid, String sort, int page) {
+    public MovieList getMovieList(Integer type, String tid, String filter, String sort, int page) {
         if (type == 1) {
-            return getMetaList(tid, sort, page);
+            return getMetaList(tid, filter, sort, page);
         }
 
         int index = tid.indexOf('$');
@@ -526,7 +611,7 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList getMetaList(String tid, String sort, int page) {
+    public MovieList getMetaList(String tid, String filter, String sort, int page) {
         int index = tid.indexOf('$');
         Site site = getSite(tid);
         String path = tid.substring(index + 1);
@@ -538,6 +623,17 @@ public class TvBoxService {
         MovieList result = new MovieList();
 
         Pageable pageable;
+        String score = "";
+        if (StringUtils.isNotBlank(filter)) {
+            try {
+                Map<String, String> map = objectMapper.readValue(filter, Map.class);
+                score = map.getOrDefault("score", "");
+                sort = map.getOrDefault("sort", sort);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+
         if (StringUtils.isNotBlank(sort)) {
             List<Sort.Order> orders = new ArrayList<>();
             for (String item : sort.split(";")) {
@@ -551,7 +647,14 @@ public class TvBoxService {
             pageable = PageRequest.of(page - 1, 30);
         }
 
-        Page<Meta> list = metaRepository.findByPathStartsWith(path, pageable);
+        Page<Meta> list;
+        if ("all".equals(score)) {
+            list = metaRepository.findByPathStartsWith(path, pageable);
+        } else if ("high".equals(score)) {
+            list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 80, pageable);
+        } else {
+            list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 60, pageable);
+        }
 
         log.debug("{} {} {}", pageable, list, list.getContent().size());
         for (Meta meta : list) {

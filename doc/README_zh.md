@@ -1,5 +1,5 @@
 # AList-TvBox
-AList代理，支持xioaya版AList界面管理。
+AList代理，支持xiaoya版AList界面管理。
 ## 功能
 - 管理界面
 - 海报墙

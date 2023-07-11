@@ -30,28 +30,28 @@ public class TvBoxController {
     }
 
     @GetMapping("/vod1")
-    public Object api1(String t, String ids, String wd, String sort,
+    public Object api1(String t, String f, String ids, String wd, String sort,
                        @RequestParam(required = false, defaultValue = "1") Integer pg,
                        HttpServletRequest request) {
-        return api("", t, ids, wd, sort, pg, 1, request);
+        return api("", t, f, ids, wd, sort, pg, 1, request);
     }
 
     @GetMapping("/vod1/{token}")
-    public Object api1(@PathVariable String token, String t, String ids, String wd, String sort,
+    public Object api1(@PathVariable String token, String t, String f, String ids, String wd, String sort,
                        @RequestParam(required = false, defaultValue = "1") Integer pg,
                        HttpServletRequest request) {
-        return api(token, t, ids, wd, sort, pg, 1, request);
+        return api(token, t, f, ids, wd, sort, pg, 1, request);
     }
 
     @GetMapping("/vod")
-    public Object api(String t, String ids, String wd, String sort,
+    public Object api(String t, String f, String ids, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request) {
-        return api("", t, ids, wd, sort, pg, 0, request);
+        return api("", t, ids, f, wd, sort, pg, 0, request);
     }
 
     @GetMapping("/vod/{token}")
-    public Object api(@PathVariable String token, String t, String ids, String wd, String sort,
+    public Object api(@PathVariable String token, String t, String f, String ids, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       @RequestParam(required = false, defaultValue = "0") Integer type,
                       HttpServletRequest request) {
@@ -59,7 +59,7 @@ public class TvBoxController {
             throw new BadRequestException();
         }
 
-        log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
+        log.info("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("path: {}  folder: {} keyword: {}  sort: {}  page: {}", ids, t, wd, sort, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.startsWith("msearch:")) {
@@ -69,7 +69,7 @@ public class TvBoxController {
             }
             return tvBoxService.getDetail(type, ids);
         } else if (t != null && !t.isEmpty()) {
-            return tvBoxService.getMovieList(type, t, sort, pg);
+            return tvBoxService.getMovieList(type, t, f, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {
             return tvBoxService.search(type, wd);
         } else {

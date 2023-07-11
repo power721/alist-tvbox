@@ -18,5 +18,5 @@ public class CategoryList {
     @JsonProperty("class")
     private List<Category> categories = new ArrayList<>();
     private List<MovieDetail> list = new ArrayList<>();
-    private Map<String, Filter> filters = new HashMap<>();
+    private Map<String, List<Filter>> filters = new HashMap<>();
 }

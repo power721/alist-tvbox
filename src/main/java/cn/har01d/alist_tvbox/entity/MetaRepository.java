@@ -8,4 +8,5 @@ public interface MetaRepository extends JpaRepository<Meta, Integer> {
     Meta findByPath(String path);
     boolean existsByPath(String path);
     Page<Meta> findByPathStartsWith(String prefix, Pageable pageable);
+    Page<Meta> findByPathStartsWithAndScoreGreaterThanEqual(String prefix, Integer score, Pageable pageable);
 }
