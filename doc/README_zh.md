@@ -154,6 +154,7 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 
 ### 海报墙模式
 ![海报](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_poster.jpg)
+![海报1](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_poster1.jpg)
 
 添加一个小雅站点并打开搜索功能。
 
