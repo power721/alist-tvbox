@@ -888,6 +888,7 @@ public class TvBoxService {
         movieDetail.setVod_director(movie.getDirectors());
         movieDetail.setVod_area(movie.getCountry());
         movieDetail.setType_name(movie.getGenre());
+        movieDetail.setVod_lang(movie.getLanguage());
         if (StringUtils.isNotEmpty(movie.getDescription())) {
             movieDetail.setVod_content(movie.getDescription());
         }
