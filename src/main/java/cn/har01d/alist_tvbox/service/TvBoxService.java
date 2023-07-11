@@ -33,6 +33,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -532,14 +533,17 @@ public class TvBoxService {
         log.debug("{} {} {}", pageable, list, list.getContent().size());
         for (Meta meta : list) {
             Movie movie = meta.getMovie();
+            String name;
             if (movie == null) {
-                continue;
+                name = getNameFromPath(meta.getPath());
+            } else {
+                name = movie.getName();
             }
 
             String newPath = fixPath(meta.getPath() + "/" + PLAYLIST);
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site.getId() + "$" + newPath);
-            movieDetail.setVod_name(movie.getName());
+            movieDetail.setVod_name(name);
             setDoubanInfo(movieDetail, movie, false);
             files.add(movieDetail);
         }
@@ -737,6 +741,9 @@ public class TvBoxService {
     }
 
     private static void setDoubanInfo(MovieDetail movieDetail, Movie movie, boolean details) {
+        if (movie == null) {
+            return;
+        }
         fixCover(movie);
         movieDetail.setVod_pic(movie.getCover());
         movieDetail.setVod_year(String.valueOf(movie.getYear()));
