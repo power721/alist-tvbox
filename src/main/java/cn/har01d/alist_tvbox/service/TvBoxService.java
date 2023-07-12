@@ -240,7 +240,7 @@ public class TvBoxService {
 
     private void setTypes(CategoryList result, Site site) {
         Category category = new Category();
-        category.setType_id(site.getId() + "$/?type=1");
+        category.setType_id(site.getId() + "$/");
         category.setType_name("\uD83C\uDFAC" + site.getName());
         category.setType_flag(0);
         result.getCategories().add(category);
@@ -271,7 +271,7 @@ public class TvBoxService {
                         name = parts[1];
                     }
                     category = new Category();
-                    category.setType_id(site.getId() + "$" + fixPath("/" + path) + "?type=1");
+                    category.setType_id(site.getId() + "$" + fixPath("/" + path));
                     category.setType_name(name);
                     category.setType_flag(0);
                     typeId = category.getType_id();
@@ -291,7 +291,7 @@ public class TvBoxService {
                 continue;
             }
             category = new Category();
-            category.setType_id(site.getId() + "$/" + name + "?type=1");
+            category.setType_id(site.getId() + "$/" + name);
             category.setType_name(name);
             category.setType_flag(0);
             result.getCategories().add(category);
