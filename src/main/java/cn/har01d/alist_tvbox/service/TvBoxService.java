@@ -272,7 +272,7 @@ public class TvBoxService {
                     }
                     category = new Category();
                     category.setType_id(site.getId() + "$" + fixPath("/" + path));
-                    category.setType_name(name);
+                    category.setType_name((appProperties.isMerge() ? "\uD83C\uDFAC" : "") + name);
                     category.setType_flag(0);
                     typeId = category.getType_id();
                     result.getCategories().add(category);
@@ -300,7 +300,11 @@ public class TvBoxService {
     }
 
     private void addFilters(CategoryList result, String typeId, List<FilterValue> filters) {
-        result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
+        if (filters.size() <= 1) {
+            result.getFilters().put(typeId, List.of(new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
+        } else {
+            result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
+        }
     }
 
     private static void setFilterValue(List<FilterValue> filters, String path) {
@@ -347,16 +351,16 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList msearch(Integer type, String keyword) {
+    public MovieList msearch(String keyword) {
         String name = TextUtils.fixName(keyword);
-        MovieList result = search(type, name);
+        MovieList result = search(name);
         if (result.getTotal() > 0) {
-            return getDetail(type, result.getList().get(0).getVod_id());
+            return getDetail(result.getList().get(0).getVod_id());
         }
         return result;
     }
 
-    public MovieList search(Integer type, String keyword) {
+    public MovieList search(String keyword) {
         MovieList result = new MovieList();
         List<Future<List<MovieDetail>>> futures = new ArrayList<>();
         for (Site site : siteService.list()) {
@@ -787,7 +791,7 @@ public class TvBoxService {
         return url;
     }
 
-    public MovieList getDetail(Integer type, String tid) {
+    public MovieList getDetail(String tid) {
         int index = tid.indexOf('$');
         Site site = getSite(tid);
         String path = tid.substring(index + 1);
