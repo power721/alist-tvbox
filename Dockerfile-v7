@@ -1,6 +1,6 @@
 ARG TAG=latest
 
-FROM arm32v7/adoptopenjdk:11-jre as adoptopenjdk
+FROM arm32v7/eclipse-temurin:17-jre as adoptopenjdk
 
 FROM xiaoyaliu/alist:${TAG}
 
