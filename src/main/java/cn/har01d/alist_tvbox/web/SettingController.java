@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/settings")
@@ -26,9 +25,7 @@ public class SettingController {
 
     @GetMapping
     public Map<String, String> findAll() {
-        Map<String, String> map = settingRepository.findAll().stream().collect(Collectors.toMap(Setting::getName, Setting::getValue));
-        map.remove("atv_password");
-        return map;
+        return service.findAll();
     }
 
     @GetMapping("/{name}")
@@ -38,7 +35,7 @@ public class SettingController {
 
     @PostMapping
     public Setting update(@RequestBody Setting setting) {
-        return settingRepository.save(setting);
+        return service.update(setting);
     }
 
     @PostMapping("/export")

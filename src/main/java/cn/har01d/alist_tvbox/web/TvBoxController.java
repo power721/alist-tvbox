@@ -60,7 +60,7 @@ public class TvBoxController {
         }
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        log.info("path: {}  folder: {} keyword: {}  sort: {}  page: {}", ids, t, wd, sort, pg);
+        log.info("path: {}  folder: {} keyword: {}  filter: {}  sort: {}  page: {}", ids, t, wd, f, sort, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.startsWith("msearch:")) {
                 return tvBoxService.msearch(type, ids.substring(8));

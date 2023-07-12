@@ -11,8 +11,6 @@ rm -rf src/main/resources/static/assets && \
 cd web-ui && \
 npm run build || exit 1
 cd .. && \
-git add src/main/resources/static
-
 mvn clean package || exit 1
 
 cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
