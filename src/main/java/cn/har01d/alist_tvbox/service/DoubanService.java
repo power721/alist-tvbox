@@ -57,7 +57,7 @@ public class DoubanService {
     @PostConstruct
     public void setup() {
         try {
-            Path path = Paths.get("data/movie_version");
+            Path path = Paths.get("/data/atv/movie_version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
