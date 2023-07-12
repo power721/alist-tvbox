@@ -164,11 +164,18 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 
 可以自定义类别。在文件管理界面，添加一个文件/data/category.txt，内容是要显示的小雅目录，不能包含别名，没有数据。
 
-可以自定义名称，冒号后面是自定义的名字。
+可以自定义名称，冒号后面是自定义的名字。 在分类下面可以加子目录作为筛选条件，用两个空格开始。
 
-/每日更新/电视剧/国产剧:国产剧
+<pre>
+每日更新
+  电视剧/国产剧
+  电视剧/美剧
+  美剧（已刮削）:美剧
+</pre>
 
 ![类别](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_category.png)
+
+![filter](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_filter.jpg)
 
 ### 配置
 ![配置页面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_config.png)

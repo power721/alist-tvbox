@@ -303,7 +303,7 @@ public class TvBoxService {
         if (filters.size() <= 1) {
             result.getFilters().put(typeId, List.of(new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
         } else {
-            result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
+            result.getFilters().put(typeId, List.of(new Filter("dir", "目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
         }
     }
 
@@ -312,7 +312,7 @@ public class TvBoxService {
         if (parts.length == 2) {
             filters.add(new FilterValue(parts[1].trim(), parts[0].trim()));
         } else {
-            filters.add(new FilterValue(path.trim(), path.trim()));
+            filters.add(new FilterValue(getNameFromPath(path.trim()), path.trim()));
         }
     }
 
@@ -900,9 +900,7 @@ public class TvBoxService {
                 movie = doubanService.getByName(movieDetail.getVod_name());
             }
 
-            if (movie != null) {
-                setDoubanInfo(movieDetail, movie, details);
-            }
+            setDoubanInfo(movieDetail, movie, details);
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -1009,7 +1007,7 @@ public class TvBoxService {
         return path;
     }
 
-    private String getNameFromPath(String path) {
+    private static String getNameFromPath(String path) {
         String[] parts = path.split("#");
         if (parts.length > 1) {
             return parts[1];
