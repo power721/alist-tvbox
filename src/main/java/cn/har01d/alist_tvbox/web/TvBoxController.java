@@ -47,13 +47,13 @@ public class TvBoxController {
     public Object api(String t, String f, String ids, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request) {
-        return api("", t, f, ids, wd, sort, pg, null, request);
+        return api("", t, f, ids, wd, sort, pg, 0, request);
     }
 
     @GetMapping("/vod/{token}")
     public Object api(@PathVariable String token, String t, String f, String ids, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
-                      @RequestParam(required = false) Integer type,
+                      @RequestParam(required = false, defaultValue = "0") Integer type,
                       HttpServletRequest request) {
         if (!subscriptionService.getToken().equals(token)) {
             throw new BadRequestException();
