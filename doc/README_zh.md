@@ -98,7 +98,7 @@ bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 为什么是`http://localhost`？ 因为小雅用80端口代理了容器内的AList 5244端口。
 管理程序运行在同一个容器内，能够直接访问80端口。
 
-访问AList，请加端口，http://your-ip:5244/ 。使用Docker映射的端口，默认是5244.
+访问AList，请加端口，http://your-ip:5344/ 。使用Docker映射的端口，默认是5344.
 
 自己可以添加三方站点，取代了xiaoya的套娃。会自动识别版本，如果不能正确识别，请手动配置版本。
 
@@ -162,7 +162,7 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 
 ![源](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_source.jpg)
 
-可以自定义类别。在文件管理界面，添加一个文件/data/category.txt，内容是要显示的小雅目录，不能包含别名，没有数据。
+可以自定义类别。在文件管理界面，添加一个文件/data/category.txt，内容是要显示的小雅目录。不能包含别名，没有数据。
 
 可以自定义名称，冒号后面是自定义的名字。 在分类下面可以加子目录作为筛选条件，用两个空格开始。
 
