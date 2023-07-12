@@ -247,9 +247,20 @@ public class TvBoxService {
         try {
             Path file = Paths.get("/data/category.txt");
             if (Files.exists(file)) {
+                String typeId = "";
+                List<FilterValue> filters = new ArrayList<>();
+                filters.add(new FilterValue("", ""));
                 for (String path : Files.readAllLines(file)) {
                     if (StringUtils.isBlank(path)) {
                         continue;
+                    }
+                    if (path.startsWith("  ")) {
+                        filters.add(new FilterValue(path.trim(), path.trim()));
+                        continue;
+                    } else if (!typeId.isEmpty()) {
+                        result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
+                        filters = new ArrayList<>();
+                        filters.add(new FilterValue("", ""));
                     }
                     String name = path;
                     String[] parts = path.split(":");
@@ -261,9 +272,10 @@ public class TvBoxService {
                     category.setType_id(site.getId() + "$" + fixPath("/" + path));
                     category.setType_name(name);
                     category.setType_flag(0);
+                    typeId = category.getType_id();
                     result.getCategories().add(category);
-                    result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
                 }
+                result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
                 return;
             }
         } catch (Exception e) {
@@ -626,11 +638,13 @@ public class TvBoxService {
 
         Pageable pageable;
         String score = "";
+        String dir = "";
         if (StringUtils.isNotBlank(filter)) {
             try {
                 Map<String, String> map = objectMapper.readValue(filter, Map.class);
                 score = map.getOrDefault("score", "");
                 sort = map.getOrDefault("sort", sort);
+                dir = map.getOrDefault("dir", "");
             } catch (Exception e) {
                 log.warn("", e);
             }
@@ -648,6 +662,8 @@ public class TvBoxService {
         } else {
             pageable = PageRequest.of(page - 1, 30);
         }
+
+        path = fixPath(path + "/" + dir);
 
         Page<Meta> list;
         if ("all".equals(score)) {
