@@ -4,8 +4,7 @@ PORT=4567
 rm -rf src/main/resources/static/assets && \
 cd web-ui && \
 npm run build || exit 1
-cd .. && \
-git add src/main/resources/static
+cd ..
 
 cp src/main/resources/application.yaml application-backup.yaml
 sed -i '/- name: 本地/,+2d' src/main/resources/application.yaml

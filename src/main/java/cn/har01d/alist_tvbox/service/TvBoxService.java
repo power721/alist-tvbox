@@ -255,15 +255,10 @@ public class TvBoxService {
                         continue;
                     }
                     if (path.startsWith("  ")) {
-                        String[] parts = path.split(":");
-                        if (parts.length == 2) {
-                            filters.add(new FilterValue(parts[1].trim(), parts[0].trim()));
-                        } else {
-                            filters.add(new FilterValue(path.trim(), path.trim()));
-                        }
+                        setFilterValue(filters, path);
                         continue;
                     } else if (!typeId.isEmpty()) {
-                        result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
+                        addFilters(result, typeId, filters);
                         filters = new ArrayList<>();
                         filters.add(new FilterValue("全部", ""));
                     }
@@ -280,7 +275,7 @@ public class TvBoxService {
                     typeId = category.getType_id();
                     result.getCategories().add(category);
                 }
-                result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
+                addFilters(result, typeId, filters);
                 return;
             }
         } catch (Exception e) {
@@ -299,6 +294,19 @@ public class TvBoxService {
             category.setType_flag(0);
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
+        }
+    }
+
+    private void addFilters(CategoryList result, String typeId, List<FilterValue> filters) {
+        result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
+    }
+
+    private static void setFilterValue(List<FilterValue> filters, String path) {
+        String[] parts = path.split(":");
+        if (parts.length == 2) {
+            filters.add(new FilterValue(parts[1].trim(), parts[0].trim()));
+        } else {
+            filters.add(new FilterValue(path.trim(), path.trim()));
         }
     }
 
