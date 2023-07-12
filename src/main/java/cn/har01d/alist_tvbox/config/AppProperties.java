@@ -13,6 +13,7 @@ public class AppProperties {
     private boolean xiaoya;
     private boolean hostmode;
     private boolean sort;
+    private boolean merge;
     private int pageSize = 100;
     private int maxSearchResult = 100;
     private String secretKey;

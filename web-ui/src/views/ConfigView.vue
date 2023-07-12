@@ -147,6 +147,15 @@
         <el-form-item>
           <el-button type="primary" @click="updateDockerAddress">更新</el-button>
         </el-form-item>
+        <el-form-item label="合并站源">
+          <el-switch
+            v-model="mergeSiteSource"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateMerge"
+          />
+        </el-form-item>
         <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>
@@ -182,6 +191,7 @@ const increase = () => {
 
 const aListStarted = ref(false)
 const aListRestart = ref(false)
+const mergeSiteSource = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -239,6 +249,12 @@ const updateOpenTokenUrl = () => {
 
 const updateDockerAddress = () => {
   axios.post('/settings', {name: 'docker_address', value: dockerAddress.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateMerge = () => {
+  axios.post('/settings', {name: 'merge_site_source', value: mergeSiteSource.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -306,6 +322,7 @@ onMounted(() => {
       dockerAddress.value = data.docker_address
       autoCheckin.value = data.auto_checkin === 'true'
       aListRestart.value = data.alist_restart_required === 'true'
+      mergeSiteSource.value = data.merge_site_source === 'true'
       login.value.username = data.alist_username
       login.value.password = data.alist_password
       login.value.enabled = data.alist_login === 'true'

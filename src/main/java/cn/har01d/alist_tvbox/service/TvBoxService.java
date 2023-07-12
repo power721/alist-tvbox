@@ -202,14 +202,16 @@ public class TvBoxService {
     public CategoryList getCategoryList(Integer type) {
         CategoryList result = new CategoryList();
 
-        if (type != null && type == 1) {
+        if ((type != null && type == 1) || appProperties.isMerge()) {
             for (Site site : siteService.list()) {
                 if (site.isXiaoya() && site.isSearchable() && !site.isDisabled()) {
                     setTypes(result, site);
                     break;
                 }
             }
-        } else {
+        }
+
+        if (type == null || type == 0 || appProperties.isMerge()) {
             int id = 1;
             for (Site site : siteService.list()) {
                 Category category = new Category();
@@ -238,8 +240,8 @@ public class TvBoxService {
 
     private void setTypes(CategoryList result, Site site) {
         Category category = new Category();
-        category.setType_id(site.getId() + "$/");
-        category.setType_name(site.getName());
+        category.setType_id(site.getId() + "$/?type=1");
+        category.setType_name("\uD83C\uDFAC" + site.getName());
         category.setType_flag(0);
         result.getCategories().add(category);
         result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
@@ -269,7 +271,7 @@ public class TvBoxService {
                         name = parts[1];
                     }
                     category = new Category();
-                    category.setType_id(site.getId() + "$" + fixPath("/" + path));
+                    category.setType_id(site.getId() + "$" + fixPath("/" + path) + "?type=1");
                     category.setType_name(name);
                     category.setType_flag(0);
                     typeId = category.getType_id();
@@ -289,7 +291,7 @@ public class TvBoxService {
                 continue;
             }
             category = new Category();
-            category.setType_id(site.getId() + "$/" + name);
+            category.setType_id(site.getId() + "$/" + name + "?type=1");
             category.setType_name(name);
             category.setType_flag(0);
             result.getCategories().add(category);
