@@ -498,7 +498,7 @@ public class TvBoxService {
 
     private List<MovieDetail> searchByXiaoya(Site site, String keyword) throws IOException {
         if (site.getId() == 1 && appProperties.isXiaoya()) {
-            List<MovieDetail> list = searchFromIndexFile(site, keyword, "/index/index.video.txt");
+            List<MovieDetail> list = searchFromIndexFile(site, keyword, "/data/index/index.video.txt");
             File customIndexFile = new File("/data/index/" + site.getId() + "/custom_index.txt");
             log.debug("custom index file: {}", customIndexFile);
             if (customIndexFile.exists()) {
