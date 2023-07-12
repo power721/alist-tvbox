@@ -6,7 +6,7 @@ spring:
     driverClassName: org.h2.Driver
   sql:
     init:
-      data-locations: file:/opt/atv/data/data.sql
+      data-locations: file:/data/atv/data.sql
 
 logging:
   file:

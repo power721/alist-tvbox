@@ -533,9 +533,20 @@ public class SubscriptionService {
         return null;
     }
 
+    private Integer getPort() {
+        if (appProperties.isHostmode()) {
+            return 6789;
+        }
+        try {
+            return Integer.parseInt(environment.getProperty("ALIST_PORT", "5344"));
+        } catch (Exception e) {
+            return 5344;
+        }
+    }
+
     private String readHostAddress() throws IOException {
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
-                .port(appProperties.isHostmode() ? 6789 : 5244)
+                .port(getPort())
                 .replacePath("/")
                 .build();
         String address = null;

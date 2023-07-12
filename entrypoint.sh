@@ -21,19 +21,20 @@ INSERT INTO x_storages VALUES(20000,'/©️ $version',0,'AList V3',30,'work','{"
 EOF
 
 LOCAL=""
-if [ -f data/movie_version ]; then
-  LOCAL=$(cat data/movie_version | head -n 1)
+if [ -f /data/atv/movie_version ]; then
+  LOCAL=$(head -n 1 </data/atv/movie_version)
 fi
+echo "local data version: $LOCAL"
 REMOTE=$(curl -fsSL http://d.har01d.cn/movie_version | head -n 1)
 if [ "$LOCAL" != "$REMOTE" ]; then
   echo "download data.zip, version: ${REMOTE}" && \
   wget http://d.har01d.cn/data.zip -O data.zip && \
-  unzip -q -o data.zip && \
-  cat data/movie_version && \
-  rm -f data.zip
+  unzip -q -o data.zip -d /tmp && \
+  cp /tmp/data/movie_version /data/atv/ && \
+  cp /tmp/data/data.sql /data/atv/ && \
+  cat /data/atv/movie_version && \
+  rm -f /tmp/data.zip
 fi
-
-ln -sf /data/config .
 
 if [ -f /data/cmd.sql ]; then
   echo "add cmd.sql"

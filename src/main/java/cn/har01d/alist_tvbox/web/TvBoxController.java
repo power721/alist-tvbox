@@ -47,31 +47,33 @@ public class TvBoxController {
     public Object api(String t, String f, String ids, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request) {
-        return api("", t, ids, f, wd, sort, pg, 0, request);
+        return api("", t, f, ids, wd, sort, pg, null, request);
     }
 
     @GetMapping("/vod/{token}")
     public Object api(@PathVariable String token, String t, String f, String ids, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
-                      @RequestParam(required = false, defaultValue = "0") Integer type,
+                      @RequestParam(required = false) Integer type,
                       HttpServletRequest request) {
         if (!subscriptionService.getToken().equals(token)) {
             throw new BadRequestException();
         }
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        log.info("path: {}  folder: {} keyword: {}  filter: {}  sort: {}  page: {}", ids, t, wd, f, sort, pg);
+        log.info("type: {}  path: {}  folder: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, wd, f, sort, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.startsWith("msearch:")) {
-                return tvBoxService.msearch(type, ids.substring(8));
+                return tvBoxService.msearch(ids.substring(8));
             } else if (ids.equals("recommend")) {
                 return tvBoxService.recommend();
             }
-            return tvBoxService.getDetail(type, ids);
+            return tvBoxService.getDetail(ids);
+        } else if (f != null && f.equals("recommend")) {
+            return tvBoxService.recommend();
         } else if (t != null && !t.isEmpty()) {
             return tvBoxService.getMovieList(type, t, f, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {
-            return tvBoxService.search(type, wd);
+            return tvBoxService.search(wd);
         } else {
             return tvBoxService.getCategoryList(type);
         }

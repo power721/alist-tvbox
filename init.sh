@@ -1,9 +1,7 @@
 #!/bin/sh
 
-mkdir /data/atv
-ln -sf /opt/atv/data/ /data/atv/
-
-mkdir -p /var/lib/pxg /www/cgi-bin /index /opt/atv/log
+mkdir -p /var/lib/pxg /www/cgi-bin /index /opt/atv/log /data/atv
+ln -sf /data/config .
 cd /var/lib/pxg
 unzip -q /var/lib/data.zip
 mv data.db /opt/alist/data/data.db

@@ -1,6 +1,6 @@
 ARG TAG=latest
 
-FROM arm32v7/adoptopenjdk:11-jre-hotspot as jre
+FROM arm32v7/adoptopenjdk:11-jre as adoptopenjdk
 
 FROM xiaoyaliu/alist:${TAG}
 
@@ -9,7 +9,7 @@ LABEL MAINTAINER="Har01d"
 ENV JAVA_HOME=/jre
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
-COPY --from=jre /opt/java/openjdk $JAVA_HOME
+COPY --from=adoptopenjdk /opt/java/openjdk $JAVA_HOME
 
 VOLUME /opt/atv/data/
 
