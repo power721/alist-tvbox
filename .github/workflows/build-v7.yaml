@@ -1,4 +1,4 @@
-name: 'release docker'
+name: 'release arm v7'
 
 on:
   workflow_dispatch:
