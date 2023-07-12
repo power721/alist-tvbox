@@ -213,7 +213,7 @@ guestpass.txt和guestlogin.txt第一次启动时加载，以后不再生效，�
 
 show_my_ali.txt第一次启动时加载，以后不再生效，请在界面配置是否加载阿里云盘。
 
-docker_address.txt不再生效，请配置->高级设置->小雅外网地址 里面设置。
+docker_address.txt不再生效，使用订阅链接会自动识别。外网访问请配置->高级设置->小雅外网地址 里面设置。
 
 alist_list.txt第一次启动时加载，以后不再生效，请在界面添加站点。
 
