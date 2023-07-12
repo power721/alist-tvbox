@@ -102,7 +102,7 @@ public class TvBoxService {
     );
     private final List<FilterValue> filters3 = Arrays.asList(
             new FilterValue("高分", "high"),
-            new FilterValue("普通", ""),
+            new FilterValue("默认", ""),
             new FilterValue("全部", "all"),
             new FilterValue("无分", "no"),
             new FilterValue("低分", "low")
@@ -249,18 +249,23 @@ public class TvBoxService {
             if (Files.exists(file)) {
                 String typeId = "";
                 List<FilterValue> filters = new ArrayList<>();
-                filters.add(new FilterValue("", ""));
+                filters.add(new FilterValue("", "全部"));
                 for (String path : Files.readAllLines(file)) {
                     if (StringUtils.isBlank(path)) {
                         continue;
                     }
                     if (path.startsWith("  ")) {
-                        filters.add(new FilterValue(path.trim(), path.trim()));
+                        String[] parts = path.split(":");
+                        if (parts.length == 2) {
+                            filters.add(new FilterValue(parts[0].trim(), parts[1].trim()));
+                        } else {
+                            filters.add(new FilterValue(path.trim(), path.trim()));
+                        }
                         continue;
                     } else if (!typeId.isEmpty()) {
-                        result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
+                        result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
                         filters = new ArrayList<>();
-                        filters.add(new FilterValue("", ""));
+                        filters.add(new FilterValue("", "全部"));
                     }
                     String name = path;
                     String[] parts = path.split(":");
@@ -275,7 +280,7 @@ public class TvBoxService {
                     typeId = category.getType_id();
                     result.getCategories().add(category);
                 }
-                result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
+                result.getFilters().put(typeId, List.of(new Filter("dir", "子目录", filters), new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
                 return;
             }
         } catch (Exception e) {
@@ -293,7 +298,7 @@ public class TvBoxService {
             category.setType_name(name);
             category.setType_flag(0);
             result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3)));
         }
     }
 
