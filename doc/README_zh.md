@@ -170,7 +170,7 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 每日更新
   电视剧/国产剧
   电视剧/美剧
-  美剧（已刮削）:美剧
+  美剧（已刮削）:美剧ℹ
 </pre>
 
 ![类别](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_category.png)
