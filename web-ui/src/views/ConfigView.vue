@@ -107,7 +107,7 @@
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
           <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
             最新版本：{{ appRemoteVersion }}，请重新运行安装脚本，升级应用。
-            <div v-if="changelog">更新日志： {{changelog}}</div>
+            <div class="changelog" v-if="changelog">更新日志： {{changelog}}</div>
           </div>
         </el-card>
 
@@ -388,5 +388,9 @@ onUnmounted(() => {
 
 .box-card {
   margin-bottom: 12px;
+}
+
+.changelog {
+  color: #67c23a;
 }
 </style>

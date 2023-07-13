@@ -150,6 +150,8 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 
 可以在界面批量导入文件里面的分享内容，批量删除分享。
 
+添加资源如果路径以/开头就会创建在根目录下。否则在/🈴我的阿里分享/下面。
+
 ![分享列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_shares.png)
 
 ### 海报墙模式
