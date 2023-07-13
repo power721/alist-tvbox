@@ -1,7 +1,9 @@
 #!/bin/sh
 
 mkdir -p /var/lib/pxg /www/cgi-bin /index /opt/atv/log /data/atv /data/index
-rm -rf /index
+if [ -d /index ]; then
+  rm -rf /index
+fi
 ln -sf /data/index /
 ln -sf /data/config .
 cd /var/lib/pxg

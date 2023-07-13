@@ -1,6 +1,6 @@
 ARG TAG=latest
 
-FROM adoptopenjdk/openjdk11:jre as adoptopenjdk
+FROM eclipse-temurin:17-jre-jammy as adoptopenjdk
 
 FROM xiaoyaliu/alist:${TAG}
 
