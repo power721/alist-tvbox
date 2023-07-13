@@ -1,6 +1,7 @@
 #!/bin/sh
 
 mkdir -p /var/lib/pxg /www/cgi-bin /index /opt/atv/log /data/atv /data/index
+ln -sf /data/index /
 ln -sf /data/config .
 cd /var/lib/pxg
 unzip -q /var/lib/data.zip
