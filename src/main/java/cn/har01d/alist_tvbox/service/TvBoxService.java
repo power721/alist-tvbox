@@ -91,19 +91,19 @@ public class TvBoxService {
     );
     private final List<FilterValue> filters2 = Arrays.asList(
             new FilterValue("原始顺序", ""),
-            new FilterValue("名字⬆️", "name,asc;year,asc"),
-            new FilterValue("名字⬇️", "name,desc;year,desc"),
-            new FilterValue("年份⬆️", "year,asc;name,asc"),
-            new FilterValue("年份⬇️", "year,desc;name,desc"),
-            new FilterValue("评分⬆️", "score,asc;name,asc"),
-            new FilterValue("评分⬇️", "score,desc;name,desc"),
+            new FilterValue("名字⬆️", "name,asc"),
+            new FilterValue("名字⬇️", "name,desc"),
+            new FilterValue("年份⬆️", "year,asc"),
+            new FilterValue("年份⬇️", "year,desc"),
+            new FilterValue("评分⬆️", "score,asc"),
+            new FilterValue("评分⬇️", "score,desc"),
             new FilterValue("ID⬆️", "movie_id,asc"),
             new FilterValue("ID⬇️", "movie_id,desc")
     );
     private final List<FilterValue> filters3 = Arrays.asList(
             new FilterValue("高分", "high"),
-            new FilterValue("默认", ""),
-            new FilterValue("全部", "all"),
+            new FilterValue("普通", "normal"),
+            new FilterValue("全部", ""),
             new FilterValue("无分", "no"),
             new FilterValue("低分", "low")
     );
@@ -669,6 +669,7 @@ public class TvBoxService {
             }
         }
 
+        int size = 60;
         if (StringUtils.isNotBlank(sort)) {
             List<Sort.Order> orders = new ArrayList<>();
             for (String item : sort.split(";")) {
@@ -677,16 +678,16 @@ public class TvBoxService {
                 orders.add(order);
             }
             Sort sort1 = Sort.by(orders);
-            pageable = PageRequest.of(page - 1, 30, sort1);
+            pageable = PageRequest.of(page - 1, size, sort1);
         } else {
-            pageable = PageRequest.of(page - 1, 30);
+            pageable = PageRequest.of(page - 1, size);
         }
 
         path = fixPath(path + "/" + dir);
 
         Page<Meta> list;
-        if ("all".equals(score)) {
-            list = metaRepository.findByPathStartsWith(path, pageable);
+        if ("normal".equals(score)) {
+            list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 60, pageable);
         } else if ("high".equals(score)) {
             list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 80, pageable);
         } else if ("low".equals(score)) {
@@ -694,7 +695,7 @@ public class TvBoxService {
         } else if ("no".equals(score)) {
             list = metaRepository.findByPathStartsWithAndScoreIsNull(path, pageable);
         } else {
-            list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 60, pageable);
+            list = metaRepository.findByPathStartsWith(path, pageable);
         }
 
         log.debug("{} {} {}", pageable, list, list.getContent().size());

@@ -12,7 +12,7 @@
       <el-table-column prop="name" label="名称" sortable width="180"/>
       <el-table-column prop="url" label="URL地址" sortable>
         <template #default="scope">
-          <a :href="scope.row.url" target="_blank">{{scope.row.url}}</a>
+          <a :href="scope.row.url" target="_blank">{{ scope.row.url }}</a>
         </template>
       </el-table-column>
       <el-table-column prop="version" label="版本" width="70"/>
@@ -120,6 +120,8 @@
           </el-button>
         </div>
       </el-scrollbar>
+      <el-pagination v-show="total>100" layout="prev, pager, next" :page-size="100" :current-page="page" :total="total"
+                     @current-change="loadData"/>
       <el-divider/>
       <h2>JSON数据</h2>
       <el-scrollbar height="600px">
@@ -161,6 +163,9 @@ interface Item {
 const token = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
+const ids = ref('')
+const page = ref(1)
+const total = ref(0)
 const jsonData = ref({} as VodList)
 const paths = ref([] as Item[])
 const sites = ref([])
@@ -215,13 +220,20 @@ const showDetails = (data: any) => {
   loadFiles('/')
 }
 
+const loadData = (pageNumber: number) => {
+  page.value = pageNumber
+  loadFiles(ids.value);
+}
+
 const loadFiles = (id: string) => {
+  ids.value = id
   extractPaths(id)
   if (!id.startsWith(form.value.id + '$')) {
     id = form.value.id + '$' + id
   }
-  axios.get('/vod' + token.value + '?pg=1&t=' + id).then(({data}) => {
+  axios.get('/vod' + token.value + '?pg=' + page.value + '&t=' + id).then(({data}) => {
     jsonData.value = data
+    total.value = data.total
     siteVisible.value = true
   }, ({response}) => {
     console.log(response.data.message)

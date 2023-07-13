@@ -23,7 +23,7 @@
     <p>
       使用方式：
       <code>docker run -d -p 4567:4567 --restart=always --name=alist-tvbox haroldli/alist-tvbox</code><br>
-      <code>docker run -d -p 4567:4567 -p 5344:80 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest</code>
+      <code>docker run -d -p 4567:4567 -p 5344:80 -e ALIST_PORT=5344 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest</code>
     </p>
     <p>
       一键部署(小雅版)：
