@@ -15,6 +15,7 @@ on:
       - 'config/**'
       - 'doc/**'
       - 'pom.xml'
+      - 'Dockerfile-v7'
 
 jobs:
   release:
