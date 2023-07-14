@@ -147,15 +147,15 @@
         <el-form-item>
           <el-button type="primary" @click="updateDockerAddress">更新</el-button>
         </el-form-item>
-        <el-form-item label="合并站源">
-          <el-switch
-            v-model="mergeSiteSource"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateMerge"
-          />
-        </el-form-item>
+<!--        <el-form-item label="合并站源">-->
+<!--          <el-switch-->
+<!--            v-model="mergeSiteSource"-->
+<!--            inline-prompt-->
+<!--            active-text="开启"-->
+<!--            inactive-text="关闭"-->
+<!--            @change="updateMerge"-->
+<!--          />-->
+<!--        </el-form-item>-->
         <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>

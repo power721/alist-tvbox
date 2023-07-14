@@ -358,9 +358,9 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList msearch(String keyword) {
+    public MovieList msearch(Integer type, String keyword) {
         String name = TextUtils.fixName(keyword);
-        MovieList result = search(0, name);
+        MovieList result = search(type, name);
         if (result.getTotal() > 0) {
             return getDetail(result.getList().get(0).getVod_id());
         }

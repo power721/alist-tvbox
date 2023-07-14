@@ -42,7 +42,7 @@ if [ ! -f update.zip ]; then
 else
   unzip -o -q -P abcd update.zip
   entries=$(grep -c 'INSERT INTO x_storages' update.sql)
-  echo $(date) "total" $entries "records"
+  echo "$(date) total $entries records"
   if [ -f /opt/alist/data/data.db-shm ]; then
     rm /opt/alist/data/data.db-shm
   fi
@@ -64,7 +64,7 @@ update x_users set password = "$pass" where id = 1;
 update x_users set permission = 368 where id = 2;
 .read update.sql
 EOF
-  echo $(date) "update database successfully"
+  echo "$(date) update database successfully"
   opentoken_url=$(cat opentoken_url.txt)
   sed -i "s#https://api.nn.ci/alist/ali_open/token#$opentoken_url#" /opt/alist/data/config.json
   rm update.zip update.sql opentoken_url.txt
@@ -79,10 +79,10 @@ else
   fi
   local=$(head -n1 /data/index/version.txt)
   latest=$(printf "$remote\n$local\n" | sort -r | head -n1)
-  if [ $remote = $local ]; then
-    echo $(date) "current index file version is updated, no need to upgrade"
+  if [ "$remote" = "$local" ]; then
+    echo "$(date) current index file version is updated, no need to upgrade"
     exit
-  elif [ $remote = $latest ]; then
+  elif [ "$remote" = "$latest" ]; then
     wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/index.zip
     if [ ! -f index.zip ]; then
       echo "Failed to download index compressed file, the index file upgrade process has aborted"
@@ -91,12 +91,12 @@ else
       unzip -o -q -P abcd index.zip
       cat index.video.txt index.book.txt index.music.txt index.non.video.txt >/data/index/index.txt
       mv index*.txt /data/index/
-      echo $(date) "update index succesfully, your new version.txt is" $remote
-      echo $remote >/data/index/version.txt
+      echo "$(date) update index successfully, your new version.txt is $remote"
+      echo "$remote" >/data/index/version.txt
     fi
   else
-    echo $(date) "your current version.txt is updated, no need to downgrade"
-    echo $remote >/data/index/version.txt
+    echo "$(date) your current version.txt is updated, no need to downgrade"
+    echo "$remote" >/data/index/version.txt
   fi
   rm -f index.* update.* version.txt
 fi

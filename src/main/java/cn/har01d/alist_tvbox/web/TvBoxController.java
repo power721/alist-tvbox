@@ -63,13 +63,11 @@ public class TvBoxController {
         log.info("type: {}  path: {}  folder: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, wd, f, sort, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.startsWith("msearch:")) {
-                return tvBoxService.msearch(ids.substring(8));
+                return tvBoxService.msearch(type, ids.substring(8));
             } else if (ids.equals("recommend")) {
                 return tvBoxService.recommend();
             }
             return tvBoxService.getDetail(ids);
-        } else if (f != null && f.equals("recommend")) {
-            return tvBoxService.recommend();
         } else if (t != null && !t.isEmpty()) {
             return tvBoxService.getMovieList(type, t, f, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {

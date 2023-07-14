@@ -349,7 +349,7 @@ public class AccountService {
         Instant time;
         try {
             time = account.getOpenTokenTime();
-            if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now) && (account.getOpenToken() != null)) {
+            if (time == null || time.plus(3, ChronoUnit.DAYS).isBefore(now) && (account.getOpenToken() != null)) {
                 log.info("update open token {}: {}", account.getId(), time);
                 account.setOpenToken(getAliOpenToken(account.getOpenToken()));
                 account.setOpenTokenTime(Instant.now());
@@ -361,7 +361,7 @@ public class AccountService {
 
         try {
             time = account.getRefreshTokenTime();
-            if (time == null || time.plus(24, ChronoUnit.HOURS).isBefore(now) && (account.getRefreshToken() != null)) {
+            if (time == null || time.plus(1, ChronoUnit.DAYS).isBefore(now) && (account.getRefreshToken() != null)) {
                 log.info("update refresh token {}: {}", account.getId(), time);
                 response = getAliToken(account.getRefreshToken());
                 account.setRefreshToken((String) response.get(REFRESH_TOKEN));
