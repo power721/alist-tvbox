@@ -190,7 +190,7 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 
 如果打开了挂载我的云盘功能，每次启动会消耗两次开放token请求。60分钟内只能请求10次，超过后需要等待60分钟后才能操作。
 
-可以换IP绕开限制。或者更换开放token的认证URL。在数据目录（默认是/etc/xiaoya）下新建文件open_token_url.txt，内容一下地址选一个。
+可以换IP绕开限制。或者更换开放token的认证URL。在数据目录（默认是/etc/xiaoya）下新建文件open_token_url.txt，内容以下地址选一个。
 
 - https://api-cf.nn.ci/alist/ali_open/token
 - https://api.xhofe.top/alist/ali_open/token
