@@ -732,7 +732,7 @@ public class TvBoxService {
                 name = movie.getName();
             }
 
-            String newPath = fixPath(meta.getPath() + "/" + PLAYLIST);
+            String newPath = fixPath(meta.getPath() + (isMediaFile(meta.getPath()) ? "" : "/" + PLAYLIST));
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site.getId() + "$" + newPath);
             movieDetail.setVod_name(name);

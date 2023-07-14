@@ -36,6 +36,7 @@ app:
     - wma
     - cda
     - flac
+    - f4v
     - m4a
     - mid
     - mka
