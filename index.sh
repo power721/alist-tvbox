@@ -9,7 +9,7 @@ if [ $# -gt 0 ]; then
     cat index.video.txt index.book.txt index.music.txt index.non.video.txt >/index/index.txt
     mv index*.txt /index/
     echo $(date) "update index successfully, your new version.txt is $remote"
-    echo "$remote" >/version.txt
+    echo "$remote" >/index/version.txt
     rm -f rm index.*
   fi
 fi
