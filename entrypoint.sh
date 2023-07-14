@@ -34,6 +34,7 @@ if [ "$LOCAL" != "$REMOTE" ]; then
   cp /tmp/data/data.sql /data/atv/ && \
   cat /data/atv/movie_version && \
   rm -f /tmp/data.zip
+  cp /data/atv.mv.db /data/backup/atv.mv.db
 fi
 
 if [ -f /data/cmd.sql ]; then

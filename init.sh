@@ -1,6 +1,6 @@
 #!/bin/sh
 
-mkdir -p /var/lib/pxg /www/cgi-bin /index /opt/atv/log /data/atv /data/index
+mkdir -p /var/lib/pxg /www/cgi-bin /index /opt/atv/log /data/atv /data/index /data/backup
 if [ -d /index ]; then
   rm -rf /index
 fi

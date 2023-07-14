@@ -119,6 +119,6 @@ jobs:
       - name: Post To Telegram
         run: |
           if [ -n "${{ secrets.CHANNEL_ID }}" ] && [ -n "${{ secrets.BOT_TOKEN }}" ]; then
-            MSG=$(echo -e "${{ github.actor }} created commit:\nCommit message: ${{ github.event.commits[0].message }}\nSee changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}\n升级：sudo bash -c \"$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)\"")
+            MSG=$(echo -e "${{ github.actor }} created commit:\nCommit message: ${{ github.event.commits[0].message }}\nSee changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}")
             curl -v "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMediaGroup?chat_id=${{ secrets.CHANNEL_ID }}&text=${MSG}
           fi
