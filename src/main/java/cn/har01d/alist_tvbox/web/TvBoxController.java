@@ -73,7 +73,7 @@ public class TvBoxController {
         } else if (t != null && !t.isEmpty()) {
             return tvBoxService.getMovieList(type, t, f, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {
-            return tvBoxService.search(wd);
+            return tvBoxService.search(type, wd);
         } else {
             return tvBoxService.getCategoryList(type);
         }

@@ -74,10 +74,10 @@ if [ ! -f version.txt ]; then
   echo "Failed to download version.txt file, the index file upgrade process has aborted"
 else
   remote=$(head -n1 version.txt)
-  if [ ! -f /version.txt ]; then
-    echo 0.0.0 >/version.txt
+  if [ ! -f /data/index/version.txt ]; then
+    echo 0.0.0 >/data/index/version.txt
   fi
-  local=$(head -n1 /version.txt)
+  local=$(head -n1 /data/index/version.txt)
   latest=$(printf "$remote\n$local\n" | sort -r | head -n1)
   if [ $remote = $local ]; then
     echo $(date) "current index file version is updated, no need to upgrade"
@@ -92,11 +92,11 @@ else
       cat index.video.txt index.book.txt index.music.txt index.non.video.txt >/data/index/index.txt
       mv index*.txt /data/index/
       echo $(date) "update index succesfully, your new version.txt is" $remote
-      echo $remote >/version.txt
+      echo $remote >/data/index/version.txt
     fi
   else
     echo $(date) "your current version.txt is updated, no need to downgrade"
-    echo $remote >/version.txt
+    echo $remote >/data/index/version.txt
   fi
   rm -f index.* update.* version.txt
 fi

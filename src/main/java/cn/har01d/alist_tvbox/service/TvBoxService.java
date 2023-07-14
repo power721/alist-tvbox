@@ -91,12 +91,12 @@ public class TvBoxService {
     );
     private final List<FilterValue> filters2 = Arrays.asList(
             new FilterValue("原始顺序", ""),
-            new FilterValue("名字⬆️", "name,asc"),
-            new FilterValue("名字⬇️", "name,desc"),
-            new FilterValue("年份⬆️", "year,asc"),
-            new FilterValue("年份⬇️", "year,desc"),
-            new FilterValue("评分⬆️", "score,asc"),
-            new FilterValue("评分⬇️", "score,desc"),
+            new FilterValue("名字⬆️", "name,asc;year,asc"),
+            new FilterValue("名字⬇️", "name,desc;year,desc"),
+            new FilterValue("年份⬆️", "year,asc;name,asc"),
+            new FilterValue("年份⬇️", "year,desc;name,desc"),
+            new FilterValue("评分⬆️", "score,asc;name,asc"),
+            new FilterValue("评分⬇️", "score,desc;name,desc"),
             new FilterValue("ID⬆️", "movie_id,asc"),
             new FilterValue("ID⬇️", "movie_id,desc")
     );
@@ -199,15 +199,22 @@ public class TvBoxService {
         }
     }
 
+    private Site getXiaoyaSite() {
+        for (Site site : siteService.list()) {
+            if (site.isXiaoya() && site.isSearchable() && !site.isDisabled()) {
+                return site;
+            }
+        }
+        return null;
+    }
+
     public CategoryList getCategoryList(Integer type) {
         CategoryList result = new CategoryList();
 
         if ((type != null && type == 1) || appProperties.isMerge()) {
-            for (Site site : siteService.list()) {
-                if (site.isXiaoya() && site.isSearchable() && !site.isDisabled()) {
-                    setTypes(result, site);
-                    break;
-                }
+            Site site = getXiaoyaSite();
+            if (site != null) {
+                setTypes(result, site);
             }
         }
 
@@ -353,38 +360,59 @@ public class TvBoxService {
 
     public MovieList msearch(String keyword) {
         String name = TextUtils.fixName(keyword);
-        MovieList result = search(name);
+        MovieList result = search(0, name);
         if (result.getTotal() > 0) {
             return getDetail(result.getList().get(0).getVod_id());
         }
         return result;
     }
 
-    public MovieList search(String keyword) {
+    public MovieList search(Integer type, String keyword) {
         MovieList result = new MovieList();
-        List<Future<List<MovieDetail>>> futures = new ArrayList<>();
-        for (Site site : siteService.list()) {
-            if (site.isSearchable()) {
-                if (StringUtils.isNotEmpty(site.getIndexFile())) {
-                    futures.add(executorService.submit(() -> searchByFile(site, keyword)));
+        List<MovieDetail> list = new ArrayList<>();
+
+        if (type != null && type == 1) {
+            for (Meta meta : metaRepository.findByPathContains(keyword)) {
+                Movie movie = meta.getMovie();
+                String name;
+                if (movie == null) {
+                    name = getNameFromPath(meta.getPath());
                 } else {
-                    futures.add(executorService.submit(() -> searchByApi(site, keyword)));
+                    name = movie.getName();
+                }
+
+                String newPath = fixPath(meta.getPath() + "/" + PLAYLIST);
+                MovieDetail movieDetail = new MovieDetail();
+                movieDetail.setVod_id(getXiaoyaSite().getId() + "$" + newPath);
+                movieDetail.setVod_name(name);
+                movieDetail.setVod_pic(Constants.ALIST_PIC);
+                setDoubanInfo(movieDetail, movie, false);
+                list.add(movieDetail);
+            }
+        } else {
+            List<Future<List<MovieDetail>>> futures = new ArrayList<>();
+            for (Site site : siteService.list()) {
+                if (site.isSearchable()) {
+                    if (StringUtils.isNotEmpty(site.getIndexFile())) {
+                        futures.add(executorService.submit(() -> searchByFile(site, keyword)));
+                    } else {
+                        futures.add(executorService.submit(() -> searchByApi(site, keyword)));
+                    }
                 }
             }
-        }
 
-        List<MovieDetail> list = new ArrayList<>();
-        for (Future<List<MovieDetail>> future : futures) {
-            try {
-                list.addAll(future.get());
-            } catch (Exception e) {
-                log.warn("", e);
+            for (Future<List<MovieDetail>> future : futures) {
+                try {
+                    list.addAll(future.get());
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
             }
-        }
 
-        for (MovieDetail movie : list) {
-            if (movie.getVod_pic() != null && movie.getVod_pic().contains(".doubanio.com/")) {
-                fixCover(movie);
+            for (MovieDetail movie : list) {
+                if (movie.getVod_pic() != null && movie.getVod_pic().contains(".doubanio.com/")) {
+                    fixCover(movie);
+                }
             }
         }
 
@@ -565,11 +593,7 @@ public class TvBoxService {
         int index = tid.indexOf('$');
         String id = tid.substring(0, index);
         if ("0".equals(id)) {
-            for (Site site : siteService.findAll()) {
-                if (site.isXiaoya() && site.isSearchable() && !site.isDisabled()) {
-                    return site;
-                }
-            }
+            return getXiaoyaSite();
         }
         try {
             Integer siteId = Integer.parseInt(id);
