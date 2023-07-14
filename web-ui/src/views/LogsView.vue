@@ -8,6 +8,10 @@ const count = ref(0)
 const total = ref(0)
 const logs = ref([])
 
+const reload = () => {
+  load(page.value)
+}
+
 const load = (pageNumber: number) => {
   page.value = pageNumber
   axios.get('/logs?size=50&page=' + (pageNumber - 1)).then(({data}) => {
@@ -31,7 +35,10 @@ onMounted(() => {
   <div class="flex">
     <el-pagination layout="prev, pager, next" :page-size="50" :current-page="page" :total="total"
                    @current-change="load"/>
-    <el-button type="primary" class="download" @click="download">下载日志</el-button>
+    <div>
+      <el-button type="primary" @click="reload">刷新</el-button>
+      <el-button type="primary" class="download" @click="download">下载日志</el-button>
+    </div>
   </div>
   <div v-for="log of logs" v-html="log"></div>
   <div v-if="count >= 50">

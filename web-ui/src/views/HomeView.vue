@@ -41,6 +41,7 @@ onMounted(() => {
     <div v-if="store.xiaoya">
       <el-text size="large">小雅集成版</el-text>
       <el-text v-if="store.hostmode" size="small">host网络模式</el-text>
+      <a :href="url" class="hint" target="_blank">{{url}}</a>
     </div>
     <el-text v-else size="large">独立版</el-text>
     <iframe v-if="store.xiaoya&&store.aListStatus" :src="url" :width="width" :height="height">

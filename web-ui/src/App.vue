@@ -68,7 +68,6 @@ onMounted(() => {
           <el-menu-item index="/login" v-else>登录</el-menu-item>
         </el-menu>
       </el-header>
-      <el-alert title="默认端口变更为4567" type="warning" v-if="showNotification" @close="close" />
 
       <el-main v-if="mounted">
         <RouterView/>
