@@ -142,6 +142,16 @@ public class ShareService {
 
     private void loadOpenTokenUrl() {
         try {
+            try {
+                Path file = Paths.get("/data/open_token_url.txt");
+                if (Files.exists(file)) {
+                    settingRepository.save(new Setting(OPEN_TOKEN_URL, Files.readString(file).trim()));
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+
             Path path = Paths.get("/opt/alist/data/config.json");
             if (Files.exists(path)) {
                 String text = Files.readString(path);
@@ -163,6 +173,15 @@ public class ShareService {
                 settingRepository.save(new Setting(OPEN_TOKEN_URL, url));
                 text = objectMapper.writeValueAsString(json);
                 Files.writeString(path, text);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        try {
+            Path file = Paths.get("/data/open_token_url.txt");
+            if (Files.exists(file)) {
+                Files.writeString(file, url);
             }
         } catch (Exception e) {
             log.warn("", e);

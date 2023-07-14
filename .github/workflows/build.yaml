@@ -116,15 +116,9 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: send telegram message
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.CHANNEL_ID }}
-          token: ${{ secrets.BOT_TOKEN }}
-          message: |
-            ${{ github.actor }} created commit:
-            Commit message: ${{ github.event.commits[0].message }}
-            
-            Repository: ${{ github.repository }}
-            
-            See changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}
+      - name: Post To Telegram
+        run: |
+          if [ -n "${{ secrets.CHANNEL_ID }}" ] && [ -n "${{ secrets.BOT_TOKEN }}" ]; then
+            MSG=$(echo -e "${{ github.actor }} created commit:\nCommit message: ${{ github.event.commits[0].message }}\nSee changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}\n升级：sudo bash -c \"$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)\"")
+            curl -v "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMediaGroup?chat_id=${{ secrets.CHANNEL_ID }}&text=${MSG}
+          fi
