@@ -31,14 +31,14 @@ public class TvBoxController {
 
     @GetMapping("/vod1")
     public Object api1(String t, String f, String ids, String wd, String sort,
-                       @RequestParam(required = false, defaultValue = "0") Integer pg,
+                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                        HttpServletRequest request) {
         return api("", t, f, ids, wd, sort, pg, 0, request);
     }
 
     @GetMapping("/vod1/{token}")
     public Object api1(@PathVariable String token, String t, String f, String ids, String wd, String sort,
-                       @RequestParam(required = false, defaultValue = "0") Integer pg,
+                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                        HttpServletRequest request) {
         return api(token, t, f, ids, wd, sort, pg, 0, request);
     }
