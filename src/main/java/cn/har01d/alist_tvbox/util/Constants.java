@@ -39,4 +39,5 @@ public final class Constants {
     public static final String DOCKER_VERSION = "docker_version";
     public static final String APP_VERSION = "app_version";
     public static final String BILIBILI_COOKIE = "bilibili_cookie";
+    public static final String BILI_BILI = "BiliBili";
 }

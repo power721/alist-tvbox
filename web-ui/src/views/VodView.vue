@@ -2,7 +2,7 @@
   <div class="vod">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="url" target="_blank">{{ currentUrl }}/vod{{type}}{{ token }}</a>
+      <a :href="url" target="_blank">{{ currentUrl }}{{ getPath(type) }}{{ token }}</a>
     </div>
 
     <div>
@@ -19,6 +19,7 @@
       <el-radio-group v-model="type" class="ml-4">
         <el-radio label="" size="large">网盘模式</el-radio>
         <el-radio label="1" size="large">点播模式</el-radio>
+        <el-radio label="2" size="large">BiliBili</el-radio>
       </el-radio-group>
     </el-form-item>
 
@@ -42,16 +43,26 @@ const url = ref('')
 const config = ref('')
 const currentUrl = window.location.origin
 
+const getPath = (type: string) => {
+  if (type == '2') {
+    return '/bilibili'
+  } else if (type == '1') {
+    return '/vod1'
+  } else {
+    return '/vod'
+  }
+}
+
 const getDetail = function () {
-  url.value = currentUrl + '/vod' + type.value + token.value + '?ids=' + id.value
-  axios.get('/vod' + type.value + token.value + '?ids=' + id.value).then(({data}) => {
+  url.value = currentUrl + getPath(type.value) + token.value + '?ids=' + id.value
+  axios.get(getPath(type.value) + token.value + '?ids=' + id.value).then(({data}) => {
     config.value = data
   })
 }
 
 const load = function () {
-  url.value = currentUrl + '/vod' + type.value + token.value + '?t=' + path.value
-  axios.get('/vod' + type.value + token.value + '?t=' + path.value ).then(({data}) => {
+  url.value = currentUrl + getPath(type.value) + token.value + '?t=' + path.value
+  axios.get(getPath(type.value) + token.value + '?t=' + path.value ).then(({data}) => {
     config.value = data
   })
 }
@@ -60,8 +71,8 @@ onMounted(async () => {
   token.value = await axios.get('/token').then(({data}) => {
     return data ? '/' + data : ''
   })
-  url.value = currentUrl + '/vod' + type.value + token.value
-  axios.get('/vod' + type.value + token.value).then(({data}) => {
+  url.value = currentUrl + getPath(type.value) + token.value
+  axios.get(getPath(type.value) + token.value).then(({data}) => {
     config.value = data
   })
 })
