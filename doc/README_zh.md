@@ -175,6 +175,8 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
   美剧（已刮削）:美剧ℹ
 </pre>
 
+[示例文件](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/category.txt)
+
 ![类别](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_category.png)
 
 ![filter](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_filter.jpg)
