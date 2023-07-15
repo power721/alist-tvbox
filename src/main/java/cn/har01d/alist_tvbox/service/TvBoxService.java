@@ -211,18 +211,16 @@ public class TvBoxService {
     public CategoryList getCategoryList(Integer type) {
         CategoryList result = new CategoryList();
 
-        if ((type != null && type == 1) || appProperties.isMerge()) {
+        if (type == 0) {
             Site site = getXiaoyaSite();
             if (site != null) {
                 setTypes(result, site);
             }
-        }
-
-        if (type == null || type == 0 || appProperties.isMerge()) {
+        } else {
             int id = 1;
             for (Site site : siteService.list()) {
                 Category category = new Category();
-                category.setType_id(site.getId() + "$/");
+                category.setType_id(site.getId() + "$/" + "$1");
                 category.setType_name(site.getName());
                 result.getCategories().add(category);
 
@@ -247,9 +245,9 @@ public class TvBoxService {
 
     private void setTypes(CategoryList result, Site site) {
         Category category = new Category();
-        category.setType_id(site.getId() + "$/");
+        category.setType_id(site.getId() + "$/" + "$1");
         category.setType_name("\uD83C\uDFAC" + site.getName());
-        category.setType_flag(0);
+        category.setType_flag(1);
         result.getCategories().add(category);
         result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
 
@@ -278,7 +276,7 @@ public class TvBoxService {
                         name = parts[1];
                     }
                     category = new Category();
-                    category.setType_id(site.getId() + "$" + fixPath("/" + path));
+                    category.setType_id(site.getId() + "$" + fixPath("/" + path) + "$0");
                     category.setType_name((appProperties.isMerge() ? "\uD83C\uDFAC" : "") + name);
                     category.setType_flag(0);
                     typeId = category.getType_id();
@@ -298,7 +296,7 @@ public class TvBoxService {
                 continue;
             }
             category = new Category();
-            category.setType_id(site.getId() + "$/" + name);
+            category.setType_id(site.getId() + "$/" + name + "$0");
             category.setType_name(name);
             category.setType_flag(0);
             result.getCategories().add(category);
@@ -326,7 +324,7 @@ public class TvBoxService {
     private void addMyFavorite(CategoryList result) {
         if (accountRepository.findAll().stream().anyMatch(Account::isShowMyAli)) {
             Category category = new Category();
-            category.setType_id("1$/\uD83D\uDCC0我的阿里云盘");
+            category.setType_id("1$/\uD83D\uDCC0我的阿里云盘$1");
             category.setType_name("我的云盘");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
@@ -335,7 +333,7 @@ public class TvBoxService {
         int pp = shareRepository.countByType(1);
         if (shareRepository.count() > pp) {
             Category category = new Category();
-            category.setType_id("1$/\uD83C\uDE34我的阿里分享");
+            category.setType_id("1$/\uD83C\uDE34我的阿里分享$1");
             category.setType_name("阿里分享");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
@@ -343,7 +341,7 @@ public class TvBoxService {
 
         if (pp > 0) {
             Category category = new Category();
-            category.setType_id("1$/\uD83D\uDD78️我的PikPak分享");
+            category.setType_id("1$/\uD83D\uDD78️我的PikPak分享$1");
             category.setType_name("PikPak");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
@@ -371,7 +369,7 @@ public class TvBoxService {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        if (type != null && type == 1) {
+        if (type != null && type == 0) {
             for (Meta meta : metaRepository.findByPathContains(keyword)) {
                 Movie movie = meta.getMovie();
                 String name;
@@ -383,7 +381,7 @@ public class TvBoxService {
 
                 String newPath = fixPath(meta.getPath() + "/" + PLAYLIST);
                 MovieDetail movieDetail = new MovieDetail();
-                movieDetail.setVod_id(getXiaoyaSite().getId() + "$" + newPath);
+                movieDetail.setVod_id(getXiaoyaSite().getId() + "$" + newPath + "$0");
                 movieDetail.setVod_name(name);
                 movieDetail.setVod_pic(Constants.ALIST_PIC);
                 setDoubanInfo(movieDetail, movie, false);
@@ -474,7 +472,7 @@ public class TvBoxService {
                 }
             }
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site.getId() + "$" + path);
+            movieDetail.setVod_id(site.getId() + "$" + path + "$1");
             movieDetail.setVod_name(getNameFromPath(line));
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_tag(FILE);
@@ -511,7 +509,7 @@ public class TvBoxService {
                     }
 
                     MovieDetail movieDetail = new MovieDetail();
-                    movieDetail.setVod_id(site.getId() + "$" + path);
+                    movieDetail.setVod_id(site.getId() + "$" + path + "$1");
                     movieDetail.setVod_name(e.getName());
                     movieDetail.setVod_pic(Constants.ALIST_PIC);
                     movieDetail.setVod_tag(FILE);
@@ -554,7 +552,7 @@ public class TvBoxService {
                     continue;
                 }
             }
-            movieDetail.setVod_id(site.getId() + "$" + path);
+            movieDetail.setVod_id(site.getId() + "$" + path + "$1");
             movieDetail.setVod_name(getNameFromPath(name));
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_tag(FILE);
@@ -605,14 +603,16 @@ public class TvBoxService {
         return siteService.getByName(id);
     }
 
-    public MovieList getMovieList(Integer type, String tid, String filter, String sort, int page) {
-        if (type == 1) {
+    public MovieList getMovieList(String tid, String filter, String sort, int page) {
+        Site site = getSite(tid);
+        String[] parts = tid.split("\\$");
+        String path = parts[1];
+        int type = Integer.parseInt(parts[2]);
+
+        if (type == 0) {
             return getMetaList(tid, filter, sort, page);
         }
 
-        int index = tid.indexOf('$');
-        Site site = getSite(tid);
-        String path = tid.substring(index + 1);
         if (path.contains(PLAYLIST)) {
             return getPlaylist(site, path);
         }
@@ -634,7 +634,7 @@ public class TvBoxService {
 
             String newPath = fixPath(path + "/" + fsInfo.getName());
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site.getId() + "$" + newPath);
+            movieDetail.setVod_id(site.getId() + "$" + newPath + "$1");
             movieDetail.setVod_name(fsInfo.getName());
             movieDetail.setVod_tag(fsInfo.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_pic(getCover(fsInfo.getThumb(), fsInfo.getType()));
@@ -669,9 +669,9 @@ public class TvBoxService {
     }
 
     public MovieList getMetaList(String tid, String filter, String sort, int page) {
-        int index = tid.indexOf('$');
         Site site = getSite(tid);
-        String path = tid.substring(index + 1);
+        String[] parts = tid.split("\\$");
+        String path = parts[1];
         if (path.contains(PLAYLIST)) {
             return getPlaylist(site, path);
         }
@@ -697,7 +697,7 @@ public class TvBoxService {
         if (StringUtils.isNotBlank(sort)) {
             List<Sort.Order> orders = new ArrayList<>();
             for (String item : sort.split(";")) {
-                String[] parts = item.split(",");
+                parts = item.split(",");
                 Sort.Order order = parts[1].equals("asc") ? Sort.Order.asc(parts[0]) : Sort.Order.desc(parts[0]);
                 orders.add(order);
             }
@@ -734,7 +734,7 @@ public class TvBoxService {
 
             String newPath = fixPath(meta.getPath() + (isMediaFile(meta.getPath()) ? "" : "/" + PLAYLIST));
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site.getId() + "$" + newPath);
+            movieDetail.setVod_id(site.getId() + "$" + newPath + "$0");
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             setDoubanInfo(movieDetail, movie, false);
@@ -787,7 +787,7 @@ public class TvBoxService {
 
     private List<MovieDetail> generatePlaylist(String path, int total, List<MovieDetail> files) {
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(path);
+        movieDetail.setVod_id(path + "$1");
         movieDetail.setVod_name("播放列表");
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
@@ -817,9 +817,9 @@ public class TvBoxService {
     }
 
     public MovieList getDetail(String tid) {
-        int index = tid.indexOf('$');
         Site site = getSite(tid);
-        String path = tid.substring(index + 1);
+        String[] parts = tid.split("\\$");
+        String path = parts[1];
         if (path.contains(PLAYLIST)) {
             return getPlaylist(site, path);
         }
@@ -827,7 +827,7 @@ public class TvBoxService {
         FsDetail fsDetail = aListService.getFile(site, path);
         MovieList result = new MovieList();
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(tid);
+        movieDetail.setVod_id(tid + "$1");
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_tag(fsDetail.getType() == 1 ? FOLDER : FILE);
         movieDetail.setVod_time(fsDetail.getModified());
@@ -858,7 +858,7 @@ public class TvBoxService {
         FsDetail fsDetail = aListService.getFile(site, newPath);
 
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(site.getId() + "$" + path);
+        movieDetail.setVod_id(site.getId() + "$" + path + "$1");
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(site.getName());
