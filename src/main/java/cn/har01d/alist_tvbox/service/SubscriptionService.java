@@ -49,6 +49,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 
 @Slf4j
@@ -434,16 +435,26 @@ public class SubscriptionService {
         Map<String, Object> site = buildSite(key);
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         sites.removeIf(item -> key.equals(item.get("key")));
-        sites.add(0, site);
+        int id = 0;
+        sites.add(id++, site);
+        log.debug("add AList site: {}", site);
+
         if (appProperties.isXiaoya()) {
             for (Site site1 : siteRepository.findAll()) {
                 if (site1.isSearchable() && !site1.isDisabled()) {
-                    sites.add(1, buildSite2(site1.getName()));
+                    site = buildSite2(site1.getName());
+                    sites.add(id++, site);
+                    log.debug("add AList site: {}", site);
                     break;
                 }
             }
         }
-        log.debug("add AList site: {}", site);
+
+        if (settingRepository.existsById(BILIBILI_COOKIE)) {
+            site = buildSite3();
+            sites.add(id, site);
+            log.debug("add AList site: {}", site);
+        }
     }
 
     private Map<String, Object> buildSite(String key) {
@@ -466,6 +477,20 @@ public class SubscriptionService {
         builder.replacePath("/vod1" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
         site.put("key", "AListVod");
         site.put("name", name);
+        site.put("type", 1);
+        site.put("api", builder.build().toUriString());
+        site.put("searchable", 1);
+        site.put("quickSearch", 1);
+        site.put("filterable", 1);
+        return site;
+    }
+
+    private Map<String, Object> buildSite3() {
+        Map<String, Object> site = new HashMap<>();
+        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
+        builder.replacePath("/bilibili" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
+        site.put("key", "BiliBili");
+        site.put("name", "BiliBili");
         site.put("type", 1);
         site.put("api", builder.build().toUriString());
         site.put("searchable", 1);
@@ -497,6 +522,15 @@ public class SubscriptionService {
 
         rule.put("host", "*");
         rule.put("rule", List.of("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*", "http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
+        rules.add(rule);
+
+        rule = new HashMap<>();
+        rule.put("name", "BiliBili");
+        rule.put("hosts", List.of("bilivideo.cn"));
+        rule.put("regex", List.of("https://.+bilivideo.cn.+\\.(mp4|m4s|m4a)\\?.*"));
+
+        rule.put("host", "bilivideo.cn");
+        rule.put("rule", List.of("https://.+bilivideo.cn.+\\.(mp4|m4s|m4a)\\?.*"));
         rules.add(rule);
     }
 

@@ -33,7 +33,10 @@ public class SettingService {
     }
 
     public Map<String, String> findAll() {
-        Map<String, String> map = settingRepository.findAll().stream().collect(Collectors.toMap(Setting::getName, Setting::getValue));
+        Map<String, String> map = settingRepository.findAll()
+                .stream()
+                .filter(e -> e.getName() != null && e.getValue() != null)
+                .collect(Collectors.toMap(Setting::getName, Setting::getValue));
         map.remove("atv_password");
         return map;
     }

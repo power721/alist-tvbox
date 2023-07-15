@@ -107,7 +107,7 @@
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
           <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
             最新版本：{{ appRemoteVersion }}，请重新运行安装脚本，升级应用。
-            <div class="changelog" v-if="changelog">更新日志： {{changelog}}</div>
+            <div class="changelog" v-if="changelog">更新日志： {{ changelog }}</div>
           </div>
         </el-card>
 
@@ -157,6 +157,12 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateDockerAddress">更新</el-button>
+        </el-form-item>
+        <el-form-item label="BiliBili Cookie" label-width="120">
+          <el-input v-model="bilibiliCookie" type="textarea" :rows="5"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateBilibiliCookie">更新</el-button>
         </el-form-item>
         <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
@@ -211,6 +217,7 @@ const fileExpireHour = ref(24)
 const aListStartTime = ref('')
 const openTokenUrl = ref('')
 const dockerAddress = ref('')
+const bilibiliCookie = ref('')
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const login = ref({
   username: '',
@@ -253,6 +260,12 @@ const updateOpenTokenUrl = () => {
 
 const updateDockerAddress = () => {
   axios.post('/settings', {name: 'docker_address', value: dockerAddress.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateBilibiliCookie = () => {
+  axios.post('/settings', {name: 'bilibili_cookie', value: bilibiliCookie.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -330,6 +343,7 @@ onMounted(() => {
       appVersion.value = data.app_version
       openTokenUrl.value = data.open_token_url
       dockerAddress.value = data.docker_address
+      bilibiliCookie.value = data.bilibili_cookie
       autoCheckin.value = data.auto_checkin === 'true'
       aListRestart.value = data.alist_restart_required === 'true'
       mergeSiteSource.value = data.merge_site_source === 'true'
