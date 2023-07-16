@@ -5,4 +5,5 @@ public class Resp {
     private Integer code;
     private String message;
     private Data data;
+    private Data result;
 }

@@ -68,7 +68,7 @@ public class BiliBiliService {
     private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s";
-    private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?bvid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
+    private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
     private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?bvid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
     private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?bvid=%s&cid=%s&qn=127&platform=html5&high_quality=1";
 
@@ -428,7 +428,7 @@ public class BiliBiliService {
                 Map<String, Object> map = objectMapper.readValue(data, Map.class);
                 for (Map.Entry<String, Object> entry : map.entrySet()) {
                     data = objectMapper.writeValueAsString(entry.getValue());
-                    log.info("{}", data);
+                    log.debug("{}", data);
                     BiliBiliSeasonInfo info = objectMapper.readValue(data, BiliBiliSeasonInfo.class);
                     info.setEpid(Integer.parseInt(entry.getKey()));
                     list.add(info);
@@ -540,11 +540,10 @@ public class BiliBiliService {
 
     public Map<String, String> getPlayUrl(String bvid) {
         String url;
-        String[] parts = bvid.split("\\$");
+        String[] parts = bvid.split("-");
         Map<String, String> result;
-        if (parts.length == 2) {
+        if (parts.length > 1) {
             url = String.format(PLAY_API1, parts[0], parts[1]);
-
         } else {
             BiliBiliInfo info = getInfo(bvid);
             url = String.format(PLAY_API, bvid, info.getCid());
@@ -552,7 +551,7 @@ public class BiliBiliService {
 
         HttpEntity<Void> entity = buildHttpEntity(null);
         ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
-        log.debug("uel: {}  response: {}", url, response.getBody());
+        log.debug("url: {}  response: {}", url, response.getBody());
 
         result = DashUtils.convert(response.getBody());
         String cookie = entity.getHeaders().getFirst("Cookie");
@@ -563,7 +562,7 @@ public class BiliBiliService {
     }
 
     private String buildPlayUrl(BiliBiliSeasonInfo info) {
-        return info.getBvid() + "$" + info.getCid();
+        return info.getAid() + "-" + info.getCid() + "-" + info.getEpid();
     }
 
     private String buildPlayUrl(String bvid) {

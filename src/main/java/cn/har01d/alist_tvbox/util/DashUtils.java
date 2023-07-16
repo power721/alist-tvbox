@@ -25,7 +25,7 @@ public final class DashUtils {
     }
 
     public static Map<String, String> convert(Resp resp) {
-        Dash dash = resp.getData().getDash();
+        Dash dash = resp.getData() == null ? resp.getResult().getDash() : resp.getData().getDash();
 
         int qn = 16;
         StringBuilder videoList = new StringBuilder();
