@@ -5,7 +5,6 @@ import cn.har01d.alist_tvbox.dto.bili.Media;
 import cn.har01d.alist_tvbox.dto.bili.Resp;
 import lombok.extern.slf4j.Slf4j;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Locale;
@@ -30,18 +29,17 @@ public final class DashUtils {
 
         int qn = 16;
         StringBuilder videoList = new StringBuilder();
-        StringBuilder audioList = new StringBuilder();
         for (Media video : dash.getVideo()) {
-            int qid = Integer.parseInt(video.getId());
-            qn = Math.max(qn, qid);
+            qn = Math.max(qn, Integer.parseInt(video.getId()));
         }
 
-        log.info("qn: {}", qn);
         for (Media video : dash.getVideo()) {
             if (video.getId().equals(String.valueOf(qn))) {
                 videoList.append(getMedia(video));
             }
         }
+
+        StringBuilder audioList = new StringBuilder();
         for (Media audio : dash.getAudio()) {
             for (String key : audios.keySet()) {
                 if (audio.getId().equals(key)) {
@@ -51,9 +49,9 @@ public final class DashUtils {
         }
 
         String mpd = getMpd(dash, videoList.toString(), audioList.toString());
-        log.info("{}", mpd);
+        log.debug("{}", mpd);
         String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
-        String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n");
+        String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
         Map<String, String> map = new HashMap<>();
         map.put("url", url);
         map.put("jx", "0");
@@ -86,7 +84,7 @@ public final class DashUtils {
                         "<Initialization range=\"%s\"/>\n" +
                         "</SegmentBase>\n" +
                         "</Representation>\n" +
-                        "</AdaptationSet>",
+                        "</AdaptationSet>\n",
                 type,
                 id, media.getBandwidth(), media.getCodecs(), media.getMimeType(), params, media.getStartWithSap(),
                 baseUrl,

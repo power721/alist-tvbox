@@ -428,6 +428,7 @@ public class BiliBiliService {
                 Map<String, Object> map = objectMapper.readValue(data, Map.class);
                 for (Map.Entry<String, Object> entry : map.entrySet()) {
                     data = objectMapper.writeValueAsString(entry.getValue());
+                    log.info("{}", data);
                     BiliBiliSeasonInfo info = objectMapper.readValue(data, BiliBiliSeasonInfo.class);
                     info.setEpid(Integer.parseInt(entry.getKey()));
                     list.add(info);
@@ -452,6 +453,7 @@ public class BiliBiliService {
                 result.getList().add(movieDetail);
             }
         }
+        log.debug("{}: {}", tid, result);
         return result;
     }
 
@@ -536,34 +538,27 @@ public class BiliBiliService {
         return response.getBody().getData().getToken();
     }
 
-    public Map<String, String> getPlayUrl(String bvid) throws IOException {
+    public Map<String, String> getPlayUrl(String bvid) {
         String url;
         String[] parts = bvid.split("\\$");
-        Map<String, String> result = new HashMap<>();
+        Map<String, String> result;
         if (parts.length == 2) {
             url = String.format(PLAY_API1, parts[0], parts[1]);
 
         } else {
             BiliBiliInfo info = getInfo(bvid);
-//            url = String.format(PLAY_API2, info.getAid(), info.getCid());
             url = String.format(PLAY_API, bvid, info.getCid());
-
-//            HttpEntity<Void> entity = buildHttpEntity(null);
-//            ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
-//            result.put("url", response.getBody().getData().getDurl().get(0).getUrl());
-//            log.info("{} {}", url, result);
-//            return objectMapper.writeValueAsString(result);
         }
 
         HttpEntity<Void> entity = buildHttpEntity(null);
         ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
-        log.info("uel: {}  response: {}", url, response.getBody());
+        log.debug("uel: {}  response: {}", url, response.getBody());
 
         result = DashUtils.convert(response.getBody());
         String cookie = entity.getHeaders().getFirst("Cookie");
         result.put("header", "{\"Referer\":\"https://www.bilibili.com\",\"cookie\":\"" + cookie + "\",\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36\"}");
 
-        log.info("{} {}", url, result);
+        log.debug("{} {}", url, result);
         return result;
     }
 
