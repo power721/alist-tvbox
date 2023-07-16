@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.util;
 
 import cn.har01d.alist_tvbox.dto.bili.Dash;
+import cn.har01d.alist_tvbox.dto.bili.Data;
 import cn.har01d.alist_tvbox.dto.bili.Media;
 import cn.har01d.alist_tvbox.dto.bili.Resp;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,13 @@ public final class DashUtils {
 
     public static Map<String, String> convert(Resp resp) {
         Dash dash = resp.getData() == null ? resp.getResult().getDash() : resp.getData().getDash();
+        if (dash == null) {
+            Data data = resp.getData() == null ? resp.getResult() : resp.getData();
+            String url = data.getDurl().get(0).getUrl();
+            Map<String, String> map = new HashMap<>();
+            map.put("url", url);
+            return map;
+        }
 
         int qn = 16;
         StringBuilder videoList = new StringBuilder();

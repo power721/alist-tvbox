@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.dto.bili;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @lombok.Data
@@ -19,4 +20,5 @@ public class Data {
     private List<Integer> acceptQuality;
     private List<Page> pages;
     private Dash dash;
+    private List<BiliBiliPlay.DUrl> durl = new ArrayList<>();
 }

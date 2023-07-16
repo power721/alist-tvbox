@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResult;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliHotResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfo;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlayResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResult;
@@ -71,7 +72,7 @@ public class BiliBiliService {
     private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s";
-    private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
+    private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
     private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
     private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&platform=html5&high_quality=1";
 
@@ -436,7 +437,7 @@ public class BiliBiliService {
                 Map<String, Object> map = objectMapper.readValue(data, Map.class);
                 for (Map.Entry<String, Object> entry : map.entrySet()) {
                     data = objectMapper.writeValueAsString(entry.getValue());
-                    log.debug("{}", data);
+                    log.info("EP: {}", data);
                     BiliBiliSeasonInfo info = objectMapper.readValue(data, BiliBiliSeasonInfo.class);
                     info.setEpid(Integer.parseInt(entry.getKey()));
                     list.add(info);
@@ -550,19 +551,23 @@ public class BiliBiliService {
         String url;
         String[] parts = bvid.split("-");
         Map<String, String> result;
-        if (parts.length > 1) {
+        if (parts.length > 2) {
             String api = appProperties.isSupportDash() ? PLAY_API1 : PLAY_API2;
-            url = String.format(api, parts[0], parts[1]);
+            url = String.format(api, parts[0], parts[1], parts[2]);
         } else {
             BiliBiliInfo info = getInfo(bvid);
             String api = appProperties.isSupportDash() ? PLAY_API : PLAY_API2;
             url = String.format(api, info.getAid(), info.getCid());
         }
+        log.info("bvid: {}  url: {}", bvid, url);
 
         HttpEntity<Void> entity = buildHttpEntity(null);
         if (appProperties.isSupportDash()) {
             ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
-            log.debug("url: {}  response: {}", url, response.getBody());
+            log.info("url: {}  response: {}", url, response.getBody());
+            if (response.getBody().getCode() != 0) {
+                log.warn("获取失败: {} {}", response.getBody().getCode(), response.getBody().getMessage());
+            }
 
             result = DashUtils.convert(response.getBody());
             String cookie = entity.getHeaders().getFirst("Cookie");
@@ -572,9 +577,15 @@ public class BiliBiliService {
             return result;
         } else {
             ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
-            log.debug("url: {}  response: {}", url, response.getBody());
+            BiliBiliPlayResponse res = response.getBody();
+            log.debug("url: {}  response: {}", url, res);
+            if (res.getCode() != 0) {
+                log.warn("获取失败: {} {}", res.getCode(), res.getMessage());
+            }
+
             Map<String, String> map = new HashMap<>();
-            map.put("url", response.getBody().getData().getDurl().get(0).getUrl());
+            BiliBiliPlay data = res.getData() == null ? res.getResult() : res.getData();
+            map.put("url", data.getDurl().get(0).getUrl());
             return map;
         }
     }
