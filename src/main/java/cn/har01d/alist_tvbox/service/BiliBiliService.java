@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.dto.BiliBiliFeedResponse;
+import cn.har01d.alist_tvbox.dto.BiliBiliHistoryResponse;
+import cn.har01d.alist_tvbox.dto.BiliBiliHistoryResult;
 import cn.har01d.alist_tvbox.dto.BiliBiliHotResponse;
 import cn.har01d.alist_tvbox.dto.BiliBiliInfo;
 import cn.har01d.alist_tvbox.dto.BiliBiliInfoResponse;
@@ -10,6 +12,8 @@ import cn.har01d.alist_tvbox.dto.BiliBiliSearchResult;
 import cn.har01d.alist_tvbox.dto.BiliBiliSeasonInfo;
 import cn.har01d.alist_tvbox.dto.BiliBiliSeasonResponse;
 import cn.har01d.alist_tvbox.dto.BiliBiliTokenResponse;
+import cn.har01d.alist_tvbox.dto.BiliBiliVideoInfo;
+import cn.har01d.alist_tvbox.dto.BiliBiliVideoInfoResponse;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.model.Filter;
@@ -23,6 +27,7 @@ import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -37,6 +42,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,16 +56,18 @@ import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.BILI_BILI;
+import static cn.har01d.alist_tvbox.util.Constants.COLLECTION;
 import static cn.har01d.alist_tvbox.util.Constants.FILE;
 import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
 
 @Slf4j
 @Service
 public class BiliBiliService {
     private static final String INFO_API = "https://api.bilibili.com/x/web-interface/view?bvid=";
     private static final String HOT_API = "https://api.bilibili.com/x/web-interface/ranking/v2?type=%s&rid=%d";
+    private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
+    private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s";
     private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?cid=%d&bvid=%s&qn=127&type=&otype=json&fourk=1&fnver=1&fnval=4048";
     private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&platform=html5&high_quality=1";
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
@@ -75,11 +83,12 @@ public class BiliBiliService {
             new FilterValue("最多弹幕", "dm"),
             new FilterValue("最多收藏️", "stow")
     );
+    private final Map<String, List<FilterValue>> filterMap = new HashMap<>();
     private final SettingRepository settingRepository;
     private final SubscriptionService subscriptionService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final List<Setting> types = new ArrayList<>();
+    private List<Setting> types = new ArrayList<>();
     private MovieDetail searchPlaylist;
     private String keyword = "";
     private int searchPage;
@@ -92,28 +101,48 @@ public class BiliBiliService {
         this.settingRepository = settingRepository;
         this.subscriptionService = subscriptionService;
         this.restTemplate = builder
-                .defaultHeader("Referer", "https://api.bilibili.com/")
+                .defaultHeader("Referer", "https://www.bilibili.com/")
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
+
+    }
+
+    private void addType(String name, String value) {
+        types.add(new Setting(name, value));
+    }
+
+    private void addType(String name, String value, String filters) {
+        types.add(new Setting(name, value));
+        filterMap.put(name, Arrays.asList(filters.split("&")).stream().map(e -> {
+            String[] parts = e.split("=");
+            return new FilterValue(parts[0], parts.length == 1 ? "" : parts[1]);
+        }).collect(Collectors.toList()));
+    }
+
+    private List<Setting> getTypes() {
+        types = new ArrayList<>();
+        if (settingRepository.findById("bilibili_history").map(Setting::getValue).orElse("").equals("true")) {
+            addType("历史记录", "history$0");
+        }
         addType("全站", "0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=all
         addType("热门", "pop$1");
-        addType("科技", "188");
-        addType("知识", "36");
-        addType("动画", "1");
-        addType("音乐", "3");
-        addType("游戏", "4");
-        addType("娱乐", "5");
-        addType("影视", "181");
-        addType("舞蹈", "129");
-        addType("运动", "234");
-        addType("汽车", "223");
-        addType("生活", "160");
-        addType("美食", "211");
-        addType("动物圈", "217");
-        addType("时尚", "155");
-        addType("鬼畜", "119");
-        addType("国创相关", "168");
+        addType("科技", "188", "主分区=&数码=95&软件应用=230&计算机技术=231&科工机械=232&极客DIY=233");
+        addType("知识", "36", "主分区=&科学科普=201&社科·法律·心理=124&人文历史=228&财经商业=207&校园学习=208&职业职场=209&设计·创意=229");
+        addType("动画", "1", "主分区=&MAD·AMV=24&MMD·3D=25&短片·手书·配音=47&手办·模玩=210&特摄=86&动漫杂谈=253&综合=27");
+        addType("音乐", "3", "主分区=");
+        addType("游戏", "4", "主分区=");
+        addType("娱乐", "5", "主分区=");
+        addType("影视", "181", "主分区=");
+        addType("舞蹈", "129", "主分区=");
+        addType("运动", "234", "主分区=");
+        addType("汽车", "223", "主分区=");
+        addType("生活", "160", "主分区=");
+        addType("美食", "211", "主分区=");
+        addType("动物圈", "217", "主分区=");
+        addType("时尚", "155", "主分区=");
+        addType("鬼畜", "119", "主分区=");
+        addType("国创相关", "168", "主分区=");
 //        addType("国产动画", "season$1"); // https://api.bilibili.com/pgc/web/rank/list?day=3&season_type=1
 //        addType("电影", "season$2"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=2
 //        addType("纪录片", "season$3"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=3
@@ -122,10 +151,7 @@ public class BiliBiliService {
 //        addType("综艺", "season$7"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=7
         addType("原创", "origin$0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=origin
         addType("新人", "rookie$0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=rookie
-    }
-
-    private void addType(String name, String value) {
-        types.add(new Setting(name, value));
+        return types;
     }
 
     public CategoryList getCategoryList() {
@@ -151,11 +177,14 @@ public class BiliBiliService {
             log.warn("", e);
         }
 
-        for (Setting item : types) {
+        for (Setting item : getTypes()) {
             Category category = new Category();
             category.setType_id(item.getValue());
             category.setType_name(item.getName());
             category.setType_flag(0);
+            if (filterMap.containsKey(item.getName())) {
+                result.getFilters().put(category.getType_id(), List.of(new Filter("type", "分类", filterMap.get(item.getName()))));
+            }
             result.getCategories().add(category);
         }
 
@@ -192,6 +221,33 @@ public class BiliBiliService {
         movieDetail.setVod_play_url(buildPlayUrl(movieDetail.getVod_id()));
         movieDetail.setVod_remarks(info.getRating());
         movieDetail.setVod_content(info.getDesc() + ";\n" + info.getStat().getView() + "播放;\n" + info.getStat().getFollow() + "关注");
+        return movieDetail;
+    }
+
+    private MovieDetail getMovieDetail(BiliBiliVideoInfo.Video info) {
+        String id = info.getBvid();
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id(id);
+        movieDetail.setVod_name(info.getTitle());
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_pic(fixUrl(info.getPic()));
+        movieDetail.setVod_play_from(BILI_BILI);
+        movieDetail.setVod_play_url(buildPlayUrl(id));
+        movieDetail.setVod_remarks(seconds2String(info.getDuration()));
+        movieDetail.setVod_content(info.getDescription());
+        return movieDetail;
+    }
+
+    private MovieDetail getMovieDetail(BiliBiliHistoryResult.Video info) {
+        String id = info.getHistory().getBvid();
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id(id);
+        movieDetail.setVod_name(info.getTitle());
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_pic(fixUrl(info.getCover()));
+        movieDetail.setVod_play_from(BILI_BILI);
+        movieDetail.setVod_play_url(buildPlayUrl(id));
+        movieDetail.setVod_remarks(seconds2String(info.getDuration()));
         return movieDetail;
     }
 
@@ -235,6 +291,15 @@ public class BiliBiliService {
     public List<BiliBiliInfo> getPopular(int page) {
         BiliBiliHotResponse hotResponse = restTemplate.getForObject(POPULAR_API + page, BiliBiliHotResponse.class);
         return hotResponse.getData().getList();
+    }
+
+    public BiliBiliVideoInfo getRankList(String type, int page) {
+        LocalDate now = LocalDate.now();
+        String from = now.minusDays(7).toString().replace("-", "");
+        String to = now.toString().replace("-", "");
+        String url = String.format(LIST_API, type, page, from, to);
+        BiliBiliVideoInfoResponse hotResponse = restTemplate.getForObject(url, BiliBiliVideoInfoResponse.class);
+        return hotResponse.getData();
     }
 
     public List<BiliBiliInfo> getTopFeed() {
@@ -290,8 +355,31 @@ public class BiliBiliService {
         return result;
     }
 
+    private List<String> ids = new ArrayList<>();
+
+    public MovieList getHistory(int page) {
+        if (page == 1) {
+            ids = new ArrayList<>();
+            ids.add("");
+        }
+        String url = String.format(HISTORY_API, ids.get(page - 1));
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        ResponseEntity<BiliBiliHistoryResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliHistoryResponse.class);
+        BiliBiliHistoryResponse hotResponse = response.getBody();
+        MovieList result = new MovieList();
+        for (BiliBiliHistoryResult.Video info : hotResponse.getData().getList()) {
+            MovieDetail movieDetail = getMovieDetail(info);
+            result.getList().add(movieDetail);
+        }
+        ids.add(String.valueOf(hotResponse.getData().getCursor().getMax()));
+        result.setTotal(2000);
+        result.setPagecount(50);
+        log.debug("getHistory: {} {}", url, result);
+        return result;
+    }
+
     public MovieList getDetail(String bvid) throws IOException {
-        if (bvid.startsWith(PLAYLIST)) {
+        if (bvid.startsWith(COLLECTION)) {
             return getPlaylist(bvid);
         }
 
@@ -394,12 +482,12 @@ public class BiliBiliService {
         }
 
         searchPlaylist = new MovieDetail();
-        searchPlaylist.setVod_id(PLAYLIST + "$" + wd + "$0$" + page);
+        searchPlaylist.setVod_id(COLLECTION + "$" + wd + "$0$" + page);
         searchPlaylist.setVod_name(wd + "合集" + (page + 1));
         searchPlaylist.setVod_tag(FILE);
         searchPlaylist.setVod_pic(LIST_PIC);
         searchPlaylist.setVod_play_from(BILI_BILI);
-        String playUrl = list.stream().map(e -> fixTitle(e) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
+        String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
         searchPlaylist.setVod_play_url(playUrl);
         searchPlaylist.setVod_content("共" + list.size() + "个视频");
         result.getList().add(searchPlaylist);
@@ -491,13 +579,28 @@ public class BiliBiliService {
         return builder.build().toUriString();
     }
 
-    public MovieList getMovieList(String tid, String sort, int page) {
+    public MovieList getMovieList(String tid, String filter, String sort, int page) {
         if (tid.startsWith("search:")) {
             String[] parts = tid.split(":");
             return search(parts[1], sort, page);
         }
 
+        String type = "";
+        if (StringUtils.isNotBlank(filter)) {
+            try {
+                Map<String, String> map = objectMapper.readValue(filter, Map.class);
+                type = map.getOrDefault("type", type);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+
+        if (StringUtils.isNotBlank(type)) {
+            return getMovieListByType(page, type);
+        }
+
         String[] parts = tid.split("\\$");
+        MovieList result = new MovieList();
         List<BiliBiliInfo> list;
         if (parts.length == 1) {
             list = getHotRank("all", Integer.parseInt(tid));
@@ -505,11 +608,12 @@ public class BiliBiliService {
             return getSeasonRank(Integer.parseInt(parts[1]));
         } else if ("pop".equals(parts[0])) {
             list = getPopular(page);
+        } else if ("history".equals(parts[0])) {
+            return getHistory(page);
         } else {
             list = getHotRank(parts[0], Integer.parseInt(parts[1]));
         }
 
-        MovieList result = new MovieList();
         for (BiliBiliInfo info : list) {
             MovieDetail movieDetail = getMovieDetail(info);
             result.getList().add(movieDetail);
@@ -523,6 +627,32 @@ public class BiliBiliService {
             result.setTotal(result.getList().size());
         }
 
+        result.setLimit(result.getList().size());
+        return result;
+    }
+
+    @NotNull
+    private MovieList getMovieListByType(int page, String type) {
+        MovieList result = new MovieList();
+        BiliBiliVideoInfo rank = getRankList(type, page);
+//            MovieDetail movieDetail = new MovieDetail();
+//            movieDetail.setVod_id(COLLECTION + "$" + wd + "$" + getType(sort) + "$" + (page - 1));
+//            movieDetail.setVod_name(wd + "合集" + page);
+//            movieDetail.setVod_tag(FILE);
+//            movieDetail.setVod_pic(LIST_PIC);
+//            movieDetail.setVod_play_from(BILI_BILI);
+//            String playUrl = rank.getResult().stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
+//            movieDetail.setVod_play_url(playUrl);
+//            movieDetail.setVod_content("共" + rank.getResult().size() + "个视频");
+//            result.getList().add(movieDetail);
+
+        for (BiliBiliVideoInfo.Video video : rank.getResult()) {
+            MovieDetail movieDetail = getMovieDetail(video);
+            result.getList().add(movieDetail);
+        }
+        result.setTotal(rank.getNumResults());
+        result.setPage(page);
+        result.setPagecount(rank.getNumPages());
         result.setLimit(result.getList().size());
         return result;
     }
@@ -543,12 +673,12 @@ public class BiliBiliService {
             keyword = wd;
             searchPage = pg - 1;
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(PLAYLIST + "$" + wd + "$" + getType(sort) + "$" + (pg - 1));
+            movieDetail.setVod_id(COLLECTION + "$" + wd + "$" + getType(sort) + "$" + (pg - 1));
             movieDetail.setVod_name(wd + "合集" + pg);
             movieDetail.setVod_tag(FILE);
             movieDetail.setVod_pic(LIST_PIC);
             movieDetail.setVod_play_from(BILI_BILI);
-            String playUrl = videos.stream().map(e -> fixTitle(e) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
+            String playUrl = videos.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
             movieDetail.setVod_play_url(playUrl);
             movieDetail.setVod_content("共" + videos.size() + "个视频");
             searchPlaylist = movieDetail;
@@ -573,13 +703,13 @@ public class BiliBiliService {
             pages = (pages + 1) / 2;
             for (int i = 0; i < pages; i++) {
                 MovieDetail movieDetail = new MovieDetail();
-                movieDetail.setVod_id(PLAYLIST + "$" + wd + "$0$" + i);
+                movieDetail.setVod_id(COLLECTION + "$" + wd + "$0$" + i);
                 movieDetail.setVod_name(wd + "合集" + (i + 1));
                 movieDetail.setVod_tag(FILE);
                 movieDetail.setVod_pic(LIST_PIC);
                 movieDetail.setVod_play_from(BILI_BILI);
                 if (i == 0) {
-                    String playUrl = list.stream().map(e -> fixTitle(e) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
+                    String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
                     movieDetail.setVod_play_url(playUrl);
                     movieDetail.setVod_content("共" + list.size() + "个视频");
                     searchPlaylist = movieDetail;
@@ -639,7 +769,7 @@ public class BiliBiliService {
     private MovieDetail getSearchMovieDetail(BiliBiliSearchResult.Video info) {
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(info.getBvid());
-        movieDetail.setVod_name(fixTitle(info));
+        movieDetail.setVod_name(fixTitle(info.getTitle()));
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_director(info.getAuthor());
         movieDetail.setType_name(info.getTypename());
@@ -652,8 +782,8 @@ public class BiliBiliService {
         return movieDetail;
     }
 
-    private static String fixTitle(BiliBiliSearchResult.Video info) {
-        return info.getTitle()
+    private static String fixTitle(String title) {
+        return title
                 .replace("#", " ")
                 .replace("&amp;", "&")
                 .replace("&quot;", "\"")
