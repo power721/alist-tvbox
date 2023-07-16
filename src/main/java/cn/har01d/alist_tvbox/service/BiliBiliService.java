@@ -1,19 +1,19 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.dto.BiliBiliFeedResponse;
-import cn.har01d.alist_tvbox.dto.BiliBiliHistoryResponse;
-import cn.har01d.alist_tvbox.dto.BiliBiliHistoryResult;
-import cn.har01d.alist_tvbox.dto.BiliBiliHotResponse;
-import cn.har01d.alist_tvbox.dto.BiliBiliInfo;
-import cn.har01d.alist_tvbox.dto.BiliBiliInfoResponse;
-import cn.har01d.alist_tvbox.dto.BiliBiliPlayResponse;
-import cn.har01d.alist_tvbox.dto.BiliBiliSearchResponse;
-import cn.har01d.alist_tvbox.dto.BiliBiliSearchResult;
-import cn.har01d.alist_tvbox.dto.BiliBiliSeasonInfo;
-import cn.har01d.alist_tvbox.dto.BiliBiliSeasonResponse;
-import cn.har01d.alist_tvbox.dto.BiliBiliTokenResponse;
-import cn.har01d.alist_tvbox.dto.BiliBiliVideoInfo;
-import cn.har01d.alist_tvbox.dto.BiliBiliVideoInfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliFeedResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResult;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliHotResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResult;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliTokenResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliVideoInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliVideoInfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.Resp;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.model.Filter;
@@ -23,6 +23,7 @@ import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +36,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -68,8 +68,10 @@ public class BiliBiliService {
     private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s";
-    private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?cid=%d&bvid=%s&qn=127&type=&otype=json&fourk=1&fnver=1&fnval=4048";
-    private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&platform=html5&high_quality=1";
+    private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?bvid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
+    private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?bvid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
+    private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?bvid=%s&cid=%s&qn=127&platform=html5&high_quality=1";
+
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
     private static final String POPULAR_API = "https://api.bilibili.com/x/web-interface/popular?ps=30&pn=";
     private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?jsonp=jsonp&search_type=video&highlight=1&page_size=50&keyword=%s&order=%s&page=%d";
@@ -143,12 +145,12 @@ public class BiliBiliService {
         addType("时尚", "155", "主分区=");
         addType("鬼畜", "119", "主分区=");
         addType("国创相关", "168", "主分区=");
-//        addType("国产动画", "season$1"); // https://api.bilibili.com/pgc/web/rank/list?day=3&season_type=1
-//        addType("电影", "season$2"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=2
-//        addType("纪录片", "season$3"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=3
-//        addType("番剧", "season$4"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=4
-//        addType("电视剧", "season$5"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=5
-//        addType("综艺", "season$7"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=7
+        addType("国产动画", "season$1"); // https://api.bilibili.com/pgc/web/rank/list?day=3&season_type=1
+        addType("电影", "season$2"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=2
+        addType("纪录片", "season$3"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=3
+        addType("番剧", "season$4"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=4
+        addType("电视剧", "season$5"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=5
+        addType("综艺", "season$7"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=7
         addType("原创", "origin$0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=origin
         addType("新人", "rookie$0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=rookie
         return types;
@@ -188,11 +190,11 @@ public class BiliBiliService {
             result.getCategories().add(category);
         }
 
-        List<MovieDetail> list = new ArrayList<>();
-        MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id("recommend");
-        list.add(movieDetail);
-        result.setList(list);
+//        List<MovieDetail> list = new ArrayList<>();
+//        MovieDetail movieDetail = new MovieDetail();
+//        movieDetail.setVod_id("recommend");
+//        list.add(movieDetail);
+//        result.setList(list);
 
         return result;
     }
@@ -534,49 +536,43 @@ public class BiliBiliService {
         return response.getBody().getData().getToken();
     }
 
-    public String getPlayUrl(String bvid, Integer aid, Integer cid) {
+    public Map<String, String> getPlayUrl(String bvid) throws IOException {
         String url;
-        if (aid != null) {
-            url = String.format(PLAY_API, aid, bvid);
+        String[] parts = bvid.split("\\$");
+        Map<String, String> result = new HashMap<>();
+        if (parts.length == 2) {
+            url = String.format(PLAY_API1, parts[0], parts[1]);
+
         } else {
             BiliBiliInfo info = getInfo(bvid);
-            url = String.format(PLAY_API, info.getAid(), info.getCid());
+//            url = String.format(PLAY_API2, info.getAid(), info.getCid());
+            url = String.format(PLAY_API, bvid, info.getCid());
+
+//            HttpEntity<Void> entity = buildHttpEntity(null);
+//            ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
+//            result.put("url", response.getBody().getData().getDurl().get(0).getUrl());
+//            log.info("{} {}", url, result);
+//            return objectMapper.writeValueAsString(result);
         }
 
         HttpEntity<Void> entity = buildHttpEntity(null);
-        ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
-        BiliBiliPlayResponse playResponse = response.getBody();
-        log.debug("url: {} response: {}", url, playResponse);
-        if (playResponse.getCode() == 0) {
-            if (playResponse.getData() != null) {
-                return playResponse.getData().getDurl().get(0).getUrl();
-            } else {
-                return playResponse.getResult().getDurl().get(0).getUrl();
-//                BiliBiliPlay play = playResponse.getResult();
-//                return play.getDash().getVideo().get(0).getBaseUrl();
-            }
-        } else {
-            log.warn("get BiliBili video play url failed: {}", playResponse.getMessage());
-        }
-        return null;
+        ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
+        log.info("uel: {}  response: {}", url, response.getBody());
+
+        result = DashUtils.convert(response.getBody());
+        String cookie = entity.getHeaders().getFirst("Cookie");
+        result.put("header", "{\"Referer\":\"https://www.bilibili.com\",\"cookie\":\"" + cookie + "\",\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36\"}");
+
+        log.info("{} {}", url, result);
+        return result;
     }
 
     private String buildPlayUrl(BiliBiliSeasonInfo info) {
-        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        String token = subscriptionService.getToken();
-        builder.replacePath("/play" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
-        builder.queryParam("aid", info.getAid());
-        builder.queryParam("cid", info.getCid());
-        builder.queryParam("bvid", info.getBvid());
-        return builder.build().toUriString();
+        return info.getBvid() + "$" + info.getCid();
     }
 
     private String buildPlayUrl(String bvid) {
-        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        String token = subscriptionService.getToken();
-        builder.replacePath("/play" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
-        builder.queryParam("bvid", bvid);
-        return builder.build().toUriString();
+        return bvid;
     }
 
     public MovieList getMovieList(String tid, String filter, String sort, int page) {
