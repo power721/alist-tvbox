@@ -244,10 +244,11 @@ public class TvBoxService {
     }
 
     private void setTypes(CategoryList result, Site site) {
+        int type = appProperties.isMix() ? 1 : 0;
         Category category = new Category();
-        category.setType_id(site.getId() + "$/" + "$1");
+        category.setType_id(site.getId() + "$/" + "$" + type);
         category.setType_name("\uD83C\uDFAC" + site.getName());
-        category.setType_flag(1);
+        category.setType_flag(type);
         result.getCategories().add(category);
         result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "筛选", filters3)));
 
@@ -291,8 +292,8 @@ public class TvBoxService {
 
         for (FsInfo fsInfo : aListService.listFiles(site, "/", 1, 20).getFiles()) {
             String name = fsInfo.getName();
-            if (fsInfo.getType() != 1 || name.contains("v.") || name.contains("画质演示测试") || name.contains("指南")
-                    || name.contains("电子书") || name.contains("游戏") || name.contains("我的")) {
+            if (fsInfo.getType() != 1 || !metaRepository.existsByPathStartsWith("/" + name)) {
+                log.info("ignore path: {}", name);
                 continue;
             }
             category = new Category();

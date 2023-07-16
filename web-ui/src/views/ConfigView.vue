@@ -125,6 +125,17 @@
           <template #header>
             <div class="card-header">豆瓣电影数据</div>
           </template>
+          <el-form label-width="110px">
+            <el-form-item label="海报墙混合模式">
+              <el-switch
+                v-model="mixSiteSource"
+                inline-prompt
+                active-text="开启"
+                inactive-text="关闭"
+                @change="updateMixed"
+              />
+            </el-form-item>
+          </el-form>
           <div>本地版本：{{ movieVersion }}</div>
           <div v-if="movieRemoteVersion&&movieRemoteVersion>movieVersion">
             最新版本：{{ movieRemoteVersion }}，{{movieRemoteVersion==cachedMovieVersion?'已经下载，请':'后台下载中，请稍后'}}重启Docker更新。
@@ -147,15 +158,6 @@
         <el-form-item>
           <el-button type="primary" @click="updateDockerAddress">更新</el-button>
         </el-form-item>
-<!--        <el-form-item label="合并站源">-->
-<!--          <el-switch-->
-<!--            v-model="mergeSiteSource"-->
-<!--            inline-prompt-->
-<!--            active-text="开启"-->
-<!--            inactive-text="关闭"-->
-<!--            @change="updateMerge"-->
-<!--          />-->
-<!--        </el-form-item>-->
         <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>
@@ -192,6 +194,7 @@ const increase = () => {
 const aListStarted = ref(false)
 const aListRestart = ref(false)
 const mergeSiteSource = ref(false)
+const mixSiteSource = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -260,6 +263,12 @@ const updateMerge = () => {
   })
 }
 
+const updateMixed = () => {
+  axios.post('/settings', {name: 'mix_site_source', value: mixSiteSource.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateLogin = () => {
   axios.post('/login', login.value).then(() => {
     ElMessage.success('保存成功')
@@ -324,6 +333,7 @@ onMounted(() => {
       autoCheckin.value = data.auto_checkin === 'true'
       aListRestart.value = data.alist_restart_required === 'true'
       mergeSiteSource.value = data.merge_site_source === 'true'
+      mixSiteSource.value = data.mix_site_source === 'true'
       login.value.username = data.alist_username
       login.value.password = data.alist_password
       login.value.enabled = data.alist_login === 'true'

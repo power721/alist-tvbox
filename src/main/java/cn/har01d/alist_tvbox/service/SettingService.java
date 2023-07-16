@@ -25,6 +25,7 @@ public class SettingService {
     @PostConstruct
     public void setup() {
         appProperties.setMerge(settingRepository.findById("merge_site_source").map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
     }
 
     public void exportDatabase() {
@@ -40,6 +41,9 @@ public class SettingService {
     public Setting update(Setting setting) {
         if ("merge_site_source".equals(setting.getName())) {
             appProperties.setMerge("true".equals(setting.getValue()));
+        }
+        if ("mix_site_source".equals(setting.getName())) {
+            appProperties.setMix("true".equals(setting.getValue()));
         }
         return settingRepository.save(setting);
     }
