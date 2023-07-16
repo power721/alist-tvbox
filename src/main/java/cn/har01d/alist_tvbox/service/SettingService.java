@@ -39,6 +39,7 @@ public class SettingService {
                 .filter(e -> e.getName() != null && e.getValue() != null)
                 .collect(Collectors.toMap(Setting::getName, Setting::getValue));
         map.remove("atv_password");
+        map.remove("api_key");
         return map;
     }
 

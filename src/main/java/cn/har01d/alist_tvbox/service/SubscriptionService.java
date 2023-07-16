@@ -450,20 +450,28 @@ public class SubscriptionService {
         log.debug("add AList site: {}", site);
 
         if (appProperties.isXiaoya()) {
-            for (Site site1 : siteRepository.findAll()) {
-                if (site1.isSearchable() && !site1.isDisabled()) {
-                    site = buildSite2(site1.getName());
-                    sites.add(id++, site);
-                    log.debug("add AList site: {}", site);
-                    break;
+            try {
+                for (Site site1 : siteRepository.findAll()) {
+                    if (site1.isSearchable() && !site1.isDisabled()) {
+                        site = buildSite2(site1.getName());
+                        sites.add(id++, site);
+                        log.debug("add AList site: {}", site);
+                        break;
+                    }
                 }
+            } catch (Exception e) {
+                log.warn("", e);
             }
         }
 
         if (settingRepository.existsById(BILIBILI_COOKIE)) {
-            site = buildSite3();
-            sites.add(id, site);
-            log.debug("add AList site: {}", site);
+            try {
+                site = buildSite3();
+                sites.add(id, site);
+                log.debug("add AList site: {}", site);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
         }
     }
 
@@ -495,7 +503,7 @@ public class SubscriptionService {
         return site;
     }
 
-    private Map<String, Object> buildSite3() {
+    private Map<String, Object> buildSite3() throws IOException {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
         builder.replacePath("");
@@ -503,8 +511,13 @@ public class SubscriptionService {
         site.put("api", "csp_BiliBili");
         site.put("name", "BiliBili");
         site.put("type", 3);
-        site.put("ext", "{\"api\":\"" + builder.build().toUriString() + "\"}");
-        site.put("jar", builder.build().toUriString() + "/custom_spider.jar");
+        Map<String, String> map = new HashMap<>();
+        map.put("api", builder.build().toUriString());
+        map.put("apiKey", settingRepository.findById("api_key").map(Setting::getValue).orElse(""));
+        String ext = objectMapper.writeValueAsString(map);
+        ext = Base64.getEncoder().encodeToString(ext.getBytes());
+        site.put("ext", ext);
+        site.put("jar", builder.build().toUriString() + "/spring.jar");
         site.put("searchable", 1);
         site.put("quickSearch", 1);
         site.put("filterable", 1);

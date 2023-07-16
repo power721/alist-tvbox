@@ -39,6 +39,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,6 +52,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -107,7 +109,13 @@ public class BiliBiliService {
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
+    }
 
+    @PostConstruct
+    public void setup() {
+        if (!settingRepository.existsById("api_key")) {
+            settingRepository.save(new Setting("api_key", UUID.randomUUID().toString()));
+        }
     }
 
     private void addType(String name, String value) {
