@@ -169,6 +169,16 @@
         <el-form-item>
           <el-button type="primary" @click="updateBilibiliCookie">更新</el-button>
         </el-form-item>
+        <el-form-item label="支持B站DASH视频">
+          <el-switch
+            v-model="supportDash"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateSupportDash"
+          />
+          <span class="hint">高清高速，仅影视EXO支持</span>
+        </el-form-item>
         <el-form-item label="B站显示历史记录">
           <el-switch
             v-model="bilibiliHistory"
@@ -216,6 +226,7 @@ const aListStarted = ref(false)
 const aListRestart = ref(false)
 const mergeSiteSource = ref(false)
 const mixSiteSource = ref(false)
+const supportDash = ref(false)
 const bilibiliHistory = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
@@ -305,6 +316,12 @@ const updateBilibiliHistory = () => {
   })
 }
 
+const updateSupportDash = () => {
+  axios.post('/settings', {name: 'support_dash', value: supportDash.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateLogin = () => {
   axios.post('/login', login.value).then(() => {
     ElMessage.success('保存成功')
@@ -372,6 +389,7 @@ onMounted(() => {
       aListRestart.value = data.alist_restart_required === 'true'
       mergeSiteSource.value = data.merge_site_source === 'true'
       mixSiteSource.value = data.mix_site_source === 'true'
+      supportDash.value = data.support_dash === 'true'
       bilibiliHistory.value = data.bilibili_history === 'true'
       login.value.username = data.alist_username
       login.value.password = data.alist_password

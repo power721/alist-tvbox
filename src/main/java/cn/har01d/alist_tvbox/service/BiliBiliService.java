@@ -1,11 +1,13 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliFeedResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResult;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliHotResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfo;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlayResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResult;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfo;
@@ -43,7 +45,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -69,8 +70,8 @@ public class BiliBiliService {
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s";
     private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
-    private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?bvid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
-    private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?bvid=%s&cid=%s&qn=127&platform=html5&high_quality=1";
+    private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048";
+    private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&platform=html5&high_quality=1";
 
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
     private static final String POPULAR_API = "https://api.bilibili.com/x/web-interface/popular?ps=30&pn=";
@@ -87,21 +88,20 @@ public class BiliBiliService {
     );
     private final Map<String, List<FilterValue>> filterMap = new HashMap<>();
     private final SettingRepository settingRepository;
-    private final SubscriptionService subscriptionService;
+    private final AppProperties appProperties;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private List<Setting> types = new ArrayList<>();
     private MovieDetail searchPlaylist;
     private String keyword = "";
     private int searchPage;
-    private LocalDateTime keyTime = LocalDateTime.now();
 
     public BiliBiliService(SettingRepository settingRepository,
-                           SubscriptionService subscriptionService,
+                           AppProperties appProperties,
                            RestTemplateBuilder builder,
                            ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
-        this.subscriptionService = subscriptionService;
+        this.appProperties = appProperties;
         this.restTemplate = builder
                 .defaultHeader("Referer", "https://www.bilibili.com/")
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
@@ -543,22 +543,32 @@ public class BiliBiliService {
         String[] parts = bvid.split("-");
         Map<String, String> result;
         if (parts.length > 1) {
-            url = String.format(PLAY_API1, parts[0], parts[1]);
+            String api = appProperties.isSupportDash() ? PLAY_API1 : PLAY_API2;
+            url = String.format(api, parts[0], parts[1]);
         } else {
             BiliBiliInfo info = getInfo(bvid);
-            url = String.format(PLAY_API, bvid, info.getCid());
+            String api = appProperties.isSupportDash() ? PLAY_API : PLAY_API2;
+            url = String.format(api, info.getAid(), info.getCid());
         }
 
         HttpEntity<Void> entity = buildHttpEntity(null);
-        ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
-        log.debug("url: {}  response: {}", url, response.getBody());
+        if (appProperties.isSupportDash()) {
+            ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
+            log.debug("url: {}  response: {}", url, response.getBody());
 
-        result = DashUtils.convert(response.getBody());
-        String cookie = entity.getHeaders().getFirst("Cookie");
-        result.put("header", "{\"Referer\":\"https://www.bilibili.com\",\"cookie\":\"" + cookie + "\",\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36\"}");
+            result = DashUtils.convert(response.getBody());
+            String cookie = entity.getHeaders().getFirst("Cookie");
+            result.put("header", "{\"Referer\":\"https://www.bilibili.com\",\"cookie\":\"" + cookie + "\",\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36\"}");
 
-        log.debug("{} {}", url, result);
-        return result;
+            log.debug("{} {}", url, result);
+            return result;
+        } else {
+            ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
+            log.debug("url: {}  response: {}", url, response.getBody());
+            Map<String, String> map = new HashMap<>();
+            map.put("url", response.getBody().getData().getDurl().get(0).getUrl());
+            return map;
+        }
     }
 
     private String buildPlayUrl(BiliBiliSeasonInfo info) {

@@ -46,7 +46,7 @@ public class PlayController {
         }
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), request.getQueryString());
-        log.info("get play url - site: {}  path: {}  bvid: {}  type: ", site, path, bvid, type);
+        log.debug("get play url - site: {}  path: {}  bvid: {}  type: ", site, path, bvid, type);
 
         if (StringUtils.isNotBlank(bvid)) {
             return biliBiliService.getPlayUrl(bvid);
