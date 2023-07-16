@@ -608,7 +608,10 @@ public class TvBoxService {
         Site site = getSite(tid);
         String[] parts = tid.split("\\$");
         String path = parts[1];
-        int type = Integer.parseInt(parts[2]);
+        int type = 1;
+        if (parts.length > 2) {
+            type = Integer.parseInt(parts[2]);
+        }
 
         if (type == 0) {
             return getMetaList(tid, filter, sort, page);
