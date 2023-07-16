@@ -3,6 +3,7 @@ FROM haroldli/alist-base:latest
 LABEL MAINTAINER="Har01d"
 
 COPY init.sh /
+COPY movie.sh /
 COPY entrypoint.sh /
 
 COPY target/application/ ./

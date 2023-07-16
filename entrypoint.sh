@@ -26,7 +26,7 @@ if [ -f /data/atv/movie_version ]; then
 fi
 REMOTE=$(curl -fsSL http://d.har01d.cn/movie_version | head -n 1)
 latest=$(printf "$REMOTE\n$LOCAL\n" | sort -r | head -n1)
-echo "local movie data version: ${LOCAL}, remote movie data version: ${REMOTE}"
+echo "local movie data version: ${LOCAL}, remote version: ${REMOTE}"
 if [ "$LOCAL" = "$REMOTE" ]; then
   echo "the movie data is updated"
 elif [ "$latest" = "$REMOTE" ]; then
@@ -45,7 +45,7 @@ fi
 if [ -f /data/cmd.sql ]; then
   echo "add cmd.sql"
   wc /data/cmd.sql
-  cat /data/cmd.sql >> data/data.sql
+  cat /data/cmd.sql >> /data/atv/data.sql
   rm -f /data/cmd.sql
 fi
 

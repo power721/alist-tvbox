@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.Versions;
 import cn.har01d.alist_tvbox.entity.Alias;
 import cn.har01d.alist_tvbox.entity.AliasRepository;
 import cn.har01d.alist_tvbox.entity.Meta;
@@ -21,6 +23,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.annotation.PostConstruct;
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -28,6 +31,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static cn.har01d.alist_tvbox.util.Constants.MOVIE_VERSION;
 
@@ -35,15 +40,24 @@ import static cn.har01d.alist_tvbox.util.Constants.MOVIE_VERSION;
 @Service
 public class DoubanService {
 
+    private final AppProperties appProperties;
     private final MetaRepository metaRepository;
     private final MovieRepository movieRepository;
     private final AliasRepository aliasRepository;
     private final SettingRepository settingRepository;
 
     private final RestTemplate restTemplate;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
+    private volatile boolean downloading;
 
-    public DoubanService(MetaRepository metaRepository, MovieRepository movieRepository, AliasRepository aliasRepository, SettingRepository settingRepository, RestTemplateBuilder builder) {
+    public DoubanService(AppProperties appProperties,
+                         MetaRepository metaRepository,
+                         MovieRepository movieRepository,
+                         AliasRepository aliasRepository,
+                         SettingRepository settingRepository,
+                         RestTemplateBuilder builder) {
+        this.appProperties = appProperties;
         this.metaRepository = metaRepository;
         this.movieRepository = movieRepository;
         this.aliasRepository = aliasRepository;
@@ -69,13 +83,58 @@ public class DoubanService {
         }
     }
 
-    public String getRemoteVersion() {
+    public String getRemoteVersion(Versions versions) {
         try {
-            return restTemplate.getForObject("http://d.har01d.cn/movie_version", String.class);
+            String remote = restTemplate.getForObject("http://d.har01d.cn/movie_version", String.class).trim();
+            versions.setMovie(remote);
+            if (appProperties.isXiaoya()) {
+                String local = settingRepository.findById(MOVIE_VERSION).map(Setting::getValue).orElse("").trim();
+                String cached = getCachedVersion();
+                versions.setCachedMovie(cached);
+                if (!local.equals(remote) && !remote.equals(cached) && !downloading) {
+                    log.info("local: {} cached: {} remote: {}", local, cached, remote);
+                    executor.execute(() -> downloadMovieData(remote));
+                }
+            }
+            return remote;
         } catch (Exception e) {
             log.warn("", e);
         }
         return "";
+    }
+
+    private String getCachedVersion() {
+        try {
+            Path file = Paths.get("/data/atv/movie_version");
+            if (Files.exists(file)) {
+                return Files.readString(file).trim();
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return "0.0";
+    }
+
+    private void downloadMovieData(String remote) {
+        try {
+            downloading = true;
+            log.info("download movie data");
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.command("sh", "-c", "/movie.sh", remote);
+            builder.inheritIO();
+            builder.directory(new File("/opt/atv/data/"));
+            Process process = builder.start();
+            int code = process.waitFor();
+            if (code == 0) {
+                log.info("movie data downloaded");
+            } else {
+                log.warn("download movie data failed: {}", code);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        } finally {
+            downloading = false;
+        }
     }
 
     public String getAppRemoteVersion() {

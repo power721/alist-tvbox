@@ -19,7 +19,7 @@ public class DoubanController {
     @GetMapping("/versions")
     public Versions getRemoteVersion() {
         Versions versions = new Versions();
-        versions.setMovie(service.getRemoteVersion().trim());
+        service.getRemoteVersion(versions);
         versions.setIndex(indexService.getRemoteVersion().trim());
         String appVersion = service.getAppRemoteVersion().trim();
         String[] parts = appVersion.split("\n");

@@ -127,7 +127,7 @@
           </template>
           <div>本地版本：{{ movieVersion }}</div>
           <div v-if="movieRemoteVersion&&movieRemoteVersion>movieVersion">
-            最新版本：{{ movieRemoteVersion }}，请重启Docker更新。
+            最新版本：{{ movieRemoteVersion }}，{{movieRemoteVersion==cachedMovieVersion?'已经下载，请':'后台下载中，请稍后'}}重启Docker更新。
           </div>
         </el-card>
       </el-col>
@@ -203,6 +203,7 @@ const indexVersion = ref('')
 const indexRemoteVersion = ref('')
 const movieVersion = ref(0)
 const movieRemoteVersion = ref(0)
+const cachedMovieVersion = ref(0)
 const fileExpireHour = ref(24)
 const aListStartTime = ref('')
 const openTokenUrl = ref('')
@@ -336,9 +337,10 @@ onMounted(() => {
       }
     })
     axios.get('/versions').then(({data}) => {
-      movieRemoteVersion.value = data.movie
+      movieRemoteVersion.value = +data.movie
+      cachedMovieVersion.value = +data.cachedMovie
       indexRemoteVersion.value = data.index
-      appRemoteVersion.value = data.app
+      appRemoteVersion.value = +data.app
       changelog.value = data.changelog
     })
   } else {
