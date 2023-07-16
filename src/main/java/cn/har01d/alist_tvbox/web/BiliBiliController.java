@@ -42,7 +42,7 @@ public class BiliBiliController {
             throw new BadRequestException();
         }
 
-        log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
+        log.info("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("path: {}  folder: {}  keyword: {}  filter: {}  sort: {}  page: {}", ids, t, wd, f, sort, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {

@@ -498,11 +498,13 @@ public class SubscriptionService {
     private Map<String, Object> buildSite3() {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        builder.replacePath("/bilibili" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
-        site.put("key", "BiliBili");
+        builder.replacePath("");
+        site.put("key", "csp_BiliBili");
+        site.put("api", "csp_BiliBili");
         site.put("name", "BiliBili");
-        site.put("type", 1);
-        site.put("api", builder.build().toUriString());
+        site.put("type", 3);
+        site.put("ext", "{\"api\":\"" + builder.build().toUriString() + "\"}");
+        site.put("jar", builder.build().toUriString() + "/custom_spider.jar");
         site.put("searchable", 1);
         site.put("quickSearch", 1);
         site.put("filterable", 1);
