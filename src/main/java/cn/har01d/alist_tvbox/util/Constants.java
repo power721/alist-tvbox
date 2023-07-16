@@ -12,6 +12,8 @@ public final class Constants {
     public static final String PLAYLIST = "/~playlist"; // auto generated playlist
     public static final String FILE = "file";
     public static final String FOLDER = "folder";
+    public static final String COLLECTION = "collection";
+
     public static final String DB_URL = "jdbc:sqlite:/opt/alist/data/data.db";
 
     public static final String ACCESS_TOKEN = "access_token";

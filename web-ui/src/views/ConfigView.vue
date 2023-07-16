@@ -164,6 +164,15 @@
         <el-form-item>
           <el-button type="primary" @click="updateBilibiliCookie">更新</el-button>
         </el-form-item>
+        <el-form-item label="B站显示历史记录">
+          <el-switch
+            v-model="bilibiliHistory"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateBilibiliHistory"
+          />
+        </el-form-item>
         <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>
@@ -201,6 +210,7 @@ const aListStarted = ref(false)
 const aListRestart = ref(false)
 const mergeSiteSource = ref(false)
 const mixSiteSource = ref(false)
+const bilibiliHistory = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -282,6 +292,12 @@ const updateMixed = () => {
   })
 }
 
+const updateBilibiliHistory = () => {
+  axios.post('/settings', {name: 'bilibili_history', value: bilibiliHistory.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateLogin = () => {
   axios.post('/login', login.value).then(() => {
     ElMessage.success('保存成功')
@@ -348,6 +364,7 @@ onMounted(() => {
       aListRestart.value = data.alist_restart_required === 'true'
       mergeSiteSource.value = data.merge_site_source === 'true'
       mixSiteSource.value = data.mix_site_source === 'true'
+      bilibiliHistory.value = data.bilibili_history === 'true'
       login.value.username = data.alist_username
       login.value.password = data.alist_password
       login.value.enabled = data.alist_login === 'true'

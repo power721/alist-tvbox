@@ -50,7 +50,7 @@ public class BiliBiliController {
             }
             return biliBiliService.getDetail(ids);
         } else if (t != null && !t.isEmpty()) {
-            return biliBiliService.getMovieList(t, sort, pg);
+            return biliBiliService.getMovieList(t, f, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {
             return biliBiliService.search(wd, sort, 0);
         } else {
