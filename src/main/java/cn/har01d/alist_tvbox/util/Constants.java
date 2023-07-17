@@ -13,6 +13,7 @@ public final class Constants {
     public static final String FILE = "file";
     public static final String FOLDER = "folder";
     public static final String COLLECTION = "collection";
+    public static final String LIST = "list";
 
     public static final String DB_URL = "jdbc:sqlite:/opt/alist/data/data.db";
 
