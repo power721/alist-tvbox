@@ -34,6 +34,9 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -517,11 +520,28 @@ public class SubscriptionService {
         String ext = objectMapper.writeValueAsString(map);
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
-        site.put("jar", builder.build().toUriString() + "/spring.jar");
+        String jar = builder.build().toUriString() + "/spring.jar";
+        String md5 = getJarMd5();
+        if (StringUtils.isNotBlank(md5)) {
+            jar += ";md5;" + md5.trim();
+        }
+        site.put("jar", jar);
         site.put("searchable", 1);
         site.put("quickSearch", 1);
         site.put("filterable", 1);
         return site;
+    }
+
+    private String getJarMd5() {
+        try {
+            Path file = Paths.get("/opt/atv/BOOT-INF/classes/static/spring.md5");
+            if (Files.exists(file)) {
+                return Files.readString(file);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return null;
     }
 
     private static void addRules(Map<String, Object> config) {

@@ -64,8 +64,8 @@ import java.util.stream.Collectors;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.BILI_BILI;
 import static cn.har01d.alist_tvbox.util.Constants.COLLECTION;
-import static cn.har01d.alist_tvbox.util.Constants.LIST;
 import static cn.har01d.alist_tvbox.util.Constants.FILE;
+import static cn.har01d.alist_tvbox.util.Constants.LIST;
 import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
 
 @Slf4j
@@ -75,7 +75,7 @@ public class BiliBiliService {
     private static final String HOT_API = "https://api.bilibili.com/x/web-interface/ranking/v2?type=%s&rid=%d";
     private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
-    private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s";
+    private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s&view_at=%s";
     private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048"; //dash
     private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048"; //dash
     private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&platform=html5&high_quality=1"; // mp4
@@ -250,10 +250,10 @@ public class BiliBiliService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setType_name(info.getBadge());
         movieDetail.setVod_pic(info.getCover());
-        movieDetail.setVod_play_from(BILI_BILI);
-        movieDetail.setVod_play_url(buildPlayUrl(movieDetail.getVod_id()));
+        //movieDetail.setVod_play_from(BILI_BILI);
+        //movieDetail.setVod_play_url(buildPlayUrl(movieDetail.getVod_id()));
         movieDetail.setVod_remarks(info.getRating());
-        movieDetail.setVod_content(info.getDesc() + "; " + info.getStat().getView() + "播放; " + info.getStat().getFollow() + "关注");
+        //movieDetail.setVod_content(info.getDesc() + "; " + info.getStat().getView() + "播放; " + info.getStat().getFollow() + "关注");
         return movieDetail;
     }
 
@@ -264,10 +264,10 @@ public class BiliBiliService {
         movieDetail.setVod_name(info.getTitle());
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(fixUrl(info.getPic()));
-        movieDetail.setVod_play_from(BILI_BILI);
-        movieDetail.setVod_play_url(buildPlayUrl(id));
+        //movieDetail.setVod_play_from(BILI_BILI);
+        //movieDetail.setVod_play_url(buildPlayUrl(id));
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
-        movieDetail.setVod_content(info.getDescription());
+        //movieDetail.setVod_content(info.getDescription());
         return movieDetail;
     }
 
@@ -299,24 +299,31 @@ public class BiliBiliService {
     }
 
     private MovieDetail getMovieDetail(BiliBiliInfo info) {
+        return getMovieDetail(info, false);
+    }
+
+    private MovieDetail getMovieDetail(BiliBiliInfo info, boolean full) {
         String id = info.getBvid();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(id);
         movieDetail.setVod_name(info.getTitle());
         movieDetail.setVod_tag(FILE);
-        if (info.getOwner() != null) {
-            movieDetail.setVod_director(info.getOwner().getName());
-        }
         movieDetail.setType_name(info.getTname());
-        movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
-        movieDetail.setVod_pic(info.getPic());
-        movieDetail.setVod_play_from(BILI_BILI);
-        movieDetail.setVod_play_url(buildPlayUrl(id));
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
-        if (info.getStat() != null) {
-            movieDetail.setVod_content(info.getDesc() + "; " + info.getStat().getView() + "播放; " + info.getStat().getLike() + "点赞");
+        if (full) {
+            movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
+            movieDetail.setVod_play_from(BILI_BILI);
+            movieDetail.setVod_play_url(buildPlayUrl(id));
+            if (info.getOwner() != null) {
+                movieDetail.setVod_director(info.getOwner().getName());
+            }
+            if (info.getStat() != null) {
+                movieDetail.setVod_content(info.getDesc() + "; " + info.getStat().getView() + "播放; " + info.getStat().getLike() + "点赞");
+            } else {
+                movieDetail.setVod_content(info.getDesc());
+            }
         } else {
-            movieDetail.setVod_content(info.getDesc());
+            movieDetail.setVod_pic(info.getPic());
         }
         return movieDetail;
     }
@@ -430,14 +437,15 @@ public class BiliBiliService {
         return result;
     }
 
-    private List<String> ids = new ArrayList<>();
+    private List<BiliBiliHistoryResult.Cursor> cursors = new ArrayList<>();
 
     public MovieList getHistory(int page) {
         if (page == 1) {
-            ids = new ArrayList<>();
-            ids.add("");
+            cursors = new ArrayList<>();
+            cursors.add(new BiliBiliHistoryResult.Cursor());
         }
-        String url = String.format(HISTORY_API, ids.get(page - 1));
+        BiliBiliHistoryResult.Cursor cursor = cursors.get(page - 1);
+        String url = String.format(HISTORY_API, cursor.getMax(), cursor.getViewAt());
         HttpEntity<Void> entity = buildHttpEntity(null);
         ResponseEntity<BiliBiliHistoryResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliHistoryResponse.class);
         BiliBiliHistoryResponse hotResponse = response.getBody();
@@ -446,9 +454,12 @@ public class BiliBiliService {
             MovieDetail movieDetail = getMovieDetail(info);
             result.getList().add(movieDetail);
         }
-        ids.add(String.valueOf(hotResponse.getData().getCursor().getMax()));
+        cursors.add(hotResponse.getData().getCursor());
+
+        result.setLimit(result.getList().size());
         result.setTotal(2000);
         result.setPagecount(50);
+        result.setPage(page);
         log.debug("getHistory: {} {}", url, result);
         return result;
     }
@@ -467,8 +478,8 @@ public class BiliBiliService {
         }
 
         BiliBiliInfo info = getInfo(bvid);
+        MovieDetail movieDetail = getMovieDetail(info, true);
         MovieList result = new MovieList();
-        MovieDetail movieDetail = getMovieDetail(info);
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
@@ -756,16 +767,19 @@ public class BiliBiliService {
         }
         MovieList result = new MovieList();
         BiliBiliVideoInfo rank = getRankList(tid, page);
+
+//        {
 //            MovieDetail movieDetail = new MovieDetail();
-//            movieDetail.setVod_id(COLLECTION + "$" + wd + "$" + getType(sort) + "$" + (page - 1));
-//            movieDetail.setVod_name(wd + "合集" + page);
+//            movieDetail.setVod_id(LIST + "$" + tid + "$" + type + "$" + page);
+//            movieDetail.setVod_name("合集" + page);
 //            movieDetail.setVod_tag(FILE);
 //            movieDetail.setVod_pic(LIST_PIC);
 //            movieDetail.setVod_play_from(BILI_BILI);
-//            String playUrl = rank.getResult().stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
+//            String playUrl = list.stream().map(e -> fixTitle(e.getVod_name()) + "$" + buildPlayUrl(e.getVod_id())).collect(Collectors.joining("#"));
 //            movieDetail.setVod_play_url(playUrl);
-//            movieDetail.setVod_content("共" + rank.getResult().size() + "个视频");
+//            movieDetail.setVod_content("共" + list.size() + "个视频");
 //            result.getList().add(movieDetail);
+//        }
 
         for (BiliBiliVideoInfo.Video video : rank.getResult()) {
             MovieDetail movieDetail = getMovieDetail(video);
@@ -964,14 +978,14 @@ public class BiliBiliService {
         movieDetail.setVod_id(info.getBvid());
         movieDetail.setVod_name(fixTitle(info.getTitle()));
         movieDetail.setVod_tag(FILE);
-        movieDetail.setVod_director(info.getAuthor());
+        //movieDetail.setVod_director(info.getAuthor());
         movieDetail.setType_name(info.getTypename());
-        movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
+        //movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
         movieDetail.setVod_pic(fixUrl(info.getPic()));
-        movieDetail.setVod_play_from(BILI_BILI);
-        movieDetail.setVod_play_url(buildPlayUrl(info.getBvid()));
+        //movieDetail.setVod_play_from(BILI_BILI);
+        //movieDetail.setVod_play_url(buildPlayUrl(info.getBvid()));
         movieDetail.setVod_remarks(info.getDuration());
-        movieDetail.setVod_content(info.getDescription());
+        //movieDetail.setVod_content(info.getDescription());
         return movieDetail;
     }
 

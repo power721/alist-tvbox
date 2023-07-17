@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.dto.bili;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -12,8 +13,9 @@ public class BiliBiliHistoryResult {
 
     @Data
     public static class Cursor {
-        private String business;
-        private long max;
+        private String max = "";
+        @JsonProperty("view_at")
+        private String viewAt = "";
     }
 
     @Data
