@@ -13,6 +13,7 @@ public class BiliBiliSeasonInfo {
     private String bvid;
     private String title;
     private String titleFormat;
+    private String long_title;
     private String url;
     private String cover;
     private String badge;
