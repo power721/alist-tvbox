@@ -568,10 +568,10 @@ public class BiliBiliService {
 
     private String getTitle(BiliBiliSeasonInfo info) {
         if (StringUtils.isNotBlank(info.getLong_title())) {
-            return info.getLong_title();
+            return info.getTitle() + "." + info.getLong_title();
         }
         if (StringUtils.isNotBlank(info.getTitleFormat())) {
-            return info.getTitleFormat();
+            return info.getTitle() + "." + info.getTitleFormat();
         }
         return info.getTitle();
     }
@@ -657,22 +657,22 @@ public class BiliBiliService {
         return response.getBody().getData().getToken();
     }
 
-    public Map<String, String> getPlayUrl(String bvid) {
+    public Map<String, String> getPlayUrl(String bvid, boolean dash) {
         String url;
         String[] parts = bvid.split("-");
         Map<String, String> result;
         if (parts.length > 2) {
-            String api = appProperties.isSupportDash() ? PLAY_API1 : PLAY_API2;
+            String api = dash ? PLAY_API1 : PLAY_API2;
             url = String.format(api, parts[0], parts[1], parts[2]);
         } else {
             BiliBiliInfo info = getInfo(bvid);
-            String api = appProperties.isSupportDash() ? PLAY_API : PLAY_API2;
+            String api = dash ? PLAY_API : PLAY_API2;
             url = String.format(api, info.getAid(), info.getCid());
         }
-        log.debug("bvid: {}  url: {}", bvid, url);
+        log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
 
         HttpEntity<Void> entity = buildHttpEntity(null);
-        if (appProperties.isSupportDash()) {
+        if (dash) {
             ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
             log.debug("url: {}  response: {}", url, response.getBody());
             if (response.getBody().getCode() != 0) {

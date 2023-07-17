@@ -517,6 +517,7 @@ public class SubscriptionService {
         Map<String, String> map = new HashMap<>();
         map.put("api", builder.build().toUriString());
         map.put("apiKey", settingRepository.findById("api_key").map(Setting::getValue).orElse(""));
+        map.put("token", token);
         String ext = objectMapper.writeValueAsString(map);
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);

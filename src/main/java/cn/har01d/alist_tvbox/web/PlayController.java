@@ -35,21 +35,21 @@ public class PlayController {
     }
 
     @GetMapping
-    public Object play(Integer site, String path, String bvid, String type, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        return play("", site, path, bvid, type, request, response);
+    public Object play(Integer site, String path, String bvid, String type, boolean dash, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        return play("", site, path, bvid, type, dash, request, response);
     }
 
     @GetMapping("/{token}")
-    public Object play(@PathVariable String token, Integer site, String path, String bvid, String type, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public Object play(@PathVariable String token, Integer site, String path, String bvid, String type, boolean dash, HttpServletRequest request, HttpServletResponse response) throws IOException {
         if (!subscriptionService.getToken().equals(token)) {
             throw new BadRequestException();
         }
 
-        log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), request.getQueryString());
+        log.debug("{} {} {} {}", request.getMethod(), request.getRequestURI(), request.getQueryString(), request.getHeader("X-CLIENT"));
         log.debug("get play url - site: {}  path: {}  bvid: {}  type: ", site, path, bvid, type);
 
         if (StringUtils.isNotBlank(bvid)) {
-            return biliBiliService.getPlayUrl(bvid);
+            return biliBiliService.getPlayUrl(bvid, dash);
         }
 
         String url = tvBoxService.getPlayUrl(site, path);
