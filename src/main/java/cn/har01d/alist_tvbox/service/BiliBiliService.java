@@ -71,13 +71,21 @@ import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
 @Slf4j
 @Service
 public class BiliBiliService {
+    private static final int VIDEO_DASH = 16;
+    private static final int VIDEO_HDR = 64;
+    private static final int VIDEO_4K = 128;
+    private static final int DOLBY_AUDIO = 256;
+    private static final int DOLBY_VIDEO = 512;
+    private static final int VIDEO_8K = 1024;
+    private static final int VIDEO_AV1 = 2048;
+    private static final int FN_VAL = VIDEO_DASH + VIDEO_HDR + VIDEO_4K + DOLBY_AUDIO + VIDEO_8K + VIDEO_AV1;
     private static final String INFO_API = "https://api.bilibili.com/x/web-interface/view?bvid=";
     private static final String HOT_API = "https://api.bilibili.com/x/web-interface/ranking/v2?type=%s&rid=%d";
     private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s&view_at=%s";
-    private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048"; //dash
-    private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=&type=&otype=json&fourk=1&fnver=0&fnval=4048"; //dash
+    private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=" + FN_VAL; //dash
+    private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=" + FN_VAL; //dash
     private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&platform=html5&high_quality=1"; // mp4
 
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
@@ -489,6 +497,7 @@ public class BiliBiliService {
 
     private static final Pattern SCRIPT = Pattern.compile("<script\\s+id=\"__NEXT_DATA__\"\\s+type=\"application/json\"\\s*>(.*?)</script\\s*>");
     private static final Pattern EP_MAP = Pattern.compile("\"episodes\"\\s*:\\s*(.+?)\\s*,\\s*\"user_status\"");
+    private static final Pattern DESC = Pattern.compile("\"evaluate\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"jp_title\"");
     private static final Pattern MEDIA_INFO = Pattern.compile("\"mediaInfo\"\\s*:\\s*.+?\"title\":\"(.+?)\",\\s*.+?\\s*\"sectionsMap\"");
     private static final Pattern VIDEO_ID = Pattern.compile("\"videoId\"\\s*:\\s*\"(ep|ss)(\\d+)\"");
 
@@ -506,9 +515,14 @@ public class BiliBiliService {
         if (m.find()) {
             String json = m.group(1);
             String title = BILI_BILI;
+            String desc = "";
             m = MEDIA_INFO.matcher(json);
             if (m.find()) {
                 title = m.group(1);
+            }
+            m = DESC.matcher(json);
+            if (m.find()) {
+                desc = m.group(1);
             }
             m = EP_MAP.matcher(json);
             SortedMap<Integer, List<BiliBiliSeasonInfo>> sections = new TreeMap<>();
@@ -524,6 +538,7 @@ public class BiliBiliService {
                 }
             }
 
+
             m = VIDEO_ID.matcher(json);
             if (m.find()) {
                 String type = m.group(1);
@@ -533,6 +548,7 @@ public class BiliBiliService {
                 movieDetail.setVod_name(title);
                 movieDetail.setVod_tag(FILE);
                 movieDetail.setVod_pic(LIST_PIC);
+                movieDetail.setVod_content(desc);
                 movieDetail.setVod_play_from(sections.keySet().stream().map(this::getSectionType).collect(Collectors.joining("$$$")));
                 String playUrl = sections.values().stream()
                         .map(this::build)
@@ -567,13 +583,16 @@ public class BiliBiliService {
     }
 
     private String getTitle(BiliBiliSeasonInfo info) {
+        String title = info.getTitle();
         if (StringUtils.isNotBlank(info.getLong_title())) {
-            return info.getTitle() + "." + info.getLong_title();
+            title = info.getLong_title().contains(info.getTitle()) ? info.getLong_title() : info.getTitle() + "." + info.getLong_title();
+        } else if (StringUtils.isNotBlank(info.getTitleFormat())) {
+            title = info.getTitleFormat().contains(info.getTitle()) ? info.getTitleFormat() : info.getTitle() + "." + info.getTitleFormat();
         }
-        if (StringUtils.isNotBlank(info.getTitleFormat())) {
-            return info.getTitle() + "." + info.getTitleFormat();
+        if (StringUtils.isNotBlank(info.getBadge())) {
+            title += " " + info.getBadge();
         }
-        return info.getTitle();
+        return title;
     }
 
     public MovieList getPlaylist(String tid) {

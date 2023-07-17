@@ -5,8 +5,7 @@ import java.util.List;
 
 @lombok.Data
 public class Data {
-    private Boolean isLogin;
-    private Integer vipType;
+    private int quality;
     private String qrcodeKey;
     private String url;
     private String aid;
@@ -14,6 +13,7 @@ public class Data {
     private String title;
     private String tname;
     private String pic;
+    private String format;
     private Long duration;
     private String desc;
     private List<String> acceptDescription;

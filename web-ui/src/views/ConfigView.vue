@@ -64,6 +64,7 @@
                 active-text="开启"
                 inactive-text="关闭"
               />
+              <span class="hint">建议外网开启</span>
             </el-form-item>
             <el-form-item prop="token" label="安全Token" v-if="form.enabledToken">
               <el-input v-model="form.token" type="password" show-password/>
