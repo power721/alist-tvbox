@@ -8,7 +8,7 @@ public class BiliBiliSeasonInfo {
     private long season_id;
     private long aid;
     private long cid;
-    private int epid;
+    private int id;
     private int sectionType;
     private String bvid;
     private String title;

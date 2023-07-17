@@ -49,7 +49,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -416,7 +415,7 @@ public class BiliBiliService {
     }
 
     private static final Pattern SCRIPT = Pattern.compile("<script\\s+id=\"__NEXT_DATA__\"\\s+type=\"application/json\"\\s*>(.*?)</script\\s*>");
-    private static final Pattern EP_MAP = Pattern.compile("\"epMap\"\\s*:\\s*(.+?)\\s*,\\s*\"initEpList\"");
+    private static final Pattern EP_MAP = Pattern.compile("\"episodes\"\\s*:\\s*(.+?)\\s*,\\s*\"user_status\"");
     private static final Pattern MEDIA_INFO = Pattern.compile("\"mediaInfo\"\\s*:\\s*.+?\"title\":\"(.+?)\",\\s*.+?\\s*\"sectionsMap\"");
     private static final Pattern VIDEO_ID = Pattern.compile("\"videoId\"\\s*:\\s*\"(ep|ss)(\\d+)\"");
 
@@ -442,20 +441,14 @@ public class BiliBiliService {
             SortedMap<Integer, List<BiliBiliSeasonInfo>> sections = new TreeMap<>();
             if (m.find()) {
                 String data = m.group(1);
-                Map<String, Object> map = objectMapper.readValue(data, Map.class);
-                for (Map.Entry<String, Object> entry : map.entrySet()) {
-                    data = objectMapper.writeValueAsString(entry.getValue());
+                for (Object item : objectMapper.readValue(data, List.class)) {
+                    data = objectMapper.writeValueAsString(item);
                     log.debug("EP: {}", data);
                     BiliBiliSeasonInfo info = objectMapper.readValue(data, BiliBiliSeasonInfo.class);
-                    info.setEpid(Integer.parseInt(entry.getKey()));
                     List<BiliBiliSeasonInfo> list = sections.getOrDefault(info.getSectionType(), new ArrayList<>());
                     list.add(info);
                     sections.put(info.getSectionType(), list);
                 }
-            }
-
-            for (List<BiliBiliSeasonInfo> list : sections.values()) {
-                list.sort(Comparator.comparingInt(BiliBiliSeasonInfo::getEpid));
             }
 
             m = VIDEO_ID.matcher(json);
@@ -629,7 +622,7 @@ public class BiliBiliService {
     }
 
     private String buildPlayUrl(BiliBiliSeasonInfo info) {
-        return info.getAid() + "-" + info.getCid() + "-" + info.getEpid();
+        return info.getAid() + "-" + info.getCid() + "-" + info.getId();
     }
 
     private String buildPlayUrl(String bvid) {
