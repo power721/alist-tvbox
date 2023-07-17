@@ -53,6 +53,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -138,6 +140,15 @@ public class BiliBiliService {
         }
         addType("全站", "0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=all
         addType("热门", "pop$1");
+
+        if (appProperties.isSupportDash()) {
+            addType("电影", "season$2"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=2
+            addType("电视剧", "season$5"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=5
+            addType("综艺", "season$7"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=7
+            addType("纪录片", "season$3"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=3
+            addType("番剧", "season$4"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=4
+        }
+
         addType("科技", "188", "主分区=&数码=95&软件应用=230&计算机技术=231&科工机械=232&极客DIY=233");
         addType("知识", "36", "主分区=&科学科普=201&社科·法律·心理=124&人文历史=228&财经商业=207&校园学习=208&职业职场=209&设计·创意=229");
         addType("动画", "1", "主分区=&MAD·AMV=24&MMD·3D=25&短片·手书·配音=47&手办·模玩=210&特摄=86&动漫杂谈=253&综合=27");
@@ -155,11 +166,7 @@ public class BiliBiliService {
         addType("鬼畜", "119", "主分区=");
         addType("国创相关", "168", "主分区=");
         addType("国产动画", "season$1"); // https://api.bilibili.com/pgc/web/rank/list?day=3&season_type=1
-        addType("电影", "season$2"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=2
-        addType("纪录片", "season$3"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=3
-        addType("番剧", "season$4"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=4
-        addType("电视剧", "season$5"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=5
-        addType("综艺", "season$7"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=7
+
         addType("原创", "origin$0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=origin
         addType("新人", "rookie$0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=rookie
         return types;
@@ -419,29 +426,36 @@ public class BiliBiliService {
         String[] parts = tid.split(":");
         String sid = parts[1];
         String url = "https://www.bilibili.com/bangumi/play/ss" + sid;
+        log.info("Bangumi: {}", url);
         HttpEntity<Void> entity = buildHttpEntity(null);
         ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
         String html = response.getBody();
         Matcher m = SCRIPT.matcher(html);
         if (m.find()) {
-            List<BiliBiliSeasonInfo> list = new ArrayList<>();
             String json = m.group(1);
-            String title = "xxx";
+            String title = BILI_BILI;
             m = MEDIA_INFO.matcher(json);
             if (m.find()) {
                 title = m.group(1);
             }
             m = EP_MAP.matcher(json);
+            SortedMap<Integer, List<BiliBiliSeasonInfo>> sections = new TreeMap<>();
             if (m.find()) {
                 String data = m.group(1);
                 Map<String, Object> map = objectMapper.readValue(data, Map.class);
                 for (Map.Entry<String, Object> entry : map.entrySet()) {
                     data = objectMapper.writeValueAsString(entry.getValue());
-                    log.info("EP: {}", data);
+                    log.debug("EP: {}", data);
                     BiliBiliSeasonInfo info = objectMapper.readValue(data, BiliBiliSeasonInfo.class);
                     info.setEpid(Integer.parseInt(entry.getKey()));
+                    List<BiliBiliSeasonInfo> list = sections.getOrDefault(info.getSectionType(), new ArrayList<>());
                     list.add(info);
+                    sections.put(info.getSectionType(), list);
                 }
+            }
+
+            for (List<BiliBiliSeasonInfo> list : sections.values()) {
+                list.sort(Comparator.comparingInt(BiliBiliSeasonInfo::getEpid));
             }
 
             m = VIDEO_ID.matcher(json);
@@ -453,17 +467,41 @@ public class BiliBiliService {
                 movieDetail.setVod_name(title);
                 movieDetail.setVod_tag(FILE);
                 movieDetail.setVod_pic(LIST_PIC);
-                movieDetail.setVod_play_from(BILI_BILI);
-                String playUrl = list.stream()
-                        .sorted(Comparator.comparingInt(BiliBiliSeasonInfo::getEpid))
-                        .map(e -> e.getTitle() + "$" + buildPlayUrl(e))
-                        .collect(Collectors.joining("#"));
+                movieDetail.setVod_play_from(sections.keySet().stream().map(this::getSectionType).collect(Collectors.joining("$$$")));
+                String playUrl = sections.values().stream()
+                        .map(this::build)
+                        .collect(Collectors.joining("$$$"));
                 movieDetail.setVod_play_url(playUrl);
                 result.getList().add(movieDetail);
             }
         }
         log.debug("{}: {}", tid, result);
         return result;
+    }
+
+    private String getSectionType(int type) {
+        switch (type) {
+            case 0:
+                return "正片";
+            case 1:
+                return "预告";
+            case 2:
+                return "看点";
+            case 5:
+                return "UP主";
+            case 8:
+                return "更多精彩";
+            default:
+                return BILI_BILI + type;
+        }
+    }
+
+    private String build(List<BiliBiliSeasonInfo> list) {
+        return list.stream().map(e -> getTitle(e) + "$" + buildPlayUrl(e)).collect(Collectors.joining("#"));
+    }
+
+    private String getTitle(BiliBiliSeasonInfo info) {
+        return StringUtils.isBlank(info.getTitleFormat()) ? info.getTitle() : info.getTitleFormat();
     }
 
     public MovieList getPlaylist(String tid) {
@@ -559,12 +597,12 @@ public class BiliBiliService {
             String api = appProperties.isSupportDash() ? PLAY_API : PLAY_API2;
             url = String.format(api, info.getAid(), info.getCid());
         }
-        log.info("bvid: {}  url: {}", bvid, url);
+        log.debug("bvid: {}  url: {}", bvid, url);
 
         HttpEntity<Void> entity = buildHttpEntity(null);
         if (appProperties.isSupportDash()) {
             ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
-            log.info("url: {}  response: {}", url, response.getBody());
+            log.debug("url: {}  response: {}", url, response.getBody());
             if (response.getBody().getCode() != 0) {
                 log.warn("获取失败: {} {}", response.getBody().getCode(), response.getBody().getMessage());
             }

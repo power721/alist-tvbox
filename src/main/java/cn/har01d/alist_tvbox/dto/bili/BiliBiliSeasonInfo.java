@@ -9,8 +9,10 @@ public class BiliBiliSeasonInfo {
     private long aid;
     private long cid;
     private int epid;
+    private int sectionType;
     private String bvid;
     private String title;
+    private String titleFormat;
     private String url;
     private String cover;
     private String badge;
