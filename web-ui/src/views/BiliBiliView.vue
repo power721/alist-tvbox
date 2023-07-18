@@ -12,13 +12,7 @@
               :row-class-name="tableRowClassName"
               row-key="id"
               style="width: 100%">
-      <el-table-column class-name="allowDrag" label="移动" width="100">
-        <template #default="scope">
-          <el-icon class="pointer">
-            <Pointer/>
-          </el-icon>
-        </template>
-      </el-table-column>
+
       <el-table-column prop="order" label="顺序" sortable width="100"/>
       <el-table-column prop="id" label="ID" sortable width="100"/>
       <el-table-column prop="name" label="名称" width="200"/>
@@ -34,12 +28,7 @@
       <el-table-column prop="parentId" label="父类ID" sortable width="180"/>
       <el-table-column prop="show" label="显示？" sortable width="140">
         <template #default="scope">
-          <el-icon v-if="scope.row.show">
-            <Check/>
-          </el-icon>
-          <el-icon v-else>
-            <Close/>
-          </el-icon>
+          <el-switch v-model="scope.row.show" @change="changed=true"/>
         </template>
       </el-table-column>
       <el-table-column prop="reserved" label="保留的？" sortable width="140">
@@ -54,7 +43,7 @@
       </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
-          <div v-if="!scope.row.reserved">
+          <div>
             <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
             <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
           </div>
@@ -84,9 +73,9 @@
             <el-radio :label="4" size="large">搜索</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="顺序" label-width="140">
-          <el-input-number v-model="form.order" :min="1"/>
-        </el-form-item>
+<!--        <el-form-item label="顺序" label-width="140">-->
+<!--          <el-input-number v-model="form.order" :min="1"/>-->
+<!--        </el-form-item>-->
         <el-form-item label="父类ID" label-width="140">
           <el-input-number v-model="form.parentId" :min="0"/>
         </el-form-item>
@@ -148,6 +137,9 @@ const tableRowClassName = ({row}: {
   row: Nav
   rowIndex: number
 }) => {
+  if (row.type == 2) {
+    return 'no-drag'
+  }
   if (row.changed) {
     return 'warning-row'
   }
@@ -176,8 +168,13 @@ const form = ref<Nav>({
 const rowDrop = () => {
   const tbody = document.querySelector(".el-table__body-wrapper tbody") as HTMLElement;
   Sortable.create(tbody, {
-    handle: ".allowDrag",
+    animation: 500,
+    handle: ".el-table__row",
     draggable: ".el-table__row",
+    filter: (event, target, sortable) => {
+      console.log(event, target, sortable)
+      return target.className.includes('no-drag')
+    },
     onEnd: (event: any) => {
       console.log(event.oldIndex, event.newIndex)
       const item = list.value[event.oldIndex]
@@ -269,22 +266,25 @@ const handleConfirm = () => {
 }
 
 const handleSave = () => {
-  axios.put('/nav', {list: list.value.map(e => ({id: e.id, order: e.order}))}).then(() => {
+  const items = list.value.map(e => ({id: e.id, order: e.order, show: e.show, children: e.children}));
+  axios.put('/nav', {list: items}).then(() => {
+    ElMessage.success('保存成功')
     load()
   })
 }
 
 const load = () => {
-  axios.get('/nav').then(({data}) => {
+  return axios.get('/nav').then(({data}) => {
     list.value = data
     list.value.sort((a, b) => a.order - b.order)
     changed.value = false
+    return data
   })
 }
-
 onMounted(() => {
-  rowDrop()
-  load()
+  load().then(() => {
+    rowDrop()
+  })
 })
 </script>
 

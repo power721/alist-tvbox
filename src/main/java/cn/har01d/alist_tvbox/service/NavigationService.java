@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -41,7 +40,10 @@ public class NavigationService {
                 NavigationDto item = new NavigationDto(navigation);
                 NavigationDto parent = map.get(navigation.getParentId());
                 if (parent != null) {
+                    item.setOrder(null);
                     parent.getChildren().add(item);
+                } else {
+                    result.add(item);
                 }
             }
         }
@@ -50,10 +52,23 @@ public class NavigationService {
     }
 
     public void saveAll(List<NavigationDto> dto) {
-        Map<Integer, Integer> map = dto.stream().collect(Collectors.toMap(NavigationDto::getId, NavigationDto::getOrder));
+        Map<Integer, NavigationDto> map = new HashMap<>();
+        for (NavigationDto item : dto) {
+            map.put(item.getId(), item);
+            for (NavigationDto child : item.getChildren()) {
+                map.put(child.getId(), child);
+            }
+        }
+
         List<Navigation> list = navigationRepository.findAll();
         for (Navigation item : list) {
-            item.setOrder(map.get(item.getId()));
+            NavigationDto updated = map.get(item.getId());
+            if (updated != null) {
+                if (item.getType() != 2) {
+                    item.setOrder(updated.getOrder());
+                }
+                item.setShow(updated.isShow());
+            }
         }
         navigationRepository.saveAll(list);
     }
@@ -72,6 +87,9 @@ public class NavigationService {
 
     public Navigation create(NavigationDto dto) {
         validate(dto);
+        if (dto.getType() == 2) {
+            dto.setOrder(navigationRepository.countByParentId(dto.getParentId()) + 1);
+        }
         Navigation navigation = new Navigation();
         syncNavigation(dto, navigation);
         return navigationRepository.save(navigation);

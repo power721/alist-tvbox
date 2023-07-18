@@ -14,7 +14,7 @@ public class NavigationDto {
     private int type;
     private boolean show;
     private boolean reserved;
-    private int order;
+    private Integer order;
     private int parentId;
     private List<NavigationDto> children = new ArrayList<>();
 
