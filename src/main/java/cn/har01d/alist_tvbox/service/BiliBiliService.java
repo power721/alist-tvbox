@@ -157,6 +157,10 @@ public class BiliBiliService {
         }
         addType("全站", "0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=all
 
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
+        Map<String, Object> data = (Map<String, Object>) json.get("data");
+        log.info("user: {} isLogin: {} vip: {}", data.get("uname"), data.get("isLogin"), data.get("vipType"));
         if (appProperties.isSupportDash()) {
             addType("电影", "season$2"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=2
             addType("电视剧", "season$5"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=5
