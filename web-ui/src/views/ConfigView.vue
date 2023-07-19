@@ -358,10 +358,10 @@ onMounted(() => {
       }
     })
     axios.get('/versions').then(({data}) => {
-      movieRemoteVersion.value = +data.movie
-      cachedMovieVersion.value = +data.cachedMovie
+      movieRemoteVersion.value = data.movie
+      cachedMovieVersion.value = data.cachedMovie
       indexRemoteVersion.value = data.index
-      appRemoteVersion.value = +data.app
+      appRemoteVersion.value = data.app
       changelog.value = data.changelog
     })
   } else {

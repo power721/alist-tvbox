@@ -152,7 +152,14 @@ public class BiliBiliService {
                 .filter(NavigationDto::isShow)
                 .forEach(item -> {
                     Category category = new Category();
-                    category.setType_id(item.getValue());
+                    String value = item.getValue();
+                    if (item.getType() == 3) {
+                        value = "channel:" + value;
+                    }
+                    if (item.getType() == 4) {
+                        value = "search:" + value;
+                    }
+                    category.setType_id(value);
                     category.setType_name(item.getName());
                     category.setType_flag(0);
                     if (!item.getChildren().isEmpty()) {
@@ -172,6 +179,8 @@ public class BiliBiliService {
                     result.getCategories().add(category);
                 });
 
+        result.setTotal(result.getCategories().size());
+        result.setLimit(result.getCategories().size());
 //        List<MovieDetail> list = new ArrayList<>();
 //        MovieDetail movieDetail = new MovieDetail();
 //        movieDetail.setVod_id("recommend");

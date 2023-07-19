@@ -43,7 +43,7 @@
       </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
-          <div>
+          <div v-if="!scope.row.reserved">
             <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
             <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
           </div>
@@ -54,27 +54,27 @@
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form">
         <el-form-item label="名称" label-width="140">
-          <el-input v-model="form.name" autocomplete="off"/>
+          <el-input v-model="form.name" placeholder="显示的名称" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="值" label-width="140">
-          <el-input v-model="form.value" autocomplete="off"/>
+          <el-input v-model="form.value" placeholder="频道ID或者搜索关键词" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="显示？" label-width="140">
           <el-switch v-model="form.show"/>
         </el-form-item>
-        <el-form-item label="保留的？" label-width="140">
-          <el-switch v-model="form.reserved"/>
-        </el-form-item>
+<!--        <el-form-item label="保留的？" label-width="140">-->
+<!--          <el-switch v-model="form.reserved"/>-->
+<!--        </el-form-item>-->
         <el-form-item label="类型" label-width="140">
           <el-radio-group v-model="form.type" class="ml-4">
-            <el-radio :label="1" size="large">一级分类</el-radio>
-            <el-radio :label="2" size="large">二级分类</el-radio>
+<!--            <el-radio :label="1" size="large">一级分类</el-radio>-->
+<!--            <el-radio :label="2" size="large">二级分类</el-radio>-->
             <el-radio :label="3" size="large">频道</el-radio>
             <el-radio :label="4" size="large">搜索</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="父类ID" label-width="140">
-          <el-input-number v-model="form.parentId" :min="0"/>
+        <el-form-item label="顺序" label-width="140">
+          <el-input-number v-model="form.order" :min="0"/>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -151,9 +151,9 @@ const form = ref<Nav>({
   id: 0,
   name: '',
   value: '',
-  type: 1,
+  type: 3,
   show: true,
-  reserved: true,
+  reserved: false,
   changed: false,
   expanded: false,
   order: 1,
@@ -185,7 +185,7 @@ const rowDrop = () => {
       activeRows.value = treeToTile(list.value)
       const oldRow = activeRows.value[(dragged as HTMLTableRowElement).rowIndex]
       const newRow = activeRows.value[(related as HTMLTableRowElement).rowIndex]
-      if (oldRow.type !== newRow.type && oldRow.id !== newRow.id) {
+      if ((oldRow.type == 2) !== (newRow.type == 2)) {
         return false
       }
       return !(oldRow.type === 2 && oldRow.parentId !== newRow.parentId);
@@ -243,12 +243,12 @@ const handleAdd = () => {
     id: 0,
     name: '',
     value: '',
-    type: 1,
+    type: 3,
     show: true,
-    reserved: true,
+    reserved: false,
     changed: false,
     expanded: false,
-    order: list.value.length + 1,
+    order: 1,
     parentId: 0,
     children: []
   }
