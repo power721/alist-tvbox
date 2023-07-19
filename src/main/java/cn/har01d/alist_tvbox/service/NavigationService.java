@@ -63,20 +63,78 @@ public class NavigationService {
         list.add(new Navigation("原创", "origin$0", 1, true, true, order++));
         list.add(new Navigation("新人", "rookie$0", 1, true, true, order));
 
-        list.add(new Navigation("数码", "95", 2, true, true, 1, 10));
-        list.add(new Navigation("软件应用", "230", 2, true, true, 2, 10));
-        list.add(new Navigation("计算机技术", "231", 2, true, true, 3, 10));
-        list.add(new Navigation("极客DIY", "233", 2, true, true, 4, 10));
+        int parent = 10;
+        order = 1;
+        list.add(new Navigation("数码", "95", 2, true, true, order++, parent));
+        list.add(new Navigation("软件应用", "230", 2, true, true, order++, parent));
+        list.add(new Navigation("计算机技术", "231", 2, true, true, order++, parent));
+        list.add(new Navigation("极客DIY", "233", 2, true, true, order++, parent));
 
-        list.add(new Navigation("科学科普", "201", 2, true, true, 1, 11));
-        list.add(new Navigation("社科·法律·心理", "124", 2, true, true, 2, 11));
-        list.add(new Navigation("人文历史", "228", 2, true, true, 3, 11));
-        list.add(new Navigation("财经商业", "207", 2, true, true, 4, 11));
-        list.add(new Navigation("校园学习", "208", 2, true, true, 5, 11));
-        list.add(new Navigation("职业职场", "209", 2, true, true, 6, 11));
-        list.add(new Navigation("设计·创意", "229", 2, true, true, 7, 11));
+        parent++;
+        order = 1;
+        list.add(new Navigation("科学科普", "201", 2, true, true, order++, parent));
+        list.add(new Navigation("社科·法律·心理", "124", 2, true, true, order++, parent));
+        list.add(new Navigation("人文历史", "228", 2, true, true, order++, parent));
+        list.add(new Navigation("财经商业", "207", 2, true, true, order++, parent));
+        list.add(new Navigation("校园学习", "208", 2, true, true, order++, parent));
+        list.add(new Navigation("职业职场", "209", 2, true, true, order++, parent));
+        list.add(new Navigation("设计·创意", "229", 2, true, true, order++, parent));
 
-//        addType("动画", "1", "主分区=&MAD·AMV=24&MMD·3D=25&短片·手书·配音=47&手办·模玩=210&特摄=86&动漫杂谈=253&综合=27");
+        parent++;
+        order = 1;
+        list.add(new Navigation("MAD·AMV", "24", 2, true, true, order++, parent));
+        list.add(new Navigation("MMD·3D", "25", 2, true, true, order++, parent));
+        list.add(new Navigation("短片·手书·配音", "47", 2, true, true, order++, parent));
+        list.add(new Navigation("手办·模玩", "210", 2, true, true, order++, parent));
+        list.add(new Navigation("特摄", "86", 2, true, true, order++, parent));
+        list.add(new Navigation("动漫杂谈", "253", 2, true, true, order++, parent));
+        list.add(new Navigation("综合", "27", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("原创音乐", "28", 2, true, true, order++, parent));
+        list.add(new Navigation("翻唱", "31", 2, true, true, order++, parent));
+        list.add(new Navigation("VOCALOID·UTAU", "30", 2, true, true, order++, parent));
+        list.add(new Navigation("演奏", "59", 2, true, true, order++, parent));
+        list.add(new Navigation("MV", "193", 2, true, true, order++, parent));
+        list.add(new Navigation("音乐现场", "29", 2, true, true, order++, parent));
+        list.add(new Navigation("音乐综合", "130", 2, true, true, order++, parent));
+        list.add(new Navigation("乐评盘点", "243", 2, true, true, order++, parent));
+        list.add(new Navigation("音乐教学", "244", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("单机游戏", "17", 2, true, true, order++, parent));
+        list.add(new Navigation("电子竞技", "171", 2, true, true, order++, parent));
+        list.add(new Navigation("手机游戏", "172", 2, true, true, order++, parent));
+        list.add(new Navigation("网络游戏", "65", 2, true, true, order++, parent));
+        list.add(new Navigation("桌游棋牌", "173", 2, true, true, order++, parent));
+        list.add(new Navigation("GMV", "121", 2, true, true, order++, parent));
+        list.add(new Navigation("音游", "136", 2, true, true, order++, parent));
+        list.add(new Navigation("Mugen", "19", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("综艺", "71", 2, true, true, order++, parent));
+        list.add(new Navigation("娱乐杂谈", "241", 2, true, true, order++, parent));
+        list.add(new Navigation("粉丝创作", "242", 2, true, true, order++, parent));
+        list.add(new Navigation("明星综合", "137", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("影视杂谈", "182", 2, true, true, order++, parent));
+        list.add(new Navigation("影视剪辑", "183", 2, true, true, order++, parent));
+        list.add(new Navigation("小剧场", "85", 2, true, true, order++, parent));
+        list.add(new Navigation("预告·资讯", "184", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("宅舞", "20", 2, true, true, order++, parent));
+        list.add(new Navigation("舞蹈综合", "154", 2, true, true, order++, parent));
+        list.add(new Navigation("舞蹈教程", "156", 2, true, true, order++, parent));
+        list.add(new Navigation("街舞", "198", 2, true, true, order++, parent));
+        list.add(new Navigation("明星舞蹈", "199", 2, true, true, order++, parent));
+        list.add(new Navigation("中国舞", "200", 2, true, true, order++, parent));
 
         navigationRepository.saveAll(list);
         log.info("load BiliBili category");

@@ -449,6 +449,7 @@ public class BiliBiliService {
     private static final Pattern SCRIPT = Pattern.compile("<script\\s+id=\"__NEXT_DATA__\"\\s+type=\"application/json\"\\s*>(.*?)</script\\s*>");
     private static final Pattern EP_MAP = Pattern.compile("\"episodes\"\\s*:\\s*(.+?)\\s*,\\s*\"user_status\"");
     private static final Pattern DESC = Pattern.compile("\"evaluate\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"jp_title\"");
+    private static final Pattern COVER = Pattern.compile("\"cover\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"publish\"");
     private static final Pattern MEDIA_INFO = Pattern.compile("\"mediaInfo\"\\s*:\\s*.+?\"title\":\"(.+?)\",\\s*.+?\\s*\"sectionsMap\"");
     private static final Pattern VIDEO_ID = Pattern.compile("\"videoId\"\\s*:\\s*\"(ep|ss)(\\d+)\"");
 
@@ -467,6 +468,7 @@ public class BiliBiliService {
             String json = m.group(1);
             String title = BILI_BILI;
             String desc = "";
+            String cover = "";
             m = MEDIA_INFO.matcher(json);
             if (m.find()) {
                 title = m.group(1);
@@ -475,6 +477,11 @@ public class BiliBiliService {
             if (m.find()) {
                 desc = m.group(1);
             }
+            m = COVER.matcher(json);
+            if (m.find()) {
+                cover = m.group(1);
+            }
+            log.debug("title: {} cover: {} desc: {}", title, cover, desc);
             m = EP_MAP.matcher(json);
             SortedMap<Integer, List<BiliBiliSeasonInfo>> sections = new TreeMap<>();
             if (m.find()) {
@@ -489,7 +496,6 @@ public class BiliBiliService {
                 }
             }
 
-
             m = VIDEO_ID.matcher(json);
             if (m.find()) {
                 String type = m.group(1);
@@ -498,7 +504,7 @@ public class BiliBiliService {
                 movieDetail.setVod_id(type + videoId);
                 movieDetail.setVod_name(title);
                 movieDetail.setVod_tag(FILE);
-                movieDetail.setVod_pic(LIST_PIC);
+                movieDetail.setVod_pic(cover.isEmpty() ? LIST_PIC : fixUrl(cover));
                 movieDetail.setVod_content(desc);
                 movieDetail.setVod_play_from(sections.keySet().stream().map(this::getSectionType).collect(Collectors.joining("$$$")));
                 String playUrl = sections.values().stream()
@@ -596,7 +602,7 @@ public class BiliBiliService {
         headers.add(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
         String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
         if (StringUtils.isNotBlank(cookie)) {
-            headers.add("Cookie", cookie);
+            headers.add("Cookie", cookie.trim());
         }
         HttpEntity<T> entity = new HttpEntity<>(data, headers);
         return entity;
@@ -793,7 +799,7 @@ public class BiliBiliService {
         movieDetail.setVod_id(LIST + "$" + id + "$" + sort + "$" + page);
         movieDetail.setVod_name("合集" + page);
         movieDetail.setVod_tag(FILE);
-        movieDetail.setVod_pic(LIST_PIC);
+        movieDetail.setVod_pic(LIST_PIC);  // TODO: cover
         movieDetail.setVod_play_from(BILI_BILI);
         String playUrl = list.stream().map(e -> fixTitle(e.getVod_name()) + "$" + buildPlayUrl(e.getVod_id())).collect(Collectors.joining("#"));
         movieDetail.setVod_play_url(playUrl);
