@@ -106,7 +106,6 @@ public class BiliBiliService {
             new FilterValue("最多播放", "hot"),
             new FilterValue("最新发布", "new")
     );
-    private final Map<String, List<FilterValue>> filterMap = new HashMap<>();
     private final SettingRepository settingRepository;
     private final AppProperties appProperties;
     private final NavigationService navigationService;
@@ -138,47 +137,16 @@ public class BiliBiliService {
         }
     }
 
-    private List<Setting> getTypes() {
-
+    private void checkLogin() {
         HttpEntity<Void> entity = buildHttpEntity(null);
         Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
         Map<String, Object> data = (Map<String, Object>) json.get("data");
         log.info("user: {} isLogin: {} vip: {}", data.get("uname"), data.get("isLogin"), data.get("vipType"));
-
-//        addType("科技", "188", "主分区=&数码=95&软件应用=230&计算机技术=231&科工机械=232&极客DIY=233");
-//        addType("知识", "36", "主分区=&科学科普=201&社科·法律·心理=124&人文历史=228&财经商业=207&校园学习=208&职业职场=209&设计·创意=229");
-//        addType("动画", "1", "主分区=&MAD·AMV=24&MMD·3D=25&短片·手书·配音=47&手办·模玩=210&特摄=86&动漫杂谈=253&综合=27");
-
-        return null;
     }
 
     public CategoryList getCategoryList() {
+        checkLogin();
         CategoryList result = new CategoryList();
-//        try {
-//            Path file = Paths.get("/data/bilibili.txt");
-//            if (Files.exists(file)) {
-//                for (String line : Files.readAllLines(file)) {
-//                    String[] parts = line.split(":");
-//                    String name = parts[1];
-//                    if (parts.length == 3) {
-//                        name = parts[2];
-//                    }
-//                    Category category = new Category();
-//                    category.setType_id(parts[0] + ":" + parts[1]);
-//                    category.setType_name(name);
-//                    category.setType_flag(0);
-//                    if ("search".equals(parts[0])) {
-//                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
-//                    } else if ("channel".equals(parts[0])) {
-//                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2)));
-//                    }
-//                    result.getCategories().add(category);
-//                }
-//            }
-//        } catch (Exception e) {
-//            log.warn("", e);
-//        }
-
         for (NavigationDto item : navigationService.list()) {
             Category category = new Category();
             category.setType_id(item.getValue());

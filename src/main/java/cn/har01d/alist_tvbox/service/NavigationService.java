@@ -70,6 +70,9 @@ public class NavigationService {
             list.add(new Navigation("校园学习", "208", 2, true, true, 5, 11));
             list.add(new Navigation("职业职场", "209", 2, true, true, 6, 11));
             list.add(new Navigation("设计·创意", "229", 2, true, true, 7, 11));
+
+//        addType("动画", "1", "主分区=&MAD·AMV=24&MMD·3D=25&短片·手书·配音=47&手办·模玩=210&特摄=86&动漫杂谈=253&综合=27");
+
             navigationRepository.saveAll(list);
         }
     }
