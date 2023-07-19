@@ -136,6 +136,43 @@ public class NavigationService {
         list.add(new Navigation("明星舞蹈", "199", 2, true, true, order++, parent));
         list.add(new Navigation("中国舞", "200", 2, true, true, order++, parent));
 
+        parent++;
+        order = 1;
+        list.add(new Navigation("篮球", "235", 2, true, true, order++, parent));
+        list.add(new Navigation("足球", "249", 2, true, true, order++, parent));
+        list.add(new Navigation("健身", "164", 2, true, true, order++, parent));
+        list.add(new Navigation("竞技体育", "236", 2, true, true, order++, parent));
+        list.add(new Navigation("运动文化", "237", 2, true, true, order++, parent));
+        list.add(new Navigation("运动综合", "238", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("赛车", "245", 2, true, true, order++, parent));
+        list.add(new Navigation("改装玩车", "246", 2, true, true, order++, parent));
+        list.add(new Navigation("新能源车", "247", 2, true, true, order++, parent));
+        list.add(new Navigation("房车", "248", 2, true, true, order++, parent));
+        list.add(new Navigation("摩托车 ", "240", 2, true, true, order++, parent));
+        list.add(new Navigation("购车攻略", "227", 2, true, true, order++, parent));
+        list.add(new Navigation("汽车生活", "176", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("搞笑", "138", 2, true, true, order++, parent));
+        list.add(new Navigation("出行", "250", 2, true, true, order++, parent));
+        list.add(new Navigation("三农", "251", 2, true, true, order++, parent));
+        list.add(new Navigation("家居房产", "239", 2, true, true, order++, parent));
+        list.add(new Navigation("手工 ", "161", 2, true, true, order++, parent));
+        list.add(new Navigation("绘画", "162", 2, true, true, order++, parent));
+        list.add(new Navigation("日常", "21", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("美食制作", "76", 2, true, true, order++, parent));
+        list.add(new Navigation("美食侦探", "212", 2, true, true, order++, parent));
+        list.add(new Navigation("美食测评", "213", 2, true, true, order++, parent));
+        list.add(new Navigation("田园美食", "214", 2, true, true, order++, parent));
+        list.add(new Navigation("美食记录 ", "215", 2, true, true, order++, parent));
+
         navigationRepository.saveAll(list);
         log.info("load BiliBili category");
     }
