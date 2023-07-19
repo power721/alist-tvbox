@@ -133,6 +133,7 @@ public class BiliBiliService {
     @PostConstruct
     public void setup() {
         if (!settingRepository.existsById("api_key")) {
+            log.debug("generate api key");
             settingRepository.save(new Setting("api_key", UUID.randomUUID().toString()));
         }
     }
@@ -147,27 +148,29 @@ public class BiliBiliService {
     public CategoryList getCategoryList() {
         checkLogin();
         CategoryList result = new CategoryList();
-        for (NavigationDto item : navigationService.list()) {
-            Category category = new Category();
-            category.setType_id(item.getValue());
-            category.setType_name(item.getName());
-            category.setType_flag(0);
-            if (!item.getChildren().isEmpty()) {
-                List<FilterValue> filters = new ArrayList<>();
-                filters.add(new FilterValue("主分区", ""));
-                item.getChildren().stream().map(e -> new FilterValue(e.getValue(), e.getName())).forEach(filters::add);
-                Filter filter1 = new Filter("category", "分类", filters);
-                Filter filter2 = new Filter("type", "类型", List.of(new FilterValue("最新", ""), new FilterValue("热门", "hot")));
-                result.getFilters().put(category.getType_id(), List.of(filter1, filter2));
-            }
-            if (item.getType() == 3) {
-                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2)));
-            }
-            if (item.getType() == 4) {
-                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters1)));
-            }
-            result.getCategories().add(category);
-        }
+        navigationService.list().stream()
+                .filter(NavigationDto::isShow)
+                .forEach(item -> {
+                    Category category = new Category();
+                    category.setType_id(item.getValue());
+                    category.setType_name(item.getName());
+                    category.setType_flag(0);
+                    if (!item.getChildren().isEmpty()) {
+                        List<FilterValue> filters = new ArrayList<>();
+                        filters.add(new FilterValue("主分区", ""));
+                        item.getChildren().stream().filter(NavigationDto::isShow).map(e -> new FilterValue(e.getName(), e.getValue())).forEach(filters::add);
+                        Filter filter1 = new Filter("category", "分类", filters);
+                        Filter filter2 = new Filter("type", "类型", List.of(new FilterValue("最新", ""), new FilterValue("热门", "hot")));
+                        result.getFilters().put(category.getType_id(), List.of(filter1, filter2));
+                    }
+                    if (item.getType() == 3) {
+                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2)));
+                    }
+                    if (item.getType() == 4) {
+                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters1)));
+                    }
+                    result.getCategories().add(category);
+                });
 
 //        List<MovieDetail> list = new ArrayList<>();
 //        MovieDetail movieDetail = new MovieDetail();
@@ -197,7 +200,7 @@ public class BiliBiliService {
         movieDetail.setVod_name(info.getTitle());
         movieDetail.setVod_tag(FILE);
         movieDetail.setType_name(info.getBadge());
-        movieDetail.setVod_pic(info.getCover());
+        movieDetail.setVod_pic(fixUrl(info.getCover()));
         //movieDetail.setVod_play_from(BILI_BILI);
         //movieDetail.setVod_play_url(buildPlayUrl(movieDetail.getVod_id()));
         movieDetail.setVod_remarks(info.getRating());
@@ -258,6 +261,7 @@ public class BiliBiliService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setType_name(info.getTname());
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
+        movieDetail.setVod_pic(fixUrl(info.getPic()));
         if (full) {
             movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
             movieDetail.setVod_play_from(BILI_BILI);
@@ -270,8 +274,6 @@ public class BiliBiliService {
             } else {
                 movieDetail.setVod_content(info.getDesc());
             }
-        } else {
-            movieDetail.setVod_pic(info.getPic());
         }
         return movieDetail;
     }

@@ -170,25 +170,6 @@
         <el-form-item>
           <el-button type="primary" @click="updateBilibiliCookie">更新</el-button>
         </el-form-item>
-        <el-form-item label="支持B站DASH视频">
-          <el-switch
-            v-model="supportDash"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateSupportDash"
-          />
-          <span class="hint">高清高速，仅影视EXO支持</span>
-        </el-form-item>
-        <el-form-item label="B站显示历史记录">
-          <el-switch
-            v-model="bilibiliHistory"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateBilibiliHistory"
-          />
-        </el-form-item>
         <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>
@@ -225,10 +206,7 @@ const increase = () => {
 
 const aListStarted = ref(false)
 const aListRestart = ref(false)
-const mergeSiteSource = ref(false)
 const mixSiteSource = ref(false)
-const supportDash = ref(false)
-const bilibiliHistory = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -277,10 +255,6 @@ const updateToken = () => {
   }
 }
 
-const goIndex = () => {
-  router.push('/index')
-}
-
 const updateOpenTokenUrl = () => {
   axios.post('/open-token-url', {url: openTokenUrl.value}).then(() => {
     ElMessage.success('更新成功')
@@ -299,26 +273,8 @@ const updateBilibiliCookie = () => {
   })
 }
 
-const updateMerge = () => {
-  axios.post('/settings', {name: 'merge_site_source', value: mergeSiteSource.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
 const updateMixed = () => {
   axios.post('/settings', {name: 'mix_site_source', value: mixSiteSource.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateBilibiliHistory = () => {
-  axios.post('/settings', {name: 'bilibili_history', value: bilibiliHistory.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateSupportDash = () => {
-  axios.post('/settings', {name: 'support_dash', value: supportDash.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -388,10 +344,7 @@ onMounted(() => {
       bilibiliCookie.value = data.bilibili_cookie
       autoCheckin.value = data.auto_checkin === 'true'
       aListRestart.value = data.alist_restart_required === 'true'
-      mergeSiteSource.value = data.merge_site_source === 'true'
       mixSiteSource.value = data.mix_site_source === 'true'
-      supportDash.value = data.support_dash === 'true'
-      bilibiliHistory.value = data.bilibili_history === 'true'
       login.value.username = data.alist_username
       login.value.password = data.alist_password
       login.value.enabled = data.alist_login === 'true'

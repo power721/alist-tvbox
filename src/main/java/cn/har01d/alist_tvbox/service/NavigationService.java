@@ -74,6 +74,7 @@ public class NavigationService {
 //        addType("动画", "1", "主分区=&MAD·AMV=24&MMD·3D=25&短片·手书·配音=47&手办·模玩=210&特摄=86&动漫杂谈=253&综合=27");
 
             navigationRepository.saveAll(list);
+            log.info("load BiliBili category");
         }
     }
 
