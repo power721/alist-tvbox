@@ -412,7 +412,10 @@ public class SubscriptionService {
             if (key != null) {
                 Map<String, Object> original = map.get(key);
                 if (name.equals("sites")) {
-                    site.put("name", prefix + site.get("name").toString());
+                    String siteName = (String) site.get("name");
+                    if (StringUtils.isNotBlank(siteName)) {
+                        site.put("name", prefix + siteName);
+                    }
                 }
 
                 if (original != null) {
@@ -426,8 +429,9 @@ public class SubscriptionService {
                 if (StringUtils.isNotBlank(spider) && site.get("jar") == null
                         && site.get("type") != null && site.get("type").equals(3)) {
                     String api = (String) site.get("api");
-                    if (!api.startsWith("http")) {
+                    if (api != null && !api.startsWith("http")) {
                         site.put("jar", spider);
+                        log.debug("replace jar {}", spider);
                     }
                 }
             }
