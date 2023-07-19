@@ -273,7 +273,8 @@ public class SubscriptionService {
         try {
             json = Pattern.compile("^\\s*#.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
             json = Pattern.compile("^\\s*//.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
-            json = json.replace("DOCKER_ADDRESS", readHostAddress());
+            json = json.replace("DOCKER_ADDRESS", readAlistAddress());
+            json = json.replace("ATV_ADDRESS", readHostAddress());
             Map<String, Object> override = objectMapper.readValue(json, Map.class);
             overrideConfig(config, "", "", override);
             return replaceString(config, override);
@@ -531,8 +532,8 @@ public class SubscriptionService {
             File file = new File("/www/tvbox/my.json");
             if (file.exists()) {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-                String address = readHostAddress();
-                json = json.replaceAll("DOCKER_ADDRESS", address);
+                json = json.replaceAll("DOCKER_ADDRESS", readAlistAddress());
+                json = json.replaceAll("ATV_ADDRESS", readHostAddress());
                 return json;
             }
         } catch (IOException e) {
@@ -542,7 +543,7 @@ public class SubscriptionService {
         return null;
     }
 
-    private Integer getPort() {
+    private Integer getAlistPort() {
         if (appProperties.isHostmode()) {
             return 6789;
         }
@@ -553,9 +554,9 @@ public class SubscriptionService {
         }
     }
 
-    private String readHostAddress() throws IOException {
+    private String readAlistAddress() throws IOException {
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
-                .port(getPort())
+                .port(getAlistPort())
                 .replacePath("/")
                 .build();
         String address = null;
@@ -581,6 +582,13 @@ public class SubscriptionService {
         }
 
         return address;
+    }
+
+    private String readHostAddress() {
+        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
+                .replacePath("")
+                .build();
+        return uriComponents.toUriString();
     }
 
     private boolean isIntranet(UriComponents uriComponents) {
