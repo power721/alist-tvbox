@@ -42,6 +42,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
@@ -449,7 +450,7 @@ public class BiliBiliService {
     private static final Pattern SCRIPT = Pattern.compile("<script\\s+id=\"__NEXT_DATA__\"\\s+type=\"application/json\"\\s*>(.*?)</script\\s*>");
     private static final Pattern EP_MAP = Pattern.compile("\"episodes\"\\s*:\\s*(.+?)\\s*,\\s*\"user_status\"");
     private static final Pattern DESC = Pattern.compile("\"evaluate\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"jp_title\"");
-    private static final Pattern COVER = Pattern.compile("\"cover\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"publish\"");
+    private static final Pattern COVER = Pattern.compile("\"squareCover\"\\s*:\\s*\".+?\"\\s*,\\s*\"cover\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"publish\"");
     private static final Pattern MEDIA_INFO = Pattern.compile("\"mediaInfo\"\\s*:\\s*.+?\"title\":\"(.+?)\",\\s*.+?\\s*\"sectionsMap\"");
     private static final Pattern VIDEO_ID = Pattern.compile("\"videoId\"\\s*:\\s*\"(ep|ss)(\\d+)\"");
 
@@ -514,6 +515,7 @@ public class BiliBiliService {
                 result.getList().add(movieDetail);
             }
         }
+        result.setHeader("{\"Referer\":\"https://www.bilibili.com\"}");
         log.debug("{}: {}", tid, result);
         return result;
     }
@@ -809,6 +811,7 @@ public class BiliBiliService {
         offsets.add(response.getBody().getData().getOffset());
         result.getList().addAll(list);
         result.setLimit(result.getList().size());
+        result.setHeader("{\"Referer\":\"https://www.bilibili.com\"}");
         return result;
     }
 

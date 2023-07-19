@@ -27,7 +27,15 @@ public class ImageController {
     @GetMapping(value = "", produces = "image/webp")
     public byte[] getImage(String url, HttpServletResponse response) {
         log.debug("get image by url: {}", url);
-        response.setContentType("image/webp");
+        if (url.endsWith(".webp")) {
+            response.setContentType("image/webp");
+        } else if (url.endsWith(".svg")) {
+            response.setContentType("image/svg+xml");
+        } else if (url.endsWith(".png")) {
+            response.setContentType("image/png");
+        } else {
+            response.setContentType("image/jpeg");
+        }
         return restTemplate.getForObject(url, byte[].class);
     }
 
