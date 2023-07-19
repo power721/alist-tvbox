@@ -85,7 +85,7 @@ public class IndexService {
     @PostConstruct
     public void setup() {
         try {
-            Path path = Paths.get("/version.txt");
+            Path path = Paths.get("/data/index/version.txt");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
