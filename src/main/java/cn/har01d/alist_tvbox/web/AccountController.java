@@ -60,6 +60,11 @@ public class AccountController {
         accountService.delete(id);
     }
 
+    @GetMapping("/ali/token/{id}")
+    public String getAliToken(@PathVariable String id) {
+        return accountService.getAliRefreshToken(id);
+    }
+
     @PostMapping("/login")
     public void updateLogin(@RequestBody AListLogin login) {
         accountService.updateLogin(login);

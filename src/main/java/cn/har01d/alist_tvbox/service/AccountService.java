@@ -57,6 +57,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
 import java.util.stream.Collectors;
 
@@ -65,6 +66,7 @@ import static cn.har01d.alist_tvbox.util.Constants.ALIST_LOGIN;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_PASSWORD;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_RESTART_REQUIRED;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_USERNAME;
+import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
 import static cn.har01d.alist_tvbox.util.Constants.AUTO_CHECKIN;
 import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_DAYS;
@@ -113,6 +115,9 @@ public class AccountService {
 
     @PostConstruct
     public void setup() {
+        if (!settingRepository.existsById(ALI_SECRET)) {
+            settingRepository.save(new Setting(ALI_SECRET, UUID.randomUUID().toString().replace("-", "")));
+        }
         scheduleAutoCheckinTime();
 
         if (accountRepository.count() == 0) {
@@ -973,5 +978,15 @@ public class AccountService {
             log.info("删除文件'{}'{}, 创建于{}, 文件大小：{}", file.getName(), item.getStatus() == 204 ? "成功" : "失败", file.getCreatedAt(), Utils.byte2size(file.getSize()));
         }
         return count;
+    }
+
+    public String getAliRefreshToken(String id) {
+        String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
+        if (aliSecret.equals(id)) {
+            return accountRepository.getFirstByMasterTrue()
+                    .map(Account::getRefreshToken)
+                    .orElseThrow(NotFoundException::new);
+        }
+        return null;
     }
 }
