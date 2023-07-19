@@ -11,8 +11,8 @@
     <el-table :data="list"
               :row-class-name="tableRowClassName"
               row-key="id"
+              :key="tableKey"
               style="width: 100%">
-
       <el-table-column prop="order" label="顺序" sortable width="100"/>
       <el-table-column prop="id" label="ID" sortable width="100"/>
       <el-table-column prop="name" label="名称" width="200"/>
@@ -73,9 +73,6 @@
             <el-radio :label="4" size="large">搜索</el-radio>
           </el-radio-group>
         </el-form-item>
-<!--        <el-form-item label="顺序" label-width="140">-->
-<!--          <el-input-number v-model="form.order" :min="1"/>-->
-<!--        </el-form-item>-->
         <el-form-item label="父类ID" label-width="140">
           <el-input-number v-model="form.parentId" :min="0"/>
         </el-form-item>
@@ -104,7 +101,7 @@
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
 import Sortable from "sortablejs"
-import {Check, Close, Pointer} from '@element-plus/icons-vue'
+import {Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
 
@@ -121,13 +118,13 @@ const columns = [
 
 interface Nav {
   id: number
+  order: number
   name: string
   value: string
   show: boolean
   reserved: boolean
   changed: boolean
   expanded: boolean
-  order: number
   type: number
   parentId: number
   children: Nav[]
@@ -137,9 +134,6 @@ const tableRowClassName = ({row}: {
   row: Nav
   rowIndex: number
 }) => {
-  if (row.type == 2) {
-    return 'no-drag'
-  }
   if (row.changed) {
     return 'warning-row'
   }
@@ -148,9 +142,11 @@ const tableRowClassName = ({row}: {
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const list = ref<Nav[]>([])
+const activeRows = ref<Nav[]>([])
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const changed = ref(false)
+const tableKey = ref(0)
 const form = ref<Nav>({
   id: 0,
   name: '',
@@ -165,51 +161,76 @@ const form = ref<Nav>({
   children: []
 })
 
+const treeToTile = (treeData: Nav[]) => {
+  const arr: Nav[] = []
+  const expanded = (data: Nav[]) => {
+    if (data && data.length > 0) {
+      data.filter(d => d).forEach(e => {
+        arr.push(e)
+        expanded(e['children'] || [])
+      })
+    }
+  }
+  expanded(treeData)
+  return arr
+}
+
 const rowDrop = () => {
   const tbody = document.querySelector(".el-table__body-wrapper tbody") as HTMLElement;
   Sortable.create(tbody, {
     animation: 500,
     handle: ".el-table__row",
     draggable: ".el-table__row",
-    filter: (event, target, sortable) => {
-      console.log(event, target, sortable)
-      return target.className.includes('no-drag')
+    onMove({dragged, related}) {
+      activeRows.value = treeToTile(list.value)
+      const oldRow = activeRows.value[(dragged as HTMLTableRowElement).rowIndex]
+      const newRow = activeRows.value[(related as HTMLTableRowElement).rowIndex]
+      if (oldRow.type !== newRow.type && oldRow.id !== newRow.id) {
+        return false
+      }
+      return !(oldRow.type === 2 && oldRow.parentId !== newRow.parentId);
     },
     onEnd: (event: any) => {
-      console.log(event.oldIndex, event.newIndex)
-      const item = list.value[event.oldIndex]
-      if (!item) {
-        ElMessage.error('不能移除到父类外')
+      let oldIndex = event.oldIndex
+      let newIndex = event.newIndex
+      const oldRow = activeRows.value[oldIndex]
+      const newRow = activeRows.value[newIndex]
+      if (!oldRow || oldIndex === newIndex || oldRow.id === newRow.id) {
         return
       }
 
-      item.changed = true
-      if (item.type === 2) {
-        const parentIndex = list.value.findIndex(e => e.id === item.parentId)
-        const parent = list.value[parentIndex]
-        const items = parent.children
-        if (event.newIndex < parentIndex || event.newIndex > parentIndex + items.length) {
-          ElMessage.error('不能移除到父类外')
-          return
+      activeRows.value.splice(oldIndex, 1)
+      activeRows.value.splice(newIndex, 0, oldRow)
+      let order = 1
+      const items: Nav[] = []
+
+      if (oldRow.type === 2) {
+        const parent = list.value.find(e => e.id === oldRow.parentId)
+        console.log(oldRow.id, oldRow.parentId, parent)
+        activeRows.value.forEach(e => {
+          if (e.type == 2 && e.parentId === oldRow.parentId) {
+            e.order = order++
+            items.push(e)
+          }
+        })
+        if (parent) {
+          parent.children = items
         }
-        const currRow = items.splice(event.oldIndex, 1)[0];
-        items.splice(event.newIndex, 0, currRow);
-
-        let order = 1
-        items.forEach(e => {
-          e.order = order++
-        })
       } else {
-        list.value[event.newIndex].changed = true
-        const currRow = list.value.splice(event.oldIndex, 1)[0];
-        list.value.splice(event.newIndex, 0, currRow);
-
-        let order = 1
-        list.value.forEach(e => {
-          e.order = order++
+        activeRows.value.forEach(e => {
+          if (e.type != 2) {
+            e.order = order++
+            items.push(e)
+          }
         })
+        list.value = items
+
+        tableKey.value = Math.random()
+        setTimeout(() => rowDrop(), 500)
       }
 
+      oldRow.changed = true
+      newRow.changed = true
       changed.value = true
     },
   });

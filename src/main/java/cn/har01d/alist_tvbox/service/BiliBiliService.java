@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.NavigationDto;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelItem;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliFeedResponse;
@@ -44,9 +45,6 @@ import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -96,7 +94,7 @@ public class BiliBiliService {
     public static final String REGION_API = "https://api.bilibili.com/x/web-interface/dynamic/region?ps=%d&rid=%s&pn=%d";
     public static final String CHANNEL_API = "https://api.bilibili.com/x/web-interface/web/channel/multiple/list?channel_id=%s&sort_type=%s&offset=%s&page_size=30";
 
-    private final List<FilterValue> filters = Arrays.asList(
+    private final List<FilterValue> filters1 = Arrays.asList(
             new FilterValue("综合排序", ""),
             new FilterValue("最多播放", "click"),
             new FilterValue("最新发布", "pubdate"),
@@ -111,19 +109,21 @@ public class BiliBiliService {
     private final Map<String, List<FilterValue>> filterMap = new HashMap<>();
     private final SettingRepository settingRepository;
     private final AppProperties appProperties;
+    private final NavigationService navigationService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private List<Setting> types = new ArrayList<>();
     private MovieDetail searchPlaylist;
     private String keyword = "";
     private int searchPage;
 
     public BiliBiliService(SettingRepository settingRepository,
                            AppProperties appProperties,
+                           NavigationService navigationService,
                            RestTemplateBuilder builder,
                            ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
         this.appProperties = appProperties;
+        this.navigationService = navigationService;
         this.restTemplate = builder
                 .defaultHeader("Referer", "https://www.bilibili.com/")
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
@@ -138,97 +138,65 @@ public class BiliBiliService {
         }
     }
 
-    private void addType(String name, String value) {
-        types.add(new Setting(name, value));
-    }
-
-    private void addType(String name, String value, String filters) {
-        types.add(new Setting(name, value));
-        filterMap.put(name, Arrays.asList(filters.split("&")).stream().map(e -> {
-            String[] parts = e.split("=");
-            return new FilterValue(parts[0], parts.length == 1 ? "" : parts[1]);
-        }).collect(Collectors.toList()));
-    }
-
     private List<Setting> getTypes() {
-        types = new ArrayList<>();
-        if (settingRepository.findById("bilibili_history").map(Setting::getValue).orElse("").equals("true")) {
-            addType("历史记录", "history$0");
-        }
-        addType("全站", "0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=all
 
         HttpEntity<Void> entity = buildHttpEntity(null);
         Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
         Map<String, Object> data = (Map<String, Object>) json.get("data");
         log.info("user: {} isLogin: {} vip: {}", data.get("uname"), data.get("isLogin"), data.get("vipType"));
-        if (appProperties.isSupportDash()) {
-            addType("电影", "season$2"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=2
-            addType("电视剧", "season$5"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=5
-            addType("综艺", "season$7"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=7
-            addType("纪录片", "season$3"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=3
-            addType("国产动画", "season$4"); // https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=4
-            addType("番剧", "season$1"); // https://api.bilibili.com/pgc/web/rank/list?day=3&season_type=1
-        }
 
-        addType("热门", "pop$1");
-        addType("科技", "188", "主分区=&数码=95&软件应用=230&计算机技术=231&科工机械=232&极客DIY=233");
-        addType("知识", "36", "主分区=&科学科普=201&社科·法律·心理=124&人文历史=228&财经商业=207&校园学习=208&职业职场=209&设计·创意=229");
-        addType("动画", "1", "主分区=&MAD·AMV=24&MMD·3D=25&短片·手书·配音=47&手办·模玩=210&特摄=86&动漫杂谈=253&综合=27");
-        addType("音乐", "3", "主分区=");
-        addType("游戏", "4", "主分区=");
-        addType("娱乐", "5", "主分区=");
-        addType("影视", "181", "主分区=");
-        addType("舞蹈", "129", "主分区=");
-        addType("运动", "234", "主分区=");
-        addType("汽车", "223", "主分区=");
-        addType("生活", "160", "主分区=");
-        addType("美食", "211", "主分区=");
-        addType("动物圈", "217", "主分区=");
-        addType("时尚", "155", "主分区=");
-        addType("鬼畜", "119", "主分区=");
-        addType("国创相关", "168", "主分区=");
+//        addType("科技", "188", "主分区=&数码=95&软件应用=230&计算机技术=231&科工机械=232&极客DIY=233");
+//        addType("知识", "36", "主分区=&科学科普=201&社科·法律·心理=124&人文历史=228&财经商业=207&校园学习=208&职业职场=209&设计·创意=229");
+//        addType("动画", "1", "主分区=&MAD·AMV=24&MMD·3D=25&短片·手书·配音=47&手办·模玩=210&特摄=86&动漫杂谈=253&综合=27");
 
-        addType("原创", "origin$0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=origin
-        addType("新人", "rookie$0"); // https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=rookie
-        return types;
+        return null;
     }
 
     public CategoryList getCategoryList() {
         CategoryList result = new CategoryList();
-        try {
-            Path file = Paths.get("/data/bilibili.txt");
-            if (Files.exists(file)) {
-                for (String line : Files.readAllLines(file)) {
-                    String[] parts = line.split(":");
-                    String name = parts[1];
-                    if (parts.length == 3) {
-                        name = parts[2];
-                    }
-                    Category category = new Category();
-                    category.setType_id(parts[0] + ":" + parts[1]);
-                    category.setType_name(name);
-                    category.setType_flag(0);
-                    if ("search".equals(parts[0])) {
-                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
-                    } else if ("channel".equals(parts[0])) {
-                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2)));
-                    }
-                    result.getCategories().add(category);
-                }
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
+//        try {
+//            Path file = Paths.get("/data/bilibili.txt");
+//            if (Files.exists(file)) {
+//                for (String line : Files.readAllLines(file)) {
+//                    String[] parts = line.split(":");
+//                    String name = parts[1];
+//                    if (parts.length == 3) {
+//                        name = parts[2];
+//                    }
+//                    Category category = new Category();
+//                    category.setType_id(parts[0] + ":" + parts[1]);
+//                    category.setType_name(name);
+//                    category.setType_flag(0);
+//                    if ("search".equals(parts[0])) {
+//                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+//                    } else if ("channel".equals(parts[0])) {
+//                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2)));
+//                    }
+//                    result.getCategories().add(category);
+//                }
+//            }
+//        } catch (Exception e) {
+//            log.warn("", e);
+//        }
 
-        for (Setting item : getTypes()) {
+        for (NavigationDto item : navigationService.list()) {
             Category category = new Category();
             category.setType_id(item.getValue());
             category.setType_name(item.getName());
             category.setType_flag(0);
-            if (filterMap.containsKey(item.getName())) {
-                Filter filter1 = new Filter("category", "分类", filterMap.get(item.getName()));
+            if (!item.getChildren().isEmpty()) {
+                List<FilterValue> filters = new ArrayList<>();
+                filters.add(new FilterValue("主分区", ""));
+                item.getChildren().stream().map(e -> new FilterValue(e.getValue(), e.getName())).forEach(filters::add);
+                Filter filter1 = new Filter("category", "分类", filters);
                 Filter filter2 = new Filter("type", "类型", List.of(new FilterValue("最新", ""), new FilterValue("热门", "hot")));
                 result.getFilters().put(category.getType_id(), List.of(filter1, filter2));
+            }
+            if (item.getType() == 3) {
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2)));
+            }
+            if (item.getType() == 4) {
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters1)));
             }
             result.getCategories().add(category);
         }
