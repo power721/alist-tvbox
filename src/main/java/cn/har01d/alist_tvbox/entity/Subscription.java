@@ -28,4 +28,5 @@ public class Subscription {
     private String url;
     @Column(columnDefinition = "TEXT")
     private String override;
+    private String sort;
 }

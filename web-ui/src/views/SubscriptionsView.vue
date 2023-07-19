@@ -42,6 +42,9 @@
         <el-form-item label="配置URL" label-width="140">
           <el-input v-model="form.url" autocomplete="off" placeholder="支持多个，逗号分割"/>
         </el-form-item>
+        <el-form-item label="排序字段" label-width="140">
+          <el-input v-model="form.sort" autocomplete="off" placeholder="留空保持默认排序"/>
+        </el-form-item>
         <el-form-item label="定制" label-width="140">
           <el-input v-model="form.override" type="textarea" rows="15"/>
           <a href="https://www.json.cn/" target="_blank">JSON验证</a>
@@ -102,6 +105,7 @@ const form = ref({
   id: 0,
   name: '',
   url: '',
+  sort: '',
   override: ''
 })
 
@@ -112,6 +116,7 @@ const handleAdd = () => {
     id: 0,
     name: '',
     url: '',
+    sort: '',
     override: ''
   }
   formVisible.value = true
@@ -124,6 +129,7 @@ const handleEdit = (data: any) => {
     id: data.id,
     name: data.name,
     url: data.url,
+    sort: data.sort,
     override: data.override
   }
   formVisible.value = true

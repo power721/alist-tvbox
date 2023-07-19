@@ -167,16 +167,18 @@ public class SubscriptionService {
     public Map<String, Object> subscription(int id) {
         String apiUrl = "";
         String override = "";
+        String sort = "";
         if (id > 0) {
             Subscription subscription = subscriptionRepository.findById(id).orElseThrow(NotFoundException::new);
             apiUrl = subscription.getUrl();
             override = subscription.getOverride();
+            sort = subscription.getSort();
         }
 
-        return subscription(apiUrl, override);
+        return subscription(apiUrl, override, sort);
     }
 
-    public Map<String, Object> subscription(String apiUrl, String override) {
+    public Map<String, Object> subscription(String apiUrl, String override, String sort) {
         Map<String, Object> config = new HashMap<>();
         for (String url : apiUrl.split(",")) {
             String[] parts = url.split("@", 2);
@@ -188,7 +190,7 @@ public class SubscriptionService {
             overrideConfig(config, fixUrl(url.trim()), prefix, getConfigData(url.trim()));
         }
 
-        sortSites(config);
+        sortSites(config, sort);
 
         if (StringUtils.isNotBlank(override)) {
             config = overrideConfig(config, override);
@@ -204,9 +206,12 @@ public class SubscriptionService {
         return config;
     }
 
-    private void sortSites(Map<String, Object> config) {
+    private void sortSites(Map<String, Object> config, String sort) {
         List<Map<String, String>> list = (List<Map<String, String>>) config.get("sites");
-        list.sort(Comparator.comparing(a -> a.get("name")));
+        if (StringUtils.isNotBlank(sort)) {
+            log.info("sort by filed {}", sort);
+            list.sort(Comparator.comparing(a -> a.get(sort)));
+        }
     }
 
     private Map<String, Object> getConfigData(String apiUrl) {

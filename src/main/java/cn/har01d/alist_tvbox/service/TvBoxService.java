@@ -6,10 +6,8 @@ import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Meta;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
 import cn.har01d.alist_tvbox.entity.Movie;
-import cn.har01d.alist_tvbox.entity.MovieRepository;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.model.FileNameInfo;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
@@ -36,7 +34,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -69,8 +66,6 @@ public class TvBoxService {
     private final AccountRepository accountRepository;
     private final ShareRepository shareRepository;
     private final MetaRepository metaRepository;
-    private final MovieRepository movieRepository;
-    private final SiteRepository siteRepository;
 
     private final AListService aListService;
     private final IndexService indexService;
@@ -111,8 +106,6 @@ public class TvBoxService {
     public TvBoxService(AccountRepository accountRepository,
                         ShareRepository shareRepository,
                         MetaRepository metaRepository,
-                        MovieRepository movieRepository,
-                        SiteRepository siteRepository,
                         AListService aListService,
                         IndexService indexService,
                         SiteService siteService,
@@ -123,8 +116,6 @@ public class TvBoxService {
         this.accountRepository = accountRepository;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
-        this.movieRepository = movieRepository;
-        this.siteRepository = siteRepository;
         this.aListService = aListService;
         this.indexService = indexService;
         this.siteService = siteService;
@@ -132,71 +123,6 @@ public class TvBoxService {
         this.doubanService = doubanService;
         this.subscriptionService = subscriptionService;
         this.objectMapper = objectMapper;
-    }
-
-    @PostConstruct
-    public void setup() {
-        try {
-            loadMeta();
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-    }
-
-    private void loadMeta() throws IOException {
-        if (appProperties.isXiaoya()) {
-            for (Site site : siteRepository.findAll()) {
-                if (site.isSearchable() && !site.isDisabled()) {
-                    loadMeta(site);
-                    return;
-                }
-            }
-        }
-    }
-
-    private void loadMeta(Site site) throws IOException {
-        Path file = Paths.get("/data/index/" + site.getId() + "/custom_index.txt");
-        if (Files.exists(file)) {
-            loadMetaFromIndexFile(file);
-        }
-    }
-
-    private void loadMetaFromIndexFile(Path file) throws IOException {
-        List<String> lines = Files.readAllLines(file);
-        for (String line : lines) {
-            try {
-                String[] parts = line.split("#");
-                String path = line;
-                if (parts.length > 1) {
-                    path = parts[0];
-                }
-
-                if (metaRepository.existsByPath(path)) {
-                    continue;
-                }
-
-                Meta meta = new Meta();
-                meta.setPath(path);
-                Movie movie = null;
-                if (parts.length > 2) {
-                    movie = movieRepository.findById(Integer.parseInt(parts[2])).orElse(null);
-                } else if (parts.length > 1) {
-                    meta.setName(parts[1]);
-                }
-
-                if (movie != null) {
-                    meta.setMovie(movie);
-                    meta.setYear(movie.getYear());
-                    meta.setName(movie.getName());
-                    if (StringUtils.isNotBlank(movie.getDbScore())) {
-                        meta.setScore((int) (Double.parseDouble(movie.getDbScore()) * 10));
-                    }
-                }
-                metaRepository.save(meta);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
     }
 
     private Site getXiaoyaSite() {
