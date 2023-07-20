@@ -2,6 +2,9 @@ package cn.har01d.alist_tvbox.dto.bili;
 
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Data
 public class BiliBiliInfo {
     private long aid;
@@ -21,6 +24,7 @@ public class BiliBiliInfo {
     private boolean is_story;
     private Stats stat;
     private Owner owner;
+    private List<PageInfo> pages = new ArrayList<>();
 
     @Data
     public static class Stats {
@@ -39,4 +43,13 @@ public class BiliBiliInfo {
         private String name;
         private String face;
     }
+
+    @Data
+    public static class PageInfo {
+        private long cid;
+        private long duration;
+        private int page;
+        private String part;
+    }
+
 }

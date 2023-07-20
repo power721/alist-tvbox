@@ -259,7 +259,11 @@ public class BiliBiliService {
         if (full) {
             movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
             movieDetail.setVod_play_from(BILI_BILI);
-            movieDetail.setVod_play_url(buildPlayUrl(id));
+            if (info.getPages().isEmpty()) {
+                movieDetail.setVod_play_url(buildPlayUrl(id));
+            } else {
+                movieDetail.setVod_play_url(info.getPages().stream().map(e -> e.getPart() + "$" + info.getAid() + "-" + e.getCid()).collect(Collectors.joining("#")));
+            }
             if (info.getOwner() != null) {
                 movieDetail.setVod_director(info.getOwner().getName());
             }
@@ -595,6 +599,7 @@ public class BiliBiliService {
 
     private BiliBiliInfo getInfo(String bvid) {
         BiliBiliInfoResponse infoResponse = restTemplate.getForObject(INFO_API + bvid, BiliBiliInfoResponse.class);
+        log.debug("get info {}: {}", INFO_API + bvid, infoResponse);
         if (infoResponse.getCode() == 0) {
             return infoResponse.getData();
         } else {
@@ -625,6 +630,9 @@ public class BiliBiliService {
         if (parts.length > 2) {
             String api = dash ? PLAY_API1 : PLAY_API2;
             url = String.format(api, parts[0], parts[1], parts[2]);
+        } else if (parts.length == 2) {
+            String api = dash ? PLAY_API : PLAY_API2;
+            url = String.format(api, parts[0], parts[1]);
         } else {
             BiliBiliInfo info = getInfo(bvid);
             String api = dash ? PLAY_API : PLAY_API2;
@@ -962,9 +970,9 @@ public class BiliBiliService {
 
     private static String fixCover(String cover) {
         String url = fixUrl(cover);
-        if (url != null && url.contains("hdslb.com/bfs/")) {
-            return url + "@150h";
-        }
+//        if (url != null && url.contains("hdslb.com/bfs/")) {
+//            return url + "@150h";
+//        }
         return url;
     }
 
