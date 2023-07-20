@@ -2,12 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.TokenDto;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.entity.SiteRepository;
-import cn.har01d.alist_tvbox.entity.Subscription;
-import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
+import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
@@ -29,25 +24,15 @@ import javax.annotation.PostConstruct;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.xml.bind.DatatypeConverter;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.security.spec.AlgorithmParameterSpec;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -522,10 +507,6 @@ public class SubscriptionService {
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
         String jar = builder.build().toUriString() + "/spring.jar";
-        String md5 = getJarMd5();
-        if (StringUtils.isNotBlank(md5)) {
-            jar += ";md5;" + md5.trim();
-        }
         site.put("jar", jar);
         site.put("searchable", 1);
         site.put("quickSearch", 1);
@@ -533,16 +514,16 @@ public class SubscriptionService {
         return site;
     }
 
-    private String getJarMd5() {
+    private static String md5(String text) {
         try {
-            Path file = Paths.get("/opt/atv/BOOT-INF/classes/static/spring.md5");
-            if (Files.exists(file)) {
-                return Files.readString(file);
-            }
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            md.update(text.getBytes());
+            byte[] digest = md.digest();
+            return DatatypeConverter.printHexBinary(digest).toLowerCase();
         } catch (Exception e) {
             log.warn("", e);
         }
-        return null;
+        return text;
     }
 
     private static void addRules(Map<String, Object> config) {

@@ -35,18 +35,23 @@ public class NavigationService {
     private void loadBiliBiliCategory() {
         List<Navigation> list = new ArrayList<>();
         int order = 1;
-        list.add(new Navigation("全站", "0", 1, true, true, order++));
-        list.add(new Navigation("电影", "season$2", 1, true, true, order++));
-        list.add(new Navigation("电视剧", "season$5", 1, true, true, order++));
-        list.add(new Navigation("综艺", "season$7", 1, true, true, order++));
-        list.add(new Navigation("纪录片", "season$3", 1, true, true, order++));
-        list.add(new Navigation("国产动画", "season$4", 1, true, true, order++));
-        list.add(new Navigation("番剧", "season$1", 1, true, true, order++));
-        list.add(new Navigation("历史记录", "history$0", 1, true, true, order++));
+        list.add(new Navigation("全站热榜", "0", 1, true, true, order++));
+        list.add(new Navigation("电影热榜", "season$2", 1, true, true, order++));
+        list.add(new Navigation("电视剧热榜", "season$5", 1, true, true, order++));
+        list.add(new Navigation("综艺热榜", "season$7", 1, true, true, order++));
+        list.add(new Navigation("纪录片热榜", "season$3", 1, true, true, order++));
+        list.add(new Navigation("动画热榜", "season$4", 1, true, true, order++));
+        list.add(new Navigation("番剧热榜", "season$1", 1, true, true, order++));
         list.add(new Navigation("热门", "pop$1", 1, true, true, order++));
+        list.add(new Navigation("历史记录", "history$0", 1, true, true, order++));
+        list.add(new Navigation("国创", "167", 1, true, true, order++));  // 10
+        list.add(new Navigation("纪录片", "177", 1, true, true, order++));
+        list.add(new Navigation("电影", "23", 1, true, true, order++));
+        list.add(new Navigation("电视剧", "11", 1, true, true, order++));
         list.add(new Navigation("科技", "188", 1, true, true, order++));
         list.add(new Navigation("知识", "36", 1, true, true, order++));
         list.add(new Navigation("动画", "1", 1, true, true, order++));
+        list.add(new Navigation("番剧", "13", 1, true, true, order++));
         list.add(new Navigation("音乐", "3", 1, true, true, order++));
         list.add(new Navigation("游戏", "4", 1, true, true, order++));
         list.add(new Navigation("娱乐", "5", 1, true, true, order++));
@@ -59,11 +64,38 @@ public class NavigationService {
         list.add(new Navigation("动物圈", "217", 1, true, true, order++));
         list.add(new Navigation("时尚", "155", 1, true, true, order++));
         list.add(new Navigation("鬼畜", "119", 1, true, true, order++));
-        list.add(new Navigation("国创相关", "168", 1, true, true, order++));
-        list.add(new Navigation("原创", "origin$0", 1, true, true, order++));
-        list.add(new Navigation("新人", "rookie$0", 1, true, true, order));
+
+        list.add(new Navigation("原创", "origin$0", 1, false, true, order++));
+        list.add(new Navigation("新人", "rookie$0", 1, false, true, order));
 
         int parent = 10;
+        order = 1;
+        list.add(new Navigation("国产动画", "153", 2, true, true, order++, parent));
+        list.add(new Navigation("国产原创", "168", 2, true, true, order++, parent));
+        list.add(new Navigation("布袋戏", "169", 2, true, true, order++, parent));
+        list.add(new Navigation("资讯", "170", 2, true, true, order++, parent));
+        list.add(new Navigation("动态漫·广播剧 ", "195", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("人文·历史", "37", 2, true, true, order++, parent));
+        list.add(new Navigation("科学·探索·自然", "178", 2, true, true, order++, parent));
+        list.add(new Navigation("军事", "179", 2, true, true, order++, parent));
+        list.add(new Navigation("社会·美食·旅行", "180", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("华语电影", "147", 2, true, true, order++, parent));
+        list.add(new Navigation("欧美电影", "145", 2, true, true, order++, parent));
+        list.add(new Navigation("日本电影", "146", 2, true, true, order++, parent));
+        list.add(new Navigation("其他国家", "83", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("国产剧", "185", 2, true, true, order++, parent));
+        list.add(new Navigation("海外剧", "187", 2, true, true, order++, parent));
+
+        parent++;
         order = 1;
         list.add(new Navigation("数码", "95", 2, true, true, order++, parent));
         list.add(new Navigation("软件应用", "230", 2, true, true, order++, parent));
@@ -89,6 +121,13 @@ public class NavigationService {
         list.add(new Navigation("特摄", "86", 2, true, true, order++, parent));
         list.add(new Navigation("动漫杂谈", "253", 2, true, true, order++, parent));
         list.add(new Navigation("综合", "27", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("资讯", "51", 2, true, true, order++, parent));
+        list.add(new Navigation("官方延伸", "152", 2, true, true, order++, parent));
+        list.add(new Navigation("完结动画", "32", 2, true, true, order++, parent));
+        list.add(new Navigation("连载动画", "33", 2, true, true, order++, parent));
 
         parent++;
         order = 1;
@@ -172,6 +211,30 @@ public class NavigationService {
         list.add(new Navigation("美食测评", "213", 2, true, true, order++, parent));
         list.add(new Navigation("田园美食", "214", 2, true, true, order++, parent));
         list.add(new Navigation("美食记录 ", "215", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("喵星人", "218", 2, true, true, order++, parent));
+        list.add(new Navigation("汪星人", "219", 2, true, true, order++, parent));
+        list.add(new Navigation("大熊猫", "220", 2, true, true, order++, parent));
+        list.add(new Navigation("野生动物", "221", 2, true, true, order++, parent));
+        list.add(new Navigation("爬宠 ", "222", 2, true, true, order++, parent));
+        list.add(new Navigation("动物综合 ", "75", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("美妆护肤", "157", 2, true, true, order++, parent));
+        list.add(new Navigation("仿妆cos", "252", 2, true, true, order++, parent));
+        list.add(new Navigation("穿搭", "158", 2, true, true, order++, parent));
+        list.add(new Navigation("时尚潮流", "159", 2, true, true, order++, parent));
+
+        parent++;
+        order = 1;
+        list.add(new Navigation("鬼畜调教", "22", 2, true, true, order++, parent));
+        list.add(new Navigation("鬼畜调教", "26", 2, true, true, order++, parent));
+        list.add(new Navigation("人力VOCALOID", "126", 2, true, true, order++, parent));
+        list.add(new Navigation("鬼畜剧场", "216", 2, true, true, order++, parent));
+        list.add(new Navigation("教程演示 ", "127", 2, true, true, order++, parent));
 
         navigationRepository.saveAll(list);
         log.info("load BiliBili category");

@@ -393,6 +393,7 @@ public class BiliBiliService {
         HttpEntity<Void> entity = buildHttpEntity(null);
         ResponseEntity<BiliBiliHistoryResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliHistoryResponse.class);
         BiliBiliHistoryResponse hotResponse = response.getBody();
+        log.debug("getHistory: {} {}", url, hotResponse);
         MovieList result = new MovieList();
         for (BiliBiliHistoryResult.Video info : hotResponse.getData().getList()) {
             MovieDetail movieDetail = getMovieDetail(info);
@@ -404,7 +405,6 @@ public class BiliBiliService {
         result.setTotal(2000);
         result.setPagecount(50);
         result.setPage(page);
-        log.debug("getHistory: {} {}", url, result);
         return result;
     }
 
@@ -590,8 +590,7 @@ public class BiliBiliService {
         if (StringUtils.isNotBlank(cookie)) {
             headers.add(HttpHeaders.COOKIE, cookie.trim());
         }
-        HttpEntity<T> entity = new HttpEntity<>(data, headers);
-        return entity;
+        return new HttpEntity<>(data, headers);
     }
 
     private BiliBiliInfo getInfo(String bvid) {
