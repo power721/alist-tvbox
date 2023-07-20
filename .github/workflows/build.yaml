@@ -12,7 +12,7 @@ on:
         description: 'The git branch to build.'
         required: true
         default: 'master'
-      docker-tag:
+      tag:
         description: 'The docker tag to build.'
         required: true
         default: 'latest'
@@ -35,6 +35,11 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: show info
+        run: |
+          echo "git branch: ${{ inputs.branch }}"
+          echo "docker tag: ${{ inputs.tag }}"
+          echo "release: ${{ inputs.release }}"
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -89,7 +94,7 @@ jobs:
           file: Dockerfile-xiaoya
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: '${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ inputs.tag }}'
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ inputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - if: inputs.release == 'true'
@@ -130,7 +135,7 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: '${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ inputs.tag }}'
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ inputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - if: inputs.release == 'true'
