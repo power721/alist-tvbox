@@ -1,11 +1,25 @@
 name: 'release docker'
 
+
 on:
   workflow_run:
     workflows: [ "release base" ]
     types:
       - completed
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'The git branch to build.'
+        required: false
+        default: 'master'
+      docker-tag:
+        description: 'The docker tag to build.'
+        required: false
+        default: 'latest'
+      release:
+        description: 'Release the app.'
+        required: false
+        default: 'true'
   push:
     branches:
       - master
@@ -23,6 +37,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.branch }}
       - name: Setup node
         uses: actions/setup-node@v3
         with:
@@ -73,10 +89,11 @@ jobs:
           file: Dockerfile-xiaoya
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ github.event.inputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Build host mode docker and push
+      - if: github.event.inputs.release == 'true'
+        name: Build host mode docker and push
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -87,9 +104,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Send version file
+        if: ${{ env.ssh_host != '' && github.event.inputs.release == 'true' }}
         env:
           ssh_host: ${{ secrets.SSH_HOST }}
-        if: ${{ env.ssh_host != '' }}
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -113,10 +130,11 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ github.event.inputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: send telegram message
+      - if: github.event.inputs.release == 'true'
+        name: send telegram message
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.CHANNEL_ID }}
