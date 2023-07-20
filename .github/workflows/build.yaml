@@ -19,7 +19,8 @@ on:
       release:
         description: 'Release the app.'
         required: true
-        default: 'true'
+        type: boolean
+        default: true
   push:
     branches:
       - master
@@ -97,7 +98,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ inputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - if: inputs.release == 'true'
+      - if: ${{ inputs.release }}
         name: Build host mode docker and push
         uses: docker/build-push-action@v4
         with:
@@ -109,7 +110,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Send version file
-        if: ${{ env.ssh_host != '' && inputs.release == 'true' }}
+        if: ${{ env.ssh_host != '' && inputs.release }}
         env:
           ssh_host: ${{ secrets.SSH_HOST }}
         uses: appleboy/scp-action@v0.1.4
@@ -138,7 +139,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ inputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - if: inputs.release == 'true'
+      - if: ${{ inputs.release }}
         name: send telegram message
         uses: appleboy/telegram-action@master
         with:
