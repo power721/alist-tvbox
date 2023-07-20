@@ -1,18 +1,16 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.bili.CookieData;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.net.URLDecoder;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -61,6 +59,16 @@ public class BiliBiliController {
         } else {
             return biliBiliService.getCategoryList();
         }
+    }
+
+    @GetMapping("/-/status")
+    public Map<String, Object> getLoginStatus() {
+        return biliBiliService.getLoginStatus();
+    }
+
+    @PostMapping("/cookie")
+    public Map<String, Object> updateCookie(@RequestBody CookieData cookieData) {
+        return biliBiliService.updateCookie(cookieData);
     }
 
     private String decodeUrl(String text) {

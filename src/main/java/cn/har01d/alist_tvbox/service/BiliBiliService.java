@@ -72,6 +72,14 @@ public class BiliBiliService {
             new FilterValue("最多收藏️", "stow")
     );
 
+    private final List<FilterValue> filters3 = Arrays.asList(
+            new FilterValue("全部", ""),
+            new FilterValue("60分钟以上", "4"),
+            new FilterValue("30~60分钟", "3"),
+            new FilterValue("10~30分钟", "2"),
+            new FilterValue("10分钟以下", "1")
+    );
+
     private final List<FilterValue> filters2 = Arrays.asList(
             new FilterValue("最多播放", "hot"),
             new FilterValue("最新发布", "new")
@@ -109,15 +117,21 @@ public class BiliBiliService {
         }
     }
 
-    private void checkLogin() {
+    public Map<String, Object> updateCookie(CookieData cookieData) {
+        settingRepository.save(new Setting(BILIBILI_COOKIE, cookieData.getCookie()));
+        return getLoginStatus();
+    }
+
+    public Map<String, Object> getLoginStatus() {
         HttpEntity<Void> entity = buildHttpEntity(null);
         Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
         Map<String, Object> data = (Map<String, Object>) json.get("data");
         log.info("user: {} isLogin: {} vip: {}", data.get("uname"), data.get("isLogin"), data.get("vipType"));
+        return data;
     }
 
     public CategoryList getCategoryList() {
-        checkLogin();
+        getLoginStatus();
         CategoryList result = new CategoryList();
         navigationService.list().stream()
                 .filter(NavigationDto::isShow)
@@ -145,7 +159,7 @@ public class BiliBiliService {
                         result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2)));
                     }
                     if (item.getType() == 4) {
-                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters1)));
+                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters1), new Filter("duration", "时长", filters3)));
                     }
                     result.getCategories().add(category);
                 });
@@ -180,7 +194,7 @@ public class BiliBiliService {
         movieDetail.setVod_name(info.getTitle());
         movieDetail.setVod_tag(FILE);
         movieDetail.setType_name(info.getBadge());
-        movieDetail.setVod_pic(fixUrl(info.getCover()));
+        movieDetail.setVod_pic(fixCover(info.getCover()));
         //movieDetail.setVod_play_from(BILI_BILI);
         //movieDetail.setVod_play_url(buildPlayUrl(movieDetail.getVod_id()));
         movieDetail.setVod_remarks(info.getRating());
@@ -194,7 +208,7 @@ public class BiliBiliService {
         movieDetail.setVod_id(id);
         movieDetail.setVod_name(info.getTitle());
         movieDetail.setVod_tag(FILE);
-        movieDetail.setVod_pic(fixUrl(info.getPic()));
+        movieDetail.setVod_pic(fixCover(info.getPic()));
         //movieDetail.setVod_play_from(BILI_BILI);
         //movieDetail.setVod_play_url(buildPlayUrl(id));
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
@@ -208,7 +222,7 @@ public class BiliBiliService {
         movieDetail.setVod_id(id);
         movieDetail.setVod_name(info.getTitle());
         movieDetail.setVod_tag(FILE);
-        movieDetail.setVod_pic(fixUrl(info.getCover()));
+        movieDetail.setVod_pic(fixCover(info.getCover()));
         movieDetail.setVod_play_from(BILI_BILI);
         movieDetail.setVod_play_url(buildPlayUrl(id));
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
@@ -222,7 +236,7 @@ public class BiliBiliService {
         movieDetail.setVod_name(info.getName());
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_director(info.getAuthor());
-        movieDetail.setVod_pic(fixUrl(info.getCover()));
+        movieDetail.setVod_pic(fixCover(info.getCover()));
         movieDetail.setVod_play_from(BILI_BILI);
         movieDetail.setVod_play_url(buildPlayUrl(id));
         movieDetail.setVod_remarks(info.getDuration());
@@ -241,7 +255,7 @@ public class BiliBiliService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setType_name(info.getTname());
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
-        movieDetail.setVod_pic(fixUrl(info.getPic()));
+        movieDetail.setVod_pic(fixCover(info.getPic()));
         if (full) {
             movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
             movieDetail.setVod_play_from(BILI_BILI);
@@ -475,7 +489,7 @@ public class BiliBiliService {
                 movieDetail.setVod_id(type + videoId);
                 movieDetail.setVod_name(title);
                 movieDetail.setVod_tag(FILE);
-                movieDetail.setVod_pic(cover.isEmpty() ? LIST_PIC : fixUrl(cover));
+                movieDetail.setVod_pic(cover.isEmpty() ? LIST_PIC : fixCover(cover));
                 movieDetail.setVod_content(desc);
                 movieDetail.setVod_play_from(sections.keySet().stream().map(this::getSectionType).collect(Collectors.joining("$$$")));
                 String playUrl = sections.values().stream()
@@ -930,7 +944,7 @@ public class BiliBiliService {
         //movieDetail.setVod_director(info.getAuthor());
         movieDetail.setType_name(info.getTypename());
         //movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
-        movieDetail.setVod_pic(fixUrl(info.getPic()));
+        movieDetail.setVod_pic(fixCover(info.getPic()));
         //movieDetail.setVod_play_from(BILI_BILI);
         //movieDetail.setVod_play_url(buildPlayUrl(info.getBvid()));
         movieDetail.setVod_remarks(info.getDuration());
@@ -945,6 +959,14 @@ public class BiliBiliService {
                 .replace("&quot;", "\"")
                 .replace("<em class=\"keyword\">", "")
                 .replace("</em>", "");
+    }
+
+    private static String fixCover(String cover) {
+        String url = fixUrl(cover);
+        if (url != null && url.contains("hdslb.com/bfs/")) {
+            return url + "@150h";
+        }
+        return url;
     }
 
     private static String fixUrl(String url) {
