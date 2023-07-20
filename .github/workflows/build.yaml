@@ -10,15 +10,15 @@ on:
     inputs:
       branch:
         description: 'The git branch to build.'
-        required: false
+        required: true
         default: 'master'
       docker-tag:
         description: 'The docker tag to build.'
-        required: false
+        required: true
         default: 'latest'
       release:
         description: 'Release the app.'
-        required: false
+        required: true
         default: 'true'
   push:
     branches:
@@ -38,7 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.inputs.branch }}
+          ref: ${{ inputs.branch }}
       - name: Setup node
         uses: actions/setup-node@v3
         with:
@@ -89,10 +89,10 @@ jobs:
           file: Dockerfile-xiaoya
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: '${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ github.event.inputs.tag }}'
+          tags: '${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ inputs.tag }}'
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - if: github.event.inputs.release == 'true'
+      - if: inputs.release == 'true'
         name: Build host mode docker and push
         uses: docker/build-push-action@v4
         with:
@@ -104,7 +104,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Send version file
-        if: ${{ env.ssh_host != '' && github.event.inputs.release == 'true' }}
+        if: ${{ env.ssh_host != '' && inputs.release == 'true' }}
         env:
           ssh_host: ${{ secrets.SSH_HOST }}
         uses: appleboy/scp-action@v0.1.4
@@ -130,10 +130,10 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: '${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ github.event.inputs.tag }}'
+          tags: '${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ inputs.tag }}'
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - if: github.event.inputs.release == 'true'
+      - if: inputs.release == 'true'
         name: send telegram message
         uses: appleboy/telegram-action@master
         with:
