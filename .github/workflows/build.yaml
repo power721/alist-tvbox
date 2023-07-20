@@ -89,7 +89,7 @@ jobs:
           file: Dockerfile-xiaoya
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ github.event.inputs.tag }}
+          tags: '${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ github.event.inputs.tag }}'
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - if: github.event.inputs.release == 'true'
@@ -130,7 +130,7 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ github.event.inputs.tag }}
+          tags: '${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ github.event.inputs.tag }}'
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - if: github.event.inputs.release == 'true'
