@@ -2,25 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.NavigationDto;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelItem;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelResponse;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliFeedResponse;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResponse;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResult;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliHotResponse;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfo;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliListResponse;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlayResponse;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResponse;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResult;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfo;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonResponse;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliTokenResponse;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliVideoInfo;
-import cn.har01d.alist_tvbox.dto.bili.BiliBiliVideoInfoResponse;
-import cn.har01d.alist_tvbox.dto.bili.Resp;
+import cn.har01d.alist_tvbox.dto.bili.*;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.model.Filter;
@@ -42,30 +24,17 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
-import java.util.UUID;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
-import static cn.har01d.alist_tvbox.util.Constants.BILI_BILI;
-import static cn.har01d.alist_tvbox.util.Constants.COLLECTION;
-import static cn.har01d.alist_tvbox.util.Constants.FILE;
-import static cn.har01d.alist_tvbox.util.Constants.LIST;
-import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
+import static cn.har01d.alist_tvbox.util.Constants.*;
 
 @Slf4j
 @Service
@@ -125,7 +94,7 @@ public class BiliBiliService {
         this.appProperties = appProperties;
         this.navigationService = navigationService;
         this.restTemplate = builder
-                .defaultHeader("Referer", "https://www.bilibili.com/")
+                .defaultHeader(HttpHeaders.REFERER, "https://www.bilibili.com/")
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
@@ -134,8 +103,9 @@ public class BiliBiliService {
     @PostConstruct
     public void setup() {
         if (!settingRepository.existsById("api_key")) {
-            log.debug("generate api key");
-            settingRepository.save(new Setting("api_key", UUID.randomUUID().toString()));
+            String apiKey = UUID.randomUUID().toString();
+            log.debug("generate api key: {}", apiKey);
+            settingRepository.save(new Setting("api_key", apiKey));
         }
     }
 
@@ -598,13 +568,13 @@ public class BiliBiliService {
 
     private <T> HttpEntity<T> buildHttpEntity(T data) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Referer", "https://api.bilibili.com/");
-        headers.add("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
-        headers.add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
+        headers.add(HttpHeaders.REFERER, "https://api.bilibili.com/");
+        headers.add(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
+        headers.add(HttpHeaders.ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
         headers.add(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
         String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
         if (StringUtils.isNotBlank(cookie)) {
-            headers.add("Cookie", cookie.trim());
+            headers.add(HttpHeaders.COOKIE, cookie.trim());
         }
         HttpEntity<T> entity = new HttpEntity<>(data, headers);
         return entity;
@@ -622,11 +592,11 @@ public class BiliBiliService {
 
     private String getToken(long aid, long cid, String cookie) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Referer", "https://api.bilibili.com/");
-        headers.add("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
-        headers.add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
+        headers.add(HttpHeaders.REFERER, "https://api.bilibili.com/");
+        headers.add(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
+        headers.add(HttpHeaders.ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
         headers.add(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
-        headers.add("Cookie", cookie);
+        headers.add(HttpHeaders.COOKIE, cookie);
 
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
         String url = String.format(TOKEN_API, aid, cid);
