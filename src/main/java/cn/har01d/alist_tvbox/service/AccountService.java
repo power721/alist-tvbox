@@ -951,7 +951,7 @@ public class AccountService {
         Instant now = Instant.now();
         Map<String, AliFileItem> map = new HashMap<>();
         AliBatchRequest body = new AliBatchRequest();
-        int hours = settingRepository.findById("file_expire_hour").map(Setting::getValue).map(Integer::parseInt).orElse(24);
+        int hours = settingRepository.findById("file_expire_hour").map(Setting::getValue).map(Integer::parseInt).orElse(6);
         hours = hours > 0 ? hours : 1;
         log.info("expire time: {} hours", hours);
         for (AliFileItem file : files) {
