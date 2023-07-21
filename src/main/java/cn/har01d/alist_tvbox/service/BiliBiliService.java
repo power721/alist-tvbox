@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
@@ -258,10 +259,10 @@ public class BiliBiliService {
         if (full) {
             movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
             movieDetail.setVod_play_from(BILI_BILI);
-            if (info.getPages().isEmpty()) {
+            if (info.getPages().size() <= 1) {
                 movieDetail.setVod_play_url(buildPlayUrl(id));
             } else {
-                movieDetail.setVod_play_url(info.getPages().stream().map(e -> e.getPart() + "$" + info.getAid() + "-" + e.getCid()).collect(Collectors.joining("#")));
+                movieDetail.setVod_play_url(info.getPages().stream().map(e -> fixTitle(e.getPart()) + "$" + info.getAid() + "-" + e.getCid()).collect(Collectors.joining("#")));
             }
             if (info.getOwner() != null) {
                 movieDetail.setVod_director(info.getOwner().getName());
@@ -820,20 +821,59 @@ public class BiliBiliService {
                 Sub sub = new Sub();
                 sub.setName(subtitle.getLan_doc());
                 sub.setLang(subtitle.getLan());
-                sub.setFormat("srt");
-                sub.setUrl(subtitle.getSubtitle_url());
+                sub.setFormat("application/x-subrip");
+                sub.setUrl(fixSubtitleUrl(subtitle.getSubtitle_url()));
                 list.add(sub);
             }
         } catch (Exception e) {
             log.warn("", e);
         }
-        Sub sub = new Sub();
-        sub.setName("弹幕");
-        sub.setLang("danmaku");
-        sub.setFormat("xml");
-        sub.setUrl("https://comment.bilibili.com/" + cid + ".xml");
-        list.add(sub);
+//        Sub sub = new Sub();
+//        sub.setName("弹幕");
+//        sub.setLang("danmaku");
+//        sub.setFormat("application/x-subrip");
+//        sub.setUrl(fixSubtitleUrl("https://comment.bilibili.com/" + cid + ".xml"));
+//        list.add(sub);
+        log.debug("subtitles: {}", list);
         return list;
+    }
+
+    public String getSubtitle(String url) {
+        StringBuilder text = new StringBuilder();
+        try {
+//            if (url.startsWith("https://comment.bilibili.com/")) {
+//                String xml = restTemplate.getForObject(url, String.class);
+//
+//            }
+            HttpEntity<Void> entity = buildHttpEntity(null);
+            ResponseEntity<SubtitleDataResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, SubtitleDataResponse.class);
+            log.trace("subtitle: {}", response.getBody());
+            int index = 1;
+            for (SubtitleData subtitle : response.getBody().getBody()) {
+                text
+                        .append(index++)
+                        .append("\n")
+                        .append(secondsToTime(subtitle.getFrom()))
+                        .append(" --> ")
+                        .append(secondsToTime(subtitle.getTo()))
+                        .append("\n")
+                        .append(subtitle.getContent())
+                        .append("\n\n");
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        log.trace("subtitle result: {}", text);
+        return text.toString();
+    }
+
+    private static String secondsToTime(String text) {
+        int milliseconds = (int) (Double.parseDouble(text) * 1000);
+        int hour = milliseconds / 3600000;
+        int minute = (milliseconds - hour * 3600000) / 60000;
+        int second = milliseconds / 1000 % 60;
+        int milis = milliseconds % 1000;
+        return String.format("%02d:%02d:%02d,%03d", hour, minute, second, milis);
     }
 
     private void heartbeat(String aid, String cid) {
@@ -1200,6 +1240,14 @@ public class BiliBiliService {
 //            return url + "@150h";
 //        }
         return url;
+    }
+
+    private static String fixSubtitleUrl(String url) {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .replacePath("/subtitles")
+                .query("url=" + fixUrl(url))
+                .build()
+                .toUriString();
     }
 
     private static String fixUrl(String url) {

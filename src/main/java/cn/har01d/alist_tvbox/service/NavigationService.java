@@ -35,6 +35,7 @@ public class NavigationService {
     private void loadBiliBiliCategory() {
         List<Navigation> list = new ArrayList<>();
         int order = 10;
+        list.add(new Navigation("历史记录", "history$0", 1, true, true, order++));
         list.add(new Navigation("全站热榜", "0", 1, true, true, order++));
         list.add(new Navigation("电影热榜", "season$2", 1, true, true, order++));
         list.add(new Navigation("电视剧热榜", "season$5", 1, true, true, order++));
@@ -43,7 +44,6 @@ public class NavigationService {
         list.add(new Navigation("动画热榜", "season$4", 1, true, true, order++));
         list.add(new Navigation("番剧热榜", "season$1", 1, true, true, order++));
         list.add(new Navigation("热门", "pop$1", 1, true, true, order++));
-        list.add(new Navigation("历史记录", "history$0", 1, true, true, order++));
         list.add(new Navigation("国创", "167", 1, true, true, order++));  // 10
         list.add(new Navigation("纪录片", "177", 1, true, true, order++));
         list.add(new Navigation("电影", "23", 1, true, true, order++));
