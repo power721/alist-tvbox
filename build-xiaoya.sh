@@ -45,6 +45,13 @@ if [ -n "$IP" ]; then
   echo -e "    \e[32m管理界面\e[0m： http://$IP:$PORT1/"
   echo -e "    \e[32m小雅AList\e[0m： http://$IP:$PORT2/"
 else
+  IP=$(ip a | grep -F '10.' | awk '{print $2}' | awk -F/ '{print $1}' | grep -E '\b10.' | head -1)
+  if [ -n "$IP" ]; then
+    echo ""
+    echo -e "\e[32m请用以下地址访问：\e[0m"
+    echo -e "    \e[32m管理界面\e[0m： http://$IP:$PORT1/"
+    echo -e "    \e[32m小雅AList\e[0m： http://$IP:$PORT2/"
+  fi
   echo -e "\e[32m云服务器请用公网IP访问\e[0m"
 fi
 echo ""

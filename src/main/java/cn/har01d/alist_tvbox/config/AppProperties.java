@@ -12,6 +12,8 @@ import java.util.Set;
 public class AppProperties {
     private boolean xiaoya;
     private boolean hostmode;
+    private boolean supportDash;
+    private boolean heartbeat;
     private boolean sort;
     private boolean merge;
     private boolean mix;

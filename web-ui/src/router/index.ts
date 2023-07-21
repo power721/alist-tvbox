@@ -17,6 +17,7 @@ import AliasView from "@/views/AliasView.vue";
 import PikPakView from "@/views/PikPakView.vue";
 import LogsView from "@/views/LogsView.vue";
 import IndexView from "@/views/IndexView.vue";
+import BiliBiliView from "@/views/BiliBiliView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -62,6 +63,12 @@ const router = createRouter({
       path: '/sites',
       name: 'sites',
       component: SitesView,
+      meta: {auth: true}
+    },
+    {
+      path: '/bilibili',
+      name: 'bilibili',
+      component: BiliBiliView,
       meta: {auth: true}
     },
     {

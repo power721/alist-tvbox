@@ -2,12 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.TokenDto;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.entity.SiteRepository;
-import cn.har01d.alist_tvbox.entity.Subscription;
-import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
+import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
@@ -29,26 +24,20 @@ import javax.annotation.PostConstruct;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.xml.bind.DatatypeConverter;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.spec.AlgorithmParameterSpec;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 
 @Slf4j
@@ -444,16 +433,34 @@ public class SubscriptionService {
         Map<String, Object> site = buildSite(key);
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         sites.removeIf(item -> key.equals(item.get("key")));
-        sites.add(0, site);
+        int id = 0;
+        sites.add(id++, site);
+        log.debug("add AList site: {}", site);
+
         if (appProperties.isXiaoya()) {
-            for (Site site1 : siteRepository.findAll()) {
-                if (site1.isSearchable() && !site1.isDisabled()) {
-                    sites.add(1, buildSite2(site1.getName()));
-                    break;
+            try {
+                for (Site site1 : siteRepository.findAll()) {
+                    if (site1.isSearchable() && !site1.isDisabled()) {
+                        site = buildSite2(site1.getName());
+                        sites.add(id++, site);
+                        log.debug("add AList site: {}", site);
+                        break;
+                    }
                 }
+            } catch (Exception e) {
+                log.warn("", e);
             }
         }
-        log.debug("add AList site: {}", site);
+
+        if (settingRepository.existsById(BILIBILI_COOKIE)) {
+            try {
+                site = buildSite3();
+                sites.add(id, site);
+                log.debug("add AList site: {}", site);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
     }
 
     private Map<String, Object> buildSite(String key) {
@@ -484,6 +491,41 @@ public class SubscriptionService {
         return site;
     }
 
+    private Map<String, Object> buildSite3() throws IOException {
+        Map<String, Object> site = new HashMap<>();
+        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
+        builder.replacePath("");
+        site.put("key", "csp_BiliBili");
+        site.put("api", "csp_BiliBili");
+        site.put("name", "BiliBili");
+        site.put("type", 3);
+        Map<String, String> map = new HashMap<>();
+        map.put("api", builder.build().toUriString());
+        map.put("apiKey", settingRepository.findById("api_key").map(Setting::getValue).orElse(""));
+        String ext = objectMapper.writeValueAsString(map);
+        ext = Base64.getEncoder().encodeToString(ext.getBytes());
+        site.put("ext", ext);
+        String jar = builder.build().toUriString() + "/spring.jar";
+        site.put("jar", jar);
+        site.put("changeable", 0);
+        site.put("searchable", 1);
+        site.put("quickSearch", 1);
+        site.put("filterable", 1);
+        return site;
+    }
+
+    private static String md5(String text) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            md.update(text.getBytes());
+            byte[] digest = md.digest();
+            return DatatypeConverter.printHexBinary(digest).toLowerCase();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return text;
+    }
+
     private static void addRules(Map<String, Object> config) {
         List<Map<String, Object>> rules = (List<Map<String, Object>>) config.get("rules");
         if (rules == null) {
@@ -507,6 +549,15 @@ public class SubscriptionService {
 
         rule.put("host", "*");
         rule.put("rule", List.of("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*", "http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
+        rules.add(rule);
+
+        rule = new HashMap<>();
+        rule.put("name", "BiliBili");
+        rule.put("hosts", List.of("bilivideo.cn"));
+        rule.put("regex", List.of("https://.+bilivideo.cn.+\\.(mp4|m4s|m4a)\\?.*"));
+
+        rule.put("host", "bilivideo.cn");
+        rule.put("rule", List.of("https://.+bilivideo.cn.+\\.(mp4|m4s|m4a)\\?.*"));
         rules.add(rule);
     }
 

@@ -19,7 +19,9 @@ export default defineConfig({
   server: {
     proxy: {
       "/accounts": API,
+      "/bilibili": API,
       "/pikpak": API,
+      "/nav": API,
       "/ali": API,
       "/export-shares": API,
       "/logs": API,

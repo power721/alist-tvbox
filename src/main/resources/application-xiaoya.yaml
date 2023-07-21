@@ -11,7 +11,8 @@ spring:
 logging:
   file:
     name: log/app.log
-
+  level:
+    cn.har01d: debug
 app:
   xiaoya: true
   sites:
