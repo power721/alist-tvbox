@@ -186,7 +186,6 @@ public class BiliBiliService {
                     }
                     break;
                 case 86038:
-                case 86090:
                     log.warn(result.getMessage());
                     return code;
             }

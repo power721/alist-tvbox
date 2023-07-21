@@ -108,14 +108,14 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="loginVisible" title="扫码登录" width="550px">
+    <el-dialog v-model="loginVisible" title="扫码登录" width="550px" @close="cancel">
       <div v-if="base64QrCode">
         <img :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
       </div>
       <template #footer>
       <span class="dialog-footer">
-        <el-button @click="loginVisible = false">取消</el-button>
-        <el-button type="primary" @click="checkLogin">我已扫码</el-button>
+        <el-button @click="loginVisible=false">取消</el-button>
+<!--        <el-button type="primary" @click="checkLogin">我已扫码</el-button>-->
       </span>
       </template>
     </el-dialog>
@@ -368,11 +368,12 @@ const updateHeartbeat = () => {
 const scanLogin = () => {
   base64QrCode.value = ''
   qrcodeKey.value = ''
-  clearTimeout(timer)
+  clearInterval(timer)
   axios.post('/bilibili/login', null).then(({data}) => {
     base64QrCode.value = data.image
     qrcodeKey.value = data.qrcode_key
     loginVisible.value = true
+    checkLogin()
   })
 }
 
@@ -380,8 +381,8 @@ let timer = 0
 let count = 90
 
 const checkLogin = () => {
-  count = 90
-  timer = setInterval(check, 2000)
+  count = 180
+  timer = setInterval(check, 1000)
 }
 
 const check = () => {
@@ -390,11 +391,11 @@ const check = () => {
       if (data === 0) {
         success()
       } else if (data !== 1) {
-        fail()
+        fail(data)
       }
     })
   } else {
-    fail()
+    fail(2)
   }
 }
 
@@ -403,11 +404,26 @@ const success = () => {
   clearInterval(timer)
   timer = 0
   getBilibiliCookie()
+  loadUser()
   loginVisible.value = false
 }
 
-const fail = () => {
-  ElMessage.error("登录失败")
+const fail = (code: number) => {
+  if (code === 86038 || code === 2) {
+    ElMessage.error("二维码已失效，重新生成")
+    scanLogin()
+  } else if (code === 86090) {
+    ElMessage.error("二维码已扫码未确认")
+  } else {
+    ElMessage.error("登录失败")
+  }
+
+  clearInterval(timer)
+  timer = 0
+}
+
+const cancel = () => {
+  loginVisible.value = false
   clearInterval(timer)
   timer = 0
 }
