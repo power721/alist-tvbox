@@ -29,9 +29,10 @@ public class BiliBiliController {
                       @RequestParam(required = false, defaultValue = "") String category,
                       @RequestParam(required = false, defaultValue = "") String type,
                       @RequestParam(required = false, defaultValue = "") String sort,
+                      @RequestParam(required = false, defaultValue = "0") String duration,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request) throws IOException {
-        return api("", t, f, ids, wd, category, type, sort, pg, request);
+        return api("", t, f, ids, wd, category, type, sort, duration, pg, request);
     }
 
     @GetMapping("/{token}")
@@ -39,6 +40,7 @@ public class BiliBiliController {
                       @RequestParam(required = false, defaultValue = "") String category,
                       @RequestParam(required = false, defaultValue = "") String type,
                       @RequestParam(required = false, defaultValue = "") String sort,
+                      @RequestParam(required = false, defaultValue = "0") String duration,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request) throws IOException {
         if (!subscriptionService.getToken().equals(token)) {
@@ -46,16 +48,16 @@ public class BiliBiliController {
         }
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        log.info("path: {}  folder: {}  category: {}  type: {} keyword: {}  filter: {}  sort: {}  page: {}", ids, t, category, type, wd, f, sort, pg);
+        log.info("path: {}  folder: {}  category: {}  type: {} keyword: {}  filter: {}  sort: {} duration: {}  page: {}", ids, t, category, type, wd, f, sort, duration, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
                 return biliBiliService.recommend();
             }
             return biliBiliService.getDetail(ids);
         } else if (t != null && !t.isEmpty()) {
-            return biliBiliService.getMovieList(t, category, type, sort, pg);
+            return biliBiliService.getMovieList(t, category, type, sort, duration, pg);
         } else if (wd != null && !wd.isEmpty()) {
-            return biliBiliService.search(wd, sort, 0);
+            return biliBiliService.search(wd, sort, duration, 0);
         } else {
             return biliBiliService.getCategoryList();
         }

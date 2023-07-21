@@ -58,7 +58,7 @@ public class BiliBiliService {
 
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
     private static final String POPULAR_API = "https://api.bilibili.com/x/web-interface/popular?ps=30&pn=";
-    private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?jsonp=jsonp&search_type=video&highlight=1&page_size=50&keyword=%s&order=%s&page=%d";
+    private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&page_size=50&keyword=%s&order=%s&duration=%s&page=%d";
     private static final String TOP_FEED_API = "https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd";
     public static final String NAV_API = "https://api.bilibili.com/x/web-interface/nav";
     public static final String REGION_API = "https://api.bilibili.com/x/web-interface/dynamic/region?ps=%d&rid=%s&pn=%d";
@@ -85,7 +85,6 @@ public class BiliBiliService {
             new FilterValue("最新发布", "new")
     );
     private final SettingRepository settingRepository;
-    private final AppProperties appProperties;
     private final NavigationService navigationService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -94,12 +93,10 @@ public class BiliBiliService {
     private int searchPage;
 
     public BiliBiliService(SettingRepository settingRepository,
-                           AppProperties appProperties,
                            NavigationService navigationService,
                            RestTemplateBuilder builder,
                            ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
-        this.appProperties = appProperties;
         this.navigationService = navigationService;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.REFERER, "https://www.bilibili.com/")
@@ -786,10 +783,10 @@ public class BiliBiliService {
         return bvid;
     }
 
-    public MovieList getMovieList(String tid, String category, String type, String sort, int page) {
+    public MovieList getMovieList(String tid, String category, String type, String sort, String duration, int page) {
         if (tid.startsWith("search:")) {
             String[] parts = tid.split(":");
-            return search(parts[1], sort, page);
+            return search(parts[1], sort, duration, page);
         } else if (tid.startsWith("channel:")) {
             String[] parts = tid.split(":");
             return getChannel(parts[1], sort, page);
@@ -967,7 +964,7 @@ public class BiliBiliService {
         return result;
     }
 
-    public MovieList search(String wd, String sort, int pg) {
+    public MovieList search(String wd, String sort, String duration, int pg) {
         MovieList result = new MovieList();
         HttpEntity<Void> entity = buildHttpEntity(null);
 
@@ -975,7 +972,7 @@ public class BiliBiliService {
 
         int pages = 1;
         if (pg > 0) {
-            String url = String.format(SEARCH_API, wd, sort, pg);
+            String url = String.format(SEARCH_API, wd, sort, duration, pg);
             log.debug("{}", url);
             ResponseEntity<BiliBiliSearchResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchResponse.class);
             List<BiliBiliSearchResult.Video> videos = response.getBody().getData().getResult();
@@ -1000,7 +997,7 @@ public class BiliBiliService {
             log.debug("response: {}", result);
         } else {
             for (int i = 1; i <= 2; i++) {
-                String url = String.format(SEARCH_API, wd, "", i);
+                String url = String.format(SEARCH_API, wd, sort, duration, i);
                 log.debug("{}", url);
                 ResponseEntity<BiliBiliSearchResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchResponse.class);
                 List<BiliBiliSearchResult.Video> videos = response.getBody().getData().getResult();
