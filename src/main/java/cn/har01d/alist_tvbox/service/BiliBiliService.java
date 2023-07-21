@@ -70,7 +70,8 @@ public class BiliBiliService {
             new FilterValue("最多播放", "click"),
             new FilterValue("最新发布", "pubdate"),
             new FilterValue("最多弹幕", "dm"),
-            new FilterValue("最多收藏️", "stow")
+            new FilterValue("最多收藏️", "stow"),
+            new FilterValue("最多评论", "scores")
     );
 
     private final List<FilterValue> filters3 = Arrays.asList(
@@ -504,6 +505,7 @@ public class BiliBiliService {
     }
 
     public MovieList getDetail(String bvid) throws IOException {
+        log.debug("--- getDetail --- {}", bvid);
         if (bvid.startsWith("channel$")) {
             return getChannelPlaylist(bvid);
         }
@@ -528,7 +530,6 @@ public class BiliBiliService {
             return getBangumi(bvid);
         }
 
-
         BiliBiliInfo info = getInfo(bvid);
         MovieDetail movieDetail = getMovieDetail(info, true);
 
@@ -551,7 +552,7 @@ public class BiliBiliService {
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
-        log.debug("detail: {}", result);
+        log.debug("--- detail --- {}", result);
         return result;
     }
 
@@ -726,7 +727,7 @@ public class BiliBiliService {
 
     private BiliBiliInfo getInfo(String bvid) {
         BiliBiliInfoResponse infoResponse = restTemplate.getForObject(INFO_API + bvid, BiliBiliInfoResponse.class);
-        log.debug("get info {}: {}", INFO_API + bvid, infoResponse);
+        log.debug("get info {} : {}", INFO_API + bvid, infoResponse);
         if (infoResponse.getCode() == 0) {
             return infoResponse.getData();
         } else {
@@ -750,12 +751,12 @@ public class BiliBiliService {
         return response.getBody().getData().getToken();
     }
 
-    public Map<String, String> getPlayUrl(String bvid, boolean dash) {
+    public Map<String, Object> getPlayUrl(String bvid, boolean dash) {
         String url;
         String aid;
         String cid;
         String[] parts = bvid.split("-");
-        Map<String, String> result;
+        Map<String, Object> result = new HashMap<>();
         if (parts.length > 2) {
             String api = dash ? PLAY_API1 : PLAY_API2;
             aid = parts[0];
@@ -786,32 +787,53 @@ public class BiliBiliService {
             result = DashUtils.convert(response.getBody());
             String cookie = entity.getHeaders().getFirst("Cookie");
             result.put("header", "{\"Referer\":\"https://www.bilibili.com\",\"cookie\":\"" + cookie + "\",\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36\"}");
-
-            log.debug("{} {}", url, result);
-
-            if (appProperties.isHeartbeat()) {
-                heartbeat(aid, cid);
-            }
-
-            return result;
         } else {
             ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
             BiliBiliPlayResponse res = response.getBody();
-            log.debug("url: {}  response: {}", url, res);
+            log.debug("getPlayUrl url: {}  response: {}", url, res);
             if (res.getCode() != 0) {
                 log.warn("获取失败: {} {}", res.getCode(), res.getMessage());
             }
 
-            Map<String, String> map = new HashMap<>();
             BiliBiliPlay data = res.getData() == null ? res.getResult() : res.getData();
-            map.put("url", data.getDurl().get(0).getUrl());
-
-            if (appProperties.isHeartbeat()) {
-                heartbeat(aid, cid);
-            }
-
-            return map;
+            result.put("url", data.getDurl().get(0).getUrl());
         }
+
+        result.put("subs", getSubtitles(aid, cid));
+
+        if (appProperties.isHeartbeat()) {
+            heartbeat(aid, cid);
+        }
+
+        log.debug("getPlayUrl: {} {}", url, result);
+        return result;
+    }
+
+    private List<Sub> getSubtitles(String aid, String cid) {
+        List<Sub> list = new ArrayList<>();
+        try {
+            String url = String.format("https://api.bilibili.com/x/player/v2?aid=%s&cid=%s", aid, cid);
+            log.debug("getSubtitles {}", url);
+            HttpEntity<Void> entity = buildHttpEntity(null);
+            ResponseEntity<BiliBiliV2InfoResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliV2InfoResponse.class);
+            for (BiliBiliV2Info.Subtitle subtitle : response.getBody().getData().getSubtitle().getSubtitles()) {
+                Sub sub = new Sub();
+                sub.setName(subtitle.getLan_doc());
+                sub.setLang(subtitle.getLan());
+                sub.setFormat("srt");
+                sub.setUrl(subtitle.getSubtitle_url());
+                list.add(sub);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        Sub sub = new Sub();
+        sub.setName("弹幕");
+        sub.setLang("danmaku");
+        sub.setFormat("xml");
+        sub.setUrl("https://comment.bilibili.com/" + cid + ".xml");
+        list.add(sub);
+        return list;
     }
 
     private void heartbeat(String aid, String cid) {
@@ -1165,6 +1187,7 @@ public class BiliBiliService {
     private static String fixTitle(String title) {
         return title
                 .replace("#", " ")
+                .replace("$", "")
                 .replace("&amp;", "&")
                 .replace("&quot;", "\"")
                 .replace("<em class=\"keyword\">", "")

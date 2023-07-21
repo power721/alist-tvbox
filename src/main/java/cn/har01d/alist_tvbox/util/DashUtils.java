@@ -25,12 +25,12 @@ public final class DashUtils {
         throw new AssertionError();
     }
 
-    public static Map<String, String> convert(Resp resp) {
+    public static Map<String, Object> convert(Resp resp) {
         Dash dash = resp.getData() == null ? resp.getResult().getDash() : resp.getData().getDash();
         if (dash == null) {
             Data data = resp.getData() == null ? resp.getResult() : resp.getData();
             String url = data.getDurl().get(0).getUrl();
-            Map<String, String> map = new HashMap<>();
+            Map<String, Object> map = new HashMap<>();
             map.put("url", url);
             return map;
         }
@@ -60,7 +60,7 @@ public final class DashUtils {
         log.debug("{}", mpd);
         String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
         String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
-        Map<String, String> map = new HashMap<>();
+        Map<String, Object> map = new HashMap<>();
         map.put("url", url);
         map.put("jx", "0");
         map.put("parse", "0");
