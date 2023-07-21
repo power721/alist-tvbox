@@ -7,6 +7,7 @@
         <span class="hint">会员状态：{{ userInfo.vipType ? userInfo.vip_label.text : '无会员' }}</span>
       </div>
       <div class="">
+        <el-button type="primary" @click="scanLogin">登录</el-button>
         <el-button type="primary" @click="settingVisible=true">配置</el-button>
       </div>
     </div>
@@ -107,6 +108,17 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="loginVisible" title="扫码登录" width="30%">
+      <div v-if="base64QrCode">
+        <img :src="'data:image/png;base64,'+ base64QrCode" style="width: 300px;">
+      </div>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="loginVisible = false">取消</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="settingVisible" title="账号设置" width="40%">
       <el-form label-width="150px">
         <el-form-item label="登录Cookie" label-width="120">
@@ -176,6 +188,8 @@ const tableRowClassName = ({row}: {
   }
   return ''
 }
+const base64QrCode = ref('')
+const qrcodeKey = ref('')
 const bilibiliCookie = ref('')
 const userInfo = ref<any>({})
 const heartbeat = ref(false)
@@ -186,6 +200,7 @@ const activeRows = ref<Nav[]>([])
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const settingVisible = ref(false)
+const loginVisible = ref(false)
 const changed = ref(false)
 const tableKey = ref(0)
 const form = ref<Nav>({
@@ -343,10 +358,50 @@ const updateBilibiliCookie = () => {
 }
 
 const updateHeartbeat = () => {
-  axios.post('/settings', {name: 'bilibili_heartbeat', value: heartbeat.value+''}).then(() => {
+  axios.post('/settings', {name: 'bilibili_heartbeat', value: heartbeat.value + ''}).then(() => {
     ElMessage.success('更新成功')
     loadUser()
   })
+}
+
+const scanLogin = () => {
+  base64QrCode.value = ''
+  qrcodeKey.value = ''
+  clearTimeout(timer)
+  axios.post('/bilibili/login').then(({data}) => {
+    base64QrCode.value = data.image
+    qrcodeKey.value = data.qrcode_key
+    loginVisible.value = true
+    setInterval(check, 1000)
+  })
+}
+
+let timer = 0
+let count = 180
+const check = () => {
+  if (count-- > 0) {
+    axios.get('/bilibili/-/check').then(({data}) => {
+      if (data === 0) {
+        success()
+      } else if (data !== 1) {
+        fail()
+      }
+    })
+  } else {
+    fail()
+  }
+}
+
+const success = () => {
+  ElMessage.error("成功")
+  clearTimeout(timer)
+  timer = 0
+}
+
+const fail = () => {
+  ElMessage.error("登录失败")
+  clearTimeout(timer)
+  timer = 0
 }
 
 const getHeartbeat = () => {

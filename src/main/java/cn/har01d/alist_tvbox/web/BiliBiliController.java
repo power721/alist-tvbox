@@ -1,9 +1,11 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.bili.CookieData;
+import cn.har01d.alist_tvbox.dto.bili.QrCode;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
+import com.google.zxing.WriterException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
@@ -71,6 +73,16 @@ public class BiliBiliController {
     @PostMapping("/cookie")
     public Map<String, Object> updateCookie(@RequestBody CookieData cookieData) {
         return biliBiliService.updateCookie(cookieData);
+    }
+
+    @PostMapping("/login")
+    public QrCode scanLogin() throws IOException, WriterException {
+        return biliBiliService.scanLogin();
+    }
+
+    @GetMapping("/-/check")
+    public int checkLogin(String key) {
+        return biliBiliService.checkLogin(key);
     }
 
     private String decodeUrl(String text) {

@@ -1,6 +1,10 @@
 package cn.har01d.alist_tvbox.util;
 
 public final class Constants {
+
+    public static final int BLACK = 0xFF000000;
+    public static final int WHITE = 0xFFFFFFFF;
+
     public static final String ACCEPT = "application/json, text/plain, */*";
     public static final String OK_USER_AGENT = "okhttp/3.15";
     public static final String USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36";

@@ -15,6 +15,11 @@ import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.WriterException;
+import com.google.zxing.common.BitMatrix;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -26,6 +31,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import javax.annotation.PostConstruct;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -131,6 +139,51 @@ public class BiliBiliService {
         Map<String, Object> data = (Map<String, Object>) json.get("data");
         log.info("user: {} isLogin: {} vip: {}", data.get("uname"), data.get("isLogin"), data.get("vipType"));
         return data;
+    }
+
+    public QrCode scanLogin() throws IOException, WriterException {
+        QrCode qrCode = restTemplate.getForObject("https://passport.bilibili.com/x/passport-login/web/qrcode/generate", QrCode.class);
+        qrCode.setImage(getQrCode(qrCode.getUrl()));
+        return qrCode;
+    }
+
+    private String getQrCode(String text) throws IOException, WriterException {
+        Map<EncodeHintType, String> charcter = new HashMap<>();
+        charcter.put(EncodeHintType.CHARACTER_SET, "UTF-8");
+        BitMatrix bitMatrix = new MultiFormatWriter()
+                .encode(text, BarcodeFormat.QR_CODE, 300, 300, charcter);
+        int width = bitMatrix.getWidth();
+        int height = bitMatrix.getHeight();
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                image.setRGB(x, y, bitMatrix.get(x, y) ? BLACK : WHITE);
+            }
+        }
+
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", stream);
+        return Base64.getEncoder().encodeToString(stream.toByteArray());
+    }
+
+    public int checkLogin(String key) {
+        String url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + key;
+        ResponseEntity<QrCodeResult> response = restTemplate.getForEntity(url, QrCodeResult.class);
+        if (response != null && response.getBody() != null) {
+            int code = response.getBody().getCode();
+            switch (code) {
+                case 0:
+                    log.info("扫码登录成功");
+                    String cookie = response.getHeaders().get("set-cookie").stream().map(e -> e.split(";")[0]).collect(Collectors.joining(";"));
+                    settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
+                    return code;
+                case 86038:
+                case 86090:
+                    log.warn(response.getBody().getMessage());
+                    return code;
+            }
+        }
+        return 1;
     }
 
     public CategoryList getCategoryList() {

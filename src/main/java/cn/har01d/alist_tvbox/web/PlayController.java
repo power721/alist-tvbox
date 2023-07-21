@@ -7,8 +7,6 @@ import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.http.MediaType;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -53,6 +51,10 @@ public class PlayController {
         }
 
         String url = tvBoxService.getPlayUrl(site, path);
+        if ("json".equals(type)) {
+            return "{\"url\":\"" + url + "\"}";
+        }
+
         response.sendRedirect(parseService.parse(url));
         return "";
     }
