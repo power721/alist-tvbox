@@ -163,11 +163,6 @@ public class BiliBiliService {
 
         result.setTotal(result.getCategories().size());
         result.setLimit(result.getCategories().size());
-//        List<MovieDetail> list = new ArrayList<>();
-//        MovieDetail movieDetail = new MovieDetail();
-//        movieDetail.setVod_id("recommend");
-//        list.add(movieDetail);
-//        result.setList(list);
 
         return result;
     }
@@ -176,8 +171,10 @@ public class BiliBiliService {
         List<BiliBiliInfo> list = getTopFeed();
         MovieList result = new MovieList();
         for (BiliBiliInfo info : list) {
-            MovieDetail movieDetail = getMovieDetail(info);
-            result.getList().add(movieDetail);
+            if (info.getCid() != 0) {
+                MovieDetail movieDetail = getMovieDetail(info);
+                result.getList().add(movieDetail);
+            }
         }
 
         result.setTotal(result.getList().size());
