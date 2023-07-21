@@ -19,7 +19,6 @@ fi
 
 rm -rf src/main/resources/static/assets && \
 cd web-ui && \
-npm install && \
 npm run build || exit 1
 cd .. && \
 mvn clean package || exit 1

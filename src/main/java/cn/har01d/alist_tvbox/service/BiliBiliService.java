@@ -1,6 +1,5 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.NavigationDto;
 import cn.har01d.alist_tvbox.dto.bili.*;
 import cn.har01d.alist_tvbox.entity.Setting;
@@ -61,6 +60,7 @@ public class BiliBiliService {
     private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&page_size=50&keyword=%s&order=%s&duration=%s&page=%d";
     private static final String TOP_FEED_API = "https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd";
     public static final String NAV_API = "https://api.bilibili.com/x/web-interface/nav";
+    public static final String RELATED_API = "https://api.bilibili.com/x/web-interface/archive/related?bvid=%s";
     public static final String REGION_API = "https://api.bilibili.com/x/web-interface/dynamic/region?ps=%d&rid=%s&pn=%d";
     public static final String CHANNEL_API = "https://api.bilibili.com/x/web-interface/web/channel/multiple/list?channel_id=%s&sort_type=%s&offset=%s&page_size=30";
 
@@ -527,8 +527,25 @@ public class BiliBiliService {
             return getBangumi(bvid);
         }
 
+
         BiliBiliInfo info = getInfo(bvid);
         MovieDetail movieDetail = getMovieDetail(info, true);
+
+        try {
+            String url = String.format(RELATED_API, bvid);
+            HttpEntity<Void> entity = buildHttpEntity(null);
+            ResponseEntity<BiliBiliRelatedResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliRelatedResponse.class);
+            List<BiliBiliInfo> list = response.getBody().getData();
+            log.debug("related videos: {} {}", url, list);
+            if (!list.isEmpty()) {
+                movieDetail.setVod_play_from(BILI_BILI + "$$$相关视频");
+                String related = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + e.getAid() + "-" + e.getCid()).collect(Collectors.joining("#"));
+                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + related);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
         result.setTotal(result.getList().size());
