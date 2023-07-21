@@ -1,11 +1,6 @@
-name: 'release docker'
-
+name: 'release dev docker'
 
 on:
-  workflow_run:
-    workflows: [ "release base" ]
-    types:
-      - completed
   workflow_dispatch:
     inputs:
       branch:
@@ -21,16 +16,6 @@ on:
         required: true
         type: boolean
         default: true
-  push:
-    branches:
-      - master
-    paths-ignore:
-      - 'build*'
-      - 'release*'
-      - 'config/**'
-      - 'doc/**'
-      - 'pom.xml'
-      - 'Dockerfile-v7'
 
 jobs:
   release:

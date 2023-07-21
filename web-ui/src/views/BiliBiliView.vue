@@ -108,9 +108,9 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="loginVisible" title="扫码登录" width="30%">
+    <el-dialog v-model="loginVisible" title="扫码登录" width="550px">
       <div v-if="base64QrCode">
-        <img :src="'data:image/png;base64,'+ base64QrCode" style="width: 300px;">
+        <img :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
       </div>
       <template #footer>
       <span class="dialog-footer">
@@ -403,6 +403,7 @@ const success = () => {
   clearInterval(timer)
   timer = 0
   getBilibiliCookie()
+  loginVisible.value = false
 }
 
 const fail = () => {

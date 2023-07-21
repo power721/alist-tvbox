@@ -153,7 +153,7 @@ public class BiliBiliService {
         Map<EncodeHintType, String> charcter = new HashMap<>();
         charcter.put(EncodeHintType.CHARACTER_SET, "UTF-8");
         BitMatrix bitMatrix = new MultiFormatWriter()
-                .encode(text, BarcodeFormat.QR_CODE, 300, 300, charcter);
+                .encode(text, BarcodeFormat.QR_CODE, 500, 500, charcter);
         int width = bitMatrix.getWidth();
         int height = bitMatrix.getHeight();
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
