@@ -115,6 +115,7 @@
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="loginVisible = false">取消</el-button>
+        <el-button type="primary" @click="checkLogin">我已扫码</el-button>
       </span>
       </template>
     </el-dialog>
@@ -368,19 +369,24 @@ const scanLogin = () => {
   base64QrCode.value = ''
   qrcodeKey.value = ''
   clearTimeout(timer)
-  axios.post('/bilibili/login').then(({data}) => {
+  axios.post('/bilibili/login', null).then(({data}) => {
     base64QrCode.value = data.image
     qrcodeKey.value = data.qrcode_key
     loginVisible.value = true
-    setInterval(check, 1000)
   })
 }
 
 let timer = 0
-let count = 180
+let count = 90
+
+const checkLogin = () => {
+  count = 90
+  timer = setInterval(check, 2000)
+}
+
 const check = () => {
   if (count-- > 0) {
-    axios.get('/bilibili/-/check').then(({data}) => {
+    axios.get('/bilibili/-/check?key=' + qrcodeKey.value).then(({data}) => {
       if (data === 0) {
         success()
       } else if (data !== 1) {
@@ -393,14 +399,15 @@ const check = () => {
 }
 
 const success = () => {
-  ElMessage.error("成功")
-  clearTimeout(timer)
+  ElMessage.success("登录成功")
+  clearInterval(timer)
   timer = 0
+  getBilibiliCookie()
 }
 
 const fail = () => {
   ElMessage.error("登录失败")
-  clearTimeout(timer)
+  clearInterval(timer)
   timer = 0
 }
 

@@ -142,12 +142,14 @@ public class BiliBiliService {
     }
 
     public QrCode scanLogin() throws IOException, WriterException {
-        QrCode qrCode = restTemplate.getForObject("https://passport.bilibili.com/x/passport-login/web/qrcode/generate", QrCode.class);
+        QrCode qrCode = restTemplate.getForObject("https://passport.bilibili.com/x/passport-login/web/qrcode/generate", BiliBiliQrCodeResponse.class).getData();
         qrCode.setImage(getQrCode(qrCode.getUrl()));
+        log.debug("{}", qrCode);
         return qrCode;
     }
 
     private String getQrCode(String text) throws IOException, WriterException {
+        log.info("getQrCode: {}", text);
         Map<EncodeHintType, String> charcter = new HashMap<>();
         charcter.put(EncodeHintType.CHARACTER_SET, "UTF-8");
         BitMatrix bitMatrix = new MultiFormatWriter()
@@ -168,18 +170,24 @@ public class BiliBiliService {
 
     public int checkLogin(String key) {
         String url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + key;
-        ResponseEntity<QrCodeResult> response = restTemplate.getForEntity(url, QrCodeResult.class);
-        if (response != null && response.getBody() != null) {
-            int code = response.getBody().getCode();
+        log.debug("{}", url);
+        ResponseEntity<BiliBiliLoginResponse> response = restTemplate.getForEntity(url, BiliBiliLoginResponse.class);
+        if (response != null && response.getBody() != null && response.getBody().getData() != null) {
+            QrCodeResult result = response.getBody().getData();
+            log.debug("checkLogin: {}", result);
+            int code = result.getCode();
             switch (code) {
                 case 0:
-                    log.info("扫码登录成功");
-                    String cookie = response.getHeaders().get("set-cookie").stream().map(e -> e.split(";")[0]).collect(Collectors.joining(";"));
-                    settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
-                    return code;
+                    if (StringUtils.isNotBlank(result.getRefresh_token())) {
+                        log.info("扫码登录成功");
+                        String cookie = response.getHeaders().get("set-cookie").stream().map(e -> e.split(";")[0]).collect(Collectors.joining(";"));
+                        settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
+                        return code;
+                    }
+                    break;
                 case 86038:
                 case 86090:
-                    log.warn(response.getBody().getMessage());
+                    log.warn(result.getMessage());
                     return code;
             }
         }
