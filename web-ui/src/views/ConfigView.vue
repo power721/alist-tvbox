@@ -164,12 +164,6 @@
         <el-form-item>
           <el-button type="primary" @click="updateDockerAddress">更新</el-button>
         </el-form-item>
-        <el-form-item label="BiliBili Cookie" label-width="120">
-          <el-input v-model="bilibiliCookie" type="textarea" :rows="5"/>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateBilibiliCookie">更新</el-button>
-        </el-form-item>
         <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>
@@ -224,7 +218,6 @@ const aListStartTime = ref('')
 const openTokenUrl = ref('')
 const dockerAddress = ref('')
 const aliSecret = ref('')
-const bilibiliCookie = ref('')
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const login = ref({
   username: '',
@@ -263,12 +256,6 @@ const updateOpenTokenUrl = () => {
 
 const updateDockerAddress = () => {
   axios.post('/settings', {name: 'docker_address', value: dockerAddress.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateBilibiliCookie = () => {
-  axios.post('/settings', {name: 'bilibili_cookie', value: bilibiliCookie.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -341,7 +328,6 @@ onMounted(() => {
       openTokenUrl.value = data.open_token_url
       dockerAddress.value = data.docker_address
       aliSecret.value = data.ali_secret
-      bilibiliCookie.value = data.bilibili_cookie
       autoCheckin.value = data.auto_checkin === 'true'
       aListRestart.value = data.alist_restart_required === 'true'
       mixSiteSource.value = data.mix_site_source === 'true'

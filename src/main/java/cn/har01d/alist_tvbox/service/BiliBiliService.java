@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.NavigationDto;
 import cn.har01d.alist_tvbox.dto.bili.*;
 import cn.har01d.alist_tvbox.entity.Setting;
@@ -17,11 +18,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
@@ -60,6 +60,7 @@ public class BiliBiliService {
     private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&page_size=50&keyword=%s&order=%s&duration=%s&page=%d";
     private static final String TOP_FEED_API = "https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd";
     public static final String NAV_API = "https://api.bilibili.com/x/web-interface/nav";
+    public static final String HEARTBEAT_API = "https://api.bilibili.com/x/click-interface/web/heartbeat";
     public static final String RELATED_API = "https://api.bilibili.com/x/web-interface/archive/related?bvid=%s";
     public static final String REGION_API = "https://api.bilibili.com/x/web-interface/dynamic/region?ps=%d&rid=%s&pn=%d";
     public static final String CHANNEL_API = "https://api.bilibili.com/x/web-interface/web/channel/multiple/list?channel_id=%s&sort_type=%s&offset=%s&page_size=30";
@@ -86,6 +87,7 @@ public class BiliBiliService {
     );
     private final SettingRepository settingRepository;
     private final NavigationService navigationService;
+    private final AppProperties appProperties;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private MovieDetail searchPlaylist;
@@ -94,10 +96,12 @@ public class BiliBiliService {
 
     public BiliBiliService(SettingRepository settingRepository,
                            NavigationService navigationService,
+                           AppProperties appProperties,
                            RestTemplateBuilder builder,
                            ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
         this.navigationService = navigationService;
+        this.appProperties = appProperties;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.REFERER, "https://www.bilibili.com/")
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
@@ -700,17 +704,24 @@ public class BiliBiliService {
         return result;
     }
 
-    private <T> HttpEntity<T> buildHttpEntity(T data) {
+    private <T> HttpEntity<T> buildHttpEntity(T data, boolean urlencoded) {
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.REFERER, "https://api.bilibili.com/");
         headers.add(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
         headers.add(HttpHeaders.ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
         headers.add(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
+        if (urlencoded) {
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        }
         String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
         if (StringUtils.isNotBlank(cookie)) {
             headers.add(HttpHeaders.COOKIE, cookie.trim());
         }
         return new HttpEntity<>(data, headers);
+    }
+
+    private <T> HttpEntity<T> buildHttpEntity(T data) {
+        return buildHttpEntity(data, false);
     }
 
     private BiliBiliInfo getInfo(String bvid) {
@@ -741,18 +752,26 @@ public class BiliBiliService {
 
     public Map<String, String> getPlayUrl(String bvid, boolean dash) {
         String url;
+        String aid;
+        String cid;
         String[] parts = bvid.split("-");
         Map<String, String> result;
         if (parts.length > 2) {
             String api = dash ? PLAY_API1 : PLAY_API2;
-            url = String.format(api, parts[0], parts[1], parts[2]);
+            aid = parts[0];
+            cid = parts[1];
+            url = String.format(api, aid, cid, parts[2]);
         } else if (parts.length == 2) {
             String api = dash ? PLAY_API : PLAY_API2;
-            url = String.format(api, parts[0], parts[1]);
+            aid = parts[0];
+            cid = parts[1];
+            url = String.format(api, aid, cid);
         } else {
             BiliBiliInfo info = getInfo(bvid);
             String api = dash ? PLAY_API : PLAY_API2;
-            url = String.format(api, info.getAid(), info.getCid());
+            aid = String.valueOf(info.getAid());
+            cid = String.valueOf(info.getCid());
+            url = String.format(api, aid, cid);
         }
         log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
 
@@ -769,6 +788,11 @@ public class BiliBiliService {
             result.put("header", "{\"Referer\":\"https://www.bilibili.com\",\"cookie\":\"" + cookie + "\",\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36\"}");
 
             log.debug("{} {}", url, result);
+
+            if (appProperties.isHeartbeat()) {
+                heartbeat(aid, cid);
+            }
+
             return result;
         } else {
             ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
@@ -781,7 +805,42 @@ public class BiliBiliService {
             Map<String, String> map = new HashMap<>();
             BiliBiliPlay data = res.getData() == null ? res.getResult() : res.getData();
             map.put("url", data.getDurl().get(0).getUrl());
+
+            if (appProperties.isHeartbeat()) {
+                heartbeat(aid, cid);
+            }
+
             return map;
+        }
+    }
+
+    private void heartbeat(String aid, String cid) {
+        try {
+            String csrf = "";
+            String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+            String[] parts = cookie.split(";");
+            for (String text : parts) {
+                if (text.contains("bili_jct")) {
+                    csrf = text.split("=")[1].trim();
+                }
+            }
+            MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+            map.add("aid", aid);
+            map.add("cid", cid);
+            map.add("dt", "2");
+            map.add("play_type", "1");
+            map.add("played_time", "0");
+            map.add("realtime", "0");
+            map.add("refer_url", "https://www.bilibili.com/");
+            map.add("csrf", csrf);
+            map.add("start_ts", String.valueOf(Instant.now().getEpochSecond()));
+            HttpEntity<MultiValueMap<String, String>> entity = buildHttpEntity(map, true);
+            log.debug("request: {}", entity);
+            String url = HEARTBEAT_API;
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            log.debug("heartbeat {}: {}", url, response.getBody());
+        } catch (Exception e) {
+            log.warn("", e);
         }
     }
 

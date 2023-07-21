@@ -1,5 +1,16 @@
 <template>
   <div class="sites">
+    <div class="flex">
+      <div v-if="userInfo">
+        <span>用户名：{{ userInfo.uname }}</span>
+        <span class="hint">登录状态：{{ userInfo.isLogin ? '已登录' : '未登录' }}</span>
+        <span class="hint">会员状态：{{ userInfo.vipType ? userInfo.vip_label.text : '无会员' }}</span>
+      </div>
+      <div class="">
+        <el-button type="primary" @click="settingVisible=true">配置</el-button>
+      </div>
+    </div>
+
     <h1>分类列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
@@ -62,13 +73,13 @@
         <el-form-item label="显示？" label-width="140">
           <el-switch v-model="form.show"/>
         </el-form-item>
-<!--        <el-form-item label="保留的？" label-width="140">-->
-<!--          <el-switch v-model="form.reserved"/>-->
-<!--        </el-form-item>-->
+        <!--        <el-form-item label="保留的？" label-width="140">-->
+        <!--          <el-switch v-model="form.reserved"/>-->
+        <!--        </el-form-item>-->
         <el-form-item label="类型" label-width="140">
           <el-radio-group v-model="form.type" class="ml-4">
-<!--            <el-radio :label="1" size="large">一级分类</el-radio>-->
-<!--            <el-radio :label="2" size="large">二级分类</el-radio>-->
+            <!--            <el-radio :label="1" size="large">一级分类</el-radio>-->
+            <!--            <el-radio :label="2" size="large">二级分类</el-radio>-->
             <el-radio :label="3" size="large">频道</el-radio>
             <el-radio :label="4" size="large">搜索</el-radio>
           </el-radio-group>
@@ -86,7 +97,7 @@
     </el-dialog>
 
     <el-dialog v-model="dialogVisible" title="删除分类" width="30%">
-      <p>是否删除站点 - {{ form.name }}</p>
+      <p>是否删除分类 - {{ form.name }}</p>
       <p>{{ form.value }}</p>
       <template #footer>
       <span class="dialog-footer">
@@ -95,6 +106,32 @@
       </span>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="settingVisible" title="账号设置" width="40%">
+      <el-form label-width="150px">
+        <el-form-item label="登录Cookie" label-width="120">
+          <el-input v-model="bilibiliCookie" type="textarea" :rows="5"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateBilibiliCookie">更新</el-button>
+        </el-form-item>
+        <el-form-item label="上报播放记录">
+          <el-switch
+            v-model="heartbeat"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateHeartbeat"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="settingVisible = false">取消</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -139,12 +176,16 @@ const tableRowClassName = ({row}: {
   }
   return ''
 }
+const bilibiliCookie = ref('')
+const userInfo = ref<any>({})
+const heartbeat = ref(false)
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const list = ref<Nav[]>([])
 const activeRows = ref<Nav[]>([])
 const formVisible = ref(false)
 const dialogVisible = ref(false)
+const settingVisible = ref(false)
 const changed = ref(false)
 const tableKey = ref(0)
 const form = ref<Nav>({
@@ -294,6 +335,32 @@ const handleSave = () => {
   })
 }
 
+const updateBilibiliCookie = () => {
+  axios.post('/settings', {name: 'bilibili_cookie', value: bilibiliCookie.value}).then(() => {
+    ElMessage.success('更新成功')
+    loadUser()
+  })
+}
+
+const updateHeartbeat = () => {
+  axios.post('/settings', {name: 'bilibili_heartbeat', value: heartbeat.value+''}).then(() => {
+    ElMessage.success('更新成功')
+    loadUser()
+  })
+}
+
+const getHeartbeat = () => {
+  axios.get('/settings/bilibili_heartbeat').then(({data}) => {
+    heartbeat.value = data.value === 'true'
+  })
+}
+
+const getBilibiliCookie = () => {
+  axios.get('/settings/bilibili_cookie').then(({data}) => {
+    bilibiliCookie.value = data.value
+  })
+}
+
 const load = () => {
   return axios.get('/nav').then(({data}) => {
     list.value = data
@@ -302,7 +369,17 @@ const load = () => {
     return data
   })
 }
+
+const loadUser = () => {
+  axios.get('/bilibili/-/status').then(({data}) => {
+    userInfo.value = data
+  })
+}
+
 onMounted(() => {
+  loadUser()
+  getHeartbeat()
+  getBilibiliCookie()
   load().then(() => {
     rowDrop()
   })
@@ -323,7 +400,10 @@ onMounted(() => {
   background-color: #fff;
 }
 
-.pointer {
-  cursor: pointer;
+.flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
+
 </style>

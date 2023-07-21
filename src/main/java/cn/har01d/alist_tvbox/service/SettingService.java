@@ -25,7 +25,7 @@ public class SettingService {
     @PostConstruct
     public void setup() {
         appProperties.setMerge(settingRepository.findById("merge_site_source").map(Setting::getValue).orElse("").equals("true"));
-        appProperties.setSupportDash(settingRepository.findById("support_dash").map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setHeartbeat(settingRepository.findById("bilibili_heartbeat").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
     }
 
@@ -47,8 +47,8 @@ public class SettingService {
         if ("merge_site_source".equals(setting.getName())) {
             appProperties.setMerge("true".equals(setting.getValue()));
         }
-        if ("support_dash".equals(setting.getName())) {
-            appProperties.setSupportDash("true".equals(setting.getValue()));
+        if ("bilibili_heartbeat".equals(setting.getName())) {
+            appProperties.setHeartbeat("true".equals(setting.getValue()));
         }
         if ("mix_site_source".equals(setting.getName())) {
             appProperties.setMix("true".equals(setting.getValue()));
