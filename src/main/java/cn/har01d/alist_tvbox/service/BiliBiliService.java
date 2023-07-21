@@ -547,7 +547,7 @@ public class BiliBiliService {
     private MovieList getBangumi(String tid) throws IOException {
         MovieList result = new MovieList();
 
-        String[] parts = tid.split(":");
+        String[] parts = tid.split("\\$");
         String sid = parts[1];
         String url = "https://www.bilibili.com/bangumi/play/ss" + sid;
         log.debug("Bangumi: {}", url);

@@ -231,7 +231,7 @@ public class NavigationService {
         parent++;
         order = 1;
         list.add(new Navigation("鬼畜调教", "22", 2, true, true, order++, parent));
-        list.add(new Navigation("鬼畜调教", "26", 2, true, true, order++, parent));
+        list.add(new Navigation("音MAD", "26", 2, true, true, order++, parent));
         list.add(new Navigation("人力VOCALOID", "126", 2, true, true, order++, parent));
         list.add(new Navigation("鬼畜剧场", "216", 2, true, true, order++, parent));
         list.add(new Navigation("教程演示 ", "127", 2, true, true, order++, parent));
