@@ -195,7 +195,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ![filter](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_filter.jpg)
 
 ### BiliBili
-拖到行可以改变顺序，需要点击保存按钮。
+拖动行可以改变顺序，需要点击保存按钮。
 
 打开、关闭显示开关后，需要点击保存按钮。
 
