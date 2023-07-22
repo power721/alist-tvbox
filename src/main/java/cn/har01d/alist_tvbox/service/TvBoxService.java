@@ -622,6 +622,9 @@ public class TvBoxService {
                 log.warn("", e);
             }
         }
+        if (StringUtils.isBlank(sort)) {
+            sort = "id,desc";
+        }
 
         int size = 60;
         if (StringUtils.isNotBlank(sort)) {
