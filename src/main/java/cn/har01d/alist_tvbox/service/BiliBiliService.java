@@ -70,6 +70,7 @@ public class BiliBiliService {
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
     private static final String POPULAR_API = "https://api.bilibili.com/x/web-interface/popular?ps=30&pn=";
     private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&page_size=50&keyword=%s&order=%s&duration=%s&page=%d";
+    private static final String NEW_SEARCH_API = "https://api.bilibili.com/x/space/wbi/arc/search";
     private static final String TOP_FEED_API = "https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd";
     private static final String FEED_API = "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all?timezone_offset=-480&type=video&offset=%s&page=%d&features=itemOpusStyle";
     private static final String CHAN_API = "https://api.bilibili.com/x/web-interface/web/channel/category/channel_arc/list?id=%s&offset=%s";
@@ -134,6 +135,12 @@ public class BiliBiliService {
             new FilterValue("星海", "22")
     );
 
+    private final List<FilterValue> filters6 = Arrays.asList(
+            new FilterValue("最多播放", "click"),
+            new FilterValue("最新发布", "pubdate"),
+            new FilterValue("最多收藏️", "stow")
+    );
+
     private final SettingRepository settingRepository;
     private final NavigationService navigationService;
     private final AppProperties appProperties;
@@ -147,6 +154,9 @@ public class BiliBiliService {
 
     private List<String> feedOffsets = new ArrayList<>(); // 动态列表
     private List<String> chanOffsets = new ArrayList<>(); // 频道列表
+    private String imgKey;
+    private String subKey;
+    private LocalDate keyTime;
 
     public BiliBiliService(SettingRepository settingRepository,
                            NavigationService navigationService,
@@ -254,6 +264,9 @@ public class BiliBiliService {
                     if (item.getType() == 4) {
                         value = "search:" + value;
                     }
+                    if (item.getType() == 5) {
+                        value = "up:" + value;
+                    }
                     category.setType_id(value);
                     category.setType_name(item.getName());
                     category.setType_flag(0);
@@ -270,6 +283,9 @@ public class BiliBiliService {
                     }
                     if (item.getType() == 4) {
                         result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters1), new Filter("duration", "时长", filters3)));
+                    }
+                    if (item.getType() == 5) {
+                        result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters6)));
                     }
                     if (value.equals("fav$0")) {
                         List<Filter> filters = getFavFilters();
@@ -491,6 +507,56 @@ public class BiliBiliService {
         return hotResponse.getData();
     }
 
+    public MovieList getUpMedia(String mid, String sort, int page) {
+        if (StringUtils.isBlank(sort)) {
+            sort = "pubdate";
+        }
+        Map<String, Object> map = new HashMap<>();
+        map.put("mid", mid);
+        map.put("ps", "30");
+        map.put("tid", "0");
+        map.put("keyword", "");
+        map.put("order", sort);
+        map.put("platform", "web");
+        map.put("order_avoided", "true");
+        map.put("pn", String.valueOf(page));
+
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        LocalDate now = LocalDate.now();
+        if (keyTime == null || now.getDayOfYear() != keyTime.getDayOfYear()) {
+            Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
+            Map<String, Object> data = (Map<String, Object>) json.get("data");
+            Map<String, Object> wbi = (Map<String, Object>) data.get("wbi_img");
+            imgKey = getKey((String) wbi.get("img_url"));
+            subKey = getKey((String) wbi.get("sub_url"));
+            keyTime = LocalDate.now();
+            log.info("get WBI key: {} {}", imgKey, subKey);
+        }
+        String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
+        log.debug("getUpMedia: {}", url);
+
+        entity = buildHttpEntity(null);
+        ResponseEntity<BiliBiliSearchInfoResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchInfoResponse.class);
+        log.debug("{}", response.getBody());
+        BiliBiliSearchInfo searchInfo = response.getBody().getData();
+        List<BiliBiliSearchInfo.Video> list = searchInfo.getList().getVlist();
+        MovieList result = new MovieList();
+        for (BiliBiliSearchInfo.Video info : list) {
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(info.getBvid());
+            movieDetail.setVod_name(info.getTitle());
+            movieDetail.setVod_tag(FILE);
+            movieDetail.setVod_pic(fixCover(info.getPic()));
+            movieDetail.setVod_remarks(info.getLength());
+            result.getList().add(movieDetail);
+        }
+        result.setLimit(result.getList().size());
+        result.setTotal(searchInfo.getPage().getCount());
+        result.setPagecount((searchInfo.getPage().getCount() + 29) / 30);
+        log.debug("getUpMedia: {}", result);
+        return result;
+    }
+
     public List<BiliBiliInfo> getTopFeed() {
         Map<String, Object> map = new HashMap<>();
         map.put("web_location", "");
@@ -506,11 +572,16 @@ public class BiliBiliService {
         map.put("last_y_num", "5");
 
         HttpEntity<Void> entity = buildHttpEntity(null);
-        Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
-        Map<String, Object> data = (Map<String, Object>) json.get("data");
-        Map<String, Object> wbi = (Map<String, Object>) data.get("wbi_img");
-        String imgKey = getKey((String) wbi.get("img_url"));
-        String subKey = getKey((String) wbi.get("sub_url"));
+        LocalDate now = LocalDate.now();
+        if (keyTime == null || now.getDayOfYear() != keyTime.getDayOfYear()) {
+            Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
+            Map<String, Object> data = (Map<String, Object>) json.get("data");
+            Map<String, Object> wbi = (Map<String, Object>) data.get("wbi_img");
+            imgKey = getKey((String) wbi.get("img_url"));
+            subKey = getKey((String) wbi.get("sub_url"));
+            keyTime = LocalDate.now();
+            log.info("get WBI key: {} {}", imgKey, subKey);
+        }
         String url = TOP_FEED_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("{}", url);
 
@@ -1061,6 +1132,9 @@ public class BiliBiliService {
         } else if (tid.startsWith("channel:")) {
             String[] parts = tid.split(":");
             return getChannel(parts[1], sort, page);
+        } else if (tid.startsWith("up:")) {
+            String[] parts = tid.split(":");
+            return getUpMedia(parts[1], sort, page);
         }
 
         if (StringUtils.isNotBlank(category)) {
@@ -1383,6 +1457,9 @@ public class BiliBiliService {
 
     public MovieList search(String wd, String sort, String duration, int pg) {
         MovieList result = new MovieList();
+        if (!appProperties.isSearchable()) {
+            return result;
+        }
         HttpEntity<Void> entity = buildHttpEntity(null);
 
         List<BiliBiliSearchResult.Video> list = new ArrayList<>();

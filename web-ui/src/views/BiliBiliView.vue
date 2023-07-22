@@ -35,6 +35,7 @@
           <span v-if="scope.row.type==2">二级分类</span>
           <span v-if="scope.row.type==3">频道</span>
           <span v-if="scope.row.type==4">搜索</span>
+          <span v-if="scope.row.type==5">UP主</span>
         </template>
       </el-table-column>
       <el-table-column prop="parentId" label="父类ID" sortable width="180"/>
@@ -83,6 +84,7 @@
             <!--            <el-radio :label="2" size="large">二级分类</el-radio>-->
             <el-radio :label="3" size="large">频道</el-radio>
             <el-radio :label="4" size="large">搜索</el-radio>
+<!--            <el-radio :label="5" size="large">UP主</el-radio>-->
           </el-radio-group>
         </el-form-item>
         <el-form-item label="顺序" label-width="140">
@@ -136,6 +138,15 @@
             active-text="开启"
             inactive-text="关闭"
             @change="updateHeartbeat"
+          />
+        </el-form-item>
+        <el-form-item label="可搜索">
+          <el-switch
+            v-model="searchable"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateSearchable"
           />
         </el-form-item>
       </el-form>
@@ -195,6 +206,7 @@ const qrcodeKey = ref('')
 const bilibiliCookie = ref('')
 const userInfo = ref<any>({})
 const heartbeat = ref(false)
+const searchable = ref(false)
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const list = ref<Nav[]>([])
@@ -366,6 +378,12 @@ const updateHeartbeat = () => {
   })
 }
 
+const updateSearchable = () => {
+  axios.post('/settings', {name: 'bilibili_searchable', value: searchable.value + ''}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const scanLogin = () => {
   base64QrCode.value = ''
   qrcodeKey.value = ''
@@ -435,6 +453,12 @@ const getHeartbeat = () => {
   })
 }
 
+const getSearchable = () => {
+  axios.get('/settings/bilibili_searchable').then(({data}) => {
+    searchable.value = data.value !== 'false'
+  })
+}
+
 const getBilibiliCookie = () => {
   axios.get('/settings/bilibili_cookie').then(({data}) => {
     bilibiliCookie.value = data.value
@@ -459,6 +483,7 @@ const loadUser = () => {
 onMounted(() => {
   loadUser()
   getHeartbeat()
+  getSearchable()
   getBilibiliCookie()
   load().then(() => {
     rowDrop()

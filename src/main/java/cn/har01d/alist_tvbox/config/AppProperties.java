@@ -17,6 +17,7 @@ public class AppProperties {
     private boolean sort;
     private boolean merge;
     private boolean mix;
+    private boolean searchable;
     private int pageSize = 100;
     private int maxSearchResult = 100;
     private String secretKey;

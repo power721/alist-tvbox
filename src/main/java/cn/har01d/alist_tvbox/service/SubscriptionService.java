@@ -508,8 +508,8 @@ public class SubscriptionService {
         String jar = builder.build().toUriString() + "/spring.jar";
         site.put("jar", jar);
         site.put("changeable", 0);
-        site.put("searchable", 1);
-        site.put("quickSearch", 1);
+        site.put("searchable", appProperties.isSearchable() ? 1 : 0);
+        site.put("quickSearch", appProperties.isSearchable() ? 1 : 0);
         site.put("filterable", 1);
         return site;
     }
