@@ -29,6 +29,9 @@ public class NavigationService {
         if (!navigationRepository.existsByValue("fav$0")) {
             navigationRepository.save(new Navigation("收藏夹", "fav$0", 1, true, true, 9));
         }
+        if (!navigationRepository.existsByValue("feed$0")) {
+            navigationRepository.save(new Navigation("动态", "feed$0", 1, true, true, 8));
+        }
     }
 
     private void loadBiliBiliCategory() {

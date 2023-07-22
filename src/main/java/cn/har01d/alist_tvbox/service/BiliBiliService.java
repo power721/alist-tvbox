@@ -14,7 +14,10 @@ import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
 import com.google.zxing.MultiFormatWriter;
@@ -68,6 +71,7 @@ public class BiliBiliService {
     private static final String POPULAR_API = "https://api.bilibili.com/x/web-interface/popular?ps=30&pn=";
     private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&page_size=50&keyword=%s&order=%s&duration=%s&page=%d";
     private static final String TOP_FEED_API = "https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd";
+    private static final String FEED_API = "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all?timezone_offset=-480&type=video&offset=%s&page=%d&features=itemOpusStyle";
     public static final String NAV_API = "https://api.bilibili.com/x/web-interface/nav";
     public static final String HEARTBEAT_API = "https://api.bilibili.com/x/click-interface/web/heartbeat";
     public static final String RELATED_API = "https://api.bilibili.com/x/web-interface/archive/related?bvid=%s";
@@ -113,6 +117,8 @@ public class BiliBiliService {
     private int searchPage;
     private String favId = "";
     private Integer mid;
+
+    private List<String> feedOffsets = new ArrayList<>();
 
     public BiliBiliService(SettingRepository settingRepository,
                            NavigationService navigationService,
@@ -1047,6 +1053,8 @@ public class BiliBiliService {
             return getHistory(page);
         } else if ("fav".equals(parts[0])) {
             return getFavList(tid, type, sort, page);
+        } else if ("feed".equals(parts[0])) {
+            return getFeeds(page);
         } else {
             int rid = Integer.parseInt(parts[1]);
             list = getHotRank(parts[0], rid, page);
@@ -1120,6 +1128,46 @@ public class BiliBiliService {
         return result;
     }
 
+    private MovieList getFeeds(int page) {
+        if (page == 1) {
+            feedOffsets = new ArrayList<>();
+            feedOffsets.add("");
+        }
+        MovieList result = new MovieList();
+        String url = String.format(FEED_API, feedOffsets.get(page - 1), page);
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        log.debug("getFeeds: {}", url);
+        ResponseEntity<JsonNode> response = restTemplate.exchange(url, HttpMethod.GET, entity, JsonNode.class);
+        JsonNode node = response.getBody();
+        log.trace("{}", node);
+        ObjectNode data = (ObjectNode) node.get("data");
+        if (!data.get("has_more").asBoolean()) {
+            return result;
+        }
+        feedOffsets.add(data.get("offset").asText());
+        ArrayNode items = (ArrayNode) data.get("items");
+        for (int i = 0; i < items.size(); ++i) {
+            JsonNode item = items.get(i);
+            ObjectNode archive = (ObjectNode) getNodeByPath(item, "modules.module_dynamic.major.archive");
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(archive.get("bvid").asText());
+            movieDetail.setVod_pic(archive.get("cover").asText());
+            movieDetail.setVod_name(archive.get("title").asText());
+            movieDetail.setVod_remarks(archive.get("duration_text").asText());
+            result.getList().add(movieDetail);
+        }
+        log.debug("{}", result);
+        return result;
+    }
+
+    private JsonNode getNodeByPath(JsonNode root, String path) {
+        JsonNode node = root;
+        for (String key : path.split("\\.")) {
+            node = node.get(key);
+        }
+        return node;
+    }
+
     private MovieList getMovieListByType(String tid, String type, int page) {
         if ("".equals(type)) {
             return getRegion(tid, page);
@@ -1176,19 +1224,19 @@ public class BiliBiliService {
         return result;
     }
 
-    private List<String> offsets = new ArrayList<>();
+    private List<String> channelOffsets = new ArrayList<>();
 
     public MovieList getChannel(String id, String sort, int page) {
         if (page == 1) {
-            offsets = new ArrayList<>();
-            offsets.add("");
+            channelOffsets = new ArrayList<>();
+            channelOffsets.add("");
         }
         if (StringUtils.isBlank(sort)) {
             sort = "new";
         }
         MovieList result = new MovieList();
         HttpEntity<Void> entity = buildHttpEntity(null);
-        String url = String.format(CHANNEL_API, id, sort, offsets.get(page - 1));
+        String url = String.format(CHANNEL_API, id, sort, channelOffsets.get(page - 1));
         ResponseEntity<BiliBiliChannelResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliChannelResponse.class);
         log.info("{}", url);
 
@@ -1214,7 +1262,7 @@ public class BiliBiliService {
         movieDetail.setVod_content("共" + list.size() + "个视频");
         result.getList().add(movieDetail);
 
-        offsets.add(response.getBody().getData().getOffset());
+        channelOffsets.add(response.getBody().getData().getOffset());
         result.getList().addAll(list);
         result.setLimit(result.getList().size());
         result.setHeader("{\"Referer\":\"https://www.bilibili.com\"}");
@@ -1228,7 +1276,7 @@ public class BiliBiliService {
         int page = Integer.parseInt(parts[3]);
 
         HttpEntity<Void> entity = buildHttpEntity(null);
-        String url = String.format(CHANNEL_API, id, sort, offsets.get(page - 1));
+        String url = String.format(CHANNEL_API, id, sort, channelOffsets.get(page - 1));
         ResponseEntity<BiliBiliChannelResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliChannelResponse.class);
         List<BiliBiliChannelItem> list = new ArrayList<>();
         List<BiliBiliChannelItem> videos = response.getBody().getData().getList();
