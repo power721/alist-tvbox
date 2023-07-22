@@ -73,6 +73,7 @@ public class BiliBiliService {
     public static final String RELATED_API = "https://api.bilibili.com/x/web-interface/archive/related?bvid=%s";
     public static final String REGION_API = "https://api.bilibili.com/x/web-interface/dynamic/region?ps=%d&rid=%s&pn=%d";
     public static final String CHANNEL_API = "https://api.bilibili.com/x/web-interface/web/channel/multiple/list?channel_id=%s&sort_type=%s&offset=%s&page_size=30";
+    public static final String FAV_API = "https://api.bilibili.com/x/v3/fav/resource/list?media_id=%s&keyword=&order=%s&type=0&tid=0&platform=web&pn=%d&ps=20";
 
     private final List<FilterValue> filters1 = Arrays.asList(
             new FilterValue("综合排序", ""),
@@ -95,6 +96,13 @@ public class BiliBiliService {
             new FilterValue("最多播放", "hot"),
             new FilterValue("最新发布", "new")
     );
+
+    private final List<FilterValue> filters4 = Arrays.asList(
+            new FilterValue("最近收藏", "mtime"),
+            new FilterValue("最多播放", "view"),
+            new FilterValue("最新投稿", "pubtime")
+    );
+
     private final SettingRepository settingRepository;
     private final NavigationService navigationService;
     private final AppProperties appProperties;
@@ -103,6 +111,8 @@ public class BiliBiliService {
     private MovieDetail searchPlaylist;
     private String keyword = "";
     private int searchPage;
+    private String favId = "";
+    private int mid;
 
     public BiliBiliService(SettingRepository settingRepository,
                            NavigationService navigationService,
@@ -137,6 +147,7 @@ public class BiliBiliService {
         HttpEntity<Void> entity = buildHttpEntity(null);
         Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
         Map<String, Object> data = (Map<String, Object>) json.get("data");
+        mid = (int) data.get("mid");
         log.info("user: {} isLogin: {} vip: {}", data.get("uname"), data.get("isLogin"), data.get("vipType"));
         return data;
     }
@@ -224,6 +235,11 @@ public class BiliBiliService {
                     if (item.getType() == 4) {
                         result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters1), new Filter("duration", "时长", filters3)));
                     }
+                    if (value.equals("fav$0")) {
+                        List<Filter> filters = getFavFilters();
+                        category.setType_id(value + "$" + favId);
+                        result.getFilters().put(category.getType_id(), filters);
+                    }
                     result.getCategories().add(category);
                 });
 
@@ -231,6 +247,16 @@ public class BiliBiliService {
         result.setLimit(result.getCategories().size());
 
         return result;
+    }
+
+    private List<Filter> getFavFilters() {
+        String url = "https://api.bilibili.com/x/v3/fav/folder/created/list-all?up_mid=" + mid;
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        ResponseEntity<BiliBiliFavListResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliFavListResponse.class);
+        log.debug("getFavlist: {}", response.getBody());
+        List<FilterValue> filters = response.getBody().getData().getList().stream().map(e -> new FilterValue(e.getTitle(), String.valueOf(e.getId()))).collect(Collectors.toList());
+        favId = filters.get(0).getV();
+        return List.of(new Filter("sort", "排序", filters4), new Filter("type", "分类", filters));
     }
 
     public MovieList recommend() {
@@ -273,6 +299,16 @@ public class BiliBiliService {
         //movieDetail.setVod_play_url(buildPlayUrl(id));
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
         //movieDetail.setVod_content(info.getDescription());
+        return movieDetail;
+    }
+
+    private MovieDetail getMovieDetail(FavItem info) {
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id(info.getBvid());
+        movieDetail.setVod_name(info.getTitle());
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_pic(fixCover(info.getCover()));
+        movieDetail.setVod_remarks(seconds2String(info.getDuration()));
         return movieDetail;
     }
 
@@ -1007,6 +1043,8 @@ public class BiliBiliService {
             return getPopular(page);
         } else if ("history".equals(parts[0])) {
             return getHistory(page);
+        } else if ("fav".equals(parts[0])) {
+            return getFavList(tid, type, sort, page);
         } else {
             int rid = Integer.parseInt(parts[1]);
             list = getHotRank(parts[0], rid, page);
@@ -1027,6 +1065,56 @@ public class BiliBiliService {
         }
 
         result.setLimit(result.getList().size());
+        return result;
+    }
+
+    private MovieList getFavList(String tid, String type, String sort, int page) {
+        MovieList result = new MovieList();
+        if (StringUtils.isBlank(sort)) {
+            sort = "mtime";
+        }
+
+        if (StringUtils.isBlank(type)) {
+            type = favId;
+        }
+
+        if (StringUtils.isBlank(type)) {
+            String[] parts = tid.split("\\$");
+            if (parts.length == 3) {
+                type = parts[2];
+            }
+        }
+
+        String url = String.format(FAV_API, type, sort, page);
+        log.debug("getFavList: {}", url);
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        ResponseEntity<BiliBiliFavItemsResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliFavItemsResponse.class);
+        log.debug("{}", response.getBody());
+        List<FavItem> items = response.getBody().getData().getMedias();
+        if (items == null) {
+            return result;
+        }
+        List<MovieDetail> list = new ArrayList<>();
+
+        for (FavItem video : items) {
+            MovieDetail movieDetail = getMovieDetail(video);
+            list.add(movieDetail);
+        }
+
+        result.getList().addAll(list);
+
+        int pages = page;
+        if (response.getBody().getData().isHas_more()) {
+            pages++;
+        }
+
+        int total = pages * 20;
+        result.setTotal(total);
+        result.setPage(page);
+        result.setPagecount(pages);
+        result.setLimit(result.getList().size());
+
+        log.debug("{}", result);
         return result;
     }
 

@@ -10,11 +10,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -29,6 +25,9 @@ public class NavigationService {
     public void setup() {
         if (navigationRepository.count() == 0) {
             loadBiliBiliCategory();
+        }
+        if (!navigationRepository.existsByValue("fav$0")) {
+            navigationRepository.save(new Navigation("收藏夹", "fav$0", 1, true, true, 9));
         }
     }
 
