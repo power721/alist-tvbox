@@ -790,14 +790,14 @@ public class BiliBiliService {
         int end = start + size;
 
         for (int i = start; i < end; i++) {
-            String url = String.format(SEARCH_API, wd, getSort(type), i + 1);
+            String url = String.format(SEARCH_API, wd, getSort(type), "0", i + 1);
             ResponseEntity<BiliBiliSearchResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchResponse.class);
             List<BiliBiliSearchResult.Video> videos = response.getBody().getData().getResult();
             list.addAll(videos);
         }
 
         searchPlaylist = new MovieDetail();
-        searchPlaylist.setVod_id("search$$" + wd + "$0$" + page);
+        searchPlaylist.setVod_id("search$" + wd + "$0$" + page);
         searchPlaylist.setVod_name(wd + "合集" + (page + 1));
         searchPlaylist.setVod_tag(FILE);
         searchPlaylist.setVod_pic(LIST_PIC);
@@ -1325,9 +1325,7 @@ public class BiliBiliService {
             result.getList().add(movieDetail);
 
             list.addAll(videos);
-            result.setTotal(response.getBody().getData().getNumResults());
             result.setPagecount(response.getBody().getData().getNumPages());
-            log.debug("response: {}", result);
         } else {
             for (int i = 1; i <= 2; i++) {
                 String url = String.format(SEARCH_API, wd, sort, duration, i);
@@ -1358,7 +1356,6 @@ public class BiliBiliService {
             }
 
             log.info("search \"{}\" result: {}", wd, list.size());
-            result.setTotal(result.getList().size());
         }
 
         for (BiliBiliSearchResult.Video info : list) {
@@ -1366,7 +1363,9 @@ public class BiliBiliService {
             result.getList().add(movieDetail);
         }
 
+        result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
+        log.debug("result: {}", result);
         return result;
     }
 
@@ -1383,6 +1382,8 @@ public class BiliBiliService {
                 return 4;
             case "stow":
                 return 5;
+            case "scores":
+                return 6;
             default:
                 return 1;
         }
@@ -1401,6 +1402,8 @@ public class BiliBiliService {
                 return "dm";
             case 5:
                 return "stow";
+            case 6:
+                return "scores";
             default:
                 return "";
         }
