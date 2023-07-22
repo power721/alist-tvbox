@@ -24,7 +24,7 @@
       </el-table-column>
       <el-table-column prop="url" label="聚合地址" sortable>
         <template #default="scope">
-          <a :href="currentUrl+'/juhe'+token+'/'+scope.row.id" target="_blank">{{ currentUrl }}/juhe{{
+          <a :href="currentUrl+'/repo'+token+'/'+scope.row.id" target="_blank">{{ currentUrl }}/repo{{
               token
             }}/{{ scope.row.id }}</a>
         </template>
