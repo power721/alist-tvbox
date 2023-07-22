@@ -202,6 +202,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ![BiliBili](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili.png)
 
 登录后才能使用，TvBox第三个站源。
+
 ![扫码登录](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_login.png)
 
 或者使用已有的cookie登录。
