@@ -19,6 +19,9 @@ cd /www/
 tar zxf mobi.tgz
 rm mobi.tgz
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/tvbox.zip
+if [ ! -f tvbox.zip ]; then
+  wget -T 20 -t 2 https://d.har01d.cn/tvbox.zip
+fi
 unzip -q -o tvbox.zip
 rm tvbox.zip
 if [ -f /data/my.json ]; then
@@ -35,7 +38,13 @@ cd /tmp/
 rm -f index.zip index.txt version.txt update.zip
 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/update/version.txt
+if [ ! -f version.txt ]; then
+  wget -T 10 -t 2 https://d.har01d.cn/version.txt
+fi
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/update.zip
+if [ ! -f update.zip ]; then
+  wget -T 20 -t 2 https://d.har01d.cn/update.zip
+fi
 if [ ! -f update.zip ]; then
   echo "Failed to download update database file, the database upgrade process has aborted"
   exit 1
@@ -85,8 +94,11 @@ else
   elif [ "$remote" = "$latest" ]; then
     wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/index.zip
     if [ ! -f index.zip ]; then
+      wget -T 30 -t 2 https://d.har01d.cn/index.zip
+    fi
+    if [ ! -f index.zip ]; then
       echo "Failed to download index compressed file, the index file upgrade process has aborted"
-      exit
+      exit 1
     else
       unzip -o -q -P abcd index.zip
       cat index.video.txt index.book.txt index.music.txt index.non.video.txt >/data/index/index.txt
