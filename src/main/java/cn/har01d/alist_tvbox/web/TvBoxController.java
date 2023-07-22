@@ -5,13 +5,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import java.net.URLDecoder;
@@ -109,6 +103,20 @@ public class TvBoxController {
         }
 
         return subscriptionService.subscription(id);
+    }
+
+    @GetMapping(value = "/repo/{id}", produces = "application/json")
+    public String repository(@PathVariable int id) {
+        return repository("", id);
+    }
+
+    @GetMapping(value = "/repo/{token}/{id}", produces = "application/json")
+    public String repository(@PathVariable String token, @PathVariable int id) {
+        if (!subscriptionService.getToken().equals(token)) {
+            throw new BadRequestException();
+        }
+
+        return subscriptionService.repository(id);
     }
 
     private String decodeUrl(String text) {

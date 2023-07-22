@@ -22,6 +22,13 @@
             }}/{{ scope.row.id }}</a>
         </template>
       </el-table-column>
+      <el-table-column prop="url" label="聚合地址" sortable>
+        <template #default="scope">
+          <a :href="currentUrl+'/juhe'+token+'/'+scope.row.id" target="_blank">{{ currentUrl }}/juhe{{
+              token
+            }}/{{ scope.row.id }}</a>
+        </template>
+      </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)" v-if="scope.row.id">编辑

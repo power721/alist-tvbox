@@ -636,8 +636,12 @@ public class SubscriptionService {
     }
 
     private String readHostAddress() {
+        return readHostAddress("");
+    }
+
+    private String readHostAddress(String path) {
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
-                .replacePath("")
+                .replacePath(path)
                 .build();
         return uriComponents.toUriString();
     }
@@ -760,4 +764,19 @@ public class SubscriptionService {
         return ret;
     }
 
+    public String repository(int id) {
+        try {
+            File file = new File("/www/tvbox/juhe.json");
+            if (file.exists()) {
+                String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+                String url = readHostAddress("/sub" + (StringUtils.isNotBlank(token) ? "/" + token : "") + "/" + id);
+                json = json.replace("DOCKER_ADDRESS/tvbox/my.json", url);
+                return json;
+            }
+        } catch (IOException e) {
+            log.warn("", e);
+            return null;
+        }
+        return null;
+    }
 }
