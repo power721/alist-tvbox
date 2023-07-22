@@ -112,7 +112,7 @@ public class BiliBiliService {
     private String keyword = "";
     private int searchPage;
     private String favId = "";
-    private int mid;
+    private Integer mid;
 
     public BiliBiliService(SettingRepository settingRepository,
                            NavigationService navigationService,
@@ -147,8 +147,10 @@ public class BiliBiliService {
         HttpEntity<Void> entity = buildHttpEntity(null);
         Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
         Map<String, Object> data = (Map<String, Object>) json.get("data");
-        mid = (int) data.get("mid");
-        log.info("user: {} isLogin: {} vip: {}", data.get("uname"), data.get("isLogin"), data.get("vipType"));
+        if (data != null) {
+            mid = (Integer) data.get("mid");
+            log.info("user: {} {} isLogin: {} vip: {}", data.get("uname"), data.get("mid"), data.get("isLogin"), data.get("vipType"));
+        }
         return data;
     }
 
