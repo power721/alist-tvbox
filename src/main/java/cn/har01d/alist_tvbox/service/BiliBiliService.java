@@ -72,6 +72,7 @@ public class BiliBiliService {
     private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&page_size=50&keyword=%s&order=%s&duration=%s&page=%d";
     private static final String TOP_FEED_API = "https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd";
     private static final String FEED_API = "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all?timezone_offset=-480&type=video&offset=%s&page=%d&features=itemOpusStyle";
+    private static final String CHAN_API = "https://api.bilibili.com/x/web-interface/web/channel/category/channel_arc/list?id=%s&offset=%s";
     public static final String NAV_API = "https://api.bilibili.com/x/web-interface/nav";
     public static final String HEARTBEAT_API = "https://api.bilibili.com/x/click-interface/web/heartbeat";
     public static final String RELATED_API = "https://api.bilibili.com/x/web-interface/archive/related?bvid=%s";
@@ -107,6 +108,32 @@ public class BiliBiliService {
             new FilterValue("最新投稿", "pubtime")
     );
 
+    private final List<FilterValue> filters5 = Arrays.asList(
+            new FilterValue("全部", "0"),
+            new FilterValue("动漫", "1"),
+            new FilterValue("游戏", "2"),
+            new FilterValue("电竞", "3"),
+            new FilterValue("鬼畜", "4"),
+            new FilterValue("时尚", "5"),
+            new FilterValue("音乐", "6"),
+            new FilterValue("科技", "7"),
+            new FilterValue("数码", "8"),
+            new FilterValue("知识", "9"),
+            new FilterValue("动物圈", "10"),
+            new FilterValue("美食", "11"),
+            new FilterValue("虚拟UP主", "12"),
+            new FilterValue("明星", "13"),
+            new FilterValue("舞蹈", "14"),
+            new FilterValue("生活", "15"),
+            new FilterValue("综艺", "16"),
+            new FilterValue("电影", "17"),
+            new FilterValue("电视剧", "18"),
+            new FilterValue("相声", "19"),
+            new FilterValue("特摄", "20"),
+            new FilterValue("运动", "21"),
+            new FilterValue("星海", "22")
+    );
+
     private final SettingRepository settingRepository;
     private final NavigationService navigationService;
     private final AppProperties appProperties;
@@ -118,7 +145,8 @@ public class BiliBiliService {
     private String favId = "";
     private Integer mid;
 
-    private List<String> feedOffsets = new ArrayList<>();
+    private List<String> feedOffsets = new ArrayList<>(); // 动态列表
+    private List<String> chanOffsets = new ArrayList<>(); // 频道列表
 
     public BiliBiliService(SettingRepository settingRepository,
                            NavigationService navigationService,
@@ -246,6 +274,10 @@ public class BiliBiliService {
                     if (value.equals("fav$0")) {
                         List<Filter> filters = getFavFilters();
                         category.setType_id(value + "$" + favId);
+                        result.getFilters().put(category.getType_id(), filters);
+                    }
+                    if (value.equals("channel$0")) {
+                        List<Filter> filters = List.of(new Filter("type", "分类", filters5));
                         result.getFilters().put(category.getType_id(), filters);
                     }
                     result.getCategories().add(category);
@@ -1053,6 +1085,8 @@ public class BiliBiliService {
             return getHistory(page);
         } else if ("fav".equals(parts[0])) {
             return getFavList(tid, type, sort, page);
+        } else if ("channel".equals(parts[0])) {
+            return getChannels(type, page);
         } else if ("feed".equals(parts[0])) {
             return getFeeds(page);
         } else {
@@ -1128,12 +1162,52 @@ public class BiliBiliService {
         return result;
     }
 
+    private MovieList getChannels(String tid, int page) {
+        if (page == 1) {
+            chanOffsets = new ArrayList<>();
+            chanOffsets.add("");
+        }
+        MovieList result = new MovieList();
+        if (chanOffsets.get(page - 1) == null) {
+            return result;
+        }
+        String url = String.format(CHAN_API, tid, chanOffsets.get(page - 1));
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        log.debug("getFeeds: {}", url);
+        ResponseEntity<BiliBiliChannelListResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliChannelListResponse.class);
+        ChannelList channelList = response.getBody().getData();
+        for (ChannelArchives archives : channelList.getArchive_channels()) {
+            for (ChannelArchive archive : archives.getArchives()) {
+                MovieDetail movieDetail = new MovieDetail();
+                movieDetail.setVod_id(archive.getBvid());
+                movieDetail.setVod_director(archive.getAuthor_name());
+                movieDetail.setVod_pic(archive.getCover());
+                movieDetail.setVod_name(archive.getName());
+                movieDetail.setVod_remarks(archive.getDuration());
+                result.getList().add(movieDetail);
+            }
+        }
+        if (channelList.isHas_more()) {
+            chanOffsets.add(channelList.getOffset());
+        } else {
+            chanOffsets.add(null);
+        }
+        result.setPage(page);
+        result.setLimit(result.getList().size());
+        result.setTotal(channelList.getTotal());
+        log.debug("{}", result);
+        return result;
+    }
+
     private MovieList getFeeds(int page) {
         if (page == 1) {
             feedOffsets = new ArrayList<>();
             feedOffsets.add("");
         }
         MovieList result = new MovieList();
+        if (feedOffsets.get(page - 1) == null) {
+            return result;
+        }
         String url = String.format(FEED_API, feedOffsets.get(page - 1), page);
         HttpEntity<Void> entity = buildHttpEntity(null);
         log.debug("getFeeds: {}", url);
@@ -1141,10 +1215,11 @@ public class BiliBiliService {
         JsonNode node = response.getBody();
         log.trace("{}", node);
         ObjectNode data = (ObjectNode) node.get("data");
-        if (!data.get("has_more").asBoolean()) {
-            return result;
+        if (data.get("has_more").asBoolean()) {
+            feedOffsets.add(data.get("offset").asText());
+        } else {
+            feedOffsets.add(null);
         }
-        feedOffsets.add(data.get("offset").asText());
         ArrayNode items = (ArrayNode) data.get("items");
         for (int i = 0; i < items.size(); ++i) {
             JsonNode item = items.get(i);
@@ -1156,6 +1231,8 @@ public class BiliBiliService {
             movieDetail.setVod_remarks(archive.get("duration_text").asText());
             result.getList().add(movieDetail);
         }
+        result.setLimit(result.getList().size());
+        result.setPage(page);
         log.debug("{}", result);
         return result;
     }
@@ -1235,6 +1312,9 @@ public class BiliBiliService {
             sort = "new";
         }
         MovieList result = new MovieList();
+        if (channelOffsets.get(page - 1) == null) {
+            return result;
+        }
         HttpEntity<Void> entity = buildHttpEntity(null);
         String url = String.format(CHANNEL_API, id, sort, channelOffsets.get(page - 1));
         ResponseEntity<BiliBiliChannelResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliChannelResponse.class);
@@ -1262,7 +1342,11 @@ public class BiliBiliService {
         movieDetail.setVod_content("共" + list.size() + "个视频");
         result.getList().add(movieDetail);
 
-        channelOffsets.add(response.getBody().getData().getOffset());
+        if (list.size() < 30) {
+            channelOffsets.add(null);
+        } else {
+            channelOffsets.add(response.getBody().getData().getOffset());
+        }
         result.getList().addAll(list);
         result.setLimit(result.getList().size());
         result.setHeader("{\"Referer\":\"https://www.bilibili.com\"}");

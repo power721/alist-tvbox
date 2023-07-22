@@ -32,6 +32,9 @@ public class NavigationService {
         if (!navigationRepository.existsByValue("feed$0")) {
             navigationRepository.save(new Navigation("动态", "feed$0", 1, true, true, 8));
         }
+        if (!navigationRepository.existsByValue("channel$0")) {
+            navigationRepository.save(new Navigation("频道", "channel$0", 1, false, true, 8));
+        }
     }
 
     private void loadBiliBiliCategory() {

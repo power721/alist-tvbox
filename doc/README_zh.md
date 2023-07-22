@@ -129,7 +129,7 @@ EOF
 https://www.aliyundrive.com/drive/folder/640xxxxxxxxxxxxxxxxxxxca8a 最后一串就是。
 
 ### 订阅
-tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
+tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ![订阅列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub.png)
 
@@ -142,6 +142,19 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 站点`key`是必须的，其它字段可选。对于lives，rules，parses，doh类型，`name`字段是必须的。
 
 站点名称可以加前缀，通过订阅URL前面加前缀，使用`@`分割。比如：`饭@http://饭太硬.top/tv,菜@https://tvbox.cainisi.cf`
+
+替换功能：
+```json
+{
+"replace": {
+  "http://127.0.0.1:9978/file/tvfan/token.txt": "ATV_ADDRESS/ali/token/9666c3651739488d9eee223344983ffc" 
+},
+"sites-blacklist": ["说明1","说明2", "说明3","说明4","公告", "ext_live_protocol", "cc"],
+"sites": [
+ 
+]
+}
+```
 
 ![订阅预览](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub_data.png)
 
@@ -180,6 +193,28 @@ tvbox/my.json不能在TvBox直接使用，请使用订阅地址！
 ![类别](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_category.png)
 
 ![filter](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_filter.jpg)
+
+### BiliBili
+拖到行可以改变顺序，需要点击保存按钮。
+
+打开、关闭显示开关后，需要点击保存按钮。
+
+![BiliBili](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili.png)
+
+登录后才能使用，TvBox第三个站源。
+![扫码登录](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_login.png)
+
+或者使用已有的cookie登录。
+
+打开上报播放记录，B站才能看到播放记录。
+
+![配置](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_config.png)
+
+添加搜索关键词作为一级分类：
+![搜索](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_search.png)
+
+添加频道作为一级分类：
+![频道](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_channel.png)
 
 ### 配置
 ![配置页面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_config.png)

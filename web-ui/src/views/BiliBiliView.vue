@@ -2,9 +2,9 @@
   <div class="sites">
     <div class="flex">
       <div v-if="userInfo">
-        <span>用户名：{{ userInfo.uname }}</span>
+        <span v-if="userInfo.uname">用户名：{{ userInfo.uname }}</span>
         <span class="hint">登录状态：{{ userInfo.isLogin ? '已登录' : '未登录' }}</span>
-        <span class="hint">会员状态：{{ userInfo.vipType ? userInfo.vip_label.text : '无会员' }}</span>
+        <span v-if="userInfo.uname" class="hint">会员状态：{{ userInfo.vipType ? userInfo.vip_label.text : '无会员' }}</span>
       </div>
       <div class="">
         <el-button type="primary" @click="scanLogin">登录</el-button>
@@ -116,7 +116,7 @@
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="loginVisible=false">取消</el-button>
-<!--        <el-button type="primary" @click="checkLogin">我已扫码</el-button>-->
+        <!--        <el-button type="primary" @click="checkLogin">我已扫码</el-button>-->
       </span>
       </template>
     </el-dialog>
