@@ -212,9 +212,11 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ![配置](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_config.png)
 
 添加搜索关键词作为一级分类：
+
 ![搜索](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_search.png)
 
 添加频道作为一级分类：
+
 ![频道](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_channel.png)
 
 ### 配置
