@@ -35,6 +35,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -321,7 +322,12 @@ public class AccountService {
         List<Account> accounts = accountRepository.findAll();
         autoCheckin(accounts);
 
-        for (Account account : accounts) {
+        indexService.getRemoteVersion();
+    }
+
+    @Scheduled(cron = "0 30 * * * ?")
+    public void clean() {
+        for (Account account : accountRepository.findAll()) {
             try {
                 Map<Object, Object> response = refreshTokens(account);
                 if (account.isClean()) {
@@ -331,8 +337,6 @@ public class AccountService {
                 log.warn("", e);
             }
         }
-
-        indexService.getRemoteVersion();
     }
 
     public void autoCheckin(List<Account> accounts) {

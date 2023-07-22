@@ -330,7 +330,7 @@ onMounted(() => {
       aliSecret.value = data.ali_secret
       autoCheckin.value = data.auto_checkin === 'true'
       aListRestart.value = data.alist_restart_required === 'true'
-      mixSiteSource.value = data.mix_site_source === 'true'
+      mixSiteSource.value = data.mix_site_source !== 'false'
       login.value.username = data.alist_username
       login.value.password = data.alist_password
       login.value.enabled = data.alist_login === 'true'
