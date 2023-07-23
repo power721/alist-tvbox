@@ -190,7 +190,7 @@ public class SubscriptionService {
         removeBlacklist(config);
 
         addSite(config);
-        addRules(config);
+//        addRules(config);
 
         return config;
     }
@@ -433,7 +433,7 @@ public class SubscriptionService {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         try {
             String key = "Alist";
-            Map<String, Object> site = buildSite(key);
+            Map<String, Object> site = buildSite("csp_AList", "AList");
             sites.removeIf(item -> key.equals(item.get("key")));
             sites.add(id++, site);
             log.debug("add AList site: {}", site);
@@ -445,7 +445,7 @@ public class SubscriptionService {
             try {
                 for (Site site1 : siteRepository.findAll()) {
                     if (site1.isSearchable() && !site1.isDisabled()) {
-                        Map<String, Object> site = buildSite2(site1.getName());
+                        Map<String, Object> site = buildSite("csp_XiaoYa", site1.getName());
                         sites.add(id++, site);
                         log.debug("add XiaoYa site: {}", site);
                         break;
@@ -458,7 +458,7 @@ public class SubscriptionService {
 
         if (settingRepository.existsById(BILIBILI_COOKIE)) {
             try {
-                Map<String, Object> site = buildSite3();
+                Map<String, Object> site = buildSite("csp_BiliBili", "BiliBili");
                 sites.add(id, site);
                 log.debug("add BiliBili site: {}", site);
             } catch (Exception e) {
@@ -467,70 +467,13 @@ public class SubscriptionService {
         }
     }
 
-    private Map<String, Object> buildSite(String key) throws IOException {
-//        Map<String, Object> site = new HashMap<>();
-//        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-//        builder.replacePath("/vod" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
-//        site.put("key", key);
-//        site.put("name", "AList");
-//        site.put("type", 1);
-//        site.put("api", builder.build().toUriString());
-//        site.put("searchable", 1);
-//        site.put("quickSearch", 1);
-//        site.put("filterable", 1);
-//        return site;
+    private Map<String, Object> buildSite(String key, String name) throws IOException {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
         builder.replacePath("");
-        site.put("key", "csp_AList");
-        site.put("api", "csp_AList");
-        site.put("name", "AList");
-        site.put("type", 3);
-        Map<String, String> map = new HashMap<>();
-        map.put("api", builder.build().toUriString());
-        map.put("apiKey", settingRepository.findById("api_key").map(Setting::getValue).orElse(""));
-        String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
-        ext = Base64.getEncoder().encodeToString(ext.getBytes());
-        site.put("ext", ext);
-        String jar = builder.build().toUriString() + "/spring.jar";
-        site.put("jar", jar);
-        site.put("changeable", 0);
-        site.put("searchable", 1);
-        site.put("quickSearch", 1);
-        site.put("filterable", 1);
-        return site;
-    }
-
-    private Map<String, Object> buildSite2(String name) throws IOException {
-        Map<String, Object> site = new HashMap<>();
-        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        builder.replacePath("");
-        site.put("key", "csp_XiaoYa");
-        site.put("api", "csp_XiaoYa");
+        site.put("key", key);
+        site.put("api", key);
         site.put("name", name);
-        site.put("type", 3);
-        Map<String, String> map = new HashMap<>();
-        map.put("api", builder.build().toUriString());
-        map.put("apiKey", settingRepository.findById("api_key").map(Setting::getValue).orElse(""));
-        String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
-        ext = Base64.getEncoder().encodeToString(ext.getBytes());
-        site.put("ext", ext);
-        String jar = builder.build().toUriString() + "/spring.jar";
-        site.put("jar", jar);
-        site.put("changeable", 0);
-        site.put("searchable", 1);
-        site.put("quickSearch", 1);
-        site.put("filterable", 1);
-        return site;
-    }
-
-    private Map<String, Object> buildSite3() throws IOException {
-        Map<String, Object> site = new HashMap<>();
-        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        builder.replacePath("");
-        site.put("key", "csp_BiliBili");
-        site.put("api", "csp_BiliBili");
-        site.put("name", "BiliBili");
         site.put("type", 3);
         Map<String, String> map = new HashMap<>();
         map.put("api", builder.build().toUriString());
