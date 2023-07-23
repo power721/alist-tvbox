@@ -133,11 +133,13 @@ public class ShareService {
 
     private void loadOpenTokenUrl() {
         try {
+            String url = null;
             try {
                 Path file = Paths.get("/data/open_token_url.txt");
                 if (Files.exists(file)) {
-                    settingRepository.save(new Setting(OPEN_TOKEN_URL, Files.readString(file).trim()));
-                    return;
+                    url = Files.readString(file).trim();
+                    log.debug("loadOpenTokenUrl {}", url);
+                    settingRepository.save(new Setting(OPEN_TOKEN_URL, url));
                 }
             } catch (Exception e) {
                 log.warn("", e);
@@ -147,7 +149,13 @@ public class ShareService {
             if (Files.exists(path)) {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);
-                settingRepository.save(new Setting(OPEN_TOKEN_URL, (String) json.get("opentoken_auth_url")));
+                if (url != null) {
+                    json.put("opentoken_auth_url", url);
+                    text = objectMapper.writeValueAsString(json);
+                    Files.writeString(path, text);
+                } else {
+                    settingRepository.save(new Setting(OPEN_TOKEN_URL, (String) json.get("opentoken_auth_url")));
+                }
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -171,9 +179,7 @@ public class ShareService {
 
         try {
             Path file = Paths.get("/data/open_token_url.txt");
-            if (Files.exists(file)) {
-                Files.writeString(file, url);
-            }
+            Files.writeString(file, url);
         } catch (Exception e) {
             log.warn("", e);
         }
