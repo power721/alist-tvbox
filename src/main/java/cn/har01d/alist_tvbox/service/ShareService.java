@@ -2,16 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.ShareInfo;
-import cn.har01d.alist_tvbox.entity.AListAlias;
-import cn.har01d.alist_tvbox.entity.AListAliasRepository;
-import cn.har01d.alist_tvbox.entity.Account;
-import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.PikPakAccount;
-import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.Share;
-import cn.har01d.alist_tvbox.entity.ShareRepository;
+import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -197,13 +188,15 @@ public class ShareService {
                 List<String> lines = Files.readAllLines(path);
                 for (String line : lines) {
                     String[] parts = line.trim().split("\\s+");
-                    if (parts.length == 3) {
+                    if (parts.length > 1) {
                         try {
                             Share share = new Share();
                             share.setId(shareId++);
                             share.setPath(parts[0]);
                             share.setShareId(parts[1]);
-                            share.setFolderId(parts[2]);
+                            if (parts.length > 2) {
+                                share.setFolderId(parts[2]);
+                            }
                             share.setType(0);
                             list.add(share);
                         } catch (Exception e) {
@@ -229,13 +222,17 @@ public class ShareService {
                 List<String> lines = Files.readAllLines(path);
                 for (String line : lines) {
                     String[] parts = line.trim().split("\\s+");
-                    if (parts.length == 3) {
+                    if (parts.length > 1) {
                         try {
                             Share share = new Share();
                             share.setId(shareId++);
                             share.setPath(parts[0]);
                             share.setShareId(parts[1]);
-                            share.setFolderId(parts[2]);
+                            if (parts.length > 2) {
+                                share.setFolderId(parts[2]);
+                            } else {
+                                share.setFolderId("");
+                            }
                             share.setType(1);
                             list.add(share);
                         } catch (Exception e) {
@@ -258,13 +255,17 @@ public class ShareService {
             while (reader.ready()) {
                 String line = reader.readLine();
                 String[] parts = line.trim().split("\\s+");
-                if (parts.length == 3) {
+                if (parts.length > 1) {
                     try {
                         Share share = new Share();
                         share.setId(shareId);
                         share.setPath(parts[0]);
                         share.setShareId(parts[1]);
-                        share.setFolderId(parts[2]);
+                        if (parts.length > 2) {
+                            share.setFolderId(parts[2]);
+                        } else if (share.getType() == 1) {
+                            share.setFolderId("");
+                        }
                         share.setType(type);
                         if (shareRepository.existsByPath(share.getPath())) {
                             continue;

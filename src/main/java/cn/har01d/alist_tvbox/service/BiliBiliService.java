@@ -376,7 +376,7 @@ public class BiliBiliService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(fixCover(info.getCover()));
         movieDetail.setVod_play_from(BILI_BILI);
-        movieDetail.setVod_play_url(buildPlayUrl(id));
+        movieDetail.setVod_play_url("视频$" + buildPlayUrl(id));
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
         return movieDetail;
     }
@@ -390,7 +390,7 @@ public class BiliBiliService {
         movieDetail.setVod_director(info.getAuthor());
         movieDetail.setVod_pic(fixCover(info.getCover()));
         movieDetail.setVod_play_from(BILI_BILI);
-        movieDetail.setVod_play_url(buildPlayUrl(id));
+        movieDetail.setVod_play_url("视频$" + buildPlayUrl(id));
         movieDetail.setVod_remarks(info.getDuration());
         return movieDetail;
     }
@@ -412,7 +412,7 @@ public class BiliBiliService {
             movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
             movieDetail.setVod_play_from(BILI_BILI);
             if (info.getPages().size() <= 1) {
-                movieDetail.setVod_play_url(buildPlayUrl(id));
+                movieDetail.setVod_play_url("视频$" + buildPlayUrl(id));
             } else {
                 movieDetail.setVod_play_url(info.getPages().stream().map(e -> fixTitle(e.getPart()) + "$" + info.getAid() + "-" + e.getCid()).collect(Collectors.joining("#")));
             }
@@ -618,7 +618,7 @@ public class BiliBiliService {
             result.getList().add(movieDetail);
         }
         result.setLimit(result.getList().size());
-        result.setTotal(result.getList().size());
+        result.setTotal(1000);
         result.setPagecount(1);
         log.debug("getSeasonRank: {} {}", url, result);
         return result;
@@ -1144,7 +1144,6 @@ public class BiliBiliService {
         String[] parts = tid.split("\\$");
         MovieList result = new MovieList();
         List<BiliBiliInfo> list;
-        int total = 100;
         if (parts.length == 1) {
             int rid = Integer.parseInt(tid);
             if (rid > 0 && "".equals(type)) {
@@ -1173,7 +1172,7 @@ public class BiliBiliService {
             result.getList().add(movieDetail);
         }
 
-        result.setTotal(total);
+        result.setTotal(1000);
         if ("pop".equals(parts[0])) {
             result.setPage(page);
             result.setPagecount(20);
@@ -1305,6 +1304,7 @@ public class BiliBiliService {
             movieDetail.setVod_remarks(archive.get("duration_text").asText());
             result.getList().add(movieDetail);
         }
+        result.setTotal(1000);
         result.setLimit(result.getList().size());
         result.setPage(page);
         log.debug("{}", result);
@@ -1392,7 +1392,7 @@ public class BiliBiliService {
         HttpEntity<Void> entity = buildHttpEntity(null);
         String url = String.format(CHANNEL_API, id, sort, channelOffsets.get(page - 1));
         ResponseEntity<BiliBiliChannelResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliChannelResponse.class);
-        log.info("{}", url);
+        log.debug("getChannel {} {}", url, response.getBody());
 
         List<MovieDetail> list = new ArrayList<>();
         for (BiliBiliChannelItem item : response.getBody().getData().getList()) {
@@ -1422,8 +1422,10 @@ public class BiliBiliService {
             channelOffsets.add(response.getBody().getData().getOffset());
         }
         result.getList().addAll(list);
+        result.setTotal(1000);
         result.setLimit(result.getList().size());
         result.setHeader("{\"Referer\":\"https://www.bilibili.com\"}");
+        log.debug("{}", result);
         return result;
     }
 
@@ -1524,7 +1526,7 @@ public class BiliBiliService {
             result.getList().add(movieDetail);
         }
 
-        result.setTotal(result.getList().size());
+        result.setTotal(1000);
         result.setLimit(result.getList().size());
         log.debug("result: {}", result);
         return result;

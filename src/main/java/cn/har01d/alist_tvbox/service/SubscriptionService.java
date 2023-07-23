@@ -502,7 +502,7 @@ public class SubscriptionService {
         Map<String, String> map = new HashMap<>();
         map.put("api", builder.build().toUriString());
         map.put("apiKey", settingRepository.findById("api_key").map(Setting::getValue).orElse(""));
-        String ext = objectMapper.writeValueAsString(map);
+        String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
         String jar = builder.build().toUriString() + "/spring.jar";
