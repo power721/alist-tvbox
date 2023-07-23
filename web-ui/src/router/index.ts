@@ -18,6 +18,7 @@ import PikPakView from "@/views/PikPakView.vue";
 import LogsView from "@/views/LogsView.vue";
 import IndexView from "@/views/IndexView.vue";
 import BiliBiliView from "@/views/BiliBiliView.vue";
+import SystemInfo from "@/views/SystemInfo.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -45,6 +46,12 @@ const router = createRouter({
       path: '/index',
       name: 'index',
       component: IndexView,
+      meta: {auth: true}
+    },
+    {
+      path: '/system',
+      name: 'system',
+      component: SystemInfo,
       meta: {auth: true}
     },
     {
