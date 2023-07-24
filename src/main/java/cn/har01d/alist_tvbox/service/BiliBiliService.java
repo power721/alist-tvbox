@@ -1426,7 +1426,7 @@ public class BiliBiliService {
             channelOffsets.add(response.getBody().getData().getOffset());
         }
         result.getList().addAll(list);
-        result.setTotal(1000);
+        result.setTotal(1020);
         result.setLimit(result.getList().size());
         result.setHeader("{\"Referer\":\"https://www.bilibili.com\"}");
         log.debug("{}", result);
@@ -1436,12 +1436,19 @@ public class BiliBiliService {
     public MovieList getChannelPlaylist(String tid) {
         String[] parts = tid.split("\\$");
         String id = parts[1];
-        String sort = parts[2];
-        int page = Integer.parseInt(parts[3]);
+        String sort = "new";
+        if (parts.length > 2) {
+            sort = parts[2];
+        }
+        int page = 1;
+        if (parts.length > 3) {
+            page = Integer.parseInt(parts[3]);
+        }
 
         HttpEntity<Void> entity = buildHttpEntity(null);
         String url = String.format(CHANNEL_API, id, sort, channelOffsets.get(page - 1));
         ResponseEntity<BiliBiliChannelResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliChannelResponse.class);
+        log.debug("getChannelPlaylist: url {}", url, response.getBody());
         List<BiliBiliChannelItem> list = new ArrayList<>();
         List<BiliBiliChannelItem> videos = response.getBody().getData().getList();
         list.addAll(videos);
@@ -1458,6 +1465,7 @@ public class BiliBiliService {
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
 
+        log.debug("getChannelPlaylist: {}", result);
         return result;
     }
 
@@ -1530,7 +1538,7 @@ public class BiliBiliService {
             result.getList().add(movieDetail);
         }
 
-        result.setTotal(1000);
+        result.setTotal(1020);
         result.setLimit(result.getList().size());
         log.debug("result: {}", result);
         return result;

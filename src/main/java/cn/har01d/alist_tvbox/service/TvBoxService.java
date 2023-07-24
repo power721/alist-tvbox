@@ -610,8 +610,7 @@ public class TvBoxService {
                 Sort.Order order = parts[1].equals("asc") ? Sort.Order.asc(parts[0]) : Sort.Order.desc(parts[0]);
                 orders.add(order);
             }
-            Sort sort1 = Sort.by(orders);
-            pageable = PageRequest.of(page - 1, size, sort1);
+            pageable = PageRequest.of(page - 1, size, Sort.by(orders));
         } else {
             pageable = PageRequest.of(page - 1, size);
         }
@@ -670,7 +669,7 @@ public class TvBoxService {
                 added.put(name, true);
             } else {
                 String newPath = fixPath(meta.getPath() + (isMediaFile(meta.getPath()) ? "" : "/" + PLAYLIST));
-                movieDetail.setVod_id(site.getId() + "$" + newPath + "$0");
+                movieDetail.setVod_id(site.getId() + "$" + encodeUrl(newPath) + "$0");
             }
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
