@@ -2,7 +2,7 @@
   <div class="search">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="currentUrl+'/vod'+type+token+'?wd=' + keyword" target="_blank">{{currentUrl}}/vod{{type}}{{token}}?wd={{keyword}}</a>
+      <a :href="currentUrl+getPath(type)+token+'?wd=' + keyword" target="_blank">{{currentUrl}}{{getPath(type)}}{{token}}?wd={{keyword}}</a>
     </div>
 
     <div>
@@ -14,6 +14,7 @@
       <el-radio-group v-model="type" class="ml-4">
         <el-radio label="" size="large">网盘模式</el-radio>
         <el-radio label="1" size="large">点播模式</el-radio>
+        <el-radio label="2" size="large">BiliBili</el-radio>
       </el-radio-group>
     </el-form-item>
 
@@ -35,8 +36,18 @@ const keyword = ref('')
 const config = ref('')
 const currentUrl = window.location.origin
 
+const getPath = (type: string) => {
+  if (type == '2') {
+    return '/bilibili'
+  } else if (type == '1') {
+    return '/vod1'
+  } else {
+    return '/vod'
+  }
+}
+
 const search = function () {
-  axios.get('/vod' + type.value + token.value + '?wd=' + keyword.value).then(({data}) => {
+  axios.get(getPath(type.value) + token.value + '?wd=' + keyword.value).then(({data}) => {
     config.value = data
   })
 }

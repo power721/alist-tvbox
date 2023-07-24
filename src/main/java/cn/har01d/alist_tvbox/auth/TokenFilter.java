@@ -1,8 +1,13 @@
 package cn.har01d.alist_tvbox.auth;
 
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StreamUtils;
@@ -13,18 +18,32 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Set;
 
+@Slf4j
 @Component
 public class TokenFilter extends OncePerRequestFilter {
     private final TokenService tokenService;
+    private final String apiKey;
 
-    public TokenFilter(TokenService tokenService) {
+    public TokenFilter(TokenService tokenService, SettingRepository settingRepository) {
         this.tokenService = tokenService;
+        apiKey = settingRepository.findById("api_key").map(Setting::getValue).orElse("");
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         try {
+            if (StringUtils.isNotBlank(apiKey)) {
+                String key = request.getHeader("X-API-KEY");
+                if (apiKey.equals(key)) {
+                    Authentication authentication = new UsernamePasswordAuthenticationToken("client", key, Set.of(new SimpleGrantedAuthority("client")));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+            }
+
             String token = getToken(request);
             if (token != null) {
                 Authentication authentication = buildAuthentication(token);

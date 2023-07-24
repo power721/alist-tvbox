@@ -35,6 +35,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -47,16 +48,14 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
 import java.util.stream.Collectors;
 
@@ -65,6 +64,7 @@ import static cn.har01d.alist_tvbox.util.Constants.ALIST_LOGIN;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_PASSWORD;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_RESTART_REQUIRED;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_USERNAME;
+import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
 import static cn.har01d.alist_tvbox.util.Constants.AUTO_CHECKIN;
 import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_DAYS;
@@ -113,6 +113,9 @@ public class AccountService {
 
     @PostConstruct
     public void setup() {
+        if (!settingRepository.existsById(ALI_SECRET)) {
+            settingRepository.save(new Setting(ALI_SECRET, UUID.randomUUID().toString().replace("-", "")));
+        }
         scheduleAutoCheckinTime();
 
         if (accountRepository.count() == 0) {
@@ -316,7 +319,12 @@ public class AccountService {
         List<Account> accounts = accountRepository.findAll();
         autoCheckin(accounts);
 
-        for (Account account : accounts) {
+        indexService.getRemoteVersion();
+    }
+
+    @Scheduled(cron = "0 30 * * * ?")
+    public void clean() {
+        for (Account account : accountRepository.findAll()) {
             try {
                 Map<Object, Object> response = refreshTokens(account);
                 if (account.isClean()) {
@@ -326,8 +334,6 @@ public class AccountService {
                 log.warn("", e);
             }
         }
-
-        indexService.getRemoteVersion();
     }
 
     public void autoCheckin(List<Account> accounts) {
@@ -642,7 +648,7 @@ public class AccountService {
         if (checkinTime != null) {
             LocalDate time = checkinTime.atZone(ZoneId.of(ZONE_ID)).toLocalDate();
             if (LocalDate.now().isEqual(time)) {
-                throw new BadRequestException("今日已签到");
+                throw new BadRequestException(account.getNickname() + " 今日已签到");
             }
         }
     }
@@ -946,7 +952,7 @@ public class AccountService {
         Instant now = Instant.now();
         Map<String, AliFileItem> map = new HashMap<>();
         AliBatchRequest body = new AliBatchRequest();
-        int hours = settingRepository.findById("file_expire_hour").map(Setting::getValue).map(Integer::parseInt).orElse(24);
+        int hours = settingRepository.findById("file_expire_hour").map(Setting::getValue).map(Integer::parseInt).orElse(6);
         hours = hours > 0 ? hours : 1;
         log.info("expire time: {} hours", hours);
         for (AliFileItem file : files) {
@@ -970,8 +976,19 @@ public class AccountService {
             if (item.getStatus() == 204) {
                 count++;
             }
-            log.info("删除文件'{}'{}, 创建于{}, 文件大小：{}", file.getName(), item.getStatus() == 204 ? "成功" : "失败", file.getCreatedAt(), Utils.byte2size(file.getSize()));
+            LocalDateTime time = file.getCreatedAt().atZone(ZoneId.of(ZONE_ID)).toLocalDateTime();
+            log.info("删除文件'{}'{}, 创建于{}, 文件大小：{}", file.getName(), item.getStatus() == 204 ? "成功" : "失败", time, Utils.byte2size(file.getSize()));
         }
         return count;
+    }
+
+    public String getAliRefreshToken(String id) {
+        String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
+        if (aliSecret.equals(id)) {
+            return accountRepository.getFirstByMasterTrue()
+                    .map(Account::getRefreshToken)
+                    .orElseThrow(NotFoundException::new);
+        }
+        return null;
     }
 }

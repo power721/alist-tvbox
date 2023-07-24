@@ -11,3 +11,7 @@ span.success {
 span.error {
     color: #f56c6c;
 }
+
+.el-table .warning-row {
+    --el-table-tr-bg-color: var(--el-color-warning-light-9);
+}

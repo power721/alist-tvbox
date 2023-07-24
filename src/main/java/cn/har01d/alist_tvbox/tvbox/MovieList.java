@@ -11,5 +11,6 @@ public class MovieList {
     private int pagecount = 1;
     private int limit = 100;
     private int total;
+    private String header;
     private List<MovieDetail> list = new ArrayList<>();
 }

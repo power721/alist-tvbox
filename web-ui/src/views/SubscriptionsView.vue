@@ -22,6 +22,13 @@
             }}/{{ scope.row.id }}</a>
         </template>
       </el-table-column>
+      <el-table-column prop="url" label="聚合地址" sortable>
+        <template #default="scope">
+          <a :href="currentUrl+'/repo'+token+'/'+scope.row.id" target="_blank">{{ currentUrl }}/repo{{
+              token
+            }}/{{ scope.row.id }}</a>
+        </template>
+      </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)" v-if="scope.row.id">编辑
@@ -41,6 +48,9 @@
         </el-form-item>
         <el-form-item label="配置URL" label-width="140">
           <el-input v-model="form.url" autocomplete="off" placeholder="支持多个，逗号分割"/>
+        </el-form-item>
+        <el-form-item label="排序字段" label-width="140">
+          <el-input v-model="form.sort" autocomplete="off" placeholder="留空保持默认排序"/>
         </el-form-item>
         <el-form-item label="定制" label-width="140">
           <el-input v-model="form.override" type="textarea" rows="15"/>
@@ -102,6 +112,7 @@ const form = ref({
   id: 0,
   name: '',
   url: '',
+  sort: '',
   override: ''
 })
 
@@ -112,6 +123,7 @@ const handleAdd = () => {
     id: 0,
     name: '',
     url: '',
+    sort: '',
     override: ''
   }
   formVisible.value = true
@@ -124,6 +136,7 @@ const handleEdit = (data: any) => {
     id: data.id,
     name: data.name,
     url: data.url,
+    sort: data.sort,
     override: data.override
   }
   formVisible.value = true

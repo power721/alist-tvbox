@@ -64,6 +64,7 @@
                 active-text="开启"
                 inactive-text="关闭"
               />
+              <span class="hint">建议外网开启</span>
             </el-form-item>
             <el-form-item prop="token" label="安全Token" v-if="form.enabledToken">
               <el-input v-model="form.token" type="password" show-password/>
@@ -107,7 +108,7 @@
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
           <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
             最新版本：{{ appRemoteVersion }}，请重新运行安装脚本，升级应用。
-            <div class="changelog" v-if="changelog">更新日志： {{changelog}}</div>
+            <div class="changelog" v-if="changelog">更新日志： {{ changelog }}</div>
           </div>
         </el-card>
 
@@ -152,6 +153,11 @@
         <el-form-item>
           <el-button type="primary" @click="updateOpenTokenUrl">更新</el-button>
         </el-form-item>
+        <el-form-item label="阿里Token地址">
+          <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
+            {{currentUrl + '/ali/token/' + aliSecret}}
+          </a>
+        </el-form-item>
         <el-form-item label="小雅外网地址">
           <el-input v-model="dockerAddress"/>
         </el-form-item>
@@ -181,6 +187,7 @@ import {store} from "@/services/store";
 import router from "@/router";
 
 let intervalId = 0
+const currentUrl = window.location.origin
 const percentage = ref<number>(0)
 const duration = computed(() => Math.floor(percentage.value / 10))
 
@@ -193,7 +200,6 @@ const increase = () => {
 
 const aListStarted = ref(false)
 const aListRestart = ref(false)
-const mergeSiteSource = ref(false)
 const mixSiteSource = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
@@ -207,10 +213,11 @@ const indexRemoteVersion = ref('')
 const movieVersion = ref(0)
 const movieRemoteVersion = ref(0)
 const cachedMovieVersion = ref(0)
-const fileExpireHour = ref(24)
+const fileExpireHour = ref(6)
 const aListStartTime = ref('')
 const openTokenUrl = ref('')
 const dockerAddress = ref('')
+const aliSecret = ref('')
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const login = ref({
   username: '',
@@ -241,10 +248,6 @@ const updateToken = () => {
   }
 }
 
-const goIndex = () => {
-  router.push('/index')
-}
-
 const updateOpenTokenUrl = () => {
   axios.post('/open-token-url', {url: openTokenUrl.value}).then(() => {
     ElMessage.success('更新成功')
@@ -253,12 +256,6 @@ const updateOpenTokenUrl = () => {
 
 const updateDockerAddress = () => {
   axios.post('/settings', {name: 'docker_address', value: dockerAddress.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateMerge = () => {
-  axios.post('/settings', {name: 'merge_site_source', value: mergeSiteSource.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -323,17 +320,17 @@ onMounted(() => {
       form.value.enabledToken = !!data.token
       scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
       aListStartTime.value = data.alist_start_time
-      fileExpireHour.value = +data.file_expire_hour || 24
+      fileExpireHour.value = +data.file_expire_hour || 6
       movieVersion.value = data.movie_version
       indexVersion.value = data.index_version
       dockerVersion.value = data.docker_version
       appVersion.value = data.app_version
       openTokenUrl.value = data.open_token_url
       dockerAddress.value = data.docker_address
+      aliSecret.value = data.ali_secret
       autoCheckin.value = data.auto_checkin === 'true'
       aListRestart.value = data.alist_restart_required === 'true'
-      mergeSiteSource.value = data.merge_site_source === 'true'
-      mixSiteSource.value = data.mix_site_source === 'true'
+      mixSiteSource.value = data.mix_site_source !== 'false'
       login.value.username = data.alist_username
       login.value.password = data.alist_password
       login.value.enabled = data.alist_login === 'true'
@@ -347,10 +344,10 @@ onMounted(() => {
       }
     })
     axios.get('/versions').then(({data}) => {
-      movieRemoteVersion.value = +data.movie
-      cachedMovieVersion.value = +data.cachedMovie
+      movieRemoteVersion.value = data.movie
+      cachedMovieVersion.value = data.cachedMovie
       indexRemoteVersion.value = data.index
-      appRemoteVersion.value = +data.app
+      appRemoteVersion.value = data.app
       changelog.value = data.changelog
     })
   } else {

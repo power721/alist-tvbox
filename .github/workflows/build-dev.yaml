@@ -1,0 +1,139 @@
+name: 'release dev docker'
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'The git branch to build.'
+        required: true
+        default: 'master'
+      tag:
+        description: 'The docker tag to build.'
+        required: true
+        default: 'latest'
+      release:
+        description: 'Release the app.'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: show info
+        run: |
+          echo "git branch: ${{ inputs.branch }}"
+          echo "docker tag: ${{ inputs.tag }}"
+          echo "release: ${{ inputs.release }}"
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.branch }}
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.16.x
+          cache: npm
+          cache-dependency-path: ./web-ui
+      - name: Install npm
+        working-directory: ./web-ui
+        run: npm ci
+      - name: Build web UI
+        working-directory: ./web-ui
+        run: npm run build
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'corretto'
+          cache: 'maven'
+      - name: Build with Maven
+        run: mvn -B package --file pom.xml
+      - name: Extract Spring Boot layers
+        working-directory: ./target
+        run: java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Set APP version
+        run: |
+          mkdir data
+          export TZ=Asia/Shanghai
+          num1=$(date +%Y)
+          num2=$(date +%j)
+          sum=$((($num1 - 2023) * 366 + $num2))
+          echo $sum.$(date +%H%M) > data/version
+          echo ${{ github.event.head_commit.message }} >> data/version
+          cp data/version data/app_version
+          cat data/version
+      - name: Build docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-xiaoya
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ inputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - if: ${{ inputs.release }}
+        name: Build host mode docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-host
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:hostmode
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Send version file
+        if: ${{ env.ssh_host != '' && inputs.release }}
+        env:
+          ssh_host: ${{ secrets.SSH_HOST }}
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: 22
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "data/app_version,config/update_new.sh,config/update_xiaoya.sh,config/update_hostmode.sh"
+          strip_components: 1
+          target: /var/www/alist/
+      - name: Download data file
+        run: |
+          wget https://d.har01d.cn/data.zip -O data.zip
+          unzip -q -o data.zip
+          mv data/data.sql src/main/resources/
+      - name: Build standalone with Maven
+        run: mvn -B package --file pom.xml
+      - name: Build standalone docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ inputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - if: ${{ inputs.release }}
+        name: send telegram message
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.CHANNEL_ID }}
+          token: ${{ secrets.BOT_TOKEN }}
+          message: |
+            ${{ github.actor }} created commit:
+            Commit message: ${{ github.event.commits[0].message }}
+
+            Repository: ${{ github.repository }}
+
+            See changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}

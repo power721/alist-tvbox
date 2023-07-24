@@ -33,20 +33,7 @@ username: admin
 password: admin
 
 # TvBox Config
-```json
-{
-  "sites": [
-    {"key":"Alist","name":"AList","type":1,"api":"http://ip:4567/vod","searchable":1,"quickSearch":1,"filterable":1}
-  ],
-  "rules": [
-    {"host":"pdsapi.aliyundrive.com","rule":["/redirect"]},
-    {"host":"*","rule":["http((?!http).){12,}?\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a|ts)\\?.*"]},
-    {"host":"*","rule":["http((?!http).){12,}\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a|ts)"]}
-  ]
-}
-```
-
-Or use this config url `http://ip:4567/sub/1`.
+Use this config url `http://ip:4567/sub/0`.
 
 ### Customize
 Backed URL support multiple values, use comma as separator.

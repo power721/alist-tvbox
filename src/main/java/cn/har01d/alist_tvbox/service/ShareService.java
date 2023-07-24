@@ -2,16 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.ShareInfo;
-import cn.har01d.alist_tvbox.entity.AListAlias;
-import cn.har01d.alist_tvbox.entity.AListAliasRepository;
-import cn.har01d.alist_tvbox.entity.Account;
-import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.PikPakAccount;
-import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.Share;
-import cn.har01d.alist_tvbox.entity.ShareRepository;
+import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -142,11 +133,13 @@ public class ShareService {
 
     private void loadOpenTokenUrl() {
         try {
+            String url = null;
             try {
                 Path file = Paths.get("/data/open_token_url.txt");
                 if (Files.exists(file)) {
-                    settingRepository.save(new Setting(OPEN_TOKEN_URL, Files.readString(file).trim()));
-                    return;
+                    url = Files.readString(file).trim();
+                    log.debug("loadOpenTokenUrl {}", url);
+                    settingRepository.save(new Setting(OPEN_TOKEN_URL, url));
                 }
             } catch (Exception e) {
                 log.warn("", e);
@@ -156,7 +149,13 @@ public class ShareService {
             if (Files.exists(path)) {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);
-                settingRepository.save(new Setting(OPEN_TOKEN_URL, (String) json.get("opentoken_auth_url")));
+                if (url != null) {
+                    json.put("opentoken_auth_url", url);
+                    text = objectMapper.writeValueAsString(json);
+                    Files.writeString(path, text);
+                } else {
+                    settingRepository.save(new Setting(OPEN_TOKEN_URL, (String) json.get("opentoken_auth_url")));
+                }
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -180,9 +179,7 @@ public class ShareService {
 
         try {
             Path file = Paths.get("/data/open_token_url.txt");
-            if (Files.exists(file)) {
-                Files.writeString(file, url);
-            }
+            Files.writeString(file, url);
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -197,13 +194,15 @@ public class ShareService {
                 List<String> lines = Files.readAllLines(path);
                 for (String line : lines) {
                     String[] parts = line.trim().split("\\s+");
-                    if (parts.length == 3) {
+                    if (parts.length > 1) {
                         try {
                             Share share = new Share();
                             share.setId(shareId++);
                             share.setPath(parts[0]);
                             share.setShareId(parts[1]);
-                            share.setFolderId(parts[2]);
+                            if (parts.length > 2) {
+                                share.setFolderId(parts[2]);
+                            }
                             share.setType(0);
                             list.add(share);
                         } catch (Exception e) {
@@ -229,13 +228,17 @@ public class ShareService {
                 List<String> lines = Files.readAllLines(path);
                 for (String line : lines) {
                     String[] parts = line.trim().split("\\s+");
-                    if (parts.length == 3) {
+                    if (parts.length > 1) {
                         try {
                             Share share = new Share();
                             share.setId(shareId++);
                             share.setPath(parts[0]);
                             share.setShareId(parts[1]);
-                            share.setFolderId(parts[2]);
+                            if (parts.length > 2) {
+                                share.setFolderId(parts[2]);
+                            } else {
+                                share.setFolderId("");
+                            }
                             share.setType(1);
                             list.add(share);
                         } catch (Exception e) {
@@ -258,13 +261,17 @@ public class ShareService {
             while (reader.ready()) {
                 String line = reader.readLine();
                 String[] parts = line.trim().split("\\s+");
-                if (parts.length == 3) {
+                if (parts.length > 1) {
                     try {
                         Share share = new Share();
                         share.setId(shareId);
                         share.setPath(parts[0]);
                         share.setShareId(parts[1]);
-                        share.setFolderId(parts[2]);
+                        if (parts.length > 2) {
+                            share.setFolderId(parts[2]);
+                        } else if (share.getType() == 1) {
+                            share.setFolderId("");
+                        }
                         share.setType(type);
                         if (shareRepository.existsByPath(share.getPath())) {
                             continue;
