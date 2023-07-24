@@ -49,5 +49,5 @@ if [ -f /data/cmd.sql ]; then
   rm -f /data/cmd.sql
 fi
 
-MEM_OPT="-Xmx256M"
+MEM_OPT="-Xmx512M"
 java "$MEM_OPT" -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication "$@"

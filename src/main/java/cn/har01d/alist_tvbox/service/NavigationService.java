@@ -26,20 +26,23 @@ public class NavigationService {
         if (navigationRepository.count() == 0) {
             loadBiliBiliCategory();
         }
-        if (!navigationRepository.existsByValue("fav$0")) {
-            navigationRepository.save(new Navigation("收藏夹", "fav$0", 1, true, true, 9));
-        }
         if (!navigationRepository.existsByValue("feed$0")) {
-            navigationRepository.save(new Navigation("动态", "feed$0", 1, true, true, 8));
+            navigationRepository.save(new Navigation("动态", "feed$0", 1, true, true, 7));
+        }
+        if (!navigationRepository.existsByValue("fav$0")) {
+            navigationRepository.save(new Navigation("收藏夹", "fav$0", 1, true, true, 8));
         }
         if (!navigationRepository.existsByValue("channel$0")) {
-            navigationRepository.save(new Navigation("频道", "channel$0", 1, false, true, 8));
+            navigationRepository.save(new Navigation("频道", "channel$0", 1, false, true, 9));
         }
     }
 
     private void loadBiliBiliCategory() {
         List<Navigation> list = new ArrayList<>();
         int order = 10;
+        list.add(new Navigation("动态", "feed$0", 1, true, true, order++));
+        list.add(new Navigation("收藏夹", "fav$0", 1, true, true, order++));
+        list.add(new Navigation("频道", "channel$0", 1, true, true, order++));
         list.add(new Navigation("历史记录", "history$0", 1, true, true, order++));
         list.add(new Navigation("全站热榜", "0", 1, true, true, order++));
         list.add(new Navigation("电影热榜", "season$2", 1, true, true, order++));
@@ -73,7 +76,7 @@ public class NavigationService {
         list.add(new Navigation("原创", "origin$0", 1, false, true, order++));
         list.add(new Navigation("新人", "rookie$0", 1, false, true, order));
 
-        int parent = 10;
+        int parent = 13;
         order = 1;
         list.add(new Navigation("国产动画", "153", 2, true, true, order++, parent));
         list.add(new Navigation("国产原创", "168", 2, true, true, order++, parent));
