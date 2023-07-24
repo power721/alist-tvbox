@@ -578,9 +578,9 @@ public class TvBoxService {
         Site site = getSite(tid);
         String[] parts = tid.split("\\$");
         String path = parts[1];
-        if (path.contains(PLAYLIST)) {
-            return getPlaylist(site, path);
-        }
+//        if (path.contains(PLAYLIST)) {
+//            return getPlaylist(site, path);
+//        }
 
         List<MovieDetail> files = new ArrayList<>();
         MovieList result = new MovieList();

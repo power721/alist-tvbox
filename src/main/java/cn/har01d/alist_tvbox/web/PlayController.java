@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.URLDecoder;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -35,18 +35,18 @@ public class PlayController {
     }
 
     @GetMapping
-    public Object play(Integer site, String path, String id, String bvid, String type, boolean dash, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        return play("", site, path, id, bvid, type, dash, request, response);
+    public Object play(Integer site, String path, String id, String bvid, String type, boolean dash, HttpServletRequest request) throws IOException {
+        return play("", site, path, id, bvid, type, dash, request);
     }
 
     @GetMapping("/{token}")
-    public Object play(@PathVariable String token, Integer site, String path, String id, String bvid, String type, boolean dash, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public Object play(@PathVariable String token, Integer site, String path, String id, String bvid, String type, boolean dash, HttpServletRequest request) throws IOException {
         if (!subscriptionService.getToken().equals(token)) {
             throw new BadRequestException();
         }
 
         String client = request.getHeader("X-CLIENT");
-        log.debug("{} {} {} {}", request.getMethod(), request.getRequestURI(), request.getQueryString(), client);
+        log.debug("{} {} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()), client);
         log.debug("get play url - site: {}  path: {}  id: {}  bvid: {}  type: ", site, path, id, bvid, type);
 
         if (StringUtils.isNotBlank(bvid)) {
@@ -80,5 +80,17 @@ public class PlayController {
         result.put("url", url);
 
         return result;
+    }
+
+    private String decodeUrl(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        try {
+            return URLDecoder.decode(text, "UTF-8");
+        } catch (Exception e) {
+            return text;
+        }
     }
 }
