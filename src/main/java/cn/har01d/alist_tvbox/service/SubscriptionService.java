@@ -190,7 +190,7 @@ public class SubscriptionService {
         removeBlacklist(config);
 
         addSite(config);
-        addRules(config);
+//        addRules(config);
 
         return config;
     }
@@ -429,21 +429,25 @@ public class SubscriptionService {
     }
 
     private void addSite(Map<String, Object> config) {
-        String key = "Alist";
-        Map<String, Object> site = buildSite(key);
-        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
-        sites.removeIf(item -> key.equals(item.get("key")));
         int id = 0;
-        sites.add(id++, site);
-        log.debug("add AList site: {}", site);
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        try {
+            String key = "Alist";
+            Map<String, Object> site = buildSite("csp_AList", "AList");
+            sites.removeIf(item -> key.equals(item.get("key")));
+            sites.add(id++, site);
+            log.debug("add AList site: {}", site);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
 
         if (appProperties.isXiaoya()) {
             try {
                 for (Site site1 : siteRepository.findAll()) {
                     if (site1.isSearchable() && !site1.isDisabled()) {
-                        site = buildSite2(site1.getName());
+                        Map<String, Object> site = buildSite("csp_XiaoYa", site1.getName());
                         sites.add(id++, site);
-                        log.debug("add AList site: {}", site);
+                        log.debug("add XiaoYa site: {}", site);
                         break;
                     }
                 }
@@ -454,55 +458,27 @@ public class SubscriptionService {
 
         if (settingRepository.existsById(BILIBILI_COOKIE)) {
             try {
-                site = buildSite3();
+                Map<String, Object> site = buildSite("csp_BiliBili", "BiliBili");
                 sites.add(id, site);
-                log.debug("add AList site: {}", site);
+                log.debug("add BiliBili site: {}", site);
             } catch (Exception e) {
                 log.warn("", e);
             }
         }
     }
 
-    private Map<String, Object> buildSite(String key) {
-        Map<String, Object> site = new HashMap<>();
-        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        builder.replacePath("/vod" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
-        site.put("key", key);
-        site.put("name", "AList");
-        site.put("type", 1);
-        site.put("api", builder.build().toUriString());
-        site.put("searchable", 1);
-        site.put("quickSearch", 1);
-        site.put("filterable", 1);
-        return site;
-    }
-
-    private Map<String, Object> buildSite2(String name) {
-        Map<String, Object> site = new HashMap<>();
-        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        builder.replacePath("/vod1" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
-        site.put("key", "AListVod");
-        site.put("name", name);
-        site.put("type", 1);
-        site.put("api", builder.build().toUriString());
-        site.put("searchable", 1);
-        site.put("quickSearch", 1);
-        site.put("filterable", 1);
-        return site;
-    }
-
-    private Map<String, Object> buildSite3() throws IOException {
+    private Map<String, Object> buildSite(String key, String name) throws IOException {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
         builder.replacePath("");
-        site.put("key", "csp_BiliBili");
-        site.put("api", "csp_BiliBili");
-        site.put("name", "BiliBili");
+        site.put("key", key);
+        site.put("api", key);
+        site.put("name", name);
         site.put("type", 3);
         Map<String, String> map = new HashMap<>();
         map.put("api", builder.build().toUriString());
         map.put("apiKey", settingRepository.findById("api_key").map(Setting::getValue).orElse(""));
-        String ext = objectMapper.writeValueAsString(map);
+        String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
         String jar = builder.build().toUriString() + "/spring.jar";
@@ -544,10 +520,10 @@ public class SubscriptionService {
 
         rule = new HashMap<>();
         rule.put("name", "阿里云");
-        rule.put("hosts", List.of("*"));
+        rule.put("hosts", List.of("aliyundrive.net"));
         rule.put("regex", List.of("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*", "http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
 
-        rule.put("host", "*");
+        rule.put("host", "aliyundrive.net");
         rule.put("rule", List.of("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*", "http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
         rules.add(rule);
 

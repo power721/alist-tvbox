@@ -48,10 +48,7 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashMap;
@@ -651,7 +648,7 @@ public class AccountService {
         if (checkinTime != null) {
             LocalDate time = checkinTime.atZone(ZoneId.of(ZONE_ID)).toLocalDate();
             if (LocalDate.now().isEqual(time)) {
-                throw new BadRequestException("今日已签到");
+                throw new BadRequestException(account.getNickname() + " 今日已签到");
             }
         }
     }
@@ -979,7 +976,8 @@ public class AccountService {
             if (item.getStatus() == 204) {
                 count++;
             }
-            log.info("删除文件'{}'{}, 创建于{}, 文件大小：{}", file.getName(), item.getStatus() == 204 ? "成功" : "失败", file.getCreatedAt(), Utils.byte2size(file.getSize()));
+            LocalDateTime time = file.getCreatedAt().atZone(ZoneId.of(ZONE_ID)).toLocalDateTime();
+            log.info("删除文件'{}'{}, 创建于{}, 文件大小：{}", file.getName(), item.getStatus() == 204 ? "成功" : "失败", time, Utils.byte2size(file.getSize()));
         }
         return count;
     }

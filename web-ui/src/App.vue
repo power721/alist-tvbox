@@ -64,6 +64,7 @@ onMounted(() => {
           <el-sub-menu v-if="account.authenticated">
             <template #title>{{ account.username }}</template>
             <el-menu-item index="/user">用户</el-menu-item>
+            <el-menu-item index="/system">系统</el-menu-item>
             <el-menu-item index="/logout" @click="logout">退出</el-menu-item>
           </el-sub-menu>
           <el-menu-item index="/login" v-else>登录</el-menu-item>

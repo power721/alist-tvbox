@@ -29,6 +29,7 @@ export default defineConfig({
       "/checkin": API,
       "/files": API,
       "/sites": API,
+      "/system": API,
       "/shares": API,
       "/resources": API,
       "/subscriptions": API,

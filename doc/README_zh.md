@@ -144,15 +144,18 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 站点名称可以加前缀，通过订阅URL前面加前缀，使用`@`分割。比如：`饭@http://饭太硬.top/tv,菜@https://tvbox.cainisi.cf`
 
 替换功能：
+
+在配置页面->高级设置里面找到阿里Token地址，然后在订阅-定制里面自替换token。
+
 ```json
 {
-"replace": {
-  "http://127.0.0.1:9978/file/tvfan/token.txt": "ATV_ADDRESS/ali/token/9666c3651739488d9eee223344983ffc" 
-},
-"sites-blacklist": ["说明1","说明2", "说明3","说明4","公告", "ext_live_protocol", "cc"],
-"sites": [
- 
-]
+    "replace": {
+      "http://127.0.0.1:9978/file/tvfan/token.txt": "ATV_ADDRESS/ali/token/9666c3651739488d9eee223344983ffc" 
+    },
+    "sites-blacklist": ["说明1","说明2", "说明3","说明4","公告", "ext_live_protocol", "cc"],
+    "sites": [
+     
+    ]
 }
 ```
 

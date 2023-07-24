@@ -1,19 +1,10 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.entity.Account;
-import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.Meta;
-import cn.har01d.alist_tvbox.entity.MetaRepository;
-import cn.har01d.alist_tvbox.entity.Movie;
-import cn.har01d.alist_tvbox.entity.ShareRepository;
-import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.model.FileNameInfo;
-import cn.har01d.alist_tvbox.model.Filter;
-import cn.har01d.alist_tvbox.model.FilterValue;
-import cn.har01d.alist_tvbox.model.FsDetail;
-import cn.har01d.alist_tvbox.model.FsInfo;
-import cn.har01d.alist_tvbox.model.FsResponse;
+import cn.har01d.alist_tvbox.entity.*;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -42,23 +33,14 @@ import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.FILE;
-import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
-import static cn.har01d.alist_tvbox.util.Constants.FOLDER_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
+import static cn.har01d.alist_tvbox.util.Constants.*;
 
 @Slf4j
 @Service
@@ -156,12 +138,6 @@ public class TvBoxService {
                 }
             }
         }
-
-        List<MovieDetail> list = new ArrayList<>();
-        MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id("recommend");
-        list.add(movieDetail);
-        result.setList(list);
 
         result.setTotal(result.getCategories().size());
         result.setLimit(result.getCategories().size());
@@ -602,9 +578,9 @@ public class TvBoxService {
         Site site = getSite(tid);
         String[] parts = tid.split("\\$");
         String path = parts[1];
-        if (path.contains(PLAYLIST)) {
-            return getPlaylist(site, path);
-        }
+//        if (path.contains(PLAYLIST)) {
+//            return getPlaylist(site, path);
+//        }
 
         List<MovieDetail> files = new ArrayList<>();
         MovieList result = new MovieList();
@@ -634,8 +610,7 @@ public class TvBoxService {
                 Sort.Order order = parts[1].equals("asc") ? Sort.Order.asc(parts[0]) : Sort.Order.desc(parts[0]);
                 orders.add(order);
             }
-            Sort sort1 = Sort.by(orders);
-            pageable = PageRequest.of(page - 1, size, sort1);
+            pageable = PageRequest.of(page - 1, size, Sort.by(orders));
         } else {
             pageable = PageRequest.of(page - 1, size);
         }
@@ -656,6 +631,21 @@ public class TvBoxService {
         }
 
         log.debug("{} {} {}", pageable, list, list.getContent().size());
+        Map<String, List<Meta>> map = new LinkedHashMap<>();
+        Map<String, Boolean> added = new HashMap<>();
+        for (Meta meta : list) {
+            Movie movie = meta.getMovie();
+            String name;
+            if (movie == null) {
+                name = getNameFromPath(meta.getPath());
+            } else {
+                name = movie.getName();
+            }
+            List<Meta> metas = map.getOrDefault(name, new ArrayList<>());
+            metas.add(meta);
+            map.put(name, metas);
+        }
+
         for (Meta meta : list) {
             Movie movie = meta.getMovie();
             String name;
@@ -665,13 +655,27 @@ public class TvBoxService {
                 name = movie.getName();
             }
 
-            String newPath = fixPath(meta.getPath() + (isMediaFile(meta.getPath()) ? "" : "/" + PLAYLIST));
+            if (added.containsKey(name)) {
+                log.debug("skip {}: {}", name, meta.getPath());
+                continue;
+            }
+
+            List<Meta> metas = map.get(name);
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site.getId() + "$" + newPath + "$0");
+            log.debug("{} {}", name, metas.size());
+            if (metas.size() > 1) {
+                String ids = metas.stream().map(Meta::getId).map(String::valueOf).collect(Collectors.joining("-"));
+                movieDetail.setVod_id(site.getId() + "$" + ids + "$0");
+                added.put(name, true);
+            } else {
+                String newPath = fixPath(meta.getPath() + (isMediaFile(meta.getPath()) ? "" : "/" + PLAYLIST));
+                movieDetail.setVod_id(site.getId() + "$" + encodeUrl(newPath) + "$0");
+            }
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             setDoubanInfo(movieDetail, movie, false);
             files.add(movieDetail);
+            log.debug("{}", movieDetail);
         }
 
         result.getList().addAll(files);
@@ -736,8 +740,23 @@ public class TvBoxService {
 
     public String getPlayUrl(Integer siteId, String path) {
         Site site = siteService.getById(siteId);
-        log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path);
-        FsDetail fsDetail = aListService.getFile(site, path);
+        FsDetail fsDetail = null;
+        if (isMediaFile(path)) {
+            log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path);
+            fsDetail = aListService.getFile(site, path);
+        } else {
+            FsResponse fsResponse = aListService.listFiles(site, path, 1, 100);
+            for (FsInfo fsInfo : fsResponse.getFiles()) {
+                if (isMediaFormat(fsInfo.getName())) {
+                    fsDetail = aListService.getFile(site, path + "/" + fsInfo.getName());
+                    break;
+                }
+            }
+            if (fsDetail == null) {
+                throw new BadRequestException("找不到文件 " + path);
+            }
+            log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path + "/" + fsDetail.getName());
+        }
         String url = fixHttp(fsDetail.getRawUrl());
         if (url.contains("abnormal.png")) {
             throw new IllegalStateException("阿里云盘账号异常");
@@ -749,6 +768,20 @@ public class TvBoxService {
         return url;
     }
 
+    public String getPlayUrl(Integer siteId, Integer id) {
+        Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
+        log.debug("getPlayUrl: {} {}", siteId, id);
+        return getPlayUrl(siteId, meta.getPath());
+    }
+
+    public String getPlayUrl(Integer siteId, Integer id, String path) {
+        Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
+        log.debug("getPlayUrl: {} {}", siteId, id);
+        return getPlayUrl(siteId, meta.getPath() + path);
+    }
+
+    private static final Pattern ID_PATH = Pattern.compile("(\\d+)(-\\d+)+");
+
     public MovieList getDetail(String tid) {
         Site site = getSite(tid);
         String[] parts = tid.split("\\$");
@@ -757,32 +790,96 @@ public class TvBoxService {
             return getPlaylist(site, path);
         }
 
-        FsDetail fsDetail = aListService.getFile(site, path);
         MovieList result = new MovieList();
-        MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(tid + "$1");
-        movieDetail.setVod_name(fsDetail.getName());
-        movieDetail.setVod_tag(fsDetail.getType() == 1 ? FOLDER : FILE);
-        movieDetail.setVod_time(fsDetail.getModified());
-        movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
-        movieDetail.setVod_play_from(site.getName());
-        movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRawUrl()));
-        movieDetail.setVod_content(site.getName() + ":" + getParent(path));
-        setDoubanInfo(site, movieDetail, getParent(path), true);
-        result.getList().add(movieDetail);
+        if (ID_PATH.matcher(path).matches()) {
+            String[] ids = path.split("\\-");
+            List<Meta> list = metaRepository.findAllById(Arrays.stream(ids).map(Integer::parseInt).collect(Collectors.toList()));
+            Meta meta = list.get(0);
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(tid + "$1");
+            movieDetail.setVod_name(meta.getName());
+            movieDetail.setVod_tag(FILE);
+            movieDetail.setVod_time(String.valueOf(meta.getYear()));
+            movieDetail.setVod_pic(meta.getMovie() == null ? ALIST_PIC : meta.getMovie().getCover());
+            List<String> from = new ArrayList<>();
+            for (int i = 1; i <= list.size(); ++i) {
+                from.add("版本" + i);
+            }
+            movieDetail.setVod_play_from(from.stream().collect(Collectors.joining("$$$")));
+            String playUrl;
+            if (isMediaFile(meta.getPath())) {
+                playUrl = list.stream().map(m -> getNameFromPath(m.getPath()) + "$" + buildPlayUrl(site, m)).collect(Collectors.joining("$$$"));
+            } else {
+                playUrl = list.stream().map(e -> buildPlaylist(site, e.getId(), e.getPath())).collect(Collectors.joining("$$$"));
+            }
+            movieDetail.setVod_play_url(playUrl);
+
+            movieDetail.setVod_content(site.getName() + ":" + getParent(path));
+            setDoubanInfo(movieDetail, meta.getMovie(), true);
+            result.getList().add(movieDetail);
+        } else {
+            FsDetail fsDetail = aListService.getFile(site, path);
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(tid + "$1");
+            movieDetail.setVod_name(fsDetail.getName());
+            movieDetail.setVod_tag(fsDetail.getType() == 1 ? FOLDER : FILE);
+            movieDetail.setVod_time(fsDetail.getModified());
+            movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
+            movieDetail.setVod_play_from(site.getName());
+            movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRawUrl()));
+            movieDetail.setVod_content(site.getName() + ":" + getParent(path));
+            setDoubanInfo(site, movieDetail, getParent(path), true);
+            result.getList().add(movieDetail);
+        }
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         log.debug("detail: {}", result);
         return result;
     }
 
+    private String buildPlaylist(Site site, Integer id, String path) {
+        FsResponse fsResponse = aListService.listFiles(site, path, 1, 0);
+        List<FsInfo> files = fsResponse.getFiles().stream()
+                .filter(e -> isMediaFormat(e.getName()))
+                .collect(Collectors.toList());
+
+        List<String> list = new ArrayList<>();
+
+        if (files.isEmpty()) {
+            List<String> folders = fsResponse.getFiles().stream().map(FsInfo::getName).filter(this::isFolder).collect(Collectors.toList());
+            log.info("load media files from folders: {}", folders);
+            for (String folder : folders) {
+                fsResponse = aListService.listFiles(site, path + "/" + folder, 1, 0);
+                files = fsResponse.getFiles().stream()
+                        .filter(e -> isMediaFormat(e.getName()))
+                        .collect(Collectors.toList());
+                if (appProperties.isSort()) {
+                    files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
+                }
+
+                for (FsInfo fsInfo : files) {
+                    list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, id + "/" + folder + "/" + fsInfo.getName()));
+                }
+            }
+        } else {
+            if (appProperties.isSort()) {
+                files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
+            }
+
+            for (FsInfo fsInfo : files) {
+                list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, id + "/" + fsInfo.getName()));
+            }
+        }
+
+        return String.join("#", list);
+    }
+
     private String buildPlayUrl(Site site, String path) {
-        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        String token = subscriptionService.getToken();
-        builder.replacePath("/play" + (StringUtils.isNotBlank(token) ? "/" + token : ""));
-        builder.queryParam("site", String.valueOf(site.getId()));
-        builder.queryParam("path", encodeUrl(path));
-        return builder.build().toUriString();
+        return encodeUrl(site.getId() + "~~~" + path);
+    }
+
+    private String buildPlayUrl(Site site, Meta meta) {
+        return buildPlayUrl(site, String.valueOf(meta.getId()));
     }
 
     public MovieList getPlaylist(Site site, String path) {
@@ -890,7 +987,7 @@ public class TvBoxService {
             if (movie.getVod_pic() != null && !movie.getVod_pic().isEmpty()) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
                         .replacePath("/images")
-                        .query("url=" + movie.getVod_pic())
+                        .replaceQuery("url=" + movie.getVod_pic())
                         .build()
                         .toUriString();
                 log.debug("cover url: {}", cover);
@@ -906,10 +1003,10 @@ public class TvBoxService {
             if (movie.getCover() != null && !movie.getCover().isEmpty() && !movie.getCover().contains("/images")) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
                         .replacePath("/images")
-                        .query("url=" + movie.getCover())
+                        .replaceQuery("url=" + movie.getCover())
                         .build()
                         .toUriString();
-                log.debug("cover url: {}", cover);
+                log.debug("movie: {} cover url: {}", movie.getId(), cover);
                 movie.setCover(cover);
             }
         } catch (Exception e) {
@@ -1003,4 +1100,5 @@ public class TvBoxService {
             return url;
         }
     }
+
 }
