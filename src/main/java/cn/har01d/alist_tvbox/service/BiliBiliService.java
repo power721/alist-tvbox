@@ -521,17 +521,12 @@ public class BiliBiliService {
         map.put("order_avoided", "true");
         map.put("pn", String.valueOf(page));
 
-        HttpEntity<Void> entity = buildHttpEntity(null);
-        LocalDate now = LocalDate.now();
-        if (keyTime == null || now.getDayOfYear() != keyTime.getDayOfYear()) {
-            Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
-            Map<String, Object> data = (Map<String, Object>) json.get("data");
-            Map<String, Object> wbi = (Map<String, Object>) data.get("wbi_img");
-            imgKey = getKey((String) wbi.get("img_url"));
-            subKey = getKey((String) wbi.get("sub_url"));
-            keyTime = LocalDate.now();
-            log.info("get WBI key: {} {}", imgKey, subKey);
-        }
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
+        headers.put("Accept-Encoding", "gzip, deflate, br");
+        headers.put("Cache-Control", "max-age=0");
+        HttpEntity<Void> entity = buildHttpEntity(null, headers);
+        getKeys(entity);
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpMedia: {}", url);
 
@@ -557,6 +552,19 @@ public class BiliBiliService {
         return result;
     }
 
+    private void getKeys(HttpEntity<Void> entity) {
+        LocalDate now = LocalDate.now();
+        if (keyTime == null || now.getDayOfYear() != keyTime.getDayOfYear()) {
+            Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
+            Map<String, Object> data = (Map<String, Object>) json.get("data");
+            Map<String, Object> wbi = (Map<String, Object>) data.get("wbi_img");
+            imgKey = getKey((String) wbi.get("img_url"));
+            subKey = getKey((String) wbi.get("sub_url"));
+            keyTime = LocalDate.now();
+            log.info("get WBI key: {} {}", imgKey, subKey);
+        }
+    }
+
     public List<BiliBiliInfo> getTopFeed() {
         Map<String, Object> map = new HashMap<>();
         map.put("web_location", "");
@@ -572,16 +580,7 @@ public class BiliBiliService {
         map.put("last_y_num", "5");
 
         HttpEntity<Void> entity = buildHttpEntity(null);
-        LocalDate now = LocalDate.now();
-        if (keyTime == null || now.getDayOfYear() != keyTime.getDayOfYear()) {
-            Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
-            Map<String, Object> data = (Map<String, Object>) json.get("data");
-            Map<String, Object> wbi = (Map<String, Object>) data.get("wbi_img");
-            imgKey = getKey((String) wbi.get("img_url"));
-            subKey = getKey((String) wbi.get("sub_url"));
-            keyTime = LocalDate.now();
-            log.info("get WBI key: {} {}", imgKey, subKey);
-        }
+        getKeys(entity);
         String url = TOP_FEED_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("{}", url);
 
@@ -914,6 +913,14 @@ public class BiliBiliService {
     }
 
     private <T> HttpEntity<T> buildHttpEntity(T data, boolean urlencoded) {
+        return buildHttpEntity(data, urlencoded, new HashMap<>());
+    }
+
+    private <T> HttpEntity<T> buildHttpEntity(T data, Map<String, String> customHeaders) {
+        return buildHttpEntity(data, false, customHeaders);
+    }
+
+    private <T> HttpEntity<T> buildHttpEntity(T data, boolean urlencoded, Map<String, String> customHeaders) {
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.REFERER, "https://api.bilibili.com/");
         headers.add(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
@@ -921,6 +928,9 @@ public class BiliBiliService {
         headers.add(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
         if (urlencoded) {
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        }
+        for (Map.Entry<String, String> entry : customHeaders.entrySet()) {
+            headers.add(entry.getKey(), entry.getValue());
         }
         String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
         if (StringUtils.isNotBlank(cookie)) {
@@ -1613,9 +1623,9 @@ public class BiliBiliService {
 
     private static String fixCover(String cover) {
         String url = fixUrl(cover);
-//        if (url != null && url.contains("hdslb.com/bfs/")) {
-//            return url + "@150h";
-//        }
+        if (url != null && url.endsWith(".jpg")) {
+            url += "@150h";
+        }
         return url;
     }
 

@@ -988,7 +988,7 @@ public class TvBoxService {
             if (movie.getVod_pic() != null && !movie.getVod_pic().isEmpty()) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
                         .replacePath("/images")
-                        .query("url=" + movie.getVod_pic())
+                        .replaceQuery("url=" + movie.getVod_pic())
                         .build()
                         .toUriString();
                 log.debug("cover url: {}", cover);
@@ -1004,10 +1004,10 @@ public class TvBoxService {
             if (movie.getCover() != null && !movie.getCover().isEmpty() && !movie.getCover().contains("/images")) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
                         .replacePath("/images")
-                        .query("url=" + movie.getCover())
+                        .replaceQuery("url=" + movie.getCover())
                         .build()
                         .toUriString();
-                log.debug("cover url: {}", cover);
+                log.debug("movie: {} cover url: {}", movie.getId(), cover);
                 movie.setCover(cover);
             }
         } catch (Exception e) {
