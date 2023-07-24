@@ -66,7 +66,6 @@ public class BiliBiliService {
     private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
     private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
     private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&platform=html5&high_quality=1"; // mp4
-
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
     private static final String POPULAR_API = "https://api.bilibili.com/x/web-interface/popular?ps=30&pn=";
     private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?search_type=video&page_size=50&keyword=%s&order=%s&duration=%s&page=%d";
@@ -229,22 +228,20 @@ public class BiliBiliService {
         String url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=" + key;
         log.debug("{}", url);
         ResponseEntity<BiliBiliLoginResponse> response = restTemplate.getForEntity(url, BiliBiliLoginResponse.class);
-        if (response != null && response.getBody() != null && response.getBody().getData() != null) {
+        if (response.getBody() != null && response.getBody().getData() != null) {
             QrCodeResult result = response.getBody().getData();
             log.debug("checkLogin: {}", result);
             int code = result.getCode();
-            switch (code) {
-                case 0:
-                    if (StringUtils.isNotBlank(result.getRefresh_token())) {
-                        log.info("扫码登录成功");
-                        String cookie = response.getHeaders().get("set-cookie").stream().map(e -> e.split(";")[0]).collect(Collectors.joining(";"));
-                        settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
-                        return code;
-                    }
-                    break;
-                case 86038:
-                    log.warn(result.getMessage());
+            if (code == 0) {
+                if (StringUtils.isNotBlank(result.getRefresh_token())) {
+                    log.info("扫码登录成功");
+                    String cookie = response.getHeaders().get("set-cookie").stream().map(e -> e.split(";")[0]).collect(Collectors.joining(";"));
+                    settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
                     return code;
+                }
+            } else if (code == 86038) {
+                log.warn(result.getMessage());
+                return code;
             }
         }
         return 1;
@@ -337,10 +334,7 @@ public class BiliBiliService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setType_name(info.getBadge());
         movieDetail.setVod_pic(fixCover(info.getCover()));
-        //movieDetail.setVod_play_from(BILI_BILI);
-        //movieDetail.setVod_play_url(buildPlayUrl(movieDetail.getVod_id()));
         movieDetail.setVod_remarks(info.getRating());
-        //movieDetail.setVod_content(info.getDesc() + "; " + info.getStat().getView() + "播放; " + info.getStat().getFollow() + "关注");
         return movieDetail;
     }
 
@@ -351,10 +345,7 @@ public class BiliBiliService {
         movieDetail.setVod_name(info.getTitle());
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(fixCover(info.getPic()));
-        //movieDetail.setVod_play_from(BILI_BILI);
-        //movieDetail.setVod_play_url(buildPlayUrl(id));
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
-        //movieDetail.setVod_content(info.getDescription());
         return movieDetail;
     }
 
@@ -1058,12 +1049,6 @@ public class BiliBiliService {
         } catch (Exception e) {
             log.warn("", e);
         }
-//        Sub sub = new Sub();
-//        sub.setName("弹幕");
-//        sub.setLang("danmaku");
-//        sub.setFormat("application/x-subrip");
-//        sub.setUrl(fixSubtitleUrl("https://comment.bilibili.com/" + cid + ".xml"));
-//        list.add(sub);
         log.debug("subtitles: {}", list);
         return list;
     }
@@ -1071,10 +1056,6 @@ public class BiliBiliService {
     public String getSubtitle(String url) {
         StringBuilder text = new StringBuilder();
         try {
-//            if (url.startsWith("https://comment.bilibili.com/")) {
-//                String xml = restTemplate.getForObject(url, String.class);
-//
-//            }
             HttpEntity<Void> entity = buildHttpEntity(null);
             ResponseEntity<SubtitleDataResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, SubtitleDataResponse.class);
             log.trace("subtitle: {}", response.getBody());
@@ -1600,14 +1581,9 @@ public class BiliBiliService {
         movieDetail.setVod_id(info.getBvid());
         movieDetail.setVod_name(fixTitle(info.getTitle()));
         movieDetail.setVod_tag(FILE);
-        //movieDetail.setVod_director(info.getAuthor());
         movieDetail.setType_name(info.getTypename());
-        //movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
         movieDetail.setVod_pic(fixCover(info.getPic()));
-        //movieDetail.setVod_play_from(BILI_BILI);
-        //movieDetail.setVod_play_url(buildPlayUrl(info.getBvid()));
         movieDetail.setVod_remarks(info.getDuration());
-        //movieDetail.setVod_content(info.getDescription());
         return movieDetail;
     }
 
