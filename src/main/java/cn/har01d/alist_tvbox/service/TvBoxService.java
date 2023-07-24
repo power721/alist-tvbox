@@ -854,8 +854,11 @@ public class TvBoxService {
                     files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
                 }
 
-                for (FsInfo fsInfo : files) {
-                    list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, id + "/" + folder + "/" + fsInfo.getName()));
+                List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
+                String prefix = getCommonPrefix(fileNames);
+                String suffix = getCommonSuffix(fileNames);
+                for (String name : fileNames) {
+                    list.add(getName(name.replace(prefix, "").replace(suffix, "")) + "$" + buildPlayUrl(site, id + "/" + folder + "/" + name));
                 }
             }
         } else {
@@ -863,8 +866,11 @@ public class TvBoxService {
                 files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
             }
 
-            for (FsInfo fsInfo : files) {
-                list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, id + "/" + fsInfo.getName()));
+            List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
+            String prefix = getCommonPrefix(fileNames);
+            String suffix = getCommonSuffix(fileNames);
+            for (String name : fileNames) {
+                list.add(getName(name.replace(prefix, "").replace(suffix, "")) + "$" + buildPlayUrl(site, id + "/" + name));
             }
         }
 
@@ -1150,7 +1156,11 @@ public class TvBoxService {
         int n = names.size();
         if (n == 1) return names.get(0);
         names = names.stream().map(e -> new StringBuilder(e).reverse().toString()).collect(Collectors.toList());
-        return new StringBuilder(getCommonPrefix(names)).reverse().toString();
+        String text = new StringBuilder(getCommonPrefix(names)).reverse().toString();
+        if (text.startsWith("集")) {
+            return text.substring(1);
+        }
+        return text;
     }
 
     private String fixPath(String path) {
