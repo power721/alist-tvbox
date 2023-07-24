@@ -57,14 +57,14 @@ public class BiliBiliService {
     private static final int DOLBY_VIDEO = 512;
     private static final int VIDEO_8K = 1024;
     private static final int VIDEO_AV1 = 2048;
-    private static final int FN_VAL = VIDEO_DASH + VIDEO_HDR + VIDEO_4K + DOLBY_AUDIO + VIDEO_8K + VIDEO_AV1;
+    private static final int FN_VAL = VIDEO_DASH + VIDEO_HDR + VIDEO_4K + DOLBY_AUDIO + VIDEO_AV1;
     private static final String INFO_API = "https://api.bilibili.com/x/web-interface/view?bvid=";
     private static final String HOT_API = "https://api.bilibili.com/x/web-interface/ranking/v2?type=%s&rid=%d";
     private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s&view_at=%s";
-    private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=" + FN_VAL; //dash
-    private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=" + FN_VAL; //dash
+    private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
+    private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
     private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&platform=html5&high_quality=1"; // mp4
 
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
@@ -964,23 +964,36 @@ public class BiliBiliService {
         String aid;
         String cid;
         String[] parts = bvid.split("-");
+        int fnval = 16;
         Map<String, Object> result = new HashMap<>();
+        if (dash) {
+            fnval = settingRepository.findById("bilibili_fnval").map(Setting::getValue).map(Integer::parseInt).orElse(FN_VAL);
+        }
         if (parts.length > 2) {
-            String api = dash ? PLAY_API1 : PLAY_API2;
             aid = parts[0];
             cid = parts[1];
-            url = String.format(api, aid, cid, parts[2]);
+            if (dash) {
+                url = String.format(PLAY_API1, aid, cid, parts[2], fnval);
+            } else {
+                url = String.format(PLAY_API2, aid, cid, parts[2]);
+            }
         } else if (parts.length == 2) {
-            String api = dash ? PLAY_API : PLAY_API2;
             aid = parts[0];
             cid = parts[1];
-            url = String.format(api, aid, cid);
+            if (dash) {
+                url = String.format(PLAY_API, aid, cid, fnval);
+            } else {
+                url = String.format(PLAY_API2, aid, cid);
+            }
         } else {
             BiliBiliInfo info = getInfo(bvid);
-            String api = dash ? PLAY_API : PLAY_API2;
             aid = String.valueOf(info.getAid());
             cid = String.valueOf(info.getCid());
-            url = String.format(api, aid, cid);
+            if (dash) {
+                url = String.format(PLAY_API, aid, cid, fnval);
+            } else {
+                url = String.format(PLAY_API2, aid, cid);
+            }
         }
         log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
 

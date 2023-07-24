@@ -4,7 +4,9 @@
       <div v-if="userInfo">
         <span v-if="userInfo.uname">用户名：{{ userInfo.uname }}</span>
         <span class="hint">登录状态：{{ userInfo.isLogin ? '已登录' : '未登录' }}</span>
-        <span v-if="userInfo.uname" class="hint">会员状态：{{ userInfo.vipType ? userInfo.vip_label.text : '无会员' }}</span>
+        <span v-if="userInfo.uname" class="hint">会员状态：{{
+            userInfo.vipType ? userInfo.vip_label.text : '无会员'
+          }}</span>
       </div>
       <div class="">
         <el-button type="primary" @click="scanLogin">登录</el-button>
@@ -84,7 +86,7 @@
             <!--            <el-radio :label="2" size="large">二级分类</el-radio>-->
             <el-radio :label="3" size="large">频道</el-radio>
             <el-radio :label="4" size="large">搜索</el-radio>
-<!--            <el-radio :label="5" size="large">UP主</el-radio>-->
+            <!--            <el-radio :label="5" size="large">UP主</el-radio>-->
           </el-radio-group>
         </el-form-item>
         <el-form-item label="顺序" label-width="140">
@@ -123,7 +125,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="settingVisible" title="账号设置" width="40%">
+    <el-dialog v-model="settingVisible" title="B站设置" width="40%">
       <el-form label-width="150px">
         <el-form-item label="登录Cookie" label-width="120">
           <el-input v-model="bilibiliCookie" type="textarea" :rows="5"/>
@@ -148,6 +150,17 @@
             inactive-text="关闭"
             @change="updateSearchable"
           />
+        </el-form-item>
+        <el-form-item label="视频格式">
+          <el-checkbox v-model="checks[0]" label="HDR" size="large"/>
+          <el-checkbox v-model="checks[1]" label="4K" size="large"/>
+          <el-checkbox v-model="checks[2]" label="杜比音频" size="large"/>
+          <el-checkbox v-model="checks[3]" label="杜比视界" size="large"/>
+          <el-checkbox v-model="checks[4]" label="8K" size="large"/>
+          <el-checkbox v-model="checks[5]" label="AV1编码" size="large"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateFnval">更新</el-button>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -204,6 +217,7 @@ const tableRowClassName = ({row}: {
 const base64QrCode = ref('')
 const qrcodeKey = ref('')
 const bilibiliCookie = ref('')
+const checks = ref<boolean[]>([true, true, true, false, true, true])
 const userInfo = ref<any>({})
 const heartbeat = ref(false)
 const searchable = ref(false)
@@ -384,6 +398,20 @@ const updateSearchable = () => {
   })
 }
 
+const updateFnval = () => {
+  let val = 16
+  let num = 64
+  for (let flag of checks.value) {
+    if (flag) {
+      val += num
+    }
+    num *= 2
+  }
+  axios.post('/settings', {name: 'bilibili_fnval', value: val + ''}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const scanLogin = () => {
   base64QrCode.value = ''
   qrcodeKey.value = ''
@@ -465,6 +493,20 @@ const getBilibiliCookie = () => {
   })
 }
 
+const getFnval = () => {
+  axios.get('/settings/bilibili_fnval').then(({data}) => {
+    let val = +data.value
+    if (!val) {
+      val = 2512
+    }
+    let num = 64
+    for (let i in checks.value) {
+      checks.value[i] = (val & num) != 0
+      num *= 2
+    }
+  })
+}
+
 const load = () => {
   return axios.get('/nav').then(({data}) => {
     list.value = data
@@ -485,6 +527,7 @@ onMounted(() => {
   getHeartbeat()
   getSearchable()
   getBilibiliCookie()
+  getFnval()
   load().then(() => {
     rowDrop()
   })
