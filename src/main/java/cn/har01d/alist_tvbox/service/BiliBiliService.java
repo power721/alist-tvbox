@@ -191,7 +191,11 @@ public class BiliBiliService {
         Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
         Map<String, Object> data = (Map<String, Object>) json.get("data");
         if (data != null) {
-            mid = (Integer) data.get("mid");
+            if (data.get("mid") instanceof Long) {
+                mid = ((Long) data.get("mid")).intValue();
+            } else {
+                mid = (Integer) data.get("mid");
+            }
             log.info("user: {} {} isLogin: {} vip: {}", data.get("uname"), data.get("mid"), data.get("isLogin"), data.get("vipType"));
         }
         return data;
