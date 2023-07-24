@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.net.URLDecoder;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -73,7 +74,10 @@ public class PlayController {
             url = tvBoxService.getPlayUrl(site, Integer.parseInt(path));
         }
 
-        url = parseService.parse(url);
+        if (url.contains("/redirect")) {
+            url = parseService.parse(url);
+        }
+
         Map<String, Object> result = new HashMap<>();
         result.put("parse", 0);
         result.put("playUrl", "");

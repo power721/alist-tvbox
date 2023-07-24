@@ -27,6 +27,10 @@ server:
 app:
   sort: true
   secretKey: "MjdiOGMwYTUtZWQ4OS00NWNiLWI1ZmQtY2FlNmFmOWJlNmQ3"
+  subtitles:
+    - srt
+    - ass
+    - vtt
   formats:
     - dff
     - dsf

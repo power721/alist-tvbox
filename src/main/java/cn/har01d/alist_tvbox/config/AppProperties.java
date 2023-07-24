@@ -22,5 +22,6 @@ public class AppProperties {
     private int maxSearchResult = 100;
     private String secretKey;
     private Set<String> formats;
+    private Set<String> subtitles;
     private List<Site> sites;
 }

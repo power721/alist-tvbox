@@ -54,7 +54,6 @@ public class TvBoxService {
     private final SiteService siteService;
     private final AppProperties appProperties;
     private final DoubanService doubanService;
-    private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
@@ -93,7 +92,6 @@ public class TvBoxService {
                         SiteService siteService,
                         AppProperties appProperties,
                         DoubanService doubanService,
-                        SubscriptionService subscriptionService,
                         ObjectMapper objectMapper) {
         this.accountRepository = accountRepository;
         this.shareRepository = shareRepository;
@@ -103,7 +101,6 @@ public class TvBoxService {
         this.siteService = siteService;
         this.appProperties = appProperties;
         this.doubanService = doubanService;
-        this.subscriptionService = subscriptionService;
         this.objectMapper = objectMapper;
     }
 
@@ -902,7 +899,7 @@ public class TvBoxService {
         List<FsInfo> files = fsResponse.getFiles().stream()
                 .filter(e -> isMediaFormat(e.getName()))
                 .collect(Collectors.toList());
-
+        Map<String, String> map = new HashMap<>();
         List<String> list = new ArrayList<>();
 
         if (files.isEmpty()) {
@@ -913,25 +910,69 @@ public class TvBoxService {
                 files = fsResponse.getFiles().stream()
                         .filter(e -> isMediaFormat(e.getName()))
                         .collect(Collectors.toList());
+//                List<String> subtitles = fsResponse.getFiles().stream()
+//                        .map(FsInfo::getName)
+//                        .filter(this::isSubtitleFormat)
+//                        .sorted()
+//                        .collect(Collectors.toList());
+//                List<String> names = files.stream().map(FsInfo::getName).sorted().collect(Collectors.toList());
+//                for (int i = 0; i < subtitles.size() && i < names.size(); ++i) {
+//                    map.put(names.get(i), subtitles.get(i));
+//                }
+
                 if (appProperties.isSort()) {
                     files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
                 }
 
-                for (FsInfo fsInfo : files) {
-                    list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, newPath + "/" + folder + "/" + fsInfo.getName()));
+                List<String> urls = new ArrayList<>();
+                List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
+                String prefix = getCommonPrefix(fileNames);
+                String suffix = getCommonSuffix(fileNames);
+                log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
+                for (String name : fileNames) {
+                    String url = buildPlayUrl(site, newPath + "/" + folder + "/" + name);
+                    if (map.containsKey(name)) {
+                        url += "@@@" + newPath + "/" + folder + "/" + map.get(name);
+                    }
+                    urls.add(getName(name.replace(prefix, "").replace(suffix, "")) + "$" + url);
                 }
+                list.add(String.join("#", urls));
             }
+            String prefix = getCommonPrefix(folders);
+            String suffix = getCommonSuffix(folders);
+            log.debug("folders common prefix: '{}'  common suffix: '{}'", prefix, suffix);
+            String folderNames = folders.stream().map(e -> e.replace(prefix, "").replace(suffix, "")).collect(Collectors.joining("$$$"));
+            movieDetail.setVod_play_from(folderNames);
+            movieDetail.setVod_play_url(String.join("$$$", list));
         } else {
+//          List<String> subtitles = fsResponse.getFiles().stream()
+//                .map(FsInfo::getName)
+//                .filter(this::isSubtitleFormat)
+//                .sorted()
+//                .collect(Collectors.toList());
+//        List<String> names = files.stream().map(FsInfo::getName).sorted().collect(Collectors.toList());
+//            for (int i = 0; i < subtitles.size() && i < names.size(); ++i) {
+//                map.put(names.get(i), subtitles.get(i));
+//            }
+
             if (appProperties.isSort()) {
                 files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
             }
 
-            for (FsInfo fsInfo : files) {
-                list.add(getName(fsInfo.getName()) + "$" + buildPlayUrl(site, newPath + "/" + fsInfo.getName()));
-            }
-        }
+            List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
+            String prefix = getCommonPrefix(fileNames);
+            String suffix = getCommonSuffix(fileNames);
+            log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
 
-        movieDetail.setVod_play_url(String.join("#", list));
+            for (String name : fileNames) {
+                String url = buildPlayUrl(site, newPath + "/" + name);
+                if (map.containsKey(name)) {
+                    url += "@@@" + newPath + "/" + map.get(name);
+                }
+                list.add(getName(name.replace(prefix, "").replace(suffix, "")) + "$" + url);
+            }
+            movieDetail.setVod_play_url(String.join("#", list));
+        }
 
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
@@ -1054,6 +1095,15 @@ public class TvBoxService {
         return false;
     }
 
+    private boolean isSubtitleFormat(String name) {
+        int index = name.lastIndexOf('.');
+        if (index > 0) {
+            String suffix = name.substring(index + 1);
+            return appProperties.getSubtitles().contains(suffix);
+        }
+        return false;
+    }
+
     private String getParent(String path) {
         int index = path.lastIndexOf('/');
         if (index > 0) {
@@ -1080,6 +1130,27 @@ public class TvBoxService {
             return name.substring(0, index);
         }
         return name;
+    }
+
+    private String getCommonPrefix(List<String> names) {
+        int n = names.size();
+        if (n == 1) return names.get(0);
+        String ans = names.get(0);
+        for (int i = 1; i < n; i++) {
+            int j = 0;
+            while (j < ans.length() && j < names.get(i).length() && ans.charAt(j) == names.get(i).charAt(j)) {
+                j++;
+            }
+            ans = names.get(i).substring(0, j);
+        }
+        return ans;
+    }
+
+    private String getCommonSuffix(List<String> names) {
+        int n = names.size();
+        if (n == 1) return names.get(0);
+        names = names.stream().map(e -> new StringBuilder(e).reverse().toString()).collect(Collectors.toList());
+        return new StringBuilder(getCommonPrefix(names)).reverse().toString();
     }
 
     private String fixPath(String path) {
