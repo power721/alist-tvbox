@@ -516,34 +516,88 @@ public class BiliBiliService {
         map.put("order_avoided", "true");
         map.put("pn", String.valueOf(page));
 
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
-        headers.put("Accept-Encoding", "gzip, deflate, br");
-        headers.put("Cache-Control", "max-age=0");
-        HttpEntity<Void> entity = buildHttpEntity(null, headers);
-        getKeys(entity);
+        getKeys(buildHttpEntity(null));
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpMedia: {}", url);
 
-        entity = buildHttpEntity(null);
-        ResponseEntity<BiliBiliSearchInfoResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchInfoResponse.class);
-        log.debug("{}", response.getBody());
-        BiliBiliSearchInfo searchInfo = response.getBody().getData();
-        List<BiliBiliSearchInfo.Video> list = searchInfo.getList().getVlist();
+        BiliBiliSearchInfoResponse response = restTemplate.getForObject(url, BiliBiliSearchInfoResponse.class);
+        log.debug("{}", response);
+        BiliBiliSearchInfo searchInfo = response.getData();
+        List<MovieDetail> list = new ArrayList<>();
         MovieList result = new MovieList();
-        for (BiliBiliSearchInfo.Video info : list) {
+        for (BiliBiliSearchInfo.Video info : searchInfo.getList().getVlist()) {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(info.getBvid());
             movieDetail.setVod_name(info.getTitle());
             movieDetail.setVod_tag(FILE);
             movieDetail.setVod_pic(fixCover(info.getPic()));
             movieDetail.setVod_remarks(info.getLength());
-            result.getList().add(movieDetail);
+            list.add(movieDetail);
         }
+
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id("up$" + mid + "$" + sort + "$" + page);
+        movieDetail.setVod_name("合集" + page);
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_pic(LIST_PIC);
+        movieDetail.setVod_play_from(BILI_BILI);
+        String playUrl = list.stream().map(e -> fixTitle(e.getVod_name()) + "$" + buildPlayUrl(e.getVod_id())).collect(Collectors.joining("#"));
+        movieDetail.setVod_play_url(playUrl);
+        movieDetail.setVod_content("共" + list.size() + "个视频");
+        result.getList().add(movieDetail);
+
+        result.getList().addAll(list);
         result.setLimit(result.getList().size());
         result.setTotal(searchInfo.getPage().getCount());
         result.setPagecount((searchInfo.getPage().getCount() + 29) / 30);
         log.debug("getUpMedia: {}", result);
+        return result;
+    }
+
+    public MovieList getUpPlaylist(String tid) {
+        String[] parts = tid.split("\\$");
+        String id = parts[1];
+        String sort = "new";
+        if (parts.length > 2) {
+            sort = parts[2];
+        }
+        String page = "1";
+        if (parts.length > 3) {
+            page = parts[3];
+        }
+        Map<String, Object> map = new HashMap<>();
+        map.put("mid", id);
+        map.put("ps", "30");
+        map.put("tid", "0");
+        map.put("keyword", "");
+        map.put("order", sort);
+        map.put("platform", "web");
+        map.put("order_avoided", "true");
+        map.put("pn", page);
+
+        getKeys(buildHttpEntity(null));
+        String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
+        log.debug("getUpMedia: {}", url);
+
+        BiliBiliSearchInfoResponse response = restTemplate.getForObject(url, BiliBiliSearchInfoResponse.class);
+        log.debug("getUpPlaylist: url {}", url, response);
+        List<BiliBiliSearchInfo.Video> list = new ArrayList<>();
+        List<BiliBiliSearchInfo.Video> videos = response.getData().getList().getVlist();
+        list.addAll(videos);
+
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id("up$" + id + "$0$" + page);
+        movieDetail.setVod_name("合集" + page);
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_pic(LIST_PIC);
+        movieDetail.setVod_play_from(BILI_BILI);
+        String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
+        movieDetail.setVod_play_url(playUrl);
+        movieDetail.setVod_content("共" + list.size() + "个视频");
+        MovieList result = new MovieList();
+        result.getList().add(movieDetail);
+
+        log.debug("getUpPlaylist: {}", result);
         return result;
     }
 
@@ -714,6 +768,10 @@ public class BiliBiliService {
 
         if (bvid.startsWith("search$")) {
             return getSearchPlaylist(bvid);
+        }
+
+        if (bvid.startsWith("up$")) {
+            return getUpPlaylist(bvid);
         }
 
         if (bvid.startsWith("popular$")) {
