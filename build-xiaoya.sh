@@ -3,10 +3,10 @@ set -e
 MOUNT=/etc/xiaoya
 PORT1=4567
 PORT2=5344
+MEM_OPT="-Xmx512M"
 
-if [ $# -eq 1 ]; then
+if [ $# -gt 0 ]; then
   MOUNT=$1
-  echo "will mount the data path: $MOUNT"
 fi
 
 if [ $# -gt 1 ]; then
@@ -15,6 +15,11 @@ fi
 
 if [ $# -gt 2 ]; then
 	PORT2=$3
+fi
+
+if [ $# -gt 3 ]; then
+	MEM_OPT="-Xmx${4}M"
+	echo "Java Memory: ${MEM_OPT}"
 fi
 
 rm -rf src/main/resources/static/assets && \
@@ -34,7 +39,7 @@ docker image prune -f
 date +%j.%H%M > data/version
 docker build -f Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest . || exit 1
 docker rm -f xiaoya-tvbox xiaoya alist-tvbox 2>/dev/null
-docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -v "$MOUNT":/data --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e MEM_OPT="$MEM_OPT" -v "$MOUNT":/data --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 
 sleep 1
 

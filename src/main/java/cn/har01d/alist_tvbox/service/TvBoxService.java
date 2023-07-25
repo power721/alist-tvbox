@@ -797,12 +797,12 @@ public class TvBoxService {
             movieDetail.setVod_name(meta.getName());
             movieDetail.setVod_tag(FILE);
             movieDetail.setVod_time(String.valueOf(meta.getYear()));
-            movieDetail.setVod_pic(meta.getMovie() == null ? ALIST_PIC : meta.getMovie().getCover());
+            movieDetail.setVod_pic(ALIST_PIC);
             List<String> from = new ArrayList<>();
             for (int i = 1; i <= list.size(); ++i) {
                 from.add("版本" + i);
             }
-            movieDetail.setVod_play_from(from.stream().collect(Collectors.joining("$$$")));
+            movieDetail.setVod_play_from(String.join("$$$", from));
             String playUrl;
             if (isMediaFile(meta.getPath())) {
                 playUrl = list.stream().map(m -> getNameFromPath(m.getPath()) + "$" + buildPlayUrl(site, m)).collect(Collectors.joining("$$$"));

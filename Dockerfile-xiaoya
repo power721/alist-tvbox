@@ -2,6 +2,8 @@ FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 
+ENV MEM_OPT="-Xmx512M"
+
 COPY init.sh /
 COPY movie.sh /
 COPY entrypoint.sh /

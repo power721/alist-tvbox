@@ -2,6 +2,7 @@ BASE_DIR=/etc/xiaoya
 PORT1=4567
 PORT2=5344
 TAG="latest"
+MEM_OPT="-Xmx512M"
 
 if [ "$1" = "-t" ]; then
   TAG="$2"
@@ -18,6 +19,11 @@ fi
 
 if [ $# -gt 2 ]; then
 	PORT2=$3
+fi
+
+if [ $# -gt 3 ]; then
+	MEM_OPT="-Xmx${4}M"
+	echo "Java Memory: ${MEM_OPT}"
 fi
 
 if docker ps | awk '{print $NF}' | grep -q alist-tvbox; then
@@ -60,7 +66,7 @@ done
 
 echo -e "\e[33m重启应用\e[0m"
 docker rm -f xiaoya-tvbox 2>/dev/null && \
-docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
+docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
 
 echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
 echo -e "    docker logs -f xiaoya-tvbox\n"
