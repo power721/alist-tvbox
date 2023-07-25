@@ -58,23 +58,23 @@ public class TvBoxService {
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
-            new FilterValue("名字⬆️", "name,asc"),
-            new FilterValue("名字⬇️", "name,desc"),
             new FilterValue("时间⬆️", "time,asc"),
             new FilterValue("时间⬇️", "time,desc"),
+            new FilterValue("名字⬆️", "name,asc"),
+            new FilterValue("名字⬇️", "name,desc"),
             new FilterValue("大小⬆️", "size,asc"),
             new FilterValue("大小⬇️", "size,desc")
     );
     private final List<FilterValue> filters2 = Arrays.asList(
             new FilterValue("原始顺序", ""),
-            new FilterValue("名字⬆️", "name,asc;year,asc"),
-            new FilterValue("名字⬇️", "name,desc;year,desc"),
-            new FilterValue("年份⬆️", "year,asc;name,asc"),
-            new FilterValue("年份⬇️", "year,desc;name,desc"),
-            new FilterValue("评分⬆️", "score,asc;name,asc"),
-            new FilterValue("评分⬇️", "score,desc;name,desc"),
-            new FilterValue("ID⬆️", "movie_id,asc"),
-            new FilterValue("ID⬇️", "movie_id,desc")
+            new FilterValue("评分⬇️", "score,desc;year,desc"),
+            new FilterValue("评分⬆️", "score,asc;year,desc"),
+            new FilterValue("年份⬇️", "year,desc;score,desc"),
+            new FilterValue("年份⬆️", "year,asc;score,desc"),
+            new FilterValue("名字⬇️", "name,desc;year,desc;score,desc"),
+            new FilterValue("名字⬆️", "name,asc;year,desc;score,desc"),
+            new FilterValue("ID⬇️", "movie_id,desc"),
+            new FilterValue("ID⬆️", "movie_id,asc")
     );
     private final List<FilterValue> filters3 = Arrays.asList(
             new FilterValue("高分", "high"),
@@ -823,7 +823,7 @@ public class TvBoxService {
             movieDetail.setVod_time(fsDetail.getModified());
             movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
             movieDetail.setVod_play_from(site.getName());
-            movieDetail.setVod_play_url(fsDetail.getName() + "$" + fixHttp(fsDetail.getRawUrl()));
+            movieDetail.setVod_play_url(fsDetail.getName() + "$" + buildPlayUrl(site, path));
             movieDetail.setVod_content(site.getName() + ":" + getParent(path));
             setDoubanInfo(site, movieDetail, getParent(path), true);
             result.getList().add(movieDetail);
@@ -1140,7 +1140,7 @@ public class TvBoxService {
 
     private String getCommonPrefix(List<String> names) {
         int n = names.size();
-        if (n == 1) return names.get(0);
+        if (n <= 1) return "";
         String ans = names.get(0);
         for (int i = 1; i < n; i++) {
             int j = 0;
@@ -1154,7 +1154,7 @@ public class TvBoxService {
 
     private String getCommonSuffix(List<String> names) {
         int n = names.size();
-        if (n == 1) return names.get(0);
+        if (n <= 1) return "";
         names = names.stream().map(e -> new StringBuilder(e).reverse().toString()).collect(Collectors.toList());
         String text = new StringBuilder(getCommonPrefix(names)).reverse().toString();
         if (text.startsWith("集")) {
