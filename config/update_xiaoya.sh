@@ -3,36 +3,47 @@ PORT1=4567
 PORT2=5344
 TAG="latest"
 MEM_OPT="-Xmx512M"
+YES=false
 
-if [ "$1" = "-t" ]; then
-  TAG="$2"
-  shift 2
-fi
+while getopts ":d:p:m:P:t:y" arg; do
+    case "${arg}" in
+        d)
+            BASE_DIR=${OPTARG}
+            ;;
+        p)
+            PORT1=${OPTARG}
+            ;;
+        P)
+            PORT2=${OPTARG}
+            ;;
+        m)
+            MEM_OPT="-Xmx${OPTARG}M"
+            ;;
+        t)
+            TAG=${OPTARG}
+            ;;
+        y)
+            YES=true
+            ;;
+        *)
+            ;;
+    esac
+done
 
-if [ $# -gt 0 ]; then
-	BASE_DIR=$1
-fi
-
-if [ $# -gt 1 ]; then
-	PORT1=$2
-fi
-
-if [ $# -gt 2 ]; then
-	PORT2=$3
-fi
-
-if [ $# -gt 3 ]; then
-	MEM_OPT="-Xmx${4}M"
-	echo "Java Memory: ${MEM_OPT}"
-fi
+shift $((OPTIND-1))
 
 if docker ps | awk '{print $NF}' | grep -q alist-tvbox; then
   echo -e "\e[33m独立版Docker容器运行中。\e[0m"
-  read -r -p "是否停止独立版Docker容器？[Y/N] " yn
-  case $yn in
-      [Yy]* ) docker rm -f alist-tvbox 2>/dev/null;;
-      [Nn]* ) exit 0;;
-  esac
+  if [ "$YES" = "true" ]; then
+    echo -e "\e[33m停止独立版Docker容器\e[0m"
+    docker rm -f alist-tvbox 2>/dev/null
+  else
+    read -r -p "是否停止独立版Docker容器？[Y/N] " yn
+    case $yn in
+        [Yy]* ) docker rm -f alist-tvbox 2>/dev/null;;
+        [Nn]* ) exit 0;;
+    esac
+  fi
 fi
 
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"

@@ -1,4 +1,20 @@
 BASE_DIR=/etc/xiaoya
+YES=false
+
+while getopts ":d:y" arg; do
+    case "${arg}" in
+        d)
+            BASE_DIR=${OPTARG}
+            ;;
+        y)
+            YES=true
+            ;;
+        *)
+            ;;
+    esac
+done
+
+shift $((OPTIND-1))
 
 if [ $# -gt 0 ]; then
 	BASE_DIR=$1
@@ -6,11 +22,16 @@ fi
 
 if docker ps | awk '{print $NF}' | grep -q alist-tvbox; then
   echo -e "\e[33m独立版Docker容器运行中。\e[0m"
-  read -r -p "是否停止独立版Docker容器？[Y/N] " yn
-  case $yn in
-      [Yy]* ) docker rm -f alist-tvbox 2>/dev/null;;
-      [Nn]* ) exit 0;;
-  esac
+  if [ "$YES" = "true" ]; then
+    echo -e "\e[33m停止独立版Docker容器\e[0m"
+    docker rm -f alist-tvbox 2>/dev/null
+  else
+    read -r -p "是否停止独立版Docker容器？[Y/N] " yn
+    case $yn in
+        [Yy]* ) docker rm -f alist-tvbox 2>/dev/null;;
+        [Nn]* ) exit 0;;
+    esac
+  fi
 fi
 
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
