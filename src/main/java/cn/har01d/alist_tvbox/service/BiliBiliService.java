@@ -296,6 +296,7 @@ public class BiliBiliService {
                         }
                     } catch (Exception e) {
                         log.warn("", e);
+                        return;
                     }
                     if (value.equals("channel$0")) {
                         List<Filter> filters = List.of(new Filter("type", "分类", filters5));
