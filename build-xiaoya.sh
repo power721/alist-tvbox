@@ -5,6 +5,27 @@ PORT1=4567
 PORT2=5344
 MEM_OPT="-Xmx512M"
 
+while getopts ":d:p:m:P:t:y" arg; do
+    case "${arg}" in
+        d)
+            MOUNT=${OPTARG}
+            ;;
+        p)
+            PORT1=${OPTARG}
+            ;;
+        P)
+            PORT2=${OPTARG}
+            ;;
+        m)
+            MEM_OPT="-Xmx${OPTARG}M"
+            ;;
+        *)
+            ;;
+    esac
+done
+
+shift $((OPTIND-1))
+
 if [ $# -gt 0 ]; then
   MOUNT=$1
 fi
@@ -33,7 +54,6 @@ cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
 echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
 
-docker pull xiaoyaliu/alist
 docker pull haroldli/alist-base
 docker image prune -f
 date +%j.%H%M > data/version

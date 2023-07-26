@@ -15,10 +15,18 @@ public interface MetaRepository extends JpaRepository<Meta, Integer> {
     boolean existsByPathStartsWith(String path);
 
     Page<Meta> findByPathStartsWith(String prefix, Pageable pageable);
+    Page<Meta> findByPathStartsWithAndYear(String prefix, Integer year, Pageable pageable);
+    Page<Meta> findByPathStartsWithAndYearLessThan(String prefix, Integer year, Pageable pageable);
 
     Page<Meta> findByPathStartsWithAndScoreGreaterThanEqual(String prefix, Integer score, Pageable pageable);
+    Page<Meta> findByPathStartsWithAndScoreGreaterThanEqualAndYear(String prefix, Integer score, Integer year, Pageable pageable);
+    Page<Meta> findByPathStartsWithAndScoreGreaterThanEqualAndYearLessThan(String prefix, Integer score, Integer year, Pageable pageable);
 
     Page<Meta> findByPathStartsWithAndScoreLessThan(String prefix, Integer score, Pageable pageable);
+    Page<Meta> findByPathStartsWithAndScoreLessThanAndYear(String prefix, Integer score, Integer year, Pageable pageable);
+    Page<Meta> findByPathStartsWithAndScoreLessThanAndYearLessThan(String prefix, Integer score, Integer year, Pageable pageable);
 
     Page<Meta> findByPathStartsWithAndScoreIsNull(String prefix, Pageable pageable);
+    Page<Meta> findByPathStartsWithAndScoreIsNullAndYear(String prefix, Integer year, Pageable pageable);
+    Page<Meta> findByPathStartsWithAndScoreIsNullAndYearLessThan(String prefix, Integer year, Pageable pageable);
 }

@@ -107,7 +107,14 @@
           <div v-if="dockerVersion">小雅版本：{{ dockerVersion }}</div>
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
           <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
-            最新版本：{{ appRemoteVersion }}，请重新运行安装脚本，升级应用。
+            <el-tooltip
+              class="box-item"
+              effect="dark"
+              :content="tooltip"
+              placement="top"
+            >
+              最新版本：{{ appRemoteVersion }}，请重新运行安装脚本，升级应用。
+            </el-tooltip>
             <div class="changelog" v-if="changelog">更新日志： {{ changelog }}</div>
           </div>
         </el-card>
@@ -139,7 +146,7 @@
           </el-form>
           <div>本地版本：{{ movieVersion }}</div>
           <div v-if="movieRemoteVersion&&movieRemoteVersion>movieVersion">
-            最新版本：{{ movieRemoteVersion }}，{{movieRemoteVersion==cachedMovieVersion?'已经下载，请':'后台下载中，请稍后'}}重启Docker更新。
+            最新版本：{{ movieRemoteVersion }}，{{movieRemoteVersion==cachedMovieVersion?'已经下载，请':'后台下载中，请稍后'}}重启Docker容器更新。
           </div>
         </el-card>
       </el-col>
@@ -198,6 +205,7 @@ const increase = () => {
   }
 }
 
+const tooltip = 'sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"'
 const aListStarted = ref(false)
 const aListRestart = ref(false)
 const mixSiteSource = ref(false)

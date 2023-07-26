@@ -1,5 +1,24 @@
 BASE_DIR=./data
 PORT=4567
+YES=false
+
+while getopts ":d:p:y" arg; do
+    case "${arg}" in
+        d)
+            BASE_DIR=${OPTARG}
+            ;;
+        p)
+            PORT=${OPTARG}
+            ;;
+        y)
+            YES=true
+            ;;
+        *)
+            ;;
+    esac
+done
+
+shift $((OPTIND-1))
 
 if [ $# -gt 0 ]; then
 	BASE_DIR=$1
@@ -11,11 +30,16 @@ fi
 
 if docker ps | awk '{print $NF}' | grep -q xiaoya-tvbox; then
   echo -e "\e[33m集成版Docker容器运行中。\e[0m"
-  read -r -p "是否停止集成版Docker容器？[Y/N] " yn
-  case $yn in
-      [Yy]* ) docker rm -f xiaoya-tvbox 2>/dev/null;;
-      [Nn]* ) exit 0;;
-  esac
+  if [ "$YES" = "true" ]; then
+    echo -e "\e[33m停止集成版Docker容器\e[0m"
+    docker rm -f xiaoya-tvbox 2>/dev/null
+  else
+    read -r -p "是否停止集成版Docker容器？[Y/N] " yn
+    case $yn in
+        [Yy]* ) docker rm -f xiaoya-tvbox 2>/dev/null;;
+        [Nn]* ) exit 0;;
+    esac
+  fi
 fi
 
 echo -e "\e[36m端口映射：\e[0m $PORT:4567"
