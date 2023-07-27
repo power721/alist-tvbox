@@ -1,14 +1,18 @@
 package cn.har01d.alist_tvbox.util;
 
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import jakarta.xml.bind.DatatypeConverter;
+import lombok.extern.slf4j.Slf4j;
 
-import javax.xml.bind.DatatypeConverter;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Map;
 import java.util.StringJoiner;
 
+@Slf4j
 public final class Utils {
     private static final int KB = 1024;
     private static final int MB = 1024 * KB;
@@ -94,6 +98,39 @@ public final class Utils {
             }
         }
         return sb.toString();
+    }
+
+    public static int executeUpdate(String sql) {
+        try {
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.command("sqlite3", "/opt/alist/data/data.db", sql);
+            builder.inheritIO();
+            Process process = builder.start();
+            return process.waitFor();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return 1;
+    }
+
+    public static String executeQuery(String sql) {
+        try {
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.command("sqlite3", "/opt/alist/data/data.db", sql);
+            Process process = builder.start();
+            BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+                sb.append(System.getProperty("line.separator"));
+            }
+            return sb.toString().trim();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return "";
     }
 
     public static String getAliasPaths(String content) {

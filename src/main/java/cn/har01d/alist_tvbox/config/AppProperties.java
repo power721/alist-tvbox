@@ -19,6 +19,7 @@ public class AppProperties {
     private boolean mix;
     private boolean replaceAliToken;
     private boolean searchable;
+    private boolean enableHttps;
     private int pageSize = 100;
     private int maxSearchResult = 100;
     private String secretKey;

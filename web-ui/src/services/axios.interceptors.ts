@@ -28,7 +28,7 @@ axios.interceptors.response.use(function (response) {
   ElMessage({
     showClose: true,
     grouping: true,
-    message: data.message,
+    message: data.message || data.detail,
     type: 'error',
   })
   return Promise.reject(data)

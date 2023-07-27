@@ -5,11 +5,18 @@ import cn.har01d.alist_tvbox.dto.bili.QrCode;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
-import com.google.zxing.WriterException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.util.Map;
@@ -20,49 +27,57 @@ import java.util.Map;
 public class BiliBiliController {
     private final BiliBiliService biliBiliService;
     private final SubscriptionService subscriptionService;
+    private final ObjectMapper objectMapper;
 
-    public BiliBiliController(BiliBiliService biliBiliService, SubscriptionService subscriptionService) {
+    public BiliBiliController(BiliBiliService biliBiliService, SubscriptionService subscriptionService, ObjectMapper objectMapper) {
         this.biliBiliService = biliBiliService;
         this.subscriptionService = subscriptionService;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("")
-    public Object api(String t, String f, String ids, String wd,
+    public String api(String t, String f, String ids, String wd,
                       @RequestParam(required = false, defaultValue = "") String category,
                       @RequestParam(required = false, defaultValue = "") String type,
                       @RequestParam(required = false, defaultValue = "") String sort,
                       @RequestParam(required = false, defaultValue = "0") String duration,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
-                      HttpServletRequest request) throws IOException {
-        return api("", t, f, ids, wd, category, type, sort, duration, pg, request);
+                      HttpServletRequest request,
+                      HttpServletResponse response) throws IOException {
+        return api("", t, f, ids, wd, category, type, sort, duration, pg, request, response);
     }
 
     @GetMapping("/{token}")
-    public Object api(@PathVariable String token, String t, String f, String ids, String wd,
+    public String api(@PathVariable String token, String t, String f, String ids, String wd,
                       @RequestParam(required = false, defaultValue = "") String category,
                       @RequestParam(required = false, defaultValue = "") String type,
                       @RequestParam(required = false, defaultValue = "") String sort,
                       @RequestParam(required = false, defaultValue = "0") String duration,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
-                      HttpServletRequest request) throws IOException {
+                      HttpServletRequest request,
+                      HttpServletResponse response) throws IOException {
         if (!subscriptionService.getToken().equals(token)) {
             throw new BadRequestException();
         }
+        response.setContentType("application/json");
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("path: {}  folder: {}  category: {}  type: {} keyword: {}  filter: {}  sort: {} duration: {}  page: {}", ids, t, category, type, wd, f, sort, duration, pg);
+        Object result;
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
-                return biliBiliService.recommend();
+                result = biliBiliService.recommend();
+            } else {
+                result = biliBiliService.getDetail(ids);
             }
-            return biliBiliService.getDetail(ids);
         } else if (t != null && !t.isEmpty()) {
-            return biliBiliService.getMovieList(t, category, type, sort, duration, pg);
+            result = biliBiliService.getMovieList(t, category, type, sort, duration, pg);
         } else if (wd != null && !wd.isEmpty()) {
-            return biliBiliService.search(wd, sort, duration, 0);
+            result = biliBiliService.search(wd, sort, duration, 0);
         } else {
-            return biliBiliService.getCategoryList();
+            result = biliBiliService.getCategoryList();
         }
+        return objectMapper.writeValueAsString(result);
     }
 
     @GetMapping("/-/status")
@@ -76,7 +91,7 @@ public class BiliBiliController {
     }
 
     @PostMapping("/login")
-    public QrCode scanLogin() throws IOException, WriterException {
+    public QrCode scanLogin() throws IOException {
         return biliBiliService.scanLogin();
     }
 

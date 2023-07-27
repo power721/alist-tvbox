@@ -1128,7 +1128,7 @@ public class TvBoxService {
         }
     }
 
-    private static void setDoubanInfo(MovieDetail movieDetail, Movie movie, boolean details) {
+    private void setDoubanInfo(MovieDetail movieDetail, Movie movie, boolean details) {
         if (movie == null) {
             return;
         }
@@ -1149,10 +1149,11 @@ public class TvBoxService {
         }
     }
 
-    private static void fixCover(MovieDetail movie) {
+    private void fixCover(MovieDetail movie) {
         try {
             if (movie.getVod_pic() != null && !movie.getVod_pic().isEmpty()) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
+                        .scheme(appProperties.isEnableHttps() ? "https" : "http")
                         .replacePath("/images")
                         .replaceQuery("url=" + movie.getVod_pic())
                         .build()
@@ -1165,10 +1166,11 @@ public class TvBoxService {
         }
     }
 
-    private static void fixCover(Movie movie) {
+    private void fixCover(Movie movie) {
         try {
             if (movie.getCover() != null && !movie.getCover().isEmpty() && !movie.getCover().contains("/images")) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
+                        .scheme(appProperties.isEnableHttps() ? "https" : "http")
                         .replacePath("/images")
                         .replaceQuery("url=" + movie.getCover())
                         .build()

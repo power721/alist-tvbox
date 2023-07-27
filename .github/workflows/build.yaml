@@ -15,7 +15,18 @@ on:
       - 'config/**'
       - 'doc/**'
       - 'pom.xml'
+      - 'entrypoint-native.sh'
       - 'Dockerfile-v7'
+      - 'Dockerfile'
+      - 'Dockerfile-native'
+      - 'Dockerfile-base'
+      - 'Dockerfile-jre'
+      - '.github/workflows/build.yaml'
+      - '.github/workflows/build-base.yaml'
+      - '.github/workflows/build-dev.yaml'
+      - '.github/workflows/build-java.yaml'
+      - '.github/workflows/build-native.yaml'
+      - '.github/workflows/build-v7.yaml'
 
 jobs:
   release:
@@ -23,6 +34,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+      - name: build cli
+        working-directory: ./atv-cli
+        run: go build
       - name: Setup node
         uses: actions/setup-node@v3
         with:
@@ -99,23 +117,23 @@ jobs:
           source: "data/app_version,config/update_new.sh,config/update_xiaoya.sh,config/update_hostmode.sh"
           strip_components: 1
           target: /var/www/alist/
-      - name: Download data file
-        run: |
-          wget https://d.har01d.cn/data.zip -O data.zip
-          unzip -q -o data.zip
-          mv data/data.sql src/main/resources/
-      - name: Build standalone with Maven
-        run: mvn -B package --file pom.xml
-      - name: Build standalone docker and push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+#      - name: Download data file
+#        run: |
+#          wget https://d.har01d.cn/data.zip -O data.zip
+#          unzip -q -o data.zip
+#          mv data/data.sql src/main/resources/
+#      - name: Build standalone with Maven
+#        run: mvn -B package --file pom.xml
+#      - name: Build standalone docker and push
+#        uses: docker/build-push-action@v4
+#        with:
+#          context: .
+#          file: Dockerfile
+#          platforms: linux/amd64,linux/arm64
+#          push: true
+#          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
+#          cache-from: type=gha
+#          cache-to: type=gha,mode=max
       - name: send telegram message
         uses: appleboy/telegram-action@master
         with:

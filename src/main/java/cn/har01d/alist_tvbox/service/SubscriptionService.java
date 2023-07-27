@@ -12,6 +12,8 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
+import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -24,11 +26,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponents;
 
-import javax.annotation.PostConstruct;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import javax.xml.bind.DatatypeConverter;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -221,6 +221,7 @@ public class SubscriptionService {
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
         String path = "/ali/token/" + settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         String tokenUrl = ServletUriComponentsBuilder.fromCurrentRequestUri()
+                .scheme(appProperties.isEnableHttps() ? "https" : "http")
                 .replacePath(path)
                 .replaceQuery("")
                 .toUriString();
@@ -516,6 +517,7 @@ public class SubscriptionService {
     private Map<String, Object> buildSite(String key, String name) throws IOException {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
+        builder.scheme(appProperties.isEnableHttps() ? "https" : "http");
         builder.replacePath("");
         site.put("key", key);
         site.put("api", key);
@@ -629,6 +631,7 @@ public class SubscriptionService {
 
     private String readAlistAddress() throws IOException {
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() ? "https" : "http")
                 .port(getAlistPort())
                 .replacePath("/")
                 .build();
@@ -663,6 +666,7 @@ public class SubscriptionService {
 
     private String readHostAddress(String path) {
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() ? "https" : "http")
                 .replacePath(path)
                 .build();
         return uriComponents.toUriString();

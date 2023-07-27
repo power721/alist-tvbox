@@ -1,0 +1,11 @@
+[
+  {
+    "interfaces": [
+      "org.hibernate.query.hql.spi.SqmQueryImplementor",
+      "org.hibernate.query.sqm.internal.SqmInterpretationsKey$InterpretationsKeySource",
+      "org.hibernate.query.spi.DomainQueryExecutionContext",
+      "org.hibernate.query.SelectionQuery",
+      "org.hibernate.query.CommonQueryContract"
+    ]
+  }
+]
