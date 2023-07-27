@@ -1,8 +1,8 @@
 package cn.har01d.alist_tvbox.util;
 
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import jakarta.xml.bind.DatatypeConverter;
 
-import javax.xml.bind.DatatypeConverter;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

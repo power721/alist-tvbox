@@ -6,7 +6,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.util.Map;
 import java.util.stream.Collectors;
 

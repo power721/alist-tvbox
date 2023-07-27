@@ -7,7 +7,7 @@ import cn.har01d.alist_tvbox.service.TvBoxService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import java.net.URLDecoder;
 import java.util.List;
 import java.util.Map;

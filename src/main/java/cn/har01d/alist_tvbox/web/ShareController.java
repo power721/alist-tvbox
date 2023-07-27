@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.dto.ShareInfo;
 import cn.har01d.alist_tvbox.dto.UrlDto;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.service.ShareService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 
