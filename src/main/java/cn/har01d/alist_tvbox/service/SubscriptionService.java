@@ -2,11 +2,15 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.TokenDto;
-import cn.har01d.alist_tvbox.entity.*;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.SiteRepository;
+import cn.har01d.alist_tvbox.entity.Subscription;
+import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
@@ -32,11 +36,21 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.spec.AlgorithmParameterSpec;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 
@@ -189,10 +203,36 @@ public class SubscriptionService {
         handleWhitelist(config);
         removeBlacklist(config);
 
+        replaceAliToken(config);
+
         addSite(config);
 //        addRules(config);
 
         return config;
+    }
+
+    private void replaceAliToken(Map<String, Object> config) {
+        List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
+        String path = "/ali/token/" + settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
+        String tokenUrl = ServletUriComponentsBuilder.fromCurrentRequestUri()
+                .replacePath(path)
+                .replaceQuery("")
+                .toUriString();
+        for (Map<String, Object> site : list) {
+            Object obj = site.get("ext");
+            if (obj instanceof String) {
+                String ext = (String) obj;
+                String text = ext.replace("http://127.0.0.1:9978/file/tvfan/token.txt", tokenUrl)
+                        .replace("http://127.0.0.1:9978/file/tvfan/tokengo.txt", tokenUrl)
+                        .replace("http://127.0.0.1:9978/file/tvbox/token.txt", tokenUrl)
+                        .replace("http://127.0.0.1:9978/file/cainisi/token.txt", tokenUrl)
+                        .replace("http://127.0.0.1:9978/file/fatcat/token.txt", tokenUrl);
+                if (!ext.equals(text)) {
+                    log.info("replace token url in ext: {}", ext);
+                    site.put("ext", text);
+                }
+            }
+        }
     }
 
     private void sortSites(Map<String, Object> config, String sort) {
@@ -273,7 +313,7 @@ public class SubscriptionService {
         return config;
     }
 
-    private Map<String, Object> replaceString(Map<String, Object> config, Map<String, Object> override) throws JsonProcessingException {
+    private Map<String, Object> replaceString(Map<String, Object> config, Map<String, Object> override) {
         try {
             Object obj = override.get("replace");
             if (obj instanceof Map) {

@@ -175,6 +175,15 @@
             {{ currentUrl + '/ali/token/' + aliSecret }}
           </a>
         </el-form-item>
+        <el-form-item label="订阅替换阿里token地址">
+          <el-switch
+            v-model="replaceAliToken"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateReplaceAliToken"
+          />
+        </el-form-item>
         <el-form-item label="小雅外网地址">
           <el-input v-model="dockerAddress"/>
         </el-form-item>
@@ -223,6 +232,7 @@ const tooltip = 'sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh
 const aListStarted = ref(false)
 const aListRestart = ref(false)
 const mixSiteSource = ref(false)
+const replaceAliToken = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -284,6 +294,12 @@ const updateDockerAddress = () => {
 
 const updateMixed = () => {
   axios.post('/settings', {name: 'mix_site_source', value: mixSiteSource.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateReplaceAliToken = () => {
+  axios.post('/settings', {name: 'replace_ali_token', value: replaceAliToken.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -352,6 +368,7 @@ onMounted(() => {
       aliSecret.value = data.ali_secret
       autoCheckin.value = data.auto_checkin === 'true'
       aListRestart.value = data.alist_restart_required === 'true'
+      replaceAliToken.value = data.replace_ali_token === 'true'
       mixSiteSource.value = data.mix_site_source !== 'false'
       login.value.username = data.alist_username
       login.value.password = data.alist_password
