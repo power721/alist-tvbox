@@ -6,16 +6,16 @@ on:
       branch:
         description: 'The git branch to build.'
         required: true
-        default: 'master'
+        default: 'dev'
       tag:
         description: 'The docker tag to build.'
         required: true
-        default: 'latest'
+        default: 'dev'
       release:
         description: 'Release the app.'
         required: true
         type: boolean
-        default: true
+        default: false
 
 jobs:
   release:

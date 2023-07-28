@@ -33,6 +33,10 @@
       <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"</code><br>
     </p>
     <p>
+      一键部署(开发版)：
+      <code>wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t dev</code><br>
+    </p>
+    <p>
       一键部署(NAS)：
       <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /volume2/docker/xiaoya</code>
     </p>
