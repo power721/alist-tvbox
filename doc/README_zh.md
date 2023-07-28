@@ -1,5 +1,17 @@
 # AList-TvBox
 AList代理，支持xiaoya版AList界面管理。
+
+## 简明教程
+1. 准备工作：安装Docker
+2. 安装AList-TvBox：
+```bash
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
+```
+2. 打开管理界面：http://your-ip:4567/#/accounts
+默认用户名：admin 密码：admin
+3. 获取并填写阿里token、开放token、转存文件夹ID
+5. 将订阅地址[http://your-ip:4567/sub/0](http://your-ip:4567/sub/0) 输入到TvBox配置
+
 ## 功能
 - 管理界面
 - 海报墙
