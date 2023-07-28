@@ -167,6 +167,73 @@ public class SubscriptionService {
         return list;
     }
 
+    public Map<String, Object> open() {
+        Map<String, Object> config = new HashMap<>();
+        Map<String, Object> video = new HashMap<>();
+        Map<String, Object> pan = new HashMap<>();
+        List<Map<String, Object>> sites = new ArrayList<>();
+        List<Map<String, Object>> panSites = new ArrayList<>();
+        video.put("sites", sites);
+        config.put("video", video);
+        pan.put("sites", panSites);
+        config.put("pan", pan);
+        addOpenSite(video);
+        return config;
+    }
+
+    private void addOpenSite(Map<String, Object> config) {
+        int id = 0;
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        try {
+            String key = "Alist";
+            Map<String, Object> site = buildOpenSite("xiaoya", "xiaoya", "小雅AList");
+            sites.removeIf(item -> key.equals(item.get("key")));
+            sites.add(id++, site);
+            log.debug("add AList site: {}", site);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        if (appProperties.isXiaoya()) {
+            try {
+                for (Site site1 : siteRepository.findAll()) {
+                    if (site1.isSearchable() && !site1.isDisabled()) {
+                        Map<String, Object> site = buildOpenSite("xiaoya-tvbox", "xiaoya", site1.getName());
+                        sites.add(id++, site);
+                        log.debug("add XiaoYa site: {}", site);
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+
+        if (settingRepository.existsById(BILIBILI_COOKIE)) {
+            try {
+                Map<String, Object> site = buildOpenSite("bilibili", "bilibili", "BiliBili");
+                sites.add(id, site);
+                log.debug("add BiliBili site: {}", site);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+    }
+
+    private Map<String, Object> buildOpenSite(String key, String api, String name) {
+        Map<String, Object> site = new HashMap<>();
+        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
+        builder.replacePath("/" + api);
+        ServletUriComponentsBuilder builder2 = ServletUriComponentsBuilder.fromCurrentRequestUri();
+        builder2.replacePath("/tvbox/" + api + ".js");
+        site.put("key", key);
+        site.put("api", builder2.build().toUriString());
+        site.put("name", name);
+        site.put("type", 3);
+        site.put("ext", builder.build().toUriString());
+        return site;
+    }
+
     public Map<String, Object> subscription(int id) {
         String apiUrl = "";
         String override = "";
