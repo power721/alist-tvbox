@@ -791,6 +791,10 @@ public class BiliBiliService {
             return getTypePlaylist(bvid);
         }
 
+        if (bvid.startsWith("ss")) {
+            return getBangumi(bvid.substring(2));
+        }
+
         if (bvid.startsWith("season$")) {
             return getBangumi(bvid);
         }
