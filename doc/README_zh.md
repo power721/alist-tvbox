@@ -4,12 +4,12 @@ AList代理，支持xiaoya版AList界面管理。
 ## 简明教程
 1. 准备工作：安装Docker
 2. 安装AList-TvBox：
-```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
-```
-2. 打开管理界面：http://your-ip:4567/#/accounts
+    ```bash
+    sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
+    ```
+3. 打开管理界面：http://your-ip:4567/#/accounts
 默认用户名：admin 密码：admin
-3. 获取并填写阿里token、开放token、转存文件夹ID
+4. 获取并填写阿里token、开放token、转存文件夹ID
 5. 将订阅地址[http://your-ip:4567/sub/0](http://your-ip:4567/sub/0) 输入到TvBox配置
 
 ## 功能
@@ -25,8 +25,11 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
 - TvBox配置聚合
 - 添加阿里云盘分享
 - 添加PikPak分享
+- 支持BiliBili
 - 管理AList服务
 - 小雅配置文件管理
+- 构建索引
+- 在线日志
 
 ## 安装
 ### 一键安装
@@ -50,8 +53,8 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /home/user/
 - 第二个参数是管理界面端口，默认是4567。
 - 第三个参数是小雅AList端口，默认是5344。
 ```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 8080
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /etc/xiaoya 8080 5344
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /home/alist 8080
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /home/alist 8080 5544
 ```
 OpenWrt去掉sudo，或者已经是root账号：
 ```bash
