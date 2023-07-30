@@ -202,7 +202,11 @@ public class SubscriptionService {
         handleWhitelist(config);
         removeBlacklist(config);
 
-        replaceAliToken(config);
+        try {
+            replaceAliToken(config);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
 
         addSite(config);
 //        addRules(config);
