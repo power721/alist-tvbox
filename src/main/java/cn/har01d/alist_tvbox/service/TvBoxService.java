@@ -691,11 +691,13 @@ public class TvBoxService {
                 paths.add(path);
             }
         }
+        log.debug("paths: {}", paths);
 
         int pages = 0;
         Page<Meta> list = new PageImpl<>(List.of());
         for (String line : paths) {
             path = line;
+            log.debug("get movies from {}", path);
             if (pageable.getSort() != null) {
                 pageable = PageRequest.of(page - pages - 1, size, pageable.getSort());
             } else {

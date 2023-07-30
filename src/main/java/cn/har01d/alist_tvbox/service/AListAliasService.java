@@ -87,6 +87,9 @@ public class AListAliasService {
         if (StringUtils.isBlank(dto.getPath())) {
             throw new BadRequestException("挂载路径不能为空");
         }
+        if (!dto.getPath().startsWith("/")) {
+            throw new BadRequestException("挂载路径必须/以开头");
+        }
         if (StringUtils.isBlank(dto.getContent())) {
             throw new BadRequestException("内容不能为空");
         }
