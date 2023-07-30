@@ -17,8 +17,6 @@ WORKDIR /opt/atv/
 
 COPY index.sh /
 
-COPY config/libbilibili.so /usr/lib64/
-
 COPY target/dependencies/ ./
 COPY target/snapshot-dependencies/ ./
 COPY target/spring-boot-loader/ ./
