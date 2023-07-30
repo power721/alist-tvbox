@@ -39,12 +39,7 @@ public class AListAliasService {
 
     public AListAlias create(AListAliasDto dto) {
         aListLocalService.validateAListStatus();
-        if (StringUtils.isBlank(dto.getPath())) {
-            throw new BadRequestException("挂载路径不能为空");
-        }
-        if (StringUtils.isBlank(dto.getContent())) {
-            throw new BadRequestException("内容不能为空");
-        }
+        validate(dto);
         AListAlias alias = new AListAlias(dto);
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
@@ -63,12 +58,7 @@ public class AListAliasService {
 
     public AListAlias update(Integer id, AListAliasDto dto) {
         aListLocalService.validateAListStatus();
-        if (StringUtils.isBlank(dto.getPath())) {
-            throw new BadRequestException("挂载路径不能为空");
-        }
-        if (StringUtils.isBlank(dto.getContent())) {
-            throw new BadRequestException("内容不能为空");
-        }
+        validate(dto);
 
         AListAlias alias = new AListAlias(dto);
         alias.setId(id);
@@ -91,6 +81,20 @@ public class AListAliasService {
             throw new BadRequestException(e);
         }
         return alias;
+    }
+
+    private static void validate(AListAliasDto dto) {
+        if (StringUtils.isBlank(dto.getPath())) {
+            throw new BadRequestException("挂载路径不能为空");
+        }
+        if (StringUtils.isBlank(dto.getContent())) {
+            throw new BadRequestException("内容不能为空");
+        }
+        for (String path : dto.getContent().split("\n")) {
+            if (!path.startsWith("/")) {
+                throw new BadRequestException("别名路径必须/以开头");
+            }
+        }
     }
 
     public void delete(Integer id) {

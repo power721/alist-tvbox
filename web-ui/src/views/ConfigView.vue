@@ -155,7 +155,7 @@
     </el-row>
 
     <el-dialog v-model="dialogVisible" title="高级功能" width="40%">
-      <el-form label-width="150px">
+      <el-form label-width="180px">
         <el-form-item label="开放Token认证URL">
           <el-select v-model="openTokenUrl" class="m-2" placeholder="Select">
             <el-option
