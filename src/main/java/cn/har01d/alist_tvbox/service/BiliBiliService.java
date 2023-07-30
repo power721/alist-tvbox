@@ -791,6 +791,10 @@ public class BiliBiliService {
             return getTypePlaylist(bvid);
         }
 
+        if (bvid.startsWith("ss")) {
+            return getBangumi(bvid.substring(2));
+        }
+
         if (bvid.startsWith("season$")) {
             return getBangumi(bvid);
         }
@@ -832,7 +836,7 @@ public class BiliBiliService {
         MovieList result = new MovieList();
 
         String[] parts = tid.split("\\$");
-        String sid = parts[1];
+        String sid = parts.length == 1 ? tid : parts[1];
         String url = "https://www.bilibili.com/bangumi/play/ss" + sid;
         log.debug("Bangumi: {}", url);
         HttpEntity<Void> entity = buildHttpEntity(null);
