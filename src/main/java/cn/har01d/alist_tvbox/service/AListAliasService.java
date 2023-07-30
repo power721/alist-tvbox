@@ -8,17 +8,15 @@ import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
-import java.util.List;
 
 @Slf4j
 @Service
-@Profile("xiaoya")
+
 public class AListAliasService {
     private final AListAliasRepository aliasRepository;
     private final AccountService accountService;

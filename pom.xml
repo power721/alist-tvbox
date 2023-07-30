@@ -189,6 +189,7 @@
                                     --libc=musl
                                     --enable-http
                                     --enable-https
+                                    -H:+AddAllCharsets
                                     -H:DynamicProxyConfigurationFiles=${project.basedir}/dynamic-proxy.json
                                 </buildArg>
                             </buildArgs>

@@ -1,7 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -23,7 +22,7 @@ import java.util.zip.ZipOutputStream;
 
 @Slf4j
 @Service
-@Profile("xiaoya")
+
 public class LogsService {
 
     private String fixLine(String text) {

@@ -8,7 +8,6 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -19,7 +18,7 @@ import java.nio.file.Paths;
 
 @Slf4j
 @Service
-@Profile("xiaoya")
+
 public class ConfigFileService {
     private final ConfigFileRepository repository;
 

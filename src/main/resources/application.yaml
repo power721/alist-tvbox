@@ -7,6 +7,7 @@ spring:
   jackson:
     serialization:
       INDENT_OUTPUT: true
+      FAIL_ON_EMPTY_BEANS: false
   jpa:
     hibernate:
       # possible values: validate | update | create | create-drop

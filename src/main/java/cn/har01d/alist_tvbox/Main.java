@@ -1,6 +1,5 @@
 package cn.har01d.alist_tvbox;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.BufferedReader;
@@ -22,6 +21,9 @@ public class Main {
     public static void main(String[] args) throws IOException {
         Set<Class> classes = findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto");
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto.bili"));
+        classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.tvbox"));
+        classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.domain"));
+        classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.model"));
         List<Map<String, Object>> result = new ArrayList<>();
         for (Class clazz : classes) {
             Map<String, Object> info = new HashMap<>();
