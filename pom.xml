@@ -150,6 +150,26 @@
             <build>
                 <plugins>
                     <plugin>
+                        <groupId>org.hibernate.orm.tooling</groupId>
+                        <artifactId>hibernate-enhance-maven-plugin</artifactId>
+                        <version>${hibernate.version}</version>
+                        <executions>
+                            <execution>
+                                <id>enhance</id>
+                                <goals>
+                                    <goal>enhance</goal>
+                                </goals>
+                                <configuration>
+                                    <failOnError>true</failOnError>
+                                    <enableLazyInitialization>true</enableLazyInitialization>
+                                    <enableDirtyTracking>true</enableDirtyTracking>
+                                    <enableAssociationManagement>true</enableAssociationManagement>
+                                    <enableExtendedEnhancement>false</enableExtendedEnhancement>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
                         <groupId>org.graalvm.buildtools</groupId>
                         <artifactId>native-maven-plugin</artifactId>
                         <executions>
@@ -164,7 +184,7 @@
                         <configuration>
                             <imageName>atv</imageName>
                             <buildArgs>
-                                <buildArg>-H:DynamicProxyConfigurationFiles=dynamic-proxy.json</buildArg>
+                                <buildArg>--static -H:DynamicProxyConfigurationFiles=${project.basedir}/dynamic-proxy.json</buildArg>
                             </buildArgs>
                         </configuration>
                     </plugin>

@@ -1,26 +1,10 @@
 [
   {
     "interfaces": [
-      "org.hibernate.query.hql.spi.SqmQueryImplementor"
-    ]
-  },
-  {
-    "interfaces": [
-      "org.hibernate.query.sqm.internal.SqmInterpretationsKey$InterpretationsKeySource"
-    ]
-  },
-  {
-    "interfaces": [
-      "org.hibernate.query.spi.DomainQueryExecutionContext"
-    ]
-  },
-  {
-    "interfaces": [
-      "org.hibernate.query.SelectionQuery"
-    ]
-  },
-  {
-    "interfaces": [
+      "org.hibernate.query.hql.spi.SqmQueryImplementor",
+      "org.hibernate.query.sqm.internal.SqmInterpretationsKey$InterpretationsKeySource",
+      "org.hibernate.query.spi.DomainQueryExecutionContext",
+      "org.hibernate.query.SelectionQuery",
       "org.hibernate.query.CommonQueryContract"
     ]
   }

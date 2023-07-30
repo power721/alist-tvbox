@@ -1,14 +1,20 @@
-FROM haroldli/alist-base:latest
+FROM xiaoyaliu/alist:latest
+
+ENV GLIBC_VERSION 2.35-r1
 
 LABEL MAINTAINER="Har01d"
 
-ENV MEM_OPT="-Xmx512M"
+VOLUME /opt/atv/data/
+
+WORKDIR /opt/atv/
+
+COPY index.sh /
 
 COPY init.sh /
 COPY movie.sh /
-COPY entrypoint.sh /
+COPY entrypoint-native.sh /entrypoint.sh
 
-COPY target/application/ ./
+COPY target/atv ./
 
 COPY data/version data/app_version
 
