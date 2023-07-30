@@ -27,7 +27,11 @@
               row-key="id"
               :key="tableKey"
               style="width: 100%">
-      <el-table-column prop="order" label="顺序" sortable width="100"/>
+      <el-table-column prop="order" label="顺序" sortable width="100">
+        <template #default="scope">
+          <span class="pointer">{{scope.row.order}}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="id" label="ID" sortable width="100"/>
       <el-table-column prop="name" label="名称" width="200"/>
       <el-table-column prop="value" label="值" sortable/>
@@ -577,4 +581,7 @@ onMounted(() => {
   align-items: center;
 }
 
+.pointer {
+  cursor: pointer;
+}
 </style>

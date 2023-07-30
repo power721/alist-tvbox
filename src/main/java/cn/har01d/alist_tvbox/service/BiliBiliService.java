@@ -11,6 +11,7 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -995,7 +996,7 @@ public class BiliBiliService {
         for (Map.Entry<String, String> entry : customHeaders.entrySet()) {
             headers.add(entry.getKey(), entry.getValue());
         }
-        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(BiliBiliUtils.getCookie());
         if (StringUtils.isNotBlank(cookie)) {
             headers.add(HttpHeaders.COOKIE, cookie.trim());
         }
@@ -1163,7 +1164,7 @@ public class BiliBiliService {
     private void heartbeat(String aid, String cid) {
         try {
             String csrf = "";
-            String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+            String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(BiliBiliUtils.getCookie());
             String[] parts = cookie.split(";");
             for (String text : parts) {
                 if (text.contains("bili_jct")) {

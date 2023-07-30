@@ -51,7 +51,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
-import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 
 @Slf4j
@@ -496,14 +495,12 @@ public class SubscriptionService {
             }
         }
 
-        if (settingRepository.existsById(BILIBILI_COOKIE)) {
-            try {
-                Map<String, Object> site = buildSite("csp_BiliBili", "BiliBili");
-                sites.add(id, site);
-                log.debug("add BiliBili site: {}", site);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
+        try {
+            Map<String, Object> site = buildSite("csp_BiliBili", "BiliBili");
+            sites.add(id, site);
+            log.debug("add BiliBili site: {}", site);
+        } catch (Exception e) {
+            log.warn("", e);
         }
     }
 
