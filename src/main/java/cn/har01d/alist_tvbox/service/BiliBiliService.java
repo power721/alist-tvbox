@@ -996,10 +996,12 @@ public class BiliBiliService {
         for (Map.Entry<String, String> entry : customHeaders.entrySet()) {
             headers.add(entry.getKey(), entry.getValue());
         }
-        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(BiliBiliUtils.getCookie());
-        if (StringUtils.isNotBlank(cookie)) {
-            headers.add(HttpHeaders.COOKIE, cookie.trim());
+        String defaultCookie = BiliBiliUtils.getCookie();
+        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(cookie)) {
+            cookie = defaultCookie;
         }
+        headers.add(HttpHeaders.COOKIE, cookie.trim());
         return new HttpEntity<>(data, headers);
     }
 
@@ -1164,7 +1166,11 @@ public class BiliBiliService {
     private void heartbeat(String aid, String cid) {
         try {
             String csrf = "";
-            String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(BiliBiliUtils.getCookie());
+            String defaultCookie = BiliBiliUtils.getCookie();
+            String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+            if (StringUtils.isBlank(cookie)) {
+                cookie = defaultCookie;
+            }
             String[] parts = cookie.split(";");
             for (String text : parts) {
                 if (text.contains("bili_jct")) {

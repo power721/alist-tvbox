@@ -209,12 +209,15 @@ public class SubscriptionService {
         }
 
         addSite(config);
-//        addRules(config);
+        addRules(config);
 
         return config;
     }
 
     private void replaceAliToken(Map<String, Object> config) {
+        if (!appProperties.isXiaoya()) {
+            return;
+        }
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
         String path = "/ali/token/" + settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         String tokenUrl = ServletUriComponentsBuilder.fromCurrentRequestUri()
@@ -499,12 +502,14 @@ public class SubscriptionService {
             }
         }
 
-        try {
-            Map<String, Object> site = buildSite("csp_BiliBili", "BiliBili");
-            sites.add(id, site);
-            log.debug("add BiliBili site: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
+        if (appProperties.isXiaoya()) {
+            try {
+                Map<String, Object> site = buildSite("csp_BiliBili", "BiliBili");
+                sites.add(id, site);
+                log.debug("add BiliBili site: {}", site);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
         }
     }
 
