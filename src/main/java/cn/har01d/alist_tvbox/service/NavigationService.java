@@ -3,78 +3,105 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.dto.NavigationDto;
 import cn.har01d.alist_tvbox.entity.Navigation;
 import cn.har01d.alist_tvbox.entity.NavigationRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class NavigationService {
+    private final JdbcTemplate jdbcTemplate;
     private final NavigationRepository navigationRepository;
+    private final SettingRepository settingRepository;
 
-    public NavigationService(NavigationRepository navigationRepository) {
+    public NavigationService(JdbcTemplate jdbcTemplate, NavigationRepository navigationRepository, SettingRepository settingRepository) {
+        this.jdbcTemplate = jdbcTemplate;
         this.navigationRepository = navigationRepository;
+        this.settingRepository = settingRepository;
     }
 
     @PostConstruct
     public void setup() {
+        fix();
         if (navigationRepository.count() == 0) {
             loadBiliBiliCategory();
         }
-        if (!navigationRepository.existsByValue("feed$0")) {
-            navigationRepository.save(new Navigation("动态", "feed$0", 1, true, true, 7));
+    }
+
+    private void fix() {
+        if (settingRepository.existsById("fix_navigation")) {
+            return;
         }
-        if (!navigationRepository.existsByValue("fav$0")) {
-            navigationRepository.save(new Navigation("收藏夹", "fav$0", 1, true, true, 8));
+        log.info("fix navigations");
+        List<Navigation> list = navigationRepository.findAll();
+        navigationRepository.deleteAll();
+        jdbcTemplate.execute("DELETE FROM ID_GENERATOR WHERE ENTITY_NAME = 'navigation'");
+        loadBiliBiliCategory();
+        Set<String> set = navigationRepository.findAll().stream().map(Navigation::getValue).collect(Collectors.toSet());
+        for (Navigation navigation : list) {
+            if (!set.contains(navigation.getValue())) {
+                navigationRepository.save(navigation);
+            }
         }
-        if (!navigationRepository.existsByValue("channel$0")) {
-            navigationRepository.save(new Navigation("频道", "channel$0", 1, false, true, 9));
-        }
+        settingRepository.save(new Setting("fix_navigation", "true"));
     }
 
     private void loadBiliBiliCategory() {
         List<Navigation> list = new ArrayList<>();
         int order = 10;
-        list.add(new Navigation("动态", "feed$0", 1, true, true, order++));
-        list.add(new Navigation("收藏夹", "fav$0", 1, true, true, order++));
-        list.add(new Navigation("频道", "channel$0", 1, true, true, order++));
-        list.add(new Navigation("历史记录", "history$0", 1, true, true, order++));
-        list.add(new Navigation("全站热榜", "0", 1, true, true, order++));
-        list.add(new Navigation("电影热榜", "season$2", 1, true, true, order++));
-        list.add(new Navigation("电视剧热榜", "season$5", 1, true, true, order++));
-        list.add(new Navigation("综艺热榜", "season$7", 1, true, true, order++));
-        list.add(new Navigation("纪录片热榜", "season$3", 1, true, true, order++));
-        list.add(new Navigation("动画热榜", "season$4", 1, true, true, order++));
-        list.add(new Navigation("番剧热榜", "season$1", 1, true, true, order++));
-        list.add(new Navigation("热门", "pop$1", 1, true, true, order++));
-        list.add(new Navigation("国创", "167", 1, true, true, order++));  // 10
-        list.add(new Navigation("纪录片", "177", 1, true, true, order++));
-        list.add(new Navigation("电影", "23", 1, true, true, order++));
-        list.add(new Navigation("电视剧", "11", 1, true, true, order++));
-        list.add(new Navigation("科技", "188", 1, true, true, order++));
-        list.add(new Navigation("知识", "36", 1, true, true, order++));
-        list.add(new Navigation("动画", "1", 1, true, true, order++));
-        list.add(new Navigation("番剧", "13", 1, true, true, order++));
-        list.add(new Navigation("音乐", "3", 1, true, true, order++));
-        list.add(new Navigation("游戏", "4", 1, true, true, order++));
-        list.add(new Navigation("娱乐", "5", 1, true, true, order++));
-        list.add(new Navigation("影视", "181", 1, true, true, order++));
-        list.add(new Navigation("舞蹈", "129", 1, true, true, order++));
-        list.add(new Navigation("运动", "234", 1, true, true, order++));
-        list.add(new Navigation("汽车", "223", 1, true, true, order++));
-        list.add(new Navigation("生活", "160", 1, true, true, order++));
-        list.add(new Navigation("美食", "211", 1, true, true, order++));
-        list.add(new Navigation("动物圈", "217", 1, true, true, order++));
-        list.add(new Navigation("时尚", "155", 1, true, true, order++));
-        list.add(new Navigation("鬼畜", "119", 1, true, true, order++));
+        int id = 1;
+        list.add(new Navigation(id++, "动态", "feed$0", 1, true, true, order++));
+        list.add(new Navigation(id++, "收藏夹", "fav$0", 1, true, true, order++));
+        list.add(new Navigation(id++, "频道", "channel$0", 1, true, true, order++));
+        list.add(new Navigation(id++, "历史记录", "history$0", 1, true, true, order++));
+        list.add(new Navigation(id++, "全站热榜", "0", 1, true, true, order++));
+        list.add(new Navigation(id++, "电影热榜", "season$2", 1, true, true, order++));
+        list.add(new Navigation(id++, "电视剧热榜", "season$5", 1, true, true, order++));
+        list.add(new Navigation(id++, "综艺热榜", "season$7", 1, true, true, order++));
+        list.add(new Navigation(id++, "纪录片热榜", "season$3", 1, true, true, order++));
+        list.add(new Navigation(id++, "动画热榜", "season$4", 1, true, true, order++));
+        list.add(new Navigation(id++, "番剧热榜", "season$1", 1, true, true, order++));
+        list.add(new Navigation(id++, "热门", "pop$1", 1, true, true, order++));
+        list.add(new Navigation(id++, "国创", "167", 1, true, true, order++));  // 10
+        list.add(new Navigation(id++, "纪录片", "177", 1, true, true, order++));
+        list.add(new Navigation(id++, "电影", "23", 1, true, true, order++));
+        list.add(new Navigation(id++, "电视剧", "11", 1, true, true, order++));
+        list.add(new Navigation(id++, "科技", "188", 1, true, true, order++));
+        list.add(new Navigation(id++, "知识", "36", 1, true, true, order++));
+        list.add(new Navigation(id++, "动画", "1", 1, true, true, order++));
+        list.add(new Navigation(id++, "番剧", "13", 1, true, true, order++));
+        list.add(new Navigation(id++, "音乐", "3", 1, true, true, order++));
+        list.add(new Navigation(id++, "游戏", "4", 1, true, true, order++));
+        list.add(new Navigation(id++, "娱乐", "5", 1, true, true, order++));
+        list.add(new Navigation(id++, "影视", "181", 1, true, true, order++));
+        list.add(new Navigation(id++, "舞蹈", "129", 1, true, true, order++));
+        list.add(new Navigation(id++, "运动", "234", 1, true, true, order++));
+        list.add(new Navigation(id++, "汽车", "223", 1, true, true, order++));
+        list.add(new Navigation(id++, "生活", "160", 1, true, true, order++));
+        list.add(new Navigation(id++, "美食", "211", 1, true, true, order++));
+        list.add(new Navigation(id++, "动物圈", "217", 1, true, true, order++));
+        list.add(new Navigation(id++, "时尚", "155", 1, true, true, order++));
+        list.add(new Navigation(id++, "鬼畜", "119", 1, true, true, order++));
 
-        list.add(new Navigation("原创", "origin$0", 1, false, true, order++));
-        list.add(new Navigation("新人", "rookie$0", 1, false, true, order));
+        list.add(new Navigation(id++, "原创", "origin$0", 1, false, true, order++));
+        list.add(new Navigation(id++, "新人", "rookie$0", 1, false, true, order));
+
+        navigationRepository.saveAll(list);
+        list = new ArrayList<>();
 
         int parent = 13;
         order = 1;

@@ -47,6 +47,16 @@ public class Navigation {
         this.order = order;
     }
 
+    public Navigation(int id, String name, String value, int type, boolean show, boolean reserved, int order) {
+        this.id = id;
+        this.name = name;
+        this.value = value;
+        this.type = type;
+        this.show = show;
+        this.reserved = reserved;
+        this.order = order;
+    }
+
     public Navigation(String name, String value, int type, boolean show, boolean reserved, int order, int parentId) {
         this.name = name;
         this.value = value;

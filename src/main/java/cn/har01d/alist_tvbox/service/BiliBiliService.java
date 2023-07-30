@@ -308,6 +308,7 @@ public class BiliBiliService {
         result.setTotal(result.getCategories().size());
         result.setLimit(result.getCategories().size());
 
+        log.debug("getCategoryList: {}", result);
         return result;
     }
 
