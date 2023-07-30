@@ -64,7 +64,6 @@
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
-            <version>3.42.0.0</version>
         </dependency>
         <dependency>
             <groupId>commons-io</groupId>
@@ -186,6 +185,10 @@
                             <buildArgs>
                                 <buildArg>
                                     --static
+                                    --verbose
+                                    --libc=musl
+                                    --enable-http
+                                    --enable-https
                                     -H:DynamicProxyConfigurationFiles=${project.basedir}/dynamic-proxy.json
                                 </buildArg>
                             </buildArgs>
