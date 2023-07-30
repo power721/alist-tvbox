@@ -96,4 +96,19 @@ public final class Utils {
         return sb.toString();
     }
 
+    public static String getAliasPaths(String content) {
+        StringBuilder sb = new StringBuilder();
+        for (String line : content.split("\\n")) {
+            String[] parts = line.split(":");
+            line = parts[0];
+            parts = line.split("\\$");
+            if (parts.length == 2) {
+                sb.append(parts[0] + ":" + parts[1]).append("\\n");
+            } else {
+                sb.append("本地:").append(line).append("\\n");
+            }
+        }
+        return sb.toString();
+    }
+
 }

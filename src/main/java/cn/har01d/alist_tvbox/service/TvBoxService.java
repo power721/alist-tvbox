@@ -230,7 +230,10 @@ public class TvBoxService {
                         String suffix = getCommonSuffix(paths);
                         log.debug("prefix: {} suffix: {} list: {}", prefix, suffix, paths);
                         for (String dir : paths) {
-                            filters.add(new FilterValue(dir.replace(prefix, "").replace(suffix, "").trim(), dir));
+                            parts = dir.split(":");
+                            dir = parts[0];
+                            name = parts.length == 2 ? parts[1] : dir.replace(prefix, "").replace(suffix, "").trim();
+                            filters.add(new FilterValue(name, dir));
                         }
                     }
 
@@ -679,7 +682,7 @@ public class TvBoxService {
         } else {
             if (aListAlias != null) {
                 if (dir.isEmpty()) {
-                    paths = Arrays.asList(aListAlias.getContent().split("\n"));
+                    paths = Arrays.stream(aListAlias.getContent().split("\n")).map(e -> e.split(":")[0]).collect(Collectors.toList());
                     log.debug("{}: {} {}", path, aListAlias, paths);
                 } else {
                     paths.add(fixPath(dir));
