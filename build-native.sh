@@ -43,11 +43,11 @@ if [ $# -gt 3 ]; then
 	echo "Java Memory: ${MEM_OPT}"
 fi
 
-#rm -rf src/main/resources/static/assets && \
-#cd web-ui && \
-#npm run build || exit 1
-#cd .. && \
-#mvn clean package -DskipTests -Pnative || exit 1
+rm -rf src/main/resources/static/assets && \
+cd web-ui && \
+npm run build || exit 1
+cd .. && \
+mvn clean package -DskipTests -Pnative || exit 1
 
 
 echo -e "\e[36m使用配置目录：\e[0m $MOUNT"

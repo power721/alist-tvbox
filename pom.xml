@@ -184,7 +184,10 @@
                         <configuration>
                             <imageName>atv</imageName>
                             <buildArgs>
-                                <buildArg>--static -H:DynamicProxyConfigurationFiles=${project.basedir}/dynamic-proxy.json</buildArg>
+                                <buildArg>
+                                    --static
+                                    -H:DynamicProxyConfigurationFiles=${project.basedir}/dynamic-proxy.json
+                                </buildArg>
                             </buildArgs>
                         </configuration>
                     </plugin>
