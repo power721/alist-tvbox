@@ -56,7 +56,7 @@ jobs:
       - name: setup zlib
         run: |
           sudo apt update
-          sudo apt install zlibc build-essential libz-dev zlib1g-dev zlib1g -y
+          sudo apt install build-essential libz-dev zlib1g-dev zlib1g -y
       - name: Build with Maven
         run:  |
           export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
