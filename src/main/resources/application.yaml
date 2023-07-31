@@ -23,6 +23,11 @@ server:
   error:
     include-message: always
   port: 4567
+  tomcat:
+    remote_ip_header: x-forwarded-for
+    protocol_header: x-forwarded-proto
+    port-header: X-Forwarded-Port
+    use-forward-headers: true
 
 app:
   sort: true

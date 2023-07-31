@@ -41,6 +41,8 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
+COPY qrcode/qrcode /
+
 COPY index.sh /
 
 COPY target/dependencies/ ./

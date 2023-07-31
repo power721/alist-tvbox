@@ -8,7 +8,7 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY config/qrcode /
+COPY qrcode/qrcode /
 COPY index.sh /
 
 COPY init.sh /

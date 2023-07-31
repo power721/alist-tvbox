@@ -46,6 +46,8 @@ fi
 rm -rf src/main/resources/static/assets && \
 cd web-ui && \
 npm run build || exit 1
+cd ../qrcode && \
+go build && \
 cd .. && \
 mvn clean package || exit 1
 
