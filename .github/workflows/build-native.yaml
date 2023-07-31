@@ -51,6 +51,9 @@ jobs:
           cache: 'maven'
       - name: Build with Maven
         run:  |
+          export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
+          export CC=$TOOLCHAIN_DIR/bin/gcc
+          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
           sudo apt update
           sudo apt install build-essential libz-dev zlib1g-dev zlib1g -y
           wget https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
@@ -62,9 +65,6 @@ jobs:
           make
           sudo make install
           cd ..
-          export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
-          export CC=$TOOLCHAIN_DIR/bin/gcc
-          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
           mvn -B -Pnative package --file pom.xml
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
