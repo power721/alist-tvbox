@@ -34,6 +34,9 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.20'
+      - name: build qrcode
+        working-directory: ./qrcode
+        run: go build
       - name: Setup node
         uses: actions/setup-node@v3
         with:
