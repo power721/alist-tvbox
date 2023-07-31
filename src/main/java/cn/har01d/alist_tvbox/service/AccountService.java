@@ -749,6 +749,9 @@ public class AccountService {
         if (StringUtils.isNotBlank(dto.getFolderId()) && dto.getFolderId().length() > 64) {
             throw new BadRequestException("转存文件夹ID长度太长");
         }
+        if (StringUtils.isAllBlank(dto.getRefreshToken(), dto.getOpenToken())) {
+            throw new BadRequestException("至少需要一个token");
+        }
         return count;
     }
 
