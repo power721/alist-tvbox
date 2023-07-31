@@ -77,7 +77,7 @@ const handleAdd = () => {
 }
 
 const handleEdit = (file: any) => {
-  axios.get('/alist/alias/' + file.id).then(({data}) => {
+  axios.get('/alist-alias/' + file.id).then(({data}) => {
     dialogTitle.value = '更新别名 - ' + file.id
     updateAction.value = true
     form.value = data
@@ -92,7 +92,7 @@ const handleDelete = (data: any) => {
 
 const deleteSub = () => {
   dialogVisible.value = false
-  axios.delete('/alist/alias/' + form.value.id).then(() => {
+  axios.delete('/alist-alias/' + form.value.id).then(() => {
     load()
   })
 }
@@ -102,7 +102,7 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
-  const url = updateAction.value ? '/alist/alias/' + form.value.id : '/alist/alias'
+  const url = updateAction.value ? '/alist-alias/' + form.value.id : '/alist-alias'
   axios.post(url, form.value).then(() => {
     formVisible.value = false
     load()
@@ -110,7 +110,7 @@ const handleConfirm = () => {
 }
 
 const load = () => {
-  axios.get('/alist/alias').then(({data}) => {
+  axios.get('/alist-alias').then(({data}) => {
     files.value = data
   })
 }
