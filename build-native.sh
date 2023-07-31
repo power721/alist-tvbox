@@ -4,8 +4,9 @@ MOUNT=/etc/xiaoya
 PORT1=4567
 PORT2=5344
 MEM_OPT="-Xmx512M"
+BUILD=true
 
-while getopts ":d:p:m:P:t:y" arg; do
+while getopts ":d:p:m:P:t:yr" arg; do
     case "${arg}" in
         d)
             MOUNT=${OPTARG}
@@ -18,6 +19,9 @@ while getopts ":d:p:m:P:t:y" arg; do
             ;;
         m)
             MEM_OPT="-Xmx${OPTARG}M"
+            ;;
+        r)
+            BUILD=false
             ;;
         *)
             ;;
@@ -43,12 +47,13 @@ if [ $# -gt 3 ]; then
 	echo "Java Memory: ${MEM_OPT}"
 fi
 
-rm -rf src/main/resources/static/assets && \
-cd web-ui && \
-npm run build || exit 1
-cd .. && \
-mvn clean package -DskipTests -Pnative || exit 1
-
+if [ "$BUILD" = "true" ]; then
+  rm -rf src/main/resources/static/assets && \
+  cd web-ui && \
+  npm run build || exit 1
+  cd .. && \
+  mvn clean package -DskipTests -Pnative || exit 1
+fi
 
 echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
 echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"

@@ -181,12 +181,9 @@
                             <buildArgs>
                                 <buildArg>
                                     --static
-                                    --verbose
                                     --libc=musl
                                     --enable-http
                                     --enable-https
-                                    --gc=G1
-                                    -H:DynamicProxyConfigurationFiles=${project.basedir}/dynamic-proxy.json
                                 </buildArg>
                             </buildArgs>
                         </configuration>

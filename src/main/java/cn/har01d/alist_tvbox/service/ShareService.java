@@ -538,39 +538,39 @@ public class ShareService {
         log.info("delete storage response: {}", response.getBody());
     }
 
-    public Page<ShareInfo> listResources(Pageable pageable) {
-        int total = 0;
-        List<ShareInfo> list = new ArrayList<>();
-        int size = pageable.getPageSize();
-        int offset = pageable.getPageNumber() * size;
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
-             Statement statement = connection.createStatement()) {
-            String sql = "select count(*) from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare'";
-            ResultSet rs = statement.executeQuery(sql);
-            total = rs.getInt(1);
-            sql = "select * from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare' LIMIT " + size + " OFFSET " + offset;
-            rs = statement.executeQuery(sql);
-            while (rs.next()) {
-                ShareInfo shareInfo = new ShareInfo();
-                shareInfo.setId(rs.getInt("id"));
-                shareInfo.setPath(rs.getString("mount_path"));
-                shareInfo.setStatus(rs.getString("status"));
-                shareInfo.setType(getType(rs.getString("driver")));
-                String addition = rs.getString("addition");
-                if (StringUtils.isNotBlank(addition)) {
-                    Map<String, String> map = objectMapper.readValue(addition, Map.class);
-                    shareInfo.setShareId(map.get("share_id"));
-                    shareInfo.setPassword(map.get("share_pwd"));
-                    shareInfo.setFolderId(map.get("root_folder_id"));
-                }
-                list.add(shareInfo);
-            }
-        } catch (Exception e) {
-            throw new BadRequestException(e);
-        }
-
-        return new PageImpl<>(list, pageable, total);
-    }
+//    public Page<ShareInfo> listResources(Pageable pageable) {
+//        int total = 0;
+//        List<ShareInfo> list = new ArrayList<>();
+//        int size = pageable.getPageSize();
+//        int offset = pageable.getPageNumber() * size;
+//        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
+//             Statement statement = connection.createStatement()) {
+//            String sql = "select count(*) from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare'";
+//            ResultSet rs = statement.executeQuery(sql);
+//            total = rs.getInt(1);
+//            sql = "select * from x_storages where driver='AliyundriveShare2Open' OR driver= 'PikPakShare' LIMIT " + size + " OFFSET " + offset;
+//            rs = statement.executeQuery(sql);
+//            while (rs.next()) {
+//                ShareInfo shareInfo = new ShareInfo();
+//                shareInfo.setId(rs.getInt("id"));
+//                shareInfo.setPath(rs.getString("mount_path"));
+//                shareInfo.setStatus(rs.getString("status"));
+//                shareInfo.setType(getType(rs.getString("driver")));
+//                String addition = rs.getString("addition");
+//                if (StringUtils.isNotBlank(addition)) {
+//                    Map<String, String> map = objectMapper.readValue(addition, Map.class);
+//                    shareInfo.setShareId(map.get("share_id"));
+//                    shareInfo.setPassword(map.get("share_pwd"));
+//                    shareInfo.setFolderId(map.get("root_folder_id"));
+//                }
+//                list.add(shareInfo);
+//            }
+//        } catch (Exception e) {
+//            throw new BadRequestException(e);
+//        }
+//
+//        return new PageImpl<>(list, pageable, total);
+//    }
 
     private Integer getType(String driver) {
         switch (driver) {

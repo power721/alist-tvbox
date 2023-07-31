@@ -53,10 +53,10 @@ public class ShareController {
         shareService.deleteShares(ids);
     }
 
-    @GetMapping("/resources")
-    public Page<ShareInfo> listResources(Pageable pageable) {
-        return shareService.listResources(pageable);
-    }
+//    @GetMapping("/resources")
+//    public Page<ShareInfo> listResources(Pageable pageable) {
+//        return shareService.listResources(pageable);
+//    }
 
     @GetMapping("/storages")
     public Object listStorages(Pageable pageable) {
