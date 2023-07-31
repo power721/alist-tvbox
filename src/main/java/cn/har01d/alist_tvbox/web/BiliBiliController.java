@@ -6,7 +6,6 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.zxing.WriterException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
