@@ -61,6 +61,7 @@ jobs:
           ./configure --prefix=$TOOLCHAIN_DIR --static
           make
           sudo make install
+          cd ..
           export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
           export CC=$TOOLCHAIN_DIR/bin/gcc
           export PATH="$TOOLCHAIN_DIR/bin:$PATH"
