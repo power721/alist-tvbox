@@ -81,6 +81,9 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -259,29 +262,9 @@ public class BiliBiliService {
 
     public QrCode scanLogin() throws IOException, WriterException {
         QrCode qrCode = restTemplate.getForObject("https://passport.bilibili.com/x/passport-login/web/qrcode/generate", BiliBiliQrCodeResponse.class).getData();
-        qrCode.setImage(getQrCode(qrCode.getUrl()));
+        qrCode.setImage(BiliBiliUtils.getQrCode(qrCode.getUrl()));
         log.debug("{}", qrCode);
         return qrCode;
-    }
-
-    private String getQrCode(String text) throws IOException, WriterException {
-        log.info("getQrCode: {}", text);
-        Map<EncodeHintType, String> charcter = new HashMap<>();
-        charcter.put(EncodeHintType.CHARACTER_SET, "UTF-8");
-        BitMatrix bitMatrix = new MultiFormatWriter()
-                .encode(text, BarcodeFormat.QR_CODE, 500, 500, charcter);
-        int width = bitMatrix.getWidth();
-        int height = bitMatrix.getHeight();
-        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                image.setRGB(x, y, bitMatrix.get(x, y) ? BLACK : WHITE);
-            }
-        }
-
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        ImageIO.write(image, "png", stream);
-        return Base64.getEncoder().encodeToString(stream.toByteArray());
     }
 
     public int checkLogin(String key) {
