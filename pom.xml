@@ -173,6 +173,7 @@
                                     --libc=musl
                                     --enable-http
                                     --enable-https
+                                    -H:-CheckToolchain
                                 </buildArg>
                             </buildArgs>
                         </configuration>
