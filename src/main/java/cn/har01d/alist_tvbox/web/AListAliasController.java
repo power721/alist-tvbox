@@ -18,7 +18,7 @@ import java.util.List;
 
 
 @RestController
-@RequestMapping("/alist-alias")
+@RequestMapping("/alist/alias")
 public class AListAliasController {
     private final AListAliasRepository repository;
     private final AListAliasService service;

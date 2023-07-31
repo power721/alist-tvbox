@@ -38,7 +38,6 @@ public class WebSecurityConfiguration {
                                 new AntPathRequestMatcher("/shares/**"),
                                 new AntPathRequestMatcher("/subscriptions/**"),
                                 new AntPathRequestMatcher("/settings/**"),
-                                new AntPathRequestMatcher("/alist-alias/**"),
                                 new AntPathRequestMatcher("/login"),
                                 new AntPathRequestMatcher("/storage"),
                                 new AntPathRequestMatcher("/token"),
