@@ -56,7 +56,7 @@ echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
 docker image prune -f
 date +%j.%H%M > data/version
 docker build -f Dockerfile-native --tag=haroldli/xiaoya-tvbox:native . || exit 1
-docker rm -f xiaoya-tvbox xiaoya alist-tvbox 2>/dev/null
+docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
 docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e MEM_OPT="$MEM_OPT" -v "$MOUNT":/data --name=xiaoya-tvbox haroldli/xiaoya-tvbox:native
 
 sleep 1

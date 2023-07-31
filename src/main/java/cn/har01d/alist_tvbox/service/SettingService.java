@@ -43,6 +43,7 @@ public class SettingService {
                 .collect(Collectors.toMap(Setting::getName, Setting::getValue));
         map.remove("atv_password");
         map.remove("api_key");
+        map.remove("bilibili_cookie");
         return map;
     }
 
