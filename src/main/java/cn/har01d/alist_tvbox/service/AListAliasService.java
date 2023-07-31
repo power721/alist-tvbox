@@ -39,19 +39,14 @@ public class AListAliasService {
 
     public AListAlias create(AListAliasDto dto) {
         aListLocalService.validateAListStatus();
-        if (StringUtils.isBlank(dto.getPath())) {
-            throw new BadRequestException("挂载路径不能为空");
-        }
-        if (StringUtils.isBlank(dto.getContent())) {
-            throw new BadRequestException("内容不能为空");
-        }
+        validate(dto);
         AListAlias alias = new AListAlias(dto);
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
             String token = accountService.login();
             alias.setId(shareId++);
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'name','asc','front',0,'302_redirect','');";
-            int count = statement.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getPaths(alias.getContent())));
+            int count = statement.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
             log.info("insert alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
             aliasRepository.save(alias);
             shareService.enableStorage(alias.getId(), token);
@@ -63,12 +58,7 @@ public class AListAliasService {
 
     public AListAlias update(Integer id, AListAliasDto dto) {
         aListLocalService.validateAListStatus();
-        if (StringUtils.isBlank(dto.getPath())) {
-            throw new BadRequestException("挂载路径不能为空");
-        }
-        if (StringUtils.isBlank(dto.getContent())) {
-            throw new BadRequestException("内容不能为空");
-        }
+        validate(dto);
 
         AListAlias alias = new AListAlias(dto);
         alias.setId(id);
@@ -83,7 +73,7 @@ public class AListAliasService {
             statement.executeUpdate(sql);
 
             sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'name','asc','front',0,'302_redirect','');";
-            int count = statement.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getPaths(alias.getContent())));
+            int count = statement.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
             log.info("update alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
 
             shareService.enableStorage(id, token);
@@ -91,6 +81,23 @@ public class AListAliasService {
             throw new BadRequestException(e);
         }
         return alias;
+    }
+
+    private static void validate(AListAliasDto dto) {
+        if (StringUtils.isBlank(dto.getPath())) {
+            throw new BadRequestException("挂载路径不能为空");
+        }
+        if (!dto.getPath().startsWith("/")) {
+            throw new BadRequestException("挂载路径必须/以开头");
+        }
+        if (StringUtils.isBlank(dto.getContent())) {
+            throw new BadRequestException("内容不能为空");
+        }
+        for (String path : dto.getContent().split("\n")) {
+            if (!path.startsWith("/")) {
+                throw new BadRequestException("别名路径必须/以开头");
+            }
+        }
     }
 
     public void delete(Integer id) {

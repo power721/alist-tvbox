@@ -1,10 +1,23 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.entity.*;
+import cn.har01d.alist_tvbox.entity.AListAlias;
+import cn.har01d.alist_tvbox.entity.AListAliasRepository;
+import cn.har01d.alist_tvbox.entity.Account;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.Meta;
+import cn.har01d.alist_tvbox.entity.MetaRepository;
+import cn.har01d.alist_tvbox.entity.Movie;
+import cn.har01d.alist_tvbox.entity.ShareRepository;
+import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
-import cn.har01d.alist_tvbox.model.*;
+import cn.har01d.alist_tvbox.model.FileNameInfo;
+import cn.har01d.alist_tvbox.model.Filter;
+import cn.har01d.alist_tvbox.model.FilterValue;
+import cn.har01d.alist_tvbox.model.FsDetail;
+import cn.har01d.alist_tvbox.model.FsInfo;
+import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -19,6 +32,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -34,19 +48,33 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.*;
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_PIC;
+import static cn.har01d.alist_tvbox.util.Constants.FILE;
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER_PIC;
+import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
+import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
 
 @Slf4j
 @Service
 public class TvBoxService {
     private final AccountRepository accountRepository;
+    private final AListAliasRepository aliasRepository;
     private final ShareRepository shareRepository;
     private final MetaRepository metaRepository;
 
@@ -86,6 +114,7 @@ public class TvBoxService {
     );
 
     public TvBoxService(AccountRepository accountRepository,
+                        AListAliasRepository aliasRepository,
                         ShareRepository shareRepository,
                         MetaRepository metaRepository,
                         AListService aListService,
@@ -95,6 +124,7 @@ public class TvBoxService {
                         DoubanService doubanService,
                         ObjectMapper objectMapper) {
         this.accountRepository = accountRepository;
+        this.aliasRepository = aliasRepository;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
         this.aListService = aListService;
@@ -177,17 +207,36 @@ public class TvBoxService {
                         filters = new ArrayList<>();
                         filters.add(new FilterValue("全部", ""));
                     }
+
                     String name = path;
                     String[] parts = path.split(":");
                     if (parts.length == 2) {
                         path = parts[0];
                         name = parts[1];
                     }
+
+                    String newPath = fixPath("/" + path);
                     category = new Category();
-                    category.setType_id(site.getId() + "$" + fixPath("/" + path) + "$0");
+                    category.setType_id(site.getId() + "$" + newPath + "$0");
                     category.setType_name((appProperties.isMerge() ? "\uD83C\uDFAC" : "") + name);
                     category.setType_flag(0);
                     typeId = category.getType_id();
+
+                    AListAlias alias = aliasRepository.findByPath(newPath);
+                    log.debug("{}: {}", newPath, alias);
+                    if (alias != null) {
+                        List<String> paths = Arrays.asList(alias.getContent().split("\n"));
+                        String prefix = getCommonPrefix(paths);
+                        String suffix = getCommonSuffix(paths);
+                        log.debug("prefix: {} suffix: {} list: {}", prefix, suffix, paths);
+                        for (String dir : paths) {
+                            parts = dir.split(":");
+                            dir = parts[0];
+                            name = parts.length == 2 ? parts[1] : dir.replace(prefix, "").replace(suffix, "").trim();
+                            filters.add(new FilterValue(name, dir));
+                        }
+                    }
+
                     result.getCategories().add(category);
                 }
                 addFilters(result, typeId, filters, years);
@@ -622,45 +671,79 @@ public class TvBoxService {
             pageable = PageRequest.of(page - 1, size);
         }
 
-        path = fixPath(path + "/" + dir);
-
-        Page<Meta> list;
-        if (year.isEmpty()) {
-            if ("normal".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 60, pageable);
-            } else if ("high".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 80, pageable);
-            } else if ("low".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreLessThan(path, 60, pageable);
-            } else if ("no".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreIsNull(path, pageable);
+        AListAlias aListAlias = aliasRepository.findByPath(path);
+        List<String> paths = new ArrayList<>();
+        if (!dir.isEmpty()) {
+            if (aListAlias == null) {
+                paths.add(fixPath(path + "/" + dir));
             } else {
-                list = metaRepository.findByPathStartsWith(path, pageable);
-            }
-        } else if ("others".equals(year)) {
-            int y = LocalDate.now().getYear() - 20;
-            if ("normal".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqualAndYearLessThan(path, 60, y, pageable);
-            } else if ("high".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqualAndYearLessThan(path, 80, y, pageable);
-            } else if ("low".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreLessThanAndYearLessThan(path, 60, y, pageable);
-            } else if ("no".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreIsNullAndYearLessThan(path, y, pageable);
-            } else {
-                list = metaRepository.findByPathStartsWithAndYearLessThan(path, y, pageable);
+                paths.add(fixPath(dir));
             }
         } else {
-            if ("normal".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqualAndYear(path, 60, Integer.parseInt(year), pageable);
-            } else if ("high".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqualAndYear(path, 80, Integer.parseInt(year), pageable);
-            } else if ("low".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreLessThanAndYear(path, 60, Integer.parseInt(year), pageable);
-            } else if ("no".equals(score)) {
-                list = metaRepository.findByPathStartsWithAndScoreIsNullAndYear(path, Integer.parseInt(year), pageable);
+            if (aListAlias != null) {
+                if (dir.isEmpty()) {
+                    paths = Arrays.stream(aListAlias.getContent().split("\n")).map(e -> e.split(":")[0]).collect(Collectors.toList());
+                    log.debug("{}: {} {}", path, aListAlias, paths);
+                } else {
+                    paths.add(fixPath(dir));
+                }
             } else {
-                list = metaRepository.findByPathStartsWithAndYear(path, Integer.parseInt(year), pageable);
+                paths.add(path);
+            }
+        }
+        log.debug("paths: {}", paths);
+
+        int pages = 0;
+        Page<Meta> list = new PageImpl<>(List.of());
+        for (String line : paths) {
+            path = line;
+            log.debug("get movies from {}", path);
+            if (pageable.getSort() != null) {
+                pageable = PageRequest.of(page - pages - 1, size, pageable.getSort());
+            } else {
+                pageable = PageRequest.of(page - pages - 1, size);
+            }
+            if (year.isEmpty()) {
+                if ("normal".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 60, pageable);
+                } else if ("high".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqual(path, 80, pageable);
+                } else if ("low".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreLessThan(path, 60, pageable);
+                } else if ("no".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreIsNull(path, pageable);
+                } else {
+                    list = metaRepository.findByPathStartsWith(path, pageable);
+                }
+            } else if ("others".equals(year)) {
+                int y = LocalDate.now().getYear() - 20;
+                if ("normal".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqualAndYearLessThan(path, 60, y, pageable);
+                } else if ("high".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqualAndYearLessThan(path, 80, y, pageable);
+                } else if ("low".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreLessThanAndYearLessThan(path, 60, y, pageable);
+                } else if ("no".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreIsNullAndYearLessThan(path, y, pageable);
+                } else {
+                    list = metaRepository.findByPathStartsWithAndYearLessThan(path, y, pageable);
+                }
+            } else {
+                if ("normal".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqualAndYear(path, 60, Integer.parseInt(year), pageable);
+                } else if ("high".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreGreaterThanEqualAndYear(path, 80, Integer.parseInt(year), pageable);
+                } else if ("low".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreLessThanAndYear(path, 60, Integer.parseInt(year), pageable);
+                } else if ("no".equals(score)) {
+                    list = metaRepository.findByPathStartsWithAndScoreIsNullAndYear(path, Integer.parseInt(year), pageable);
+                } else {
+                    list = metaRepository.findByPathStartsWithAndYear(path, Integer.parseInt(year), pageable);
+                }
+            }
+            pages += list.getTotalPages();
+            if (list.getNumberOfElements() > 0) {
+                break;
             }
         }
 
