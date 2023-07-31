@@ -55,12 +55,8 @@ jobs:
           tar xf x86_64-linux-musl-native.tgz -C /opt
       - name: setup zlib
         run: |
-          wget https://zlib.net/zlib-1.2.13.tar.gz
-          tar xf zlib-1.2.13.tar.gz
-          cd zlib-1.2.13
-          ./configure --prefix=$TOOLCHAIN_DIR --static
-          make
-          sudo make install
+          sudo apt update
+          sudo apt install zlib1g -y
       - name: Build with Maven
         run:  |
           export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
