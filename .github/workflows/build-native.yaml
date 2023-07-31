@@ -48,6 +48,11 @@ jobs:
           java-version: '17.0.7'
           distribution: 'graalvm' # See 'Options' for all available distributions
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'maven'
+      - uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: musl-tools # provides musl-gcc
+          version: 1.0
       - name: Build with Maven
         run: mvn -B -Pnative package --file pom.xml
       - name: Set up QEMU
