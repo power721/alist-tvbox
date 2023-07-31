@@ -51,7 +51,7 @@ jobs:
           cache: 'maven'
       - name: Build with Maven
         run:  |
-          sudo apt install zlibc build-essential libz-dev zlib1g-dev
+          sudo apt install build-essential libz-dev zlib1g-dev
           wget https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
           tar xf x86_64-linux-musl-native.tgz -C /opt
           export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
