@@ -3,10 +3,9 @@ set -e
 MOUNT=/etc/xiaoya
 PORT1=4567
 PORT2=5344
-MEM_OPT="-Xmx512M"
 BUILD=true
 
-while getopts ":d:p:m:P:t:yr" arg; do
+while getopts ":d:p:P:t:yr" arg; do
     case "${arg}" in
         d)
             MOUNT=${OPTARG}
@@ -16,9 +15,6 @@ while getopts ":d:p:m:P:t:yr" arg; do
             ;;
         P)
             PORT2=${OPTARG}
-            ;;
-        m)
-            MEM_OPT="-Xmx${OPTARG}M"
             ;;
         r)
             BUILD=false
@@ -42,15 +38,12 @@ if [ $# -gt 2 ]; then
 	PORT2=$3
 fi
 
-if [ $# -gt 3 ]; then
-	MEM_OPT="-Xmx${4}M"
-	echo "Java Memory: ${MEM_OPT}"
-fi
-
 if [ "$BUILD" = "true" ]; then
   rm -rf src/main/resources/static/assets && \
   cd web-ui && \
   npm run build || exit 1
+  cd ../qrcode && \
+  go build && \
   cd .. && \
   mvn clean package -DskipTests -Pnative || exit 1
 fi
@@ -62,7 +55,7 @@ docker image prune -f
 date +%j.%H%M > data/version
 docker build -f Dockerfile-native --tag=haroldli/xiaoya-tvbox:native . || exit 1
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
-docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e MEM_OPT="$MEM_OPT" -v "$MOUNT":/data --name=xiaoya-tvbox haroldli/xiaoya-tvbox:native
+docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -v "$MOUNT":/data --name=xiaoya-tvbox haroldli/xiaoya-tvbox:native
 
 sleep 1
 
