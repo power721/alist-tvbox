@@ -49,10 +49,21 @@ jobs:
           distribution: 'graalvm' # See 'Options' for all available distributions
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
-      - uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: musl-tools # provides musl-gcc
-          version: 1.0
+      - name: setup musl
+        run: |
+          sudo apt install zlibc build-essential libz-dev zlib1g-dev
+          wget https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
+          mv x86_64-linux-musl-native.tgz /opt
+          cd /opt && tar xf x86_64-linux-musl-native.tgz
+          wget https://zlib.net/zlib-1.2.13.tar.gz
+          export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
+          export CC=$TOOLCHAIN_DIR/bin/gcc
+          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
+          tar xf zlib-1.2.13.tar.gz
+          cd zlib-1.2.13
+          ./configure --prefix=$TOOLCHAIN_DIR --static
+          make
+          make install
       - name: Build with Maven
         run: mvn -B -Pnative package --file pom.xml
       - name: Set up QEMU
