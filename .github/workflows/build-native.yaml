@@ -30,21 +30,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ inputs.branch }}
-      - name: setup musl
-        run: |
-          apt install zlibc build-essential libz-dev zlib1g-dev
-          wget https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
-          mv x86_64-linux-musl-native.tgz /opt
-          cd /opt && tar xf x86_64-linux-musl-native.tgz
-          wget https://zlib.net/zlib-1.2.13.tar.gz
-          echo "TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/" >> $GITHUB_ENV
-          echo "CC=$TOOLCHAIN_DIR/bin/gcc" >> $GITHUB_ENV
-          echo "PATH=$TOOLCHAIN_DIR/bin:$PATH" >> $GITHUB_ENV
-          tar xf zlib-1.2.13.tar.gz
-          cd zlib-1.2.13
-          ./configure --prefix=$TOOLCHAIN_DIR --static
-          make
-          make install
       - name: Setup node
         uses: actions/setup-node@v3
         with:
@@ -65,7 +50,14 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
       - name: Build with Maven
-        run: mvn -B -Pnative package --file pom.xml
+        run:  |
+          sudo apt install zlibc build-essential libz-dev zlib1g-dev
+          wget https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
+          tar xf x86_64-linux-musl-native.tgz -C /opt
+          export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
+          export CC=$TOOLCHAIN_DIR/bin/gcc
+          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
+          mvn -B -Pnative package --file pom.xml
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
