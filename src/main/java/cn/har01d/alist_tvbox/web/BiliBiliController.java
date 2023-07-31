@@ -92,7 +92,7 @@ public class BiliBiliController {
     }
 
     @PostMapping("/login")
-    public QrCode scanLogin() throws IOException, WriterException {
+    public QrCode scanLogin() throws IOException {
         return biliBiliService.scanLogin();
     }
 
