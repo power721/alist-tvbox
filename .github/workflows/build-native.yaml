@@ -49,11 +49,20 @@ jobs:
           distribution: 'graalvm' # See 'Options' for all available distributions
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
-      - name: Build with Maven
-        run:  |
-          sudo apt install build-essential libz-dev zlib1g-dev
+      - name: setup musl
+        run: |
           wget https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
           tar xf x86_64-linux-musl-native.tgz -C /opt
+      - name: setup zlib
+        run: |
+          wget https://zlib.net/zlib-1.2.13.tar.gz
+          tar xf zlib-1.2.13.tar.gz
+          cd zlib-1.2.13
+          ./configure --prefix=$TOOLCHAIN_DIR --static
+          make
+          make install
+      - name: Build with Maven
+        run:  |
           export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
           export CC=$TOOLCHAIN_DIR/bin/gcc
           export PATH="$TOOLCHAIN_DIR/bin:$PATH"
@@ -83,7 +92,7 @@ jobs:
         with:
           context: .
           file: Dockerfile-native
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native
           cache-from: type=gha
