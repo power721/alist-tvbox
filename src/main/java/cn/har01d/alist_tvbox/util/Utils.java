@@ -103,7 +103,7 @@ public final class Utils {
     public static int executeUpdate(String sql) {
         try {
             ProcessBuilder builder = new ProcessBuilder();
-            builder.command("sqlite3", "/opt/alist/data/data.db", sql);
+            builder.command("sqlite3", "/opt/alist/data/data.db", "\"" + sql + ";\"");
             builder.inheritIO();
             Process process = builder.start();
             return process.waitFor();
@@ -116,7 +116,7 @@ public final class Utils {
     public static String executeQuery(String sql) {
         try {
             ProcessBuilder builder = new ProcessBuilder();
-            builder.command("sqlite3", "/opt/alist/data/data.db", sql);
+            builder.command("sqlite3", "/opt/alist/data/data.db", "\"" + sql + ";\"");
             Process process = builder.start();
             BufferedReader reader =
                     new BufferedReader(new InputStreamReader(process.getInputStream()));

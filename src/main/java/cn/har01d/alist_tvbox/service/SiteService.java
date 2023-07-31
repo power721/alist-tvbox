@@ -141,7 +141,7 @@ public class SiteService {
         }
 
         try {
-            String sql = "select value from x_setting_items where key = 'token';";
+            String sql = "select value from x_setting_items where key = 'token'";
             aListToken = Utils.executeQuery(sql);
             if (!aListToken.equals(site.getToken())) {
                 log.info("update site token: {}", aListToken);
