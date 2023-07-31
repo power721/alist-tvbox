@@ -60,7 +60,7 @@ jobs:
           cd zlib-1.2.13
           ./configure --prefix=$TOOLCHAIN_DIR --static
           make
-          make install
+          sudo make install
       - name: Build with Maven
         run:  |
           export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
