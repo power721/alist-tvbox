@@ -20,7 +20,7 @@ public final class BiliBiliUtils {
         log.info("get qr code for text: {}", text);
         try {
             ProcessBuilder builder = new ProcessBuilder();
-            builder.command("/qrcode", text);
+            builder.command("/atv-cli", text);
             builder.inheritIO();
             Process process = builder.start();
             process.waitFor();

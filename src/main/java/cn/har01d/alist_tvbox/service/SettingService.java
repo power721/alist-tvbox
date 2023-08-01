@@ -28,6 +28,7 @@ public class SettingService {
         appProperties.setHeartbeat(settingRepository.findById("bilibili_heartbeat").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setSupportDash(settingRepository.findById("bilibili_dash").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setReplaceAliToken(settingRepository.findById("replace_ali_token").map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setEnableHttps(settingRepository.findById("enable_https").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
     }
@@ -65,6 +66,9 @@ public class SettingService {
         }
         if ("replace_ali_token".equals(setting.getName())) {
             appProperties.setReplaceAliToken("true".equals(setting.getValue()));
+        }
+        if ("enable_https".equals(setting.getName())) {
+            appProperties.setEnableHttps("true".equals(setting.getValue()));
         }
         return settingRepository.save(setting);
     }

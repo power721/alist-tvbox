@@ -233,6 +233,7 @@ const aListStarted = ref(false)
 const aListRestart = ref(false)
 const mixSiteSource = ref(false)
 const replaceAliToken = ref(false)
+const enableHttps = ref(false)
 const showLogin = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -304,6 +305,12 @@ const updateReplaceAliToken = () => {
   })
 }
 
+const updateEnableHttps = () => {
+  axios.post('/settings', {name: 'enable_https', value: enableHttps.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateLogin = () => {
   axios.post('/login', login.value).then(() => {
     ElMessage.success('保存成功')
@@ -369,6 +376,7 @@ onMounted(() => {
       autoCheckin.value = data.auto_checkin === 'true'
       aListRestart.value = data.alist_restart_required === 'true'
       replaceAliToken.value = data.replace_ali_token === 'true'
+      enableHttps.value = data.enable_https === 'true'
       mixSiteSource.value = data.mix_site_source !== 'false'
       login.value.username = data.alist_username
       login.value.password = data.alist_password

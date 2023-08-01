@@ -1,4 +1,4 @@
-module qrcode
+module atv-cli
 
 go 1.20
 

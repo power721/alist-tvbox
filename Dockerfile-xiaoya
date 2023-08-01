@@ -41,7 +41,7 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY qrcode/qrcode /
+COPY atv-cli/atv-cli /
 
 COPY index.sh /
 

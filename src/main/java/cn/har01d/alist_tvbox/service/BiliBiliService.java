@@ -1717,8 +1717,9 @@ public class BiliBiliService {
         return url;
     }
 
-    private static String fixSubtitleUrl(String url) {
+    private String fixSubtitleUrl(String url) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() ? "https" : "http")
                 .replacePath("/subtitles")
                 .query("url=" + fixUrl(url))
                 .build()
