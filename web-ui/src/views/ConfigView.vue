@@ -184,6 +184,15 @@
             @change="updateReplaceAliToken"
           />
         </el-form-item>
+        <el-form-item label="开启HTTPS">
+          <el-switch
+            v-model="enableHttps"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateEnableHttps"
+          />
+        </el-form-item>
         <el-form-item label="小雅外网地址">
           <el-input v-model="dockerAddress"/>
         </el-form-item>
