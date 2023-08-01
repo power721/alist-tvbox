@@ -2,6 +2,15 @@ name: 'release java'
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'The git branch to build.'
+        required: true
+        default: 'dev'
+      tag:
+        description: 'The docker tag to build.'
+        required: true
+        default: '17'
   push:
     branches:
       - master
@@ -14,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.branch }}
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
@@ -36,6 +47,6 @@ jobs:
           file: Dockerfile-jre
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/java:17
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/java:${{ inputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
