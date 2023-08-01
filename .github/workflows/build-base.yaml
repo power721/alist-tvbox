@@ -6,15 +6,6 @@ on:
     types:
       - completed
   workflow_dispatch:
-    inputs:
-      branch:
-        description: 'The git branch to build.'
-        required: true
-        default: 'dev'
-      tag:
-        description: 'The docker tag to build.'
-        required: true
-        default: 'latest'
 
 jobs:
   release:
@@ -22,8 +13,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.branch }}
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
@@ -49,18 +38,18 @@ jobs:
           file: Dockerfile-base
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-base:${{ inputs.tag }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-base:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: TAG=latest
-#      - name: Build hostmode docker and push
-#        uses: docker/build-push-action@v4
-#        with:
-#          context: .
-#          file: Dockerfile-base
-#          platforms: linux/amd64,linux/arm64
-#          push: true
-#          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-base:hostmode
-#          cache-from: type=gha
-#          cache-to: type=gha,mode=max
-#          build-args: TAG=hostmode
+      - name: Build hostmode docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-base
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-base:hostmode
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: TAG=hostmode

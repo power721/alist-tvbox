@@ -92,7 +92,7 @@
     </template>
   </el-dialog>
 
-  <el-dialog v-model="uploadVisible" title="导入分享" width="30%">
+  <el-dialog v-model="uploadVisible" title="导入分享" width="50%">
     <el-form-item label="类型" label-width="140">
       <el-radio-group v-model="sharesDto.type" class="ml-4">
         <el-radio :label="0" size="large">阿里云盘</el-radio>
