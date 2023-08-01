@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.entity.Account;
@@ -27,11 +28,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -254,34 +252,31 @@ public class ShareService {
         return list;
     }
 
-    public int importShares(MultipartFile file, int type) throws IOException {
+    public int importShares(SharesDto dto) {
         int count = 0;
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
-            log.info("import share list from file");
-            while (reader.ready()) {
-                String line = reader.readLine();
-                String[] parts = line.trim().split("\\s+");
-                if (parts.length > 1) {
-                    try {
-                        Share share = new Share();
-                        share.setId(shareId);
-                        share.setPath(parts[0]);
-                        share.setShareId(parts[1]);
-                        if (parts.length > 2) {
-                            share.setFolderId(parts[2]);
-                        } else if (share.getType() == 1) {
-                            share.setFolderId("");
-                        }
-                        share.setType(type);
-                        if (shareRepository.existsByPath(share.getPath())) {
-                            continue;
-                        }
-                        create(share);
-                        count++;
-                        shareId++;
-                    } catch (Exception e) {
-                        log.warn("{}", e.getMessage());
+        log.info("import share list from file");
+        for (String line : dto.getContent().split("\n")) {
+            String[] parts = line.trim().split("\\s+");
+            if (parts.length > 1) {
+                try {
+                    Share share = new Share();
+                    share.setId(shareId);
+                    share.setPath(parts[0]);
+                    share.setShareId(parts[1]);
+                    if (parts.length > 2) {
+                        share.setFolderId(parts[2]);
+                    } else if (share.getType() == 1) {
+                        share.setFolderId("");
                     }
+                    share.setType(dto.getType());
+                    if (shareRepository.existsByPath(share.getPath())) {
+                        continue;
+                    }
+                    create(share);
+                    count++;
+                    shareId++;
+                } catch (Exception e) {
+                    log.warn("{}", e.getMessage());
                 }
             }
         }
