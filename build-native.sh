@@ -51,6 +51,8 @@ fi
 echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
 echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
 
+docker pull xiaoyaliu/alist:latest
+
 docker image prune -f
 date +%j.%H%M > data/version
 docker build -f Dockerfile-native --tag=haroldli/xiaoya-tvbox:native . || exit 1
