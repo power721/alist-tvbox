@@ -48,7 +48,11 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
-import java.time.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashMap;
@@ -923,12 +927,17 @@ public class AccountService {
             map = getAliToken(account.getRefreshToken());
         }
         String accessToken = (String) map.get(ACCESS_TOKEN);
-        String driveId = (String) map.get("resource_drive_id");
-        if (StringUtils.isBlank(driveId)) {
+        String driveId = (String) map.get("default_drive_id");
+
+        AliFileList list;
+        try {
+            list = getFileList(driveId, account.getFolderId(), accessToken);
+        } catch (Exception e) {
+            log.warn("{}", e.getMessage());
             driveId = (String) getUserInfo(accessToken).get("resource_drive_id");
+            list = getFileList(driveId, account.getFolderId(), accessToken);
         }
 
-        AliFileList list = getFileList(driveId, account.getFolderId(), accessToken);
         log.debug("AliFileList: {}", list);
         List<AliFileItem> files = list.getItems().stream().filter(file -> !file.isHidden() && "file".equals(file.getType())).collect(Collectors.toList());
         return deleteFiles(driveId, files, accessToken);
