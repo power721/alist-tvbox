@@ -838,7 +838,7 @@ public class AccountService {
     }
 
     public void showMyAli(Account account) {
-        int storageId = 9999 + account.getId();
+        int storageId = 10000 + (account.getId() - 1) * 2;
         try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
              Statement statement = connection.createStatement()) {
             String name = account.getNickname();
@@ -851,7 +851,6 @@ public class AccountService {
                 storageId++;
                 sql = "INSERT INTO x_storages VALUES(" + storageId + ",'/\uD83D\uDCC0我的阿里云盘/" + name + "/备份盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"https://api.nn.ci/alist/ali_open/token\",\"client_id\":\"\",\"client_secret\":\"\",\"rorb\":\"b\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                 statement.executeUpdate(sql);
-                storageId++;
                 log.info("add AList storage {}", name);
             }
         } catch (Exception e) {
@@ -866,7 +865,7 @@ public class AccountService {
         }
 
         String token = status == 2 ? login() : "";
-        int storageId = 9999 + account.getId();
+        int storageId = 10000 + (account.getId() - 1) * 2;
         if (status == 2) {
             deleteStorage(storageId, token);
             deleteStorage(storageId + 1, token);
