@@ -942,11 +942,11 @@ public class AccountService {
         AliFileList list;
         try {
             driveId = (String) getUserInfo(accessToken).get("resource_drive_id");
-            if (driveId == null) {
-                log.debug("use resource_drive_id {}", driveId);
-            } else {
+            if (StringUtils.isBlank(driveId)) {
                 driveId = (String) map.get("default_drive_id");
                 log.debug("use default_drive_id {}", driveId);
+            } else {
+                log.debug("use resource_drive_id {}", driveId);
             }
             list = getFileList(driveId, account.getFolderId(), accessToken);
         } catch (Exception e) {
@@ -969,6 +969,7 @@ public class AccountService {
         Map<String, Object> body = new HashMap<>();
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<Map> response = restTemplate1.exchange("https://user.aliyundrive.com/v2/user/get", HttpMethod.POST, entity, Map.class);
+        log.debug("getUserInfo: {}", response.getBody());
         return response.getBody();
     }
 
