@@ -209,7 +209,7 @@ public class SubscriptionService {
         }
 
         addSite(config);
-        addRules(config);
+//        addRules(config);
 
         return config;
     }
