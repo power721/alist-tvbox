@@ -9,20 +9,54 @@ import java.io.InputStreamReader;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Slf4j
 public final class Utils {
     private static final int KB = 1024;
     private static final int MB = 1024 * KB;
     private static final int GB = 1024 * MB;
+    private static final Pattern EPISODE = Pattern.compile("^(.+)[sS]\\d{1,2}[eE]?$");
     private static final int[] mixinKeyEncTab = new int[]{
             46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
             33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40,
             61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11,
             36, 20, 34, 44, 52
     };
+
+    public static String getCommonPrefix(List<String> names) {
+        int n = names.size();
+        if (n <= 1) return "";
+        String ans = names.get(0);
+        for (int i = 1; i < n; i++) {
+            int j = 0;
+            while (j < ans.length() && j < names.get(i).length() && ans.charAt(j) == names.get(i).charAt(j)) {
+                j++;
+            }
+            ans = names.get(i).substring(0, j);
+        }
+        Matcher matcher = EPISODE.matcher(ans);
+        if (matcher.matches()) {
+            return matcher.group(1);
+        }
+        return ans;
+    }
+
+    public static String getCommonSuffix(List<String> names) {
+        int n = names.size();
+        if (n <= 1) return "";
+        names = names.stream().map(e -> new StringBuilder(e).reverse().toString()).collect(Collectors.toList());
+        String text = new StringBuilder(getCommonPrefix(names)).reverse().toString();
+        if (text.startsWith("集")) {
+            return text.substring(1);
+        }
+        return text;
+    }
 
     public static String getMixinKey(String imgKey, String subKey) {
         String s = imgKey + subKey;
@@ -140,7 +174,7 @@ public final class Utils {
             line = parts[0];
             parts = line.split("\\$");
             if (parts.length == 2) {
-                sb.append(parts[0] + ":" + parts[1]).append("\\n");
+                sb.append(parts[0]).append(":").append(parts[1]).append("\\n");
             } else {
                 sb.append("本地:").append(line).append("\\n");
             }
