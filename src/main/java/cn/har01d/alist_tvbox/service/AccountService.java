@@ -927,14 +927,17 @@ public class AccountService {
             map = getAliToken(account.getRefreshToken());
         }
         String accessToken = (String) map.get(ACCESS_TOKEN);
-        String driveId = (String) map.get("default_drive_id");
+        String driveId;
 
         AliFileList list;
         try {
+            driveId = (String) getUserInfo(accessToken).get("resource_drive_id");
+            log.debug("use resource_drive_id {}", driveId);
             list = getFileList(driveId, account.getFolderId(), accessToken);
         } catch (Exception e) {
             log.warn("{}", e.getMessage());
-            driveId = (String) getUserInfo(accessToken).get("resource_drive_id");
+            driveId = (String) map.get("default_drive_id");
+            log.debug("use default_drive_id {}", driveId);
             list = getFileList(driveId, account.getFolderId(), accessToken);
         }
 
