@@ -1,7 +1,5 @@
 FROM xiaoyaliu/alist:latest
 
-ENV GLIBC_VERSION 2.35-r1
-
 LABEL MAINTAINER="Har01d"
 
 VOLUME /opt/atv/data/

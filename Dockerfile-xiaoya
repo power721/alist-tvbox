@@ -1,4 +1,4 @@
-FROM haroldli/java:17.1 as corretto-jdk
+FROM haroldli/java:17 as corretto-jdk
 
 FROM xiaoyaliu/alist:latest
 

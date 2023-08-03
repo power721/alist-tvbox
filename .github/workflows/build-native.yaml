@@ -2,34 +2,34 @@ name: 'release native docker'
 
 on:
   workflow_dispatch:
-    inputs:
-      branch:
-        description: 'The git branch to build.'
-        required: true
-        default: 'dev'
-#      tag:
-#        description: 'The docker tag to build.'
-#        required: true
-#        default: 'dev'
-      release:
-        description: 'Release the app.'
-        required: true
-        type: boolean
-        default: false
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'build*'
+      - 'release*'
+      - 'config/**'
+      - 'doc/**'
+      - 'pom.xml'
+      - 'entrypoint-xiaoya.sh'
+      - 'Dockerfile-v7'
+      - 'Dockerfile'
+      - 'Dockerfile-native'
+      - 'Dockerfile-base'
+      - 'Dockerfile-jre'
+      - '.github/workflows/build.yaml'
+      - '.github/workflows/build-base.yaml'
+      - '.github/workflows/build-dev.yaml'
+      - '.github/workflows/build-java.yaml'
+      - '.github/workflows/build-xiaoya.yaml'
+      - '.github/workflows/build-v7.yaml'
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: show info
-        run: |
-          echo "git branch: ${{ inputs.branch }}"
-          echo "docker tag: ${{ inputs.tag }}"
-          echo "release: ${{ inputs.release }}"
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.branch }}
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
@@ -103,40 +103,3 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native
           cache-from: type=gha
           cache-to: type=gha,mode=max
-#      - if: ${{ inputs.release }}
-#        name: Build host mode docker and push
-#        uses: docker/build-push-action@v4
-#        with:
-#          context: .
-#          file: Dockerfile-host
-#          platforms: linux/amd64,linux/arm64
-#          push: true
-#          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:hostmode
-#          cache-from: type=gha
-#          cache-to: type=gha,mode=max
-      - name: Send version file
-        if: ${{ env.ssh_host != '' && inputs.release }}
-        env:
-          ssh_host: ${{ secrets.SSH_HOST }}
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          port: 22
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "data/app_version,config/update_new.sh,config/update_xiaoya.sh,config/update_hostmode.sh"
-          strip_components: 1
-          target: /var/www/alist/
-      - if: ${{ inputs.release }}
-        name: send telegram message
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.CHANNEL_ID }}
-          token: ${{ secrets.BOT_TOKEN }}
-          message: |
-            ${{ github.actor }} created commit:
-            Commit message: ${{ github.event.commits[0].message }}
-
-            Repository: ${{ github.repository }}
-
-            See changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}
