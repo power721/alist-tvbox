@@ -208,7 +208,7 @@ public class SubscriptionService {
             }
         }
 
-        if (settingRepository.existsById(BILIBILI_COOKIE)) {
+        if (appProperties.isXiaoya()) {
             try {
                 Map<String, Object> site = buildOpenSite("bilibili", "bilibili", "BiliBili");
                 sites.add(id, site);
@@ -376,8 +376,9 @@ public class SubscriptionService {
         try {
             json = Pattern.compile("^\\s*#.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
             json = Pattern.compile("^\\s*//.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
-            json = json.replace("DOCKER_ADDRESS", readAlistAddress());
-            json = json.replace("ATV_ADDRESS", readHostAddress());
+            String address = readHostAddress();
+            json = json.replace("DOCKER_ADDRESS", address);
+            json = json.replace("ATV_ADDRESS", address);
             Map<String, Object> override = objectMapper.readValue(json, Map.class);
             overrideConfig(config, "", "", override);
             return replaceString(config, override);
@@ -674,8 +675,9 @@ public class SubscriptionService {
             File file = new File("/www/tvbox/my.json");
             if (file.exists()) {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-                json = json.replaceAll("DOCKER_ADDRESS", readAlistAddress());
-                json = json.replaceAll("ATV_ADDRESS", readHostAddress());
+                String address = readHostAddress();
+                json = json.replaceAll("DOCKER_ADDRESS", address);
+                json = json.replaceAll("ATV_ADDRESS", address);
                 return json;
             }
         } catch (IOException e) {
@@ -683,48 +685,6 @@ public class SubscriptionService {
             return null;
         }
         return null;
-    }
-
-    private Integer getAlistPort() {
-        if (appProperties.isHostmode()) {
-            return 6789;
-        }
-        try {
-            return Integer.parseInt(environment.getProperty("ALIST_PORT", "5344"));
-        } catch (Exception e) {
-            return 5344;
-        }
-    }
-
-    private String readAlistAddress() throws IOException {
-        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() ? "https" : "http")
-                .port(getAlistPort())
-                .replacePath("/")
-                .build();
-        String address = null;
-        if (!isIntranet(uriComponents)) {
-            address = getAddress();
-            if (StringUtils.isBlank(address)) {
-                File file = new File("/data/docker_address.txt");
-                if (file.exists()) {
-                    address = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-                    if (StringUtils.isNotBlank(address)) {
-                        settingRepository.save(new Setting("docker_address", address));
-                    }
-                }
-            }
-        }
-
-        if (StringUtils.isBlank(address)) {
-            address = uriComponents.toUriString();
-        }
-
-        if (address.endsWith("/")) {
-            address = address.substring(0, address.length() - 1);
-        }
-
-        return address;
     }
 
     private String readHostAddress() {
@@ -737,20 +697,6 @@ public class SubscriptionService {
                 .replacePath(path)
                 .build();
         return uriComponents.toUriString();
-    }
-
-    private boolean isIntranet(UriComponents uriComponents) {
-        try {
-            String host = uriComponents.getHost();
-            return host != null && (host.equals("localhost") || host.equals("127.0.0.1") || host.startsWith("192.168."));
-        } catch (Exception e) {
-            log.warn("{}", e.getMessage());
-        }
-        return false;
-    }
-
-    private String getAddress() {
-        return settingRepository.findById("docker_address").map(Setting::getValue).orElse(null);
     }
 
     public Map<String, Object> convertResult(String json, String configKey) {
