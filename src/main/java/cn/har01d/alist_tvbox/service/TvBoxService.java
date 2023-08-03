@@ -932,7 +932,7 @@ public class TvBoxService {
             }
             movieDetail.setVod_play_url(playUrl);
 
-            movieDetail.setVod_content(site.getName() + ":" + getParent(path));
+            movieDetail.setVod_content(getParent(path));
             setDoubanInfo(movieDetail, meta.getMovie(), true);
             result.getList().add(movieDetail);
         } else {
@@ -945,7 +945,7 @@ public class TvBoxService {
             movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
             movieDetail.setVod_play_from(site.getName());
             movieDetail.setVod_play_url(fsDetail.getName() + "$" + buildPlayUrl(site, path));
-            movieDetail.setVod_content(site.getName() + ":" + getParent(path));
+            movieDetail.setVod_content(getParent(path));
             setDoubanInfo(site, movieDetail, getParent(path), true);
             result.getList().add(movieDetail);
         }
@@ -1146,7 +1146,7 @@ public class TvBoxService {
         movieDetail.setType_name(movie.getGenre());
         movieDetail.setVod_lang(movie.getLanguage());
         if (StringUtils.isNotEmpty(movie.getDescription())) {
-            movieDetail.setVod_content(movie.getDescription());
+            movieDetail.setVod_content(movieDetail.getVod_content() + ";\n" + movie.getDescription());
         }
     }
 

@@ -44,6 +44,9 @@ while getopts ":d:p:P:m:t:yh" arg; do
     esac
 done
 
+mkdir -p "$HOME/.config/atv"
+echo "$0 ${*}" > "$HOME/.config/atv/cmd"
+
 shift $((OPTIND-1))
 
 if [ $# -gt 0 ]; then

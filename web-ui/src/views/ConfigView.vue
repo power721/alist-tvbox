@@ -196,9 +196,9 @@
 <!--        <el-form-item label="小雅外网地址">-->
 <!--          <el-input v-model="dockerAddress"/>-->
 <!--        </el-form-item>-->
-        <el-form-item>
-          <el-button type="primary" @click="updateDockerAddress">更新</el-button>
-        </el-form-item>
+<!--        <el-form-item>-->
+<!--          <el-button type="primary" @click="updateDockerAddress">更新</el-button>-->
+<!--        </el-form-item>-->
         <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>
