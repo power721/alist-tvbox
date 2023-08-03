@@ -111,6 +111,20 @@ public class TvBoxController {
         return subscriptionService.subscription(id);
     }
 
+    @GetMapping("/open")
+    public Map<String, Object> open() {
+        return open("");
+    }
+
+    @GetMapping("/open/{token}")
+    public Map<String, Object> open(@PathVariable String token) {
+        if (!subscriptionService.getToken().equals(token)) {
+            throw new BadRequestException();
+        }
+
+        return subscriptionService.open();
+    }
+
     @GetMapping(value = "/repo/{id}", produces = "application/json")
     public String repository(@PathVariable int id) {
         return repository("", id);
