@@ -8,17 +8,15 @@ import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
-import java.util.List;
 
 @Slf4j
 @Service
-@Profile("xiaoya")
+
 public class AListAliasService {
     private final AListAliasRepository aliasRepository;
     private final AccountService accountService;
@@ -41,12 +39,11 @@ public class AListAliasService {
         aListLocalService.validateAListStatus();
         validate(dto);
         AListAlias alias = new AListAlias(dto);
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
-             Statement statement = connection.createStatement()) {
+        try {
             String token = accountService.login();
             alias.setId(shareId++);
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'name','asc','front',0,'302_redirect','');";
-            int count = statement.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
+            int count = Utils.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
             log.info("insert alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
             aliasRepository.save(alias);
             shareService.enableStorage(alias.getId(), token);
@@ -65,15 +62,14 @@ public class AListAliasService {
         aliasRepository.save(alias);
 
         String token = accountService.login();
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
-             Statement statement = connection.createStatement()) {
+        try {
             shareService.deleteStorage(id, token);
 
             String sql = "DELETE FROM x_storages WHERE id = " + id;
-            statement.executeUpdate(sql);
+            Utils.executeUpdate(sql);
 
             sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'name','asc','front',0,'302_redirect','');";
-            int count = statement.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
+            int count = Utils.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
             log.info("update alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
 
             shareService.enableStorage(id, token);

@@ -92,34 +92,15 @@
     </template>
   </el-dialog>
 
-  <el-dialog v-model="uploadVisible" title="上传分享文件" width="30%">
-    <el-upload
-      ref="upload"
-      class="upload"
-      :action="'/import-shares?type='+form.type"
-      accept=".txt"
-      :limit="1"
-      :headers="{'X-ACCESS-TOKEN': token}"
-      :on-exceed="handleExceed"
-      :on-success="uploadSuccess"
-      :on-error="uploadError"
-      :auto-upload="false"
-    >
-      <template #trigger>
-        <el-button type="primary">选择文件</el-button>
-      </template>
-
-      <template #tip>
-        <div class="el-upload__tip text-red">
-          选择1个txt文件，挂载路径，分享ID，目录ID，空格分隔。
-        </div>
-      </template>
-    </el-upload>
+  <el-dialog v-model="uploadVisible" title="导入分享" width="50%">
     <el-form-item label="类型" label-width="140">
-      <el-radio-group v-model="form.type" class="ml-4">
+      <el-radio-group v-model="sharesDto.type" class="ml-4">
         <el-radio :label="0" size="large">阿里云盘</el-radio>
         <el-radio :label="1" size="large">PikPak分享</el-radio>
       </el-radio-group>
+    </el-form-item>
+    <el-form-item label="分享内容" label-width="120">
+      <el-input v-model="sharesDto.content" type="textarea" :rows="15" placeholder="多行分享"/>
     </el-form-item>
     <template #footer>
       <span class="dialog-footer">
@@ -149,12 +130,10 @@
 <script setup lang="ts">
 import {onMounted, ref} from "vue";
 import axios from "axios";
-import type {UploadInstance, UploadProps, UploadRawFile} from 'element-plus'
 import {ElMessage, genFileId} from 'element-plus'
 import accountService from "@/services/account.service";
 
 const token = accountService.getToken()
-const upload = ref<UploadInstance>()
 
 interface ShareInfo {
   id: string
@@ -190,6 +169,10 @@ const form = ref({
   folderId: '',
   password: '',
   cookie: '',
+  type: 0
+})
+const sharesDto = ref({
+  content: '',
   type: 0
 })
 
@@ -294,15 +277,8 @@ const loadShares = (value: number) => {
   })
 }
 
-const handleExceed: UploadProps['onExceed'] = (files, uploadFiles) => {
-  upload.value!.clearFiles()
-  const file = files[0] as UploadRawFile
-  file.uid = genFileId()
-  upload.value!.handleStart(file)
-}
-
 const submitUpload = () => {
-  upload.value!.submit()
+  axios.post('/import-shares', sharesDto.value).then()
 }
 
 const exportShares = () => {

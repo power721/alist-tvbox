@@ -1,7 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.service.LogsService;
-import org.springframework.context.annotation.Profile;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -9,11 +9,10 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 @RestController
-@Profile("xiaoya")
+
 public class LogController {
     private final LogsService logsService;
 

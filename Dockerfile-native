@@ -1,0 +1,26 @@
+FROM xiaoyaliu/alist:latest
+
+ENV GLIBC_VERSION 2.35-r1
+
+LABEL MAINTAINER="Har01d"
+
+VOLUME /opt/atv/data/
+
+WORKDIR /opt/atv/
+
+COPY atv-cli/atv-cli /
+COPY index.sh /
+
+COPY init.sh /
+COPY movie.sh /
+COPY entrypoint-native.sh /entrypoint.sh
+
+COPY target/atv ./
+
+COPY data/version data/app_version
+
+EXPOSE 4567 80
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+CMD ["81", "--spring.profiles.active=production,xiaoya"]

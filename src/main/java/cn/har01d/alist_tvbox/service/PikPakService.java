@@ -5,12 +5,12 @@ import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -21,7 +21,7 @@ import java.util.List;
 
 @Slf4j
 @Service
-@Profile("xiaoya")
+
 public class PikPakService {
     private final PikPakAccountRepository pikPakAccountRepository;
     private final AccountService accountService;
@@ -94,12 +94,11 @@ public class PikPakService {
     }
 
     public void loadPikPak() {
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
-             Statement statement = connection.createStatement()) {
+        try {
             List<PikPakAccount> list = pikPakAccountRepository.findAll();
             for (PikPakAccount account : list) {
                 String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'','','',0,'302_redirect','');";
-                statement.executeUpdate(String.format(sql, 8000 + account.getId(), account.getNickname(), account.getUsername(), account.getPassword()));
+                Utils.executeUpdate(String.format(sql, 8000 + account.getId(), account.getNickname(), account.getUsername(), account.getPassword()));
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -191,8 +190,7 @@ public class PikPakService {
 
     public void updatePikPak(PikPakAccount account) {
         int status = aListLocalService.getAListStatus();
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
-             Statement statement = connection.createStatement()) {
+        try {
             int id = 8000 + account.getId();
             int disabled = status == 0 ? 0 : 1;
             String token = status == 2 ? accountService.login() : "";
@@ -200,7 +198,7 @@ public class PikPakService {
                 accountService.deleteStorage(id, token);
             }
             String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',%d,'','','',0,'302_redirect','');";
-            statement.executeUpdate(String.format(sql, id, account.getNickname(), account.getUsername(), account.getPassword(), disabled));
+            Utils.executeUpdate(String.format(sql, id, account.getNickname(), account.getUsername(), account.getPassword(), disabled));
             log.info("add AList PikPak {} {}: {}", id, account.getNickname(), account.getUsername());
             if (status == 2) {
                 accountService.enableStorage(id, token);
@@ -224,14 +222,13 @@ public class PikPakService {
     }
 
     private void updateAList(PikPakAccount account) {
-        try (Connection connection = DriverManager.getConnection(Constants.DB_URL);
-             Statement statement = connection.createStatement()) {
+        try {
             log.info("update AList PikPak credentials by account: {}", account.getId());
 
             String sql = "update x_storages set addition = json_replace(addition, '$.username', '" + account.getUsername() + "') where driver = 'PikPakShare';";
-            statement.executeUpdate(String.format(sql));
+            Utils.executeUpdate(String.format(sql));
             sql = "update x_storages set addition = json_replace(addition, '$.password', '" + account.getPassword() + "') where driver = 'PikPakShare';";
-            statement.executeUpdate(String.format(sql));
+            Utils.executeUpdate(String.format(sql));
         } catch (Exception e) {
             throw new BadRequestException(e);
         }

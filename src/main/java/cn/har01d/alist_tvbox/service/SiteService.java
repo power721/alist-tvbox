@@ -8,22 +8,19 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
 import java.io.File;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.Statement;
 import java.util.List;
 import java.util.Optional;
 
@@ -143,11 +140,9 @@ public class SiteService {
             log.info("set site url {}: {}", site.getName(), site.getUrl());
         }
 
-        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:/opt/alist/data/data.db")) {
-            Statement statement = connection.createStatement();
+        try {
             String sql = "select value from x_setting_items where key = 'token'";
-            ResultSet rs = statement.executeQuery(sql);
-            aListToken = rs.getString(1);
+            aListToken = Utils.executeQuery(sql);
             if (!aListToken.equals(site.getToken())) {
                 log.info("update site token: {}", aListToken);
                 site.setToken(aListToken);

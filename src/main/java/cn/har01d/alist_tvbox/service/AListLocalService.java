@@ -7,7 +7,6 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.SettingResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -21,7 +20,7 @@ import static cn.har01d.alist_tvbox.util.Constants.ALIST_START_TIME;
 
 @Slf4j
 @Service
-@Profile("xiaoya")
+
 public class AListLocalService {
 
     private final SettingRepository settingRepository;

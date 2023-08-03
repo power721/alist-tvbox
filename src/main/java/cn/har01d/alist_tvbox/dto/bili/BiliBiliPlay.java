@@ -24,6 +24,7 @@ public class BiliBiliPlay {
     public static class Dash {
         private List<Audio> audio = new ArrayList<>();
         private List<Video> video = new ArrayList<>();
+
         @Data
         public static class Audio {
             private long id;

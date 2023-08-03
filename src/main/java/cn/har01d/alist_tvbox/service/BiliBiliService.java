@@ -2,7 +2,45 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.NavigationDto;
-import cn.har01d.alist_tvbox.dto.bili.*;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelItem;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelListResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliFavItemsResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliFavListResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliFeedResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResult;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliHotResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliListResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliLoginResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlay;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliPlayResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliQrCodeResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliRelatedResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchInfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResult;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliTokenResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2InfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliVideoInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliVideoInfoResponse;
+import cn.har01d.alist_tvbox.dto.bili.ChannelArchive;
+import cn.har01d.alist_tvbox.dto.bili.ChannelArchives;
+import cn.har01d.alist_tvbox.dto.bili.ChannelList;
+import cn.har01d.alist_tvbox.dto.bili.CookieData;
+import cn.har01d.alist_tvbox.dto.bili.FavItem;
+import cn.har01d.alist_tvbox.dto.bili.QrCode;
+import cn.har01d.alist_tvbox.dto.bili.QrCodeResult;
+import cn.har01d.alist_tvbox.dto.bili.Resp;
+import cn.har01d.alist_tvbox.dto.bili.Sub;
+import cn.har01d.alist_tvbox.dto.bili.SubtitleData;
+import cn.har01d.alist_tvbox.dto.bili.SubtitleDataResponse;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.model.Filter;
@@ -19,34 +57,40 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.EncodeHintType;
-import com.google.zxing.MultiFormatWriter;
-import com.google.zxing.WriterException;
-import com.google.zxing.common.BitMatrix;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import javax.annotation.PostConstruct;
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.*;
+import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
+import static cn.har01d.alist_tvbox.util.Constants.BILI_BILI;
+import static cn.har01d.alist_tvbox.util.Constants.FILE;
+import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
 
 @Slf4j
 @Service
@@ -202,31 +246,11 @@ public class BiliBiliService {
         return data;
     }
 
-    public QrCode scanLogin() throws IOException, WriterException {
+    public QrCode scanLogin() throws IOException {
         QrCode qrCode = restTemplate.getForObject("https://passport.bilibili.com/x/passport-login/web/qrcode/generate", BiliBiliQrCodeResponse.class).getData();
-        qrCode.setImage(getQrCode(qrCode.getUrl()));
+        qrCode.setImage(BiliBiliUtils.getQrCode(qrCode.getUrl()));
         log.debug("{}", qrCode);
         return qrCode;
-    }
-
-    private String getQrCode(String text) throws IOException, WriterException {
-        log.info("getQrCode: {}", text);
-        Map<EncodeHintType, String> charcter = new HashMap<>();
-        charcter.put(EncodeHintType.CHARACTER_SET, "UTF-8");
-        BitMatrix bitMatrix = new MultiFormatWriter()
-                .encode(text, BarcodeFormat.QR_CODE, 500, 500, charcter);
-        int width = bitMatrix.getWidth();
-        int height = bitMatrix.getHeight();
-        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                image.setRGB(x, y, bitMatrix.get(x, y) ? BLACK : WHITE);
-            }
-        }
-
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        ImageIO.write(image, "png", stream);
-        return Base64.getEncoder().encodeToString(stream.toByteArray());
     }
 
     public int checkLogin(String key) {
@@ -1693,8 +1717,9 @@ public class BiliBiliService {
         return url;
     }
 
-    private static String fixSubtitleUrl(String url) {
+    private String fixSubtitleUrl(String url) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() ? "https" : "http")
                 .replacePath("/subtitles")
                 .query("url=" + fixUrl(url))
                 .build()

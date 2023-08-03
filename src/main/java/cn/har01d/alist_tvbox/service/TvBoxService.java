@@ -24,6 +24,7 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -60,6 +61,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -226,8 +228,8 @@ public class TvBoxService {
                     log.debug("{}: {}", newPath, alias);
                     if (alias != null) {
                         List<String> paths = Arrays.asList(alias.getContent().split("\n"));
-                        String prefix = getCommonPrefix(paths);
-                        String suffix = getCommonSuffix(paths);
+                        String prefix = Utils.getCommonPrefix(paths);
+                        String suffix = Utils.getCommonSuffix(paths);
                         log.debug("prefix: {} suffix: {} list: {}", prefix, suffix, paths);
                         for (String dir : paths) {
                             parts = dir.split(":");
@@ -975,8 +977,8 @@ public class TvBoxService {
                 }
 
                 List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
-                String prefix = getCommonPrefix(fileNames);
-                String suffix = getCommonSuffix(fileNames);
+                String prefix = Utils.getCommonPrefix(fileNames);
+                String suffix = Utils.getCommonSuffix(fileNames);
                 for (String name : fileNames) {
                     list.add(getName(name.replace(prefix, "").replace(suffix, "")) + "$" + buildPlayUrl(site, id + "/" + folder + "/" + name));
                 }
@@ -987,8 +989,8 @@ public class TvBoxService {
             }
 
             List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
-            String prefix = getCommonPrefix(fileNames);
-            String suffix = getCommonSuffix(fileNames);
+            String prefix = Utils.getCommonPrefix(fileNames);
+            String suffix = Utils.getCommonSuffix(fileNames);
             for (String name : fileNames) {
                 list.add(getName(name.replace(prefix, "").replace(suffix, "")) + "$" + buildPlayUrl(site, id + "/" + name));
             }
@@ -1052,8 +1054,8 @@ public class TvBoxService {
 
                 List<String> urls = new ArrayList<>();
                 List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
-                String prefix = getCommonPrefix(fileNames);
-                String suffix = getCommonSuffix(fileNames);
+                String prefix = Utils.getCommonPrefix(fileNames);
+                String suffix = Utils.getCommonSuffix(fileNames);
                 log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
                 for (String name : fileNames) {
                     String url = buildPlayUrl(site, newPath + "/" + folder + "/" + name);
@@ -1064,8 +1066,8 @@ public class TvBoxService {
                 }
                 list.add(String.join("#", urls));
             }
-            String prefix = getCommonPrefix(folders);
-            String suffix = getCommonSuffix(folders);
+            String prefix = Utils.getCommonPrefix(folders);
+            String suffix = Utils.getCommonSuffix(folders);
             log.debug("folders common prefix: '{}'  common suffix: '{}'", prefix, suffix);
             String folderNames = folders.stream().map(e -> e.replace(prefix, "").replace(suffix, "")).collect(Collectors.joining("$$$"));
             movieDetail.setVod_play_from(folderNames);
@@ -1086,8 +1088,8 @@ public class TvBoxService {
             }
 
             List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
-            String prefix = getCommonPrefix(fileNames);
-            String suffix = getCommonSuffix(fileNames);
+            String prefix = Utils.getCommonPrefix(fileNames);
+            String suffix = Utils.getCommonSuffix(fileNames);
             log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
 
             for (String name : fileNames) {
@@ -1128,7 +1130,7 @@ public class TvBoxService {
         }
     }
 
-    private static void setDoubanInfo(MovieDetail movieDetail, Movie movie, boolean details) {
+    private void setDoubanInfo(MovieDetail movieDetail, Movie movie, boolean details) {
         if (movie == null) {
             return;
         }
@@ -1149,10 +1151,11 @@ public class TvBoxService {
         }
     }
 
-    private static void fixCover(MovieDetail movie) {
+    private void fixCover(MovieDetail movie) {
         try {
             if (movie.getVod_pic() != null && !movie.getVod_pic().isEmpty()) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
+                        .scheme(appProperties.isEnableHttps() ? "https" : "http")
                         .replacePath("/images")
                         .replaceQuery("url=" + movie.getVod_pic())
                         .build()
@@ -1165,10 +1168,11 @@ public class TvBoxService {
         }
     }
 
-    private static void fixCover(Movie movie) {
+    private void fixCover(Movie movie) {
         try {
             if (movie.getCover() != null && !movie.getCover().isEmpty() && !movie.getCover().contains("/images")) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
+                        .scheme(appProperties.isEnableHttps() ? "https" : "http")
                         .replacePath("/images")
                         .replaceQuery("url=" + movie.getCover())
                         .build()
@@ -1256,31 +1260,6 @@ public class TvBoxService {
             return name.substring(0, index);
         }
         return name;
-    }
-
-    private String getCommonPrefix(List<String> names) {
-        int n = names.size();
-        if (n <= 1) return "";
-        String ans = names.get(0);
-        for (int i = 1; i < n; i++) {
-            int j = 0;
-            while (j < ans.length() && j < names.get(i).length() && ans.charAt(j) == names.get(i).charAt(j)) {
-                j++;
-            }
-            ans = names.get(i).substring(0, j);
-        }
-        return ans;
-    }
-
-    private String getCommonSuffix(List<String> names) {
-        int n = names.size();
-        if (n <= 1) return "";
-        names = names.stream().map(e -> new StringBuilder(e).reverse().toString()).collect(Collectors.toList());
-        String text = new StringBuilder(getCommonPrefix(names)).reverse().toString();
-        if (text.startsWith("集")) {
-            return text.substring(1);
-        }
-        return text;
     }
 
     private String fixPath(String path) {

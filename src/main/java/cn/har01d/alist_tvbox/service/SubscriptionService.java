@@ -12,6 +12,8 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
+import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -24,11 +26,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponents;
 
-import javax.annotation.PostConstruct;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import javax.xml.bind.DatatypeConverter;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -166,6 +166,73 @@ public class SubscriptionService {
         return list;
     }
 
+    public Map<String, Object> open() {
+        Map<String, Object> config = new HashMap<>();
+        Map<String, Object> video = new HashMap<>();
+        Map<String, Object> pan = new HashMap<>();
+        List<Map<String, Object>> sites = new ArrayList<>();
+        List<Map<String, Object>> panSites = new ArrayList<>();
+        video.put("sites", sites);
+        config.put("video", video);
+        pan.put("sites", panSites);
+        config.put("pan", pan);
+        addOpenSite(video);
+        return config;
+    }
+
+    private void addOpenSite(Map<String, Object> config) {
+        int id = 0;
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        try {
+            String key = "Alist";
+            Map<String, Object> site = buildOpenSite("xiaoya", "xiaoya", "小雅AList");
+            sites.removeIf(item -> key.equals(item.get("key")));
+            sites.add(id++, site);
+            log.debug("add AList site: {}", site);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        if (appProperties.isXiaoya()) {
+            try {
+                for (Site site1 : siteRepository.findAll()) {
+                    if (site1.isSearchable() && !site1.isDisabled()) {
+                        Map<String, Object> site = buildOpenSite("xiaoya-tvbox", "xiaoya", site1.getName());
+                        sites.add(id++, site);
+                        log.debug("add XiaoYa site: {}", site);
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+
+        if (appProperties.isXiaoya()) {
+            try {
+                Map<String, Object> site = buildOpenSite("bilibili", "bilibili", "BiliBili");
+                sites.add(id, site);
+                log.debug("add BiliBili site: {}", site);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+    }
+
+    private Map<String, Object> buildOpenSite(String key, String api, String name) {
+        Map<String, Object> site = new HashMap<>();
+        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
+        builder.replacePath("/" + api);
+        ServletUriComponentsBuilder builder2 = ServletUriComponentsBuilder.fromCurrentRequestUri();
+        builder2.replacePath("/tvbox/" + api + ".js");
+        site.put("key", key);
+        site.put("api", builder2.build().toUriString());
+        site.put("name", name);
+        site.put("type", 3);
+        site.put("ext", builder.build().toUriString());
+        return site;
+    }
+
     public Map<String, Object> subscription(int id) {
         String apiUrl = "";
         String override = "";
@@ -209,7 +276,7 @@ public class SubscriptionService {
         }
 
         addSite(config);
-        addRules(config);
+//        addRules(config);
 
         return config;
     }
@@ -221,6 +288,7 @@ public class SubscriptionService {
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
         String path = "/ali/token/" + settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         String tokenUrl = ServletUriComponentsBuilder.fromCurrentRequestUri()
+                .scheme(appProperties.isEnableHttps() ? "https" : "http")
                 .replacePath(path)
                 .replaceQuery("")
                 .toUriString();
@@ -308,8 +376,9 @@ public class SubscriptionService {
         try {
             json = Pattern.compile("^\\s*#.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
             json = Pattern.compile("^\\s*//.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
-            json = json.replace("DOCKER_ADDRESS", readAlistAddress());
-            json = json.replace("ATV_ADDRESS", readHostAddress());
+            String address = readHostAddress();
+            json = json.replace("DOCKER_ADDRESS", address);
+            json = json.replace("ATV_ADDRESS", address);
             Map<String, Object> override = objectMapper.readValue(json, Map.class);
             overrideConfig(config, "", "", override);
             return replaceString(config, override);
@@ -516,6 +585,7 @@ public class SubscriptionService {
     private Map<String, Object> buildSite(String key, String name) throws IOException {
         Map<String, Object> site = new HashMap<>();
         ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
+        builder.scheme(appProperties.isEnableHttps() ? "https" : "http");
         builder.replacePath("");
         site.put("key", key);
         site.put("api", key);
@@ -605,8 +675,9 @@ public class SubscriptionService {
             File file = new File("/www/tvbox/my.json");
             if (file.exists()) {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-                json = json.replaceAll("DOCKER_ADDRESS", readAlistAddress());
-                json = json.replaceAll("ATV_ADDRESS", readHostAddress());
+                String address = readHostAddress();
+                json = json.replaceAll("DOCKER_ADDRESS", address);
+                json = json.replaceAll("ATV_ADDRESS", address);
                 return json;
             }
         } catch (IOException e) {
@@ -616,70 +687,16 @@ public class SubscriptionService {
         return null;
     }
 
-    private Integer getAlistPort() {
-        if (appProperties.isHostmode()) {
-            return 6789;
-        }
-        try {
-            return Integer.parseInt(environment.getProperty("ALIST_PORT", "5344"));
-        } catch (Exception e) {
-            return 5344;
-        }
-    }
-
-    private String readAlistAddress() throws IOException {
-        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
-                .port(getAlistPort())
-                .replacePath("/")
-                .build();
-        String address = null;
-        if (!isIntranet(uriComponents)) {
-            address = getAddress();
-            if (StringUtils.isBlank(address)) {
-                File file = new File("/data/docker_address.txt");
-                if (file.exists()) {
-                    address = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-                    if (StringUtils.isNotBlank(address)) {
-                        settingRepository.save(new Setting("docker_address", address));
-                    }
-                }
-            }
-        }
-
-        if (StringUtils.isBlank(address)) {
-            address = uriComponents.toUriString();
-        }
-
-        if (address.endsWith("/")) {
-            address = address.substring(0, address.length() - 1);
-        }
-
-        return address;
-    }
-
     private String readHostAddress() {
         return readHostAddress("");
     }
 
     private String readHostAddress(String path) {
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() ? "https" : "http")
                 .replacePath(path)
                 .build();
         return uriComponents.toUriString();
-    }
-
-    private boolean isIntranet(UriComponents uriComponents) {
-        try {
-            String host = uriComponents.getHost();
-            return host != null && (host.equals("localhost") || host.equals("127.0.0.1") || host.startsWith("192.168."));
-        } catch (Exception e) {
-            log.warn("{}", e.getMessage());
-        }
-        return false;
-    }
-
-    private String getAddress() {
-        return settingRepository.findById("docker_address").map(Setting::getValue).orElse(null);
     }
 
     public Map<String, Object> convertResult(String json, String configKey) {

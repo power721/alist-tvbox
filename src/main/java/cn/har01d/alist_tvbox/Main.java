@@ -1,0 +1,69 @@
+package cn.har01d.alist_tvbox;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+public class Main {
+    public static void main(String[] args) throws IOException {
+        Set<Class> classes = findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto");
+        classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto.bili"));
+        classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.tvbox"));
+        classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.domain"));
+        classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.model"));
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Class clazz : classes) {
+            Map<String, Object> info = new HashMap<>();
+            info.put("name", clazz.getName());
+            List<Map<String, Object>> fields = new ArrayList<>();
+            for (Field field : clazz.getFields()) {
+                Map<String, Object> fieldInfo = new HashMap<>();
+                fieldInfo.put("name", field.getName());
+                fieldInfo.put("allowWrite", true);
+                fields.add(fieldInfo);
+            }
+            info.put("allDeclaredFields", true);
+            info.put("allDeclaredMethods", true);
+            info.put("allDeclaredConstructors", true);
+            result.add(info);
+        }
+        ObjectMapper objectMapper = new ObjectMapper();
+        String json = objectMapper.writeValueAsString(result);
+        System.out.println("Working Directory = " + System.getProperty("user.dir"));
+        Path path = Paths.get(System.getProperty("user.dir") + "/src/main/resources/META-INF/native-image/reflect-config.json");
+        Files.writeString(path, json);
+    }
+
+    public static Set<Class> findAllClassesUsingClassLoader(String packageName) {
+        InputStream stream = ClassLoader.getSystemClassLoader()
+                .getResourceAsStream(packageName.replaceAll("[.]", "/"));
+        BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
+        return reader.lines()
+                .filter(line -> line.endsWith(".class"))
+                .map(line -> getClass(line, packageName))
+                .collect(Collectors.toSet());
+    }
+
+    private static Class getClass(String className, String packageName) {
+        try {
+            return Class.forName(packageName + "."
+                    + className.substring(0, className.lastIndexOf('.')));
+        } catch (ClassNotFoundException e) {
+            // handle the exception
+        }
+        return null;
+    }
+}

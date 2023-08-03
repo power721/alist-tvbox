@@ -90,7 +90,6 @@ else
   latest=$(printf "$remote\n$local\n" | sort -r | head -n1)
   if [ "$remote" = "$local" ]; then
     echo "$(date) current index file version is updated, no need to upgrade"
-    exit
   elif [ "$remote" = "$latest" ]; then
     wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/index.zip
     if [ ! -f index.zip ]; then
@@ -98,7 +97,6 @@ else
     fi
     if [ ! -f index.zip ]; then
       echo "Failed to download index compressed file, the index file upgrade process has aborted"
-      exit 1
     else
       unzip -o -q -P abcd index.zip
       cat index.video.txt index.book.txt index.music.txt index.non.video.txt >/data/index/index.txt
@@ -112,3 +110,6 @@ else
   fi
   rm -f index.* update.* version.txt
 fi
+
+wget http://d.har01d.cn/cat_open.zip -O cat_open.zip && \
+unzip cat_open.zip -d /www/tvbox/
