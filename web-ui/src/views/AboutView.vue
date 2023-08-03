@@ -32,6 +32,10 @@
       <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"</code><br>
     </p>
     <p>
+      一键部署(内存优化版)：
+      <code>wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t native</code><br>
+    </p>
+    <p>
       一键部署(开发版)：
       <code>wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t dev</code><br>
     </p>

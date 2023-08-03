@@ -66,6 +66,12 @@ bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
 wget https://d.har01d.cn/update_xiaoya.sh; sh ./update_xiaoya.sh
 ```
 
+#### 内存优化版
+目前仅支持Linux x86_64平台。
+```bash
+wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t native
+```
+
 #### host网络模式
 使用host网络模式运行：
 ```bash

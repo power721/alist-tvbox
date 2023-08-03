@@ -111,5 +111,5 @@ else
   rm -f index.* update.* version.txt
 fi
 
-wget http://d.har01d.cn/cat_open.zip -O cat_open.zip && \
-unzip cat_open.zip -d /www/tvbox/
+#wget http://d.har01d.cn/cat_open.zip -O cat_open.zip && \
+#unzip cat_open.zip -d /www/tvbox/
