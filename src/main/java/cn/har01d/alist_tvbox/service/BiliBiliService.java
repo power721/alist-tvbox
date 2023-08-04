@@ -253,6 +253,16 @@ public class BiliBiliService {
             result.put("vip", data.get("vip"));
             result.put("vip_label", data.get("vip_label"));
             result.put("level_info", data.get("level_info"));
+            try {
+                Map<String, Object> wbi = (Map<String, Object>) data.get("wbi_img");
+                if (wbi != null) {
+                    imgKey = getKey((String) wbi.get("img_url"));
+                    subKey = getKey((String) wbi.get("sub_url"));
+                    keyTime = LocalDate.now();
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
             log.info("user: {} {} isLogin: {} vip: {}", data.get("uname"), data.get("mid"), data.get("isLogin"), data.get("vipType"));
         }
         return result;
@@ -1032,10 +1042,9 @@ public class BiliBiliService {
         for (Map.Entry<String, String> entry : customHeaders.entrySet()) {
             headers.add(entry.getKey(), entry.getValue());
         }
-        String defaultCookie = BiliBiliUtils.getCookie();
         String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
-        if (StringUtils.isBlank(cookie)) {
-            cookie = defaultCookie;
+        if (StringUtils.isBlank(cookie) || "666".equals(cookie)) {
+            cookie = getCookie(cookie);
         }
         headers.add(HttpHeaders.COOKIE, cookie.trim());
         return new HttpEntity<>(data, headers);
@@ -1199,13 +1208,41 @@ public class BiliBiliService {
         return String.format("%02d:%02d:%02d,%03d", hour, minute, second, milis);
     }
 
+    private String getCookie(String token) {
+        if ("666".equals(token)) {
+            return BiliBiliUtils.getCookie();
+        } else {
+            try {
+                String cookie = BiliBiliUtils.getDefaultCookie();
+                if (cookie != null) {
+                    return cookie;
+                }
+
+                String json = restTemplate.getForObject("https://ghproxy.com/raw.githubusercontent.com/gaotianliuyun/gao/master/0827.json", String.class);
+                Map<String, Object> map = objectMapper.readValue(json, Map.class);
+                List<Map<String, Object>> sites = (List<Map<String, Object>>) map.get("sites");
+                for (Map<String, Object> site : sites) {
+                    String api = (String) site.get("api");
+                    if ("csp_Bili".equals(api)) {
+                        Map<String, Object> ext = (Map<String, Object>) site.get("ext");
+                        cookie = (String) ext.get("cookie");
+                        BiliBiliUtils.setDefaultCookie(cookie);
+                        return cookie;
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+        return "";
+    }
+
     private void heartbeat(String aid, String cid) {
         try {
             String csrf = "";
-            String defaultCookie = BiliBiliUtils.getCookie();
             String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
-            if (StringUtils.isBlank(cookie)) {
-                cookie = defaultCookie;
+            if (StringUtils.isBlank(cookie) || "666".equals(cookie)) {
+                cookie = getCookie(cookie);
             }
             String[] parts = cookie.split(";");
             for (String text : parts) {

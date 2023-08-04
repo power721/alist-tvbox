@@ -173,6 +173,7 @@
                                     --libc=musl
                                     --enable-http
                                     --enable-https
+                                    -march=compatibility
                                 </buildArg>
                             </buildArgs>
                         </configuration>

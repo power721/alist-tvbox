@@ -1,10 +1,14 @@
 BASE_DIR=/etc/xiaoya
 YES=false
+TAG="hostmode"
 
-while getopts ":d:y" arg; do
+while getopts ":d:t:y" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
+            ;;
+        t)
+            TAG=${OPTARG}
             ;;
         y)
             YES=true
@@ -49,11 +53,10 @@ fi
 docker image prune -f
 
 platform="linux/amd64"
-tag="hostmode"
 ARCH=$(uname -m)
 if [ "$ARCH" = "armv7l" ]; then
-  platform="linux/arm/v7"
-  tag="arm-v7"
+  echo "不支持的平台"
+  exit 1
 elif [ "$ARCH" = "aarch64" ]; then
     platform="linux/arm64"
 fi
@@ -61,12 +64,12 @@ fi
 echo -e "\e[32m下载最新Docker镜像，平台：${platform}\e[0m"
 for i in 1 2 3 4 5
 do
-   docker pull --platform ${platform} haroldli/xiaoya-tvbox:${tag} && break
+   docker pull --platform ${platform} haroldli/xiaoya-tvbox:${TAG} && break
 done
 
 echo -e "\e[33m重启应用，host网络模式\e[0m"
 docker rm -f xiaoya-tvbox 2>/dev/null && \
-docker run -d --network host -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${tag}
+docker run -d --network host -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
 
 echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
 echo -e "    docker logs -f xiaoya-tvbox\n"

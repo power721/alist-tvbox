@@ -17,7 +17,6 @@ on:
       - 'pom.xml'
       - 'Dockerfile-v7'
       - 'Dockerfile'
-      - 'Dockerfile-native'
       - 'Dockerfile-base'
       - 'Dockerfile-jre'
       - '.github/workflows/build-base.yaml'
