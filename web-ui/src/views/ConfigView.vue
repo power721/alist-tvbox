@@ -100,7 +100,7 @@
             <div class="card-header">
               <span>应用数据</span>
               <div>
-                <el-button @click="dialogVisible=true">高级设置</el-button>
+                <el-button type="primary" plain @click="dialogVisible=true">高级设置</el-button>
               </div>
             </div>
           </template>
