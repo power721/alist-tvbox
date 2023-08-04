@@ -137,7 +137,7 @@ jobs:
           file: Dockerfile-native-host
           platforms: linux/amd64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native-host
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Send version file
