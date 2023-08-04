@@ -20,7 +20,6 @@ on:
       - 'Dockerfile-native'
       - 'Dockerfile-base'
       - 'Dockerfile-jre'
-      - '.github/workflows/build.yaml'
       - '.github/workflows/build-base.yaml'
       - '.github/workflows/build-dev.yaml'
       - '.github/workflows/build-java.yaml'
