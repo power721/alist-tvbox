@@ -130,6 +130,16 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build host native docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-native-host
+          platforms: linux/amd64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Send version file
         env:
           ssh_host: ${{ secrets.SSH_HOST }}

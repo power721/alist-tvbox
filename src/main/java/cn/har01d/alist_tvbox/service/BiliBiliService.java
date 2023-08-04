@@ -235,15 +235,26 @@ public class BiliBiliService {
         HttpEntity<Void> entity = buildHttpEntity(null);
         Map<String, Object> json = restTemplate.exchange(NAV_API, HttpMethod.GET, entity, Map.class).getBody();
         Map<String, Object> data = (Map<String, Object>) json.get("data");
+        Map<String, Object> result = new HashMap<>();
         if (data != null) {
             if (data.get("mid") instanceof Long) {
                 mid = ((Long) data.get("mid")).intValue();
             } else {
                 mid = (Integer) data.get("mid");
             }
+            if (mid != null && mid.equals(BiliBiliUtils.getMid())) {
+                data.put("uname", "内置账号");
+                data.remove("mid");
+            }
+            result.put("uname", data.get("uname"));
+            result.put("mid", data.get("mid"));
+            result.put("isLogin", data.get("isLogin"));
+            result.put("vipType", data.get("vipType"));
+            result.put("vip", data.get("vip"));
+            result.put("level_info", data.get("level_info"));
             log.info("user: {} {} isLogin: {} vip: {}", data.get("uname"), data.get("mid"), data.get("isLogin"), data.get("vipType"));
         }
-        return data;
+        return result;
     }
 
     public QrCode scanLogin() throws IOException {
