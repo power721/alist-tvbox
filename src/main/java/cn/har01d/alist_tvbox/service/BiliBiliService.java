@@ -251,6 +251,7 @@ public class BiliBiliService {
             result.put("isLogin", data.get("isLogin"));
             result.put("vipType", data.get("vipType"));
             result.put("vip", data.get("vip"));
+            result.put("vip_label", data.get("vip_label"));
             result.put("level_info", data.get("level_info"));
             log.info("user: {} {} isLogin: {} vip: {}", data.get("uname"), data.get("mid"), data.get("isLogin"), data.get("vipType"));
         }
