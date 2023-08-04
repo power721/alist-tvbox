@@ -32,6 +32,7 @@
     <properties>
         <java.version>17</java.version>
         <jjwt.version>0.11.5</jjwt.version>
+        <libc>--libc=musl</libc>
     </properties>
 
     <dependencies>
@@ -130,6 +131,12 @@
 
     <profiles>
         <profile>
+            <id>arm</id>
+            <properties>
+                <libc></libc>
+            </properties>
+        </profile>
+        <profile>
             <id>native</id>
             <build>
                 <plugins>
@@ -170,7 +177,7 @@
                             <buildArgs>
                                 <buildArg>
                                     --static
-                                    --libc=musl
+                                    ${libc}
                                     --enable-http
                                     --enable-https
                                     -march=compatibility

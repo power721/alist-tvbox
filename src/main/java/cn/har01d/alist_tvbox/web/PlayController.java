@@ -20,7 +20,7 @@ import java.util.Map;
 
 @Slf4j
 @RestController
-@RequestMapping("/play")
+@RequestMapping
 public class PlayController {
     private final TvBoxService tvBoxService;
     private final BiliBiliService biliBiliService;
@@ -34,12 +34,12 @@ public class PlayController {
         this.subscriptionService = subscriptionService;
     }
 
-    @GetMapping
+    @GetMapping("/play")
     public Object play(Integer site, String path, String id, String bvid, String type, boolean dash, HttpServletRequest request) throws IOException {
         return play("", site, path, id, bvid, type, dash, request);
     }
 
-    @GetMapping("/{token}")
+    @GetMapping("/play/{token}")
     public Object play(@PathVariable String token, Integer site, String path, String id, String bvid, String type, boolean dash, HttpServletRequest request) throws IOException {
         if (!subscriptionService.getToken().equals(token)) {
             throw new BadRequestException();
@@ -59,28 +59,25 @@ public class PlayController {
             path = parts[1];
         }
 
-        String url;
+
+        Map<String, Object> result;
         if (path.contains("/")) {
             if (path.startsWith("/")) {
-                url = tvBoxService.getPlayUrl(site, path);
+                result = tvBoxService.getPlayUrl(site, path);
             } else {
                 int index = path.indexOf('/');
                 id = path.substring(0, index);
                 path = path.substring(index);
-                url = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path);
+                result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path);
             }
         } else {
-            url = tvBoxService.getPlayUrl(site, Integer.parseInt(path));
+            result = tvBoxService.getPlayUrl(site, Integer.parseInt(path));
         }
 
+        String url = (String) result.get("url");
         if (url.contains("/redirect")) {
-            url = parseService.parse(url);
+            result.put("url", parseService.parse(url));
         }
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("parse", 0);
-        result.put("playUrl", "");
-        result.put("url", url);
 
         return result;
     }

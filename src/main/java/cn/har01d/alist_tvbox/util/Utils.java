@@ -58,6 +58,10 @@ public final class Utils {
         return text;
     }
 
+    public static String removeExt(String text) {
+        return text.contains(".") ? text.substring(0, text.lastIndexOf(".")) : text;
+    }
+
     public static String getMixinKey(String imgKey, String subKey) {
         String s = imgKey + subKey;
         StringBuilder key = new StringBuilder();
