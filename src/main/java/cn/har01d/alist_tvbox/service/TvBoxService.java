@@ -1082,7 +1082,7 @@ public class TvBoxService {
                 //subtitles = findSub(fsResponse, fileNames, prefix, suffix);
 
                 if (appProperties.isSort()) {
-                    files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
+                    fileNames.sort(Comparator.comparing(e -> new FileNameInfo(e)));
                 }
 
                 List<String> urls = new ArrayList<>();
@@ -1110,7 +1110,7 @@ public class TvBoxService {
             //subtitles = findSub(fsResponse, fileNames, prefix, suffix);
 
             if (appProperties.isSort()) {
-                files.sort(Comparator.comparing(e -> new FileNameInfo(e.getName())));
+                fileNames.sort(Comparator.comparing(e -> new FileNameInfo(e)));
             }
 
             for (String name : fileNames) {
