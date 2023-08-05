@@ -14,7 +14,7 @@ mv search /www/cgi-bin/search
 mv sou /www/cgi-bin/sou
 mv header.html /www/cgi-bin/header.html
 
-#sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
+sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
 
 mv mobi.tgz /www/mobi.tgz
 cd /www/
