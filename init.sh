@@ -13,7 +13,9 @@ mv config.json /opt/alist/data/config.json
 mv search /www/cgi-bin/search
 mv sou /www/cgi-bin/sou
 mv header.html /www/cgi-bin/header.html
-sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
+
+#sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
+
 mv mobi.tgz /www/mobi.tgz
 cd /www/
 tar zxf mobi.tgz
@@ -60,24 +62,24 @@ else
     rm /opt/alist/data/data.db-wal
   fi
 
-sqlite3 /opt/alist/data/data.db <<EOF
-select value from x_setting_items where key='version';
-EOF
+  sed -i '/alist.xiaoya.pro/d' update.sql
+  grep -c 'alist.xiaoya.pro' update.sql
 
-  pass=$(tr -dc '_A-Za-z0-9' </dev/urandom | head -c 32)
   sqlite3 /opt/alist/data/data.db <<EOF
 drop table x_storages;
 drop table x_meta;
 drop table x_setting_items;
-update x_users set password = "$pass" where id = 1;
 update x_users set permission = 368 where id = 2;
 .read update.sql
 EOF
+
   echo "$(date) update database successfully"
   opentoken_url=$(cat opentoken_url.txt)
   sed -i "s#https://api.nn.ci/alist/ali_open/token#$opentoken_url#" /opt/alist/data/config.json
   rm update.zip update.sql opentoken_url.txt
 fi
+
+sqlite3 /opt/alist/data/data.db 'delete from x_storages where driver="AList V3";'
 
 if [ ! -f version.txt ]; then
   echo "Failed to download version.txt file, the index file upgrade process has aborted"

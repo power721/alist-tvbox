@@ -2,7 +2,7 @@ ARG TAG=latest
 
 FROM haroldli/java:17 as corretto-jdk
 
-FROM xiaoyaliu/alist:${TAG}
+FROM haroldli/alist:${TAG}
 
 LABEL MAINTAINER="Har01d"
 
@@ -10,6 +10,10 @@ ENV JAVA_HOME=/jre
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 COPY --from=corretto-jdk /jre $JAVA_HOME
+
+COPY config/nginx.conf /etc/nginx/http.d/default.conf
+
+COPY atv-cli/atv-cli /
 
 VOLUME /opt/atv/data/
 
