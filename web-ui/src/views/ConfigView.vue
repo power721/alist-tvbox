@@ -82,15 +82,7 @@
             <el-form-item label="计划时间">
               <el-time-picker v-model="scheduleTime"/>
               <el-button type="primary" @click="updateScheduleTime">更新</el-button>
-              <span class="hint">自动签到和刷新阿里Token的时间</span>
-            </el-form-item>
-          </el-form>
-
-          <el-form label-width="140px">
-            <el-form-item label="文件过期时间">
-              <el-input-number v-model="fileExpireHour" :min="1"/>
-              <span class="append">小时</span>
-              <el-button type="primary" @click="updateFileExpireHour">更新</el-button>
+              <span class="hint">自动签到的时间</span>
             </el-form-item>
           </el-form>
         </el-card>

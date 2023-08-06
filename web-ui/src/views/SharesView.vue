@@ -45,10 +45,10 @@
 
   <el-dialog v-model="formVisible" :title="dialogTitle">
     <el-form :model="form">
-      <el-form-item label="挂载路径" label-width="140">
+      <el-form-item label="挂载路径" label-width="140" required>
         <el-input v-model="form.path" autocomplete="off"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2" label="分享ID" label-width="140">
+      <el-form-item v-if="form.type!=2" label="分享ID" label-width="140" required>
         <el-input v-model="form.shareId" autocomplete="off" placeholder="分享ID或者分享链接"/>
       </el-form-item>
       <el-form-item v-if="form.type!=2" label="密码" label-width="140">
@@ -105,7 +105,7 @@
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="uploadVisible = false">取消</el-button>
-        <el-button class="ml-3" type="success" @click="submitUpload">上传</el-button>
+        <el-button class="ml-3" type="success" @click="submitUpload">导入</el-button>
       </span>
     </template>
   </el-dialog>

@@ -33,7 +33,6 @@ public class Account {
     @Column(columnDefinition = "TEXT")
     private String openToken = "";
     private Instant openTokenTime;
-    private String folderId = "";
     private Instant checkinTime;
     private int checkinDays;
     private boolean autoCheckin;

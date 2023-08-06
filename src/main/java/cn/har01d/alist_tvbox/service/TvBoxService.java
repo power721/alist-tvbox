@@ -340,7 +340,7 @@ public class TvBoxService {
 
                 String newPath = fixPath(meta.getPath() + "/" + PLAYLIST);
                 MovieDetail movieDetail = new MovieDetail();
-                movieDetail.setVod_id(getXiaoyaSite().getId() + "$" + newPath + "$0");
+                movieDetail.setVod_id(getXiaoyaSite().getId() + "$" + encodeUrl(newPath) + "$0");
                 movieDetail.setVod_name(name);
                 movieDetail.setVod_pic(Constants.ALIST_PIC);
                 setDoubanInfo(movieDetail, movie, false);
@@ -431,7 +431,7 @@ public class TvBoxService {
                 }
             }
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site.getId() + "$" + path + "$1");
+            movieDetail.setVod_id(site.getId() + "$" + encodeUrl(path) + "$1");
             movieDetail.setVod_name(getNameFromPath(line));
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_tag(FILE);
@@ -468,7 +468,7 @@ public class TvBoxService {
                     }
 
                     MovieDetail movieDetail = new MovieDetail();
-                    movieDetail.setVod_id(site.getId() + "$" + path + "$1");
+                    movieDetail.setVod_id(site.getId() + "$" + encodeUrl(path) + "$1");
                     movieDetail.setVod_name(e.getName());
                     movieDetail.setVod_pic(Constants.ALIST_PIC);
                     movieDetail.setVod_tag(FILE);
@@ -511,7 +511,7 @@ public class TvBoxService {
                     continue;
                 }
             }
-            movieDetail.setVod_id(site.getId() + "$" + path + "$1");
+            movieDetail.setVod_id(site.getId() + "$" + encodeUrl(path) + "$1");
             movieDetail.setVod_name(getNameFromPath(name));
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_tag(FILE);
@@ -596,7 +596,7 @@ public class TvBoxService {
 
             String newPath = fixPath(path + "/" + fsInfo.getName());
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(site.getId() + "$" + newPath + "$1");
+            movieDetail.setVod_id(site.getId() + "$" + encodeUrl(newPath) + "$1");
             movieDetail.setVod_name(fsInfo.getName());
             movieDetail.setVod_tag(fsInfo.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_pic(getCover(fsInfo.getThumb(), fsInfo.getType()));
@@ -784,7 +784,7 @@ public class TvBoxService {
             log.debug("{} {}", name, metas.size());
             if (metas.size() > 1) {
                 String ids = metas.stream().map(Meta::getId).map(String::valueOf).collect(Collectors.joining("-"));
-                movieDetail.setVod_id(site.getId() + "$" + ids + "$0");
+                movieDetail.setVod_id(site.getId() + "$" + encodeUrl(ids) + "$0");
                 added.put(name, true);
             } else {
                 String newPath = fixPath(meta.getPath() + (isMediaFile(meta.getPath()) ? "" : "/" + PLAYLIST));
@@ -843,7 +843,7 @@ public class TvBoxService {
 
     private List<MovieDetail> generatePlaylist(String path, int total, List<MovieDetail> files) {
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(path + "$1");
+        movieDetail.setVod_id(encodeUrl(path) + "$1");
         movieDetail.setVod_name("播放列表");
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
@@ -1049,7 +1049,7 @@ public class TvBoxService {
         FsDetail fsDetail = aListService.getFile(site, newPath);
 
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(site.getId() + "$" + path + "$1");
+        movieDetail.setVod_id(site.getId() + "$" + encodeUrl(path) + "$1");
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(site.getName());

@@ -5,6 +5,8 @@ import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.SettingResponse;
+import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +33,12 @@ public class AListLocalService {
     public AListLocalService(SettingRepository settingRepository, AppProperties appProperties, RestTemplateBuilder builder) {
         this.settingRepository = settingRepository;
         this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
+    }
+
+    @PostConstruct
+    public void setup() {
+        String url = settingRepository.findById("open_token_url").map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_token_url','" + url + "','','string','',1,0);");
     }
 
     public void startAListServer() {

@@ -1,4 +1,4 @@
-FROM haroldli/alist-base-new:latest
+FROM haroldli/alist-base-new:hostmode
 
 LABEL MAINTAINER="Har01d"
 
@@ -18,4 +18,4 @@ EXPOSE 4567 80
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-CMD ["81", "--spring.profiles.active=production,xiaoya"]
+CMD ["5233", "--spring.profiles.active=production,xiaoya,host"]

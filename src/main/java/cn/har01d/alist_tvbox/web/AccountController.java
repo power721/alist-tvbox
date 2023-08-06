@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.dto.AccountDto;
 import cn.har01d.alist_tvbox.dto.CheckinResult;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.model.AliTokensResponse;
 import cn.har01d.alist_tvbox.service.AccountService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -44,14 +45,9 @@ public class AccountController {
         return accountService.checkin(id, force);
     }
 
-    @PostMapping("/ali/accounts/{id}/clean")
-    public int clean(@PathVariable Integer id) {
-        return accountService.clean(id);
-    }
-
     @PostMapping("/ali/accounts/{id}")
-    public Account update(@PathVariable Integer id, @RequestBody AccountDto account, HttpServletResponse response) {
-        return accountService.update(id, account, response);
+    public Account update(@PathVariable Integer id, @RequestBody AccountDto account) {
+        return accountService.update(id, account);
     }
 
     @DeleteMapping("/ali/accounts/{id}")
@@ -62,6 +58,11 @@ public class AccountController {
     @GetMapping("/ali/token/{id}")
     public String getAliToken(@PathVariable String id) {
         return accountService.getAliRefreshToken(id);
+    }
+
+    @GetMapping("/ali/account-tokens")
+    public AliTokensResponse getTokens() {
+        return accountService.getTokens();
     }
 
     @PostMapping("/login")
