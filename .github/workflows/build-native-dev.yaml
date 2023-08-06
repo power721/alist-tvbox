@@ -2,6 +2,11 @@ name: 'release native dev docker'
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'The git branch to build.'
+        required: true
+        default: 'dev'
 
 jobs:
   release:
@@ -9,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.branch }}
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
