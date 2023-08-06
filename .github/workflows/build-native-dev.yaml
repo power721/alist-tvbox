@@ -1,4 +1,4 @@
-name: 'release native docker'
+name: 'release native dev docker'
 
 on:
   workflow_dispatch:
@@ -79,8 +79,8 @@ jobs:
           file: Dockerfile-native
           platforms: linux/amd64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native-dev
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args:
-            - BASE=xiaoyaliu
+            - BASE=${{ secrets.DOCKERHUB_USERNAME }}

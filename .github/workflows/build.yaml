@@ -22,6 +22,7 @@ on:
       - 'Dockerfile-jre'
       - '.github/workflows/build-base.yaml'
       - '.github/workflows/build-base-new.yaml'
+      - '.github/workflows/build-native-dev.yaml'
       - '.github/workflows/build-dev.yaml'
       - '.github/workflows/build-java.yaml'
       - '.github/workflows/build-v7.yaml'

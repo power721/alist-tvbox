@@ -1,4 +1,5 @@
-FROM xiaoyaliu/alist:latest
+ARG BASE=xiaoyaliu
+FROM ${BASE}/alist:latest
 
 LABEL MAINTAINER="Har01d"
 
