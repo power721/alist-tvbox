@@ -218,9 +218,6 @@ public class SiteService {
     }
 
     public Site update(int id, SiteDto dto) {
-        if (id == 1 && appProperties.isXiaoya()) {
-            throw new BadRequestException("不能更改默认站点");
-        }
         validate(dto);
         Site site = siteRepository.findById(id).orElseThrow(() -> new NotFoundException("站点不存在"));
         Optional<Site> other = siteRepository.findByName(dto.getName());
