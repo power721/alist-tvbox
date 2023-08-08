@@ -14,6 +14,7 @@ import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.AListUser;
+import cn.har01d.alist_tvbox.model.AliToken;
 import cn.har01d.alist_tvbox.model.AliTokensResponse;
 import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
@@ -30,6 +31,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -956,5 +958,18 @@ public class AccountService {
             log.warn("", e);
         }
         return new AliTokensResponse();
+    }
+
+    @Scheduled(cron = "0 30 * * * ?")
+    public void syncTokens() {
+        List<AliToken> tokens = getTokens().getData();
+        if (tokens != null) {
+            Map<String, String> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, AliToken::getValue));
+            for (Account account : accountRepository.findAll()) {
+                account.setRefreshToken(map.get("RefreshToken-" + account.getId()));
+                account.setOpenToken(map.get("RefreshTokenOpen-" + account.getId()));
+                accountRepository.save(account);
+            }
+        }
     }
 }
