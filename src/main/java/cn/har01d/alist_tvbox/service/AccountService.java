@@ -44,6 +44,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Collections;
@@ -514,9 +515,11 @@ public class AccountService {
         log.info("updateTokens {}", list.size());
         for (Account account : list) {
             String sql = "INSERT INTO x_tokens VALUES('RefreshToken-%d','%s',%d,'%s')";
-            Utils.executeUpdate(String.format(sql, account.getId(), account.getRefreshToken(), account.getId(), OffsetDateTime.now()));
+            Utils.executeUpdate(String.format(sql, account.getId(), account.getRefreshToken(), account.getId(), account.getRefreshTokenTime().atOffset(ZoneOffset.of("+08:00"))));
             sql = "INSERT INTO x_tokens VALUES('RefreshTokenOpen-%d','%s',%d,'%s')";
-            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenToken(), account.getId(), OffsetDateTime.now()));
+            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenToken(), account.getId(), account.getOpenTokenTime().atOffset(ZoneOffset.of("+08:00"))));
+            sql = "INSERT INTO x_tokens VALUES('AccessTokenOpen-%d','%s',%d,'%s')";
+            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenAccessToken(), account.getId(), account.getOpenAccessTokenTime().atOffset(ZoneOffset.of("+08:00"))));
         }
     }
 
