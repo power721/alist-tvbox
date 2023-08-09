@@ -499,8 +499,10 @@ public class AccountService {
             Utils.executeUpdate(String.format(sql, account.getId(), account.getRefreshToken(), account.getId(), account.getRefreshTokenTime().atOffset(ZONE_OFFSET)));
             sql = "INSERT INTO x_tokens VALUES('RefreshTokenOpen-%d','%s',%d,'%s')";
             Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenToken(), account.getId(), account.getOpenTokenTime().atOffset(ZONE_OFFSET)));
-            sql = "INSERT INTO x_tokens VALUES('AccessTokenOpen-%d','%s',%d,'%s')";
-            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenAccessToken(), account.getId(), account.getOpenAccessTokenTime().atOffset(ZONE_OFFSET)));
+            if (StringUtils.isNotBlank(account.getOpenAccessToken())) {
+                sql = "INSERT INTO x_tokens VALUES('AccessTokenOpen-%d','%s',%d,'%s')";
+                Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenAccessToken(), account.getId(), account.getOpenAccessTokenTime().atOffset(ZONE_OFFSET)));
+            }
         }
     }
 
