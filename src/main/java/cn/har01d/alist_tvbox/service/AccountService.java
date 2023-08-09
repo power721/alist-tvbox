@@ -152,8 +152,8 @@ public class AccountService {
             readLogin();
         }
 
+        Utils.executeUpdate("alter table IF EXISTS ACCOUNT alter column IF EXISTS OPEN_ACCESS_TOKEN text");
         if (accountRepository.count() > 0) {
-            Utils.executeUpdate("alter table ACCOUNT alter column OPEN_ACCESS_TOKEN text");
 
             try {
                 updateAliAccountId();
@@ -954,7 +954,7 @@ public class AccountService {
         return new AliTokensResponse();
     }
 
-    @Scheduled(initialDelay = 300_000, fixedDelay = 3600_000)
+    @Scheduled(initialDelay = 120_000, fixedDelay = 3600_000)
     public void syncTokens() {
         List<AliToken> tokens = getTokens().getData();
         if (tokens == null) {
