@@ -30,6 +30,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.CronTrigger;
@@ -90,6 +91,7 @@ public class AccountService {
     private final RestTemplate restTemplate;
     private final TaskScheduler scheduler;
     private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
     private ScheduledFuture scheduledFuture;
 
     public AccountService(AccountRepository accountRepository,
@@ -100,7 +102,8 @@ public class AccountService {
                           AppProperties appProperties,
                           TaskScheduler scheduler,
                           RestTemplateBuilder builder,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          JdbcTemplate jdbcTemplate) {
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
         this.userRepository = userRepository;
@@ -108,6 +111,7 @@ public class AccountService {
         this.indexService = indexService;
         this.scheduler = scheduler;
         this.objectMapper = objectMapper;
+        this.jdbcTemplate = jdbcTemplate;
         this.aListClient = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
         this.restTemplate = builder.build();
     }
@@ -152,9 +156,8 @@ public class AccountService {
             readLogin();
         }
 
-        Utils.executeUpdate("alter table IF EXISTS ACCOUNT alter column IF EXISTS OPEN_ACCESS_TOKEN text");
+        jdbcTemplate.execute("ALTER TABLE ACCOUNT ALTER COLUMN OPEN_ACCESS_TOKEN TEXT");
         if (accountRepository.count() > 0) {
-
             try {
                 updateAliAccountId();
             } catch (Exception e) {
@@ -946,7 +949,7 @@ public class AccountService {
             headers.put("Authorization", Collections.singletonList(token));
             HttpEntity<String> entity = new HttpEntity<>(null, headers);
             ResponseEntity<AliTokensResponse> response = aListClient.exchange("/api/admin/token/list", HttpMethod.GET, entity, AliTokensResponse.class);
-            log.debug("getTokens response: {}", response.getBody());
+            log.debug("getTokens response: {}", response.getBody().getData());
             return response.getBody();
         } catch (Exception e) {
             log.warn("", e);
@@ -954,7 +957,7 @@ public class AccountService {
         return new AliTokensResponse();
     }
 
-    @Scheduled(initialDelay = 120_000, fixedDelay = 3600_000)
+    @Scheduled(initialDelay = 90_000, fixedDelay = 3600_000)
     public void syncTokens() {
         List<AliToken> tokens = getTokens().getData();
         if (tokens == null) {
