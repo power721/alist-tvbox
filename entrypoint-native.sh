@@ -15,12 +15,6 @@ chmod a+x /init.sh /index.sh
 /usr/sbin/nginx
 shift
 
-version=$(head -n1 /docker.version)
-app_ver=$(head -n1 /opt/atv/data/app_version)
-sqlite3 /opt/alist/data/data.db <<EOF
-INSERT INTO x_storages VALUES(20000,'/©️ $version-$app_ver',0,'AList V3',30,'work','{"root_folder_path":"/安装，配置，修复 xiaoya docker 指南/打赏码，谢谢你的支持.jpg","url":"http://alist.xiaoya.pro","password":"","access_token":""}','','2022-11-12 13:05:12.467024193+00:00',0,'','','',0,'302_redirect','');
-EOF
-
 LOCAL="0.0"
 if [ -f /data/atv/movie_version ]; then
   LOCAL=$(head -n 1 </data/atv/movie_version)

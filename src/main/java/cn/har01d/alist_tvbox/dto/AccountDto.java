@@ -11,7 +11,6 @@ public class AccountDto {
     private Instant refreshTokenTime;
     private String openToken = "";
     private Instant openTokenTime;
-    private String folderId = "";
     private Instant checkinTime;
     private int checkinDays;
     private boolean autoCheckin;

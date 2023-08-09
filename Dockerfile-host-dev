@@ -1,19 +1,16 @@
-FROM haroldli/alist:hostmode
+FROM haroldli/alist-base-new:hostmode
 
 LABEL MAINTAINER="Har01d"
 
-VOLUME /opt/atv/data/
-
-WORKDIR /opt/atv/
+ENV MEM_OPT="-Xmx512M"
 
 COPY atv-cli/atv-cli /
-COPY index.sh /
 
 COPY init.sh /
 COPY movie.sh /
-COPY entrypoint-native.sh /entrypoint.sh
+COPY entrypoint.sh /
 
-COPY target/atv ./
+COPY target/application/ ./
 
 COPY data/version data/app_version
 

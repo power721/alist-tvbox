@@ -265,6 +265,8 @@ public class SubscriptionService {
             config = overrideConfig(config, override);
         }
 
+        addSite(config);
+
         // should after overrideConfig
         handleWhitelist(config);
         removeBlacklist(config);
@@ -275,7 +277,6 @@ public class SubscriptionService {
             log.warn("", e);
         }
 
-        addSite(config);
 //        addRules(config);
 
         return config;
@@ -546,6 +547,20 @@ public class SubscriptionService {
     private void addSite(Map<String, Object> config) {
         int id = 0;
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+
+        try {
+            for (Site site1 : siteRepository.findAll()) {
+                if (site1.isSearchable() && !site1.isDisabled()) {
+                    Map<String, Object> site = buildSite("csp_XiaoYa", site1.getName());
+                    sites.add(id++, site);
+                    log.debug("add XiaoYa site: {}", site);
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
         try {
             String key = "Alist";
             Map<String, Object> site = buildSite("csp_AList", "AList");
@@ -556,29 +571,12 @@ public class SubscriptionService {
             log.warn("", e);
         }
 
-        if (appProperties.isXiaoya()) {
-            try {
-                for (Site site1 : siteRepository.findAll()) {
-                    if (site1.isSearchable() && !site1.isDisabled()) {
-                        Map<String, Object> site = buildSite("csp_XiaoYa", site1.getName());
-                        sites.add(id++, site);
-                        log.debug("add XiaoYa site: {}", site);
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-
-        if (appProperties.isXiaoya()) {
-            try {
-                Map<String, Object> site = buildSite("csp_BiliBili", "BiliBili");
-                sites.add(id, site);
-                log.debug("add BiliBili site: {}", site);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
+        try {
+            Map<String, Object> site = buildSite("csp_BiliBili", "BiliBili");
+            sites.add(id, site);
+            log.debug("add BiliBili site: {}", site);
+        } catch (Exception e) {
+            log.warn("", e);
         }
     }
 
@@ -603,54 +601,12 @@ public class SubscriptionService {
         site.put("searchable", 1);
         site.put("quickSearch", 1);
         site.put("filterable", 1);
+        Map<String, Object> viewType = new HashMap<>();
+        Map<String, Object> style = new HashMap<>();
+        style.put("type", "rect");
+        viewType.put("style", style);
+        site.put("viewType", viewType);
         return site;
-    }
-
-    private static String md5(String text) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            md.update(text.getBytes());
-            byte[] digest = md.digest();
-            return DatatypeConverter.printHexBinary(digest).toLowerCase();
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-        return text;
-    }
-
-    private static void addRules(Map<String, Object> config) {
-        List<Map<String, Object>> rules = (List<Map<String, Object>>) config.get("rules");
-        if (rules == null) {
-            rules = new ArrayList<>();
-            config.put("rules", rules);
-        }
-
-        Map<String, Object> rule = new HashMap<>();
-        rule.put("name", "阿里云盘");
-        rule.put("hosts", List.of("pdsapi.aliyundrive.com"));
-        rule.put("regex", List.of("/redirect"));
-
-        rule.put("host", "pdsapi.aliyundrive.com");
-        rule.put("rule", List.of("/redirect"));
-        rules.add(rule);
-
-        rule = new HashMap<>();
-        rule.put("name", "阿里云");
-        rule.put("hosts", List.of("aliyundrive.net"));
-        rule.put("regex", List.of("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*", "http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
-
-        rule.put("host", "aliyundrive.net");
-        rule.put("rule", List.of("http((?!http).){12,}?\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)\\\\?.*", "http((?!http).){12,}\\\\.(m3u8|mp4|flv|avi|mkv|rm|wmv|mpg|ape|flac|wav|wma|m4a)"));
-        rules.add(rule);
-
-        rule = new HashMap<>();
-        rule.put("name", "BiliBili");
-        rule.put("hosts", List.of("bilivideo.cn"));
-        rule.put("regex", List.of("https://.+bilivideo.cn.+\\.(mp4|m4s|m4a)\\?.*"));
-
-        rule.put("host", "bilivideo.cn");
-        rule.put("rule", List.of("https://.+bilivideo.cn.+\\.(mp4|m4s|m4a)\\?.*"));
-        rules.add(rule);
     }
 
     private String loadConfigJson(String url) {

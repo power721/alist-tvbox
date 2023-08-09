@@ -46,16 +46,6 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column prop="master" label="自动清理？" width="120">
-        <template #default="scope">
-          <el-icon v-if="scope.row.clean">
-            <Check/>
-          </el-icon>
-          <el-icon v-else>
-            <Close/>
-          </el-icon>
-        </template>
-      </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">详情</el-button>
@@ -66,18 +56,15 @@
 
     <el-dialog v-model="formVisible" :title="dialogTitle" width="60%">
       <el-form :model="form">
-        <el-form-item label="阿里token" label-width="140">
+        <el-form-item label="阿里refresh token" label-width="150">
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位" autocomplete="off"/>
           <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
           <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
         </el-form-item>
-        <el-form-item label="开放token" label-width="140">
+        <el-form-item label="开放refresh token" label-width="140">
           <el-input v-model="form.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"
                     autocomplete="off"/>
           <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
-        </el-form-item>
-        <el-form-item label="转存文件夹ID" label-width="140">
-          <el-input v-model="form.folderId" placeholder="长度40位" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
           <el-switch
@@ -96,14 +83,6 @@
           />
           <span class="hint">主账号用来观看分享。</span>
         </el-form-item>
-        <el-form-item label="自动清理" label-width="140">
-          <el-switch
-            v-model="form.clean"
-            inline-prompt
-            active-text="是"
-            inactive-text="否"
-          />
-        </el-form-item>
         <el-form-item label="自动签到" label-width="140">
           <el-switch
             v-model="form.autoCheckin"
@@ -121,7 +100,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="dialogVisible" title="删除站点" width="30%">
+    <el-dialog v-model="dialogVisible" title="删除账号" width="30%">
       <p>是否删除账号 - {{ form.id }}</p>
       <p>{{ form.nickname }}</p>
       <template #footer>
@@ -133,23 +112,31 @@
     </el-dialog>
 
     <el-dialog v-model="detailVisible" title="账号详情" width="60%">
-      <el-form :model="form" label-width="120px">
-        <el-form-item prop="accessToken" label="阿里token">
+      <el-form :model="form" label-width="150px">
+        <el-form-item v-if="form.accessToken" prop="accessToken" label="阿里access token">
+          <el-input v-model="form.accessToken" maxlength="128" readonly/>
+          <span class="hint">创建时间： {{ formatTime(iat[0]) }}</span>
+          <span class="hint">更新时间： {{ formatTime(form.accessTokenTime) }}</span>
+          <span class="hint">过期时间： {{ formatTime(exp[0]) }}</span>
+        </el-form-item>
+        <el-form-item v-if="form.accessTokenOpen" prop="accessTokenOpen" label="开放access token">
+          <el-input v-model="form.accessTokenOpen" maxlength="128" readonly/>
+          <span class="hint">创建时间： {{ formatTime(iat[1]) }}</span>
+          <span class="hint">更新时间： {{ formatTime(form.accessTokenOpenTime) }}</span>
+          <span class="hint">过期时间： {{ formatTime(exp[1]) }}</span>
+        </el-form-item>
+        <el-form-item prop="refreshToken" label="阿里refresh token" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位"/>
           <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
           <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
           <span class="hint">更新时间： {{ formatTime(form.refreshTokenTime) }}</span>
         </el-form-item>
-        <el-form-item prop="openToken" label="开放token">
-          <el-input v-model="form.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"/>
+        <el-form-item prop="openToken" label="开放refresh token" required>
+          <el-input v-model="form.openToken" type="textarea" rows="4" minlength="256" placeholder="长度280位"/>
           <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
-          <span class="hint">创建时间： {{ formatTime(iat) }}</span>
+          <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
           <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>
-          <span class="hint">过期时间： {{ formatTime(exp) }}</span>
-        </el-form-item>
-        <el-form-item prop="folderId" label="转存文件夹ID">
-          <el-input v-model="form.folderId" placeholder="长度40位"/>
-          <a href="https://www.aliyundrive.com/drive" target="_blank">阿里云盘</a>
+          <span class="hint">过期时间： {{ formatTime(exp[2]) }}</span>
         </el-form-item>
         <el-form-item label="加载我的云盘" v-if="form.openToken">
           <el-switch
@@ -168,14 +155,6 @@
           />
           <span class="hint">主账号用来观看分享。</span>
         </el-form-item>
-        <el-form-item label="自动清理">
-          <el-switch
-            v-model="form.clean"
-            inline-prompt
-            active-text="是"
-            inactive-text="否"
-          />
-        </el-form-item>
         <el-form-item label="自动签到">
           <el-switch
             v-model="form.autoCheckin"
@@ -193,14 +172,13 @@
       <template #footer>
           <span class="dialog-footer">
             <el-button @click="detailVisible = false">取消</el-button>
-            <el-button type="success" @click="clean">清理</el-button>
             <el-button type="success" @click="checkin">签到</el-button>
             <el-button type="primary" @click="handleConfirm">更新</el-button>
           </span>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="alistVisible" title="更新成功" width="30%">
+    <el-dialog v-model="alistVisible" title="更新成功" width="40%">
       <p>需要重启AList服务后才能生效</p>
       <p>是否重启AList服务？</p>
       <template #footer>
@@ -227,12 +205,20 @@ interface Item {
   text: string
 }
 
-const iat = ref(0)
-const exp = ref(0)
+interface Token {
+  key: string
+  value: string
+  accountId: number
+  modified: string
+}
+
+const iat = ref([0])
+const exp = ref([0])
 const forceCheckin = ref(false)
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const accounts = ref([])
+const tokens = ref<Token[]>([])
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
@@ -242,13 +228,15 @@ const form = ref({
   nickname: '',
   refreshToken: '',
   openToken: '',
-  folderId: '',
+  accessToken: '',
+  accessTokenOpen: '',
   autoCheckin: true,
   showMyAli: false,
   master: false,
-  clean: false,
   refreshTokenTime: '',
   openTokenTime: '',
+  accessTokenTime: '',
+  accessTokenOpenTime: '',
   checkinTime: '',
   checkinDays: 1,
 })
@@ -259,11 +247,38 @@ const formatTime = (value: string | number) => {
 
 const showDetails = (data: any) => {
   form.value = Object.assign({}, data)
+  for (let token of tokens.value) {
+    if (token.accountId == data.id) {
+      if (token.key.startsWith('RefreshTokenOpen')) {
+        form.value.openToken = token.value
+        form.value.openTokenTime = token.modified
+      } else if (token.key.startsWith('RefreshToken')) {
+        form.value.refreshToken = token.value
+        form.value.refreshTokenTime = token.modified
+      } else if (token.key.startsWith('AccessTokenOpen')) {
+        form.value.accessTokenOpen = token.value
+        form.value.accessTokenOpenTime = token.modified
+      } else if (token.key.startsWith('AccessToken')) {
+        form.value.accessToken = token.value
+        form.value.accessTokenTime = token.modified
+      }
+    }
+  }
   updateAction.value = true
-  if (data.openToken) {
-    let details = JSON.parse(atob(data.openToken.split('.')[1]))
-    iat.value = details.iat * 1000
-    exp.value = details.exp * 1000
+  if (form.value.accessToken) {
+    let details = JSON.parse(atob(form.value.accessToken.split('.')[1]))
+    iat.value[0] = details.iat * 1000
+    exp.value[0] = details.exp * 1000
+  }
+  if (form.value.accessTokenOpen) {
+    let details = JSON.parse(atob(form.value.accessTokenOpen.split('.')[1]))
+    iat.value[1] = details.iat * 1000
+    exp.value[1] = details.exp * 1000
+  }
+  if (form.value.openToken) {
+    let details = JSON.parse(atob(form.value.openToken.split('.')[1]))
+    iat.value[2] = details.iat * 1000
+    exp.value[2] = details.exp * 1000
   }
   detailVisible.value = true
 }
@@ -278,16 +293,6 @@ const checkin = () => {
   })
 }
 
-const clean = () => {
-  axios.post('/ali/accounts/' + form.value.id + '/clean').then(({data}) => {
-    if (data) {
-      ElMessage.success('成功清理' + data + '个过期文件')
-    } else {
-      ElMessage.info('没有可清理的文件')
-    }
-  })
-}
-
 const handleAdd = () => {
   dialogTitle.value = '添加账号'
   updateAction.value = false
@@ -296,15 +301,17 @@ const handleAdd = () => {
     nickname: '',
     refreshToken: '',
     openToken: '',
-    folderId: '',
+    accessToken: '',
+    accessTokenOpen: '',
     autoCheckin: true,
     showMyAli: false,
     master: false,
-    clean: false,
     refreshTokenTime: '',
     openTokenTime: '',
+    accessTokenTime: '',
+    accessTokenOpenTime: '',
     checkinTime: '',
-    checkinDays: 0,
+    checkinDays: 1,
   }
   formVisible.value = true
 }
@@ -363,8 +370,15 @@ const load = () => {
   })
 }
 
+const getTokens = () => {
+  axios.get('/ali/account-tokens').then(({data}) => {
+    tokens.value = data.data
+  })
+}
+
 onMounted(() => {
   load()
+  getTokens()
 })
 </script>
 

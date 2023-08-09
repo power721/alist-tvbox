@@ -75,7 +75,7 @@ jobs:
           num1=$(date +%Y)
           num2=$(date +%j)
           sum=$((($num1 - 2023) * 366 + $num2))
-          echo $sum.$(date +%H%M) > data/version
+          echo $sum.$(date +%H%M)-dev > data/version
           echo ${{ github.event.head_commit.message }} >> data/version
           cp data/version data/app_version
           cat data/version

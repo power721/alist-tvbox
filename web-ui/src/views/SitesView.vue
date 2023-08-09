@@ -63,19 +63,19 @@
           <el-input v-model="form.name" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="URL地址" label-width="140">
-          <el-input v-model="form.url" autocomplete="off"/>
+          <el-input v-model="form.url" :readonly="form.id===1" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="版本" label-width="140">
           <el-input-number v-model="form.version" min="2" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="根目录" label-width="140">
-          <el-input v-model="form.folder" autocomplete="off"/>
+          <el-input v-model="form.folder" :readonly="form.id===1" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="访问密码" label-width="140">
-          <el-input v-model="form.password" autocomplete="off"/>
+          <el-input v-model="form.password" :readonly="form.id===1" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="认证Token" label-width="140">
-          <el-input v-model="form.token" autocomplete="off"/>
+          <el-input v-model="form.token" :readonly="form.id===1" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="可搜索？">
           <el-switch v-model="form.searchable"/>
@@ -84,7 +84,7 @@
           <el-switch v-model="form.xiaoya"/>
         </el-form-item>
         <el-form-item label="索引文件" label-width="140">
-          <el-input v-model="form.indexFile" placeholder="文件路径或者URL"/>
+          <el-input v-model="form.indexFile" :readonly="form.id===1" placeholder="文件路径或者URL"/>
         </el-form-item>
         <el-form-item label="顺序" label-width="140">
           <el-input-number v-model="form.order" :min="0"/>

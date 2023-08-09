@@ -8,6 +8,7 @@ import {store} from "@/services/store";
 const account = accountService.account
 const router = useRouter()
 const show = ref(false)
+const full = ref(localStorage.getItem('full_view') == 'true')
 const mounted = ref(false)
 const showNotification = ref(true)
 
@@ -18,6 +19,10 @@ const logout = () => {
 
 const close = () => {
   localStorage.setItem('notification2', 'true')
+}
+
+const onModeChange = (value: boolean) => {
+  localStorage.setItem('full_view', value + '')
 }
 
 onMounted(() => {
@@ -48,18 +53,26 @@ onMounted(() => {
           <el-menu-item index="/">首页</el-menu-item>
           <el-menu-item index="/sites" v-if="account.authenticated">站点</el-menu-item>
           <el-menu-item index="/accounts" v-if="account.authenticated&&show">账号</el-menu-item>
-          <el-menu-item index="/pikpak" v-if="account.authenticated&&show">PikPak</el-menu-item>
-          <el-menu-item index="/bilibili" v-if="account.authenticated&&show">BiliBili</el-menu-item>
+          <el-menu-item index="/pikpak" v-if="account.authenticated&&show&&full">PikPak</el-menu-item>
+          <el-menu-item index="/bilibili" v-if="account.authenticated&&show&&full">BiliBili</el-menu-item>
           <el-menu-item index="/subscriptions" v-if="account.authenticated">订阅</el-menu-item>
-          <el-menu-item index="/shares" v-if="account.authenticated&&show">资源</el-menu-item>
+          <el-menu-item index="/shares" v-if="account.authenticated&&show&&full">资源</el-menu-item>
           <el-menu-item index="/config" v-if="account.authenticated">配置</el-menu-item>
-          <el-menu-item index="/index" v-if="account.authenticated&&show">索引</el-menu-item>
+          <el-menu-item index="/index" v-if="account.authenticated&&show&&full">索引</el-menu-item>
           <el-menu-item index="/logs" v-if="account.authenticated&&store.xiaoya">日志</el-menu-item>
-          <el-menu-item index="/files" v-if="account.authenticated&&show">文件</el-menu-item>
-          <el-menu-item index="/alias" v-if="account.authenticated&&show">别名</el-menu-item>
-          <el-menu-item index="/vod" v-if="account.authenticated">vod</el-menu-item>
-          <el-menu-item index="/search" v-if="account.authenticated">搜索</el-menu-item>
+          <el-menu-item index="/files" v-if="account.authenticated&&show&&full">文件</el-menu-item>
+          <el-menu-item index="/alias" v-if="account.authenticated&&show&&full">别名</el-menu-item>
+          <el-menu-item index="/vod" v-if="account.authenticated&&full">vod</el-menu-item>
+          <el-menu-item index="/search" v-if="account.authenticated&&full">搜索</el-menu-item>
           <el-menu-item index="/about" v-if="account.authenticated">关于</el-menu-item>
+          <el-menu-item id="mode" v-if="account.authenticated">
+            <el-switch v-model="full"
+                       inline-prompt
+                       active-text="高级模式"
+                       inactive-text="简单模式"
+                       style="--el-switch-on-color: #13ce66; --el-switch-off-color: #409eff"
+                       @change="onModeChange" />
+          </el-menu-item>
           <div class="flex-grow"/>
           <el-sub-menu v-if="account.authenticated">
             <template #title>{{ account.username }}</template>
@@ -79,6 +92,9 @@ onMounted(() => {
 </template>
 
 <style>
+#mode {
+  margin-top: 12px;
+}
 .flex-grow {
   flex-grow: 1;
 }
