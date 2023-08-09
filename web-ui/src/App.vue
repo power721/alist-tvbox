@@ -21,8 +21,8 @@ const close = () => {
   localStorage.setItem('notification2', 'true')
 }
 
-const onModeChange = (value) => {
-  localStorage.setItem('full_view', value)
+const onModeChange = (value: boolean) => {
+  localStorage.setItem('full_view', value + '')
 }
 
 onMounted(() => {
