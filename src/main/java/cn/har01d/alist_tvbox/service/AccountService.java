@@ -42,7 +42,6 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -68,6 +67,7 @@ import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_TIME;
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER_ID;
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_TIME;
+import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
 import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN_TIME;
 import static cn.har01d.alist_tvbox.util.Constants.SCHEDULE_TIME;
@@ -84,8 +84,8 @@ public class AccountService {
     private final UserRepository userRepository;
     private final AListLocalService aListLocalService;
     private final IndexService indexService;
+    private final RestTemplate aListClient;
     private final RestTemplate restTemplate;
-    private final RestTemplate restTemplate1;
     private final TaskScheduler scheduler;
     private final ObjectMapper objectMapper;
     private ScheduledFuture scheduledFuture;
@@ -106,8 +106,8 @@ public class AccountService {
         this.indexService = indexService;
         this.scheduler = scheduler;
         this.objectMapper = objectMapper;
-        this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
-        this.restTemplate1 = builder.build();
+        this.aListClient = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
+        this.restTemplate = builder.build();
     }
 
     @PostConstruct
@@ -120,14 +120,12 @@ public class AccountService {
         if (accountRepository.count() == 0) {
             String refreshToken = settingRepository.findById(REFRESH_TOKEN).map(Setting::getValue).orElse("");
             String openToken = settingRepository.findById(OPEN_TOKEN).map(Setting::getValue).orElse("");
-            String folderId = settingRepository.findById(FOLDER_ID).map(Setting::getValue).orElse("");
             Account account = new Account();
 
-            if (StringUtils.isAllBlank(refreshToken, openToken, folderId)) {
+            if (StringUtils.isAllBlank(refreshToken, openToken)) {
                 log.info("load account from files");
                 refreshToken = readRefreshToken();
                 openToken = readOpenToken();
-                folderId = readFolderId();
             } else {
                 log.info("load account from settings");
                 settingRepository.deleteById(REFRESH_TOKEN);
@@ -146,7 +144,7 @@ public class AccountService {
             account.setMaster(true);
             account.setUser(userRepository.findById(1).orElse(null));
 
-            if (!StringUtils.isAllBlank(refreshToken, openToken, folderId)) {
+            if (!StringUtils.isAllBlank(refreshToken, openToken)) {
                 accountRepository.save(account);
             }
             readLogin();
@@ -238,22 +236,6 @@ public class AccountService {
         return "";
     }
 
-    private String readFolderId() {
-        Path path = Paths.get("/data/temp_transfer_folder_id.txt");
-        if (Files.exists(path)) {
-            try {
-                log.info("read temp transfer folder id from file");
-                List<String> lines = Files.readAllLines(path);
-                if (!lines.isEmpty()) {
-                    return lines.get(0).trim();
-                }
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-        return "";
-    }
-
     private void readLogin() {
         try {
             String password = settingRepository.findById(ALIST_PASSWORD).map(Setting::getValue).orElse(null);
@@ -303,6 +285,20 @@ public class AccountService {
         }
     }
 
+    private LocalTime getScheduleTime() {
+        String time = settingRepository.findById(SCHEDULE_TIME).map(Setting::getValue).orElse(null);
+        LocalTime localTime = LocalTime.of(9, 0, 0);
+        if (time != null) {
+            try {
+                localTime = Instant.parse(time).atZone(ZoneId.of(ZONE_ID)).toLocalTime();
+            } catch (Exception e) {
+                log.warn("", e);
+                settingRepository.save(new Setting(SCHEDULE_TIME, "2023-07-31T00:00:00.000Z"));
+            }
+        }
+        return localTime;
+    }
+
     public void autoCheckin() {
         for (Account account : accountRepository.findAll()) {
             if (account.isAutoCheckin()) {
@@ -315,22 +311,8 @@ public class AccountService {
         }
     }
 
-    private LocalTime getScheduleTime() {
-        String time = settingRepository.findById(SCHEDULE_TIME).map(Setting::getValue).orElse(null);
-        LocalTime localTime = LocalTime.of(9, 0, 0);
-        if (time != null) {
-            try {
-                localTime = Instant.parse(time).atZone(ZoneId.of(ZONE_ID)).toLocalTime();
-            } catch (Exception e) {
-                log.warn("", e);
-                settingRepository.save(new Setting(SCHEDULE_TIME, "2023-06-20T00:00:00.000Z"));
-            }
-        }
-        return localTime;
-    }
-
     public void handleScheduleTask() {
-        log.info("auto checkin");
+        log.info("handleScheduleTask");
         for (Account account : accountRepository.findAll()) {
             try {
                 refreshTokens(account);
@@ -371,16 +353,18 @@ public class AccountService {
         return true;
     }
 
-    private Map<Object, Object> refreshTokens(Account account) {
+    private void refreshTokens(Account account) {
         boolean changed = false;
-        Map<Object, Object> response = null;
         Instant now = Instant.now().plusSeconds(60);
         Instant time;
         try {
             if (shouldRefreshOpenToken(account)) {
-                log.info("update open token {}: {}", account.getId(), account.getRefreshTokenTime());
-                account.setOpenToken(getAliOpenToken(account.getOpenToken()));
+                log.info("update open refresh token {}: {}", account.getId(), account.getRefreshTokenTime());
                 account.setOpenTokenTime(Instant.now());
+                account.setOpenAccessTokenTime(Instant.now());
+                Map<Object, Object> response = getAliOpenToken(account.getOpenToken());
+                account.setOpenToken((String) response.get(REFRESH_TOKEN));
+                account.setOpenAccessToken((String) response.get(ACCESS_TOKEN));
                 changed = true;
             }
         } catch (Exception e) {
@@ -389,11 +373,11 @@ public class AccountService {
 
         try {
             time = account.getRefreshTokenTime();
-            if (time == null || time.plus(1, ChronoUnit.DAYS).isBefore(now) && (account.getRefreshToken() != null)) {
+            if ((time == null || time.plus(1, ChronoUnit.DAYS).isAfter(now)) && account.getRefreshToken() != null) {
                 log.info("update refresh token {}: {}", account.getId(), time);
-                response = getAliToken(account.getRefreshToken());
-                account.setRefreshToken((String) response.get(REFRESH_TOKEN));
                 account.setRefreshTokenTime(Instant.now());
+                Map<Object, Object> response = getAliToken(account.getRefreshToken());
+                account.setRefreshToken((String) response.get(REFRESH_TOKEN));
                 changed = true;
             }
         } catch (Exception e) {
@@ -404,36 +388,35 @@ public class AccountService {
             accountRepository.save(account);
             updateTokenToAList(account);
         }
-
-        return response;
     }
 
     public Map<Object, Object> getAliToken(String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("User-Agent", Collections.singletonList(USER_AGENT));
-        headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
+        headers.put(HttpHeaders.USER_AGENT, Collections.singletonList(USER_AGENT));
+        headers.put(HttpHeaders.REFERER, Collections.singletonList("https://www.aliyundrive.com/"));
         Map<String, String> body = new HashMap<>();
         body.put(REFRESH_TOKEN, token);
         body.put("grant_type", REFRESH_TOKEN);
         log.debug("body: {}", body);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> response = restTemplate1.exchange("https://auth.aliyundrive.com/v2/account/token", HttpMethod.POST, entity, Map.class);
+        ResponseEntity<Map> response = restTemplate.exchange("https://auth.aliyundrive.com/v2/account/token", HttpMethod.POST, entity, Map.class);
         log.debug("get Ali token response: {}", response.getBody());
         return response.getBody();
     }
 
-    public String getAliOpenToken(String token) {
+    public Map<Object, Object> getAliOpenToken(String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("User-Agent", Collections.singletonList(USER_AGENT));
-        headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
+        headers.put(HttpHeaders.USER_AGENT, Collections.singletonList(USER_AGENT));
+        headers.put(HttpHeaders.REFERER, Collections.singletonList("https://xhofe.top/"));
         Map<String, String> body = new HashMap<>();
         body.put(REFRESH_TOKEN, token);
         body.put("grant_type", REFRESH_TOKEN);
         log.debug("body: {}", body);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> response = restTemplate1.exchange("https://api.xhofe.top/alist/ali_open/token", HttpMethod.POST, entity, Map.class);
+        String url = settingRepository.findById(OPEN_TOKEN_URL).map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token");
+        ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
         log.debug("get open token response: {}", response.getBody());
-        return (String) response.getBody().get(REFRESH_TOKEN);
+        return response.getBody();
     }
 
     public void enableLogin() {
@@ -562,7 +545,7 @@ public class AccountService {
         LoginRequest request = new LoginRequest();
         request.setUsername(username);
         request.setPassword(password);
-        LoginResponse response = restTemplate.postForObject("/api/auth/login", request, LoginResponse.class);
+        LoginResponse response = aListClient.postForObject("/api/auth/login", request, LoginResponse.class);
         log.info("AList login response: {}", response.getData());
         return response.getData().getToken();
     }
@@ -571,7 +554,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<UserResponse> response = restTemplate.exchange("/api/admin/user/get?id=" + id, HttpMethod.GET, entity, UserResponse.class);
+        ResponseEntity<UserResponse> response = aListClient.exchange("/api/admin/user/get?id=" + id, HttpMethod.GET, entity, UserResponse.class);
         log.info("get AList user {} response: {}", id, response.getBody());
         return response.getBody().getData();
     }
@@ -580,7 +563,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<String> response = restTemplate.exchange("/api/admin/user/delete?id=" + id, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/user/delete?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("delete AList user {} response: {}", id, response.getBody());
     }
 
@@ -588,7 +571,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<AListUser> entity = new HttpEntity<>(user, headers);
-        ResponseEntity<String> response = restTemplate.exchange("/api/admin/user/update", HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/user/update", HttpMethod.POST, entity, String.class);
         log.info("update AList user {} response: {}", user.getId(), response.getBody());
     }
 
@@ -596,7 +579,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<AListUser> entity = new HttpEntity<>(user, headers);
-        ResponseEntity<String> response = restTemplate.exchange("/api/admin/user/create", HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/user/create", HttpMethod.POST, entity, String.class);
         log.info("create AList user response: {}", response.getBody());
     }
 
@@ -644,7 +627,7 @@ public class AccountService {
         headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
         headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<CheckinResponse> response = restTemplate1.exchange("https://member.aliyundrive.com/v1/activity/sign_in_list", HttpMethod.POST, entity, CheckinResponse.class);
+        ResponseEntity<CheckinResponse> response = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_list", HttpMethod.POST, entity, CheckinResponse.class);
 
         CheckinResult result = response.getBody().getResult();
         Instant now = Instant.now();
@@ -662,7 +645,7 @@ public class AccountService {
                 headers.put("Referer", Collections.singletonList("https://www.aliyundrive.com/"));
                 headers.put("Authorization", Collections.singletonList("Bearer " + accessToken));
                 entity = new HttpEntity<>(body, headers);
-                ResponseEntity<RewardResponse> res = restTemplate1.exchange("https://member.aliyundrive.com/v1/activity/sign_in_reward?_rx-s=mobile", HttpMethod.POST, entity, RewardResponse.class);
+                ResponseEntity<RewardResponse> res = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_reward?_rx-s=mobile", HttpMethod.POST, entity, RewardResponse.class);
                 log.info("今日签到获得 {} {}", res.getBody().getResult().getName(), res.getBody().getResult().getDescription());
             }
         }
@@ -817,7 +800,7 @@ public class AccountService {
         body.put("flag", 1);
         body.put("value", account.getId());
         HttpEntity<List<Map<String, Object>>> entity = new HttpEntity<>(List.of(body), headers);
-        ResponseEntity<String> response = restTemplate.exchange("/api/admin/setting/save", HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/setting/save", HttpMethod.POST, entity, String.class);
         log.info("updateAliAccountByApi {} response: {}", account.getId(), response.getBody());
     }
 
@@ -902,7 +885,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<String> response = restTemplate.exchange("/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("enable AList storage {} response: {}", id, response.getBody());
     }
 
@@ -910,7 +893,7 @@ public class AccountService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<String> response = restTemplate.exchange("/api/admin/storage/delete?id=" + id, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/storage/delete?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("delete AList storage {} response: {}", id, response.getBody());
     }
 
@@ -933,7 +916,7 @@ public class AccountService {
         body.put("key", key);
         body.put("value", value);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<String> response = restTemplate.exchange("/api/admin/token/update", HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/token/update", HttpMethod.POST, entity, String.class);
         log.info("updateTokenToAList {} response: {}", key, response.getBody());
     }
 
@@ -953,7 +936,7 @@ public class AccountService {
             HttpHeaders headers = new HttpHeaders();
             headers.put("Authorization", Collections.singletonList(token));
             HttpEntity<String> entity = new HttpEntity<>(null, headers);
-            ResponseEntity<AliTokensResponse> response = restTemplate.exchange("/api/admin/token/list", HttpMethod.GET, entity, AliTokensResponse.class);
+            ResponseEntity<AliTokensResponse> response = aListClient.exchange("/api/admin/token/list", HttpMethod.GET, entity, AliTokensResponse.class);
             log.debug("getTokens response: {}", response.getBody());
             return response.getBody();
         } catch (Exception e) {
@@ -962,26 +945,27 @@ public class AccountService {
         return new AliTokensResponse();
     }
 
-    @Scheduled(cron = "0 30 * * * ?")
+    @Scheduled(initialDelay = 300_000, fixedDelay = 3600_000)
     public void syncTokens() {
         List<AliToken> tokens = getTokens().getData();
-        if (tokens != null) {
-            Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
-            for (Account account : accountRepository.findAll()) {
-                AliToken token = map.get("RefreshToken-" + account.getId());
-                account.setRefreshToken(token.getValue());
-                account.setRefreshTokenTime(token.getModified());
+        if (tokens == null) {
+            return;
+        }
+        Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
+        for (Account account : accountRepository.findAll()) {
+            AliToken token = map.get("RefreshToken-" + account.getId());
+            account.setRefreshToken(token.getValue());
+            account.setRefreshTokenTime(token.getModified());
 
-                token = map.get("RefreshTokenOpen-" + account.getId());
-                account.setOpenToken(token.getValue());
-                account.setOpenTokenTime(token.getModified());
+            token = map.get("RefreshTokenOpen-" + account.getId());
+            account.setOpenToken(token.getValue());
+            account.setOpenTokenTime(token.getModified());
 
-                token = map.get("AccessTokenOpen-" + account.getId());
-                account.setOpenAccessToken(token.getValue());
-                account.setOpenAccessTokenTime(token.getModified());
+            token = map.get("AccessTokenOpen-" + account.getId());
+            account.setOpenAccessToken(token.getValue());
+            account.setOpenAccessTokenTime(token.getModified());
 
-                accountRepository.save(account);
-            }
+            accountRepository.save(account);
         }
     }
 }
