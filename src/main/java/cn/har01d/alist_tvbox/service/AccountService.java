@@ -963,8 +963,10 @@ public class AccountService {
         if (tokens == null) {
             return;
         }
+        log.info("syncTokens {}", tokens.size());
         Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
-        for (Account account : accountRepository.findAll()) {
+        List<Account> accounts = accountRepository.findAll();
+        for (Account account : accounts) {
             AliToken token = map.get("RefreshToken-" + account.getId());
             account.setRefreshToken(token.getValue());
             account.setRefreshTokenTime(token.getModified());
@@ -976,8 +978,7 @@ public class AccountService {
             token = map.get("AccessTokenOpen-" + account.getId());
             account.setOpenAccessToken(token.getValue());
             account.setOpenAccessTokenTime(token.getModified());
-
-            accountRepository.save(account);
         }
+        accountRepository.saveAll(accounts);
     }
 }
