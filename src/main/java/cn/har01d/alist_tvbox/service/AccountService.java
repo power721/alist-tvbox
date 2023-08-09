@@ -42,6 +42,7 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -496,14 +497,21 @@ public class AccountService {
         log.info("updateTokens {}", list.size());
         for (Account account : list) {
             String sql = "INSERT INTO x_tokens VALUES('RefreshToken-%d','%s',%d,'%s')";
-            Utils.executeUpdate(String.format(sql, account.getId(), account.getRefreshToken(), account.getId(), account.getRefreshTokenTime().atOffset(ZONE_OFFSET)));
+            Utils.executeUpdate(String.format(sql, account.getId(), account.getRefreshToken(), account.getId(), getTime(account.getRefreshTokenTime())));
             sql = "INSERT INTO x_tokens VALUES('RefreshTokenOpen-%d','%s',%d,'%s')";
-            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenToken(), account.getId(), account.getOpenTokenTime().atOffset(ZONE_OFFSET)));
+            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenToken(), account.getId(), getTime(account.getOpenTokenTime())));
             if (StringUtils.isNotBlank(account.getOpenAccessToken())) {
                 sql = "INSERT INTO x_tokens VALUES('AccessTokenOpen-%d','%s',%d,'%s')";
-                Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenAccessToken(), account.getId(), account.getOpenAccessTokenTime().atOffset(ZONE_OFFSET)));
+                Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenAccessToken(), account.getId(), getTime(account.getOpenAccessTokenTime())));
             }
         }
+    }
+
+    private OffsetDateTime getTime(Instant time) {
+        if (time == null) {
+            return OffsetDateTime.now();
+        }
+        return time.atOffset(ZONE_OFFSET);
     }
 
     public void updateLogin(AListLogin login) {
