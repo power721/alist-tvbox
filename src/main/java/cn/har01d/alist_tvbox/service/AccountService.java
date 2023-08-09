@@ -360,7 +360,7 @@ public class AccountService {
             byte[] bytes = Base64.getDecoder().decode(json);
             Map<Object, Object> map = objectMapper.readValue(bytes, Map.class);
             log.debug("open token: {}", map);
-            long exp = (long) map.get("exp");
+            int exp = (int) map.get("exp");
             Instant expireTime = Instant.ofEpochSecond(exp).plus(3, ChronoUnit.DAYS);
             return expireTime.isAfter(Instant.now());
         } catch (Exception e) {
