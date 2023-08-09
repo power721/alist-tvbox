@@ -33,6 +33,7 @@ public class Account {
     @Column(columnDefinition = "TEXT")
     private String openToken = "";
     private Instant openTokenTime;
+    @Column(columnDefinition = "TEXT")
     private String openAccessToken = "";
     private Instant openAccessTokenTime;
     private Instant checkinTime;
