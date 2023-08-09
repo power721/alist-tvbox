@@ -114,12 +114,13 @@ jobs:
           to: ${{ secrets.CHANNEL_ID }}
           token: ${{ secrets.BOT_TOKEN }}
           message: |
-            一键部署(开发版)： wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t dev
-            
+            一键部署(开发版)： wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t ${{ inputs.tag }}
+
             ${{ github.actor }} created commit on ${{ inputs.branch }} branch:
             Commit message: ${{ env.HEAD_MESSAGE }}
 
             Repository: ${{ github.repository }}:${{ inputs.branch }}
             Branch: ${{ inputs.branch }}
+            Docker Image: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ inputs.tag }}
 
             See changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}
