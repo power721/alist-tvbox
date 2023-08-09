@@ -153,6 +153,8 @@ public class AccountService {
         }
 
         if (accountRepository.count() > 0) {
+            Utils.executeUpdate("alter table ACCOUNT alter column OPEN_ACCESS_TOKEN text");
+
             try {
                 updateAliAccountId();
             } catch (Exception e) {
