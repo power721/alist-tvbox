@@ -65,11 +65,15 @@ onMounted(() => {
           <el-menu-item index="/vod" v-if="account.authenticated&&full">vod</el-menu-item>
           <el-menu-item index="/search" v-if="account.authenticated&&full">搜索</el-menu-item>
           <el-menu-item index="/about" v-if="account.authenticated">关于</el-menu-item>
-          <div class="flex-grow"/>
-          <el-menu-item id="mode">
-            <el-switch v-model="full" inline-prompt active-text="高级" inactive-text="简单" @change="onModeChange" />
-            模式
+          <el-menu-item id="mode" v-if="account.authenticated">
+            <el-switch v-model="full"
+                       inline-prompt
+                       active-text="高级模式"
+                       inactive-text="简单模式"
+                       style="--el-switch-on-color: #13ce66; --el-switch-off-color: #409eff"
+                       @change="onModeChange" />
           </el-menu-item>
+          <div class="flex-grow"/>
           <el-sub-menu v-if="account.authenticated">
             <template #title>{{ account.username }}</template>
             <el-menu-item index="/user">用户</el-menu-item>
