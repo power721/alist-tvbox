@@ -44,7 +44,6 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Collections;
@@ -964,10 +963,20 @@ public class AccountService {
     public void syncTokens() {
         List<AliToken> tokens = getTokens().getData();
         if (tokens != null) {
-            Map<String, String> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, AliToken::getValue));
+            Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
             for (Account account : accountRepository.findAll()) {
-                account.setRefreshToken(map.get("RefreshToken-" + account.getId()));
-                account.setOpenToken(map.get("RefreshTokenOpen-" + account.getId()));
+                AliToken token = map.get("RefreshToken-" + account.getId());
+                account.setRefreshToken(token.getValue());
+                account.setRefreshTokenTime(token.getModified());
+
+                token = map.get("RefreshTokenOpen-" + account.getId());
+                account.setOpenToken(token.getValue());
+                account.setOpenTokenTime(token.getModified());
+
+                token = map.get("AccessTokenOpen-" + account.getId());
+                account.setOpenAccessToken(token.getValue());
+                account.setOpenAccessTokenTime(token.getModified());
+
                 accountRepository.save(account);
             }
         }
