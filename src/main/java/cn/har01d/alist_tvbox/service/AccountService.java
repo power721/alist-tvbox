@@ -79,6 +79,7 @@ import static cn.har01d.alist_tvbox.util.Constants.ZONE_ID;
 @Service
 
 public class AccountService {
+    public static final ZoneOffset ZONE_OFFSET = ZoneOffset.of("+08:00");
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
     private final UserRepository userRepository;
@@ -468,21 +469,18 @@ public class AccountService {
                     }
                     String sql;
                     if (account.isShowMyAli()) {
-                        log.info("enable AList storage {}", id, name);
                         sql = "INSERT INTO x_storages VALUES(" + id + ",'/\uD83D\uDCC0我的阿里云盘/" + name + "/资源盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\",\"drive_type\":\"resource\",\"account_id\":" + account.getId() + "}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         int code = Utils.executeUpdate(sql);
-                        log.debug("{}", sql);
-                        sql = "INSERT INTO x_storages VALUES(" + (id + 1) + ",'/\uD83D\uDCC0我的阿里云盘/" + name + "/备份盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\",\"drive_type\":\"backup\",\"account_id\":" + account.getId() + "}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         log.info("add AList storage {} {} {}", id, name, code);
+                        sql = "INSERT INTO x_storages VALUES(" + (id + 1) + ",'/\uD83D\uDCC0我的阿里云盘/" + name + "/备份盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"" + account.getOpenToken() + "\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\",\"drive_type\":\"backup\",\"account_id\":" + account.getId() + "}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                     } else {
                         sql = "DELETE FROM x_storages WHERE id = " + id;
                         int code = Utils.executeUpdate(sql);
-                        log.debug("{}", sql);
-                        sql = "DELETE FROM x_storages WHERE id = " + (id + 1);
                         log.info("remove AList storage {} {} {}", id, name, code);
+                        sql = "DELETE FROM x_storages WHERE id = " + (id + 1);
                     }
                     int code = Utils.executeUpdate(sql);
-                    log.debug("{} {}", code, sql);
+                    log.info("enableMyAli {} {}", account.isShowMyAli(), code);
                 } catch (Exception e) {
                     log.warn("", e);
                 }
@@ -498,11 +496,11 @@ public class AccountService {
         log.info("updateTokens {}", list.size());
         for (Account account : list) {
             String sql = "INSERT INTO x_tokens VALUES('RefreshToken-%d','%s',%d,'%s')";
-            Utils.executeUpdate(String.format(sql, account.getId(), account.getRefreshToken(), account.getId(), account.getRefreshTokenTime().atOffset(ZoneOffset.of("+08:00"))));
+            Utils.executeUpdate(String.format(sql, account.getId(), account.getRefreshToken(), account.getId(), account.getRefreshTokenTime().atOffset(ZONE_OFFSET)));
             sql = "INSERT INTO x_tokens VALUES('RefreshTokenOpen-%d','%s',%d,'%s')";
-            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenToken(), account.getId(), account.getOpenTokenTime().atOffset(ZoneOffset.of("+08:00"))));
+            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenToken(), account.getId(), account.getOpenTokenTime().atOffset(ZONE_OFFSET)));
             sql = "INSERT INTO x_tokens VALUES('AccessTokenOpen-%d','%s',%d,'%s')";
-            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenAccessToken(), account.getId(), account.getOpenAccessTokenTime().atOffset(ZoneOffset.of("+08:00"))));
+            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenAccessToken(), account.getId(), account.getOpenAccessTokenTime().atOffset(ZONE_OFFSET)));
         }
     }
 
@@ -806,11 +804,7 @@ public class AccountService {
         log.info("reset account master");
         List<Account> list = accountRepository.findAll();
         for (Account a : list) {
-            if (a.getId().equals(account.getId())) {
-                a.setMaster(true);
-            } else {
-                a.setMaster(false);
-            }
+            a.setMaster(a.getId().equals(account.getId()));
         }
         accountRepository.saveAll(list);
     }
@@ -917,7 +911,7 @@ public class AccountService {
         Map<String, Object> body = new HashMap<>();
         body.put("key", key);
         body.put("value", value);
-        body.put("modified", time.atOffset(ZoneOffset.of("+08:00")).toString());
+        body.put("modified", time.atOffset(ZONE_OFFSET).toString());
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<String> response = aListClient.exchange("/api/admin/token/update", HttpMethod.POST, entity, String.class);
         log.info("updateTokenToAList {} response: {}", key, response.getBody());
