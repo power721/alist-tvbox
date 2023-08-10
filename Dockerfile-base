@@ -15,7 +15,7 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY config/config-${TAG}.json /opt/alist/data/config.json
+COPY "config/config-${TAG}.json" /opt/alist/data/config.json
 
 COPY index.sh /
 
