@@ -6,6 +6,8 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
+COPY config/config-host.json /opt/alist/data/config.json
+
 COPY atv-cli/atv-cli /
 COPY index.sh /
 
