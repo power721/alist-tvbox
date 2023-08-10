@@ -973,14 +973,14 @@ public class AccountService {
                 account.setRefreshTokenTime(token.getModified());
             }
 
+            token = map.get("RefreshTokenOpen-" + account.getId());
             if (token != null) {
-                token = map.get("RefreshTokenOpen-" + account.getId());
                 account.setOpenToken(token.getValue());
                 account.setOpenTokenTime(token.getModified());
             }
 
+            token = map.get("AccessTokenOpen-" + account.getId());
             if (token != null) {
-                token = map.get("AccessTokenOpen-" + account.getId());
                 account.setOpenAccessToken(token.getValue());
                 account.setOpenAccessTokenTime(token.getModified());
             }
