@@ -968,16 +968,22 @@ public class AccountService {
         List<Account> accounts = accountRepository.findAll();
         for (Account account : accounts) {
             AliToken token = map.get("RefreshToken-" + account.getId());
-            account.setRefreshToken(token.getValue());
-            account.setRefreshTokenTime(token.getModified());
+            if (token != null) {
+                account.setRefreshToken(token.getValue());
+                account.setRefreshTokenTime(token.getModified());
+            }
 
-            token = map.get("RefreshTokenOpen-" + account.getId());
-            account.setOpenToken(token.getValue());
-            account.setOpenTokenTime(token.getModified());
+            if (token != null) {
+                token = map.get("RefreshTokenOpen-" + account.getId());
+                account.setOpenToken(token.getValue());
+                account.setOpenTokenTime(token.getModified());
+            }
 
-            token = map.get("AccessTokenOpen-" + account.getId());
-            account.setOpenAccessToken(token.getValue());
-            account.setOpenAccessTokenTime(token.getModified());
+            if (token != null) {
+                token = map.get("AccessTokenOpen-" + account.getId());
+                account.setOpenAccessToken(token.getValue());
+                account.setOpenAccessTokenTime(token.getModified());
+            }
         }
         accountRepository.saveAll(accounts);
     }
