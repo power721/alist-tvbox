@@ -16,7 +16,7 @@
     "ssl_mode": ""
   },
   "scheme": {
-    "address": "0.0.0.0",
+    "address": "127.0.0.1",
     "http_port": 5244,
     "https_port": -1,
     "force_https": false,
