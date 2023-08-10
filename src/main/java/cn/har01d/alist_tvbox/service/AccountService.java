@@ -960,7 +960,7 @@ public class AccountService {
     @Scheduled(initialDelay = 90_000, fixedDelay = 3600_000)
     public void syncTokens() {
         List<AliToken> tokens = getTokens().getData();
-        if (tokens == null) {
+        if (tokens == null || tokens.isEmpty()) {
             return;
         }
         log.info("syncTokens {}", tokens.size());
