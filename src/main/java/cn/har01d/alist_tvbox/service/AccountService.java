@@ -957,7 +957,7 @@ public class AccountService {
         return new AliTokensResponse();
     }
 
-    @Scheduled(initialDelay = 90_000, fixedDelay = 3600_000)
+    @Scheduled(initialDelay = 90_000, fixedDelay = 300_000)
     public void syncTokens() {
         List<AliToken> tokens = getTokens().getData();
         if (tokens == null || tokens.isEmpty()) {

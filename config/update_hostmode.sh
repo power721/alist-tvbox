@@ -19,7 +19,7 @@ while getopts ":d:t:y" arg; do
 done
 
 mkdir -p "$HOME/.config/atv"
-echo "$0 ${*}" > "$HOME/.config/atv/cmd"
+echo "host ${*}" > "$HOME/.config/atv/cmd"
 
 shift $((OPTIND-1))
 

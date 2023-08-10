@@ -45,7 +45,7 @@ while getopts ":d:p:P:m:t:yh" arg; do
 done
 
 mkdir -p "$HOME/.config/atv"
-echo "$0 ${*}" > "$HOME/.config/atv/cmd"
+echo "bridge ${*}" > "$HOME/.config/atv/cmd"
 
 shift $((OPTIND-1))
 
