@@ -140,7 +140,7 @@
           <div v-if="movieRemoteVersion&&movieRemoteVersion>movieVersion">
             最新版本：{{
               movieRemoteVersion
-            }}，后台下载中，请稍后。
+            }}，后台更新中。
           </div>
         </el-card>
       </el-col>

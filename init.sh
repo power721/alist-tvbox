@@ -64,8 +64,6 @@ else
   sed -i '/alist.xiaoya.pro/d' update.sql
   grep -c 'alist.xiaoya.pro' update.sql
 
-rm -f /opt/alist/data/data.db-shm /opt/alist/data/data.db-wal
-
   sqlite3 /opt/alist/data/data.db <<EOF
 drop table x_storages;
 drop table x_meta;
