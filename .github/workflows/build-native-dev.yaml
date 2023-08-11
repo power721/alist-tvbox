@@ -89,4 +89,3 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native-dev
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: BASE=${{ secrets.DOCKERHUB_USERNAME }}

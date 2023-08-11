@@ -9,7 +9,7 @@ AList代理，支持xiaoya版AList界面管理。
     ```
 3. 打开管理界面：http://your-ip:4567/#/accounts
 默认用户名：admin 密码：admin
-4. 获取并填写阿里token、开放token、转存文件夹ID
+4. 获取并填写阿里token、开放token
 5. 将订阅地址[http://your-ip:4567/sub/0](http://your-ip:4567/sub/0) 输入到TvBox配置
 
 ## 功能
