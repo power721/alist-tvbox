@@ -21,6 +21,7 @@ on:
       - 'Dockerfile-base-new'
       - 'Dockerfile-native-base'
       - 'Dockerfile-jre'
+      - 'scripts/install.sh'
       - '.github/workflows/build-base.yaml'
       - '.github/workflows/build-base-new.yaml'
       - '.github/workflows/build-native-dev.yaml'
