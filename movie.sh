@@ -8,10 +8,10 @@ if [ "$LOCAL" = "$1" ]; then
   exit
 fi
 
-echo "download data.zip" && \
-wget http://d.har01d.cn/data.zip -O data.zip && \
-unzip -q -o data.zip -d /tmp && \
+echo "download diff.zip" && \
+wget http://d.har01d.cn/diff.zip -O diff.zip && \
+unzip -q -o diff.zip -d /tmp && \
 cp /tmp/data/movie_version /data/atv/ && \
-cp /tmp/data/data.sql /data/atv/ && \
+cp /tmp/data/diff.sql /data/atv/ && \
 cat /data/atv/movie_version && \
-rm -f /tmp/data.zip
+rm -f /tmp/diff.zip

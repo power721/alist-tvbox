@@ -279,6 +279,7 @@ public class SubscriptionService {
 
 //        addRules(config);
 
+        log.debug("{} {}", apiUrl, config);
         return config;
     }
 

@@ -1,9 +1,9 @@
-import { fileURLToPath, URL } from 'node:url'
+import {fileURLToPath, URL} from 'node:url'
 
-import { defineConfig } from 'vite'
+import {defineConfig} from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-const API = "http://127.0.0.1:4567";
+const API: string = "http://127.0.0.1:4567";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -18,6 +18,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      "/api": API,
       "/accounts": API,
       "/bilibili": API,
       "/pikpak": API,

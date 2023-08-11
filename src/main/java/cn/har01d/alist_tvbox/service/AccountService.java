@@ -700,10 +700,11 @@ public class AccountService {
         account.setShowMyAli(dto.isShowMyAli());
         account.setClean(dto.isClean());
 
+        account.setMaster(count == 0);
         accountRepository.save(account);
 
         if (count == 0) {
-            account.setMaster(true);
+            updateTokens();
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + account.getId() + "','','number','',1,0)");
             aListLocalService.startAListServer();
         } else if (account.isMaster()) {
@@ -959,6 +960,9 @@ public class AccountService {
 
     @Scheduled(initialDelay = 90_000, fixedDelay = 300_000)
     public void syncTokens() {
+        if (aListLocalService.getAListStatus() != 2) {
+            return;
+        }
         List<AliToken> tokens = getTokens().getData();
         if (tokens == null || tokens.isEmpty()) {
             return;
