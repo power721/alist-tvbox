@@ -27,10 +27,18 @@ wget -O maven.tgz https://archive.apache.org/dist/maven/maven-3/${VERSION}/binar
 tar xf maven.tgz
 ln -sf apache-maven-${VERSION} maven
 
-wget -O musl.tgz https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
-tar xf musl.tgz
+if [ "$platform" = "aarch64" ]; then
+  wget -O musl.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
+  tar xf musl.tgz
+  ln -sf aarch64-linux-musl-cross musl
+else
+  wget -O musl.tgz https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
+  tar xf musl.tgz
+  ln -sf x86_64-linux-musl-native musl
+fi
 
-export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
+export TOOLCHAIN_DIR=/opt/musl/
+
 export CC=$TOOLCHAIN_DIR/bin/gcc
 export PATH="$TOOLCHAIN_DIR/bin:$PATH"
 

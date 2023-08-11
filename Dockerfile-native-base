@@ -7,7 +7,7 @@ COPY scripts/install.sh ./
 RUN bash install.sh
 
 ENV LANG=en_US.UTF-8
-ENV TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native
+ENV TOOLCHAIN_DIR=/opt/musl
 ENV CC="$TOOLCHAIN_DIR/bin/gcc"
 ENV MAVEN_HOME=/opt/maven
 ENV JAVA_HOME=/opt/graalvm

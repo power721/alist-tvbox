@@ -153,7 +153,7 @@ public class DoubanService {
                         try {
                             jdbcTemplate.execute(line);
                         } catch (Exception e) {
-                            log.warn("{}", e.getMessage());
+                            log.debug("{}", e);
                         }
                     }
                     settingRepository.save(new Setting(MOVIE_VERSION, remote));
