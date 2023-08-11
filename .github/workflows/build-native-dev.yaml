@@ -35,30 +35,6 @@ jobs:
       - name: Build web UI
         working-directory: ./web-ui
         run: npm run build
-      - name: setup graalvm
-        uses: graalvm/setup-graalvm@v1
-        with:
-          java-version: '17.0.7'
-          distribution: 'graalvm' # See 'Options' for all available distributions
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          cache: 'maven'
-      - name: Build with Maven
-        run:  |
-          export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
-          export CC=$TOOLCHAIN_DIR/bin/gcc
-          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
-          sudo apt update
-          sudo apt install build-essential libz-dev zlib1g-dev zlib1g -y
-          wget https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
-          tar xf x86_64-linux-musl-native.tgz -C /opt
-          wget https://zlib.net/zlib-1.2.13.tar.gz
-          tar xf zlib-1.2.13.tar.gz
-          cd zlib-1.2.13
-          ./configure --prefix=$TOOLCHAIN_DIR --static
-          make
-          sudo make install
-          cd ..
-          mvn -B -Pnative package --file pom.xml
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx

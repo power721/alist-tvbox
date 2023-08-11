@@ -1,3 +1,9 @@
+FROM haroldli/native-base:latest as BUILDER
+
+COPY ./ ./
+
+RUN mvn clean package -DskipTests -Pnative
+
 FROM haroldli/alist:hostmode
 
 LABEL MAINTAINER="Har01d"
@@ -15,7 +21,7 @@ COPY init.sh /
 COPY movie.sh /
 COPY entrypoint-native.sh /entrypoint.sh
 
-COPY target/atv ./
+COPY --from=BUILDER /app/target/atv ./
 
 COPY data/version data/app_version
 
