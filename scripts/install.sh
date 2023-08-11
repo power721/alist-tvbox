@@ -5,7 +5,6 @@ cd /opt
 apt-get update
 apt-get -y install build-essential wget zlib1g-dev locales
 locale-gen en_US.UTF-8
-export LANG=en_US.UTF-8
 
 if command -v arch >/dev/null 2>&1; then
   platform=$(arch)
@@ -29,16 +28,14 @@ ln -sf apache-maven-${VERSION} maven
 
 if [ "$platform" = "aarch64" ]; then
   wget -O musl.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
-  tar xf musl.tgz
-  ln -sf aarch64-linux-musl-cross musl
 else
   wget -O musl.tgz https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
-  tar xf musl.tgz
-  ln -sf x86_64-linux-musl-native musl
 fi
 
-export TOOLCHAIN_DIR=/opt/musl/
+tar xf musl.tgz
+find /opt -name '*-linux-musl-*' -exec ln -sf {} musl \;
 
+export TOOLCHAIN_DIR=/opt/musl
 export CC=$TOOLCHAIN_DIR/bin/gcc
 export PATH="$TOOLCHAIN_DIR/bin:$PATH"
 
@@ -50,10 +47,3 @@ make
 make install
 
 rm -f graalvm.tgz maven.tgz musl.tgz zlib-1.2.13.tar.gz
-
-#echo 'export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native' > /etc/profile.d/env.sh
-#echo 'export CC="$TOOLCHAIN_DIR/bin/gcc"' >> /etc/profile.d/env.sh
-#echo 'export MAVEN_HOME=/opt/maven' >> /etc/profile.d/env.sh
-#echo 'export JAVA_HOME=/opt/graalvm' >> /etc/profile.d/env.sh
-#echo 'export GRAALVM_HOME=/opt/graalvm' >> /etc/profile.d/env.sh
-#echo 'export PATH="${JAVA_HOME}/bin:${MAVEN_HOME}/bin:$TOOLCHAIN_DIR/bin:${PATH}"' >> /etc/profile.d/env.sh
