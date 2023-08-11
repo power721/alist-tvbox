@@ -44,8 +44,7 @@ if [ "$BUILD" = "true" ]; then
   npm run build || exit 1
   cd ../atv-cli && \
   go build && \
-  cd .. && \
-  mvn clean package -DskipTests -Pnative || exit 1
+  cd ..
 fi
 
 echo -e "\e[36m使用配置目录：\e[0m $MOUNT"

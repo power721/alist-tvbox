@@ -120,3 +120,11 @@ app_ver=$(head -n1 /opt/atv/data/app_version)
 sqlite3 /opt/alist/data/data.db <<EOF
 INSERT INTO x_storages VALUES(20000,'/©️ $version-$app_ver',0,'Alias',30,'work','{"paths":"/每日更新"}','','2022-11-12 13:05:12+00:00',0,'','','',0,'302_redirect','');
 EOF
+
+if [ ! -f /data/atv/init ]; then
+  wget http://d.har01d.cn/data.zip -O data.zip && \
+  unzip -q -o data.zip -d /tmp && \
+  cp /tmp/data/data.sql /data/atv/
+else
+  echo "show tables;" > /data/atv/data.sql
+fi

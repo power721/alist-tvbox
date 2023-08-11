@@ -19,6 +19,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -47,6 +48,7 @@ public class DoubanService {
     private final SettingRepository settingRepository;
 
     private final RestTemplate restTemplate;
+    private final JdbcTemplate jdbcTemplate;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private volatile boolean downloading;
@@ -56,7 +58,8 @@ public class DoubanService {
                          MovieRepository movieRepository,
                          AliasRepository aliasRepository,
                          SettingRepository settingRepository,
-                         RestTemplateBuilder builder) {
+                         RestTemplateBuilder builder,
+                         JdbcTemplate jdbcTemplate) {
         this.appProperties = appProperties;
         this.metaRepository = metaRepository;
         this.movieRepository = movieRepository;
@@ -66,6 +69,7 @@ public class DoubanService {
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @PostConstruct
@@ -80,6 +84,21 @@ public class DoubanService {
             }
         } catch (Exception e) {
             log.warn("", e);
+        }
+
+        Path file = Paths.get("/data/atv/init");
+        if (metaRepository.count() > 10000 && !Files.exists(file)) {
+            try {
+                Files.createFile(file);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+
+            try {
+                Files.writeString(Paths.get("/data/atv/data.sql"), "SELECT COUNT(*) FROM META;");
+            } catch (Exception e) {
+                log.warn("", e);
+            }
         }
     }
 
@@ -127,6 +146,19 @@ public class DoubanService {
             int code = process.waitFor();
             if (code == 0) {
                 log.info("movie data downloaded");
+                Path file = Paths.get("/data/atv/diff.sql");
+                if (Files.exists(file)) {
+                    List<String> lines = Files.readAllLines(file);
+                    for (String line : lines) {
+                        try {
+                            jdbcTemplate.execute(line);
+                        } catch (Exception e) {
+                            log.warn("{}", e.getMessage());
+                        }
+                    }
+                    settingRepository.save(new Setting(MOVIE_VERSION, remote));
+                    Files.delete(file);
+                }
             } else {
                 log.warn("download movie data failed: {}", code);
             }

@@ -33,6 +33,7 @@
         <java.version>17</java.version>
         <jjwt.version>0.11.5</jjwt.version>
         <libc>--libc=musl</libc>
+        <lib.static>--static</lib.static>
     </properties>
 
     <dependencies>
@@ -131,10 +132,16 @@
 
     <profiles>
         <profile>
-            <id>arm</id>
             <properties>
                 <libc></libc>
+                <lib.static></lib.static>
             </properties>
+            <id>platform-arm</id>
+            <activation>
+                <os>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
         </profile>
         <profile>
             <id>native</id>
@@ -176,7 +183,7 @@
                             <imageName>atv</imageName>
                             <buildArgs>
                                 <buildArg>
-                                    --static
+                                    ${lib.static}
                                     ${libc}
                                     --enable-http
                                     --enable-https
