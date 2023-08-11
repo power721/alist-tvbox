@@ -1,15 +1,6 @@
-FROM ubuntu:latest as BUILDER
-
-WORKDIR /app/
+FROM haroldli/native-base:latest as BUILDER
 
 COPY ./ ./
-
-RUN apt-get update && apt-get -y install build-essential wget zlib1g-dev && bash scripts/install.sh
-
-ENV MAVEN_HOME=/usr/lib/apache-maven-3.8.6
-ENV JAVA_HOME=/opt/graalvm
-ENV GRAALVM_HOME=/opt/graalvm
-ENV PATH="${JAVA_HOME}/bin:${MAVEN_HOME}/bin:${PATH}"
 
 RUN mvn clean package -DskipTests -Pnative
 

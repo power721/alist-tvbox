@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+cd /opt
+
+apt-get update
+apt-get -y install build-essential wget zlib1g-dev
+
 if command -v arch >/dev/null 2>&1; then
   platform=$(arch)
 else
@@ -13,10 +18,9 @@ else
 fi
 
 tar xf /tmp/graalvm.tgz  -C /opt
-ln -sf /opt/graalvm-jdk-17_* /opt/graalvm
+find /opt -name 'graalvm-jdk-*' -exec ln -sf {} graalvm \;
 
 VERSION=3.8.6
 wget -O /tmp/maven.tgz https://archive.apache.org/dist/maven/maven-3/${VERSION}/binaries/apache-maven-${VERSION}-bin.tar.gz
 tar xf /tmp/maven.tgz -C /opt
-
-ls -l /opt
+ln -sf apache-maven-${VERSION} maven

@@ -21,7 +21,7 @@ jobs:
       - name: Build docker and push
         uses: docker/build-push-action@v4
         with:
-          context: .
+          context: scripts
           file: Dockerfile-native-base
           platforms: linux/amd64,linux/arm64
           push: true
