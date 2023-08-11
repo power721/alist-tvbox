@@ -149,7 +149,7 @@ public final class Utils {
         } catch (Exception e) {
             log.warn("", e);
         }
-        log.debug("executeUpdate {} {}", sql, code);
+        log.debug("executeUpdate {} result: {}", sql, code);
         return code;
     }
 
