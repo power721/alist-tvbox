@@ -3,7 +3,9 @@
 cd /opt
 
 apt-get update
-apt-get -y install build-essential wget zlib1g-dev
+apt-get -y install build-essential wget zlib1g-dev locales
+locale-gen en_US.UTF-8
+export LANG=en_US.UTF-8
 
 if command -v arch >/dev/null 2>&1; then
   platform=$(arch)
