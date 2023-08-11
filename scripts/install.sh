@@ -4,7 +4,8 @@ cd /opt
 
 apt-get update
 apt-get -y install build-essential wget zlib1g-dev locales
-locale-gen en_US.UTF-8
+rm -rf /var/lib/apt/lists/*
+localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
 
 if command -v arch >/dev/null 2>&1; then
   platform=$(arch)
@@ -39,11 +40,11 @@ export TOOLCHAIN_DIR=/opt/musl
 export CC=$TOOLCHAIN_DIR/bin/gcc
 export PATH="$TOOLCHAIN_DIR/bin:$PATH"
 
-wget https://zlib.net/zlib-1.2.13.tar.gz
-tar xf zlib-1.2.13.tar.gz
+wget -O zlib.tgz https://zlib.net/zlib-1.2.13.tar.gz
+tar xf zlib.tgz
 cd zlib-1.2.13
 ./configure --prefix=$TOOLCHAIN_DIR --static
 make
 make install
 
-rm -f graalvm.tgz maven.tgz musl.tgz zlib-1.2.13.tar.gz
+rm -rf "*.tgz" zlib-1.2.13
