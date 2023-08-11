@@ -17,9 +17,6 @@
     </p>
     <p>
       Docker：
-      <a href="https://hub.docker.com/r/haroldli/alist-tvbox" target="_blank">https://hub.docker.com/r/haroldli/alist-tvbox</a>
-    </p>
-    <p>
       <a href="https://hub.docker.com/r/haroldli/xiaoya-tvbox" target="_blank">https://hub.docker.com/r/haroldli/xiaoya-tvbox</a>
     </p>
     <p>

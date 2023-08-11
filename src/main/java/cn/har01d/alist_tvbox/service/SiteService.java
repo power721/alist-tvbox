@@ -64,6 +64,7 @@ public class SiteService {
             site.setXiaoya(s.isXiaoya());
             site.setIndexFile(s.getIndexFile());
             site.setVersion(s.getVersion());
+            site.setToken(s.getToken());
             site.setOrder(order++);
             siteRepository.save(site);
             log.info("save site to database: {}", site);

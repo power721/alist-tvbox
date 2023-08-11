@@ -11,5 +11,6 @@ public class Site {
     private boolean xiaoya;
     private String searchApi = "/api/fs/search";
     private String indexFile;
+    private String token;
     private Integer version;
 }
