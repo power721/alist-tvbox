@@ -2,7 +2,7 @@ FROM ubuntu:latest
 
 WORKDIR /app/
 
-COPY install.sh ./
+COPY scripts/install.sh ./
 
 RUN bash install.sh
 
