@@ -47,4 +47,6 @@ cd zlib-1.2.13
 make
 make install
 
+cd /opt
+
 rm -rf "*.tgz" zlib-1.2.13
