@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+set -e
 
 cd /opt
 
@@ -14,9 +14,9 @@ else
 fi
 
 if [ "$platform" = "aarch64" ]; then
-  wget https://download.oracle.com/graalvm/17/latest/graalvm-jdk-17_linux-aarch64_bin.tar.gz -O graalvm.tgz
+  wget -O graalvm.tgz https://download.oracle.com/graalvm/17/latest/graalvm-jdk-17_linux-aarch64_bin.tar.gz
 else
-  wget https://download.oracle.com/graalvm/17/latest/graalvm-jdk-17_linux-x64_bin.tar.gz -O graalvm.tgz
+  wget -O graalvm.tgz https://download.oracle.com/graalvm/17/latest/graalvm-jdk-17_linux-x64_bin.tar.gz
 fi
 
 tar xf graalvm.tgz
@@ -49,4 +49,4 @@ make install
 
 cd /opt
 
-rm -rf "*.tgz" zlib-1.2.13
+rm -rf graalvm.tgz maven.tgz musl.tgz zlib.tgz zlib-1.2.13
