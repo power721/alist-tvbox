@@ -1710,10 +1710,15 @@ public class BiliBiliService {
     }
 
     private List<MovieDetail> searchBangumi(HttpEntity<Void> entity, String wd, String sort) {
-        String url = String.format(SEARCH_API, "media_bangumi", wd, sort, "", 1);
-        log.debug("searchBangumi: {}", url);
-        ResponseEntity<BiliBiliSearchPgcResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchPgcResponse.class);
-        return response.getBody().getData().getResult().stream().map(this::getSearchMovieDetail).collect(Collectors.toList());
+        try {
+            String url = String.format(SEARCH_API, "media_bangumi", wd, sort, "", 1);
+            log.debug("searchBangumi: {}", url);
+            ResponseEntity<BiliBiliSearchPgcResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchPgcResponse.class);
+            return response.getBody().getData().getResult().stream().map(this::getSearchMovieDetail).collect(Collectors.toList());
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return List.of();
     }
 
     private static int getType(String sort) {
