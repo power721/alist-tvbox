@@ -47,7 +47,7 @@ if [ "$BUILD" = "true" ]; then
   cd ..
 fi
 
-mkdir data
+[ -d data ] || mkdir data
 export TZ=Asia/Shanghai
 num1=$(date +%Y)
 num2=$(date +%j)

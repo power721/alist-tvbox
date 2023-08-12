@@ -54,7 +54,7 @@ mvn clean package || exit 1
 cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 pwd
 
-mkdir data
+[ -d data ] || mkdir data
 export TZ=Asia/Shanghai
 num1=$(date +%Y)
 num2=$(date +%j)
