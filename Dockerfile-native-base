@@ -9,7 +9,9 @@ RUN bash install.sh
 ENV LC_ALL=en_US.UTF-8
 ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US.UTF-8
+ENV TOOLCHAIN_DIR=/opt/musl
+ENV CC="$TOOLCHAIN_DIR/bin/gcc"
 ENV MAVEN_HOME=/opt/maven
 ENV JAVA_HOME=/opt/graalvm
 ENV GRAALVM_HOME=/opt/graalvm
-ENV PATH="${JAVA_HOME}/bin:${MAVEN_HOME}/bin:${PATH}"
+ENV PATH="${JAVA_HOME}/bin:${MAVEN_HOME}/bin:$TOOLCHAIN_DIR/bin:${PATH}"
