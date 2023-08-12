@@ -17,8 +17,8 @@
 
     <el-form-item label="类型" label-width="140" v-if="store.xiaoya">
       <el-radio-group v-model="type" class="ml-4">
-        <el-radio label="" size="large">网盘模式</el-radio>
         <el-radio label="1" size="large">点播模式</el-radio>
+        <el-radio label="" size="large">网盘模式</el-radio>
         <el-radio label="2" size="large">BiliBili</el-radio>
       </el-radio-group>
     </el-form-item>
@@ -36,7 +36,7 @@ import axios from "axios"
 import {store} from "@/services/store";
 
 const token = ref('')
-const type = ref('')
+const type = ref('1')
 const id = ref('')
 const path = ref('')
 const url = ref('')

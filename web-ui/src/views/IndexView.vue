@@ -157,7 +157,7 @@ const form = reactive({
   indexName: 'custom_index',
   excludeExternal: false,
   incremental: true,
-  includeFiles: true,
+  includeFiles: false,
   compress: false,
   sleep: 2000,
   maxDepth: 10,

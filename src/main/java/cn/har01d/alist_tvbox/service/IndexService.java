@@ -405,6 +405,7 @@ public class IndexService {
 
         log.debug("{} get {} files", fsResponse.getProvider(), fsResponse.getFiles().size());
         List<String> files = new ArrayList<>();
+        boolean hasFile = false;
         for (FsInfo fsInfo : fsResponse.getFiles()) {
             try {
                 if (fsInfo.getType() == 1) { // folder
@@ -422,17 +423,20 @@ public class IndexService {
                     }
 
                     index(context, newPath, depth + 1);
-                } else if (context.getIndexRequest().isIncludeFiles() && isMediaFormat(fsInfo.getName())) { // file
-                    String newPath = fixPath(path + "/" + fsInfo.getName());
-                    if (exclude(context.getExcludes(), newPath)) {
-                        log.warn("exclude file {}", newPath);
-                        context.stats.excluded++;
-                        continue;
-                    }
+                } else if (isMediaFormat(fsInfo.getName())) { // file
+                    hasFile = true;
+                    if (context.getIndexRequest().isIncludeFiles()) {
+                        String newPath = fixPath(path + "/" + fsInfo.getName());
+                        if (exclude(context.getExcludes(), newPath)) {
+                            log.warn("exclude file {}", newPath);
+                            context.stats.excluded++;
+                            continue;
+                        }
 
-                    context.stats.files++;
-                    log.debug("{}, add file: {}", path, fsInfo.getName());
-                    files.add(fsInfo.getName());
+                        context.stats.files++;
+                        log.debug("{}, add file: {}", path, fsInfo.getName());
+                        files.add(fsInfo.getName());
+                    }
                 } else {
                     log.debug("ignore file: {}", fsInfo.getName());
                 }
@@ -441,7 +445,7 @@ public class IndexService {
             }
         }
 
-        if (!files.isEmpty() && !context.contains(path)) {
+        if (hasFile && !context.contains(path)) {
             context.write(path);
         }
 

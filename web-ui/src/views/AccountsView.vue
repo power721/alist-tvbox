@@ -56,12 +56,12 @@
 
     <el-dialog v-model="formVisible" :title="dialogTitle" width="60%">
       <el-form :model="form">
-        <el-form-item label="阿里refresh token" label-width="150">
+        <el-form-item label="阿里refresh token" label-width="150" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位" autocomplete="off"/>
           <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
           <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
         </el-form-item>
-        <el-form-item label="开放refresh token" label-width="140">
+        <el-form-item label="开放refresh token" label-width="140" required>
           <el-input v-model="form.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"
                     autocomplete="off"/>
           <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>

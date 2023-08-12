@@ -72,10 +72,10 @@
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form">
-        <el-form-item label="名称" label-width="140">
+        <el-form-item label="名称" label-width="140" required>
           <el-input v-model="form.name" placeholder="显示的名称" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="值" label-width="140">
+        <el-form-item label="值" label-width="140" required>
           <el-input v-model="form.value" placeholder="频道ID、UP主ID或者搜索关键词" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="显示？" label-width="140">

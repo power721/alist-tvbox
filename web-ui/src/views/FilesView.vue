@@ -22,13 +22,13 @@
 
     <el-dialog v-model="formVisible" :fullscreen="fullscreen" :title="dialogTitle">
       <el-form :model="form">
-        <el-form-item label="目录" label-width="120">
+        <el-form-item label="目录" label-width="120" required>
           <el-input v-model="form.dir" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="名称" label-width="120">
+        <el-form-item label="名称" label-width="120" required>
           <el-input v-model="form.name" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="内容" label-width="120">
+        <el-form-item label="内容" label-width="120" required>
           <el-input v-model="form.content" type="textarea" :rows="fullscreen?45:15"/>
           <a href="https://www.json.cn/" target="_blank">JSON验证</a>
         </el-form-item>

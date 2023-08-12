@@ -40,11 +40,26 @@ public class Main {
             info.put("allDeclaredConstructors", true);
             result.add(info);
         }
+        addCollections(result);
         ObjectMapper objectMapper = new ObjectMapper();
         String json = objectMapper.writeValueAsString(result);
         System.out.println("Working Directory = " + System.getProperty("user.dir"));
         Path path = Paths.get(System.getProperty("user.dir") + "/src/main/resources/META-INF/native-image/reflect-config.json");
         Files.writeString(path, json);
+    }
+
+    private static void addCollections(List<Map<String, Object>> result) {
+        for (String name : List.of("java.util.HashSet", "java.util.ArrayList", "java.util.HashMap")) {
+            Map<String, Object> info = new HashMap<>();
+            info.put("name", name);
+            List<Map<String, Object>> methods = new ArrayList<>();
+            Map<String, Object> method = new HashMap<>();
+            method.put("name", "<init>");
+            method.put("parameterTypes", List.of());
+            methods.add(method);
+            info.put("methods", methods);
+            result.add(info);
+        }
     }
 
     public static Set<Class> findAllClassesUsingClassLoader(String packageName) {

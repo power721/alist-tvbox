@@ -31,13 +31,13 @@
 
     <el-dialog v-model="formVisible" :title="dialogTitle" width="60%">
       <el-form :model="form">
-        <el-form-item label="昵称" label-width="140">
+        <el-form-item label="昵称" label-width="140" required>
           <el-input v-model="form.nickname" autocomplete="off" placeholder="昵称决定挂载路径"/>
         </el-form-item>
-        <el-form-item label="用户名" label-width="140">
+        <el-form-item label="用户名" label-width="140" required>
           <el-input v-model="form.username" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="密码" label-width="140">
+        <el-form-item label="密码" label-width="140" required>
           <el-input v-model="form.password" type="password" show-password/>
         </el-form-item>
         <el-form-item label="主账号" label-width="140">

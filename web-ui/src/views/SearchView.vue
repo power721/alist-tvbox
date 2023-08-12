@@ -7,7 +7,7 @@
 
     <div>
       <el-input v-model="keyword" autocomplete="off"/>
-      <el-button type="primary" @click="search">搜索</el-button>
+      <el-button type="primary" @click="search" :disabled="!keyword">搜索</el-button>
     </div>
 
     <el-form-item label="类型" label-width="140" v-if="store.xiaoya">

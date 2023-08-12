@@ -10,19 +10,19 @@
     <el-table :data="subscriptions" border style="width: 100%">
       <el-table-column prop="id" label="ID" sortable width="70"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
-      <el-table-column prop="url" label="配置URL" sortable>
+      <el-table-column prop="url" label="原始配置URL" sortable>
         <template #default="scope">
           <a :href="scope.row.url" target="_blank">{{ scope.row.url }}</a>
         </template>
       </el-table-column>
-      <el-table-column prop="url" label="订阅地址" sortable>
+      <el-table-column prop="url" label="TvBox配置地址" sortable>
         <template #default="scope">
           <a :href="currentUrl+'/sub'+token+'/'+scope.row.id" target="_blank">{{ currentUrl }}/sub{{
               token
             }}/{{ scope.row.id }}</a>
         </template>
       </el-table-column>
-      <el-table-column prop="url" label="聚合地址" sortable>
+      <el-table-column prop="url" label="多仓聚合地址" sortable>
         <template #default="scope">
           <a :href="currentUrl+'/repo'+token+'/'+scope.row.id" target="_blank">{{ currentUrl }}/repo{{
               token
@@ -43,11 +43,11 @@
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form">
-        <el-form-item label="名称" label-width="140">
+        <el-form-item label="名称" label-width="140" required>
           <el-input v-model="form.name" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="配置URL" label-width="140">
-          <el-input v-model="form.url" autocomplete="off" placeholder="支持多个，逗号分割"/>
+          <el-input v-model="form.url" autocomplete="off" placeholder="支持多个，逗号分割。留空使用默认配置。"/>
         </el-form-item>
         <el-form-item label="排序字段" label-width="140">
           <el-input v-model="form.sort" autocomplete="off" placeholder="留空保持默认排序"/>

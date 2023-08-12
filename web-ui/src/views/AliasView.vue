@@ -20,10 +20,10 @@
 
     <el-dialog v-model="formVisible" :fullscreen="fullscreen" :title="dialogTitle">
       <el-form :model="form">
-        <el-form-item label="挂载路径" label-width="120">
+        <el-form-item label="挂载路径" label-width="120" required>
           <el-input v-model="form.path" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="内容" label-width="120">
+        <el-form-item label="内容" label-width="120" required>
           <el-input v-model="form.content" type="textarea" :rows="fullscreen?45:15" placeholder="多行路径"/>
         </el-form-item>
       </el-form>
