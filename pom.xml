@@ -181,6 +181,7 @@
                         </executions>
                         <configuration>
                             <imageName>atv</imageName>
+                            <mainClass>cn.har01d.alist_tvbox.AListApplication</mainClass>
                             <buildArgs>
                                 <buildArg>
                                     ${lib.static}
