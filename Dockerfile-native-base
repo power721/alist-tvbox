@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM debian:12-slim
 
 WORKDIR /app/
 
@@ -6,9 +6,9 @@ COPY scripts/install.sh ./
 
 RUN bash install.sh
 
-ENV LC_ALL=en_US.UTF-8
-ENV LANG=en_US.UTF-8
-ENV LANGUAGE=en_US.UTF-8
+ENV LC_ALL=zh_CN.UTF-8
+ENV LANG=zh_CN.UTF-8
+ENV LANGUAGE=zh_CN.UTF-8
 ENV TOOLCHAIN_DIR=/opt/musl
 ENV CC="$TOOLCHAIN_DIR/bin/gcc"
 ENV MAVEN_HOME=/opt/maven
