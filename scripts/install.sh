@@ -27,11 +27,7 @@ wget -O maven.tgz https://archive.apache.org/dist/maven/maven-3/${VERSION}/binar
 tar xf maven.tgz
 ln -sf apache-maven-${VERSION} maven
 
-if [ "$platform" = "aarch64" ]; then
-  wget -O musl.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
-else
-  wget -O musl.tgz https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
-fi
+wget -O musl.tgz https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
 
 tar xf musl.tgz
 find /opt -name '*-linux-musl-*' -exec ln -sf {} musl \;
