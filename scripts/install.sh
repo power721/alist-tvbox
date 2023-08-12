@@ -3,7 +3,7 @@ set -e
 cd /opt
 
 apt-get update
-apt-get -y install build-essential wget zlib1g-dev locales
+apt-get -y install build-essential wget musl-tools zlib1g-dev locales
 rm -rf /var/lib/apt/lists/*
 localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
 
@@ -27,18 +27,18 @@ wget -O maven.tgz https://archive.apache.org/dist/maven/maven-3/${VERSION}/binar
 tar xf maven.tgz
 ln -sf apache-maven-${VERSION} maven
 
-if [ "$platform" = "aarch64" ]; then
-  wget -O musl.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
-else
-  wget -O musl.tgz https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
-fi
-
-tar xf musl.tgz
-find /opt -name '*-linux-musl-*' -exec ln -sf {} musl \;
-
-export TOOLCHAIN_DIR=/opt/musl
-export CC=$TOOLCHAIN_DIR/bin/gcc
-export PATH="$TOOLCHAIN_DIR/bin:$PATH"
+#if [ "$platform" = "aarch64" ]; then
+#  wget -O musl.tgz https://musl.cc/aarch64-linux-musl-cross.tgz
+#else
+#  wget -O musl.tgz https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
+#fi
+#
+#tar xf musl.tgz
+#find /opt -name '*-linux-musl-*' -exec ln -sf {} musl \;
+#
+#export TOOLCHAIN_DIR=/opt/musl
+#export CC=$TOOLCHAIN_DIR/bin/gcc
+#export PATH="$TOOLCHAIN_DIR/bin:$PATH"
 
 wget -O zlib.tgz https://zlib.net/zlib-1.2.13.tar.gz
 tar xf zlib.tgz
@@ -49,4 +49,4 @@ make install
 
 cd /opt
 
-rm -rf graalvm.tgz maven.tgz musl.tgz zlib.tgz zlib-1.2.13
+rm -rf graalvm.tgz maven.tgz zlib.tgz zlib-1.2.13
