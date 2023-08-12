@@ -66,8 +66,8 @@ public class AccountController {
     }
 
     @PostMapping("/login")
-    public void updateLogin(@RequestBody AListLogin login) {
-        accountService.updateLogin(login);
+    public AListLogin updateLogin(@RequestBody AListLogin login) {
+        return accountService.updateLogin(login);
     }
 
     @GetMapping("/login")

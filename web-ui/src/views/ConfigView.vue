@@ -185,12 +185,6 @@
             @change="updateEnableHttps"
           />
         </el-form-item>
-<!--        <el-form-item label="小雅外网地址">-->
-<!--          <el-input v-model="dockerAddress"/>-->
-<!--        </el-form-item>-->
-<!--        <el-form-item>-->
-<!--          <el-button type="primary" @click="updateDockerAddress">更新</el-button>-->
-<!--        </el-form-item>-->
         <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>
@@ -288,12 +282,6 @@ const updateOpenTokenUrl = () => {
   })
 }
 
-const updateDockerAddress = () => {
-  axios.post('/settings', {name: 'docker_address', value: dockerAddress.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
 const updateMixed = () => {
   axios.post('/settings', {name: 'mix_site_source', value: mixSiteSource.value}).then(() => {
     ElMessage.success('更新成功')
@@ -313,8 +301,9 @@ const updateEnableHttps = () => {
 }
 
 const updateLogin = () => {
-  axios.post('/login', login.value).then(() => {
+  axios.post('/login', login.value).then(({data}) => {
     ElMessage.success('保存成功')
+    login.value = data
   })
 }
 
@@ -326,12 +315,6 @@ const exportDatabase = () => {
 
 const updateScheduleTime = () => {
   axios.post('/schedule', scheduleTime.value).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateFileExpireHour = () => {
-  axios.post('/settings', {name: 'file_expire_hour', value: '' + fileExpireHour.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }

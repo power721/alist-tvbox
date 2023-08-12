@@ -519,7 +519,7 @@ public class AccountService {
         return time.atOffset(ZONE_OFFSET);
     }
 
-    public void updateLogin(AListLogin login) {
+    public AListLogin updateLogin(AListLogin login) {
         aListLocalService.validateAListStatus();
         if (login.isEnabled()) {
             if (StringUtils.isBlank(login.getUsername())) {
@@ -530,6 +530,9 @@ public class AccountService {
             }
             if (login.getUsername().equals("atv") || login.getUsername().equals("admin")) {
                 throw new BadRequestException("用户名已被使用");
+            }
+            if ("guest".equals(login.getUsername())) {
+                login.setUsername("dav");
             }
         }
 
@@ -550,6 +553,7 @@ public class AccountService {
             user.setPassword(login.getPassword());
             createUser(user, token);
         }
+        return login;
     }
 
     public String login() {
