@@ -44,7 +44,8 @@ if [ "$BUILD" = "true" ]; then
   npm run build || exit 1
   cd ../atv-cli && \
   go build && \
-  cd ..
+  cd .. && \
+  mvn clean package -DskipTests -Pnative
 fi
 
 [ -d data ] || mkdir data
