@@ -251,8 +251,6 @@ public class AccountService {
             }
 
             AListLogin login = new AListLogin();
-            login.setUsername("guest");
-            login.setPassword("guest_Api789");
             Path pass = Paths.get("/data/guestpass.txt");
             if (Files.exists(pass)) {
                 log.info("read guest password from file");
@@ -969,7 +967,6 @@ public class AccountService {
             syncs++;
             return;
         }
-        syncs++;
         if (aListLocalService.getAListStatus() != 2) {
             return;
         }
@@ -977,6 +974,7 @@ public class AccountService {
         if (tokens == null || tokens.isEmpty()) {
             return;
         }
+        syncs++;
         log.info("syncTokens {}", tokens.size());
         Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
         List<Account> accounts = accountRepository.findAll();
