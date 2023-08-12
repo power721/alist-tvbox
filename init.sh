@@ -48,7 +48,6 @@ if [ ! -f update.zip ]; then
 fi
 if [ ! -f update.zip ]; then
   echo "Failed to download update database file, the database upgrade process has aborted"
-  exit 1
 else
   unzip -o -q -P abcd update.zip
   entries=$(grep -c 'INSERT INTO x_storages' update.sql)
