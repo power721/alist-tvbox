@@ -125,7 +125,7 @@ public class IndexService {
         try {
             String remote = restTemplate.getForObject("http://docker.xiaoya.pro/update/version.txt", String.class).trim();
             String local = settingRepository.findById(INDEX_VERSION).map(Setting::getValue).orElse("").trim();
-            if (!local.equals(remote) && appProperties.isXiaoya()) {
+            if (!local.equals(remote)) {
                 executor.execute(() -> updateXiaoyaIndexFile(remote));
             }
             return remote;

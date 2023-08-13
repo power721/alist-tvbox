@@ -163,7 +163,7 @@ public class TvBoxService {
                 result.getCategories().add(category);
 
                 result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
-                if (id++ == 1 && appProperties.isXiaoya()) {
+                if (id++ == 1) {
                     addMyFavorite(result);
                 }
             }
@@ -482,7 +482,7 @@ public class TvBoxService {
     }
 
     private List<MovieDetail> searchByXiaoya(Site site, String keyword) throws IOException {
-        if (site.getId() == 1 && appProperties.isXiaoya()) {
+        if (site.getId() == 1) {
             List<MovieDetail> list = searchFromIndexFile(site, keyword, "/data/index/index.video.txt");
             File customIndexFile = new File("/data/index/" + site.getId() + "/custom_index.txt");
             log.debug("custom index file: {}", customIndexFile);

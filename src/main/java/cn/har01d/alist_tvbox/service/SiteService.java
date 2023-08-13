@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -45,11 +47,8 @@ public class SiteService {
 
     @PostConstruct
     public void init() {
-        boolean sp = appProperties.isXiaoya();
         if (siteRepository.count() > 0) {
-            if (sp) {
-                siteRepository.findById(1).ifPresent(this::updateSite);
-            }
+            siteRepository.findById(1).ifPresent(this::updateSite);
             fixId();
             return;
         }
@@ -64,15 +63,16 @@ public class SiteService {
             site.setXiaoya(s.isXiaoya());
             site.setIndexFile(s.getIndexFile());
             site.setVersion(s.getVersion());
-            site.setToken(s.getToken());
+            if (order == 1) {
+                aListToken = generateToken();
+                site.setToken(aListToken);
+            }
             site.setOrder(order++);
             siteRepository.save(site);
             log.info("save site to database: {}", site);
         }
 
-        if (sp) {
-            readAList(order);
-        }
+        readAList(order);
     }
 
     private void fixId() {
@@ -142,16 +142,22 @@ public class SiteService {
         }
 
         try {
-            String sql = "select value from x_setting_items where key = 'token'";
-            aListToken = Utils.executeQuery(sql);
-            if (!aListToken.equals(site.getToken())) {
-                log.info("update site token: {}", aListToken);
+            if (StringUtils.isBlank(site.getToken())) {
+                aListToken = generateToken();
                 site.setToken(aListToken);
             }
+            String sql = "UPDATE x_setting_items SET value='" + aListToken + "' WHERE key = 'token'";
+            Utils.executeUpdate(sql);
         } catch (Exception e) {
             log.warn("", e);
         }
         siteRepository.save(site);
+    }
+
+    private String generateToken() {
+        String token = "alist-" + UUID.randomUUID() + IdUtils.generate(64);
+        log.info("generate token {}", token);
+        return token;
     }
 
     public Site getById(Integer id) {
@@ -262,7 +268,7 @@ public class SiteService {
     }
 
     public void delete(int id) {
-        if (id == 1 && appProperties.isXiaoya()) {
+        if (id == 1) {
             throw new BadRequestException("不能删除默认站点");
         }
         siteRepository.deleteById(id);

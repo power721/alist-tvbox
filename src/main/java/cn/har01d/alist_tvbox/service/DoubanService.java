@@ -109,14 +109,12 @@ public class DoubanService {
         try {
             String remote = restTemplate.getForObject("http://d.har01d.cn/movie_version", String.class).trim();
             versions.setMovie(remote);
-            if (appProperties.isXiaoya()) {
-                String local = settingRepository.findById(MOVIE_VERSION).map(Setting::getValue).orElse("").trim();
-                String cached = getCachedVersion();
-                versions.setCachedMovie(cached);
-                if (!local.equals(remote) && !remote.equals(cached) && !downloading) {
-                    log.info("local: {} cached: {} remote: {}", local, cached, remote);
-                    executor.execute(() -> downloadMovieData(remote));
-                }
+            String local = settingRepository.findById(MOVIE_VERSION).map(Setting::getValue).orElse("").trim();
+            String cached = getCachedVersion();
+            versions.setCachedMovie(cached);
+            if (!local.equals(remote) && !remote.equals(cached) && !downloading) {
+                log.info("local: {} cached: {} remote: {}", local, cached, remote);
+                executor.execute(() -> downloadMovieData(remote));
             }
             return remote;
         } catch (Exception e) {

@@ -13,7 +13,6 @@ import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
-import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -34,7 +33,6 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -193,29 +191,25 @@ public class SubscriptionService {
             log.warn("", e);
         }
 
-        if (appProperties.isXiaoya()) {
-            try {
-                for (Site site1 : siteRepository.findAll()) {
-                    if (site1.isSearchable() && !site1.isDisabled()) {
-                        Map<String, Object> site = buildOpenSite("xiaoya-tvbox", "xiaoya", site1.getName());
-                        sites.add(id++, site);
-                        log.debug("add XiaoYa site: {}", site);
-                        break;
-                    }
+        try {
+            for (Site site1 : siteRepository.findAll()) {
+                if (site1.isSearchable() && !site1.isDisabled()) {
+                    Map<String, Object> site = buildOpenSite("xiaoya-tvbox", "xiaoya", site1.getName());
+                    sites.add(id++, site);
+                    log.debug("add XiaoYa site: {}", site);
+                    break;
                 }
-            } catch (Exception e) {
-                log.warn("", e);
             }
+        } catch (Exception e) {
+            log.warn("", e);
         }
 
-        if (appProperties.isXiaoya()) {
-            try {
-                Map<String, Object> site = buildOpenSite("bilibili", "bilibili", "BiliBili");
-                sites.add(id, site);
-                log.debug("add BiliBili site: {}", site);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
+        try {
+            Map<String, Object> site = buildOpenSite("bilibili", "bilibili", "BiliBili");
+            sites.add(id, site);
+            log.debug("add BiliBili site: {}", site);
+        } catch (Exception e) {
+            log.warn("", e);
         }
     }
 
@@ -284,9 +278,6 @@ public class SubscriptionService {
     }
 
     private void replaceAliToken(Map<String, Object> config) {
-        if (!appProperties.isXiaoya()) {
-            return;
-        }
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
         String path = "/ali/token/" + settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         String tokenUrl = ServletUriComponentsBuilder.fromCurrentRequestUri()
@@ -612,10 +603,7 @@ public class SubscriptionService {
 
     private String loadConfigJson(String url) {
         if (url == null || url.isEmpty()) {
-            if (appProperties.isXiaoya()) {
-                return loadConfigJsonXiaoya();
-            }
-            return null;
+            return loadConfigJsonXiaoya();
         }
 
         try {

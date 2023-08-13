@@ -18,7 +18,6 @@ app:
   sites:
     - name: 丫仙女
       url: http://localhost
-      token: alist-09ceb38a-f143-47f7-b255-c3eec819cd7b0lSmqjgBRIMJakAkbJIE2KzO6h2CUVBuEkqrLiA5cJJzOzYxJtCTIGBXXnhrg7Av
       version: 3
       searchable: true
       xiaoya: true

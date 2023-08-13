@@ -10,7 +10,6 @@ import java.util.Set;
 @Data
 @ConfigurationProperties("app")
 public class AppProperties {
-    private boolean xiaoya;
     private boolean hostmode;
     private boolean supportDash;
     private boolean heartbeat;

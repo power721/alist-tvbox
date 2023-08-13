@@ -3,20 +3,18 @@ PORT1=4567
 PORT2=5344
 TAG="latest"
 MEM_OPT="-Xmx512M"
-YES=false
 
 usage(){
-  echo "Usage: $0 [ -d BASE_DIR ] [ -p PORT1 ] [ -P PORT2 ] [ -t TAG ] [ -m MEM_OPT ] [ -y ]"
+  echo "Usage: $0 [ -d BASE_DIR ] [ -p PORT1 ] [ -P PORT2 ] [ -t TAG ] [ -m MEM_OPT ]"
   echo "-d BASE_DIR  数据目录，默认：/etc/xiaoya"
   echo "-p PORT1     管理界面端口，默认：4567"
   echo "-P PORT2     小雅AList端口，默认：5344"
   echo "-t TAG       Docker镜像标签，默认：latest"
   echo "-m MEM_OPT   Java最大堆内存，默认：512M"
-  echo "-y           强制停止独立版Docker容器"
   exit 2
 }
 
-while getopts ":d:p:P:m:t:yh" arg; do
+while getopts "d:p:P:m:t:h" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
@@ -32,9 +30,6 @@ while getopts ":d:p:P:m:t:yh" arg; do
             ;;
         t)
             TAG=${OPTARG}
-            ;;
-        y)
-            YES=true
             ;;
         h)
             usage
@@ -59,20 +54,6 @@ fi
 
 if [ $# -gt 2 ]; then
 	PORT2=$3
-fi
-
-if docker ps | awk '{print $NF}' | grep -q alist-tvbox; then
-  echo -e "\e[33m独立版Docker容器运行中。\e[0m"
-  if [ "$YES" = "true" ]; then
-    echo -e "\e[33m停止独立版Docker容器\e[0m"
-    docker rm -f alist-tvbox 2>/dev/null
-  else
-    read -r -p "是否停止独立版Docker容器？[Y/N] " yn
-    case $yn in
-        [Yy]* ) docker rm -f alist-tvbox 2>/dev/null;;
-        [Nn]* ) exit 0;;
-    esac
-  fi
 fi
 
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
