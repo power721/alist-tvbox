@@ -86,18 +86,20 @@ public class DoubanService {
             log.warn("", e);
         }
 
-        Path file = Paths.get("/data/atv/init");
-        if (metaRepository.count() > 10000 && !Files.exists(file)) {
-            try {
-                Files.createFile(file);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
+        if (metaRepository.count() > 10000) {
+            Path file = Path.of("/tmp/data/base_version");
+            if (Files.exists(file)) {
+                try {
+                    Files.move(file, Paths.get("/data/atv/base_version"));
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
 
-            try {
-                Files.writeString(Paths.get("/data/atv/data.sql"), "SELECT COUNT(*) FROM META;");
-            } catch (Exception e) {
-                log.warn("", e);
+                try {
+                    Files.writeString(Paths.get("/data/atv/data.sql"), "SELECT COUNT(*) FROM META;");
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
             }
         }
     }

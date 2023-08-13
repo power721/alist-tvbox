@@ -9,6 +9,12 @@ LABEL MAINTAINER="Har01d"
 ENV JAVA_HOME=/jre
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
+COPY data/update.sql /
+
+RUN sqlite3 /opt/alist/data/data.db "drop table x_storages";\
+    sqlite3 /opt/alist/data/data.db ".read /update.sql"; \
+    rm -f /update.sql
+
 COPY --from=corretto-jdk /jre $JAVA_HOME
 
 VOLUME /opt/atv/data/

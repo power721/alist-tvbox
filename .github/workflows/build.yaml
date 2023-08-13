@@ -78,7 +78,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set APP version
         run: |
-          mkdir data
+          [ -d data ] || mkdir data
           export TZ=Asia/Shanghai
           num1=$(date +%Y)
           num2=$(date +%j)
