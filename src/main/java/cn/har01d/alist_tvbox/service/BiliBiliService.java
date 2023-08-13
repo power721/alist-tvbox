@@ -68,6 +68,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -197,7 +198,7 @@ public class BiliBiliService {
     private String keyword = "";
     private int searchPage;
     private String favId = "";
-    private Integer mid;
+    private Long mid;
 
     private List<String> feedOffsets = new ArrayList<>(); // 动态列表
     private List<String> chanOffsets = new ArrayList<>(); // 频道列表
@@ -241,9 +242,9 @@ public class BiliBiliService {
         Map<String, Object> result = new HashMap<>();
         if (data != null) {
             if (data.get("mid") instanceof Long) {
-                mid = ((Long) data.get("mid")).intValue();
-            } else {
-                mid = (Integer) data.get("mid");
+                mid = ((Long) data.get("mid"));
+            } else if (data.get("mid") instanceof Integer) {
+                mid = Long.valueOf((Integer) data.get("mid"));
             }
             if (mid != null && mid.equals(BiliBiliUtils.getMid())) {
                 data.put("uname", "内置账号");
@@ -1719,6 +1720,23 @@ public class BiliBiliService {
             log.warn("", e);
         }
         return List.of();
+    }
+
+    @Scheduled(cron = "0 30 9 * * *")
+    public void checkin() {
+        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(null);
+        if (cookie == null || cookie.contains(String.valueOf(BiliBiliUtils.getMid())) || cookie.contains("3493271303096985")) {
+            return;
+        }
+
+        String url = "https://api.bilibili.com/pgc/activity/score/task/sign";
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        ResponseEntity<BiliBiliInfoResponse> response = restTemplate.exchange(url, HttpMethod.POST, entity, BiliBiliInfoResponse.class);
+        if (response.getBody() != null && response.getBody().getCode() == 0) {
+            log.info("B站用户签到成功");
+        } else {
+            log.warn("B站用户签到失败：{} {}", response.getBody().getCode(), response.getBody().getMessage());
+        }
     }
 
     private static int getType(String sort) {
