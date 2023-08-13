@@ -56,7 +56,7 @@
         <el-input v-model="form.password" autocomplete="off"/>
       </el-form-item>
       <el-form-item v-if="form.type==2" label="Cookie" label-width="140">
-        <el-input v-model="form.cookie" autocomplete="off"/>
+        <el-input v-model="form.cookie" type="textarea" :rows="5" autocomplete="off"/>
       </el-form-item>
       <el-form-item label="文件夹ID" label-width="140">
         <el-input v-model="form.folderId" autocomplete="off" placeholder="默认为根目录或者从分享链接读取"/>
@@ -65,6 +65,7 @@
         <el-radio-group v-model="form.type" class="ml-4">
           <el-radio :label="0" size="large">阿里云盘</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
+          <el-radio :label="2" size="large">夸克网盘</el-radio>
         </el-radio-group>
       </el-form-item>
       <span v-if="form.path">完整路径： {{fullPath(form)}}</span>
@@ -131,7 +132,7 @@
 <script setup lang="ts">
 import {onMounted, ref} from "vue";
 import axios from "axios";
-import {ElMessage, genFileId} from 'element-plus'
+import {ElMessage} from 'element-plus'
 import accountService from "@/services/account.service";
 
 const token = accountService.getToken()
@@ -243,7 +244,7 @@ const fullPath = (share: any) => {
   if (share.type == 1) {
     return '/\uD83D\uDD78\uFE0F我的PikPak分享/' + path
   } else if (share.type == 2) {
-    return '/我的夸克/' + path
+    return '/🌞我的夸克网盘/' + path
   } else {
     return '/\uD83C\uDE34我的阿里分享/' + path
   }

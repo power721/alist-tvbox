@@ -348,6 +348,10 @@ public class ShareService {
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account2.getUsername(), account2.getPassword(), share.getShareId(), share.getPassword()));
                         pikpak = true;
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
+                    } else if (share.getType() == 2) {
+                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
+                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
+                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     }
                     shareId = Math.max(shareId, share.getId() + 1);
                     if (share.getType() == null) {
@@ -385,6 +389,8 @@ public class ShareService {
             return "/\uD83C\uDE34我的阿里分享/" + path;
         } else if (share.getType() == 1) {
             return "/\uD83D\uDD78️我的PikPak分享/" + path;
+        } else if (share.getType() == 2) {
+            return "/\uD83C\uDF1E我的夸克网盘/" + path;
         }
         return path;
     }
@@ -423,6 +429,9 @@ public class ShareService {
     }
 
     private void parseShare(Share share) {
+        if (StringUtils.isBlank(share.getShareId())) {
+            return;
+        }
         String url = share.getShareId();
         if (url.startsWith("https://www.aliyundrive.com/s/")) {
             url = url.substring(30);
@@ -454,6 +463,10 @@ public class ShareService {
                 PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+            } else if (share.getType() == 2) {
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','',0);";
+                int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
+                log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
             }
             log.info("insert result: {}", result);
 
@@ -488,6 +501,10 @@ public class ShareService {
                 PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
+            } else if (share.getType() == 2) {
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','',0);";
+                int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
+                log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
             }
             log.info("insert result: {}", result);
 
@@ -499,17 +516,30 @@ public class ShareService {
     }
 
     private void validate(Share share) {
-        if (share.getType() == 1 && (StringUtils.isBlank(share.getFolderId()))) {
-            throw new BadRequestException("文件夹ID不能为空");
-        }
-        if (StringUtils.isBlank(share.getShareId())) {
-            throw new BadRequestException("分享ID不能为空");
-        }
         if (StringUtils.isBlank(share.getPath())) {
             throw new BadRequestException("挂载路径不能为空");
         }
+
+        if (share.getType() == 1 && (StringUtils.isBlank(share.getFolderId()))) {
+            throw new BadRequestException("文件夹ID不能为空");
+        }
+
+        if (share.getType() == 2) {
+            if (StringUtils.isBlank(share.getCookie())) {
+                throw new BadRequestException("Cookie不能为空");
+            }
+        } else {
+            if (StringUtils.isBlank(share.getShareId())) {
+                throw new BadRequestException("分享ID不能为空");
+            }
+        }
+
         if (StringUtils.isBlank(share.getFolderId())) {
-            share.setFolderId("root");
+            if (share.getType() == 2) {
+                share.setFolderId("0");
+            } else {
+                share.setFolderId("root");
+            }
         }
     }
 
