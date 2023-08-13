@@ -13,6 +13,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.annotation.PostConstruct;
@@ -87,10 +88,10 @@ public class DoubanService {
         }
 
         if (metaRepository.count() > 10000) {
-            Path file = Path.of("/tmp/data/base_version");
-            if (Files.exists(file)) {
+            Path source = Path.of("/tmp/data/base_version");
+            if (Files.exists(source)) {
                 try {
-                    Files.move(file, Paths.get("/data/atv/base_version"));
+                    Utils.execute("mv /tmp/data/base_version /data/atv/base_version");
                 } catch (Exception e) {
                     log.warn("", e);
                 }

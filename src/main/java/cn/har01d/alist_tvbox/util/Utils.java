@@ -174,6 +174,21 @@ public final class Utils {
         return "";
     }
 
+    public static int execute(String command) {
+        int code = 1;
+        try {
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.inheritIO();
+            builder.command("bash", "-c", command);
+            Process process = builder.start();
+            code = process.waitFor();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        log.debug("execute {} result: {}", command, code);
+        return code;
+    }
+
     public static String getAliasPaths(String content) {
         StringBuilder sb = new StringBuilder();
         for (String line : content.split("\\n")) {
