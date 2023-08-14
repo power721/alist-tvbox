@@ -145,6 +145,8 @@ public class SiteService {
             if (StringUtils.isBlank(site.getToken())) {
                 aListToken = generateToken();
                 site.setToken(aListToken);
+            } else {
+                aListToken = site.getToken();
             }
             String sql = "UPDATE x_setting_items SET value='" + aListToken + "' WHERE key = 'token'";
             Utils.executeUpdate(sql);
