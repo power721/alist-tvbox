@@ -11,7 +11,7 @@ import java.util.Base64;
 
 @Slf4j
 public final class BiliBiliUtils {
-    private static final int MID = 534587613;
+    private static final long MID = 534587613;
     private static final String COOKIE = "11t9VCKbJ5jxU0VTU0RBVEE9NjYzNmJmYjIlMkMxNzA2MjQ2NzUwJTJDYjcyMzIlMkE3MXZrRmtGVlBBZEJZZUNQdkhIRVlIVEFCWmFDMzJBclBISlk5RllmalhJU0w2SXo0Yk1jUnAwTWVkV3lNNEV3b1ZuRFJ2MEFBQVJnQTtiaWxpX2pjdD0yNTllOTMwMmM2ODk4NGQ0ZWMxMGI3YjdiMGY5YmRiZDtEZWRlVXNlcklEPTE3ODQ4MDU3NzA7RGVkZVVzZXJJRF9fY2tNZDU9YThlNWQ4YTg0OGYyZDg4ZTtzaWQ9N2plNG9pb2M=";
 
     private static String defaultCookie;
@@ -48,7 +48,7 @@ public final class BiliBiliUtils {
         return Base64.getEncoder().encodeToString(Files.readAllBytes(file));
     }
 
-    public static int getMid() {
-        return (MID ^ (123456789 << 3 + 1)) - 3;
+    public static long getMid() {
+        return (MID ^ (123456789L << 3 + 1)) - 3;
     }
 }
