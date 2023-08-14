@@ -21,7 +21,7 @@ tar zxf mobi.tgz
 rm mobi.tgz
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/tvbox.zip
 if [ ! -f tvbox.zip ]; then
-  wget -T 20 -t 2 https://d.har01d.cn/tvbox.zip
+  wget -T 20 -t 2 http://cdn.har01d.cn/tvbox/data/tvbox.zip
 fi
 unzip -q -o tvbox.zip
 rm tvbox.zip
@@ -40,11 +40,11 @@ rm -f index.zip index.txt version.txt update.zip
 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/update/version.txt
 if [ ! -f version.txt ]; then
-  wget -T 10 -t 2 https://d.har01d.cn/version.txt
+  wget -T 10 -t 2 http://d.har01d.cn/version.txt
 fi
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/update.zip
 if [ ! -f update.zip ]; then
-  wget -T 20 -t 2 https://d.har01d.cn/update.zip
+  wget -T 20 -t 2 http://cdn.har01d.cn/tvbox/data/update.zip
 fi
 if [ ! -f update.zip ]; then
   echo "Failed to download update database file, the database upgrade process has aborted"
@@ -93,7 +93,7 @@ else
   elif [ "$remote" = "$latest" ]; then
     wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/index.zip
     if [ ! -f index.zip ]; then
-      wget -T 30 -t 2 https://d.har01d.cn/index.zip
+      wget -T 30 -t 2 http://cdn.har01d.cn/tvbox/data/index.zip
     fi
     if [ ! -f index.zip ]; then
       echo "Failed to download index compressed file, the index file upgrade process has aborted"
@@ -127,7 +127,7 @@ fi
 REMOTE=$(curl -fsSL http://d.har01d.cn/base_version | head -n 1)
 echo "movie base version: $LOCAL $REMOTE"
 if [ "$LOCAL" != "$REMOTE" ]; then
-  wget http://d.har01d.cn/data.zip -O data.zip && \
+  wget http://cdn.har01d.cn/tvbox/data/data.zip -O data.zip && \
   unzip -q -o data.zip -d /tmp && \
   cp /tmp/data/data.sql /data/atv/
 fi

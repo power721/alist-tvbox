@@ -13,6 +13,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -26,6 +27,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -38,8 +40,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
+import static cn.har01d.alist_tvbox.util.Constants.TACIT_0924_LINK;
 
 @Slf4j
 @Service
@@ -57,6 +62,7 @@ public class ShareService {
     private final ConfigFileService configFileService;
     private final PikPakService pikPakService;
     private final RestTemplate restTemplate;
+    private final RestTemplate restTemplate1;
 
     private volatile int shareId = 5000;
 
@@ -83,6 +89,10 @@ public class ShareService {
         this.configFileService = configFileService;
         this.pikPakService = pikPakService;
         this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
+        this.restTemplate1 = builder
+                .defaultHeader(HttpHeaders.REFERER, "https://docs.qq.com/")
+                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
+                .build();
     }
 
     @PostConstruct
@@ -102,6 +112,8 @@ public class ShareService {
         pikPakService.loadPikPak();
         configFileService.writeFiles();
         readTvTxt();
+
+        loadTacit0924();
 
         if (accountRepository.count() > 0 || pikPakAccountRepository.count() > 0) {
             aListLocalService.startAListServer();
@@ -549,4 +561,50 @@ public class ShareService {
         return response.getBody();
     }
 
+    private static final Pattern SHARE = Pattern.compile("(https://www.aliyundrive.com/s/\\w+)</span>");
+    private static final String TACIT_URL = "https://docs.qq.com/doc/DQmx1WEdTRXpGeEZ6";
+
+    private void loadTacit0924() {
+        try {
+            String link = settingRepository.findById(TACIT_0924_LINK).map(Setting::getValue).orElse("");
+            if (link.isEmpty()) {
+                String html = restTemplate1.getForObject(TACIT_URL, String.class);
+                Matcher matcher = SHARE.matcher(html);
+                if (matcher.find()) {
+                    link = matcher.group(1);
+                    settingRepository.save(new Setting(TACIT_0924_LINK, link));
+                }
+            }
+            String sql = "INSERT INTO x_storages VALUES(7000,'/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"root\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','')";
+            Utils.executeUpdate(String.format(sql, link.substring(30)));
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    @Scheduled(cron = "0 30 9 * * ?")
+    public void getTacit0924() {
+        try {
+            String html = restTemplate1.getForObject(TACIT_URL, String.class);
+            Matcher matcher = SHARE.matcher(html);
+            if (matcher.find()) {
+                String link = settingRepository.findById(TACIT_0924_LINK).map(Setting::getValue).orElse("");
+                String url = matcher.group(1);
+                log.debug("{} {}", link, url);
+                if (!link.equals(url)) {
+                    settingRepository.save(new Setting(TACIT_0924_LINK, url));
+                    String token = accountService.login();
+                    deleteStorage(7000, token);
+
+                    String sql = "INSERT INTO x_storages VALUES(7000,'/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"root\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0)";
+                    int result = Utils.executeUpdate(String.format(sql, url.substring(30)));
+                    log.info("insert result: {}", result);
+
+                    enableStorage(7000, token);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
 }

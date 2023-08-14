@@ -48,4 +48,5 @@ public final class Constants {
     public static final String BILIBILI_COOKIE = "bilibili_cookie";
     public static final String BILI_BILI = "BiliBili";
     public static final String ALI_SECRET = "ali_secret";
+    public static final String TACIT_0924_LINK = "tacit0924_link";
 }

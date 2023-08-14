@@ -204,4 +204,26 @@ public final class Utils {
         return sb.toString();
     }
 
+    public static long durationToSeconds(String duration) {
+        try {
+            String[] parts = duration.split(":");
+            if (parts.length == 1) {
+                return Integer.parseInt(duration);
+            } else if (parts.length == 2) {
+                return Integer.parseInt(parts[0]) * 60 + Integer.parseInt(parts[1]);
+            }
+        } catch (Exception e) {
+            log.warn("{}", e);
+        }
+        return 0;
+    }
+
+    public static String secondsToDuration(long seconds) {
+        long hour = seconds / 3600;
+        long minute = (seconds - hour * 3600) / 60;
+        if (hour > 0) {
+            return String.format("%d:%02d:%02d", hour, minute, seconds % 60);
+        }
+        return String.format("%d:%02d", minute, seconds % 60);
+    }
 }

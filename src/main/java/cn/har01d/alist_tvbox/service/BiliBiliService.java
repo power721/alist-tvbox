@@ -504,6 +504,7 @@ public class BiliBiliService {
             list.add(movieDetail);
         }
 
+        long seconds = hotResponse.getData().getList().stream().mapToLong(BiliBiliInfo::getDuration).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("popular$0$" + 0 + "$" + page);
         movieDetail.setVod_name("合集" + page);
@@ -513,6 +514,7 @@ public class BiliBiliService {
         String playUrl = list.stream().map(e -> fixTitle(e.getVod_name()) + "$" + buildPlayUrl(e.getVod_id())).collect(Collectors.joining("#"));
         movieDetail.setVod_play_url(playUrl);
         movieDetail.setVod_content("共" + list.size() + "个视频");
+        movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
         result.getList().add(movieDetail);
 
         result.getList().addAll(list);
@@ -534,6 +536,7 @@ public class BiliBiliService {
         log.debug("{}", hotResponse);
         List<BiliBiliInfo> list = hotResponse.getData().getList();
 
+        long seconds = list.stream().mapToLong(BiliBiliInfo::getDuration).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("popular$0$0$" + page);
         movieDetail.setVod_name("合集" + page);
@@ -543,6 +546,7 @@ public class BiliBiliService {
         String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e)).collect(Collectors.joining("#"));
         movieDetail.setVod_play_url(playUrl);
         movieDetail.setVod_content("共" + list.size() + "个视频");
+        movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
 
@@ -592,6 +596,7 @@ public class BiliBiliService {
             list.add(movieDetail);
         }
 
+        long seconds = searchInfo.getList().getVlist().stream().map(BiliBiliSearchInfo.Video::getDescription).mapToLong(Utils::durationToSeconds).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("up$" + mid + "$" + sort + "$" + page);
         movieDetail.setVod_name("合集" + page);
@@ -601,6 +606,7 @@ public class BiliBiliService {
         String playUrl = list.stream().map(e -> fixTitle(e.getVod_name()) + "$" + buildPlayUrl(e.getVod_id())).collect(Collectors.joining("#"));
         movieDetail.setVod_play_url(playUrl);
         movieDetail.setVod_content("共" + list.size() + "个视频");
+        movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
         result.getList().add(movieDetail);
 
         result.getList().addAll(list);
@@ -642,6 +648,7 @@ public class BiliBiliService {
         List<BiliBiliSearchInfo.Video> videos = response.getData().getList().getVlist();
         list.addAll(videos);
 
+        long seconds = list.stream().map(BiliBiliSearchInfo.Video::getDescription).mapToLong(Utils::durationToSeconds).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("up$" + id + "$0$" + page);
         movieDetail.setVod_name("合集" + page);
@@ -651,6 +658,7 @@ public class BiliBiliService {
         String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
         movieDetail.setVod_play_url(playUrl);
         movieDetail.setVod_content("共" + list.size() + "个视频");
+        movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
 
@@ -742,6 +750,7 @@ public class BiliBiliService {
             list.add(movieDetail);
         }
 
+        long seconds = hotResponse.getData().getArchives().stream().mapToLong(BiliBiliInfo::getDuration).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("region$" + tid + "$" + 0 + "$" + page);
         movieDetail.setVod_name("合集" + page);
@@ -751,6 +760,7 @@ public class BiliBiliService {
         String playUrl = list.stream().map(e -> fixTitle(e.getVod_name()) + "$" + buildPlayUrl(e.getVod_id())).collect(Collectors.joining("#"));
         movieDetail.setVod_play_url(playUrl);
         movieDetail.setVod_content("共" + list.size() + "个视频");
+        movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
         result.getList().add(movieDetail);
 
         result.getList().addAll(list);
@@ -775,6 +785,7 @@ public class BiliBiliService {
         log.debug("{}", response.getBody());
         List<BiliBiliInfo> list = response.getBody().getData().getArchives();
 
+        long seconds = list.stream().mapToLong(BiliBiliInfo::getDuration).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("region$" + id + "$0$" + page);
         movieDetail.setVod_name("合集" + page);
@@ -784,6 +795,7 @@ public class BiliBiliService {
         String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e)).collect(Collectors.joining("#"));
         movieDetail.setVod_play_url(playUrl);
         movieDetail.setVod_content("共" + list.size() + "个视频");
+        movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
 
@@ -1012,6 +1024,7 @@ public class BiliBiliService {
             list.addAll(videos);
         }
 
+        long seconds = list.stream().map(BiliBiliSearchResult.Video::getDuration).mapToLong(Utils::durationToSeconds).sum();
         searchPlaylist = new MovieDetail();
         searchPlaylist.setVod_id("search$" + wd + "$0$" + page);
         searchPlaylist.setVod_name(wd + "合集" + (page + 1));
@@ -1021,6 +1034,7 @@ public class BiliBiliService {
         String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
         searchPlaylist.setVod_play_url(playUrl);
         searchPlaylist.setVod_content("共" + list.size() + "个视频");
+        searchPlaylist.setVod_remarks(Utils.secondsToDuration(seconds));
         result.getList().add(searchPlaylist);
 
         return result;
@@ -1493,6 +1507,7 @@ public class BiliBiliService {
             list.add(movieDetail);
         }
 
+        int seconds = rank.getResult().stream().mapToInt(e -> Math.toIntExact(e.getDuration())).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("type$" + tid + "$" + type + "$" + page);
         movieDetail.setVod_name("合集" + page);
@@ -1502,6 +1517,7 @@ public class BiliBiliService {
         String playUrl = list.stream().map(e -> fixTitle(e.getVod_name()) + "$" + buildPlayUrl(e.getVod_id())).collect(Collectors.joining("#"));
         movieDetail.setVod_play_url(playUrl);
         movieDetail.setVod_content("共" + list.size() + "个视频");
+        movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
         result.getList().add(movieDetail);
 
         result.getList().addAll(list);
@@ -1642,6 +1658,7 @@ public class BiliBiliService {
             ResponseEntity<BiliBiliSearchResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchResponse.class);
             List<BiliBiliSearchResult.Video> videos = response.getBody().getData().getResult();
 
+            long seconds = videos.stream().map(BiliBiliSearchResult.Video::getDuration).mapToLong(Utils::durationToSeconds).sum();
             keyword = wd;
             searchPage = pg - 1;
             MovieDetail movieDetail = new MovieDetail();
@@ -1653,6 +1670,7 @@ public class BiliBiliService {
             String playUrl = videos.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
             movieDetail.setVod_play_url(playUrl);
             movieDetail.setVod_content("共" + videos.size() + "个视频");
+            movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
             searchPlaylist = movieDetail;
             result.getList().add(movieDetail);
 
@@ -1670,6 +1688,7 @@ public class BiliBiliService {
                 pages = response.getBody().getData().getNumPages();
             }
 
+            long seconds = list.stream().map(BiliBiliSearchResult.Video::getDuration).mapToLong(Utils::durationToSeconds).sum();
             keyword = wd;
             searchPage = 0;
             pages = (pages + 1) / 2;
@@ -1684,6 +1703,7 @@ public class BiliBiliService {
                     String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
                     movieDetail.setVod_play_url(playUrl);
                     movieDetail.setVod_content("共" + list.size() + "个视频");
+                    movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
                     searchPlaylist = movieDetail;
                 }
                 result.getList().add(movieDetail);
