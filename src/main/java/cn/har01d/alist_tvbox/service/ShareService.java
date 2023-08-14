@@ -575,7 +575,7 @@ public class ShareService {
                     settingRepository.save(new Setting(TACIT_0924_LINK, link));
                 }
             }
-            String sql = "INSERT INTO x_storages VALUES(7000,'/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"root\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','')";
+            String sql = "INSERT INTO x_storages VALUES(7000,'/\uD83C\uDE34我的阿里分享/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"root\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','')";
             Utils.executeUpdate(String.format(sql, link.substring(30)));
         } catch (Exception e) {
             log.warn("", e);
@@ -596,7 +596,7 @@ public class ShareService {
                     String token = accountService.login();
                     deleteStorage(7000, token);
 
-                    String sql = "INSERT INTO x_storages VALUES(7000,'/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"root\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0)";
+                    String sql = "INSERT INTO x_storages VALUES(7000,'/\uD83C\uDE34我的阿里分享/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"root\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0)";
                     int result = Utils.executeUpdate(String.format(sql, url.substring(30)));
                     log.info("insert result: {}", result);
 
