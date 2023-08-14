@@ -194,7 +194,7 @@ public class AccountService {
 
     private void addAdminUser() {
         try {
-            String sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0)";
+            String sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0,'')";
             Utils.executeUpdate(sql);
         } catch (Exception e) {
             log.warn("", e);
@@ -444,7 +444,7 @@ public class AccountService {
                     Utils.executeUpdate(sql);
                     sql = "delete from x_users where id = 3";
                     Utils.executeUpdate(sql);
-                    sql = "INSERT INTO x_users VALUES(3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,368,'',0,0)";
+                    sql = "INSERT INTO x_users VALUES(3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,368,'',0,0,'')";
                     Utils.executeUpdate(sql);
                 }
             } else {
