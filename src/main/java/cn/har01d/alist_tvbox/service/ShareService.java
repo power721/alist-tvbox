@@ -38,6 +38,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -45,6 +46,7 @@ import java.util.regex.Pattern;
 
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
 import static cn.har01d.alist_tvbox.util.Constants.TACIT_0924_ID;
+import static cn.har01d.alist_tvbox.util.Constants.TACIT_FOLDER_ID;
 
 @Slf4j
 @Service
@@ -567,16 +569,19 @@ public class ShareService {
     private void loadTacit0924() {
         try {
             String link = settingRepository.findById(TACIT_0924_ID).map(Setting::getValue).orElse("");
-            if (link.isEmpty()) {
+            String folder = settingRepository.findById(TACIT_FOLDER_ID).map(Setting::getValue).orElse("");
+            if (link.isEmpty() || folder.isEmpty()) {
                 String html = restTemplate1.getForObject(TACIT_URL, String.class);
                 Matcher matcher = SHARE.matcher(html);
                 if (matcher.find()) {
                     link = matcher.group(1).substring(30);
                     settingRepository.save(new Setting(TACIT_0924_ID, link));
+                    folder = getFolderId(link);
+                    settingRepository.save(new Setting(TACIT_FOLDER_ID, folder));
                 }
             }
-            String sql = "INSERT INTO x_storages VALUES(7000,'/\uD83C\uDE34我的阿里分享/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"root\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','')";
-            Utils.executeUpdate(String.format(sql, link));
+            String sql = "INSERT INTO x_storages VALUES(7000,'/\uD83C\uDE34我的阿里分享/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','')";
+            Utils.executeUpdate(String.format(sql, link, folder));
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -592,12 +597,14 @@ public class ShareService {
                 String url = matcher.group(1).substring(30);
                 log.debug("{} {}", link, url);
                 if (!link.equals(url)) {
+                    String folder = getFolderId(link);
+                    settingRepository.save(new Setting(TACIT_FOLDER_ID, folder));
                     settingRepository.save(new Setting(TACIT_0924_ID, url));
                     String token = accountService.login();
                     deleteStorage(7000, token);
 
-                    String sql = "INSERT INTO x_storages VALUES(7000,'/\uD83C\uDE34我的阿里分享/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"root\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0)";
-                    int result = Utils.executeUpdate(String.format(sql, url));
+                    String sql = "INSERT INTO x_storages VALUES(7000,'/\uD83C\uDE34我的阿里分享/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0)";
+                    int result = Utils.executeUpdate(String.format(sql, url, folder));
                     log.info("insert result: {}", result);
 
                     enableStorage(7000, token);
@@ -607,4 +614,55 @@ public class ShareService {
             log.warn("", e);
         }
     }
+
+    private String getFolderId(String shareId) {
+        try {
+            String shareToken = getShareToken(shareId);
+            String fileId = getFileId(shareId, shareToken, "root");
+            return getFileId(shareId, shareToken, fileId);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return "root";
+    }
+
+    private String getShareToken(String shareId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
+        headers.put("X-Device-Id", List.of("92ac5d71-3747-4a37-8bfc-a02155edca4a"));
+        Map<String, Object> body = new HashMap<>();
+        body.put("share_id", shareId);
+        body.put("share_pwd", "");
+        HttpEntity<Map> entity = new HttpEntity<>(body, headers);
+        ResponseEntity<Map> response = restTemplate1.exchange("https://api.aliyundrive.com/v2/share_link/get_share_token", HttpMethod.POST, entity, Map.class);
+        log.debug("getShareToken {}", response.getBody());
+        return (String) response.getBody().get("share_token");
+    }
+
+    private String getFileId(String shareId, String shareToken, String parentId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
+        headers.put("X-Device-Id", List.of("92ac5d71-3747-4a37-8bfc-a02155edca4a"));
+        headers.put("X-Share-Token", List.of(shareToken));
+        Map<String, Object> body = new HashMap<>();
+        body.put("share_id", shareId);
+        body.put("image_thumbnail_process", "image/resize,w_256/format,jpeg");
+        body.put("image_url_process", "image/resize,w_1920/format,jpeg/interlace,1");
+        body.put("limit", 20);
+        body.put("order_by", "name");
+        body.put("order_direction", "DESC");
+        body.put("parent_file_id", parentId);
+        body.put("video_thumbnail_process", "video/snapshot,t_1000,f_jpg,ar_auto,w_256");
+        HttpEntity<Map> entity = new HttpEntity<>(body, headers);
+        ResponseEntity<Map> response = restTemplate1.exchange("https://api.aliyundrive.com/adrive/v2/file/list_by_share", HttpMethod.POST, entity, Map.class);
+        log.debug("getFileId {}", response.getBody());
+        List<Map> items = (List<Map>) response.getBody().get("items");
+        for (Map item : items) {
+            if ("folder".equals(item.get("type"))) {
+                return (String) item.get("file_id");
+            }
+        }
+        return "root";
+    }
+
 }
