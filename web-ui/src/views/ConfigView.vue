@@ -186,6 +186,9 @@
           />
         </el-form-item>
         <el-form-item>
+          <el-button @click="resetAListToken">重置AList认证Token</el-button>
+        </el-form-item>
+        <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>
       </el-form>
@@ -274,6 +277,12 @@ const updateToken = () => {
       ElMessage.info('成功关闭安全订阅')
     })
   }
+}
+
+const resetAListToken = () => {
+  axios.post('/alist/reset_token', {}).then(() => {
+    ElMessage.success('AList认证Token重置成功')
+  })
 }
 
 const updateOpenTokenUrl = () => {

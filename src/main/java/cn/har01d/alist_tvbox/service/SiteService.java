@@ -8,14 +8,23 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.model.Response;
+import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
 import java.net.URL;
@@ -33,16 +42,22 @@ public class SiteService {
     private final SiteRepository siteRepository;
     private final SettingRepository settingRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final RestTemplate restTemplate;
     private String aListToken = "";
 
     public SiteService(AppProperties appProperties,
                        SiteRepository siteRepository,
                        SettingRepository settingRepository,
-                       JdbcTemplate jdbcTemplate) {
+                       JdbcTemplate jdbcTemplate,
+                       RestTemplateBuilder builder) {
         this.appProperties = appProperties;
         this.siteRepository = siteRepository;
         this.settingRepository = settingRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.restTemplate = builder
+                .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
+                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
+                .build();
     }
 
     @PostConstruct
@@ -156,10 +171,32 @@ public class SiteService {
         siteRepository.save(site);
     }
 
-    private String generateToken() {
+    public String generateToken() {
         String token = "alist-" + UUID.randomUUID() + IdUtils.generate(64);
         log.info("generate token {}", token);
         return token;
+    }
+
+    public void resetToken() {
+        String url = appProperties.isHostmode() ? "http://localhost:5234" : "http://localhost:5244";
+        String token = postRestToken(url + "/api/admin/setting/reset_token");
+        log.info("{}", token);
+        for (Site site : siteRepository.findAll()) {
+            if (aListToken.equals(site.getToken())) {
+                site.setToken(token);
+                siteRepository.save(site);
+            }
+        }
+        aListToken = token;
+    }
+
+    private String postRestToken(String url) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("Authorization", aListToken);
+        HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+        ResponseEntity<Response<String>> response = restTemplate.exchange(url, HttpMethod.POST, entity, new ParameterizedTypeReference<Response<String>>() {
+        });
+        return response.getBody().getData();
     }
 
     public Site getById(Integer id) {
