@@ -44,7 +44,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
-import static cn.har01d.alist_tvbox.util.Constants.TACIT_0924_LINK;
+import static cn.har01d.alist_tvbox.util.Constants.TACIT_0924_ID;
 
 @Slf4j
 @Service
@@ -566,17 +566,17 @@ public class ShareService {
 
     private void loadTacit0924() {
         try {
-            String link = settingRepository.findById(TACIT_0924_LINK).map(Setting::getValue).orElse("");
+            String link = settingRepository.findById(TACIT_0924_ID).map(Setting::getValue).orElse("");
             if (link.isEmpty()) {
                 String html = restTemplate1.getForObject(TACIT_URL, String.class);
                 Matcher matcher = SHARE.matcher(html);
                 if (matcher.find()) {
-                    link = matcher.group(1);
-                    settingRepository.save(new Setting(TACIT_0924_LINK, link));
+                    link = matcher.group(1).substring(30);
+                    settingRepository.save(new Setting(TACIT_0924_ID, link));
                 }
             }
             String sql = "INSERT INTO x_storages VALUES(7000,'/\uD83C\uDE34我的阿里分享/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"root\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','')";
-            Utils.executeUpdate(String.format(sql, link.substring(30)));
+            Utils.executeUpdate(String.format(sql, link));
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -588,16 +588,16 @@ public class ShareService {
             String html = restTemplate1.getForObject(TACIT_URL, String.class);
             Matcher matcher = SHARE.matcher(html);
             if (matcher.find()) {
-                String link = settingRepository.findById(TACIT_0924_LINK).map(Setting::getValue).orElse("");
-                String url = matcher.group(1);
+                String link = settingRepository.findById(TACIT_0924_ID).map(Setting::getValue).orElse("");
+                String url = matcher.group(1).substring(30);
                 log.debug("{} {}", link, url);
                 if (!link.equals(url)) {
-                    settingRepository.save(new Setting(TACIT_0924_LINK, url));
+                    settingRepository.save(new Setting(TACIT_0924_ID, url));
                     String token = accountService.login();
                     deleteStorage(7000, token);
 
                     String sql = "INSERT INTO x_storages VALUES(7000,'/\uD83C\uDE34我的阿里分享/Tacit0924',0,'AliyundriveShare2Open',30,'work','{\"RefreshToken\":\"\",\"RefreshTokenOpen\":\"\",\"TempTransferFolderID\":\"root\",\"share_id\":\"%s\",\"share_pwd\":\"\",\"root_folder_id\":\"root\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"oauth_token_url\":\"\",\"client_id\":\"\",\"client_secret\":\"\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0)";
-                    int result = Utils.executeUpdate(String.format(sql, url.substring(30)));
+                    int result = Utils.executeUpdate(String.format(sql, url));
                     log.info("insert result: {}", result);
 
                     enableStorage(7000, token);
