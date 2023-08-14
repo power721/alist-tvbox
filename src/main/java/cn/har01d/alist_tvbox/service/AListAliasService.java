@@ -37,7 +37,7 @@ public class AListAliasService {
         try {
             String token = accountService.login();
             alias.setId(shareId++);
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'name','asc','front',0,'302_redirect','');";
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'name','asc','front',0,'302_redirect','',0);";
             int count = Utils.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
             log.info("insert alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
             aliasRepository.save(alias);
@@ -63,7 +63,7 @@ public class AListAliasService {
             String sql = "DELETE FROM x_storages WHERE id = " + id;
             Utils.executeUpdate(sql);
 
-            sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'name','asc','front',0,'302_redirect','');";
+            sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'name','asc','front',0,'302_redirect','',0);";
             int count = Utils.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
             log.info("update alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
 

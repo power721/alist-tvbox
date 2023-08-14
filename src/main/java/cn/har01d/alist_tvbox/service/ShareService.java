@@ -118,7 +118,7 @@ public class ShareService {
             for (AListAlias alias : list) {
                 try {
                     String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'name','asc','front',0,'302_redirect','');";
-                    int count = Utils.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getPaths(alias.getContent())));
+                    int count = Utils.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
                     log.info("insert Alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
