@@ -1,3 +1,11 @@
+FROM golang:1.20 as BUILDER
+
+WORKDIR /app/
+
+COPY atv-cli ./
+
+RUN go build
+
 FROM haroldli/alist:hostmode
 
 LABEL MAINTAINER="Har01d"
@@ -8,7 +16,8 @@ WORKDIR /opt/atv/
 
 COPY config/config-host.json /opt/alist/data/config.json
 
-COPY atv-cli/atv-cli /
+COPY --from=BUILDER /app/atv-cli /
+
 COPY index.sh /
 
 COPY init.sh /

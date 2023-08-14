@@ -60,6 +60,7 @@ else
     rm /opt/alist/data/data.db-wal
   fi
 
+  sed -i '/v3.9.2/d' update.sql
   sed -i '/alist.xiaoya.pro/d' update.sql
 
   sqlite3 /opt/alist/data/data.db <<EOF

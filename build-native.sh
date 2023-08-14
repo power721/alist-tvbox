@@ -42,8 +42,6 @@ if [ "$BUILD" = "true" ]; then
   rm -rf src/main/resources/static/assets && \
   cd web-ui && \
   npm run build || exit 1
-  cd ../atv-cli && \
-  go build && \
   cd .. && \
   mvn clean package -DskipTests -Pnative
 fi

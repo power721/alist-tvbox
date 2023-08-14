@@ -1,3 +1,11 @@
+FROM golang:1.20 as BUILDER
+
+WORKDIR /app/
+
+COPY atv-cli ./
+
+RUN go build
+
 FROM haroldli/alist-base-new:hostmode
 
 LABEL MAINTAINER="Har01d"
@@ -6,7 +14,7 @@ ENV MEM_OPT="-Xmx512M"
 
 COPY config/config-host.json /opt/alist/data/config.json
 
-COPY atv-cli/atv-cli /
+COPY --from=BUILDER /app/atv-cli /
 
 COPY init.sh /
 COPY movie.sh /
