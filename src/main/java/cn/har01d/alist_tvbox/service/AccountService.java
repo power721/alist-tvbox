@@ -924,6 +924,12 @@ public class AccountService {
     }
 
     private void updateTokenToAList(String key, String value, Instant time, String token) {
+        if (StringUtils.isBlank(value)) {
+            return;
+        }
+        if (time == null) {
+            time = Instant.now();
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         Map<String, Object> body = new HashMap<>();
