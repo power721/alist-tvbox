@@ -1146,6 +1146,7 @@ public class BiliBiliService {
             }
 
             result = DashUtils.convert(response.getBody());
+            result.put("dash", aid + "+" + cid + "+127");
             String cookie = entity.getHeaders().getFirst("Cookie");
             result.put("header", "{\"Referer\":\"https://www.bilibili.com\",\"cookie\":\"" + cookie + "\",\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36\"}");
         } else {

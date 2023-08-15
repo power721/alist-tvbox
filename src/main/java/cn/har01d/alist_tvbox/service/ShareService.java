@@ -587,7 +587,7 @@ public class ShareService {
         }
     }
 
-    @Scheduled(cron = "0 30 9 * * ?")
+    @Scheduled(cron = "0 0 23 * * ?")
     public void getTacit0924() {
         try {
             String html = restTemplate1.getForObject(TACIT_URL, String.class);
