@@ -814,7 +814,7 @@ public class AccountService {
         body.put("flag", 1);
         body.put("value", account.getId());
         HttpEntity<List<Map<String, Object>>> entity = new HttpEntity<>(List.of(body), headers);
-        ResponseEntity<String> response = aListClient.exchange("/api/admin/setting/save", HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/setting/update", HttpMethod.POST, entity, String.class);
         log.info("updateAliAccountByApi {} response: {}", account.getId(), response.getBody());
     }
 
@@ -937,7 +937,7 @@ public class AccountService {
         body.put("value", value);
         body.put("modified", time.atOffset(ZONE_OFFSET).toString());
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<String> response = aListClient.exchange("/api/admin/token/update", HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/token/save", HttpMethod.POST, entity, String.class);
         log.info("updateTokenToAList {} response: {}", key, response.getBody());
     }
 
