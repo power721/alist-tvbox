@@ -22,8 +22,6 @@ rm mobi.tgz
 
 sqlite3 /opt/alist/data/data.db ".read /update.sql"
 
-cd /tmp/
-
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/tvbox.zip
 if [ ! -f tvbox.zip ]; then
   wget -T 20 -t 2 http://cdn.har01d.cn/tvbox/data/tvbox.zip
@@ -40,6 +38,8 @@ if [ -f /data/iptv.m3u ]; then
 fi
 
 rm -f index.zip index.txt version.txt update.zip
+
+cd /tmp/
 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/update/version.txt
 if [ ! -f version.txt ]; then
@@ -63,7 +63,7 @@ else
     rm /opt/alist/data/data.db-wal
   fi
 
-  sed -i '/v3.9.2/d' update.sql
+  sed -i 's/v3.9.2/v3.25.1/' update.sql
   sed -i '/alist.xiaoya.pro/d' update.sql
 
   sqlite3 /opt/alist/data/data.db <<EOF
