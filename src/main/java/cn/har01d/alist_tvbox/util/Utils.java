@@ -153,6 +153,16 @@ public final class Utils {
         return code;
     }
 
+    private static String secure(String text) {
+        return text
+                .replaceAll("\"refresh_token\":\".+?\"", "\"refresh_token\":\"******\"")
+                .replaceAll("\"RefreshToken\":\".+?\"", "\"RefreshToken\":\"*********\"")
+                .replaceAll("\"RefreshTokenOpen\":\".+?\"", "\"RefreshTokenOpen\":\"*********\"")
+                .replaceAll("\"password\":\".+?\"", "\"password\":\"***\"")
+                .replaceAll("'$.password', '.+?'", "'$.password', '***'")
+                ;
+    }
+
     public static String executeQuery(String sql) {
         log.debug("executeQuery {}", sql);
         try {

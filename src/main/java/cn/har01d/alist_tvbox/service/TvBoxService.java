@@ -984,6 +984,9 @@ public class TvBoxService {
             movieDetail.setVod_play_url(fsDetail.getName() + "$" + buildPlayUrl(site, path));
             movieDetail.setVod_content(getParent(path));
             setDoubanInfo(site, movieDetail, getParent(path), true);
+            if ("PikPakShare".equals(fsDetail.getProvider())) {
+                movieDetail.setVod_remarks("P" + movieDetail.getVod_remarks());
+            }
             result.getList().add(movieDetail);
         }
         result.setTotal(result.getList().size());
