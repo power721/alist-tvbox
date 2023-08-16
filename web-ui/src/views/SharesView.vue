@@ -244,7 +244,7 @@ const fullPath = (share: any) => {
   if (share.type == 1) {
     return '/\uD83D\uDD78\uFE0F我的PikPak分享/' + path
   } else if (share.type == 2) {
-    return '/🌞我的夸克网盘/' + path
+    return '/\uD83C\uDF1E我的夸克网盘/' + path
   } else {
     return '/\uD83C\uDE34我的阿里分享/' + path
   }
