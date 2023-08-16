@@ -33,6 +33,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -86,6 +87,7 @@ public class TvBoxService {
     private final AppProperties appProperties;
     private final DoubanService doubanService;
     private final ObjectMapper objectMapper;
+    private final Environment environment;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -124,7 +126,8 @@ public class TvBoxService {
                         SiteService siteService,
                         AppProperties appProperties,
                         DoubanService doubanService,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper,
+                        Environment environment) {
         this.accountRepository = accountRepository;
         this.aliasRepository = aliasRepository;
         this.shareRepository = shareRepository;
@@ -135,6 +138,7 @@ public class TvBoxService {
         this.appProperties = appProperties;
         this.doubanService = doubanService;
         this.objectMapper = objectMapper;
+        this.environment = environment;
     }
 
     private Site getXiaoyaSite() {
@@ -1321,7 +1325,18 @@ public class TvBoxService {
 
     private String fixHttp(String url) {
         if (url.startsWith("//")) {
-            return "http:" + url;
+            url = "http:" + url;
+        }
+        if (url.startsWith("http://localhost/p/")) {
+            String proxy = ServletUriComponentsBuilder.fromCurrentRequest()
+                    .scheme(appProperties.isEnableHttps() ? "https" : "http")
+                    .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
+                    .replacePath("/p")
+                    .replaceQuery("")
+                    .build()
+                    .toUriString();
+            url = url.replace("http://localhost/p", proxy);
+            log.debug("{}", url);
         }
         return url;
     }
