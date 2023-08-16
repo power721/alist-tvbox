@@ -19,6 +19,11 @@ mv mobi.tgz /www/mobi.tgz
 cd /www/
 tar zxf mobi.tgz
 rm mobi.tgz
+
+sqlite3 /opt/alist/data/data.db ".read /update.sql"
+
+cd /tmp/
+
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/tvbox.zip
 if [ ! -f tvbox.zip ]; then
   wget -T 20 -t 2 http://cdn.har01d.cn/tvbox/data/tvbox.zip
@@ -33,8 +38,6 @@ fi
 if [ -f /data/iptv.m3u ]; then
   ln -s /data/iptv.m3u /www/tvbox/iptv.m3u
 fi
-
-cd /tmp/
 
 rm -f index.zip index.txt version.txt update.zip
 
