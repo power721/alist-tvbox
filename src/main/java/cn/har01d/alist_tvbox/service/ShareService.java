@@ -353,7 +353,9 @@ public class ShareService {
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     }
-                    shareId = Math.max(shareId, share.getId() + 1);
+                    if (share.getId() < 6000) {
+                        shareId = Math.max(shareId, share.getId() + 1);
+                    }
                     if (share.getType() == null) {
                         share.setType(0);
                         shareRepository.save(share);
