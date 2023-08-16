@@ -8,7 +8,8 @@
     <div class="space"></div>
 
     <el-table :data="subscriptions" border style="width: 100%">
-      <el-table-column prop="id" label="ID" sortable width="70"/>
+<!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
+      <el-table-column prop="sid" label="订阅ID" sortable width="180"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
       <el-table-column prop="url" label="原始配置URL" sortable>
         <template #default="scope">
@@ -17,16 +18,16 @@
       </el-table-column>
       <el-table-column prop="url" label="TvBox配置地址" sortable>
         <template #default="scope">
-          <a :href="currentUrl+'/sub'+token+'/'+scope.row.id" target="_blank">{{ currentUrl }}/sub{{
+          <a :href="currentUrl+'/sub'+token+'/'+scope.row.sid" target="_blank">{{ currentUrl }}/sub{{
               token
-            }}/{{ scope.row.id }}</a>
+            }}/{{ scope.row.sid }}</a>
         </template>
       </el-table-column>
       <el-table-column prop="url" label="多仓聚合地址" sortable>
         <template #default="scope">
-          <a :href="currentUrl+'/repo'+token+'/'+scope.row.id" target="_blank">{{ currentUrl }}/repo{{
+          <a :href="currentUrl+'/repo'+token+'/'+scope.row.sid" target="_blank">{{ currentUrl }}/repo{{
               token
-            }}/{{ scope.row.id }}</a>
+            }}/{{ scope.row.sid }}</a>
         </template>
       </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
@@ -43,6 +44,9 @@
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form">
+        <el-form-item label="订阅ID" label-width="140" required>
+          <el-input v-model="form.sid" autocomplete="off"/>
+        </el-form-item>
         <el-form-item label="名称" label-width="140" required>
           <el-input v-model="form.name" autocomplete="off"/>
         </el-form-item>
@@ -110,6 +114,7 @@ const formVisible = ref(false)
 const dialogVisible = ref(false)
 const form = ref({
   id: 0,
+  sid: '',
   name: '',
   url: '',
   sort: '',
@@ -121,6 +126,7 @@ const handleAdd = () => {
   updateAction.value = false
   form.value = {
     id: 0,
+    sid: '',
     name: '',
     url: '',
     sort: '',
@@ -134,6 +140,7 @@ const handleEdit = (data: any) => {
   updateAction.value = true
   form.value = {
     id: data.id,
+    sid: data.sid,
     name: data.name,
     url: data.url,
     sort: data.sort,
@@ -145,7 +152,7 @@ const handleEdit = (data: any) => {
 const showDetails = (data: any) => {
   form.value = data
   dialogTitle.value = '订阅数据 - ' + data.name
-  axios.get('/sub' + token.value + '/' + data.id).then(({data}) => {
+  axios.get('/sub' + token.value + '/' + data.sid).then(({data}) => {
     jsonData.value = data
     detailVisible.value = true
   })

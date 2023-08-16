@@ -104,7 +104,28 @@ public class SubscriptionService {
             sub.setUrl("https://tvbox.cainisi.cf");
             subscriptionRepository.save(sub);
         } else {
+            fixSid(list);
             fixId(list);
+        }
+    }
+
+    private void fixSid(List<Subscription> list) {
+        String fixed = settingRepository.findById("fix_sid").map(Setting::getValue).orElse(null);
+        if (fixed == null) {
+            Subscription sub = new Subscription();
+            sub.setSid("0");
+            sub.setName("默认");
+            sub.setUrl("");
+            list.add(0, sub);
+
+            for (Subscription subscription : list) {
+                if (StringUtils.isBlank(subscription.getSid())) {
+                    subscription.setSid(String.valueOf(subscription.getId()));
+                }
+            }
+            subscriptionRepository.saveAll(list);
+
+            settingRepository.save(new Setting("fix_sid", "true"));
         }
     }
 
@@ -155,13 +176,7 @@ public class SubscriptionService {
     }
 
     public List<Subscription> findAll() {
-        List<Subscription> list = subscriptionRepository.findAll();
-        Subscription sub = new Subscription();
-        sub.setId(0);
-        sub.setName("默认");
-        sub.setUrl("");
-        list.add(0, sub);
-        return list;
+        return subscriptionRepository.findAll();
     }
 
     public Map<String, Object> open() {
@@ -227,16 +242,11 @@ public class SubscriptionService {
         return site;
     }
 
-    public Map<String, Object> subscription(int id) {
-        String apiUrl = "";
-        String override = "";
-        String sort = "";
-        if (id > 0) {
-            Subscription subscription = subscriptionRepository.findById(id).orElseThrow(NotFoundException::new);
-            apiUrl = subscription.getUrl();
-            override = subscription.getOverride();
-            sort = subscription.getSort();
-        }
+    public Map<String, Object> subscription(String id) {
+        Subscription subscription = subscriptionRepository.findBySid(id).orElseThrow(NotFoundException::new);
+        String apiUrl = subscription.getUrl();
+        String override = subscription.getOverride();
+        String sort = subscription.getSort();
 
         return subscription(apiUrl, override, sort);
     }

@@ -22,6 +22,7 @@ public class Subscription {
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
     private Integer id;
     private String name;
+    private String sid;
     private String url;
     @Column(columnDefinition = "TEXT")
     private String override;

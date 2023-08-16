@@ -98,12 +98,12 @@ public class TvBoxController {
     }
 
     @GetMapping("/sub/{id}")
-    public Map<String, Object> subscription(@PathVariable int id) {
+    public Map<String, Object> subscription(@PathVariable String id) {
         return subscription("", id);
     }
 
     @GetMapping("/sub/{token}/{id}")
-    public Map<String, Object> subscription(@PathVariable String token, @PathVariable int id) {
+    public Map<String, Object> subscription(@PathVariable String token, @PathVariable String id) {
         if (!subscriptionService.getToken().equals(token)) {
             throw new BadRequestException();
         }

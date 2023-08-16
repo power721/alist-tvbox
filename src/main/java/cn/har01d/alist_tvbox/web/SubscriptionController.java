@@ -2,8 +2,10 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.Subscription;
 import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,6 +30,20 @@ public class SubscriptionController {
 
     @PostMapping
     public Subscription save(@RequestBody Subscription subscription) {
+        if (StringUtils.isNotBlank(subscription.getSid())) {
+            Subscription other = subscriptionRepository.findBySid(subscription.getSid()).orElse(null);
+            if (other != null && !other.getId().equals(subscription.getId())) {
+                throw new BadRequestException("订阅ID重复");
+            }
+        }
+        subscription = subscriptionRepository.save(subscription);
+        if (StringUtils.isBlank(subscription.getSid())) {
+            subscription.setSid(String.valueOf(subscription.getId()));
+            Subscription other = subscriptionRepository.findBySid(subscription.getSid()).orElse(null);
+            if (other != null && !other.getId().equals(subscription.getId())) {
+                throw new BadRequestException("订阅是必须的");
+            }
+        }
         return subscriptionRepository.save(subscription);
     }
 
