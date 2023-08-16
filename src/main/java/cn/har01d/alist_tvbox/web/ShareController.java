@@ -50,6 +50,11 @@ public class ShareController {
         shareService.deleteShares(ids);
     }
 
+    @PostMapping("/tacit0924")
+    public void getTacit0924() {
+        shareService.getTacit0924();
+    }
+
 //    @GetMapping("/resources")
 //    public Page<ShareInfo> listResources(Pageable pageable) {
 //        return shareService.listResources(pageable);
