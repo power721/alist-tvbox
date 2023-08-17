@@ -63,7 +63,7 @@
           <el-input v-model="form.name" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="URL地址" label-width="140">
-          <el-input v-model="form.url" :readonly="form.id===1" autocomplete="off"/>
+          <el-input v-model="form.url" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="版本" label-width="140">
           <el-input-number v-model="form.version" min="2" autocomplete="off"/>
