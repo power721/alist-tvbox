@@ -24,7 +24,7 @@ sqlite3 /opt/alist/data/data.db ".read /update.sql"
 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/tvbox.zip
 if [ ! -f tvbox.zip ]; then
-  wget -T 20 -t 2 http://cdn.har01d.cn/tvbox/data/tvbox.zip
+  wget -T 20 -t 2 http://d.har01d.cn/tvbox.zip
 fi
 unzip -q -o tvbox.zip
 rm tvbox.zip
@@ -47,7 +47,7 @@ if [ ! -f version.txt ]; then
 fi
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/update.zip
 if [ ! -f update.zip ]; then
-  wget -T 20 -t 2 http://cdn.har01d.cn/tvbox/data/update.zip
+  wget -T 20 -t 2 http://d.har01d.cn/update.zip
 fi
 if [ ! -f update.zip ]; then
   echo "Failed to download update database file, the database upgrade process has aborted"
@@ -96,7 +96,7 @@ else
   elif [ "$remote" = "$latest" ]; then
     wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/index.zip
     if [ ! -f index.zip ]; then
-      wget -T 30 -t 2 http://cdn.har01d.cn/tvbox/data/index.zip
+      wget -T 30 -t 2 http://d.har01d.cn/index.zip
     fi
     if [ ! -f index.zip ]; then
       echo "Failed to download index compressed file, the index file upgrade process has aborted"
@@ -112,6 +112,13 @@ else
     echo "$remote" >/data/index/version.txt
   fi
   rm -f index.* update.* version.txt
+fi
+
+if ! grep -q "/🈴我的阿里分享/" /data/index/index.video.txt; then
+  echo "Download index.share.zip"
+  wget http://d.har01d.cn/index.share.zip -O index.share.zip && \
+  unzip -q -o index.share.zip -d /data/index/ && \
+  cat /data/index/index.share.txt >> /data/index/index.video.txt
 fi
 
 #wget http://d.har01d.cn/cat_open.zip -O cat_open.zip && \
@@ -130,7 +137,7 @@ fi
 REMOTE=$(curl -fsSL http://d.har01d.cn/base_version | head -n 1)
 echo "movie base version: $LOCAL $REMOTE"
 if [ "$LOCAL" != "$REMOTE" ]; then
-  wget http://cdn.har01d.cn/tvbox/data/data.zip -O data.zip && \
+  wget http://d.har01d.cn/data.zip -O data.zip && \
   unzip -q -o data.zip -d /tmp && \
   cp /tmp/data/data.sql /data/atv/
 fi
