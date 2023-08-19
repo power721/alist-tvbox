@@ -604,14 +604,13 @@ public class ShareService {
 
     private Share loadTacit0924() {
         try {
-            Share share = shareRepository.findById(7000).orElse(null);
-            if (share == null) {
+            if (!shareRepository.existsById(7000)) {
                 String html = restTemplate1.getForObject(TACIT_URL, String.class);
                 Matcher matcher = SHARE.matcher(html);
                 if (matcher.find()) {
                     String link = matcher.group(1).substring(30);
                     String folder = getFolderId(link);
-                    share = new Share();
+                    Share share = new Share();
                     share.setType(0);
                     share.setId(7000);
                     share.setShareId(link);
@@ -620,7 +619,6 @@ public class ShareService {
                     return shareRepository.save(share);
                 }
             }
-            return share;
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -629,13 +627,15 @@ public class ShareService {
 
     private Share loadLatestShare() {
         try {
-            Share share = new Share();
-            share.setType(0);
-            share.setId(7001);
-            share.setShareId("mxAfB6eRgY4");
-            share.setFolderId("63833bb670c164d4eeb14aa09c62ee770d9112ba");
-            share.setPath("/\uD83C\uDE34我的阿里分享/近期更新");
-            return shareRepository.save(share);
+            if (!shareRepository.existsById(7001)) {
+                Share share = new Share();
+                share.setType(0);
+                share.setId(7001);
+                share.setShareId("mxAfB6eRgY4");
+                share.setFolderId("63833bb670c164d4eeb14aa09c62ee770d9112ba");
+                share.setPath("/\uD83C\uDE34我的阿里分享/近期更新");
+                return shareRepository.save(share);
+            }
         } catch (Exception e) {
             log.warn("", e);
         }
