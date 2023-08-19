@@ -566,6 +566,15 @@ public class TvBoxService {
         return siteService.getByName(id);
     }
 
+    private boolean exclude(String name) {
+        for (String text : Set.of("订阅", "福利", "会员", "微信", "QQ群", "招募", "代找")) {
+            if (name.contains(text)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public MovieList getMovieList(String tid, String filter, String sort, int page) {
         Site site = getSite(tid);
         String[] parts = tid.split("\\$");
@@ -593,7 +602,7 @@ public class TvBoxService {
         int total = fsResponse.getTotal();
 
         for (FsInfo fsInfo : fsResponse.getFiles()) {
-            if (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName())) {
+            if (exclude(fsInfo.getName()) || (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName()))) {
                 total--;
                 continue;
             }
