@@ -602,7 +602,8 @@ public class TvBoxService {
         int total = fsResponse.getTotal();
 
         for (FsInfo fsInfo : fsResponse.getFiles()) {
-            if (exclude(fsInfo.getName()) || (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName()))) {
+            if ((fsInfo.getType() == 1 && exclude(fsInfo.getName()))
+                    || (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName()))) {
                 total--;
                 continue;
             }
