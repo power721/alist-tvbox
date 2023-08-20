@@ -649,14 +649,17 @@ public class ShareService {
             Matcher matcher = SHARE.matcher(html);
             if (matcher.find()) {
                 String link = matcher.group(1).substring(30);
-                String folder = getFolderId(link);
-                Share share = new Share();
-                share.setType(0);
-                share.setId(7000);
-                share.setShareId(link);
-                share.setFolderId(folder);
-                share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
-                update(7000, share);
+                String shareId = shareRepository.findById(7000).map(Share::getShareId).orElse("");
+                if (!shareId.equals(link)) {
+                    String folder = getFolderId(link);
+                    Share share = new Share();
+                    share.setType(0);
+                    share.setId(7000);
+                    share.setShareId(link);
+                    share.setFolderId(folder);
+                    share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
+                    update(7000, share);
+                }
             }
         } catch (Exception e) {
             log.warn("", e);

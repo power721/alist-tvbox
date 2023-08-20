@@ -446,6 +446,47 @@ public class SubscriptionService {
                 log.warn("", e);
             }
         }
+
+        if (StringUtils.isNotBlank(url)) {
+            fixApiUrl(config, url);
+            fixExtUrl(config, url);
+        }
+    }
+
+    private static void fixApiUrl(Map<String, Object> config, String url) {
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        for (Map<String, Object> site : sites) {
+            Object api = site.get("api");
+            if (api instanceof String apiUrl) {
+                if (apiUrl.startsWith("./")) {
+                    api = url + apiUrl.substring(1);
+                    site.put("api", api);
+                    log.debug("api {} -> {}", apiUrl, api);
+                } else if (apiUrl.startsWith("/")) {
+                    api = getRoot(url) + api;
+                    site.put("api", api);
+                    log.debug("api {} -> {}", apiUrl, api);
+                }
+            }
+        }
+    }
+
+    private static void fixExtUrl(Map<String, Object> config, String url) {
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        for (Map<String, Object> site : sites) {
+            Object ext = site.get("ext");
+            if (ext instanceof String extUrl) {
+                if (extUrl.startsWith("./")) {
+                    ext = url + extUrl.substring(1);
+                    site.put("ext", ext);
+                    log.debug("ext {} -> {}", extUrl, ext);
+                } else if (extUrl.startsWith("/")) {
+                    ext = getRoot(url) + ext;
+                    site.put("ext", ext);
+                    log.debug("ext {} -> {}", extUrl, ext);
+                }
+            }
+        }
     }
 
     private static String fixUrl(String url) {
