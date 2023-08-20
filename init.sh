@@ -120,6 +120,7 @@ if ! grep -q "/🈴我的阿里分享/" /data/index/index.video.txt; then
   wget http://d.har01d.cn/index.share.zip -O index.share.zip && \
   unzip -q -o index.share.zip -d /data/index/ && \
   cat /data/index/index.share.txt >> /data/index/index.video.txt
+  cat /data/index/index.share.txt >> /data/index/index.txt
 fi
 
 #wget http://d.har01d.cn/cat_open.zip -O cat_open.zip && \
