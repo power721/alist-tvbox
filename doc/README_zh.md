@@ -87,12 +87,6 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 
 4567 - 管理应用
 
-#### 独立版
-```bash
-bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
-```
-独立版请使用小雅搜索索引文件： http://d.har01d.cn/index.video.zip
-
 #### NAS
 对于群辉等NAS系统，请挂载Docker的/data目录到群辉文件系统，否则数据不会保留。
 
@@ -125,14 +119,7 @@ bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 
 ![添加站点](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_site_config.png)
 
-如果AList开启了强制登录，xiaoya版会自动填写认证token。
-
-对于独立版需要手动获取认证Token，执行命令：
-```bash
-docker exec -i xiaoya sqlite3 /opt/alist/data/data.db <<EOF
-select value from x_setting_items where key = "token"; 
-EOF
-```
+如果AList开启了强制登录，会自动填写认证token。
 
 ![站点数据](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_site_data.png)
 
@@ -170,9 +157,6 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ```json
 {
-    "replace": {
-      "http://127.0.0.1:9978/file/tvfan/token.txt": "ATV_ADDRESS/ali/token/9666c3651739488d9eee223344983ffc" 
-    },
     "sites-blacklist": ["说明1","说明2", "说明3","说明4","公告", "ext_live_protocol", "cc"],
     "sites": [
      
@@ -197,11 +181,9 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 添加一个小雅站点并打开搜索功能。
 
-订阅里面第二个源是海报墙模式。
-
 ![源](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_source.jpg)
 
-可以自定义类别。在文件管理界面，添加一个文件/data/category.txt，内容是要显示的小雅目录。不能包含别名，别名没有数据。
+可以自定义类别。在文件管理界面，添加一个文件/data/category.txt，内容是要显示的小雅目录。
 
 可以自定义名称，冒号后面是自定义的名字。 在分类下面可以加子目录作为筛选条件，用两个空格开始。
 
@@ -252,11 +234,9 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 强制登录AList后，连接webdav需要使用下面的用户名和密码。
 
-阿里token每天会刷新，开放token三天刷新一次。时间和自动签到时间一致。即使没有开启自动签到，也会刷新。
-
 如果打开了挂载我的云盘功能，每次启动会消耗两次开放token请求。60分钟内只能请求10次，超过后需要等待60分钟后才能操作。
 
-可以换IP绕开限制。或者更换开放token的认证URL。在数据目录（默认是/etc/xiaoya）下新建文件open_token_url.txt，内容以下地址选一个。
+可以换IP绕开限制。或者更换开放token的认证URL。配置页面->高级设置 选择一个认证URL。
 
 - https://api-cf.nn.ci/alist/ali_open/token
 - https://api.xhofe.top/alist/ali_open/token
