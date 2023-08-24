@@ -1,5 +1,10 @@
 #!/bin/sh
 
+if [ -f /opt/alist/data/data.db ]; then
+  echo "已经初始化成功"
+  exit
+fi
+
 mkdir -p /var/lib/pxg /www/cgi-bin /index /opt/atv/log /data/atv /data/index /data/backup
 if [ -d /index ]; then
   rm -rf /index

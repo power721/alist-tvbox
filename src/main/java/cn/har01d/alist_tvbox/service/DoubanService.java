@@ -157,6 +157,7 @@ public class DoubanService {
                             log.debug("{}", e);
                         }
                     }
+                    log.info("movie data upgraded");
                     settingRepository.save(new Setting(MOVIE_VERSION, remote));
                     Files.delete(file);
                 }
