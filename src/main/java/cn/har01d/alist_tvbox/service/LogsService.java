@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -54,6 +55,7 @@ public class LogsService {
     }
 
     public FileSystemResource downloadLog() throws IOException {
+        FileUtils.copyFileToDirectory(new File("/opt/alist/log/alist.log"), new File("/opt/atv/log/"));
         File out = new File("/tmp/log.zip");
         out.createNewFile();
         try (FileOutputStream fos = new FileOutputStream(out);

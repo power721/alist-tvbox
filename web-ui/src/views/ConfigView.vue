@@ -96,7 +96,7 @@
               </div>
             </div>
           </template>
-          <div v-if="dockerVersion">小雅版本：{{ dockerVersion }}</div>
+<!--          <div v-if="dockerVersion">小雅版本：{{ dockerVersion }}</div>-->
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
           <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
             <el-tooltip
