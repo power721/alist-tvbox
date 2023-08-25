@@ -936,6 +936,7 @@ public class AccountService {
         body.put("key", key);
         body.put("value", value);
         body.put("modified", time.atOffset(ZONE_OFFSET).toString());
+        log.debug("updateTokenToAList: {}", body);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<String> response = aListClient.exchange("/api/admin/token/save", HttpMethod.POST, entity, String.class);
         log.info("updateTokenToAList {} response: {}", key, response.getBody());
@@ -986,22 +987,23 @@ public class AccountService {
         List<Account> accounts = accountRepository.findAll();
         for (Account account : accounts) {
             AliToken token = map.get("RefreshToken-" + account.getId());
-            if (token != null) {
+            if (token != null && (account.getRefreshTokenTime() == null || token.getModified().isAfter(account.getRefreshTokenTime()))) {
                 account.setRefreshToken(token.getValue());
                 account.setRefreshTokenTime(token.getModified());
             }
 
             token = map.get("RefreshTokenOpen-" + account.getId());
-            if (token != null) {
+            if (token != null && (account.getOpenTokenTime() == null || token.getModified().isAfter(account.getOpenTokenTime()))) {
                 account.setOpenToken(token.getValue());
                 account.setOpenTokenTime(token.getModified());
             }
 
             token = map.get("AccessTokenOpen-" + account.getId());
-            if (token != null) {
+            if (token != null && (account.getOpenAccessTokenTime() == null || token.getModified().isAfter(account.getOpenAccessTokenTime()))) {
                 account.setOpenAccessToken(token.getValue());
                 account.setOpenAccessTokenTime(token.getModified());
             }
+            log.info("{} token time: {} {} {}", account.getId(), account.getRefreshTokenTime(), account.getOpenTokenTime(), account.getOpenAccessTokenTime());
         }
         accountRepository.saveAll(accounts);
     }
