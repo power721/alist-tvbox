@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -103,6 +104,12 @@ public class DoubanService {
                 }
             }
         }
+    }
+
+    @Scheduled(cron = "0 0 22 * * ?")
+    public void update() {
+        Versions versions = new Versions();
+        getRemoteVersion(versions);
     }
 
     public String getRemoteVersion(Versions versions) {

@@ -1021,7 +1021,7 @@ public class TvBoxService {
                 String prefix = Utils.getCommonPrefix(fileNames);
                 String suffix = Utils.getCommonSuffix(fileNames);
                 for (String name : fileNames) {
-                    list.add(getName(name.replace(prefix, "").replace(suffix, "")) + "$" + buildPlayUrl(site, id + "/" + folder + "/" + name));
+                    list.add(name.replace(prefix, "").replace(suffix, "") + "$" + buildPlayUrl(site, id + "/" + folder + "/" + name));
                 }
             }
         } else {
@@ -1033,7 +1033,7 @@ public class TvBoxService {
             String prefix = Utils.getCommonPrefix(fileNames);
             String suffix = Utils.getCommonSuffix(fileNames);
             for (String name : fileNames) {
-                list.add(getName(name.replace(prefix, "").replace(suffix, "")) + "$" + buildPlayUrl(site, id + "/" + name));
+                list.add(name.replace(prefix, "").replace(suffix, "") + "$" + buildPlayUrl(site, id + "/" + name));
             }
         }
 
@@ -1096,7 +1096,7 @@ public class TvBoxService {
                     if (subtitles.containsKey(name)) {
                         url += "@@@" + encodeUrl(newPath + "/" + folder + "/" + subtitles.get(name));
                     }
-                    urls.add(getName(name.replace(prefix, "").replace(suffix, "")) + "$" + url);
+                    urls.add(name.replace(prefix, "").replace(suffix, "") + "$" + url);
                 }
                 list.add(String.join("#", urls));
             }
@@ -1115,7 +1115,7 @@ public class TvBoxService {
             //subtitles = findSub(fsResponse, fileNames, prefix, suffix);
 
             if (appProperties.isSort()) {
-                fileNames.sort(Comparator.comparing(e -> new FileNameInfo(e)));
+                fileNames.sort(Comparator.comparing(FileNameInfo::new));
             }
 
             for (String name : fileNames) {
@@ -1123,7 +1123,7 @@ public class TvBoxService {
                 if (subtitles.containsKey(name)) {
                     url += "@@@" + encodeUrl(newPath + "/" + subtitles.get(name));
                 }
-                list.add(getName(name.replace(prefix, "").replace(suffix, "")) + "$" + url);
+                list.add(name.replace(prefix, "").replace(suffix, "") + "$" + url);
             }
             movieDetail.setVod_play_url(String.join("#", list));
         }
@@ -1307,14 +1307,6 @@ public class TvBoxService {
             return path.substring(index + 1);
         }
         return path;
-    }
-
-    private String getName(String name) {
-        int index = name.lastIndexOf('.');
-        if (index > 0) {
-            return name.substring(0, index);
-        }
-        return name;
     }
 
     private String fixPath(String path) {

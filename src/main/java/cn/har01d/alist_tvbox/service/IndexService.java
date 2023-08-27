@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
 import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.IndexResponse;
+import cn.har01d.alist_tvbox.dto.Versions;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
@@ -21,6 +22,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
 import org.springframework.web.client.RestTemplate;
@@ -119,6 +121,11 @@ public class IndexService {
         } catch (Exception e) {
             log.warn("", e);
         }
+    }
+
+    @Scheduled(cron = "0 0 22 * * ?")
+    public void update() {
+        getRemoteVersion();
     }
 
     public String getRemoteVersion() {
