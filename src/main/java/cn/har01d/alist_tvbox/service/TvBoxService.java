@@ -346,6 +346,7 @@ public class TvBoxService {
                 MovieDetail movieDetail = new MovieDetail();
                 movieDetail.setVod_id(getXiaoyaSite().getId() + "$" + encodeUrl(newPath) + "$0");
                 movieDetail.setVod_name(name);
+                movieDetail.setVod_tag(String.valueOf(meta.getId()));
                 movieDetail.setVod_pic(Constants.ALIST_PIC);
                 setDoubanInfo(movieDetail, movie, false);
                 list.add(movieDetail);
@@ -790,7 +791,7 @@ public class TvBoxService {
             MovieDetail movieDetail = new MovieDetail();
             log.debug("{} {}", name, metas.size());
             if (metas.size() > 1) {
-                String ids = metas.stream().map(Meta::getId).map(String::valueOf).collect(Collectors.joining("-"));
+                String ids = metas.stream().map(Meta::getId).map(String::valueOf).distinct().collect(Collectors.joining("-"));
                 movieDetail.setVod_id(site.getId() + "$" + encodeUrl(ids) + "$0");
                 added.put(name, true);
             } else {
