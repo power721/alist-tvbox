@@ -13,10 +13,16 @@
     <el-table :data="files" border style="width: 100%">
       <el-table-column prop="id" label="ID" width="70"/>
       <el-table-column prop="name" label="电影名称" width="250"/>
+      <el-table-column prop="movieId" label="豆瓣ID" width="100">
+        <template #default="scope">
+          <a v-if="scope.row.movieId" :href="'https://movie.douban.com/subject/' + scope.row.movieId" target="_blank">
+            {{scope.row.movieId}}
+          </a>
+        </template>
+      </el-table-column>
       <el-table-column prop="path" label="路径"/>
       <el-table-column prop="year" label="年份" width="100"/>
       <el-table-column prop="score" label="评分" width="100"/>
-      <el-table-column prop="movieId" label="豆瓣ID" width="100"/>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
