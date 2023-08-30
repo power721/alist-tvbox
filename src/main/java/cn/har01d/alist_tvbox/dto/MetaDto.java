@@ -21,6 +21,8 @@ public class MetaDto {
         this.path = meta.getPath();
         this.year = meta.getYear();
         this.score = meta.getScore();
-        this.movieId = meta.getMovie().getId();
+        if (meta.getMovie() != null) {
+            this.movieId = meta.getMovie().getId();
+        }
     }
 }
