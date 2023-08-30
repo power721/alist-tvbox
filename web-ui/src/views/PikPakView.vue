@@ -1,6 +1,6 @@
 <template>
-  <div class="sites">
-    <h1>账号列表</h1>
+  <div class="list">
+    <h1>PikPak账号列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
@@ -58,8 +58,8 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="dialogVisible" title="删除站点" width="30%">
-      <p>是否删除账号 - {{ form.id }}</p>
+    <el-dialog v-model="dialogVisible" title="删除PikPak账号" width="30%">
+      <p>是否删除PikPak账号 - {{ form.id }}</p>
       <p>{{ form.nickname }}</p>
       <template #footer>
       <span class="dialog-footer">
@@ -101,7 +101,7 @@ const form = ref({
 })
 
 const handleAdd = () => {
-  dialogTitle.value = '添加账号'
+  dialogTitle.value = '添加PikPak账号'
   updateAction.value = false
   form.value = {
     id: 0,
@@ -114,7 +114,7 @@ const handleAdd = () => {
 }
 
 const handleEdit = (data: any) => {
-  dialogTitle.value = '更新账号 - ' + data.nickname
+  dialogTitle.value = '更新PikPak账号 - ' + data.nickname
   updateAction.value = true
   form.value = Object.assign({}, data)
   formVisible.value = true
