@@ -44,6 +44,7 @@ export default defineConfig({
       "/index": API,
       "/index-templates": API,
       "/movies": API,
+      "/meta": API,
       "/tasks": API,
       "/parse": API,
       "/play": API,

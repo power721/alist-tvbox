@@ -11,6 +11,8 @@ public interface MetaRepository extends JpaRepository<Meta, Integer> {
 
     List<Meta> findByPathContains(String text);
 
+    Page<Meta> findByPathContains(String text, Pageable pageable);
+
     boolean existsByPath(String path);
 
     boolean existsByPathStartsWith(String path);
