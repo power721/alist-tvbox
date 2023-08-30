@@ -16,6 +16,7 @@
       <el-table-column prop="path" label="路径"/>
       <el-table-column prop="year" label="年份" width="100"/>
       <el-table-column prop="score" label="评分" width="100"/>
+      <el-table-column prop="movieId" label="豆瓣ID" width="100"/>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
@@ -56,7 +57,8 @@ const form = ref({
   name: '',
   path: '',
   year: 0,
-  score: 0
+  score: 0,
+  movieId: 0,
 })
 
 const handleDelete = (data: any) => {

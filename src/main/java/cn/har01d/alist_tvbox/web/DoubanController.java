@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.MetaDto;
 import cn.har01d.alist_tvbox.dto.Versions;
 import cn.har01d.alist_tvbox.entity.Meta;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
@@ -26,11 +27,11 @@ public class DoubanController {
     }
 
     @GetMapping("/meta")
-    public Page<Meta> list(Pageable pageable, String q) {
+    public Page<MetaDto> list(Pageable pageable, String q) {
         if (StringUtils.isNotBlank(q)) {
-            return metaRepository.findByPathContains(q, pageable);
+            return metaRepository.findByPathContains(q, pageable).map(MetaDto::new);
         }
-        return metaRepository.findAll(pageable);
+        return metaRepository.findAll(pageable).map(MetaDto::new);
     }
 
     @DeleteMapping("/meta/{id}")
