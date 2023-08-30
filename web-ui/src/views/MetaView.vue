@@ -6,7 +6,7 @@
       <el-button type="primary" @click="search" :disabled="!keyword">
         搜索
       </el-button>
-      <el-button @click="load">刷新</el-button>
+      <el-button @click="refresh">刷新</el-button>
     </el-row>
     <div class="space"></div>
 
