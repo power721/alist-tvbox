@@ -64,7 +64,7 @@
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="deleteSite">删除</el-button>
+        <el-button type="danger" @click="deleteAccount">删除</el-button>
       </span>
       </template>
     </el-dialog>
@@ -125,7 +125,7 @@ const handleDelete = (data: any) => {
   dialogVisible.value = true
 }
 
-const deleteSite = () => {
+const deleteAccount = () => {
   dialogVisible.value = false
   axios.delete('/pikpak/accounts/' + form.value.id).then(() => {
     load()

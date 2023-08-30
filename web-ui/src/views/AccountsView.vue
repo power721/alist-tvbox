@@ -106,7 +106,7 @@
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="deleteSite">删除</el-button>
+        <el-button type="danger" @click="deleteAccount">删除</el-button>
       </span>
       </template>
     </el-dialog>
@@ -264,6 +264,7 @@ const checkin = () => {
     form.value.nickname = data.nickname
     forceCheckin.value = false
     ElMessage.success('签到成功, 本月累计' + data.signInCount + '天')
+    load()
   })
 }
 
@@ -295,7 +296,7 @@ const handleDelete = (data: any) => {
   dialogVisible.value = true
 }
 
-const deleteSite = () => {
+const deleteAccount = () => {
   dialogVisible.value = false
   axios.delete('/ali/accounts/' + form.value.id).then(() => {
     load()
