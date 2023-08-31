@@ -194,8 +194,13 @@ public class AccountService {
 
     private void addAdminUser() {
         try {
-            String sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0,'')";
-            Utils.executeUpdate(sql);
+            String slat = IdUtils.generate(16);
+            String sql = "INSERT INTO x_users VALUES(4,'atv','','/',2,258,'',0,0,'','" + Utils.hashPassword(generatePassword(), slat) + "','" + slat + "')";
+            int code = Utils.executeUpdate(sql);
+            if (code == 1) {
+                sql = "INSERT INTO x_users VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,258,'',0,0,'')";
+                Utils.executeUpdate(sql);
+            }
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -444,12 +449,18 @@ public class AccountService {
                     Utils.executeUpdate(sql);
                     sql = "delete from x_users where id = 3";
                     Utils.executeUpdate(sql);
-                    sql = "INSERT INTO x_users VALUES(3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,368,'',0,0,'')";
-                    Utils.executeUpdate(sql);
+                    String slat = IdUtils.generate(16);
+                    sql = "INSERT INTO x_users VALUES(3,'" + login.getUsername() + "','','/',0,368,'',0,0,'','" + Utils.hashPassword(login.getPassword(), slat) + "','" + slat + "')";
+                    int code = Utils.executeUpdate(sql);
+                    if (code == 1) {
+                        sql = "INSERT INTO x_users VALUES(3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,368,'',0,0,'')";
+                        Utils.executeUpdate(sql);
+                    }
                 }
             } else {
                 log.info("enable AList guest");
-                sql = "update x_users set disabled = 0, permission = '368', password = 'guest_Api789' where id = 2";
+                String slat = IdUtils.generate(16);
+                sql = "update x_users set disabled = 0, permission = '368', pwd_hash = '" + Utils.hashPassword("guest_Api789", slat) + "', slat='" + slat + "' where id = 2";
                 Utils.executeUpdate(sql);
                 sql = "delete from x_users where id = 3";
                 Utils.executeUpdate(sql);
