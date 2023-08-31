@@ -1,6 +1,6 @@
 <template>
-  <div class="sites">
-    <h1>账号列表</h1>
+  <div class="list">
+    <h1>阿里账号列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
@@ -100,18 +100,18 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="dialogVisible" title="删除账号" width="30%">
-      <p>是否删除账号 - {{ form.id }}</p>
+    <el-dialog v-model="dialogVisible" title="删除阿里账号" width="30%">
+      <p>是否删除阿里账号 - {{ form.id }}</p>
       <p>{{ form.nickname }}</p>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="deleteSite">删除</el-button>
+        <el-button type="danger" @click="deleteAccount">删除</el-button>
       </span>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="账号详情" width="60%">
+    <el-dialog v-model="detailVisible" title="阿里账号详情" width="60%">
       <el-form :model="form" label-width="150px">
         <el-form-item v-if="form.accessToken" prop="accessToken" label="阿里access token">
           <el-input v-model="form.accessToken" maxlength="128" readonly/>
@@ -189,6 +189,9 @@
       </template>
     </el-dialog>
 
+    <div class="divider"></div>
+
+    <PikPakView></PikPakView>
   </div>
 </template>
 
@@ -199,6 +202,7 @@ import axios from "axios"
 import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 import router from "@/router";
+import PikPakView from '@/views/PikPakView.vue'
 
 const iat = ref([0])
 const exp = ref([0])
@@ -260,11 +264,12 @@ const checkin = () => {
     form.value.nickname = data.nickname
     forceCheckin.value = false
     ElMessage.success('签到成功, 本月累计' + data.signInCount + '天')
+    load()
   })
 }
 
 const handleAdd = () => {
-  dialogTitle.value = '添加账号'
+  dialogTitle.value = '添加阿里账号'
   updateAction.value = false
   form.value = {
     id: 0,
@@ -291,7 +296,7 @@ const handleDelete = (data: any) => {
   dialogVisible.value = true
 }
 
-const deleteSite = () => {
+const deleteAccount = () => {
   dialogVisible.value = false
   axios.delete('/ali/accounts/' + form.value.id).then(() => {
     load()
@@ -346,6 +351,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.divider {
+  margin: 30px 0;
+}
+
 .space {
   margin-bottom: 6px;
 }

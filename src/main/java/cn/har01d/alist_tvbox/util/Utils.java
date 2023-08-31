@@ -21,6 +21,7 @@ public final class Utils {
     private static final int KB = 1024;
     private static final int MB = 1024 * KB;
     private static final int GB = 1024 * MB;
+    private static final String StaticHashSalt = "https://github.com/alist-org/alist";
     private static final Pattern EPISODE = Pattern.compile("^(.+)[sS]\\d{1,2}[eE]?\\d?$");
     private static final Pattern EPISODE2 = Pattern.compile("^(.+EP)\\d?$");
     private static final int[] mixinKeyEncTab = new int[]{
@@ -240,5 +241,35 @@ public final class Utils {
             return String.format("%d:%02d:%02d", hour, minute, seconds % 60);
         }
         return String.format("%d:%02d", minute, seconds % 60);
+    }
+
+    private static String bytesToHex(byte[] hash) {
+        StringBuilder hexString = new StringBuilder(2 * hash.length);
+        for (int i = 0; i < hash.length; i++) {
+            String hex = Integer.toHexString(0xff & hash[i]);
+            if (hex.length() == 1) {
+                hexString.append('0');
+            }
+            hexString.append(hex);
+        }
+        return hexString.toString();
+    }
+
+    private static String sha256Hex(String text) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(text.getBytes(StandardCharsets.UTF_8));
+            return bytesToHex(bytes);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static String hash(String password, String slat) {
+        return sha256Hex(password + "-" + slat);
+    }
+
+    public static String hashPassword(String password, String slat) {
+        return hash(hash(password, StaticHashSalt), slat);
     }
 }

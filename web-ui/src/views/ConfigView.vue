@@ -176,7 +176,7 @@
             @change="updateReplaceAliToken"
           />
         </el-form-item>
-        <el-form-item label="订阅支持HTTPS">
+        <el-form-item label="订阅域名支持HTTPS">
           <el-switch
             v-model="enableHttps"
             inline-prompt

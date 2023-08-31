@@ -19,6 +19,7 @@ import LogsView from "@/views/LogsView.vue";
 import IndexView from "@/views/IndexView.vue";
 import BiliBiliView from "@/views/BiliBiliView.vue";
 import SystemInfo from "@/views/SystemInfo.vue";
+import MetaView from "@/views/MetaView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -82,6 +83,12 @@ const router = createRouter({
       path: '/files',
       name: 'files',
       component: FilesView,
+      meta: {auth: true}
+    },
+    {
+      path: '/meta',
+      name: 'meta',
+      component: MetaView,
       meta: {auth: true}
     },
     {
