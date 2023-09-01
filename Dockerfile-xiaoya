@@ -6,7 +6,7 @@ COPY atv-cli ./
 
 RUN go build
 
-FROM haroldli/alist-base-new:latest
+FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 

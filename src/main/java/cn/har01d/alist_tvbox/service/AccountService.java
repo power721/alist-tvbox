@@ -982,6 +982,7 @@ public class AccountService {
         if (tokens == null || tokens.isEmpty()) {
             return;
         }
+
         syncs++;
         log.info("syncTokens {}", tokens.size());
         log.debug("syncTokens {}", tokens);
