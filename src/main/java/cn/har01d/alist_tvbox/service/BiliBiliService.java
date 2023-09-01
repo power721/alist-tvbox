@@ -375,8 +375,8 @@ public class BiliBiliService {
         return List.of(new Filter("sort", "排序", filters4), new Filter("type", "分类", filters));
     }
 
-    public MovieList recommend() {
-        List<BiliBiliInfo> list = getTopFeed();
+    public MovieList recommend(int page) {
+        List<BiliBiliInfo> list = getTopFeed(page);
         MovieList result = new MovieList();
         for (BiliBiliInfo info : list) {
             if (info.getCid() != 0) {
@@ -385,6 +385,7 @@ public class BiliBiliService {
             }
         }
 
+        result.setPagecount(page + 1);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         return result;
@@ -681,15 +682,15 @@ public class BiliBiliService {
         }
     }
 
-    public List<BiliBiliInfo> getTopFeed() {
+    public List<BiliBiliInfo> getTopFeed(int page) {
         Map<String, Object> map = new HashMap<>();
         map.put("web_location", "");
         map.put("y_num", "4");
         map.put("fresh_type", "4");
         map.put("feed_version", "V8");
-        map.put("fresh_idx_1h", "1");
+        map.put("fresh_idx_1h", String.valueOf(page));
         map.put("fetch_row", "4");
-        map.put("fresh_idx", "1");
+        map.put("fresh_idx", String.valueOf(page));
         map.put("brush", "1");
         map.put("homepage_ver", "1");
         map.put("ps", "30");
@@ -1340,6 +1341,8 @@ public class BiliBiliService {
             return getChannels(type, page);
         } else if ("feed".equals(parts[0])) {
             return getFeeds(page);
+        } else if ("recommend".equals(parts[0])) {
+            return recommend(page);
         } else {
             int rid = Integer.parseInt(parts[1]);
             list = getHotRank(parts[0], rid, page);

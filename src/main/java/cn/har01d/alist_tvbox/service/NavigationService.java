@@ -39,6 +39,14 @@ public class NavigationService {
         fix();
         if (navigationRepository.count() == 0) {
             loadBiliBiliCategory();
+        } else {
+            addRecommend();
+        }
+    }
+
+    private void addRecommend() {
+        if (navigationRepository.findAll().stream().filter(e -> "recommend$0".equals(e.getValue())).findAny().isEmpty()) {
+            navigationRepository.save(new Navigation("推荐", "recommend$0", 1, true, true, 1));
         }
     }
 
@@ -64,6 +72,7 @@ public class NavigationService {
         List<Navigation> list = new ArrayList<>();
         int order = 10;
         int id = 1;
+        list.add(new Navigation(id++, "推荐", "recommend$0", 1, true, true, order++));
         list.add(new Navigation(id++, "动态", "feed$0", 1, false, true, order++));
         list.add(new Navigation(id++, "收藏夹", "fav$0", 1, false, true, order++));
         list.add(new Navigation(id++, "频道", "channel$0", 1, true, true, order++));
@@ -76,7 +85,7 @@ public class NavigationService {
         list.add(new Navigation(id++, "动画热榜", "season$4", 1, true, true, order++));
         list.add(new Navigation(id++, "番剧热榜", "season$1", 1, true, true, order++));
         list.add(new Navigation(id++, "热门", "pop$1", 1, true, true, order++));
-        list.add(new Navigation(id++, "国创", "167", 1, true, true, order++));  // 10
+        list.add(new Navigation(id++, "国创", "167", 1, true, true, order++));  // 14
         list.add(new Navigation(id++, "纪录片", "177", 1, true, true, order++));
         list.add(new Navigation(id++, "电影", "23", 1, true, true, order++));
         list.add(new Navigation(id++, "电视剧", "11", 1, true, true, order++));
@@ -103,7 +112,7 @@ public class NavigationService {
         navigationRepository.saveAll(list);
         list = new ArrayList<>();
 
-        int parent = 13;
+        int parent = 14;
         order = 1;
         list.add(new Navigation("国产动画", "153", 2, true, true, order++, parent));
         list.add(new Navigation("国产原创", "168", 2, true, true, order++, parent));

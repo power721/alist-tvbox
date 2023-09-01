@@ -66,7 +66,7 @@ public class BiliBiliController {
         Object result;
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
-                result = biliBiliService.recommend();
+                result = biliBiliService.recommend(1);
             } else {
                 result = biliBiliService.getDetail(ids);
             }
