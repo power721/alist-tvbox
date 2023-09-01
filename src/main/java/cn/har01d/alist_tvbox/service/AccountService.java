@@ -1004,6 +1004,11 @@ public class AccountService {
                 account.setOpenAccessToken(token.getValue());
                 account.setOpenAccessTokenTime(token.getModified());
             }
+
+            if (token != null && account.getOpenAccessTokenTime() != null && token.getModified().isBefore(account.getOpenAccessTokenTime())) {
+                updateTokenToAList(account);
+            }
+
             log.info("{} token time: {} {} {}", account.getId(), account.getRefreshTokenTime(), account.getOpenTokenTime(), account.getOpenAccessTokenTime());
         }
         accountRepository.saveAll(accounts);
