@@ -41,8 +41,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
 
@@ -599,26 +597,20 @@ public class ShareService {
         return response.getBody();
     }
 
-    private static final Pattern SHARE = Pattern.compile("(https://www.aliyundrive.com/s/\\w+)</span>");
-    private static final String TACIT_URL = "https://docs.qq.com/doc/DQmx1WEdTRXpGeEZ6";
+    private static final String TACIT_URL = "https://ycyup.cn/tacit0924";
 
     private Share loadTacit0924() {
         try {
-            if (!shareRepository.existsById(7000)) {
-                String html = restTemplate1.getForObject(TACIT_URL, String.class);
-                Matcher matcher = SHARE.matcher(html);
-                if (matcher.find()) {
-                    String link = matcher.group(1).substring(30);
-                    String folder = getFolderId(link);
-                    Share share = new Share();
-                    share.setType(0);
-                    share.setId(7000);
-                    share.setShareId(link);
-                    share.setFolderId(folder);
-                    share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
-                    return shareRepository.save(share);
-                }
-            }
+            String link = restTemplate1.getForObject(TACIT_URL, String.class);
+            log.info("Tacit0924 link: {}", link);
+            String folder = getFolderId(link);
+            Share share = new Share();
+            share.setType(0);
+            share.setId(7000);
+            share.setShareId(link);
+            share.setFolderId(folder);
+            share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
+            return shareRepository.save(share);
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -642,24 +634,21 @@ public class ShareService {
         return null;
     }
 
-    @Scheduled(cron = "0 15 0,9-23 * * ?")
+    @Scheduled(cron = "0 20 0,9-23 * * ?")
     public void getTacit0924() {
         try {
-            String html = restTemplate1.getForObject(TACIT_URL, String.class);
-            Matcher matcher = SHARE.matcher(html);
-            if (matcher.find()) {
-                String link = matcher.group(1).substring(30);
-                String shareId = shareRepository.findById(7000).map(Share::getShareId).orElse("");
-                if (!shareId.equals(link)) {
-                    String folder = getFolderId(link);
-                    Share share = new Share();
-                    share.setType(0);
-                    share.setId(7000);
-                    share.setShareId(link);
-                    share.setFolderId(folder);
-                    share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
-                    update(7000, share);
-                }
+            String link = restTemplate1.getForObject(TACIT_URL, String.class);
+            log.info("Tacit0924 link: {}", link);
+            String shareId = shareRepository.findById(7000).map(Share::getShareId).orElse("");
+            if (!shareId.equals(link)) {
+                String folder = getFolderId(link);
+                Share share = new Share();
+                share.setType(0);
+                share.setId(7000);
+                share.setShareId(link);
+                share.setFolderId(folder);
+                share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
+                update(7000, share);
             }
         } catch (Exception e) {
             log.warn("", e);
