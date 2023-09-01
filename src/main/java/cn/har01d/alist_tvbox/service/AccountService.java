@@ -984,6 +984,7 @@ public class AccountService {
         }
         syncs++;
         log.info("syncTokens {}", tokens.size());
+        log.debug("syncTokens {}", tokens);
         Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
         List<Account> accounts = accountRepository.findAll();
         for (Account account : accounts) {
