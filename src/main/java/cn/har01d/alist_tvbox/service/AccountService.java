@@ -938,7 +938,7 @@ public class AccountService {
         body.put("modified", time.atOffset(ZONE_OFFSET).toString());
         log.debug("updateTokenToAList: {}", body);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<String> response = aListClient.exchange("/api/admin/token/save", HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/token/update", HttpMethod.POST, entity, String.class);
         log.info("updateTokenToAList {} response: {}", key, response.getBody());
     }
 
@@ -982,8 +982,10 @@ public class AccountService {
         if (tokens == null || tokens.isEmpty()) {
             return;
         }
+
         syncs++;
         log.info("syncTokens {}", tokens.size());
+        log.debug("syncTokens {}", tokens);
         Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
         List<Account> accounts = accountRepository.findAll();
         for (Account account : accounts) {
@@ -1004,6 +1006,11 @@ public class AccountService {
                 account.setOpenAccessToken(token.getValue());
                 account.setOpenAccessTokenTime(token.getModified());
             }
+
+            if (token != null && account.getOpenAccessTokenTime() != null && token.getModified().isBefore(account.getOpenAccessTokenTime())) {
+                updateTokenToAList(account);
+            }
+
             log.info("{} token time: {} {} {}", account.getId(), account.getRefreshTokenTime(), account.getOpenTokenTime(), account.getOpenAccessTokenTime());
         }
         accountRepository.saveAll(accounts);

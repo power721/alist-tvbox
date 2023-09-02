@@ -1,49 +1,52 @@
 #!/bin/sh
 
+init() {
+  mkdir -p /var/lib/pxg /www/cgi-bin /index /data/atv /data/index /data/backup
+  if [ -d /index ]; then
+    rm -rf /index
+  fi
+  ln -sf /data/index /
+  ln -sf /data/config .
+  cd /var/lib/pxg
+  unzip -q /var/lib/data.zip
+  mv data.db /opt/alist/data/data.db
+  sed -i 's!/"$after"!"$after"!' search
+  mv search /www/cgi-bin/search
+  mv sou /www/cgi-bin/sou
+  mv header.html /www/cgi-bin/header.html
+
+  sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
+
+  mv mobi.tgz /www/mobi.tgz
+  cd /www/
+  tar zxf mobi.tgz
+  rm mobi.tgz
+
+  sqlite3 /opt/alist/data/data.db ".read /update.sql"
+
+  wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/tvbox.zip
+  if [ ! -f tvbox.zip ]; then
+    wget -T 20 -t 2 http://d.har01d.cn/tvbox.zip
+  fi
+  unzip -q -o tvbox.zip
+  rm tvbox.zip
+  if [ -f /data/my.json ]; then
+    rm /www/tvbox/my.json
+    ln -s /data/my.json /www/tvbox/my.json
+  fi
+
+  if [ -f /data/iptv.m3u ]; then
+    ln -s /data/iptv.m3u /www/tvbox/iptv.m3u
+  fi
+
+  rm -f index.zip index.txt version.txt update.zip
+}
+
 if [ -f /opt/alist/data/data.db ]; then
   echo "已经初始化成功"
-  exit
+else
+  init
 fi
-
-mkdir -p /var/lib/pxg /www/cgi-bin /index /opt/atv/log /data/atv /data/index /data/backup
-if [ -d /index ]; then
-  rm -rf /index
-fi
-ln -sf /data/index /
-ln -sf /data/config .
-cd /var/lib/pxg
-unzip -q /var/lib/data.zip
-mv data.db /opt/alist/data/data.db
-sed -i 's!/"$after"!"$after"!' search
-mv search /www/cgi-bin/search
-mv sou /www/cgi-bin/sou
-mv header.html /www/cgi-bin/header.html
-
-sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
-
-mv mobi.tgz /www/mobi.tgz
-cd /www/
-tar zxf mobi.tgz
-rm mobi.tgz
-
-sqlite3 /opt/alist/data/data.db ".read /update.sql"
-
-wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/tvbox.zip
-if [ ! -f tvbox.zip ]; then
-  wget -T 20 -t 2 http://d.har01d.cn/tvbox.zip
-fi
-unzip -q -o tvbox.zip
-rm tvbox.zip
-if [ -f /data/my.json ]; then
-  rm /www/tvbox/my.json
-  ln -s /data/my.json /www/tvbox/my.json
-fi
-
-if [ -f /data/iptv.m3u ]; then
-  ln -s /data/iptv.m3u /www/tvbox/iptv.m3u
-fi
-
-rm -f index.zip index.txt version.txt update.zip
 
 cd /tmp/
 
@@ -76,7 +79,6 @@ else
 drop table x_storages;
 drop table x_meta;
 drop table x_setting_items;
-update x_users set permission = 368 where id = 2;
 .read update.sql
 EOF
 

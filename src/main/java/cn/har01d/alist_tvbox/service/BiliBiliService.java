@@ -376,8 +376,28 @@ public class BiliBiliService {
     }
 
     public MovieList recommend() {
-        List<BiliBiliInfo> list = getTopFeed();
+        return recommend(1, false);
+    }
+
+    public MovieList recommend(int page, boolean collect) {
+        List<BiliBiliInfo> list = getTopFeed(page);
         MovieList result = new MovieList();
+
+        if (collect) {
+            int seconds = list.stream().mapToInt(e -> Math.toIntExact(e.getDuration())).sum();
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id("recommend$0$0$" + page);
+            movieDetail.setVod_name("推荐合集" + page);
+            movieDetail.setVod_tag(FILE);
+            movieDetail.setVod_pic(LIST_PIC);
+            movieDetail.setVod_play_from(BILI_BILI);
+            String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
+            movieDetail.setVod_play_url(playUrl);
+            movieDetail.setVod_content("共" + list.size() + "个视频");
+            movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
+            result.getList().add(movieDetail);
+        }
+
         for (BiliBiliInfo info : list) {
             if (info.getCid() != 0) {
                 MovieDetail movieDetail = getMovieDetail(info);
@@ -385,6 +405,7 @@ public class BiliBiliService {
             }
         }
 
+        result.setPagecount(page + 1);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         return result;
@@ -508,7 +529,7 @@ public class BiliBiliService {
 
         long seconds = hotResponse.getData().getList().stream().mapToLong(BiliBiliInfo::getDuration).sum();
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id("popular$0$" + 0 + "$" + page);
+        movieDetail.setVod_id("popular$0$0$" + page);
         movieDetail.setVod_name("合集" + page);
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(LIST_PIC);
@@ -681,15 +702,15 @@ public class BiliBiliService {
         }
     }
 
-    public List<BiliBiliInfo> getTopFeed() {
+    public List<BiliBiliInfo> getTopFeed(int page) {
         Map<String, Object> map = new HashMap<>();
         map.put("web_location", "");
         map.put("y_num", "4");
         map.put("fresh_type", "4");
         map.put("feed_version", "V8");
-        map.put("fresh_idx_1h", "1");
+        map.put("fresh_idx_1h", String.valueOf(page));
         map.put("fetch_row", "4");
-        map.put("fresh_idx", "1");
+        map.put("fresh_idx", String.valueOf(page));
         map.put("brush", "1");
         map.put("homepage_ver", "1");
         map.put("ps", "30");
@@ -855,6 +876,10 @@ public class BiliBiliService {
 
         if (bvid.startsWith("type$")) {
             return getTypePlaylist(bvid);
+        }
+
+        if (bvid.startsWith("recommend$")) {
+            return getRecommendPlaylist(bvid);
         }
 
         if (bvid.startsWith("ss")) {
@@ -1340,6 +1365,8 @@ public class BiliBiliService {
             return getChannels(type, page);
         } else if ("feed".equals(parts[0])) {
             return getFeeds(page);
+        } else if ("recommend".equals(parts[0])) {
+            return recommend(page, true);
         } else {
             int rid = Integer.parseInt(parts[1]);
             list = getHotRank(parts[0], rid, page);
@@ -1540,6 +1567,7 @@ public class BiliBiliService {
         BiliBiliVideoInfo rank = getRankList(id, page);
         List<BiliBiliVideoInfo.Video> list = rank.getResult();
 
+        int seconds = list.stream().mapToInt(e -> Math.toIntExact(e.getDuration())).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("type$" + id + "$0$" + page);
         movieDetail.setVod_name("合集" + page);
@@ -1549,6 +1577,30 @@ public class BiliBiliService {
         String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
         movieDetail.setVod_play_url(playUrl);
         movieDetail.setVod_content("共" + list.size() + "个视频");
+        movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
+        MovieList result = new MovieList();
+        result.getList().add(movieDetail);
+
+        return result;
+    }
+
+    public MovieList getRecommendPlaylist(String tid) {
+        String[] parts = tid.split("\\$");
+        int page = Integer.parseInt(parts[3]);
+        List<BiliBiliInfo> list = getTopFeed(page);
+
+        log.debug("{}", list);
+        int seconds = list.stream().mapToInt(e -> Math.toIntExact(e.getDuration())).sum();
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id("recommend$0$0$" + page);
+        movieDetail.setVod_name("推荐合集" + page);
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_pic(LIST_PIC);
+        movieDetail.setVod_play_from(BILI_BILI);
+        String playUrl = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
+        movieDetail.setVod_play_url(playUrl);
+        movieDetail.setVod_content("共" + list.size() + "个视频");
+        movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
 

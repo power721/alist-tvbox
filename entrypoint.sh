@@ -9,7 +9,9 @@ fi
 
 chmod a+x /init.sh /index.sh
 
-/init.sh
+mkdir -p /opt/atv/log
+
+/init.sh 2>&1 | tee /opt/atv/log/init.log 2>&1
 
 /bin/busybox-extras httpd -p "$1" -h /www
 /usr/sbin/nginx
