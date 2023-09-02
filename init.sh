@@ -25,7 +25,7 @@ init() {
   sqlite3 /opt/alist/data/data.db ".read /update.sql"
 
   wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/tvbox.zip || \
-  wget -T 30 -t 2 http://d.har01d.cn/tvbox.zip
+  wget -T 30 -t 2 http://d.har01d.cn/tvbox.zip -O tvbox.zip
 
   unzip -q -o tvbox.zip
   rm tvbox.zip
