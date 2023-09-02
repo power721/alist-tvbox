@@ -24,10 +24,9 @@ init() {
 
   sqlite3 /opt/alist/data/data.db ".read /update.sql"
 
-  wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/tvbox.zip
-  if [ ! -f tvbox.zip ]; then
-    wget -T 20 -t 2 http://d.har01d.cn/tvbox.zip
-  fi
+  wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/tvbox.zip || \
+  wget -T 30 -t 2 http://d.har01d.cn/tvbox.zip
+
   unzip -q -o tvbox.zip
   rm tvbox.zip
   if [ -f /data/my.json ]; then
@@ -50,14 +49,12 @@ fi
 
 cd /tmp/
 
-wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/update/version.txt
-if [ ! -f version.txt ]; then
-  wget -T 10 -t 2 http://d.har01d.cn/version.txt
-fi
-wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/update.zip
-if [ ! -f update.zip ]; then
-  wget -T 20 -t 2 http://d.har01d.cn/update.zip
-fi
+wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/update/version.txt || \
+wget -T 10 -t 2 http://d.har01d.cn/version.txt
+
+wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/update.zip || \
+wget -T 30 -t 2 http://d.har01d.cn/update.zip
+
 if [ ! -f update.zip ]; then
   echo "Failed to download update database file, the database upgrade process has aborted"
 else
@@ -102,10 +99,9 @@ else
   if [ "$remote" = "$local" ]; then
     echo "$(date) current index file version is updated, no need to upgrade"
   elif [ "$remote" = "$latest" ]; then
-    wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 http://docker.xiaoya.pro/update/index.zip
-    if [ ! -f index.zip ]; then
-      wget -T 30 -t 2 http://d.har01d.cn/index.zip
-    fi
+    wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/index.zip || \
+    wget -T 40 -t 2 http://d.har01d.cn/index.zip
+
     if [ ! -f index.zip ]; then
       echo "Failed to download index compressed file, the index file upgrade process has aborted"
     else

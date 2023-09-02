@@ -9,7 +9,8 @@ fi
 
 chmod a+x /init.sh /index.sh
 
-mkdir -p /opt/atv/log
+mkdir -p /data/log
+ln -sf /data/log /opt/atv/log
 
 /init.sh 2>&1 | tee /opt/atv/log/init.log 2>&1
 
