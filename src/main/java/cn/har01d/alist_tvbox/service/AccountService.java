@@ -938,7 +938,7 @@ public class AccountService {
         body.put("modified", time.atOffset(ZONE_OFFSET).toString());
         log.debug("updateTokenToAList: {}", body);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<String> response = aListClient.exchange("/api/admin/token/save", HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = aListClient.exchange("/api/admin/token/update", HttpMethod.POST, entity, String.class);
         log.info("updateTokenToAList {} response: {}", key, response.getBody());
     }
 
