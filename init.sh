@@ -1,7 +1,7 @@
 #!/bin/sh
 
 init() {
-  mkdir -p /var/lib/pxg /www/cgi-bin /index /opt/atv/log /data/atv /data/index /data/backup
+  mkdir -p /var/lib/pxg /www/cgi-bin /index /data/atv /data/index /data/backup
   if [ -d /index ]; then
     rm -rf /index
   fi
