@@ -375,6 +375,10 @@ public class BiliBiliService {
         return List.of(new Filter("sort", "排序", filters4), new Filter("type", "分类", filters));
     }
 
+    public MovieList recommend() {
+        return recommend(1, false);
+    }
+
     public MovieList recommend(int page, boolean collect) {
         List<BiliBiliInfo> list = getTopFeed(page);
         MovieList result = new MovieList();
