@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
 
@@ -107,6 +108,7 @@ public class ShareService {
 
         Share share = loadTacit0924();
         if (share != null) {
+            list = list.stream().filter(e -> e.getId() != 7000).collect(Collectors.toList());
             list.add(share);
         }
 
