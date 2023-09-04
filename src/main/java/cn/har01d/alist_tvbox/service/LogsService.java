@@ -36,8 +36,18 @@ public class LogsService {
                 .replace("\u001b[0m", " </span>");
     }
 
-    public Page<String> getLogs(Pageable pageable) throws IOException {
-        Path file = Paths.get("/opt/atv/log/app.log");
+    private Path getLogFile(String type) {
+        if ("alist".equals(type)) {
+            return Paths.get("/opt/alist/log/alist.log");
+        } else if ("init".equals(type)) {
+            return Paths.get("/data/log/init.log");
+        } else {
+            return Paths.get("/data/log/app.log");
+        }
+    }
+
+    public Page<String> getLogs(Pageable pageable, String type) throws IOException {
+        Path file = getLogFile(type);
         List<String> lines = Files.readAllLines(file);
         int size = pageable.getPageSize();
         int start = pageable.getPageNumber() * size;

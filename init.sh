@@ -28,7 +28,6 @@ init() {
   wget -T 30 -t 2 http://d.har01d.cn/tvbox.zip -O tvbox.zip
 
   unzip -q -o tvbox.zip
-  rm tvbox.zip
   if [ -f /data/my.json ]; then
     rm /www/tvbox/my.json
     ln -s /data/my.json /www/tvbox/my.json
@@ -38,8 +37,11 @@ init() {
     ln -s /data/iptv.m3u /www/tvbox/iptv.m3u
   fi
 
-  rm -f index.zip index.txt version.txt update.zip
+  rm -f tvbox.zip index.zip index.txt version.txt update.zip
 }
+
+cat data/app_version
+date
 
 if [ -f /opt/alist/data/data.db ]; then
   echo "已经初始化成功"
@@ -82,7 +84,7 @@ EOF
   echo "$(date) update database successfully"
   opentoken_url=$(cat opentoken_url.txt)
   sed -i "s#https://api.nn.ci/alist/ali_open/token#$opentoken_url#" /opt/alist/data/config.json
-  rm update.zip update.sql opentoken_url.txt
+  rm -f update.zip update.sql opentoken_url.txt
 fi
 
 sqlite3 /opt/alist/data/data.db 'delete from x_storages where driver="AList V3";'
