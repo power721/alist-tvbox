@@ -1285,14 +1285,6 @@ public class TvBoxService {
         return false;
     }
 
-    private String removeExt(String name) {
-        int index = name.lastIndexOf('.');
-        if (index > 0) {
-            return name.substring(0, index);
-        }
-        return name;
-    }
-
     private String getExt(String name) {
         int index = name.lastIndexOf('.');
         if (index > 0) {
