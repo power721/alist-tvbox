@@ -924,7 +924,7 @@ public class TvBoxService {
         String best = null;
         int min = name.length();
         for (String subtitle : subtitles) {
-            String sub = removeExt(subtitle.replace(prefix, "").replace(suffix, ""));
+            String sub = subtitle.replace(prefix, "").replace(suffix, "");
             if (sub.equals(name) || sub.startsWith(name)) {
                 return subtitle;
             }
@@ -950,7 +950,7 @@ public class TvBoxService {
         log.debug("{} {}", prefix, suffix);
         List<String> subtitles = files.stream().map(FsInfo::getName).filter(this::isSubtitleFormat).collect(Collectors.toList());
 
-        String best = findBestSubtitle(subtitles, removeExt(name.replace(prefix, "").replace(suffix, "")));
+        String best = findBestSubtitle(subtitles, name.replace(prefix, "").replace(suffix, ""));
         if (best == null) {
             return null;
         }
