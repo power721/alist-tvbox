@@ -32,6 +32,10 @@ public final class Utils {
     };
 
     public static String getCommonPrefix(List<String> names) {
+        return getCommonPrefix(names, true);
+    }
+
+    public static String getCommonPrefix(List<String> names, boolean pretty) {
         int n = names.size();
         if (n <= 1) return "";
         String ans = names.get(0);
@@ -42,23 +46,31 @@ public final class Utils {
             }
             ans = names.get(i).substring(0, j);
         }
-        Matcher matcher = EPISODE.matcher(ans);
-        if (matcher.matches()) {
-            return matcher.group(1);
+
+        if (pretty) {
+            Matcher matcher = EPISODE.matcher(ans);
+            if (matcher.matches()) {
+                return matcher.group(1);
+            }
+            matcher = EPISODE2.matcher(ans);
+            if (matcher.matches()) {
+                return matcher.group(1);
+            }
         }
-        matcher = EPISODE2.matcher(ans);
-        if (matcher.matches()) {
-            return matcher.group(1);
-        }
+
         return ans;
     }
 
     public static String getCommonSuffix(List<String> names) {
+        return getCommonSuffix(names, true);
+    }
+
+    public static String getCommonSuffix(List<String> names, boolean pretty) {
         int n = names.size();
         if (n <= 1) return "";
         names = names.stream().map(e -> new StringBuilder(e).reverse().toString()).collect(Collectors.toList());
         String text = new StringBuilder(getCommonPrefix(names)).reverse().toString();
-        if (text.startsWith("集")) {
+        if (pretty && text.startsWith("集")) {
             return text.substring(1);
         }
         return text;

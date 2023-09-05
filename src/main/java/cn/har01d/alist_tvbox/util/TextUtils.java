@@ -359,4 +359,43 @@ public class TextUtils {
         return charSequence.length() > threshold ? charSequence.subSequence(0, threshold) + "..." : charSequence.toString();
     }
 
+    public static int minDistance(String sourceStr, String targetStr) {
+        int sourceLen = sourceStr.length();
+        int targetLen = targetStr.length();
+
+        if (sourceLen == 0) {
+            return targetLen;
+        }
+        if (targetLen == 0) {
+            return sourceLen;
+        }
+
+        int[][] arr = new int[sourceLen + 1][targetLen + 1];
+
+        for (int i = 0; i < sourceLen + 1; i++) {
+            arr[i][0] = i;
+        }
+
+        for (int j = 0; j < targetLen + 1; j++) {
+            arr[0][j] = j;
+        }
+
+        char sourceChar;
+        char targetChar;
+
+        for (int i = 1; i < sourceLen + 1; i++) {
+            sourceChar = sourceStr.charAt(i - 1);
+            for (int j = 1; j < targetLen + 1; j++) {
+                targetChar = targetStr.charAt(j - 1);
+                if (sourceChar == targetChar) {
+                    arr[i][j] = arr[i - 1][j - 1];
+                } else {
+                    arr[i][j] = (Math.min(Math.min(arr[i - 1][j], arr[i][j - 1]), arr[i - 1][j - 1])) + 1;
+                }
+            }
+        }
+
+        return arr[sourceLen][targetLen];
+    }
+
 }
