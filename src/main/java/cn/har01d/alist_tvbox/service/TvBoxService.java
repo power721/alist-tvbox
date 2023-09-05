@@ -859,9 +859,7 @@ public class TvBoxService {
         return list;
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, String path) {
-        String[] parts = path.split("@@@");
-        path = parts[0];
+    public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub) {
         Site site = siteService.getById(siteId);
         FsDetail fsDetail = null;
         if (isMediaFile(path)) {
@@ -892,24 +890,30 @@ public class TvBoxService {
         result.put("parse", 0);
         result.put("playUrl", "");
         result.put("url", url);
+
+        if (!getSub) {
+            return result;
+        }
+
         Subtitle subtitle = getSubtitle(site, isMediaFile(path) ? getParent(path) : path, fsDetail.getName());
         if (subtitle != null) {
             result.put("subs", List.of(subtitle));
             result.put("subt", subtitle.getUrl());
         }
+
         return result;
     }
 
     public Map<String, Object> getPlayUrl(Integer siteId, Integer id) {
         Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
         log.debug("getPlayUrl: {} {}", siteId, id);
-        return getPlayUrl(siteId, meta.getPath());
+        return getPlayUrl(siteId, meta.getPath(), false);
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path) {
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path, boolean getSub) {
         Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
         log.debug("getPlayUrl: {} {}", siteId, id);
-        return getPlayUrl(siteId, meta.getPath() + path);
+        return getPlayUrl(siteId, meta.getPath() + path, getSub);
     }
 
     private String findBestSubtitle(List<String> subtitles, String name) {
