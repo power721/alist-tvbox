@@ -925,7 +925,7 @@ public class TvBoxService {
         int min = name.length();
         for (String subtitle : subtitles) {
             String sub = subtitle.replace(prefix, "").replace(suffix, "");
-            if (sub.equals(name) || sub.startsWith(name)) {
+            if (sub.equals(name) || sub.startsWith(name) || name.startsWith(sub)) {
                 return subtitle;
             }
 
