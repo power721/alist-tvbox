@@ -59,6 +59,7 @@ public class PlayController {
         }
 
 
+        boolean getSub = "com.github.tvbox.osc.bh".equals(client);
         Map<String, Object> result;
         if (path.contains("/")) {
             if (path.startsWith("/")) {
@@ -67,10 +68,10 @@ public class PlayController {
                 int index = path.indexOf('/');
                 id = path.substring(0, index);
                 path = path.substring(index);
-                result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path, "com.github.tvbox.osc.bh".equals(client));
+                result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path, getSub);
             }
         } else {
-            result = tvBoxService.getPlayUrl(site, Integer.parseInt(path));
+            result = tvBoxService.getPlayUrl(site, Integer.parseInt(path), getSub);
         }
 
         String url = (String) result.get("url");

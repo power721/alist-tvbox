@@ -904,10 +904,10 @@ public class TvBoxService {
         return result;
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id) {
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, boolean getSub) {
         Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
         log.debug("getPlayUrl: {} {}", siteId, id);
-        return getPlayUrl(siteId, meta.getPath(), false);
+        return getPlayUrl(siteId, meta.getPath(), getSub);
     }
 
     public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path, boolean getSub) {
