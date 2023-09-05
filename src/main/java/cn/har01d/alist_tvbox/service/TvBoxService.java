@@ -961,10 +961,11 @@ public class TvBoxService {
             Subtitle subtitle = new Subtitle();
             if (best.contains("chs")) {
                 subtitle.setLang("chs");
+                subtitle.setName("简体中文");
             } else if (best.contains("cht")) {
                 subtitle.setLang("cht");
+                subtitle.setName("繁体中文");
             }
-            subtitle.setName(best);
             subtitle.setExt(getExt(best));
             subtitle.setUrl(fsDetail.getRawUrl());
             log.debug("subtitle: {}", subtitle);
