@@ -58,12 +58,11 @@ public class PlayController {
             path = parts[1];
         }
 
-
         boolean getSub = "com.github.tvbox.osc.bh".equals(client);
         Map<String, Object> result;
         if (path.contains("/")) {
             if (path.startsWith("/")) {
-                result = tvBoxService.getPlayUrl(site, path, false);
+                result = tvBoxService.getPlayUrl(site, path, getSub);
             } else {
                 int index = path.indexOf('/');
                 id = path.substring(0, index);
