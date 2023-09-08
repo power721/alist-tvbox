@@ -1798,7 +1798,7 @@ public class BiliBiliService {
     @Scheduled(cron = "0 30 9 * * *")
     public void checkin() {
         String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(null);
-        if (cookie == null || cookie.contains(String.valueOf(BiliBiliUtils.getMid())) || cookie.contains("3493271303096985")) {
+        if (cookie == null || cookie.equals("666") || cookie.contains(String.valueOf(BiliBiliUtils.getMid())) || cookie.contains("3493271303096985")) {
             return;
         }
 

@@ -901,6 +901,7 @@ public class TvBoxService {
             result.put("subt", subtitle.getUrl());
         }
 
+        log.debug("result: {}", result);
         return result;
     }
 
@@ -969,6 +970,13 @@ public class TvBoxService {
             } else if (best.contains("cht")) {
                 subtitle.setLang("cht");
                 subtitle.setName("繁体中文");
+            }
+            if (best.endsWith("ssa")) {
+                subtitle.setFormat("text/x-ssa");
+            } else if (best.endsWith("vtt")) {
+                subtitle.setFormat("text/vtt");
+            } else if (best.endsWith("ttml")) {
+                subtitle.setFormat("application/ttml+xml");
             }
             subtitle.setExt(getExt(best));
             subtitle.setUrl(fsDetail.getRawUrl());

@@ -36,6 +36,7 @@ app:
     - srt
     - ass
     - vtt
+    - ttml
   formats:
     - dff
     - dsf

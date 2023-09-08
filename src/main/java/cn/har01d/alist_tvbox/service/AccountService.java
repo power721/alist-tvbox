@@ -969,7 +969,7 @@ public class AccountService {
 
     private int syncs = 0;
 
-    @Scheduled(initialDelay = 90_000, fixedDelay = 300_000)
+    @Scheduled(initialDelay = 120_000, fixedDelay = 300_000)
     public void syncTokens() {
         if (syncs > 1 && syncs % 12 != 0) {
             syncs++;
