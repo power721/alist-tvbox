@@ -96,13 +96,21 @@ public class SubscriptionService {
         List<Subscription> list = subscriptionRepository.findAll();
         if (list.isEmpty()) {
             Subscription sub = new Subscription();
+            sub.setSid("0");
+            sub.setName("默认");
+            subscriptionRepository.save(sub);
+            sub = new Subscription();
+            sub.setSid("1");
             sub.setName("饭太硬");
             sub.setUrl("http://饭太硬.top/tv");
             subscriptionRepository.save(sub);
             sub = new Subscription();
+            sub.setSid("2");
             sub.setName("菜妮丝");
             sub.setUrl("https://tvbox.cainisi.cf");
             subscriptionRepository.save(sub);
+            settingRepository.save(new Setting("fix_sid", "true"));
+            settingRepository.save(new Setting("fix_sub_id", "true"));
         } else {
             fixSid(list);
             fixId(list);
