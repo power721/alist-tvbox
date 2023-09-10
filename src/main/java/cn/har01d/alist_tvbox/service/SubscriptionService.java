@@ -260,6 +260,9 @@ public class SubscriptionService {
     }
 
     public Map<String, Object> subscription(String apiUrl, String override, String sort) {
+        if (apiUrl == null) {
+            apiUrl = "";
+        }
         Map<String, Object> config = new HashMap<>();
         for (String url : apiUrl.split(",")) {
             String[] parts = url.split("@", 2);

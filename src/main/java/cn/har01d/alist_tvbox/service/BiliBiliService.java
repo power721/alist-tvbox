@@ -215,7 +215,10 @@ public class BiliBiliService {
         this.settingRepository = settingRepository;
         this.navigationService = navigationService;
         this.appProperties = appProperties;
-        this.restTemplate1 = builder.build();
+        this.restTemplate1 = builder
+                .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
+                .defaultHeader(HttpHeaders.USER_AGENT, Constants.OK_USER_AGENT)
+                .build();
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.REFERER, "https://www.bilibili.com/")
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
@@ -1264,18 +1267,11 @@ public class BiliBiliService {
                     return cookie;
                 }
 
-                String json = restTemplate.getForObject("https://ghproxy.com/raw.githubusercontent.com/gaotianliuyun/gao/master/0827.json", String.class);
-                Map<String, Object> map = objectMapper.readValue(json, Map.class);
-                List<Map<String, Object>> sites = (List<Map<String, Object>>) map.get("sites");
-                for (Map<String, Object> site : sites) {
-                    String api = (String) site.get("api");
-                    if ("csp_Bili".equals(api)) {
-                        Map<String, Object> ext = (Map<String, Object>) site.get("ext");
-                        cookie = (String) ext.get("cookie");
-                        BiliBiliUtils.setDefaultCookie(cookie);
-                        return cookie;
-                    }
-                }
+                Map map = restTemplate1.getForObject("http://饭太硬.top/x/json/bilibili.json", Map.class);
+                cookie = (String) map.getOrDefault("cookie", "");
+                log.info("{}", cookie);
+                BiliBiliUtils.setDefaultCookie(cookie);
+                return cookie;
             } catch (Exception e) {
                 log.warn("", e);
             }

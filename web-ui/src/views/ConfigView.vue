@@ -1,7 +1,7 @@
 <template>
   <div id="config">
     <el-row>
-      <el-col :span="11">
+      <el-col :xs="23" :sm="23" :md="23" :lg="11" :xl="11">
         <el-card class="box-card" v-if="showLogin">
           <template #header>
             <div class="card-header">
@@ -76,7 +76,7 @@
         </el-card>
       </el-col>
 
-      <el-col :span="11">
+      <el-col :xs="23" :sm="23" :md="23" :lg="11" :xl="11">
         <el-card class="box-card" v-if="showLogin">
           <el-form label-width="120px">
             <el-form-item label="计划时间">
