@@ -238,15 +238,11 @@ public class SubscriptionService {
 
     private Map<String, Object> buildOpenSite(String key, String api, String name) {
         Map<String, Object> site = new HashMap<>();
-        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        builder.replacePath("/" + api);
-        ServletUriComponentsBuilder builder2 = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        builder2.replacePath("/tvbox/" + api + ".js");
         site.put("key", key);
-        site.put("api", builder2.build().toUriString());
+        site.put("api", readHostAddress("/tvbox/" + api + ".js"));
         site.put("name", name);
         site.put("type", 3);
-        site.put("ext", builder.build().toUriString());
+        site.put("ext", readHostAddress("/" + api));
         return site;
     }
 
@@ -301,11 +297,7 @@ public class SubscriptionService {
     private void replaceAliToken(Map<String, Object> config) {
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
         String path = "/ali/token/" + settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
-        String tokenUrl = ServletUriComponentsBuilder.fromCurrentRequestUri()
-                .scheme(appProperties.isEnableHttps() ? "https" : "http")
-                .replacePath(path)
-                .replaceQuery("")
-                .toUriString();
+        String tokenUrl = readHostAddress(path);
         for (Map<String, Object> site : list) {
             Object obj = site.get("ext");
             if (obj instanceof String) {
@@ -636,20 +628,18 @@ public class SubscriptionService {
 
     private Map<String, Object> buildSite(String key, String name) throws IOException {
         Map<String, Object> site = new HashMap<>();
-        ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromCurrentRequestUri();
-        builder.scheme(appProperties.isEnableHttps() ? "https" : "http");
-        builder.replacePath("");
+        String url = readHostAddress("");
         site.put("key", key);
         site.put("api", key);
         site.put("name", name);
         site.put("type", 3);
         Map<String, String> map = new HashMap<>();
-        map.put("api", builder.build().toUriString());
+        map.put("api", url);
         map.put("apiKey", settingRepository.findById("api_key").map(Setting::getValue).orElse(""));
         String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
-        String jar = builder.build().toUriString() + "/spring.jar";
+        String jar = url + "/spring.jar";
         site.put("jar", jar);
         site.put("changeable", 0);
         site.put("searchable", 1);
@@ -699,7 +689,7 @@ public class SubscriptionService {
     }
 
     private String readHostAddress(String path) {
-        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
+        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequestUri()
                 .scheme(appProperties.isEnableHttps() ? "https" : "http")
                 .replacePath(path)
                 .build();

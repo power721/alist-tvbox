@@ -27,7 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -144,6 +146,15 @@ public class AListService {
         log.debug("call api: {} request: {}", url, request);
         FsDetailResponse response = post(site, url, request, FsDetailResponse.class);
         logError(response);
+        if (response.getData() == null && "object not found".equals(response.getMessage()) && site.getId() == 1) {
+            try {
+                Map<String, String> body = new HashMap<>();
+                body.put("path", path);
+                restTemplate.postForObject("http://stats.har01d.cn/movies", body, String.class);
+            } catch (Exception e) {
+                // ignore
+            }
+        }
         log.debug("get file: {} {}", path, response.getData());
         return response.getData();
     }

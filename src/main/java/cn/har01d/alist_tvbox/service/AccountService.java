@@ -152,6 +152,8 @@ public class AccountService {
 
             if (!StringUtils.isAllBlank(refreshToken, openToken)) {
                 accountRepository.save(account);
+            } else {
+                log.warn("No account");
             }
             readLogin();
         }
