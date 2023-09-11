@@ -151,7 +151,7 @@ public class PikPakService {
         }
 
         updateMaster(dto);
-        pikPakAccountRepository.save(dto);
+        dto = pikPakAccountRepository.save(dto);
         updatePikPak(dto);
 
         return dto;
