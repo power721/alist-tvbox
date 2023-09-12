@@ -1,6 +1,7 @@
 if [ $# -gt 0 ]; then
   remote=$1
-  wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 5 -t 2 http://docker.xiaoya.pro/update/index.zip
+  wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/index.zip || \
+  wget -T 40 -t 2 http://d.har01d.cn/index.zip -O index.zip
   if [ ! -f index.zip ]; then
     echo "Failed to download index compressed file, the index file upgrade process has aborted"
     exit 1

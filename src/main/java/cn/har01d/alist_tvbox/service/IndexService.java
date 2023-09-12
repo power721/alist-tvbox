@@ -18,12 +18,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
@@ -129,9 +131,9 @@ public class IndexService {
 
     public String getRemoteVersion() {
         try {
-            String remote = restTemplate.getForObject("http://docker.xiaoya.pro/update/version.txt", String.class).trim();
+            String remote = getVersion();
             String local = settingRepository.findById(INDEX_VERSION).map(Setting::getValue).orElse("").trim();
-            if (!local.equals(remote)) {
+            if (remote != null && !local.equals(remote)) {
                 executor.execute(() -> updateXiaoyaIndexFile(remote));
             }
             return remote;
@@ -139,6 +141,19 @@ public class IndexService {
             log.warn("", e);
         }
         return "";
+    }
+
+    private String getVersion() {
+        String remote;
+        try {
+            remote = restTemplate.getForObject("http://docker.xiaoya.pro/update/version.txt", String.class);
+        } catch (ResourceAccessException e) {
+            remote = restTemplate.getForObject("http://d.har01d.cn/version.txt", String.class);
+        }
+        if (remote == null) {
+            return null;
+        }
+        return remote.trim();
     }
 
     public void updateXiaoyaIndexFile(String remote) {
