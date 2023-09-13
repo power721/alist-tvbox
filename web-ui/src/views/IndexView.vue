@@ -96,7 +96,7 @@
                    @current-change="handleCurrentChange" :total="total"/>
 
     <el-dialog v-model="dialogVisible" :title="task.name" width="30%">
-      <p>{{ task.data }}</p>
+      <pre>{{ task.data }}</pre>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="dialogVisible = false">关闭</el-button>

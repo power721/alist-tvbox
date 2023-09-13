@@ -333,7 +333,8 @@ public class IndexService {
              FileWriter writer2 = new FileWriter(info)) {
             Instant time = Instant.now();
             taskService.startTask(task.getId());
-            taskService.updateTaskData(task.getId(), file.getAbsolutePath());
+            String detail = "索引路径:\n" + String.join("\n", indexRequest.getPaths()) + "\n\n索引文件:\n" + file.getAbsolutePath();
+            taskService.updateTaskData(task.getId(), detail);
             IndexContext context = new IndexContext(indexRequest, site, writer, task.getId());
             for (String path : indexRequest.getPaths()) {
                 if (isCancelled(context)) {

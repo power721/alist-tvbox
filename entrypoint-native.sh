@@ -9,7 +9,7 @@ fi
 
 chmod a+x /init.sh /index.sh
 
-if [ -d /data/log ]; then
+if [ ! -d /data/log ]; then
   mkdir -p /data/log && \
   ln -sf /data/log /opt/atv/log
 fi
