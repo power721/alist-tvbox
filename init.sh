@@ -13,6 +13,7 @@ init() {
   sed -i 's!/"$after"!"$after"!' search
   mv search /www/cgi-bin/search
   mv sou /www/cgi-bin/sou
+  mv whatsnew /www/cgi-bin/whatsnew
   mv header.html /www/cgi-bin/header.html
 
   sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf

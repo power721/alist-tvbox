@@ -66,7 +66,7 @@ docker pull haroldli/alist
 docker image prune -f
 date +%j.%H%M > data/version
 docker build -f Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest . || exit 1
-docker rm -f xiaoya-tvbox xiaoya alist-tvbox 2>/dev/null
+docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
 docker run -d -p $PORT1:4567 -p $PORT2:80 -p 5566:5244 -e ALIST_PORT=$PORT2 -e MEM_OPT="$MEM_OPT" -v "$MOUNT":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 
 sleep 1
