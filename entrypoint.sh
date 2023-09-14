@@ -10,9 +10,9 @@ fi
 chmod a+x /init.sh /index.sh
 
 if [ ! -d /data/log ]; then
-  mkdir -p /data/log && \
-  ln -sf /data/log /opt/atv/log
+  mkdir -p /data/log
 fi
+ln -sf /data/log /opt/atv/log
 unlink /opt/atv/log/log
 
 /init.sh 2>&1 | tee /opt/atv/log/init.log 2>&1
