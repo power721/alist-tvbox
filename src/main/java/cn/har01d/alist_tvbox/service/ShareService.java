@@ -434,14 +434,22 @@ public class ShareService {
         if (StringUtils.isBlank(share.getShareId())) {
             return;
         }
+
         String url = share.getShareId();
+        if (url.startsWith("https://mypikpak.com/s/")) {
+            url = url.substring(23);
+        }
         if (url.startsWith("https://www.aliyundrive.com/s/")) {
             url = url.substring(30);
         }
+
         String[] parts = url.split("/");
         if (parts.length == 3 && "folder".equals(parts[1])) {
             share.setShareId(parts[0]);
             share.setFolderId(parts[2]);
+        } else if (parts.length == 2) {
+            share.setShareId(parts[0]);
+            share.setFolderId(parts[1]);
         } else {
             share.setShareId(parts[0]);
         }
@@ -520,10 +528,6 @@ public class ShareService {
             throw new BadRequestException("挂载路径不能为空");
         }
 
-        if (share.getType() == 1 && (StringUtils.isBlank(share.getFolderId()))) {
-            throw new BadRequestException("文件夹ID不能为空");
-        }
-
         if (share.getType() == 2) {
             if (StringUtils.isBlank(share.getCookie())) {
                 throw new BadRequestException("Cookie不能为空");
@@ -537,9 +541,13 @@ public class ShareService {
         if (StringUtils.isBlank(share.getFolderId())) {
             if (share.getType() == 2) {
                 share.setFolderId("0");
-            } else {
+            } else if (share.getType() == 0) {
                 share.setFolderId("root");
             }
+        }
+
+        if (share.getType() == 1 && "root".equals(share.getFolderId())) {
+            share.setFolderId("");
         }
     }
 
