@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.entity;
 import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
 import cn.har01d.alist_tvbox.domain.TaskType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -31,6 +32,7 @@ public class Task {
     private TaskType type;
     private TaskStatus status = TaskStatus.READY;
     private TaskResult result;
+    @Column(columnDefinition = "TEXT")
     private String data;
     private String summary;
     private String error;

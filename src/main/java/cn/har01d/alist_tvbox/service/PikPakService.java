@@ -115,6 +115,9 @@ public class PikPakService {
         if (StringUtils.isBlank(dto.getNickname())) {
             throw new BadRequestException("账号昵称不能为空");
         }
+        if (dto.getNickname().contains("/")) {
+            throw new BadRequestException("账号昵称不能包含/");
+        }
         if (StringUtils.isBlank(dto.getUsername())) {
             throw new BadRequestException("用户名不能为空");
         }

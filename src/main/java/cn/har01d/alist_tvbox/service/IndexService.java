@@ -18,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.jetbrains.annotations.NotNull;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.scheduling.annotation.Async;
@@ -439,12 +438,16 @@ public class IndexService {
                         continue;
                     }
 
-                    if (context.getIndexRequest().getSleep() > 0) {
-                        log.debug("sleep {}", context.getIndexRequest().getSleep());
-                        Thread.sleep(context.getIndexRequest().getSleep());
-                    }
+                    if (context.getMaxDepth() == 1) {
+                        files.add(fsInfo.getName());
+                    } else {
+                        if (context.getIndexRequest().getSleep() > 0) {
+                            log.debug("sleep {}", context.getIndexRequest().getSleep());
+                            Thread.sleep(context.getIndexRequest().getSleep());
+                        }
 
-                    index(context, newPath, depth + 1);
+                        index(context, newPath, depth + 1);
+                    }
                 } else if (isMediaFormat(fsInfo.getName())) { // file
                     hasFile = true;
                     if (context.getIndexRequest().isIncludeFiles()) {
