@@ -123,7 +123,7 @@ fi
 
 if ! grep -q "/🈴我的阿里分享/" /data/index/index.video.txt; then
   echo "Download index.share.zip"
-  wget http://d.har01d.cn/index.share.zip -O index.share.zip && \
+  wget https://static.har01d.cn/tvbox/data/index.share.zip -O index.share.zip && \
   unzip -q -o index.share.zip -d /data/index/ && \
   cat /data/index/index.share.txt >> /data/index/index.video.txt
   cat /data/index/index.share.txt >> /data/index/index.txt
@@ -142,10 +142,10 @@ LOCAL="0.0"
 if [ -f /data/atv/base_version ]; then
   LOCAL=$(head -n 1 </data/atv/base_version)
 fi
-REMOTE=$(curl -fsSL http://d.har01d.cn/base_version | head -n 1)
+REMOTE=$(curl -fsSL https://static.har01d.cn/tvbox/data/base_version | head -n 1)
 echo "movie base version: $LOCAL $REMOTE"
 if [ "$LOCAL" != "$REMOTE" ]; then
-  wget http://d.har01d.cn/data.zip -O data.zip && \
+  wget https://static.har01d.cn/tvbox/data/data.zip -O data.zip && \
   unzip -q -o data.zip -d /tmp && \
   cp /tmp/data/data.sql /data/atv/
 fi
