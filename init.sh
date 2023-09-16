@@ -26,7 +26,7 @@ init() {
   sqlite3 /opt/alist/data/data.db ".read /update.sql"
 
   wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/tvbox.zip || \
-  wget -T 30 -t 2 http://d.har01d.cn/tvbox.zip -O tvbox.zip
+  wget -T 30 -t 2 https://static.har01d.cn/tvbox/data/tvbox.zip -O tvbox.zip
 
   unzip -q -o tvbox.zip
   if [ -f /data/my.json ]; then
@@ -53,10 +53,10 @@ fi
 cd /tmp/
 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/update/version.txt || \
-wget -T 10 -t 2 http://d.har01d.cn/version.txt -O version.txt
+wget -T 10 -t 2 https://static.har01d.cn/tvbox/data/version.txt -O version.txt
 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/update.zip || \
-wget -T 30 -t 2 http://d.har01d.cn/update.zip -O update.zip
+wget -T 30 -t 2 https://static.har01d.cn/tvbox/data/update.zip -O update.zip
 
 if [ ! -f update.zip ]; then
   echo "Failed to download update database file, the database upgrade process has aborted"
@@ -103,7 +103,7 @@ else
     echo "$(date) current index file version is updated, no need to upgrade"
   elif [ "$remote" = "$latest" ]; then
     wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/index.zip || \
-    wget -T 40 -t 2 http://d.har01d.cn/index.zip -O index.zip
+    wget -T 40 -t 2 https://static.har01d.cn/tvbox/data/index.zip -O index.zip
 
     if [ ! -f index.zip ]; then
       echo "Failed to download index compressed file, the index file upgrade process has aborted"
@@ -121,15 +121,26 @@ else
   rm -f index.* update.* version.txt
 fi
 
-if ! grep -q "/🈴我的阿里分享/" /data/index/index.video.txt; then
+LOCAL="0.0"
+if [ -f /data/index/share_version ]; then
+  LOCAL=$(head -n 1 </data/index/share_version)
+fi
+REMOTE=$(curl -fsSL https://static.har01d.cn/tvbox/data/share_version | head -n 1)
+echo "share index version: $LOCAL $REMOTE"
+if [ "$LOCAL" != "$REMOTE" ]; then
   echo "Download index.share.zip"
   wget https://static.har01d.cn/tvbox/data/index.share.zip -O index.share.zip && \
   unzip -q -o index.share.zip -d /data/index/ && \
+  rm -f index.share.zip
+  grep -v "/🈴我的阿里分享/" /data/index/index.video.txt >/data/index/index.video.txt.1
+  grep -v "/🈴我的阿里分享/" /data/index/index.txt >/data/index/index.txt.1
+  mv /data/index/index.video.txt.1 /data/index/index.video.txt
+  mv /data/index/index.txt.1 /data/index/index.txt
   cat /data/index/index.share.txt >> /data/index/index.video.txt
   cat /data/index/index.share.txt >> /data/index/index.txt
 fi
 
-#wget http://d.har01d.cn/cat_open.zip -O cat_open.zip && \
+#wget https://static.har01d.cn/tvbox/data/cat_open.zip -O cat_open.zip && \
 #unzip cat_open.zip -d /www/tvbox/
 
 version=$(head -n1 /docker.version)
