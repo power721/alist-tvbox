@@ -147,7 +147,7 @@ public class IndexService {
         try {
             remote = restTemplate.getForObject("http://docker.xiaoya.pro/update/version.txt", String.class);
         } catch (ResourceAccessException e) {
-            remote = restTemplate.getForObject("http://d.har01d.cn/version.txt", String.class);
+            remote = restTemplate.getForObject("http://data.har01d.cn/version.txt", String.class);
         }
         if (remote == null) {
             return null;

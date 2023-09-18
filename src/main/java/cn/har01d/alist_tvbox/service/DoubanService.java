@@ -114,7 +114,7 @@ public class DoubanService {
 
     public String getRemoteVersion(Versions versions) {
         try {
-            String remote = restTemplate.getForObject("http://d.har01d.cn/movie_version", String.class).trim();
+            String remote = restTemplate.getForObject("http://data.har01d.cn/movie_version", String.class).trim();
             versions.setMovie(remote);
             String local = settingRepository.findById(MOVIE_VERSION).map(Setting::getValue).orElse("").trim();
             String cached = getCachedVersion();
