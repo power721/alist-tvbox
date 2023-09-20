@@ -32,7 +32,8 @@ public class WebSecurityConfiguration {
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers(
-                                new AntPathRequestMatcher("/ali-accounts/**"),
+                                new AntPathRequestMatcher("/ali/accounts/**"),
+                                new AntPathRequestMatcher("/pikpak/accounts/**"),
                                 new AntPathRequestMatcher("/files/**"),
                                 new AntPathRequestMatcher("/sites/**"),
                                 new AntPathRequestMatcher("/shares/**"),
