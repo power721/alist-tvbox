@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.config;
 
 import cn.har01d.alist_tvbox.auth.TokenFilter;
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -27,11 +28,16 @@ public class WebSecurityConfiguration {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeRequests(requests -> requests
+                        .dispatcherTypeMatchers(DispatcherType.FORWARD).permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers(
                                 new AntPathRequestMatcher("/bilibili/-/status"),
                                 new AntPathRequestMatcher("/bilibili/-/check")
                         ).authenticated()
                         .requestMatchers(
+                                new AntPathRequestMatcher("/", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/favicon.ico", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/assets/**", HttpMethod.GET.name()),
                                 new AntPathRequestMatcher("/bilibili/**", HttpMethod.GET.name()),
                                 new AntPathRequestMatcher("/subtitles/**", HttpMethod.GET.name()),
                                 new AntPathRequestMatcher("/vod/**", HttpMethod.GET.name()),
