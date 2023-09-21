@@ -85,6 +85,11 @@ public class BiliBiliController {
         return biliBiliService.getLoginStatus();
     }
 
+    @GetMapping("/-/check")
+    public int checkLogin(String key) {
+        return biliBiliService.checkLogin(key);
+    }
+
     @PostMapping("/cookie")
     public Map<String, Object> updateCookie(@RequestBody CookieData cookieData) {
         return biliBiliService.updateCookie(cookieData);
@@ -93,11 +98,6 @@ public class BiliBiliController {
     @PostMapping("/login")
     public QrCode scanLogin() throws IOException {
         return biliBiliService.scanLogin();
-    }
-
-    @GetMapping("/-/check")
-    public int checkLogin(String key) {
-        return biliBiliService.checkLogin(key);
     }
 
     private String decodeUrl(String text) {

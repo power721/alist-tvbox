@@ -26,30 +26,26 @@ public class WebSecurityConfiguration {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .authorizeRequests(requests -> requests.requestMatchers(
-                                new AntPathRequestMatcher("/accounts/login"),
-                                new AntPathRequestMatcher("/accounts/logout")
-                        ).permitAll()
-                        .requestMatchers(HttpMethod.OPTIONS).permitAll()
+                .authorizeRequests(requests -> requests
                         .requestMatchers(
-                                new AntPathRequestMatcher("/ali/accounts/**"),
-                                new AntPathRequestMatcher("/pikpak/accounts/**"),
-                                new AntPathRequestMatcher("/files/**"),
-                                new AntPathRequestMatcher("/sites/**"),
-                                new AntPathRequestMatcher("/shares/**"),
-                                new AntPathRequestMatcher("/subscriptions/**"),
-                                new AntPathRequestMatcher("/settings/**"),
-                                new AntPathRequestMatcher("/login"),
-                                new AntPathRequestMatcher("/storage"),
-                                new AntPathRequestMatcher("/token"),
-                                new AntPathRequestMatcher("/resources"),
-                                new AntPathRequestMatcher("/checkin")
+                                new AntPathRequestMatcher("/bilibili/-/status"),
+                                new AntPathRequestMatcher("/bilibili/-/check")
                         ).authenticated()
-                        .requestMatchers(HttpMethod.POST).authenticated()
-                        .requestMatchers(HttpMethod.PUT).authenticated()
-                        .requestMatchers(HttpMethod.PATCH).authenticated()
-                        .requestMatchers(HttpMethod.DELETE).authenticated()
-                        .anyRequest().permitAll())
+                        .requestMatchers(
+                                new AntPathRequestMatcher("/bilibili/**", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/vod/**", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/vod1/**", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/play/**", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/sub/**", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/repo/**", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/open/**", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/images", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/ali/token/*", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/accounts/principal", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/accounts/login", HttpMethod.POST.name()),
+                                new AntPathRequestMatcher("/accounts/logout", HttpMethod.POST.name())
+                        ).permitAll()
+                        .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
