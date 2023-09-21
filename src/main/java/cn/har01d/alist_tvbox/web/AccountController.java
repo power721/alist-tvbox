@@ -59,11 +59,6 @@ public class AccountController {
         return accountService.getAliRefreshToken(id);
     }
 
-    @GetMapping("/ali/account-tokens")
-    public AliTokensResponse getTokens() {
-        return accountService.getTokens();
-    }
-
     @PostMapping("/login")
     public AListLogin updateLogin(@RequestBody AListLogin login) {
         return accountService.updateLogin(login);

@@ -27,33 +27,39 @@ public class WebSecurityConfiguration {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .authorizeRequests(requests -> requests
-                        .dispatcherTypeMatchers(DispatcherType.FORWARD).permitAll()
+                .authorizeRequests(requests -> requests.requestMatchers(
+                                new AntPathRequestMatcher("/accounts/login"),
+                                new AntPathRequestMatcher("/accounts/logout")
+                        ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers(
-                                new AntPathRequestMatcher("/bilibili/-/status"),
-                                new AntPathRequestMatcher("/bilibili/-/check")
+                                new AntPathRequestMatcher("/ali/accounts/**"),
+                                new AntPathRequestMatcher("/pikpak/accounts/**"),
+                                new AntPathRequestMatcher("/alist/**"),
+                                new AntPathRequestMatcher("/files/**"),
+                                new AntPathRequestMatcher("/sites/**"),
+                                new AntPathRequestMatcher("/shares/**"),
+                                new AntPathRequestMatcher("/subscriptions/**"),
+                                new AntPathRequestMatcher("/settings/**"),
+                                new AntPathRequestMatcher("/tasks/**"),
+                                new AntPathRequestMatcher("/nav/**"),
+                                new AntPathRequestMatcher("/logs/**"),
+                                new AntPathRequestMatcher("/bilibili/-/**"),
+                                new AntPathRequestMatcher("/meta/**"),
+                                new AntPathRequestMatcher("/storage/**"),
+                                new AntPathRequestMatcher("/resources/**"),
+                                new AntPathRequestMatcher("/index/**"),
+                                new AntPathRequestMatcher("/index-templates/**"),
+                                new AntPathRequestMatcher("/login"),
+                                new AntPathRequestMatcher("/system"),
+                                new AntPathRequestMatcher("/token"),
+                                new AntPathRequestMatcher("/export-shares")
                         ).authenticated()
-                        .requestMatchers(
-                                new AntPathRequestMatcher("/", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/favicon.ico", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/assets/**", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/bilibili/**", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/subtitles/**", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/vod/**", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/vod1/**", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/play/**", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/parse/**", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/sub/**", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/repo/**", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/open/**", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/images", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/ali/token/*", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/accounts/principal", HttpMethod.GET.name()),
-                                new AntPathRequestMatcher("/accounts/login", HttpMethod.POST.name()),
-                                new AntPathRequestMatcher("/accounts/logout", HttpMethod.POST.name())
-                        ).permitAll()
-                        .anyRequest().authenticated())
+                        .requestMatchers(HttpMethod.POST).authenticated()
+                        .requestMatchers(HttpMethod.PUT).authenticated()
+                        .requestMatchers(HttpMethod.PATCH).authenticated()
+                        .requestMatchers(HttpMethod.DELETE).authenticated()
+                        .anyRequest().permitAll())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)

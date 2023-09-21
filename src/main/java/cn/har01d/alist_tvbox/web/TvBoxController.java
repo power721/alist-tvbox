@@ -77,11 +77,6 @@ public class TvBoxController {
         }
     }
 
-    @GetMapping("/profiles")
-    public List<String> getProfiles() {
-        return subscriptionService.getProfiles();
-    }
-
     @GetMapping("/token")
     public String getToken() {
         return subscriptionService.getToken();
