@@ -1,0 +1,15 @@
+version: "3"
+
+services:
+  xiaoya-tvbox:
+    image: haroldli/xiaoya-tvbox:latest
+    container_name: xiaoya-tvbox
+    restart: unless-stopped
+    environment:
+      ALIST_PORT: 5344
+      MEM_OPT: -Xmx512M
+    volumes:
+      - /etc/xiaoya:/data
+    ports:
+      - "4567:4567"
+      - "5344:80"
