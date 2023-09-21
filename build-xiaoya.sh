@@ -62,7 +62,7 @@ echo $sum.$(date +%H%M) > data/version
 echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
 echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
 
-docker pull haroldli/alist
+docker pull haroldli/alist-base
 docker image prune -f
 date +%j.%H%M > data/version
 docker build -f Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest . || exit 1
