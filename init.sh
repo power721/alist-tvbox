@@ -112,11 +112,11 @@ else
       unzip -o -q -P abcd index.zip
       cat index.video.txt index.book.txt index.music.txt index.non.video.txt >/data/index/index.txt
       mv index*.txt /data/index/
-      echo "$(date) update index successfully, your new version.txt is $remote"
+      echo "$(date) update index successfully, your new version is $remote"
       echo "$remote" >/data/index/version.txt
     fi
   else
-    echo "$(date) your current version.txt is updated, no need to downgrade"
+    echo "$(date) your current version is updated, no need to downgrade"
     echo "$remote" >/data/index/version.txt
   fi
   rm -f index.* update.* version.txt
