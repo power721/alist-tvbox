@@ -4,8 +4,8 @@ import lombok.Data;
 
 @Data
 public class Subtitle {
-    private String name = "英文";
-    private String lang = "eng";
+    private String name = "中文";
+    private String lang = "ch";
     private String format = "application/x-subrip";
     private String ext;
     private String url;
