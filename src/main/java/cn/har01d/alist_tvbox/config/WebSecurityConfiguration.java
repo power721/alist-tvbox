@@ -33,9 +33,11 @@ public class WebSecurityConfiguration {
                         ).authenticated()
                         .requestMatchers(
                                 new AntPathRequestMatcher("/bilibili/**", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/subtitles/**", HttpMethod.GET.name()),
                                 new AntPathRequestMatcher("/vod/**", HttpMethod.GET.name()),
                                 new AntPathRequestMatcher("/vod1/**", HttpMethod.GET.name()),
                                 new AntPathRequestMatcher("/play/**", HttpMethod.GET.name()),
+                                new AntPathRequestMatcher("/parse/**", HttpMethod.GET.name()),
                                 new AntPathRequestMatcher("/sub/**", HttpMethod.GET.name()),
                                 new AntPathRequestMatcher("/repo/**", HttpMethod.GET.name()),
                                 new AntPathRequestMatcher("/open/**", HttpMethod.GET.name()),
