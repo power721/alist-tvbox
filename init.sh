@@ -98,6 +98,7 @@ else
     echo 0.0.0 >/data/index/version.txt
   fi
   local=$(head -n1 /data/index/version.txt)
+  echo "index version: $local $remote"
   latest=$(printf "$remote\n$local\n" | sort -r | head -n1)
   if [ "$remote" = "$local" ]; then
     echo "$(date) current index file version is updated, no need to upgrade"
