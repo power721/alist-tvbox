@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.config;
 
 import cn.har01d.alist_tvbox.auth.TokenFilter;
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -34,16 +35,25 @@ public class WebSecurityConfiguration {
                         .requestMatchers(
                                 new AntPathRequestMatcher("/ali/accounts/**"),
                                 new AntPathRequestMatcher("/pikpak/accounts/**"),
+                                new AntPathRequestMatcher("/bilibili/-/**"),
+                                new AntPathRequestMatcher("/alist/**"),
                                 new AntPathRequestMatcher("/files/**"),
                                 new AntPathRequestMatcher("/sites/**"),
                                 new AntPathRequestMatcher("/shares/**"),
+                                new AntPathRequestMatcher("/storage/**"),
+                                new AntPathRequestMatcher("/resources/**"),
                                 new AntPathRequestMatcher("/subscriptions/**"),
                                 new AntPathRequestMatcher("/settings/**"),
+                                new AntPathRequestMatcher("/tasks/**"),
+                                new AntPathRequestMatcher("/nav/**"),
+                                new AntPathRequestMatcher("/logs/**"),
+                                new AntPathRequestMatcher("/meta/**"),
+                                new AntPathRequestMatcher("/index/**"),
+                                new AntPathRequestMatcher("/index-templates/**"),
                                 new AntPathRequestMatcher("/login"),
-                                new AntPathRequestMatcher("/storage"),
+                                new AntPathRequestMatcher("/system"),
                                 new AntPathRequestMatcher("/token"),
-                                new AntPathRequestMatcher("/resources"),
-                                new AntPathRequestMatcher("/checkin")
+                                new AntPathRequestMatcher("/export-shares")
                         ).authenticated()
                         .requestMatchers(HttpMethod.POST).authenticated()
                         .requestMatchers(HttpMethod.PUT).authenticated()

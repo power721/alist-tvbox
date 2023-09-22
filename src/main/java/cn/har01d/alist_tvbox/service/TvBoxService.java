@@ -973,6 +973,9 @@ public class TvBoxService {
             } else if (best.contains("cht")) {
                 subtitle.setLang("cht");
                 subtitle.setName("繁体中文");
+            } else if (best.contains("en")) {
+                subtitle.setLang("eng");
+                subtitle.setName("英文");
             }
             if (best.endsWith("ssa")) {
                 subtitle.setFormat("text/x-ssa");
