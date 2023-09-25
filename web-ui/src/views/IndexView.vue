@@ -6,20 +6,8 @@
           <el-option :label="site.name" :value="site.id" v-for="site of sites"/>
         </el-select>
       </el-form-item>
-<!--      <el-form-item label="索引名称" :label-width="labelWidth">-->
-<!--        <span>用于生成文件名，自动添加后缀.txt</span>-->
-<!--        <el-input v-model="form.indexName" autocomplete="off"/>-->
-<!--      </el-form-item>-->
-      <el-form-item v-for="(item, index) in form.paths" :key="item.key" :label="'索引路径'+(index+1)"
-                    :label-width="labelWidth">
-        <el-input v-model="item.value">
-          <template #append>
-            <el-button class="mt-2" @click.prevent="removePath(item)">删除</el-button>
-          </template>
-        </el-input>
-      </el-form-item>
-      <el-form-item :label-width="labelWidth">
-        <el-button @click="addPath">添加路径</el-button>
+      <el-form-item label="索引路径" :label-width="labelWidth">
+        <el-input type="textarea" v-model="form.paths" :rows="6" placeholder="每行一个路径"/>
       </el-form-item>
       <el-form-item label="排除路径" :label-width="labelWidth">
         <span>支持多个路径，逗号分割</span>
@@ -161,10 +149,7 @@ const form = reactive({
   compress: false,
   sleep: 2000,
   maxDepth: 10,
-  paths: [{
-    key: 1,
-    value: '/',
-  }],
+  paths: '',
   stopWords: '',
   excludes: '',
 })
@@ -214,13 +199,7 @@ const loadTemplate = (data: IndexTemplate) => {
   form.compress = template.compress
   form.sleep = template.sleep
   form.maxDepth = template.maxDepth
-  form.paths = []
-  for (let path of template.paths) {
-    form.paths.push({
-      key: Date.now(),
-      value: path,
-    })
-  }
+  form.paths = template.paths.join('\n')
   form.excludes = template.excludes.join(',')
   form.stopWords = template.stopWords.join(',')
 }
@@ -235,7 +214,7 @@ const saveTemplates = () => {
     compress: form.compress,
     maxDepth: form.maxDepth,
     sleep: form.sleep,
-    paths: form.paths.map(e => e.value).filter(e => e),
+    paths: form.paths.split('\n'),
     stopWords: form.stopWords ? form.stopWords.split(/\s*,\s*/) : [],
     excludes: form.excludes ? form.excludes.split(/\s*,\s*/) : [],
   }
@@ -277,23 +256,6 @@ const handleDelete = (data: any) => {
   })
 }
 
-const addPath = () => {
-  form.paths.push({
-    key: Date.now(),
-    value: '',
-  })
-}
-
-const removePath = (item: Item) => {
-  if (form.paths.length < 2) {
-    return
-  }
-  const index = form.paths.indexOf(item)
-  if (index !== -1) {
-    form.paths.splice(index, 1)
-  }
-}
-
 const handleForm = () => {
   const request = {
     siteId: form.siteId,
@@ -304,7 +266,7 @@ const handleForm = () => {
     compress: form.compress,
     sleep: form.sleep,
     maxDepth: form.maxDepth,
-    paths: form.paths.map(e => e.value).filter(e => e),
+    paths: form.paths.split('\n'),
     stopWords: form.stopWords ? form.stopWords.split(/\s*,\s*/) : [],
     excludes: form.excludes ? form.excludes.split(/\s*,\s*/) : [],
   }

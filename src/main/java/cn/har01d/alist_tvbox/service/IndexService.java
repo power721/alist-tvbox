@@ -46,7 +46,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -323,6 +322,7 @@ public class IndexService {
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
         File info = new File(dir, indexRequest.getIndexName() + ".info");
 
+        indexRequest.setPaths(indexRequest.getPaths().stream().filter(e -> !e.isBlank()).toList());
         if (indexRequest.isIncremental()) {
             removeLines(file, indexRequest.getPaths());
         }
@@ -332,7 +332,7 @@ public class IndexService {
              FileWriter writer2 = new FileWriter(info)) {
             Instant time = Instant.now();
             taskService.startTask(task.getId());
-            String detail = "索引路径:\n" + String.join("\n", indexRequest.getPaths()) + "\n\n索引文件:\n" + file.getAbsolutePath();
+            String detail = getTaskDetails(indexRequest.getPaths()) + "\n\n索引文件:\n" + file.getAbsolutePath();
             taskService.updateTaskData(task.getId(), detail);
             IndexContext context = new IndexContext(indexRequest, site, writer, task.getId());
             for (String path : indexRequest.getPaths()) {
@@ -362,17 +362,26 @@ public class IndexService {
         log.info("index file: {}", file.getAbsolutePath());
     }
 
+    private String getTaskDetails(List<String> paths) {
+        int n = paths.size();
+        if (n < 7) {
+            return "索引路径:\n" + String.join("\n", paths);
+        }
+        return "索引路径:\n" + String.join("\n", paths.subList(0, 3)) +
+                "\n...\n" + String.join("\n", paths.subList(n - 3, n));
+    }
+
     private boolean isCancelled(IndexContext context) {
         Task task = taskService.getById(context.getTaskId());
         return task.getStatus() == TaskStatus.COMPLETED && task.getResult() == TaskResult.CANCELLED;
     }
 
-    private void removeLines(File file, Set<String> prefix) {
+    private void removeLines(File file, List<String> prefix) {
         try {
             List<String> lines = Files.readAllLines(file.toPath())
                     .stream()
                     .filter(path -> prefix.stream().noneMatch(path::startsWith))
-                    .collect(Collectors.toList());
+                    .toList();
 
             try (FileWriter writer = new FileWriter(file)) {
                 IOUtils.writeLines(lines, null, writer);
