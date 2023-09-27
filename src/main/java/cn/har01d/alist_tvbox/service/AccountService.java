@@ -814,8 +814,8 @@ public class AccountService {
         body.put("key", "ali_account_id");
         body.put("type", "number");
         body.put("flag", 1);
-        body.put("value", account.getId());
-        HttpEntity<List<Map<String, Object>>> entity = new HttpEntity<>(List.of(body), headers);
+        body.put("value", String.valueOf(account.getId()));
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<String> response = aListClient.exchange("/api/admin/setting/update", HttpMethod.POST, entity, String.class);
         log.info("updateAliAccountByApi {} response: {}", account.getId(), response.getBody());
     }
