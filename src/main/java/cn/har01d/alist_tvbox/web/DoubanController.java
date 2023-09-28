@@ -2,7 +2,6 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.MetaDto;
 import cn.har01d.alist_tvbox.dto.Versions;
-import cn.har01d.alist_tvbox.entity.Meta;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
 import cn.har01d.alist_tvbox.service.DoubanService;
 import cn.har01d.alist_tvbox.service.IndexService;
@@ -26,7 +25,7 @@ public class DoubanController {
         this.metaRepository = metaRepository;
     }
 
-    @GetMapping("/meta")
+    @GetMapping("/api/meta")
     public Page<MetaDto> list(Pageable pageable, String q) {
         if (StringUtils.isNotBlank(q)) {
             return metaRepository.findByPathContains(q, pageable).map(MetaDto::new);
@@ -34,12 +33,12 @@ public class DoubanController {
         return metaRepository.findAll(pageable).map(MetaDto::new);
     }
 
-    @DeleteMapping("/meta/{id}")
+    @DeleteMapping("/api/meta/{id}")
     public void delete(@PathVariable Integer id) {
         metaRepository.deleteById(id);
     }
 
-    @GetMapping("/versions")
+    @GetMapping("/api/versions")
     public Versions getRemoteVersion() {
         Versions versions = new Versions();
         service.getRemoteVersion(versions);

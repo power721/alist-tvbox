@@ -74,7 +74,7 @@ const handleDelete = (data: any) => {
 
 const deleteSub = () => {
   dialogVisible.value = false
-  axios.delete('/meta/' + form.value.id).then(() => {
+  axios.delete('/api/meta/' + form.value.id).then(() => {
     refresh()
   })
 }
@@ -89,7 +89,7 @@ const refresh = () => {
 
 const load = (value: number) => {
   page.value = value
-  axios.get('/meta?page=' + (page.value - 1) + '&size=' + size.value + '&q=' + keyword.value).then(({data}) => {
+  axios.get('/api/meta?page=' + (page.value - 1) + '&size=' + size.value + '&q=' + keyword.value).then(({data}) => {
     files.value = data.content
     total.value = data.totalElements
   })

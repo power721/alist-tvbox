@@ -67,7 +67,7 @@ import axios from "axios";
 
 const info = ref<any>({})
 const load = () => {
-  axios.get('/system').then(({data}) => {
+  axios.get('/api/system').then(({data}) => {
     info.value = data
   })
 }

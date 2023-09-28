@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/nav")
+@RequestMapping("/api/nav")
 public class NavigationController {
     private final NavigationService navigationService;
 

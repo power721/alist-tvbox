@@ -280,63 +280,63 @@ const updateToken = () => {
 }
 
 const resetAListToken = () => {
-  axios.post('/alist/reset_token', {}).then(() => {
+  axios.post('/api/alist/reset_token', {}).then(() => {
     ElMessage.success('AList认证Token重置成功')
   })
 }
 
 const updateOpenTokenUrl = () => {
-  axios.post('/open-token-url', {url: openTokenUrl.value}).then(() => {
+  axios.post('/api/open-token-url', {url: openTokenUrl.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateMixed = () => {
-  axios.post('/settings', {name: 'mix_site_source', value: mixSiteSource.value}).then(() => {
+  axios.post('/api/settings', {name: 'mix_site_source', value: mixSiteSource.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateReplaceAliToken = () => {
-  axios.post('/settings', {name: 'replace_ali_token', value: replaceAliToken.value}).then(() => {
+  axios.post('/api/settings', {name: 'replace_ali_token', value: replaceAliToken.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateEnableHttps = () => {
-  axios.post('/settings', {name: 'enable_https', value: enableHttps.value}).then(() => {
+  axios.post('/api/settings', {name: 'enable_https', value: enableHttps.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateLogin = () => {
-  axios.post('/login', login.value).then(({data}) => {
+  axios.post('/api/alist/login', login.value).then(({data}) => {
     ElMessage.success('保存成功')
     login.value = data
   })
 }
 
 const exportDatabase = () => {
-  axios.post('/settings/export').then(() => {
+  axios.post('/api/settings/export').then(() => {
     ElMessage.success('导出数据库成功')
   })
 }
 
 const updateScheduleTime = () => {
-  axios.post('/schedule', scheduleTime.value).then(() => {
+  axios.post('/api/schedule', scheduleTime.value).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const handleAList = (op: string) => {
-  axios.post('/alist/' + op).then(() => {
+  axios.post('/api/alist/' + op).then(() => {
     ElMessage.success('操作成功')
     setTimeout(() => getAListStatus(), 3000)
   })
 }
 
 const getAListStatus = () => {
-  axios.get('/alist/status').then(({data}) => {
+  axios.get('/api/alist/status').then(({data}) => {
     increase()
     store.aListStatus = data
     aListStarted.value = data != 0
@@ -353,7 +353,7 @@ const getAListStatus = () => {
 onMounted(() => {
   showLogin.value = store.xiaoya
   if (store.xiaoya) {
-    axios.get('/settings').then(({data}) => {
+    axios.get('/api/settings').then(({data}) => {
       form.value.token = data.token
       form.value.enabledToken = !!data.token
       scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
@@ -375,7 +375,7 @@ onMounted(() => {
       login.value.password = data.alist_password
       login.value.enabled = data.alist_login === 'true'
     })
-    axios.get('/alist/status').then(({data}) => {
+    axios.get('/api/alist/status').then(({data}) => {
       store.aListStatus = data
       aListStarted.value = data != 0
       if (data === 1) {
@@ -383,7 +383,7 @@ onMounted(() => {
         intervalId = setInterval(getAListStatus, 1000)
       }
     })
-    axios.get('/versions').then(({data}) => {
+    axios.get('/api/versions').then(({data}) => {
       movieRemoteVersion.value = data.movie
       cachedMovieVersion.value = data.cachedMovie
       indexRemoteVersion.value = data.index

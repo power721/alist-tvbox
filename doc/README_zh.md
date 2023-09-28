@@ -8,7 +8,7 @@ AList代理，支持xiaoya版AList界面管理。
     sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
     ```
 3. 打开管理界面：http://your-ip:4567/#/accounts
-默认用户名：admin 密码：admin
+   默认用户名：admin 密码：admin
 4. 获取并填写阿里token、开放token
 5. 将订阅地址[http://your-ip:4567/sub/0](http://your-ip:4567/sub/0) 输入到TvBox配置
 
@@ -108,7 +108,7 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 ### 站点
 ![站点列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sites.png)
 
-小雅版默认添加了站点：`http://localhost`，如果配置有域名，自行修改地址。
+默认添加了站点：`http://localhost`，如果配置有域名，自行修改地址。
 
 为什么是`http://localhost`？ 因为小雅用80端口代理了容器内的AList 5244端口。
 管理程序运行在同一个容器内，能够直接访问80端口。
@@ -129,12 +129,6 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 第一次启动会自动读取/data/mytoken.txt,/data/myopentoken.txt,/data/temp_transfer_folder_id.txt里面的内容，以后这些文件不再生效。
 
 ![账号详情](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_detail.png)
-
-#### 转存文件夹ID
-在阿里网盘网页版上创建一个转存目录，比如“temp”.
-
-然后点击目录，浏览器显示的 URL
-https://www.aliyundrive.com/drive/folder/640xxxxxxxxxxxxxxxxxxxca8a 最后一串就是。
 
 ### 订阅
 tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
@@ -281,3 +275,5 @@ docker_address.txt不再生效，使用订阅链接会自动识别。
 alist_list.txt第一次启动时加载，以后不再生效，请在界面添加站点。
 
 proxy.txt、tv.txt、my.json、iptv.m3u还是生效的，可以在文件页面编辑。
+
+本项目不会使用alist.min.js。

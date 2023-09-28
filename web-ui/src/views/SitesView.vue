@@ -264,7 +264,7 @@ const handleDelete = (data: any) => {
 
 const deleteSite = () => {
   dialogVisible.value = false
-  axios.delete('/sites/' + form.value.id).then(() => {
+  axios.delete('/api/sites/' + form.value.id).then(() => {
     load()
   })
 }
@@ -274,7 +274,7 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
-  const url = updateAction.value ? '/sites/' + form.value.id : '/sites'
+  const url = updateAction.value ? '/api/sites/' + form.value.id : '/api/sites'
   axios.post(url, form.value).then(() => {
     formVisible.value = false
     load()
@@ -282,12 +282,12 @@ const handleConfirm = () => {
 }
 
 const updateIndexFile = (id: string | number) => {
-  axios.post('/sites/' + id + '/updateIndexFile').then(() => {
+  axios.post('/api/sites/' + id + '/updateIndexFile').then(() => {
   })
 }
 
 const load = () => {
-  axios.get('/sites').then(({data}) => {
+  axios.get('/api/sites').then(({data}) => {
     sites.value = data
   })
 }

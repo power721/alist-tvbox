@@ -519,7 +519,7 @@ public class AccountService {
         return time.atOffset(ZONE_OFFSET);
     }
 
-    public AListLogin updateLogin(AListLogin login) {
+    public AListLogin updateAListLogin(AListLogin login) {
         aListLocalService.validateAListStatus();
         if (login.isEnabled()) {
             if (StringUtils.isBlank(login.getUsername())) {
@@ -600,7 +600,7 @@ public class AccountService {
         log.info("create AList user response: {}", response.getBody());
     }
 
-    public AListLogin getLoginInfo() {
+    public AListLogin getAListLoginInfo() {
         String username = settingRepository.findById(ALIST_USERNAME).map(Setting::getValue).orElse("");
         String password = settingRepository.findById(ALIST_PASSWORD).map(Setting::getValue).orElse("");
         String enabled = settingRepository.findById(ALIST_LOGIN).map(Setting::getValue).orElse("");

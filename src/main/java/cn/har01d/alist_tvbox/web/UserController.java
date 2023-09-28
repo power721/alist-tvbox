@@ -23,7 +23,7 @@ import java.util.Collection;
 import java.util.Set;
 
 @RestController
-@RequestMapping("/accounts")
+@RequestMapping("/api/accounts")
 public class UserController {
     private final UserService userService;
     private final TokenService tokenService;

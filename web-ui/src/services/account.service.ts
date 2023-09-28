@@ -18,7 +18,7 @@ class AccountService {
   }
 
   update(account: Account) {
-    axios.post("/accounts/update", account).then(() => {
+    axios.post("/api/accounts/update", account).then(() => {
       this.account.username = account.username
       localStorage.setItem('username', account.username)
       ElMessage.success('账号更新成功')
@@ -31,7 +31,7 @@ class AccountService {
     this.account.username = account.username
     localStorage.setItem('username', account.username)
 
-    return axios.post("/accounts/login", account).then(({data}) => {
+    return axios.post("/api/accounts/login", account).then(({data}) => {
       this.account.authenticated = true
       localStorage.setItem("token", data.token)
       return data

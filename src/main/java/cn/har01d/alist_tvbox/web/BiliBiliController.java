@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,7 +22,6 @@ import java.util.Map;
 
 @Slf4j
 @RestController
-@RequestMapping("/bilibili")
 public class BiliBiliController {
     private final BiliBiliService biliBiliService;
     private final SubscriptionService subscriptionService;
@@ -35,7 +33,7 @@ public class BiliBiliController {
         this.objectMapper = objectMapper;
     }
 
-    @GetMapping("")
+    @GetMapping("/bilibili")
     public String api(String t, String f, String ids, String wd,
                       @RequestParam(required = false, defaultValue = "") String category,
                       @RequestParam(required = false, defaultValue = "") String type,
@@ -47,7 +45,7 @@ public class BiliBiliController {
         return api("", t, f, ids, wd, category, type, sort, duration, pg, request, response);
     }
 
-    @GetMapping("/{token}")
+    @GetMapping("/bilibili/{token}")
     public String api(@PathVariable String token, String t, String f, String ids, String wd,
                       @RequestParam(required = false, defaultValue = "") String category,
                       @RequestParam(required = false, defaultValue = "") String type,
@@ -80,22 +78,22 @@ public class BiliBiliController {
         return objectMapper.writeValueAsString(result);
     }
 
-    @GetMapping("/-/status")
+    @GetMapping("/api/bilibili/status")
     public Map<String, Object> getLoginStatus() {
         return biliBiliService.getLoginStatus();
     }
 
-    @GetMapping("/-/check")
+    @GetMapping("/api/bilibili/check")
     public int checkLogin(String key) {
         return biliBiliService.checkLogin(key);
     }
 
-    @PostMapping("/cookie")
+    @PostMapping("/api/bilibili/cookie")
     public Map<String, Object> updateCookie(@RequestBody CookieData cookieData) {
         return biliBiliService.updateCookie(cookieData);
     }
 
-    @PostMapping("/login")
+    @PostMapping("/api/bilibili/login")
     public QrCode scanLogin() throws IOException {
         return biliBiliService.scanLogin();
     }

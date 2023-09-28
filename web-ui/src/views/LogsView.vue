@@ -20,7 +20,7 @@ const onTypeChange = () => {
 
 const load = (pageNumber: number) => {
   page.value = pageNumber
-  axios.get('/logs?type='+type.value+'&size=50&page=' + (pageNumber - 1)).then(({data}) => {
+  axios.get('/api/logs?type='+type.value+'&size=50&page=' + (pageNumber - 1)).then(({data}) => {
     logs.value = data.content
     total.value = data.totalElements
     count.value = data.numberOfElements
@@ -28,7 +28,7 @@ const load = (pageNumber: number) => {
 }
 
 const download = () => {
-  window.location.href = '/logs/download?t=' + new Date().getTime();
+  window.location.href = '/api/logs/download?t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
 }
 
 onMounted(() => {

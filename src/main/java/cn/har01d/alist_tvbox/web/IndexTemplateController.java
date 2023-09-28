@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/index-templates")
+@RequestMapping("/api/index-templates")
 
 public class IndexTemplateController {
     private final IndexTemplateService indexTemplateService;

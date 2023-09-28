@@ -127,7 +127,7 @@ const handleDelete = (data: any) => {
 
 const deleteAccount = () => {
   dialogVisible.value = false
-  axios.delete('/pikpak/accounts/' + form.value.id).then(() => {
+  axios.delete('/api/pikpak/accounts/' + form.value.id).then(() => {
     load()
   })
 }
@@ -137,7 +137,7 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
-  const url = updateAction.value ? '/pikpak/accounts/' + form.value.id : '/pikpak/accounts'
+  const url = updateAction.value ? '/api/pikpak/accounts/' + form.value.id : '/api/pikpak/accounts'
   axios.post(url, form.value).then(() => {
     formVisible.value = false
     if (accounts.value.length === 0) {
@@ -155,7 +155,7 @@ const handleConfirm = () => {
 }
 
 const load = () => {
-  axios.get('/pikpak/accounts').then(({data}) => {
+  axios.get('/api/pikpak/accounts').then(({data}) => {
     accounts.value = data
   })
 }

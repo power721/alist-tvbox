@@ -222,11 +222,11 @@ const handleDeleteBatch = () => {
 const deleteSub = () => {
   dialogVisible.value = false
   if (batch.value) {
-    axios.post('/delete-shares', multipleSelection.value.map(s => s.id)).then(() => {
+    axios.post('/api/delete-shares', multipleSelection.value.map(s => s.id)).then(() => {
       loadShares(page.value)
     })
   } else {
-    axios.delete('/shares/' + form.value.id).then(() => {
+    axios.delete('/api/shares/' + form.value.id).then(() => {
       loadShares(page.value)
     })
   }
@@ -251,7 +251,7 @@ const fullPath = (share: any) => {
 }
 
 const handleConfirm = () => {
-  axios.post('/shares/' + form.value.id, form.value).then(() => {
+  axios.post('/api/shares/' + form.value.id, form.value).then(() => {
     formVisible.value = false
     loadShares(page.value)
   })
@@ -273,22 +273,22 @@ const getShareLink = (shareInfo: ShareInfo) => {
 
 const loadShares = (value: number) => {
   page.value = value
-  axios.get('/shares?page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
+  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
     shares.value = data.content
     total.value = data.totalElements
   })
 }
 
 const reload = () => {
-  axios.post('/tacit0924').then()
+  axios.post('/api/tacit0924').then()
 }
 
 const submitUpload = () => {
-  axios.post('/import-shares', sharesDto.value).then()
+  axios.post('/api/import-shares', sharesDto.value).then()
 }
 
 const exportShares = () => {
-  window.location.href = '/export-shares?type=' + form.value.type + '&t=' + new Date().getTime();
+  window.location.href = '/api/export-shares?type=' + form.value.type + '&t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
 }
 
 const uploadSuccess = (response: any) => {

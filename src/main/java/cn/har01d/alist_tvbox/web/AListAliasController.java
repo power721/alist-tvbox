@@ -1,6 +1,5 @@
 package cn.har01d.alist_tvbox.web;
 
-
 import cn.har01d.alist_tvbox.dto.AListAliasDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
@@ -16,9 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-
 @RestController
-@RequestMapping("/alist/alias")
+@RequestMapping("/api/alist/alias")
 public class AListAliasController {
     private final AListAliasRepository repository;
     private final AListAliasService service;

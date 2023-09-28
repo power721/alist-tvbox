@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 
 @RestController
-@RequestMapping("/index")
+@RequestMapping("/api/index")
 
 public class IndexController {
     private final IndexService indexService;

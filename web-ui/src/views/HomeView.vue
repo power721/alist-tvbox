@@ -14,12 +14,12 @@ window.onresize = () => {
 
 onMounted(() => {
   if (store.xiaoya) {
-    axios.get('/sites/1').then(({data}) => {
+    axios.get('/api/sites/1').then(({data}) => {
       const re = /http:\/\/localhost:(\d+)/.exec(data.url)
       if (re) {
         url.value = 'http://' + window.location.hostname + ':' + re[1]
       } else if (data.url == 'http://localhost') {
-        axios.get('/alist/port').then(({data}) => {
+        axios.get('/api/alist/port').then(({data}) => {
           if (data) {
             url.value = 'http://' + window.location.hostname + ':' + data
           }

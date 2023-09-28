@@ -18,7 +18,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/subscriptions")
+@RequestMapping("/api/subscriptions")
 public class SubscriptionController {
     private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionService subscriptionService;
@@ -41,7 +41,7 @@ public class SubscriptionController {
             subscription.setSid(String.valueOf(subscription.getId()));
             Subscription other = subscriptionRepository.findBySid(subscription.getSid()).orElse(null);
             if (other != null && !other.getId().equals(subscription.getId())) {
-                throw new BadRequestException("订阅是必须的");
+                throw new BadRequestException("订阅ID重复");
             }
         }
         return subscriptionRepository.save(subscription);
