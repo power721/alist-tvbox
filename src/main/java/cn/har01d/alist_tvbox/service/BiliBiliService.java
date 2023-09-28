@@ -1267,7 +1267,8 @@ public class BiliBiliService {
                     return cookie;
                 }
 
-                Map map = restTemplate1.getForObject("https://agit.ai/fantaiying/fty/raw/branch/master/json/bilibili.json", Map.class);
+                String json = restTemplate1.getForObject("https://agit.ai/fantaiying/fty/raw/branch/master/json/bilibili.json", String.class);
+                Map map = objectMapper.readValue(json, Map.class);
                 cookie = (String) map.getOrDefault("cookie", "");
                 log.info("{}", cookie);
                 BiliBiliUtils.setDefaultCookie(cookie);
