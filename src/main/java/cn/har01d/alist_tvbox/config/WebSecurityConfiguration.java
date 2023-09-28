@@ -27,6 +27,7 @@ public class WebSecurityConfiguration {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeRequests(requests -> requests.requestMatchers(
+                                new AntPathRequestMatcher("/api/profiles"),
                                 new AntPathRequestMatcher("/api/accounts/login"),
                                 new AntPathRequestMatcher("/api/accounts/logout"),
                                 new AntPathRequestMatcher("/api/accounts/principal")
