@@ -288,7 +288,7 @@ const submitUpload = () => {
 }
 
 const exportShares = () => {
-  window.location.href = '/api/export-shares?type=' + form.value.type + '&t=' + new Date().getTime();
+  window.location.href = '/api/export-shares?type=' + form.value.type + '&t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
 }
 
 const uploadSuccess = (response: any) => {

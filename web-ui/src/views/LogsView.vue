@@ -28,7 +28,7 @@ const load = (pageNumber: number) => {
 }
 
 const download = () => {
-  window.location.href = '/api/logs/download?t=' + new Date().getTime();
+  window.location.href = '/api/logs/download?t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
 }
 
 onMounted(() => {
