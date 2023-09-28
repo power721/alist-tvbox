@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.util.List;
 
-
 @RestController
 public class AccountController {
     private final AccountRepository accountRepository;
@@ -72,5 +71,4 @@ public class AccountController {
     public Instant updateScheduleTime(@RequestBody Instant time) {
         return accountService.updateScheduleTime(time);
     }
-
 }

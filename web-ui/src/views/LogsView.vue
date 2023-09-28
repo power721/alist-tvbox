@@ -28,7 +28,7 @@ const load = (pageNumber: number) => {
 }
 
 const download = () => {
-  window.location.href = '/logs/download?t=' + new Date().getTime();
+  window.location.href = '/api/logs/download?t=' + new Date().getTime();
 }
 
 onMounted(() => {
