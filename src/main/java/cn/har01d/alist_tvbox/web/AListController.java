@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/alist")
+@RequestMapping("/api/alist")
 
 public class AListController {
     private final AListLocalService service;

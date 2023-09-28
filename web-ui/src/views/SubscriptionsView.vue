@@ -165,7 +165,7 @@ const handleDelete = (data: any) => {
 
 const deleteSub = () => {
   dialogVisible.value = false
-  axios.delete('/subscriptions/' + form.value.id).then(() => {
+  axios.delete('/api/subscriptions/' + form.value.id).then(() => {
     load()
   })
 }
@@ -175,14 +175,14 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
-  axios.post('/subscriptions', form.value).then(() => {
+  axios.post('/api/subscriptions', form.value).then(() => {
     formVisible.value = false
     load()
   })
 }
 
 const load = () => {
-  axios.get('/subscriptions').then(({data}) => {
+  axios.get('/api/subscriptions').then(({data}) => {
     subscriptions.value = data
   })
 }

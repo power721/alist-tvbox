@@ -258,7 +258,7 @@ const showDetails = (data: any) => {
 }
 
 const checkin = () => {
-  axios.post('/ali/accounts/' + form.value.id + '/checkin?force=' + forceCheckin.value).then(({data}) => {
+  axios.post('/api/ali/accounts/' + form.value.id + '/checkin?force=' + forceCheckin.value).then(({data}) => {
     form.value.checkinTime = data.checkinTime
     form.value.checkinDays = data.signInCount
     form.value.nickname = data.nickname
@@ -298,7 +298,7 @@ const handleDelete = (data: any) => {
 
 const deleteAccount = () => {
   dialogVisible.value = false
-  axios.delete('/ali/accounts/' + form.value.id).then(() => {
+  axios.delete('/api/ali/accounts/' + form.value.id).then(() => {
     load()
   })
 }
@@ -308,7 +308,7 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
-  const url = updateAction.value ? '/ali/accounts/' + form.value.id : '/ali/accounts'
+  const url = updateAction.value ? '/api/ali/accounts/' + form.value.id : '/api/ali/accounts'
   axios.post(url, form.value).then((response) => {
     detailVisible.value = false
     if (accounts.value.length === 0) {
@@ -332,7 +332,7 @@ const handleConfirm = () => {
 }
 
 const restartAList = () => {
-  axios.post('/alist/restart').then(() => {
+  axios.post('/api/alist/restart').then(() => {
     alistVisible.value = false
     ElMessage.success('AList重启中')
     setTimeout(() => router.push('/wait'), 1000)
@@ -340,7 +340,7 @@ const restartAList = () => {
 }
 
 const load = () => {
-  axios.get('/ali/accounts').then(({data}) => {
+  axios.get('/api/ali/accounts').then(({data}) => {
     accounts.value = data
   })
 }

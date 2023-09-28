@@ -15,7 +15,7 @@ import java.util.List;
 
 
 @RestController
-@RequestMapping("/pikpak")
+@RequestMapping("/api/pikpak")
 public class PikPakController {
     private final PikPakAccountRepository accountRepository;
     private final PikPakService pikPakService;

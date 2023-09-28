@@ -11,7 +11,7 @@ import java.util.Properties;
 @RestController
 public class SystemController {
 
-    @GetMapping("/system")
+    @GetMapping("/api/system")
     public SystemInfo getSystemInfo() throws UnknownHostException {
         Runtime runtime = Runtime.getRuntime();
         Properties props = System.getProperties();

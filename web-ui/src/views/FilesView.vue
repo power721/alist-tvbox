@@ -106,7 +106,7 @@ const handleAdd = () => {
 }
 
 const handleEdit = (file: any) => {
-  axios.get('/files/' + file.id).then(({data}) => {
+  axios.get('/api/files/' + file.id).then(({data}) => {
     dialogTitle.value = '更新配置文件 - ' + data.name
     updateAction.value = true
     form.value = data
@@ -121,7 +121,7 @@ const handleDelete = (data: any) => {
 
 const deleteSub = () => {
   dialogVisible.value = false
-  axios.delete('/files/' + form.value.id).then(() => {
+  axios.delete('/api/files/' + form.value.id).then(() => {
     load()
   })
 }
@@ -131,7 +131,7 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
-  const url = updateAction.value ? '/files/' + form.value.id : '/files'
+  const url = updateAction.value ? '/api/files/' + form.value.id : '/api/files'
   axios.post(url, form.value).then(() => {
     formVisible.value = false
     load()
@@ -139,7 +139,7 @@ const handleConfirm = () => {
 }
 
 const load = () => {
-  axios.get('/files').then(({data}) => {
+  axios.get('/api/files').then(({data}) => {
     files.value = data
   })
 }

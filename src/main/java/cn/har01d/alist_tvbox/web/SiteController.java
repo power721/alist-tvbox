@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.util.List;
 
 @RestController
-@RequestMapping("/sites")
+@RequestMapping("/api/sites")
 public class SiteController {
     private final SiteService siteService;
     private final IndexService indexService;

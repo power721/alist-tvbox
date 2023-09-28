@@ -25,57 +25,57 @@ public class ShareController {
         this.shareService = shareService;
     }
 
-    @GetMapping("/shares")
+    @GetMapping("/api/shares")
     public Page<Share> list(Pageable pageable) {
         return shareService.list(pageable);
     }
 
-    @PostMapping("/shares")
+    @PostMapping("/api/shares")
     public Share create(@RequestBody Share share) {
         return shareService.create(share);
     }
 
-    @PostMapping("/shares/{id}")
+    @PostMapping("/api/shares/{id}")
     public Share update(@PathVariable Integer id, @RequestBody Share share) {
         return shareService.update(id, share);
     }
 
-    @DeleteMapping("/shares/{id}")
+    @DeleteMapping("/api/shares/{id}")
     public void delete(@PathVariable Integer id) {
         shareService.deleteShare(id);
     }
 
-    @PostMapping("/delete-shares")
+    @PostMapping("/api/delete-shares")
     public void deleteShares(@RequestBody List<Integer> ids) {
         shareService.deleteShares(ids);
     }
 
-    @PostMapping("/tacit0924")
+    @PostMapping("/api/tacit0924")
     public void getTacit0924() {
         shareService.getTacit0924();
     }
 
-//    @GetMapping("/resources")
+//    @GetMapping("/api/resources")
 //    public Page<ShareInfo> listResources(Pageable pageable) {
 //        return shareService.listResources(pageable);
 //    }
 
-    @GetMapping("/storages")
+    @GetMapping("/api/storages")
     public Object listStorages(Pageable pageable) {
         return shareService.listStorages(pageable);
     }
 
-    @PostMapping("/import-shares")
+    @PostMapping("/api/import-shares")
     public int importShares(@RequestBody SharesDto sharesDto) {
         return shareService.importShares(sharesDto);
     }
 
-    @GetMapping("/export-shares")
+    @GetMapping("/api/export-shares")
     public String exportShare(HttpServletResponse response, int type) {
         return shareService.exportShare(response, type);
     }
 
-    @PostMapping("/open-token-url")
+    @PostMapping("/api/open-token-url")
     public void updateOpenTokenUrl(@RequestBody UrlDto dto) {
         shareService.updateOpenTokenUrl(dto.getUrl());
     }

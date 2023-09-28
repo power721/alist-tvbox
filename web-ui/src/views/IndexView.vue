@@ -162,7 +162,7 @@ const datetime = (row: any, column: any, cellValue: any) => {
 }
 
 const loadSites = () => {
-  axios.get('/sites').then(({data}) => {
+  axios.get('/api/sites').then(({data}) => {
     sites.value = data
     if (sites.value && sites.value.length > 0) {
       form.siteId = sites.value[0].id
@@ -171,14 +171,14 @@ const loadSites = () => {
 }
 
 const loadTasks = () => {
-  axios.get('/tasks?sort=id,desc&size=10&page=' + (currentPage.value - 1)).then(({data}) => {
+  axios.get('/api/tasks?sort=id,desc&size=10&page=' + (currentPage.value - 1)).then(({data}) => {
     tasks.value = data
     total.value = data.totalElements
   })
 }
 
 const loadTemplates = () => {
-  axios.get('/index-templates?sort=id,desc').then(({data}) => {
+  axios.get('/api/index-templates?sort=id,desc').then(({data}) => {
     templates.value = data.content
   })
 }
@@ -223,13 +223,13 @@ const saveTemplates = () => {
     siteId: form.siteId,
     data: JSON.stringify(data)
   }
-  axios.post('/index-templates', request).then(() => {
+  axios.post('/api/index-templates', request).then(() => {
     ElMessage.success('保持模板成功')
   })
 }
 
 const deleteTemplate = (data: any) => {
-  axios.delete('/index-templates/' + data.id).then(() => {
+  axios.delete('/api/index-templates/' + data.id).then(() => {
     loadTemplates()
   })
 }
@@ -245,13 +245,13 @@ const handleCurrentChange = (data: number) => {
 }
 
 const handleCancel = (data: any) => {
-  axios.post('/tasks/' + data.id + '/cancel').then(() => {
+  axios.post('/api/tasks/' + data.id + '/cancel').then(() => {
     loadTasks()
   })
 }
 
 const handleDelete = (data: any) => {
-  axios.delete('/tasks/' + data.id).then(() => {
+  axios.delete('/api/tasks/' + data.id).then(() => {
     loadTasks()
   })
 }
@@ -270,7 +270,7 @@ const handleForm = () => {
     stopWords: form.stopWords ? form.stopWords.split(/\s*,\s*/) : [],
     excludes: form.excludes ? form.excludes.split(/\s*,\s*/) : [],
   }
-  axios.post('/index', request).then(() => {
+  axios.post('/api/index', request).then(() => {
     currentPage.value = 1
     loadTasks()
   })

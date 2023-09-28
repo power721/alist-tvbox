@@ -367,7 +367,7 @@ const handleDelete = (data: any) => {
 
 const deleteSite = () => {
   dialogVisible.value = false
-  axios.delete('/nav/' + form.value.id).then(() => {
+  axios.delete('/api/nav/' + form.value.id).then(() => {
     load()
   })
 }
@@ -377,7 +377,7 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
-  const url = updateAction.value ? '/nav/' + form.value.id : '/nav'
+  const url = updateAction.value ? '/api/nav/' + form.value.id : '/api/nav'
   axios.post(url, form.value).then(() => {
     formVisible.value = false
     load()
@@ -386,34 +386,34 @@ const handleConfirm = () => {
 
 const handleSave = () => {
   const items = list.value.map(e => ({id: e.id, order: e.order, show: e.show, children: e.children}));
-  axios.put('/nav', {list: items}).then(() => {
+  axios.put('/api/nav', {list: items}).then(() => {
     ElMessage.success('保存成功')
     load()
   })
 }
 
 const updateBilibiliCookie = () => {
-  axios.post('/settings', {name: 'bilibili_cookie', value: bilibiliCookie.value}).then(() => {
+  axios.post('/api/settings', {name: 'bilibili_cookie', value: bilibiliCookie.value}).then(() => {
     ElMessage.success('更新成功')
     loadUser()
   })
 }
 
 const updateHeartbeat = () => {
-  axios.post('/settings', {name: 'bilibili_heartbeat', value: heartbeat.value + ''}).then(() => {
+  axios.post('/api/settings', {name: 'bilibili_heartbeat', value: heartbeat.value + ''}).then(() => {
     ElMessage.success('更新成功')
     loadUser()
   })
 }
 
 const updateSearchable = () => {
-  axios.post('/settings', {name: 'bilibili_searchable', value: searchable.value + ''}).then(() => {
+  axios.post('/api/settings', {name: 'bilibili_searchable', value: searchable.value + ''}).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateDash = () => {
-  axios.post('/settings', {name: 'bilibili_dash', value: dash.value + ''}).then(() => {
+  axios.post('/api/settings', {name: 'bilibili_dash', value: dash.value + ''}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -427,7 +427,7 @@ const updateFnval = () => {
     }
     num *= 2
   }
-  axios.post('/settings', {name: 'bilibili_fnval', value: val + ''}).then(() => {
+  axios.post('/api/settings', {name: 'bilibili_fnval', value: val + ''}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -436,7 +436,7 @@ const scanLogin = () => {
   base64QrCode.value = ''
   qrcodeKey.value = ''
   clearInterval(timer)
-  axios.post('/bilibili/login', null).then(({data}) => {
+  axios.post('/api/bilibili/login', null).then(({data}) => {
     base64QrCode.value = data.image
     qrcodeKey.value = data.qrcode_key
     loginVisible.value = true
@@ -454,7 +454,7 @@ const checkLogin = () => {
 
 const check = () => {
   if (count-- > 0) {
-    axios.get('/bilibili/-/check?key=' + qrcodeKey.value).then(({data}) => {
+    axios.get('/api/bilibili/check?key=' + qrcodeKey.value).then(({data}) => {
       if (data === 0) {
         success()
       } else if (data !== 1) {
@@ -496,31 +496,31 @@ const cancel = () => {
 }
 
 const getHeartbeat = () => {
-  axios.get('/settings/bilibili_heartbeat').then(({data}) => {
+  axios.get('/api/settings/bilibili_heartbeat').then(({data}) => {
     heartbeat.value = data.value === 'true'
   })
 }
 
 const getSearchable = () => {
-  axios.get('/settings/bilibili_searchable').then(({data}) => {
+  axios.get('/api/settings/bilibili_searchable').then(({data}) => {
     searchable.value = data.value !== 'false'
   })
 }
 
 const getDash = () => {
-  axios.get('/settings/bilibili_dash').then(({data}) => {
+  axios.get('/api/settings/bilibili_dash').then(({data}) => {
     dash.value = data.value === 'true'
   })
 }
 
 const getBilibiliCookie = () => {
-  axios.get('/settings/bilibili_cookie').then(({data}) => {
+  axios.get('/api/settings/bilibili_cookie').then(({data}) => {
     bilibiliCookie.value = data.value
   })
 }
 
 const getFnval = () => {
-  axios.get('/settings/bilibili_fnval').then(({data}) => {
+  axios.get('/api/settings/bilibili_fnval').then(({data}) => {
     let val = +data.value
     if (!val) {
       val = 2512
@@ -534,7 +534,7 @@ const getFnval = () => {
 }
 
 const load = () => {
-  return axios.get('/nav').then(({data}) => {
+  return axios.get('/api/nav').then(({data}) => {
     list.value = data
     list.value.sort((a, b) => a.order - b.order)
     changed.value = false
@@ -543,7 +543,7 @@ const load = () => {
 }
 
 const loadUser = () => {
-  axios.get('/bilibili/-/status').then(({data}) => {
+  axios.get('/api/bilibili/status').then(({data}) => {
     userInfo.value = data
   })
 }

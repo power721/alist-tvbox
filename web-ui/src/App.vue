@@ -27,13 +27,13 @@ const onModeChange = (value: boolean) => {
 
 onMounted(() => {
   showNotification.value = localStorage.getItem('notification2') != 'true'
-  axios.get("/profiles").then(({data}) => {
+  axios.get("/api/profiles").then(({data}) => {
     show.value = data.includes('xiaoya')
     store.xiaoya = data.includes('xiaoya')
     store.hostmode = data.includes('host')
     mounted.value = true
     if (show.value) {
-      axios.get('/alist/status').then(({data}) => {
+      axios.get('/api/alist/status').then(({data}) => {
         store.aListStatus = data
         show.value = show.value && data != 1
         if (data === 1) {

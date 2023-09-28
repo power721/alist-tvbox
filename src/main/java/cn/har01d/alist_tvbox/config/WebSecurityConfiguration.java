@@ -1,7 +1,6 @@
 package cn.har01d.alist_tvbox.config;
 
 import cn.har01d.alist_tvbox.auth.TokenFilter;
-import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -28,33 +27,12 @@ public class WebSecurityConfiguration {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeRequests(requests -> requests.requestMatchers(
-                                new AntPathRequestMatcher("/accounts/login"),
-                                new AntPathRequestMatcher("/accounts/logout")
+                                new AntPathRequestMatcher("/api/accounts/login"),
+                                new AntPathRequestMatcher("/api/accounts/logout"),
+                                new AntPathRequestMatcher("/api/accounts/principal")
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
-                        .requestMatchers(
-                                new AntPathRequestMatcher("/ali/accounts/**"),
-                                new AntPathRequestMatcher("/pikpak/accounts/**"),
-                                new AntPathRequestMatcher("/bilibili/-/**"),
-                                new AntPathRequestMatcher("/alist/**"),
-                                new AntPathRequestMatcher("/files/**"),
-                                new AntPathRequestMatcher("/sites/**"),
-                                new AntPathRequestMatcher("/shares/**"),
-                                new AntPathRequestMatcher("/storage/**"),
-                                new AntPathRequestMatcher("/resources/**"),
-                                new AntPathRequestMatcher("/subscriptions/**"),
-                                new AntPathRequestMatcher("/settings/**"),
-                                new AntPathRequestMatcher("/tasks/**"),
-                                new AntPathRequestMatcher("/nav/**"),
-                                new AntPathRequestMatcher("/logs/**"),
-                                new AntPathRequestMatcher("/meta/**"),
-                                new AntPathRequestMatcher("/index/**"),
-                                new AntPathRequestMatcher("/index-templates/**"),
-                                new AntPathRequestMatcher("/login"),
-                                new AntPathRequestMatcher("/system"),
-                                new AntPathRequestMatcher("/token"),
-                                new AntPathRequestMatcher("/export-shares")
-                        ).authenticated()
+                        .requestMatchers(new AntPathRequestMatcher("/api/**")).authenticated()
                         .requestMatchers(HttpMethod.POST).authenticated()
                         .requestMatchers(HttpMethod.PUT).authenticated()
                         .requestMatchers(HttpMethod.PATCH).authenticated()
