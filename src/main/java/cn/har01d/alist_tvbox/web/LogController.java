@@ -21,7 +21,7 @@ public class LogController {
         this.logsService = logsService;
     }
 
-    @GetMapping("")
+    @GetMapping
     public Page<String> logs(Pageable pageable, String type) throws IOException {
         return logsService.getLogs(pageable, type);
     }

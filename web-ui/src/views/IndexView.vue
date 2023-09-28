@@ -224,7 +224,7 @@ const saveTemplates = () => {
     data: JSON.stringify(data)
   }
   axios.post('/api/index-templates', request).then(() => {
-    ElMessage.success('保持模板成功')
+    ElMessage.success('保存模板成功')
   })
 }
 
