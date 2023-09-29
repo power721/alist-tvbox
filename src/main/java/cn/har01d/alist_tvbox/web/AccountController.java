@@ -52,7 +52,7 @@ public class AccountController {
         accountService.delete(id);
     }
 
-    @GetMapping("/api/ali/token/{id}")
+    @GetMapping("/ali/token/{id}")
     public String getAliToken(@PathVariable String id) {
         return accountService.getAliRefreshToken(id);
     }
