@@ -868,6 +868,9 @@ public class TvBoxService {
         if (isMediaFile(path)) {
             log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path);
             fsDetail = aListService.getFile(site, path);
+            if (fsDetail == null) {
+                throw new BadRequestException("找不到文件 " + path);
+            }
         } else {
             FsResponse fsResponse = aListService.listFiles(site, path, 1, 100);
             for (FsInfo fsInfo : fsResponse.getFiles()) {
@@ -882,13 +885,6 @@ public class TvBoxService {
             log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path + "/" + fsDetail.getName());
         }
         String url = fixHttp(fsDetail.getRawUrl());
-        if (url.contains("abnormal.png")) {
-            throw new IllegalStateException("阿里云盘账号异常");
-        } else if (url.contains("diskfull.png")) {
-            throw new IllegalStateException("阿里云盘空间不足");
-        } else if (url.contains(".png")) {
-            log.warn("play url: {}", url);
-        }
         Map<String, Object> result = new HashMap<>();
         result.put("parse", 0);
         result.put("playUrl", "");
