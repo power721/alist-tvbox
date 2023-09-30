@@ -87,8 +87,6 @@ EOF
   rm -f update.zip update.sql opentoken_url.txt
 fi
 
-sqlite3 /opt/alist/data/data.db 'delete from x_storages where driver="AList V3";'
-
 if [ ! -f version.txt ]; then
   echo "Failed to download version.txt file, the index file upgrade process has aborted"
 else
