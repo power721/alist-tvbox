@@ -325,7 +325,6 @@ const showIndex = (data: any) => {
   indexContent.value = []
   indexTotal.value = 0
   indexCount.value = 0
-  indexVisible.value = true
   loadIndexFile(1)
 }
 
@@ -335,6 +334,9 @@ const loadIndexFile = (pageNumber: number) => {
     indexContent.value = data.content
     indexTotal.value = data.totalElements
     indexCount.value = data.numberOfElements
+    indexVisible.value = true
+  }, () => {
+    indexVisible.value = false
   })
 }
 
