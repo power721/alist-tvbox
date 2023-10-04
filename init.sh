@@ -64,8 +64,7 @@ if [ -s /data/emby_server.txt ]; then
 	emby_server=$(head -n1 /data/emby_server.txt)
 	_docker_address=$(head -n1 /data/docker_address.txt)
 	sed -i "s#EMBY_SERVER#$emby_server#" /etc/nginx/http.d/emby.conf
-	sed -i "s#EMBY_SERVER#$emby_server#" /etc/nginx/http.d/emby.js
-	sed -i "s#_DOCKER_ADDRESS#$_docker_address#" /etc/nginx/http.d/emby.js
+	sed -i -e "s#EMBY_SERVER#$emby_server#" -e "s#_DOCKER_ADDRESS#$_docker_address#" /etc/nginx/http.d/emby.js
 fi
 
 if [ -s /data/infuse_api_key.txt ]; then
