@@ -15,6 +15,8 @@ init() {
   mv sou /www/cgi-bin/sou
   mv whatsnew /www/cgi-bin/whatsnew
   mv header.html /www/cgi-bin/header.html
+  mv emby.conf /etc/nginx/http.d/emby.conf
+  mv emby.js /etc/nginx/http.d/emby.js
 
   sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
 
@@ -43,6 +45,12 @@ init() {
 
 cat data/app_version
 date
+
+if [ ! -f /etc/nginx/http.d/emby.js ]; then
+  unzip -q /var/lib/data.zip -d /tmp
+  mv /tmp/emby.conf /etc/nginx/http.d/emby.conf
+  mv /tmp/emby.js /etc/nginx/http.d/emby.js
+fi
 
 if [ -f /opt/alist/data/data.db ]; then
   echo "已经初始化成功"

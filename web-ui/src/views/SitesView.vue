@@ -52,6 +52,7 @@
         <template #default="scope">
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">数据</el-button>
+          <el-button link type="primary" size="small" @click="showIndex(scope.row)"> 索引</el-button>
           <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
@@ -135,6 +136,28 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="indexVisible" title="索引数据" width="98%">
+      <div>
+        <div class="flex">
+          <el-pagination layout="prev, pager, next" :page-size="50" :current-page="indexPage" :total="indexTotal"
+                         @current-change="loadIndexFile"/>
+          <div>
+            <el-button type="primary" class="download" v-if="indexTotal" @click="downloadIndexFile">下载文件</el-button>
+          </div>
+        </div>
+        <div v-for="log of indexContent" v-html="log"></div>
+        <div v-if="indexCount >= 50">
+          <el-pagination layout="prev, pager, next" :page-size="50" :current-page="indexPage" :total="indexTotal"
+                         @current-change="loadIndexFile"/>
+        </div>
+      </div>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="indexVisible = false">关闭</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="dialogVisible" title="删除站点" width="30%">
       <p>是否删除站点 - {{ form.name }}</p>
       <p>{{ form.url }}</p>
@@ -172,6 +195,11 @@ const sites = ref([])
 const siteVisible = ref(false)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
+const indexVisible = ref(false)
+const indexContent = ref([])
+const indexPage = ref(1)
+const indexTotal = ref(0)
+const indexCount = ref(0)
 const form = ref({
   id: 0,
   name: '',
@@ -292,6 +320,28 @@ const load = () => {
   })
 }
 
+const showIndex = (data: any) => {
+  form.value = data
+  indexContent.value = []
+  indexTotal.value = 0
+  indexCount.value = 0
+  indexVisible.value = true
+  loadIndexFile(1)
+}
+
+const loadIndexFile = (pageNumber: number) => {
+  page.value = pageNumber
+  axios.get('/api/index-files?siteId='+form.value.id+'&size=50&page=' + (pageNumber - 1)).then(({data}) => {
+    indexContent.value = data.content
+    indexTotal.value = data.totalElements
+    indexCount.value = data.numberOfElements
+  })
+}
+
+const downloadIndexFile = () => {
+  window.location.href = '/api/index-files/download?siteId='+form.value.id+'&t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
+}
+
 onMounted(() => {
   load()
   axios.get('/token').then(({data}) => {
@@ -308,5 +358,12 @@ onMounted(() => {
 .json pre {
   height: 600px;
   overflow: scroll;
+}
+
+.flex {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 0 24px;
 }
 </style>

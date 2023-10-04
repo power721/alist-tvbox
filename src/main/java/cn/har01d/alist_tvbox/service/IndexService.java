@@ -479,15 +479,12 @@ public class IndexService {
             }
         }
 
-        if (hasFile && !context.contains(path)) {
+        if (hasFile) {
             context.write(path);
         }
 
         for (String name : files) {
             String newPath = fixPath(path + "/" + name);
-            if (context.contains(newPath)) {
-                continue;
-            }
             context.write(newPath);
         }
 

@@ -42,9 +42,10 @@ public class IndexContext {
     }
 
     public void write(String path) throws IOException {
-        set.add(path);
-        stats.indexed++;
-        writer.write(path + "\n");
+        if (set.add(path)) {
+            stats.indexed++;
+            writer.write(path + "\n");
+        }
     }
 
     @Data
