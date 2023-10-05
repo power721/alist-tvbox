@@ -109,7 +109,8 @@ public class BiliBiliService {
     private static final String INFO_API = "https://api.bilibili.com/x/web-interface/view?bvid=";
     private static final String HOT_API = "https://api.bilibili.com/x/web-interface/ranking/v2?type=%s&rid=%d";
     private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
-    private static final String SEASON_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
+    private static final String SEASON_RANK_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
+    private static final String SEASON_API = "https://api.bilibili.com/pgc/season/index/result?st=1&style_id=%s&season_version=-1&spoken_language_type=-1&area=-1&is_finish=%s&copyright=-1&season_status=-1&season_month=-1&year=-1&order=0&sort=0&page=%d&season_type=%s&pagesize=30&type=1";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s&view_at=%s";
     private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
     private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
@@ -187,6 +188,54 @@ public class BiliBiliService {
             new FilterValue("最多播放", "click"),
             new FilterValue("最新发布", "pubdate"),
             new FilterValue("最多收藏️", "stow")
+    );
+
+    private final List<FilterValue> filters7 = Arrays.asList(
+            new FilterValue("全部", "-1"),
+            new FilterValue("原创", "10010"),
+            new FilterValue("漫画改", "10011"),
+            new FilterValue("小说改", "10012"),
+            new FilterValue("游戏改", "10013"),
+            new FilterValue("特摄", "10102"),
+            new FilterValue("布袋戏", "10015"),
+            new FilterValue("热血", "10016"),
+            new FilterValue("穿越", "10017"),
+            new FilterValue("奇幻", "10018"),
+            new FilterValue("战斗", "10020"),
+            new FilterValue("搞笑", "10021"),
+            new FilterValue("日常", "10022"),
+            new FilterValue("科幻", "10023"),
+            new FilterValue("萌系", "10024"),
+            new FilterValue("治愈", "10025"),
+            new FilterValue("校园", "10026"),
+            new FilterValue("少儿", "10027"),
+            new FilterValue("泡面", "10028"),
+            new FilterValue("恋爱", "10029"),
+            new FilterValue("少女", "10030"),
+            new FilterValue("魔法", "10031"),
+            new FilterValue("冒险", "10032"),
+            new FilterValue("历史", "10033"),
+            new FilterValue("架空", "10034"),
+            new FilterValue("机战", "10035"),
+            new FilterValue("神魔", "10036"),
+            new FilterValue("声控", "10037"),
+            new FilterValue("运动", "10038"),
+            new FilterValue("励志", "10039"),
+            new FilterValue("音乐", "10040"),
+            new FilterValue("推理", "10041"),
+            new FilterValue("社团", "10042"),
+            new FilterValue("智斗", "10043"),
+            new FilterValue("催泪", "10044"),
+            new FilterValue("美食", "10045"),
+            new FilterValue("偶像", "10046"),
+            new FilterValue("乙女", "10047"),
+            new FilterValue("职场", "10048")
+    );
+
+    private final List<FilterValue> filters8 = Arrays.asList(
+            new FilterValue("全部", "-1"),
+            new FilterValue("完结", "1"),
+            new FilterValue("连载", "0")
     );
 
     private final SettingRepository settingRepository;
@@ -356,6 +405,10 @@ public class BiliBiliService {
                     }
                     if (value.equals("channel$0")) {
                         List<Filter> filters = List.of(new Filter("type", "分类", filters5));
+                        result.getFilters().put(category.getType_id(), filters);
+                    }
+                    if (value.equals("index$1")) {
+                        List<Filter> filters = List.of(new Filter("type", "分类", filters7), new Filter("status", "状态", filters8));
                         result.getFilters().put(category.getType_id(), filters);
                     }
                     result.getCategories().add(category);
@@ -743,12 +796,29 @@ public class BiliBiliService {
         return hotResponse.getData().getList();
     }
 
+    public MovieList getSeasonResult(String type, String category, String status, int page) {
+        MovieList result = new MovieList();
+        String url = String.format(SEASON_API, category, status, page, type);
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        ResponseEntity<BiliBiliSeasonResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSeasonResponse.class);
+        BiliBiliSeasonResponse seasonResponse = response.getBody();
+        for (BiliBiliSeasonInfo info : seasonResponse.getData().getList()) {
+            MovieDetail movieDetail = getMovieDetail(info);
+            result.getList().add(movieDetail);
+        }
+        result.setLimit(result.getList().size());
+        result.setTotal(seasonResponse.getData().getTotal());
+        result.setPagecount(result.getTotal() / 30 + 1);
+        log.debug("getSeasonResult: {} {}", url, result);
+        return result;
+    }
+
     public MovieList getSeasonRank(int type, int page) {
         MovieList result = new MovieList();
         if (page > 1) {
             return result;
         }
-        String url = String.format(SEASON_API, type);
+        String url = String.format(SEASON_RANK_API, type);
         HttpEntity<Void> entity = buildHttpEntity(null);
         ResponseEntity<BiliBiliSeasonResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSeasonResponse.class);
         BiliBiliSeasonResponse hotResponse = response.getBody();
@@ -1325,7 +1395,7 @@ public class BiliBiliService {
         return bvid;
     }
 
-    public MovieList getMovieList(String tid, String category, String type, String sort, String duration, int page) {
+    public MovieList getMovieList(String tid, String category, String type, String status, String sort, String duration, int page) {
         if (tid.startsWith("search:")) {
             String[] parts = tid.split(":");
             return search(parts[1], sort, duration, page);
@@ -1352,6 +1422,8 @@ public class BiliBiliService {
             list = getHotRank("all", rid, page);
         } else if ("season".equals(parts[0])) {
             return getSeasonRank(Integer.parseInt(parts[1]), page);
+        } else if ("index".equals(parts[0])) {
+            return getSeasonResult(parts[1], type, status, page);
         } else if ("pop".equals(parts[0])) {
             return getPopular(page);
         } else if ("history".equals(parts[0])) {

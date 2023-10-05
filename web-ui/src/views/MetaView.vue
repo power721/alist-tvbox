@@ -42,7 +42,7 @@
                      @current-change="load"/>
     </div>
 
-    <el-dialog v-model="formVisible" :title="'编辑'+form.id" width="60%">
+    <el-dialog v-model="formVisible" :title="'编辑 '+form.id" width="60%">
       <el-form label-width="140px">
         <el-form-item label="路径" required>
           <el-input v-model="form.path" autocomplete="off" readonly/>

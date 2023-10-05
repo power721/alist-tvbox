@@ -41,12 +41,19 @@ public class NavigationService {
             loadBiliBiliCategory();
         } else {
             addRecommend();
+            addIndex();
         }
     }
 
     private void addRecommend() {
         if (navigationRepository.findAll().stream().filter(e -> "recommend$0".equals(e.getValue())).findAny().isEmpty()) {
             navigationRepository.save(new Navigation("推荐", "recommend$0", 1, true, true, 1));
+        }
+    }
+
+    private void addIndex() {
+        if (navigationRepository.findAll().stream().filter(e -> "index$1".equals(e.getValue())).findAny().isEmpty()) {
+            navigationRepository.save(new Navigation("番剧索引", "index$1", 1, true, true, 20));
         }
     }
 
@@ -107,7 +114,8 @@ public class NavigationService {
         list.add(new Navigation(id++, "鬼畜", "119", 1, true, true, order++));
 
         list.add(new Navigation(id++, "原创", "origin$0", 1, false, true, order++));
-        list.add(new Navigation(id++, "新人", "rookie$0", 1, false, true, order));
+        list.add(new Navigation(id++, "新人", "rookie$0", 1, false, true, order++));
+        list.add(new Navigation(id++, "番剧索引", "index$1", 1, true, true, 20));
 
         navigationRepository.saveAll(list);
         list = new ArrayList<>();

@@ -8,4 +8,5 @@ import java.util.List;
 @Data
 public class BiliBiliSeasonInfoList {
     private List<BiliBiliSeasonInfo> list = new ArrayList<>();
+    private int total;
 }

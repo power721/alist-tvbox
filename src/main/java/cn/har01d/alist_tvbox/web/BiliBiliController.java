@@ -37,18 +37,20 @@ public class BiliBiliController {
     public String api(String t, String f, String ids, String wd,
                       @RequestParam(required = false, defaultValue = "") String category,
                       @RequestParam(required = false, defaultValue = "") String type,
+                      @RequestParam(required = false, defaultValue = "") String status,
                       @RequestParam(required = false, defaultValue = "") String sort,
                       @RequestParam(required = false, defaultValue = "0") String duration,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request,
                       HttpServletResponse response) throws IOException {
-        return api("", t, f, ids, wd, category, type, sort, duration, pg, request, response);
+        return api("", t, f, ids, wd, category, type, status, sort, duration, pg, request, response);
     }
 
     @GetMapping("/bilibili/{token}")
     public String api(@PathVariable String token, String t, String f, String ids, String wd,
                       @RequestParam(required = false, defaultValue = "") String category,
                       @RequestParam(required = false, defaultValue = "") String type,
+                      @RequestParam(required = false, defaultValue = "") String status,
                       @RequestParam(required = false, defaultValue = "") String sort,
                       @RequestParam(required = false, defaultValue = "0") String duration,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
@@ -60,7 +62,7 @@ public class BiliBiliController {
         response.setContentType("application/json");
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        log.info("path: {}  folder: {}  category: {}  type: {} keyword: {}  filter: {}  sort: {} duration: {}  page: {}", ids, t, category, type, wd, f, sort, duration, pg);
+        log.info("path: {}  folder: {}  category: {}  type: {} keyword: {}  filter: {}  status: {}  sort: {} duration: {}  page: {}", ids, t, category, type, wd, f, status, sort, duration, pg);
         Object result;
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
@@ -69,7 +71,7 @@ public class BiliBiliController {
                 result = biliBiliService.getDetail(ids);
             }
         } else if (t != null && !t.isEmpty()) {
-            result = biliBiliService.getMovieList(t, category, type, sort, duration, pg);
+            result = biliBiliService.getMovieList(t, category, type, status, sort, duration, pg);
         } else if (wd != null && !wd.isEmpty()) {
             result = biliBiliService.search(wd, sort, duration, 0);
         } else {
