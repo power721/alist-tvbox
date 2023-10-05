@@ -10,7 +10,7 @@ import java.util.Set;
 @Data
 public class IndexRequest {
     private Integer siteId;
-    private String indexName = "index";
+    private String indexName = "custom_index";
     private boolean excludeExternal;
     private boolean incremental;
     private boolean compress;

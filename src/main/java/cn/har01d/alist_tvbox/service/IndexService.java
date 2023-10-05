@@ -5,6 +5,8 @@ import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
 import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.IndexResponse;
+import cn.har01d.alist_tvbox.entity.IndexTemplate;
+import cn.har01d.alist_tvbox.entity.IndexTemplateRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
@@ -13,6 +15,7 @@ import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
 import cn.har01d.alist_tvbox.util.Constants;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
@@ -40,6 +43,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -62,7 +66,9 @@ public class IndexService {
     private final TaskService taskService;
     private final AppProperties appProperties;
     private final SettingRepository settingRepository;
+    private final IndexTemplateRepository indexTemplateRepository;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     public IndexService(AListService aListService,
@@ -70,16 +76,20 @@ public class IndexService {
                         TaskService taskService,
                         AppProperties appProperties,
                         SettingRepository settingRepository,
-                        RestTemplateBuilder builder) {
+                        IndexTemplateRepository indexTemplateRepository,
+                        RestTemplateBuilder builder,
+                        ObjectMapper objectMapper) {
         this.aListService = aListService;
         this.siteService = siteService;
         this.taskService = taskService;
         this.appProperties = appProperties;
         this.settingRepository = settingRepository;
+        this.indexTemplateRepository = indexTemplateRepository;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT1)
                 .build();
+        this.objectMapper = objectMapper;
         updateIndexFile();
     }
 
@@ -299,6 +309,24 @@ public class IndexService {
         return name;
     }
 
+    @Scheduled(cron = "0 0 10,12,14,16,18-23 * * ?")
+    public void autoIndex() {
+        String hour = String.valueOf(LocalTime.now().getHour());
+        List<IndexTemplate> list = indexTemplateRepository.findByScheduledTrue();
+        log.debug("auto index: {}", list.size());
+        for (IndexTemplate template : list) {
+            if (template.getScheduleTime() != null && template.getScheduleTime().contains(hour)) {
+                try {
+                    log.info("auto index for template: {}", template.getId());
+                    IndexRequest indexRequest = objectMapper.readValue(template.getData(), IndexRequest.class);
+                    index(indexRequest);
+                } catch (Exception e) {
+                    log.error("start index failed: {}", template.getId(), e);
+                }
+            }
+        }
+    }
+
     public IndexResponse index(IndexRequest indexRequest) {
         cn.har01d.alist_tvbox.entity.Site site = siteService.getById(indexRequest.getSiteId());
         Task task = taskService.addIndexTask(site);
@@ -439,6 +467,9 @@ public class IndexService {
         for (FsInfo fsInfo : fsResponse.getFiles()) {
             try {
                 if (fsInfo.getType() == 1) { // folder
+                    if (fsInfo.getName().equals("字幕")) {
+                        continue;
+                    }
                     String newPath = fixPath(path + "/" + fsInfo.getName());
                     log.debug("new path: {}", newPath);
                     if (exclude(context.getExcludes(), newPath)) {

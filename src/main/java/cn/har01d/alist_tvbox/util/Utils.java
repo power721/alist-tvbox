@@ -58,6 +58,9 @@ public final class Utils {
             }
         }
 
+        if (pretty && "《".equals(ans)) {
+            return "";
+        }
         return ans;
     }
 

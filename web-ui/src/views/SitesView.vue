@@ -329,7 +329,7 @@ const showIndex = (data: any) => {
 }
 
 const loadIndexFile = (pageNumber: number) => {
-  page.value = pageNumber
+  indexPage.value = pageNumber
   axios.get('/api/index-files?siteId='+form.value.id+'&size=50&page=' + (pageNumber - 1)).then(({data}) => {
     indexContent.value = data.content
     indexTotal.value = data.totalElements

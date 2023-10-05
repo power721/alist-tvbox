@@ -44,6 +44,8 @@ public class IndexTemplateService {
         template.setName(dto.getName());
         template.setData(dto.getData());
         template.setSleep(dto.getSleep());
+        template.setScheduled(dto.isScheduled());
+        template.setScheduleTime(dto.getScheduleTime());
         template.setCreatedTime(Instant.now());
         return indexTemplateRepository.save(template);
     }
@@ -60,6 +62,8 @@ public class IndexTemplateService {
         template.setSiteId(dto.getSiteId());
         template.setName(dto.getName());
         template.setData(dto.getData());
+        template.setScheduled(dto.isScheduled());
+        template.setScheduleTime(dto.getScheduleTime());
         template.setCreatedTime(Instant.now());
         return indexTemplateRepository.save(template);
     }

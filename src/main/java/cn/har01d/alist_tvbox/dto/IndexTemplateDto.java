@@ -7,6 +7,7 @@ public class IndexTemplateDto {
     private Integer siteId;
     private String name;
     private String data;
-    private boolean includeFiles;
+    private boolean scheduled;
+    private String scheduleTime;
     private int sleep = 2000;
 }

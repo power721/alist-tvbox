@@ -31,7 +31,8 @@ public class IndexTemplate {
     private String data;
     private Integer sleep;
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
-    private boolean includeFiles;
+    private boolean scheduled;
+    private String scheduleTime;
     private Instant createdTime;
 
     @Override
