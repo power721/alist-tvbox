@@ -4,10 +4,10 @@ import lombok.Data;
 
 @Data
 public class IndexTemplateDto {
-    private Integer siteId;
-    private String name;
+    private Integer siteId = 1;
+    private String name = "custom_index";
     private String data;
     private boolean scheduled;
-    private String scheduleTime;
+    private String scheduleTime = "";
     private int sleep = 2000;
 }

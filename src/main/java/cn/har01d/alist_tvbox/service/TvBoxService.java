@@ -371,6 +371,7 @@ public class TvBoxService {
                 }
             }
 
+            list = list.stream().distinct().toList();
             for (MovieDetail movie : list) {
                 if (movie.getVod_pic() != null && movie.getVod_pic().contains(".doubanio.com/")) {
                     fixCover(movie);
