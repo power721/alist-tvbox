@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.FilterDto;
 import cn.har01d.alist_tvbox.dto.bili.CookieData;
 import cn.har01d.alist_tvbox.dto.bili.QrCode;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
@@ -34,25 +35,17 @@ public class BiliBiliController {
     }
 
     @GetMapping("/bilibili")
-    public String api(String t, String f, String ids, String wd,
-                      @RequestParam(required = false, defaultValue = "") String category,
-                      @RequestParam(required = false, defaultValue = "") String type,
-                      @RequestParam(required = false, defaultValue = "") String status,
-                      @RequestParam(required = false, defaultValue = "") String sort,
-                      @RequestParam(required = false, defaultValue = "0") String duration,
+    public String api(String t, String ids, String wd,
+                      FilterDto filter,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request,
                       HttpServletResponse response) throws IOException {
-        return api("", t, f, ids, wd, category, type, status, sort, duration, pg, request, response);
+        return api("", t, ids, wd, filter, pg, request, response);
     }
 
     @GetMapping("/bilibili/{token}")
-    public String api(@PathVariable String token, String t, String f, String ids, String wd,
-                      @RequestParam(required = false, defaultValue = "") String category,
-                      @RequestParam(required = false, defaultValue = "") String type,
-                      @RequestParam(required = false, defaultValue = "") String status,
-                      @RequestParam(required = false, defaultValue = "") String sort,
-                      @RequestParam(required = false, defaultValue = "0") String duration,
+    public String api(@PathVariable String token, String t, String ids, String wd,
+                      FilterDto filter,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request,
                       HttpServletResponse response) throws IOException {
@@ -62,7 +55,7 @@ public class BiliBiliController {
         response.setContentType("application/json");
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        log.info("path: {}  folder: {}  category: {}  type: {} keyword: {}  filter: {}  status: {}  sort: {} duration: {}  page: {}", ids, t, category, type, wd, f, status, sort, duration, pg);
+        log.info("path: {}  folder: {}  keyword: {}  filter: {} page: {}", ids, t, wd, filter, pg);
         Object result;
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
@@ -71,9 +64,9 @@ public class BiliBiliController {
                 result = biliBiliService.getDetail(ids);
             }
         } else if (t != null && !t.isEmpty()) {
-            result = biliBiliService.getMovieList(t, category, type, status, sort, duration, pg);
+            result = biliBiliService.getMovieList(t, filter, pg);
         } else if (wd != null && !wd.isEmpty()) {
-            result = biliBiliService.search(wd, sort, duration, 0);
+            result = biliBiliService.search(wd, filter.getSort(), filter.getDuration(), 0);
         } else {
             result = biliBiliService.getCategoryList();
         }

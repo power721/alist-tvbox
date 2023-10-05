@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.util;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -104,6 +105,10 @@ public final class Utils {
     }
 
     public static String encodeUrl(String value) {
+        if (StringUtils.isBlank(value)) {
+            return "";
+        }
+
         try {
             return URLEncoder.encode(value, StandardCharsets.UTF_8.toString());
         } catch (Exception e) {

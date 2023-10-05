@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.FilterDto;
 import cn.har01d.alist_tvbox.dto.NavigationDto;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelItem;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelListResponse;
@@ -110,7 +111,7 @@ public class BiliBiliService {
     private static final String HOT_API = "https://api.bilibili.com/x/web-interface/ranking/v2?type=%s&rid=%d";
     private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
     private static final String SEASON_RANK_API = "https://api.bilibili.com/pgc/season/rank/web/list?day=3&season_type=%d";
-    private static final String SEASON_API = "https://api.bilibili.com/pgc/season/index/result?st=1&style_id=%s&season_version=-1&spoken_language_type=-1&area=-1&is_finish=%s&copyright=-1&season_status=-1&season_month=-1&year=-1&order=0&sort=0&page=%d&season_type=%s&pagesize=30&type=1";
+    private static final String SEASON_API = "https://api.bilibili.com/pgc/season/index/result?st=1&style_id=%s&season_version=-1&spoken_language_type=-1&area=-1&is_finish=%s&copyright=-1&season_status=-1&season_month=-1&year=%s&order=0&sort=0&page=%d&season_type=%s&pagesize=30&type=1";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s&view_at=%s";
     private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
     private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
@@ -233,6 +234,25 @@ public class BiliBiliService {
     );
 
     private final List<FilterValue> filters8 = Arrays.asList(
+            new FilterValue("全部", "-1"),
+            new FilterValue("2023", Utils.encodeUrl("[2023,2024)")),
+            new FilterValue("2022", Utils.encodeUrl("[2022,2023)")),
+            new FilterValue("2021", Utils.encodeUrl("[2021,2022)")),
+            new FilterValue("2020", Utils.encodeUrl("[2020,2021)")),
+            new FilterValue("2019", Utils.encodeUrl("[2019,2020)")),
+            new FilterValue("2018", Utils.encodeUrl("[2018,2019)")),
+            new FilterValue("2017", Utils.encodeUrl("[2017,2018)")),
+            new FilterValue("2016", Utils.encodeUrl("[2016,2017)")),
+            new FilterValue("2015", Utils.encodeUrl("[2015,2016)")),
+            new FilterValue("2010-2014", Utils.encodeUrl("[2010,2015)")),
+            new FilterValue("2005-2009", Utils.encodeUrl("[2005,2010)")),
+            new FilterValue("2000-2004", Utils.encodeUrl("[2000,2005)")),
+            new FilterValue("90年代", Utils.encodeUrl("[1990,2000)")),
+            new FilterValue("80年代", Utils.encodeUrl("[1980,1990)")),
+            new FilterValue("更早", Utils.encodeUrl("[,1980)"))
+    );
+
+    private final List<FilterValue> filters9 = Arrays.asList(
             new FilterValue("全部", "-1"),
             new FilterValue("完结", "1"),
             new FilterValue("连载", "0")
@@ -408,7 +428,7 @@ public class BiliBiliService {
                         result.getFilters().put(category.getType_id(), filters);
                     }
                     if (value.equals("index$1")) {
-                        List<Filter> filters = List.of(new Filter("type", "分类", filters7), new Filter("status", "状态", filters8));
+                        List<Filter> filters = List.of(new Filter("type", "风格", filters7), new Filter("year", "年份", filters8), new Filter("status", "状态", filters9));
                         result.getFilters().put(category.getType_id(), filters);
                     }
                     result.getCategories().add(category);
@@ -796,9 +816,9 @@ public class BiliBiliService {
         return hotResponse.getData().getList();
     }
 
-    public MovieList getSeasonResult(String type, String category, String status, int page) {
+    public MovieList getSeasonResult(String type, FilterDto filter, int page) {
         MovieList result = new MovieList();
-        String url = String.format(SEASON_API, category, status, page, type);
+        String url = String.format(SEASON_API, filter.getType(), filter.getStatus(), filter.getYear(), page, type);
         HttpEntity<Void> entity = buildHttpEntity(null);
         ResponseEntity<BiliBiliSeasonResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSeasonResponse.class);
         BiliBiliSeasonResponse seasonResponse = response.getBody();
@@ -1395,20 +1415,20 @@ public class BiliBiliService {
         return bvid;
     }
 
-    public MovieList getMovieList(String tid, String category, String type, String status, String sort, String duration, int page) {
+    public MovieList getMovieList(String tid, FilterDto filter, int page) {
         if (tid.startsWith("search:")) {
             String[] parts = tid.split(":");
-            return search(parts[1], sort, duration, page);
+            return search(parts[1], filter.getSort(), filter.getDuration(), page);
         } else if (tid.startsWith("channel:")) {
             String[] parts = tid.split(":");
-            return getChannel(parts[1], sort, page);
+            return getChannel(parts[1], filter.getSort(), page);
         } else if (tid.startsWith("up:")) {
             String[] parts = tid.split(":");
-            return getUpMedia(parts[1], sort, page);
+            return getUpMedia(parts[1], filter.getSort(), page);
         }
 
-        if (StringUtils.isNotBlank(category)) {
-            return getMovieListByType(category, type, page);
+        if (StringUtils.isNotBlank(filter.getCategory())) {
+            return getMovieListByType(filter.getCategory(), filter.getType(), page);
         }
 
         String[] parts = tid.split("\\$");
@@ -1416,22 +1436,22 @@ public class BiliBiliService {
         List<BiliBiliInfo> list;
         if (parts.length == 1) {
             int rid = Integer.parseInt(tid);
-            if (rid > 0 && "".equals(type)) {
+            if (rid > 0 && "".equals(filter.getType())) {
                 return getRegion(tid, page);
             }
             list = getHotRank("all", rid, page);
         } else if ("season".equals(parts[0])) {
             return getSeasonRank(Integer.parseInt(parts[1]), page);
         } else if ("index".equals(parts[0])) {
-            return getSeasonResult(parts[1], type, status, page);
+            return getSeasonResult(parts[1], filter, page);
         } else if ("pop".equals(parts[0])) {
             return getPopular(page);
         } else if ("history".equals(parts[0])) {
             return getHistory(page);
         } else if ("fav".equals(parts[0])) {
-            return getFavList(tid, type, sort, page);
+            return getFavList(tid, filter.getType(), filter.getSort(), page);
         } else if ("channel".equals(parts[0])) {
-            return getChannels(type, page);
+            return getChannels(filter.getType(), page);
         } else if ("feed".equals(parts[0])) {
             return getFeeds(page);
         } else if ("recommend".equals(parts[0])) {
