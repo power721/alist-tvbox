@@ -11,6 +11,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -31,6 +33,21 @@ public class DoubanController {
             return metaRepository.findByPathContains(q, pageable).map(MetaDto::new);
         }
         return metaRepository.findAll(pageable).map(MetaDto::new);
+    }
+
+    @PostMapping("/api/meta")
+    public boolean addMeta(@RequestBody MetaDto dto) {
+        return service.addMeta(dto);
+    }
+
+    @PostMapping("/api/meta/{id}/movie")
+    public boolean updateMetaMovie(@PathVariable Integer id, Integer movieId) {
+        return service.updateMetaMovie(id, movieId);
+    }
+
+    @PostMapping("/api/meta/{id}/scrape")
+    public boolean scrape(@PathVariable Integer id, String name) {
+        return service.scrape(id, name);
     }
 
     @DeleteMapping("/api/meta/{id}")

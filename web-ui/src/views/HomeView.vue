@@ -27,6 +27,7 @@ onMounted(() => {
       } else {
         url.value = data.url
       }
+      store.baseUrl = url.value
       console.log('load AList ' + url.value)
     })
   }

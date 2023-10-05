@@ -442,7 +442,7 @@ public class IndexService {
     private void index(IndexContext context, String path, int depth) throws IOException {
         log.debug("path: {}  depth: {}  context: {}", path, depth, context);
         if ((context.getMaxDepth() > 0 && depth == context.getMaxDepth()) || isCancelled(context)) {
-            log.debug("exit");
+            log.debug("exit {}", depth);
             return;
         }
 

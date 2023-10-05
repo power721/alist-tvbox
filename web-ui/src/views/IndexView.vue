@@ -97,10 +97,10 @@
 
     <el-dialog v-model="settingVisible" title="模板设置">
         <el-form :model="form" :label-width="labelWidth">
-          <el-form-item label="定时更新？">
+          <el-form-item label="定时索引？">
             <el-switch v-model="form.scheduled"/>
           </el-form-item>
-          <el-form-item label="更新时间(小时)">
+          <el-form-item label="索引时间(小时)">
           <el-checkbox-group v-model="timeList" :disabled="!form.scheduled">
             <el-checkbox label="10" />
             <el-checkbox label="12" />
@@ -129,7 +129,7 @@
         <el-table-column prop="id" label="ID" sortable width="70"/>
         <el-table-column prop="name" label="名称" sortable width="120"/>
         <el-table-column prop="siteId" label="站点" sortable width="80"/>
-        <el-table-column prop="scheduled" label="定时更新" width="90">
+        <el-table-column prop="scheduled" label="定时索引?" width="90">
           <template #default="scope">
             <el-icon v-if="scope.row.scheduled">
               <Check/>

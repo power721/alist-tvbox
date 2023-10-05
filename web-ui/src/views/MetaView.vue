@@ -7,6 +7,7 @@
         搜索
       </el-button>
       <el-button @click="refresh">刷新</el-button>
+      <el-button type="primary" @click="addMeta">添加</el-button>
     </el-row>
     <div class="space"></div>
 
@@ -20,11 +21,18 @@
           </a>
         </template>
       </el-table-column>
-      <el-table-column prop="path" label="路径"/>
+      <el-table-column prop="path" label="路径">
+        <template #default="scope">
+          <a :href="url + scope.row.path" target="_blank">
+            {{scope.row.path}}
+          </a>
+        </template>
+      </el-table-column>
       <el-table-column prop="year" label="年份" width="100"/>
       <el-table-column prop="score" label="评分" width="100"/>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
+          <el-button type="primary" size="small" @click="editMeta(scope.row)">编辑</el-button>
           <el-button type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
@@ -33,6 +41,51 @@
       <el-pagination layout="total, prev, pager, next" :current-page="page" :page-size="size" :total="total"
                      @current-change="load"/>
     </div>
+
+    <el-dialog v-model="formVisible" :title="'编辑'+form.id" width="60%">
+      <el-form label-width="140px">
+        <el-form-item label="路径" required>
+          <el-input v-model="form.path" autocomplete="off" readonly/>
+        </el-form-item>
+        <el-form-item label="豆瓣ID" required>
+          <el-input v-model="form.movieId" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateMeta">更新</el-button>
+        </el-form-item>
+        <el-form-item label="名称" required>
+          <el-input v-model="form.name" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="搜索">
+          <a :href="'https://search.douban.com/movie/subject_search?search_text='+form.name" target="_blank">{{form.name}}</a>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="scrape">刮削</el-button>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="formVisible=false">取消</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="addVisible" title="添加电影数据" width="60%">
+      <el-form label-width="140px">
+        <el-form-item label="路径" required>
+          <el-input v-model="form.path" autocomplete="off" readonly/>
+        </el-form-item>
+        <el-form-item label="豆瓣ID" required>
+          <el-input v-model="form.movieId" autocomplete="off"/>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="addVisible=false">取消</el-button>
+        <el-button type="primary" @click="saveMeta">保存</el-button>
+      </span>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="dialogVisible" title="删除电影数据" width="30%">
       <p>是否删除电影数据 - {{ form.name }}</p>
@@ -50,13 +103,18 @@
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
 import axios from "axios"
+import {ElMessage} from "element-plus";
+import {store} from "@/services/store";
 
+const url = ref('http://' + window.location.hostname + ':5244')
 const keyword = ref('')
 const page = ref(1)
 const size = ref(20)
 const total = ref(0)
 const files = ref([])
 const dialogVisible = ref(false)
+const formVisible = ref(false)
+const addVisible = ref(false)
 const fullscreen = ref(false)
 const form = ref({
   id: 0,
@@ -87,6 +145,60 @@ const refresh = () => {
   load(page.value)
 }
 
+const addMeta = () => {
+  form.value = {
+    id: 0,
+    name: '',
+    path: '',
+    year: 0,
+    score: 0,
+    movieId: 0,
+  }
+  addVisible.value = true
+}
+
+const saveMeta = () => {
+  form.value.movieId = +form.value.movieId
+  axios.post('/api/meta', form.value).then(({data}) => {
+    if (data) {
+      ElMessage.success('保存成功')
+      addVisible.value = false
+      refresh()
+    } else {
+      ElMessage.warning('保存失败')
+    }
+  })
+}
+
+const editMeta = (data: any) => {
+  form.value = Object.assign({}, data)
+  formVisible.value = true
+}
+
+const updateMeta = () => {
+  axios.post('/api/meta/' + form.value.id + '/movie?movieId=' + form.value.movieId).then(({data}) => {
+    if (data) {
+      ElMessage.success('更新成功')
+      formVisible.value = false
+      refresh()
+    } else {
+      ElMessage.warning('更新失败')
+    }
+  })
+}
+
+const scrape = () => {
+  axios.post('/api/meta/' + form.value.id + '/scrape?name=' + form.value.name).then(({data}) => {
+    if (data) {
+      ElMessage.success('刮削成功')
+      formVisible.value = false
+      refresh()
+    } else {
+      ElMessage.warning('刮削失败')
+    }
+  })
+}
+
 const load = (value: number) => {
   page.value = value
   axios.get('/api/meta?page=' + (page.value - 1) + '&size=' + size.value + '&q=' + keyword.value).then(({data}) => {
@@ -95,7 +207,34 @@ const load = (value: number) => {
   })
 }
 
+const loadBaseUrl = () => {
+  if (store.baseUrl) {
+    url.value = store.baseUrl
+    return
+  }
+
+  if (store.xiaoya) {
+    axios.get('/api/sites/1').then(({data}) => {
+      const re = /http:\/\/localhost:(\d+)/.exec(data.url)
+      if (re) {
+        url.value = 'http://' + window.location.hostname + ':' + re[1]
+      } else if (data.url == 'http://localhost') {
+        axios.get('/api/alist/port').then(({data}) => {
+          if (data) {
+            url.value = 'http://' + window.location.hostname + ':' + data
+          }
+        })
+      } else {
+        url.value = data.url
+      }
+      store.baseUrl = url.value
+      console.log('load AList ' + url.value)
+    })
+  }
+}
+
 onMounted(() => {
+  loadBaseUrl()
   refresh()
 })
 </script>
