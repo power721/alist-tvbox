@@ -155,7 +155,11 @@ public class DoubanService {
             return;
         }
         log.info("fix meta id");
-        jdbcTemplate.execute("INSERT INTO ID_GENERATOR VALUES ('meta', 500000)");
+        try {
+            jdbcTemplate.execute("UPDATE ID_GENERATOR SET NEXT_ID = 500000 WHERE ENTITY_NAME = 'meta'");
+        } catch (Exception e) {
+            jdbcTemplate.execute("INSERT INTO ID_GENERATOR VALUES ('meta', 500000)");
+        }
         settingRepository.save(new Setting("fix_meta_id", "true"));
     }
 
