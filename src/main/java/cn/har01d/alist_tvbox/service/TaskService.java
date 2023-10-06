@@ -59,6 +59,14 @@ public class TaskService {
         return taskRepository.save(task);
     }
 
+    public Task addScrapeTask(Site site) {
+        Task task = new Task();
+        task.setType(TaskType.SCRAPE);
+        task.setName("刮削索引文件 - " + site.getName());
+        task.setCreatedTime(Instant.now());
+        return taskRepository.save(task);
+    }
+
     public void startTask(Integer id) {
         Task task = getById(id);
         log.info("start task {}: {}", id, task.getName());

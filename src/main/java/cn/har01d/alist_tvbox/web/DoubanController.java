@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+
 @RestController
 public class DoubanController {
     private final DoubanService service;
@@ -43,6 +45,11 @@ public class DoubanController {
     @PostMapping("/api/meta/{id}/movie")
     public boolean updateMetaMovie(@PathVariable Integer id, Integer movieId) {
         return service.updateMetaMovie(id, movieId);
+    }
+
+    @PostMapping("/api/meta-scrape")
+    public void scrape(Integer siteId) throws IOException {
+        service.scrape(siteId);
     }
 
     @PostMapping("/api/meta/{id}/scrape")
