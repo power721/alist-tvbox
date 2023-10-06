@@ -12,7 +12,7 @@
     <div class="space"></div>
 
     <el-table :data="files" border style="width: 100%">
-      <el-table-column prop="id" label="ID" width="70"/>
+      <el-table-column prop="id" label="ID" width="75"/>
       <el-table-column prop="name" label="电影名称" width="250"/>
       <el-table-column prop="movieId" label="豆瓣ID" width="100">
         <template #default="scope">
@@ -48,7 +48,7 @@
           <el-input v-model="form.path" autocomplete="off" readonly/>
         </el-form-item>
         <el-form-item label="豆瓣ID" required>
-          <el-input v-model="form.movieId" autocomplete="off"/>
+          <el-input-number v-model="form.movieId" autocomplete="off"/>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateMeta">更新</el-button>
@@ -73,10 +73,10 @@
     <el-dialog v-model="addVisible" title="添加电影数据" width="60%">
       <el-form label-width="140px">
         <el-form-item label="路径" required>
-          <el-input v-model="form.path" autocomplete="off" readonly/>
+          <el-input v-model="form.path" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="豆瓣ID" required>
-          <el-input v-model="form.movieId" autocomplete="off"/>
+          <el-input-number v-model="form.movieId" autocomplete="off"/>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -246,5 +246,9 @@ onMounted(() => {
 
 .space {
   margin-bottom: 6px;
+}
+
+.el-input-number {
+  width: 200px;
 }
 </style>

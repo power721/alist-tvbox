@@ -53,6 +53,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static cn.har01d.alist_tvbox.util.Constants.MOVIE_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
@@ -127,6 +128,17 @@ public class DoubanService {
                 }
             }
         }
+
+        fixMetaId();
+    }
+
+    private void fixMetaId() {
+        if (settingRepository.existsById("fix_meta_id")) {
+            return;
+        }
+        log.info("fix meta id");
+        jdbcTemplate.execute("INSERT INTO ID_GENERATOR VALUES ('meta', 500000)");
+        settingRepository.save(new Setting("fix_meta_id", "true"));
     }
 
     @Scheduled(cron = "0 0 22 * * ?")
@@ -139,12 +151,12 @@ public class DoubanService {
         try {
             String remote = restTemplate.getForObject("http://data.har01d.cn/movie_version", String.class).trim();
             versions.setMovie(remote);
-            String local = settingRepository.findById(MOVIE_VERSION).map(Setting::getValue).orElse("").trim();
+            String local = settingRepository.findById(MOVIE_VERSION).map(Setting::getValue).orElse("0.0").trim();
             String cached = getCachedVersion();
             versions.setCachedMovie(cached);
             if (!local.equals(remote) && !remote.equals(cached) && !downloading) {
                 log.info("local: {} cached: {} remote: {}", local, cached, remote);
-                executor.execute(() -> downloadMovieData(remote));
+                executor.execute(() -> upgradeMovieData(local, remote));
             }
             return remote;
         } catch (Exception e) {
@@ -165,7 +177,7 @@ public class DoubanService {
         return "0.0";
     }
 
-    private void downloadMovieData(String remote) {
+    private void upgradeMovieData(String local, String remote) {
         try {
             downloading = true;
             log.info("download movie data");
@@ -177,20 +189,7 @@ public class DoubanService {
             int code = process.waitFor();
             if (code == 0) {
                 log.info("movie data downloaded");
-                Path file = Paths.get("/data/atv/diff.sql");
-                if (Files.exists(file)) {
-                    List<String> lines = Files.readAllLines(file);
-                    for (String line : lines) {
-                        try {
-                            jdbcTemplate.execute(line);
-                        } catch (Exception e) {
-                            log.debug("{}", e);
-                        }
-                    }
-                    log.info("movie data upgraded");
-                    settingRepository.save(new Setting(MOVIE_VERSION, remote));
-                    Files.delete(file);
-                }
+                getSqlFiles(local).forEach(this::upgradeSqlFile);
             } else {
                 log.warn("download movie data failed: {}", code);
             }
@@ -198,6 +197,37 @@ public class DoubanService {
             log.warn("", e);
         } finally {
             downloading = false;
+        }
+    }
+
+    private Stream<Path> getSqlFiles(String version) throws IOException {
+        double local = Double.parseDouble(version);
+        return Files.list(Path.of("/data/atv/sql"))
+                .filter(e -> Double.compare(getSqlVersion(e), local) > 0)
+                .sorted((a, b) -> Double.compare(getSqlVersion(a), getSqlVersion(b)));
+    }
+
+    private double getSqlVersion(Path path) {
+        String name = path.toFile().getName();
+        int index = name.lastIndexOf('.');
+        return Double.parseDouble(name.substring(0, index));
+    }
+
+    private void upgradeSqlFile(Path file) {
+        try {
+            List<String> lines = Files.readAllLines(file);
+            for (String line : lines) {
+                try {
+                    jdbcTemplate.execute(line);
+                } catch (Exception e) {
+                    log.debug("execute sql failed: {}", e);
+                }
+            }
+            String version = String.valueOf(getSqlVersion(file));
+            settingRepository.save(new Setting(MOVIE_VERSION, version));
+            log.info("movie data upgraded: {}", version);
+        } catch (Exception e) {
+            log.warn("upgrade SQL file failed: {}", file, e);
         }
     }
 
@@ -305,7 +335,7 @@ public class DoubanService {
     }
 
     public boolean updateMetaMovie(@PathVariable Integer id, Integer movieId) {
-        if (movieId == null || movieId == 0) {
+        if (movieId == null || movieId < 100000) {
             throw new BadRequestException("电影ID不正确");
         }
         var meta = metaRepository.findById(id).orElse(null);
@@ -427,16 +457,23 @@ public class DoubanService {
     }
 
     public boolean addMeta(MetaDto dto) {
-        if (dto.getMovieId() == null || dto.getMovieId() == 0) {
+        if (dto.getMovieId() == null || dto.getMovieId() < 100000) {
             throw new BadRequestException("电影ID不正确");
         }
-        if (StringUtils.isBlank(dto.getPath())) {
+        String path = dto.getPath();
+        if (StringUtils.isBlank(path)) {
             throw new BadRequestException("路径不正确");
         }
-        Meta meta = metaRepository.findByPath(dto.getPath());
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        if (path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        Meta meta = metaRepository.findByPath(path);
         if (meta == null) {
             meta = new Meta();
-            meta.setPath(dto.getPath());
+            meta.setPath(path);
         }
         Movie movie = getById(dto.getMovieId());
         if (movie != null) {
