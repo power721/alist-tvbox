@@ -718,7 +718,7 @@ public class DoubanService {
             }
         }
 
-        int target = 1;
+        int target = 0;
         if (distance <= target) {
             log.info("distance: {}", distance);
             return getById(best);
