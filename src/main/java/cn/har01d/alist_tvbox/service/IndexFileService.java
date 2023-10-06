@@ -45,6 +45,30 @@ public class IndexFileService {
         return new PageImpl<>(list, pageable, lines.size());
     }
 
+    public void toggleExcluded(String siteId, int index) throws IOException {
+        if (index < 0) {
+            throw new BadRequestException("行数不正确");
+        }
+        Path file = Paths.get("/data/index", siteId, "custom_index.txt");
+        if (!Files.exists(file)) {
+            throw new BadRequestException("索引文件不存在");
+        }
+
+        List<String> lines = Files.readAllLines(file);
+        if (index >= lines.size()) {
+            throw new BadRequestException("行数不正确");
+        }
+
+        String line = lines.get(index);
+        if (line.startsWith("-")) {
+            line = line.substring(1);
+        } else {
+            line = "-" + line;
+        }
+        lines.set(index, line);
+        Files.writeString(file, String.join("\n", lines));
+    }
+
     public FileSystemResource downloadIndexFile(String siteId) throws IOException {
         File out = new File("/tmp/index.zip");
         out.createNewFile();

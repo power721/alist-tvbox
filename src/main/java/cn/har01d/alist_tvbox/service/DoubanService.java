@@ -423,7 +423,7 @@ public class DoubanService {
                 break;
             }
             String line = lines.get(i).trim();
-            if (line.isEmpty()) {
+            if (line.isEmpty() || line.startsWith("-")) {
                 continue;
             }
 

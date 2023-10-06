@@ -145,7 +145,14 @@
             <el-button type="primary" class="download" v-if="indexTotal" @click="downloadIndexFile">下载文件</el-button>
           </div>
         </div>
-        <div v-for="log of indexContent" v-html="log"></div>
+        <div v-for="line of indexContent">
+          {{ line.id }}
+          <el-button size="small" @click="toggleExcluded(line.id)">
+            <el-icon v-if="line.path.startsWith('-')"><Close /></el-icon>
+            <el-icon v-else><Check /></el-icon>
+          </el-button>
+          : {{ line.path }}
+        </div>
         <div v-if="indexCount >= 50">
           <el-pagination layout="prev, pager, next" :page-size="50" :current-page="indexPage" :total="indexTotal"
                          @current-change="loadIndexFile"/>
@@ -183,6 +190,11 @@ interface Item {
   text: string
 }
 
+interface IndexLine {
+  path: string
+  id: number
+}
+
 const token = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
@@ -196,7 +208,7 @@ const siteVisible = ref(false)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const indexVisible = ref(false)
-const indexContent = ref([])
+const indexContent = ref<IndexLine[]>([])
 const indexPage = ref(1)
 const indexTotal = ref(0)
 const indexCount = ref(0)
@@ -330,8 +342,14 @@ const showIndex = (data: any) => {
 
 const loadIndexFile = (pageNumber: number) => {
   indexPage.value = pageNumber
-  axios.get('/api/index-files?siteId='+form.value.id+'&size=50&page=' + (pageNumber - 1)).then(({data}) => {
-    indexContent.value = data.content
+  axios.get('/api/index-files?siteId=' + form.value.id + '&size=50&page=' + (pageNumber - 1)).then(({data}) => {
+    indexContent.value = []
+    for (let i in data.content) {
+      indexContent.value.push({
+        id: +i + (pageNumber - 1) * 50 + 1,
+        path: data.content[i]
+      })
+    }
     indexTotal.value = data.totalElements
     indexCount.value = data.numberOfElements
     indexVisible.value = true
@@ -340,8 +358,14 @@ const loadIndexFile = (pageNumber: number) => {
   })
 }
 
+const toggleExcluded = (id: number) => {
+  axios.post("/api/index-files/exclude?siteId=" + form.value.id + '&index=' + (id - 1)).then(() => {
+    loadIndexFile(indexPage.value)
+  })
+}
+
 const downloadIndexFile = () => {
-  window.location.href = '/api/index-files/download?siteId='+form.value.id+'&t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
+  window.location.href = '/api/index-files/download?siteId=' + form.value.id + '&t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
 }
 
 onMounted(() => {

@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -24,6 +25,11 @@ public class IndexFileController {
     @GetMapping
     public Page<String> getIndexContent(Pageable pageable, String siteId) throws IOException {
         return service.getIndexContent(pageable, siteId);
+    }
+
+    @PostMapping("/exclude")
+    public void toggleExcluded(String siteId, int index) throws IOException {
+        service.toggleExcluded(siteId, index);
     }
 
     @GetMapping("/download")

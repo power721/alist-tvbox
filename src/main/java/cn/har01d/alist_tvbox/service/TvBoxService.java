@@ -408,10 +408,12 @@ public class TvBoxService {
         Set<String> keywords = Arrays.stream(keyword.split("\\s+")).collect(Collectors.toSet());
         Set<String> lines = Files.readAllLines(Paths.get(indexFile))
                 .stream()
+                .filter(path -> !path.startsWith("-"))
                 .filter(path -> keywords.stream().allMatch(path::contains))
                 .limit(appProperties.getMaxSearchResult())
                 .collect(Collectors.toSet());
 
+        log.debug("search \"{}\" from file: {}, result: {}", keyword, indexFile, lines.size());
         List<MovieDetail> list = new ArrayList<>();
         for (String line : lines) {
             if (line.startsWith("./")) {

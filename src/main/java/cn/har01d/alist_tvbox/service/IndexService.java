@@ -363,6 +363,7 @@ public class IndexService {
             String detail = getTaskDetails(indexRequest.getPaths()) + "\n\n索引文件:\n" + file.getAbsolutePath();
             taskService.updateTaskData(task.getId(), detail);
             IndexContext context = new IndexContext(indexRequest, site, writer, task.getId());
+            context.getExcludes().addAll(loadExcluded(file));
             for (String path : indexRequest.getPaths()) {
                 if (isCancelled(context)) {
                     break;
@@ -417,6 +418,14 @@ public class IndexService {
         } catch (Exception e) {
             log.warn("", e);
         }
+    }
+
+    private List<String> loadExcluded(File file) throws IOException {
+        return Files.readAllLines(file.toPath())
+                .stream()
+                .filter(path -> path.startsWith("-"))
+                .map(path -> "^" + path.substring(1) + "$")
+                .toList();
     }
 
     private void zipFile(File file, File info, File output) throws IOException {

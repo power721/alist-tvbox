@@ -152,6 +152,8 @@ if [ "$LOCAL" != "$REMOTE" ]; then
   rm -f index.share.zip
   grep -v "/🈴我的阿里分享/" /data/index/index.video.txt >/data/index/index.video.txt.1
   grep -v "/🈴我的阿里分享/" /data/index/index.txt >/data/index/index.txt.1
+  grep -v "/🌞我的夸克网盘/Harold/" /data/index/index.video.txt >/data/index/index.video.txt.1
+  grep -v "/🌞我的夸克网盘/Harold/" /data/index/index.txt >/data/index/index.txt.1
   mv /data/index/index.video.txt.1 /data/index/index.video.txt
   mv /data/index/index.txt.1 /data/index/index.txt
   cat /data/index/index.share.txt >> /data/index/index.video.txt
