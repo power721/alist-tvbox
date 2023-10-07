@@ -138,15 +138,32 @@ public class DoubanService {
                     log.warn("", e);
                 }
 
-                try {
-                    Files.writeString(Paths.get("/data/atv/data.sql"), "SELECT COUNT(*) FROM META;");
-                } catch (Exception e) {
-                    log.warn("", e);
-                }
+                writeText("/data/atv/data.sql", "SELECT COUNT(*) FROM META;");
             }
         }
 
         fixMetaId();
+        runCmd();
+    }
+
+    private void runCmd() {
+        try {
+            Path path = Paths.get("/data/atv/cmd.sql");
+            if (Files.exists(path)) {
+                List<String> lines = Files.readAllLines(path);
+                log.info("run {} sql from file", lines.size());
+                for (String line : lines) {
+                    try {
+                        jdbcTemplate.execute(line);
+                    } catch (Exception e) {
+                        log.warn("execute sql failed: {}", e);
+                    }
+                }
+                Files.delete(path);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
     }
 
     private void fixMetaId() {
@@ -413,14 +430,21 @@ public class DoubanService {
         if (!Files.exists(path)) {
             throw new BadRequestException("索引文件不存在");
         }
-        log.info("readIndexFile: {}", path);
+        log.debug("readIndexFile: {}", path);
         List<String> lines = Files.readAllLines(path);
         log.info("get {} lines from index file {}", lines.size(), path);
-        Set<String> failed = loadFailed();
-        int count = 0;
         Site site = siteService.getById(siteId);
         Task task = taskService.addScrapeTask(site);
+        scrapeIndexFile(task, lines, force);
+    }
+
+    public void scrapeIndexFile(Task task, List<String> lines, boolean force) {
+        int count = 0;
+        Set<String> failed = loadFailed();
+        List<String> paths = new ArrayList<>();
+        log.debug("load {} failed names", failed.size());
         taskService.startTask(task.getId());
+
         for (int i = 0; i < lines.size(); i++) {
             if (isCancelled(task.getId())) {
                 break;
@@ -437,6 +461,8 @@ public class DoubanService {
                 if (movie != null) {
                     count++;
                     taskService.updateTaskData(task.getId(), "成功刮削数量：" + count);
+                } else {
+                    paths.add(line.split("#")[0]);
                 }
             } catch (Exception e) {
                 log.warn("{}: {}", i, line, e);
@@ -445,8 +471,13 @@ public class DoubanService {
 
         taskService.completeTask(task.getId());
 
+        writeText("/data/atv/paths.txt", String.join("\n", paths));
+        writeText("/data/atv/failed.txt", String.join("\n", failed));
+    }
+
+    private static void writeText(String path, String content) {
         try {
-            Files.writeString(Paths.get("/data/atv/failed.txt"), String.join("\n", failed));
+            Files.writeString(Paths.get(path), content);
         } catch (Exception e) {
             log.warn("", e);
         }

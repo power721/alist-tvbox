@@ -67,6 +67,7 @@
       </el-form>
       <template #footer>
       <span class="dialog-footer">
+        <el-button type="danger" size="small" @click="dialogVisible=true">删除</el-button>
         <el-button @click="formVisible=false">取消</el-button>
       </span>
       </template>
@@ -128,7 +129,7 @@ import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 import type {Site} from "@/model/Site";
 
-const url = ref('http://' + window.location.hostname + ':5244')
+const url = ref('http://' + window.location.hostname + ':5344')
 const keyword = ref('')
 const force = ref(false)
 const siteId = ref(1)
@@ -157,8 +158,9 @@ const handleDelete = (data: any) => {
 }
 
 const deleteSub = () => {
-  dialogVisible.value = false
   axios.delete('/api/meta/' + form.value.id).then(() => {
+    dialogVisible.value = false
+    scrapeVisible.value = false
     refresh()
   })
 }
