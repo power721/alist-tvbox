@@ -417,6 +417,9 @@ public class TvBoxService {
         log.debug("search \"{}\" from file: {}, result: {}", keyword, indexFile, lines.size());
         List<MovieDetail> list = new ArrayList<>();
         for (String line : lines) {
+            if (line.startsWith("+")) {
+                line = line.substring(1);
+            }
             if (line.startsWith("./")) {
                 line = line.substring(1);
             }

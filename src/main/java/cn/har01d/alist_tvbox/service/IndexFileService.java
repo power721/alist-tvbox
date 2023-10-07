@@ -63,6 +63,8 @@ public class IndexFileService {
 
         String line = lines.get(index);
         if (line.startsWith("-")) {
+            line = "+" + line.substring(1);
+        } else if (line.startsWith("+")) {
             line = line.substring(1);
         } else {
             line = "-" + line;
@@ -137,6 +139,6 @@ public class IndexFileService {
     }
 
     private boolean isValid(String line) {
-        return line.startsWith("-") || line.startsWith("/") || line.startsWith("./") || line.isBlank();
+        return line.startsWith("-") || line.startsWith("+") || line.startsWith("/") || line.startsWith("./") || line.isBlank();
     }
 }

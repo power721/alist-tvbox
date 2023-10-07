@@ -60,7 +60,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static cn.har01d.alist_tvbox.util.Constants.MOVIE_VERSION;
@@ -427,7 +426,7 @@ public class DoubanService {
                 break;
             }
             String line = lines.get(i).trim();
-            if (line.isEmpty() || line.startsWith("-")) {
+            if (line.isEmpty() || line.startsWith("-") || line.startsWith("+")) {
                 continue;
             }
 
@@ -465,28 +464,26 @@ public class DoubanService {
             return meta.getMovie();
         }
 
-        String name;
+        String name = "";
         Movie movie = null;
         if (parts.length == 2) {
             name = TextUtils.fixName(parts[1]);
         } else if (parts.length > 2) {
             name = TextUtils.fixName(parts[1]);
-            if (parts[2].startsWith("tt")) {
-                // tt
-            } else if (!parts[2].equals("_") && !parts[2].isBlank()) {
+            String number = parts[2];
+            log.debug("{} {}", name, number);
+            if (number.length() > 5) {
                 try {
-                    String number = parts[2];
-                    if (number.endsWith("/")) {
-                        number = number.substring(0, number.length() - 1);
-                    }
-                    if (!"11 - à Zélie".equals(number) && number.length() > 5) {
-                        movie = getById(Integer.parseInt(number));
-                    }
+                    movie = getById(Integer.parseInt(number));
                 } catch (Exception e) {
                     log.warn("{} {}", id + 1, path, e);
                 }
+                if (movie != null) {
+                    name = movie.getName();
+                }
             }
-        } else {
+        }
+        if (name.isBlank()) {
             name = getName(path);
         }
 
@@ -550,6 +547,7 @@ public class DoubanService {
             String newname = TextUtils.updateName(name);
             if (failed.contains(newname) || !TextUtils.isNormal(newname)) {
                 log.debug("exclude {}: {}", path, newname);
+                failed.add(name);
                 return null;
             }
 
@@ -797,6 +795,7 @@ public class DoubanService {
 
     private Movie parse(Integer id) {
         try {
+            log.debug("parse by id: {}", id);
             String url = DB_PREFIX + id + "/";
             String html = getHtml(url);
 
