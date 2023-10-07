@@ -150,14 +150,11 @@ public class DoubanService {
         try {
             Path path = Paths.get("/data/atv/cmd.sql");
             if (Files.exists(path)) {
-                List<String> lines = Files.readAllLines(path);
-                log.info("run {} sql from file", lines.size());
-                for (String line : lines) {
-                    try {
-                        jdbcTemplate.execute(line);
-                    } catch (Exception e) {
-                        log.warn("execute sql failed: {}", e);
-                    }
+                log.info("run sql from file {}", path);
+                try {
+                    jdbcTemplate.execute("RUNSCRIPT FROM '/data/atv/cmd.sql'");
+                } catch (Exception e) {
+                    log.warn("execute sql failed: {}", e);
                 }
                 Files.delete(path);
             }
