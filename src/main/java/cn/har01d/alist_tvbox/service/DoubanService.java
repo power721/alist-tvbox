@@ -408,7 +408,7 @@ public class DoubanService {
     }
 
     @Async
-    public void scrape(Integer siteId) throws IOException {
+    public void scrape(Integer siteId, boolean force) throws IOException {
         Path path = Paths.get("/data/index", String.valueOf(siteId), "custom_index.txt");
         if (!Files.exists(path)) {
             throw new BadRequestException("索引文件不存在");
@@ -433,7 +433,7 @@ public class DoubanService {
             try {
                 log.debug("handle {} {}", i, line);
                 taskService.updateTaskSummary(task.getId(), (i + 1) + ":" + line);
-                Movie movie = handleIndexLine(i, line, failed);
+                Movie movie = handleIndexLine(i, line, force, failed);
                 if (movie != null) {
                     count++;
                     taskService.updateTaskData(task.getId(), "成功刮削数量：" + count);
@@ -452,7 +452,7 @@ public class DoubanService {
         }
     }
 
-    private Movie handleIndexLine(int id, String path, Set<String> failed) {
+    private Movie handleIndexLine(int id, String path, boolean force, Set<String> failed) {
         String[] parts = path.split("#");
         path = parts[0];
 
@@ -460,7 +460,7 @@ public class DoubanService {
         if (meta == null) {
             meta = new Meta();
             meta.setPath(path);
-        } else if (meta.getMovie() != null) {
+        } else if (meta.getMovie() != null && !force) {
             return meta.getMovie();
         }
 

@@ -106,6 +106,9 @@
           <el-option :label="site.name" :value="site.id" v-for="site of sites"/>
         </el-select>
       </el-form-item>
+      <el-form-item label="强制更新？">
+        <el-switch v-model="force"/>
+      </el-form-item>
       <p>索引文件：/data/index/{{ siteId }}/custom_index.txt</p>
       <template #footer>
       <span class="dialog-footer">
@@ -127,6 +130,7 @@ import type {Site} from "@/model/Site";
 
 const url = ref('http://' + window.location.hostname + ':5244')
 const keyword = ref('')
+const force = ref(false)
 const siteId = ref(1)
 const page = ref(1)
 const size = ref(20)
@@ -222,7 +226,7 @@ const scrape = () => {
 }
 
 const scrapeIndex = () => {
-  axios.post('/api/meta-scrape?siteId=' + siteId.value).then(() => {
+  axios.post('/api/meta-scrape?siteId=' + siteId.value + '&force=' + force.value).then(() => {
     ElMessage.success('刮削开始')
     scrapeVisible.value = false
   })

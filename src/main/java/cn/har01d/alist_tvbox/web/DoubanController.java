@@ -48,8 +48,8 @@ public class DoubanController {
     }
 
     @PostMapping("/api/meta-scrape")
-    public void scrape(Integer siteId) throws IOException {
-        service.scrape(siteId);
+    public void scrape(Integer siteId, boolean force) throws IOException {
+        service.scrape(siteId, force);
     }
 
     @PostMapping("/api/meta/{id}/scrape")
