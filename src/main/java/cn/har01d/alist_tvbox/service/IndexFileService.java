@@ -2,11 +2,13 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -116,4 +118,25 @@ public class IndexFileService {
         }
     }
 
+    public void uploadIndexFile(String siteId, MultipartFile file) throws IOException {
+        Path temp = Path.of("/tmp/custom_index.txt");
+        try {
+            FileUtils.copyToFile(file.getInputStream(), temp.toFile());
+            List<String> lines = Files.readAllLines(temp);
+            if (lines.stream().anyMatch(e -> !isValid(e))) {
+                throw new BadRequestException("索引格式不正确");
+            }
+
+            lines = lines.stream().map(e -> e.startsWith("./") ? e.substring(1) : e).toList();
+            String path = "/data/index/" + siteId + "/custom_index.txt";
+            Files.writeString(Path.of(path), String.join("\n", lines));
+            log.info("上传索引文件成功： {}", path);
+        } finally {
+            Files.delete(temp);
+        }
+    }
+
+    private boolean isValid(String line) {
+        return line.startsWith("-") || line.startsWith("/") || line.startsWith("./") || line.isBlank();
+    }
 }

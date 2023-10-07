@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
   datasource:
     url: jdbc:h2:file:~/.config/atv/data
     username: sa

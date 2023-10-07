@@ -342,12 +342,13 @@ public class TvBoxService {
                     name = movie.getName();
                 }
 
-                String newPath = fixPath(meta.getPath() + "/" + PLAYLIST);
+                boolean isMediaFile = isMediaFile(meta.getPath());
+                String newPath = fixPath(meta.getPath() + (isMediaFile ? "" : PLAYLIST));
                 MovieDetail movieDetail = new MovieDetail();
                 movieDetail.setVod_id(getXiaoyaSite().getId() + "$" + encodeUrl(newPath) + "$0");
                 movieDetail.setVod_name(name);
                 movieDetail.setVod_pic(Constants.ALIST_PIC);
-                movieDetail.setVod_content(newPath);
+                movieDetail.setVod_content(meta.getPath());
                 setDoubanInfo(movieDetail, movie, false);
                 list.add(movieDetail);
             }
@@ -442,7 +443,7 @@ public class TvBoxService {
             movieDetail.setVod_id(site.getId() + "$" + encodeUrl(path) + "$1");
             movieDetail.setVod_name(getNameFromPath(line));
             movieDetail.setVod_pic(Constants.ALIST_PIC);
-            movieDetail.setVod_content(path);
+            movieDetail.setVod_content(path.replace(PLAYLIST, ""));
             movieDetail.setVod_tag(FILE);
             if (!isMediaFile) {
                 setDoubanInfo(site, movieDetail, getParent(path), false);
@@ -538,7 +539,7 @@ public class TvBoxService {
             movieDetail.setVod_id(site.getId() + "$" + encodeUrl(path) + "$1");
             movieDetail.setVod_name(getNameFromPath(name));
             movieDetail.setVod_pic(Constants.ALIST_PIC);
-            movieDetail.setVod_content(path);
+            movieDetail.setVod_content(path.replace(PLAYLIST, ""));
             movieDetail.setVod_tag(FILE);
             if (!isMediaFile) {
                 setDoubanInfo(site, movieDetail, getParent(path), false);

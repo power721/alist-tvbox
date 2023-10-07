@@ -141,15 +141,38 @@
         <div class="flex">
           <el-pagination layout="prev, pager, next" :page-size="50" :current-page="indexPage" :total="indexTotal"
                          @current-change="loadIndexFile"/>
-          <div>
+          <div class="flex">
             <el-button type="primary" class="download" v-if="indexTotal" @click="downloadIndexFile">下载文件</el-button>
+            <el-upload ref="upload"
+                       accept=".txt"
+                       :action="'/api/index-files/upload?siteId='+form.id"
+                       :headers="headers"
+                       :limit="1"
+                       :show-file-list="false"
+                       :on-exceed="handleExceed"
+                       :on-success="handleUploadSuccess"
+                       :on-error="handleUploadError"
+                       >
+              <template #trigger>
+                <el-button type="primary">上传文件</el-button>
+              </template>
+              <template #tip>
+                <div class="el-upload__tip text-red">
+                  上传并覆盖索引文件
+                </div>
+              </template>
+            </el-upload>
           </div>
         </div>
         <div v-for="line of indexContent">
           {{ line.id }}
           <el-button size="small" @click="toggleExcluded(line.id)">
-            <el-icon v-if="line.path.startsWith('-')"><Close /></el-icon>
-            <el-icon v-else><Check /></el-icon>
+            <el-icon v-if="line.path.startsWith('-')">
+              <Close/>
+            </el-icon>
+            <el-icon v-else>
+              <Check/>
+            </el-icon>
           </el-button>
           : {{ line.path }}
         </div>
@@ -182,8 +205,14 @@
 import {onMounted, ref} from 'vue'
 import {Check, Close, Refresh} from '@element-plus/icons-vue'
 import axios from "axios"
-import {ElMessage} from "element-plus";
+import type {UploadInstance, UploadProps, UploadRawFile} from 'element-plus'
+import {ElMessage, genFileId} from "element-plus";
 import type {VodList} from "@/model/VodList";
+
+const upload = ref<UploadInstance>()
+const headers = {
+  'X-Access-Token': localStorage.getItem('token')
+}
 
 interface Item {
   path: string
@@ -334,7 +363,6 @@ const load = () => {
 
 const showIndex = (data: any) => {
   form.value = data
-  indexContent.value = []
   indexTotal.value = 0
   indexCount.value = 0
   loadIndexFile(1)
@@ -366,6 +394,25 @@ const toggleExcluded = (id: number) => {
 
 const downloadIndexFile = () => {
   window.location.href = '/api/index-files/download?siteId=' + form.value.id + '&t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
+}
+
+const handleUploadSuccess = () => {
+  ElMessage.success('上传文件成功')
+  upload.value!.clearFiles()
+  loadIndexFile(1)
+}
+
+const handleUploadError = (error: Error) => {
+  const e = JSON.parse(error.message)
+  ElMessage.error('上传文件失败：' + e.detail)
+  upload.value!.clearFiles()
+}
+
+const handleExceed: UploadProps['onExceed'] = (files: File[]) => {
+  upload.value!.clearFiles()
+  const file = files[0] as UploadRawFile
+  file.uid = genFileId()
+  upload.value!.handleStart(file)
 }
 
 onMounted(() => {
