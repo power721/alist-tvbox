@@ -139,6 +139,6 @@ public class IndexFileService {
     }
 
     private boolean isValid(String line) {
-        return line.startsWith("-") || line.startsWith("+") || line.startsWith("/") || line.startsWith("./") || line.isBlank();
+        return line.startsWith("-/") || line.startsWith("+/") || line.startsWith("/") || line.startsWith("./") || line.isBlank();
     }
 }
