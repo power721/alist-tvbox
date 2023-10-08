@@ -3,18 +3,25 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.SettingResponse;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_RESTART_REQUIRED;
@@ -26,12 +33,14 @@ import static cn.har01d.alist_tvbox.util.Constants.ALIST_START_TIME;
 public class AListLocalService {
 
     private final SettingRepository settingRepository;
+    private final SiteRepository siteRepository;
     private final RestTemplate restTemplate;
 
     private volatile int aListStatus;
 
-    public AListLocalService(SettingRepository settingRepository, AppProperties appProperties, RestTemplateBuilder builder) {
+    public AListLocalService(SettingRepository settingRepository, SiteRepository siteRepository, AppProperties appProperties, RestTemplateBuilder builder) {
         this.settingRepository = settingRepository;
+        this.siteRepository = siteRepository;
         this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
     }
 
@@ -39,6 +48,31 @@ public class AListLocalService {
     public void setup() {
         String url = settingRepository.findById("open_token_url").map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token");
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_token_url','" + url + "','','string','',1,0);");
+        String token = settingRepository.findById("token").map(Setting::getValue).orElse("");
+        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + StringUtils.isNotBlank(token) + "' WHERE key = 'sign_all'");
+    }
+
+    public void updateSetting(String key, String value, String type) {
+        log.info("update setting {}={}", key, value);
+        if (getAListStatus() == 2) {
+            Map<String, Object> body = new HashMap<>();
+            body.put("key", key);
+            body.put("value", value);
+            body.put("type", type);
+            body.put("flag", 1);
+            body.put("group", 4);
+            body.put("help", "");
+            body.put("options", "");
+            HttpHeaders headers = new HttpHeaders();
+            Site site = siteRepository.findById(1).orElseThrow();
+            headers.add("Authorization", site.getToken());
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            SettingResponse response = restTemplate.postForObject("/api/admin/setting/update", entity, SettingResponse.class);
+            log.info("update setting by API: {}", response);
+        } else {
+            int code = Utils.executeUpdate(String.format("UPDATE x_setting_items SET value = '%s' WHERE key = '%s'", key, value));
+            log.info("update setting by SQL: {}", code);
+        }
     }
 
     public void startAListServer() {

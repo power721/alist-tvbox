@@ -12,6 +12,8 @@ import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
+import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -54,6 +56,7 @@ public class ShareService {
     private final ShareRepository shareRepository;
     private final AListAliasRepository aliasRepository;
     private final SettingRepository settingRepository;
+    private final SiteRepository siteRepository;
     private final AccountRepository accountRepository;
     private final PikPakAccountRepository pikPakAccountRepository;
     private final AccountService accountService;
@@ -69,6 +72,7 @@ public class ShareService {
                         ShareRepository shareRepository,
                         AListAliasRepository aliasRepository,
                         SettingRepository settingRepository,
+                        SiteRepository siteRepository,
                         AccountRepository accountRepository,
                         PikPakAccountRepository pikPakAccountRepository,
                         AppProperties appProperties,
@@ -81,6 +85,7 @@ public class ShareService {
         this.shareRepository = shareRepository;
         this.aliasRepository = aliasRepository;
         this.settingRepository = settingRepository;
+        this.siteRepository = siteRepository;
         this.accountRepository = accountRepository;
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.accountService = accountService;
@@ -119,6 +124,7 @@ public class ShareService {
 
         loadAListShares(list);
         loadAListAlias();
+        loadSites();
         pikPakService.loadPikPak();
         configFileService.writeFiles();
         readTvTxt();
@@ -146,6 +152,21 @@ public class ShareService {
             }
         } catch (Exception e) {
             log.warn("", e);
+        }
+    }
+
+    private void loadSites() {
+        for (Site site : siteRepository.findAll()) {
+            if (site.getUrl().equals("http://localhost")) {
+                continue;
+            }
+            try {
+                String sql = "INSERT INTO x_storages VALUES(%d,'/\uD83C\uDF8E我的套娃/%s',0,'AList V%d',0,'work','{\"root_folder_path\":\"%s\",\"url\":\"%s\",\"meta_password\":\"%s\",\"access_token\":\"%s\",\"username\":\"\",\"password\":\"\"}','','2023-06-20 12:00:00+00:00',0,'name','asc','front',0,'302_redirect','');";
+                int count = Utils.executeUpdate(String.format(sql, 8000 + site.getId(), site.getName(), site.getVersion(), site.getFolder(), site.getUrl(), site.getPassword(), site.getToken()));
+                log.info("insert Site {}:{} {}, result: {}", site.getId(), site.getName(), site.getUrl(), count);
+            } catch (Exception e) {
+                log.warn("{}", e.getMessage());
+            }
         }
     }
 

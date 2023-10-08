@@ -35,6 +35,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
@@ -176,6 +177,21 @@ public class DoubanService {
         settingRepository.save(new Setting("fix_meta_id", "true"));
     }
 
+    public void fixUnique() {
+        log.info("fixUnique");
+        Map<String, Meta> map = new HashMap<>();
+        List<Meta> list = new ArrayList<>();
+        for (Meta meta : metaRepository.findAll(Sort.by("id"))) {
+            String path = meta.getPath();
+            if (map.containsKey(path)) {
+                list.add(map.get(path));
+            }
+            map.put(path, meta);
+        }
+        log.info("delete {} meta", list.size());
+        metaRepository.deleteAll(list);
+    }
+
     @Scheduled(cron = "0 0 22 * * ?")
     public void update() {
         Versions versions = new Versions();
@@ -250,6 +266,7 @@ public class DoubanService {
 
     private void upgradeSqlFile(Path file) {
         try {
+            //jdbcTemplate.execute("RUNSCRIPT FROM '" + file.toString() + "'");
             List<String> lines = Files.readAllLines(file);
             for (String line : lines) {
                 try {

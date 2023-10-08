@@ -47,6 +47,11 @@ public class DoubanController {
         return service.updateMetaMovie(id, movieId);
     }
 
+    @PostMapping("/api/fix-meta")
+    public void fixUnique() {
+        service.fixUnique();
+    }
+
     @PostMapping("/api/meta-scrape")
     public void scrape(Integer siteId, boolean force) throws IOException {
         service.scrape(siteId, force);

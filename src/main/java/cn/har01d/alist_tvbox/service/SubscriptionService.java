@@ -63,6 +63,7 @@ public class SubscriptionService {
     private final SettingRepository settingRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final SiteRepository siteRepository;
+    private final AListLocalService aListLocalService;
 
     private String token = "";
 
@@ -73,7 +74,8 @@ public class SubscriptionService {
                                JdbcTemplate jdbcTemplate,
                                SettingRepository settingRepository,
                                SubscriptionRepository subscriptionRepository,
-                               SiteRepository siteRepository) {
+                               SiteRepository siteRepository,
+                               AListLocalService aListLocalService) {
         this.environment = environment;
         this.appProperties = appProperties;
         this.restTemplate = builder
@@ -85,6 +87,7 @@ public class SubscriptionService {
         this.settingRepository = settingRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.siteRepository = siteRepository;
+        this.aListLocalService = aListLocalService;
     }
 
     @PostConstruct
@@ -166,6 +169,7 @@ public class SubscriptionService {
     public void deleteToken() {
         token = "";
         settingRepository.save(new Setting(TOKEN, token));
+        aListLocalService.updateSetting("sign_all", "false", "bool");
     }
 
     public String createToken(TokenDto dto) {
@@ -176,6 +180,7 @@ public class SubscriptionService {
         }
 
         settingRepository.save(new Setting(TOKEN, token));
+        aListLocalService.updateSetting("sign_all", String.valueOf(StringUtils.isNotBlank(token)), "bool");
         return token;
     }
 
