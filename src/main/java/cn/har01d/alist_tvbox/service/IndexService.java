@@ -64,6 +64,7 @@ public class IndexService {
     private final AListService aListService;
     private final SiteService siteService;
     private final TaskService taskService;
+    private final AListLocalService aListLocalService;
     private final AppProperties appProperties;
     private final SettingRepository settingRepository;
     private final IndexTemplateRepository indexTemplateRepository;
@@ -74,6 +75,7 @@ public class IndexService {
     public IndexService(AListService aListService,
                         SiteService siteService,
                         TaskService taskService,
+                        AListLocalService aListLocalService,
                         AppProperties appProperties,
                         SettingRepository settingRepository,
                         IndexTemplateRepository indexTemplateRepository,
@@ -82,6 +84,7 @@ public class IndexService {
         this.aListService = aListService;
         this.siteService = siteService;
         this.taskService = taskService;
+        this.aListLocalService = aListLocalService;
         this.appProperties = appProperties;
         this.settingRepository = settingRepository;
         this.indexTemplateRepository = indexTemplateRepository;
@@ -311,6 +314,9 @@ public class IndexService {
 
     @Scheduled(cron = "0 0 10,12,14,16,18-23 * * ?")
     public void autoIndex() {
+        if (aListLocalService.getAListStatus() != 2) {
+            return;
+        }
         String hour = String.valueOf(LocalTime.now().getHour());
         List<IndexTemplate> list = indexTemplateRepository.findByScheduledTrue();
         log.debug("auto index: {}", list.size());

@@ -161,13 +161,20 @@ public class ShareService {
                 continue;
             }
             try {
-                String sql = "INSERT INTO x_storages VALUES(%d,'/\uD83C\uDF8E我的套娃/%s',0,'AList V%d',0,'work','{\"root_folder_path\":\"%s\",\"url\":\"%s\",\"meta_password\":\"%s\",\"access_token\":\"%s\",\"username\":\"\",\"password\":\"\"}','','2023-06-20 12:00:00+00:00',0,'name','asc','front',0,'302_redirect','');";
-                int count = Utils.executeUpdate(String.format(sql, 8000 + site.getId(), site.getName(), site.getVersion(), site.getFolder(), site.getUrl(), site.getPassword(), site.getToken()));
+                String sql = "INSERT INTO x_storages VALUES(%d,'/\uD83C\uDF8E我的套娃/%s',0,'AList V%d',0,'work','{\"root_folder_path\":\"%s\",\"url\":\"%s\",\"meta_password\":\"%s\",\"token\":\"%s\",\"username\":\"\",\"password\":\"\"}','','2023-06-20 12:00:00+00:00',0,'name','asc','front',0,'302_redirect','');";
+                int count = Utils.executeUpdate(String.format(sql, 8000 + site.getId(), site.getName(), site.getVersion(), getFolder(site), site.getUrl(), site.getPassword(), site.getToken()));
                 log.info("insert Site {}:{} {}, result: {}", site.getId(), site.getName(), site.getUrl(), count);
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());
             }
         }
+    }
+
+    private String getFolder(Site site) {
+        if (StringUtils.isBlank(site.getFolder())) {
+            return "/";
+        }
+        return site.getFolder();
     }
 
     private void loadOpenTokenUrl() {
