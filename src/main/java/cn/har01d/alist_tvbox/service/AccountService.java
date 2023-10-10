@@ -663,6 +663,7 @@ public class AccountService {
                 headers.put(HttpHeaders.AUTHORIZATION, Collections.singletonList("Bearer " + accessToken));
                 entity = new HttpEntity<>(body, headers);
                 ResponseEntity<RewardResponse> res = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_reward?_rx-s=mobile", HttpMethod.POST, entity, RewardResponse.class);
+                log.debug("RewardResponse: {}", res.getBody());
                 log.info("今日签到获得 {} {}", res.getBody().getResult().getName(), res.getBody().getResult().getDescription());
             }
         }

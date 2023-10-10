@@ -44,6 +44,8 @@ init() {
 }
 
 cat data/app_version
+version=$(head -n1 /docker.version)
+echo "xiaoya version: $version"
 date
 
 if [ ! -f /etc/nginx/http.d/emby.js ]; then
@@ -163,9 +165,7 @@ fi
 #wget http://data.har01d.cn/cat_open.zip -O cat_open.zip && \
 #unzip cat_open.zip -d /www/tvbox/
 
-version=$(head -n1 /docker.version)
 app_ver=$(head -n1 /opt/atv/data/app_version)
-echo "xiaoya version: $version"
 sqlite3 /opt/alist/data/data.db <<EOF
 INSERT INTO x_storages VALUES(20000,'/©️ $version-$app_ver',0,'Alias',30,'work','{"paths":"/每日更新"}','','2022-11-12 13:05:12+00:00',0,'','','',0,'302_redirect','');
 EOF
