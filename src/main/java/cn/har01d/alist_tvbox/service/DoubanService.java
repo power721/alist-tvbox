@@ -254,14 +254,18 @@ public class DoubanService {
     private Stream<Path> getSqlFiles(String version) throws IOException {
         double local = Double.parseDouble(version);
         return Files.list(Path.of("/data/atv/sql"))
-                .filter(e -> Double.compare(getSqlVersion(e), local) > 0)
-                .sorted((a, b) -> Double.compare(getSqlVersion(a), getSqlVersion(b)));
+                .filter(e -> Double.compare(getVersionNumber(e), local) > 0)
+                .sorted((a, b) -> Double.compare(getVersionNumber(a), getVersionNumber(b)));
     }
 
-    private double getSqlVersion(Path path) {
+    private double getVersionNumber(Path path) {
+        return Double.parseDouble(getVersion(path));
+    }
+
+    private String getVersion(Path path) {
         String name = path.toFile().getName();
         int index = name.lastIndexOf('.');
-        return Double.parseDouble(name.substring(0, index));
+        return name.substring(0, index);
     }
 
     private void upgradeSqlFile(Path file) {
@@ -275,7 +279,7 @@ public class DoubanService {
                     log.debug("execute sql failed: {}", e);
                 }
             }
-            String version = String.valueOf(getSqlVersion(file));
+            String version = getVersion(file);
             settingRepository.save(new Setting(MOVIE_VERSION, version));
             log.info("movie data upgraded: {}", version);
         } catch (Exception e) {
