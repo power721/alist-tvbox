@@ -26,6 +26,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -92,6 +93,7 @@ public class AccountService {
     private final TaskScheduler scheduler;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final Environment environment;
     private ScheduledFuture scheduledFuture;
 
     public AccountService(AccountRepository accountRepository,
@@ -103,7 +105,8 @@ public class AccountService {
                           TaskScheduler scheduler,
                           RestTemplateBuilder builder,
                           ObjectMapper objectMapper,
-                          JdbcTemplate jdbcTemplate) {
+                          JdbcTemplate jdbcTemplate,
+                          Environment environment) {
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
         this.userRepository = userRepository;
@@ -112,6 +115,7 @@ public class AccountService {
         this.scheduler = scheduler;
         this.objectMapper = objectMapper;
         this.jdbcTemplate = jdbcTemplate;
+        this.environment = environment;
         this.aListClient = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
         this.restTemplate = builder.build();
     }
@@ -190,7 +194,7 @@ public class AccountService {
     private void updateAliAccountId() {
         accountRepository.getFirstByMasterTrue().map(Account::getId).ifPresent(id -> {
             log.info("updateAliAccountId {}", id);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + id + "','','number','',1,0)");
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + id + "','','number','',0,1)");
         });
     }
 
@@ -439,19 +443,19 @@ public class AccountService {
                 if (login.getUsername().equals("guest")) {
                     sql = "delete from x_users where id = 3";
                     Utils.executeUpdate(sql);
-                    sql = "update x_users set disabled = 0, username = '" + login.getUsername() + "' where id = 2";
+                    sql = "update x_users set disabled = 0 where username = 'guest'";
                     Utils.executeUpdate(sql);
                 } else {
-                    sql = "update x_users set disabled = 1 where id = 2";
+                    sql = "update x_users set disabled = 1 where username = 'guest'";
                     Utils.executeUpdate(sql);
                     sql = "delete from x_users where id = 3";
                     Utils.executeUpdate(sql);
-                    sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES (3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,368)";
+                    sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES (3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,372)";
                     Utils.executeUpdate(sql);
                 }
             } else {
                 log.info("enable AList guest");
-                sql = "update x_users set disabled = 0, permission = '368', password = 'guest_Api789' where id = 2";
+                sql = "update x_users set disabled = 0, permission = '368', password = 'guest_Api789' where username = 'guest'";
                 Utils.executeUpdate(sql);
                 sql = "delete from x_users where id = 3";
                 Utils.executeUpdate(sql);
@@ -542,8 +546,10 @@ public class AccountService {
 
         String token = login();
         AListUser guest = getUser(2, token);
-        guest.setDisabled(login.isEnabled());
-        updateUser(guest, token);
+        if (guest != null) {
+            guest.setDisabled(login.isEnabled());
+            updateUser(guest, token);
+        }
 
         deleteUser(3, token);
         if (login.isEnabled()) {

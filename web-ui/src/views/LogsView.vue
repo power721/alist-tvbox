@@ -39,7 +39,7 @@ onMounted(() => {
 
 <template>
 
-  <el-form-item label="类型" label-width="140" v-if="store.xiaoya">
+  <el-form-item label="类型" label-width="140">
     <el-radio-group v-model="type" @change="onTypeChange" class="ml-4">
       <el-radio label="app" size="large">应用日志</el-radio>
       <el-radio label="alist" size="large">AList日志</el-radio>

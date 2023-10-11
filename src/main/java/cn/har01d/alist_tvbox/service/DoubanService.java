@@ -35,6 +35,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -88,6 +89,7 @@ public class DoubanService {
 
     private final RestTemplate restTemplate;
     private final JdbcTemplate jdbcTemplate;
+    private final Environment environment;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final OkHttpClient client = new OkHttpClient();
 
@@ -101,7 +103,8 @@ public class DoubanService {
                          SiteService siteService,
                          TaskService taskService,
                          RestTemplateBuilder builder,
-                         JdbcTemplate jdbcTemplate) {
+                         JdbcTemplate jdbcTemplate,
+                         Environment environment) {
         this.appProperties = appProperties;
         this.metaRepository = metaRepository;
         this.movieRepository = movieRepository;
@@ -114,6 +117,7 @@ public class DoubanService {
                 .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
                 .build();
         this.jdbcTemplate = jdbcTemplate;
+        this.environment = environment;
     }
 
     @PostConstruct
@@ -201,6 +205,10 @@ public class DoubanService {
     }
 
     public String getRemoteVersion(Versions versions) {
+        if (!environment.matchesProfiles("xiaoya")) {
+            return "";
+        }
+
         try {
             String remote = restTemplate.getForObject("http://data.har01d.cn/movie_version", String.class).trim();
             versions.setMovie(remote);
@@ -210,6 +218,8 @@ public class DoubanService {
             if (!local.equals(remote) && !remote.equals(cached) && !downloading) {
                 log.info("local: {} cached: {} remote: {}", local, cached, remote);
                 executor.execute(() -> upgradeMovieData(local, remote));
+            } else {
+                log.debug("local: {} cached: {} remote: {}", local, cached, remote);
             }
             return remote;
         } catch (Exception e) {

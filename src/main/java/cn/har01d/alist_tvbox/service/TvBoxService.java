@@ -1125,6 +1125,9 @@ public class TvBoxService {
         log.info("load playlist {}:{} {}", site.getId(), site.getName(), path);
         String newPath = getParent(path);
         FsDetail fsDetail = aListService.getFile(site, newPath);
+        if (fsDetail == null) {
+            throw new BadRequestException("加载文件失败: " + newPath);
+        }
 
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(site.getId() + "$" + encodeUrl(path) + "$1");

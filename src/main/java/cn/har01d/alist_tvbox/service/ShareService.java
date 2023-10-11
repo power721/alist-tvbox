@@ -23,6 +23,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpEntity;
@@ -65,6 +66,7 @@ public class ShareService {
     private final PikPakService pikPakService;
     private final RestTemplate restTemplate;
     private final RestTemplate restTemplate1;
+    private final Environment environment;
 
     private volatile int shareId = 5000;
 
@@ -80,7 +82,8 @@ public class ShareService {
                         AListLocalService aListLocalService,
                         ConfigFileService configFileService,
                         PikPakService pikPakService,
-                        RestTemplateBuilder builder) {
+                        RestTemplateBuilder builder,
+                        Environment environment) {
         this.objectMapper = objectMapper;
         this.shareRepository = shareRepository;
         this.aliasRepository = aliasRepository;
@@ -92,6 +95,7 @@ public class ShareService {
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
         this.pikPakService = pikPakService;
+        this.environment = environment;
         this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
         this.restTemplate1 = builder
                 .defaultHeader(HttpHeaders.REFERER, "https://docs.qq.com/")
@@ -638,6 +642,10 @@ public class ShareService {
     private static final String TACIT_URL = "https://ycyup.cn/tacit0924";
 
     private Share loadTacit0924() {
+        if (!environment.matchesProfiles("xiaoya")) {
+            return null;
+        }
+
         try {
             String link = restTemplate1.getForObject(TACIT_URL, String.class);
             log.info("Tacit0924 link: {}", link);
@@ -656,6 +664,10 @@ public class ShareService {
     }
 
     private Share loadLatestShare() {
+        if (!environment.matchesProfiles("xiaoya")) {
+            return null;
+        }
+
         try {
             if (!shareRepository.existsById(7001)) {
                 Share share = new Share();
@@ -674,6 +686,10 @@ public class ShareService {
 
     @Scheduled(cron = "0 20 0,9-23 * * ?")
     public void getTacit0924() {
+        if (!environment.matchesProfiles("xiaoya")) {
+            return;
+        }
+
         try {
             String link = restTemplate1.getForObject(TACIT_URL, String.class);
             log.info("Tacit0924 link: {}", link);

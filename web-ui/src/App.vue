@@ -7,7 +7,7 @@ import {store} from "@/services/store";
 
 const account = accountService.account
 const router = useRouter()
-const show = ref(false)
+const show = ref(true)
 const full = ref(localStorage.getItem('full_view') == 'true')
 const mounted = ref(false)
 const showNotification = ref(true)
@@ -28,7 +28,6 @@ const onModeChange = (value: boolean) => {
 onMounted(() => {
   showNotification.value = localStorage.getItem('notification2') != 'true'
   axios.get("/api/profiles").then(({data}) => {
-    show.value = data.includes('xiaoya')
     store.xiaoya = data.includes('xiaoya')
     store.hostmode = data.includes('host')
     mounted.value = true
@@ -59,7 +58,7 @@ onMounted(() => {
           <el-menu-item index="/shares" v-if="account.authenticated&&show&&full">资源</el-menu-item>
           <el-menu-item index="/config" v-if="account.authenticated">配置</el-menu-item>
           <el-menu-item index="/index" v-if="account.authenticated&&show&&full">索引</el-menu-item>
-          <el-menu-item index="/logs" v-if="account.authenticated&&store.xiaoya">日志</el-menu-item>
+          <el-menu-item index="/logs" v-if="account.authenticated">日志</el-menu-item>
           <el-menu-item index="/files" v-if="account.authenticated&&show&&full">文件</el-menu-item>
           <el-menu-item index="/alias" v-if="account.authenticated&&show&&full">别名</el-menu-item>
           <el-menu-item index="/vod" v-if="account.authenticated&&full">vod</el-menu-item>

@@ -1,20 +1,32 @@
-FROM haroldli/java:17 as corretto-jdk
+FROM golang:1.20 as BUILDER
 
-FROM alpine:latest
+WORKDIR /app/
+
+COPY atv-cli ./
+
+RUN go build
+
+FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 
-ENV JAVA_HOME=/jre
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
+ENV MEM_OPT="-Xmx512M" ALIST_PORT=5344
 
-COPY --from=corretto-jdk /jre $JAVA_HOME
+COPY config/config.json /opt/alist/data/config.json
 
-VOLUME /opt/atv/data/
+COPY --from=BUILDER /app/atv-cli /
 
-WORKDIR /opt/atv/
+COPY scripts/init.sh /
+COPY scripts/alist.sql /
+COPY movie.sh /
+COPY entrypoint.sh /
 
-COPY target/alist-tvbox-1.0.jar ./alist-tvbox.jar
+COPY target/application/ ./
 
-EXPOSE 4567
+COPY data/version data/app_version
 
-ENTRYPOINT ["java", "-jar", "alist-tvbox.jar", "--spring.profiles.active=production,docker"]
+EXPOSE 4567 5244 80
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+CMD ["81", "--spring.profiles.active=production,docker"]
