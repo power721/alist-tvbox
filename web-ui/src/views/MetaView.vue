@@ -7,6 +7,7 @@
         搜索
       </el-button>
       <el-button @click="scrapeVisible=true">刮削</el-button>
+      <el-button @click="fixMeta">去重</el-button>
       <el-button @click="refresh">刷新</el-button>
       <el-button type="primary" @click="addMeta">添加</el-button>
     </el-row>
@@ -171,6 +172,12 @@ const search = () => {
 
 const refresh = () => {
   load(page.value)
+}
+
+const fixMeta = () => {
+  axios.post('/api/fix-meta').then(({data}) => {
+    ElMessage.success('删除' + data + '个重复数据')
+  })
 }
 
 const addMeta = () => {

@@ -48,8 +48,8 @@ public class DoubanController {
     }
 
     @PostMapping("/api/fix-meta")
-    public void fixUnique() {
-        service.fixUnique();
+    public int fixUnique() {
+        return service.fixUnique();
     }
 
     @PostMapping("/api/meta-scrape")

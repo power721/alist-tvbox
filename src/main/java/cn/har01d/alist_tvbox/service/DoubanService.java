@@ -177,7 +177,7 @@ public class DoubanService {
         settingRepository.save(new Setting("fix_meta_id", "true"));
     }
 
-    public void fixUnique() {
+    public int fixUnique() {
         log.info("fixUnique");
         Map<String, Meta> map = new HashMap<>();
         List<Meta> list = new ArrayList<>();
@@ -188,8 +188,10 @@ public class DoubanService {
             }
             map.put(path, meta);
         }
-        log.info("delete {} meta", list.size());
+        log.info("delete {} meta: {}", list.size(), list.stream().map(Meta::getId).toList());
+        log.info("{}", list.stream().map(Meta::getPath).toList());
         metaRepository.deleteAll(list);
+        return list.size();
     }
 
     @Scheduled(cron = "0 0 22 * * ?")
