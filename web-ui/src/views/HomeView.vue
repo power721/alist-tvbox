@@ -43,7 +43,7 @@ onMounted(() => {
       <a :href="url" class="hint" target="_blank">{{ url }}</a>
     </div>
     <div v-else>
-      <el-text size="large">独立版</el-text>
+      <el-text size="large">纯净版</el-text>
       <a :href="url" class="hint" target="_blank">{{ url }}</a>
     </div>
     <iframe v-if="store.aListStatus" :src="url" :width="width" :height="height">
