@@ -183,7 +183,7 @@ public class SiteService {
         log.info("new token {}", token);
         if (StringUtils.isBlank(token)) {
             token = generateToken();
-            token = Utils.executeQuery("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");
+            Utils.executeUpdate("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");
         }
         for (Site site : siteRepository.findAll()) {
             if (aListToken.equals(site.getToken())) {
@@ -195,6 +195,9 @@ public class SiteService {
     }
 
     private String postRestToken(String url) {
+        if (StringUtils.isBlank(aListToken)) {
+            return null;
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", aListToken);
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
