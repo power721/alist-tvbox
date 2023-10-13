@@ -180,7 +180,11 @@ public class SiteService {
     public void resetToken() {
         String url = appProperties.isHostmode() ? "http://localhost:5234" : "http://localhost:5244";
         String token = postRestToken(url + "/api/admin/setting/reset_token");
-        log.info("{}", token);
+        log.info("new token {}", token);
+        if (token == null) {
+            token = generateToken();
+            token = Utils.executeQuery("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");
+        }
         for (Site site : siteRepository.findAll()) {
             if (aListToken.equals(site.getToken())) {
                 site.setToken(token);
