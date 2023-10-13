@@ -1,14 +1,18 @@
 BASE_DIR=./data
-PORT=4567
+PORT1=4567
+PORT2=5344
 YES=false
 
-while getopts ":d:p:y" arg; do
+while getopts ":d:p:P:y" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
             ;;
         p)
-            PORT=${OPTARG}
+            PORT1=${OPTARG}
+            ;;
+        P)
+            PORT2=${OPTARG}
             ;;
         y)
             YES=true
@@ -25,7 +29,7 @@ if [ $# -gt 0 ]; then
 fi
 
 if [ $# -gt 1 ]; then
-	PORT=$2
+	PORT1=$2
 fi
 
 if docker ps | awk '{print $NF}' | grep -q xiaoya-tvbox; then
@@ -42,7 +46,7 @@ if docker ps | awk '{print $NF}' | grep -q xiaoya-tvbox; then
   fi
 fi
 
-echo -e "\e[36m端口映射：\e[0m $PORT:4567"
+echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:5244"
 
 echo -e "\e[33m默认端口变更为4567\e[0m"
 
@@ -65,7 +69,7 @@ do
 done
 
 docker rm -f alist-tvbox && \
-docker run -d -p $PORT:4567 --restart=always -v "$BASE_DIR":/data --name=alist-tvbox haroldli/alist-tvbox:${tag}
+docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 --restart=always -v "$BASE_DIR":/data --name=alist-tvbox haroldli/alist-tvbox:${tag}
 
 echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
 echo -e "    docker logs -f alist-tvbox\n"
@@ -74,7 +78,8 @@ IP=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head 
 if [ -n "$IP" ]; then
   echo ""
   echo -e "\e[32m请用以下地址访问：\e[0m"
-  echo -e "    \e[32m管理界面\e[0m： http://$IP:$PORT/"
+  echo -e "    \e[32m管理界面\e[0m： http://$IP:$PORT1/"
+  echo -e "    \e[32mAList\e[0m： http://$IP:$PORT2/"
 else
   echo -e "\e[32m云服务器请用公网IP访问\e[0m"
 fi

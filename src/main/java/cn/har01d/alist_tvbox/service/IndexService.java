@@ -22,6 +22,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -70,6 +71,7 @@ public class IndexService {
     private final IndexTemplateRepository indexTemplateRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final Environment environment;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     public IndexService(AListService aListService,
@@ -80,7 +82,8 @@ public class IndexService {
                         SettingRepository settingRepository,
                         IndexTemplateRepository indexTemplateRepository,
                         RestTemplateBuilder builder,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper,
+                        Environment environment) {
         this.aListService = aListService;
         this.siteService = siteService;
         this.taskService = taskService;
@@ -93,6 +96,7 @@ public class IndexService {
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT1)
                 .build();
         this.objectMapper = objectMapper;
+        this.environment = environment;
         updateIndexFile();
     }
 
@@ -141,6 +145,10 @@ public class IndexService {
     }
 
     public String getRemoteVersion() {
+        if (!environment.matchesProfiles("xiaoya")) {
+            return "";
+        }
+
         try {
             String remote = getVersion();
             String local = settingRepository.findById(INDEX_VERSION).map(Setting::getValue).orElse("").trim();

@@ -4,3 +4,17 @@ spring:
     username: sa
     password: password
     driverClassName: org.h2.Driver
+
+logging:
+  file:
+    name: log/app.log
+  level:
+    cn.har01d: debug
+
+app:
+  sites:
+    - name: 本地
+      url: http://localhost
+      version: 3
+      searchable: true
+      xiaoya: false

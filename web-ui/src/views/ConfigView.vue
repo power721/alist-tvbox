@@ -2,7 +2,7 @@
   <div id="config">
     <el-row>
       <el-col :xs="23" :sm="23" :md="23" :lg="11" :xl="11">
-        <el-card class="box-card" v-if="showLogin">
+        <el-card class="box-card">
           <template #header>
             <div class="card-header">
               <span>AList运行状态</span>
@@ -33,8 +33,8 @@
           />
         </el-card>
 
-        <el-card class="box-card" v-if="showLogin&&store.aListStatus">
-          <el-form :model="login" label-width="120px" v-if="showLogin">
+        <el-card class="box-card" v-if="store.aListStatus">
+          <el-form :model="login" label-width="120px">
             <el-form-item prop="token" label="强制登录AList">
               <el-switch
                 v-model="login.enabled"
@@ -77,7 +77,7 @@
       </el-col>
 
       <el-col :xs="23" :sm="23" :md="23" :lg="11" :xl="11">
-        <el-card class="box-card" v-if="showLogin">
+        <el-card class="box-card">
           <el-form label-width="120px">
             <el-form-item label="计划时间">
               <el-time-picker v-model="scheduleTime"/>
@@ -96,7 +96,6 @@
               </div>
             </div>
           </template>
-<!--          <div v-if="dockerVersion">小雅版本：{{ dockerVersion }}</div>-->
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
           <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
             <el-tooltip
@@ -185,6 +184,9 @@
             @change="updateEnableHttps"
           />
         </el-form-item>
+        <el-form-item label="AList管理密码" v-if="!store.xiaoya">
+          <el-input v-model="atvPass" type="password" show-password/>
+        </el-form-item>
         <el-form-item>
           <el-button @click="resetAListToken">重置AList认证Token</el-button>
         </el-form-item>
@@ -232,7 +234,6 @@ const aListRestart = ref(false)
 const mixSiteSource = ref(false)
 const replaceAliToken = ref(false)
 const enableHttps = ref(false)
-const showLogin = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
 const changelog = ref('')
@@ -249,6 +250,7 @@ const aListStartTime = ref('')
 const openTokenUrl = ref('')
 const dockerAddress = ref('')
 const aliSecret = ref('')
+const atvPass = ref('')
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const login = ref({
   username: '',
@@ -351,51 +353,44 @@ const getAListStatus = () => {
 }
 
 onMounted(() => {
-  showLogin.value = store.xiaoya
-  if (store.xiaoya) {
-    axios.get('/api/settings').then(({data}) => {
-      form.value.token = data.token
-      form.value.enabledToken = !!data.token
-      scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
-      aListStartTime.value = data.alist_start_time
-      fileExpireHour.value = +data.file_expire_hour || 6
-      movieVersion.value = data.movie_version
-      indexVersion.value = data.index_version
-      dockerVersion.value = data.docker_version
-      appVersion.value = data.app_version
-      openTokenUrl.value = data.open_token_url
-      dockerAddress.value = data.docker_address
-      aliSecret.value = data.ali_secret
-      autoCheckin.value = data.auto_checkin === 'true'
-      aListRestart.value = data.alist_restart_required === 'true'
-      replaceAliToken.value = data.replace_ali_token === 'true'
-      enableHttps.value = data.enable_https === 'true'
-      mixSiteSource.value = data.mix_site_source !== 'false'
-      login.value.username = data.alist_username
-      login.value.password = data.alist_password
-      login.value.enabled = data.alist_login === 'true'
-    })
-    axios.get('/api/alist/status').then(({data}) => {
-      store.aListStatus = data
-      aListStarted.value = data != 0
-      if (data === 1) {
-        percentage.value = 0
-        intervalId = setInterval(getAListStatus, 1000)
-      }
-    })
-    axios.get('/api/versions').then(({data}) => {
-      movieRemoteVersion.value = data.movie
-      cachedMovieVersion.value = data.cachedMovie
-      indexRemoteVersion.value = data.index
-      appRemoteVersion.value = data.app
-      changelog.value = data.changelog
-    })
-  } else {
-    axios.get('/token').then(({data}) => {
-      form.value.token = data
-      form.value.enabledToken = data != ''
-    })
-  }
+  axios.get('/api/settings').then(({data}) => {
+    form.value.token = data.token
+    form.value.enabledToken = !!data.token
+    scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
+    aListStartTime.value = data.alist_start_time
+    fileExpireHour.value = +data.file_expire_hour || 6
+    movieVersion.value = data.movie_version
+    indexVersion.value = data.index_version
+    dockerVersion.value = data.docker_version
+    appVersion.value = data.app_version
+    openTokenUrl.value = data.open_token_url
+    dockerAddress.value = data.docker_address
+    aliSecret.value = data.ali_secret
+    autoCheckin.value = data.auto_checkin === 'true'
+    aListRestart.value = data.alist_restart_required === 'true'
+    replaceAliToken.value = data.replace_ali_token === 'true'
+    enableHttps.value = data.enable_https === 'true'
+    mixSiteSource.value = data.mix_site_source !== 'false'
+    atvPass.value = data.atv_password
+    login.value.username = data.alist_username
+    login.value.password = data.alist_password
+    login.value.enabled = data.alist_login === 'true'
+  })
+  axios.get('/api/alist/status').then(({data}) => {
+    store.aListStatus = data
+    aListStarted.value = data != 0
+    if (data === 1) {
+      percentage.value = 0
+      intervalId = setInterval(getAListStatus, 1000)
+    }
+  })
+  axios.get('/api/versions').then(({data}) => {
+    movieRemoteVersion.value = data.movie
+    cachedMovieVersion.value = data.cachedMovie
+    indexRemoteVersion.value = data.index
+    appRemoteVersion.value = data.app
+    changelog.value = data.changelog
+  })
 })
 
 onUnmounted(() => {

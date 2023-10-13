@@ -100,6 +100,16 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:hostmode-${{ inputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build standalone docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - if: ${{ inputs.publish }}
         name: send telegram message
         uses: appleboy/telegram-action@master
