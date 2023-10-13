@@ -13,6 +13,7 @@ init() {
   mv search /www/cgi-bin/search
   mv sou /www/cgi-bin/sou
   mv header.html /www/cgi-bin/header.html
+  mv nginx.conf /etc/nginx/http.d/default.conf
 
   mv mobi.tgz /www/mobi.tgz
   cd /www/

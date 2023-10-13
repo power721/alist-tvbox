@@ -75,6 +75,7 @@ public class DoubanService {
     private static final Pattern NUMBER3 = Pattern.compile("^S(\\d{1,2})$");
     private static final Pattern NUMBER1 = Pattern.compile("第(\\d{1,2})季");
     private static final Pattern YEAR_PATTERN = Pattern.compile("\\((\\d{4})\\)");
+    private static final Pattern YEAR2_PATTERN = Pattern.compile("(\\d{4})");
     private static final String DB_PREFIX = "https://movie.douban.com/subject/";
     private static final String[] tokens = new String[]{"导演:", "编剧:", "主演:", "类型:", "制片国家/地区:", "语言:", "上映日期:",
             "片长:", "又名:", "IMDb链接:", "官方网站:", "官方小站:", "首播:", "季数:", "集数:", "单集片长:"};
@@ -429,7 +430,7 @@ public class DoubanService {
         if (meta == null) {
             return false;
         }
-        Movie movie = scrape(name);
+        Movie movie = scrape(name, getYearFromPath(meta.getPath()));
         if (movie != null) {
             meta.setMovie(movie);
             meta.setYear(movie.getYear());
@@ -614,7 +615,7 @@ public class DoubanService {
 
             try {
                 log.info("[{}] handle name: {} - path: {}", id, newname, path);
-                movie = search(newname);
+                movie = search(newname, getYearFromPath(path));
             } catch (RuntimeException e) {
                 throw e;
             } catch (Exception e) {
@@ -740,20 +741,41 @@ public class DoubanService {
         return path;
     }
 
-    public Movie scrape(String name) {
+    public Integer getYearFromPath(String path) {
+        String[] parts = path.split("/");
+        for (int i = parts.length - 1; i >= 0; i--) {
+            Matcher m = YEAR2_PATTERN.matcher(parts[i]);
+            while (m.find()) {
+                Integer year = Integer.parseInt(m.group(1));
+                if (year > 1960) {
+                    log.debug("find year {} from path {}", year, path);
+                    return year;
+                }
+            }
+        }
+        return null;
+    }
+
+    public Movie scrape(String name, Integer year) {
         try {
-            log.info("刮削: {}", name);
-            return search(name);
+            log.info("刮削: {} {}", name, year);
+            return search(name, year);
         } catch (IOException e) {
             return null;
         }
     }
 
-    private Movie search(String text) throws IOException {
+    private Movie search(String text, Integer year) throws IOException {
         if (text.trim().isEmpty()) {
             return null;
         }
-        String url = "https://m.douban.com/search/?type=movie&query=" + URLEncoder.encode(text, "UTF-8");
+        String query;
+        if (year != null) {
+            query = text + " " + year;
+        } else {
+            query = text;
+        }
+        String url = "https://m.douban.com/search/?type=movie&query=" + URLEncoder.encode(query, "UTF-8");
 
         String html = getHtml(url);
 
