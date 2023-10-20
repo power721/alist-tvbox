@@ -62,6 +62,7 @@ version=$(head -n1 /docker.version)
 echo "xiaoya version: $version"
 date
 
+rm -f /etc/nginx/http.d/emby.conf /etc/nginx/http.d/emby.js
 #if [ ! -f /etc/nginx/http.d/emby.js ]; then
 #  unzip -q /var/lib/data.zip -d /tmp
 #  mv /tmp/emby.conf /etc/nginx/http.d/
