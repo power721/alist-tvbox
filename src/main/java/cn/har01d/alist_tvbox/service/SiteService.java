@@ -81,10 +81,8 @@ public class SiteService {
             if (order == 1) {
                 aListToken = generateToken();
                 site.setToken(aListToken);
-                int code = Utils.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
-                if (code != 0) {
-                    Utils.executeUpdate("INSERT INTO x_setting_items VALUES('token','" + aListToken + "','','string','',0,1)");
-                }
+                Utils.executeUpdate("INSERT INTO x_setting_items VALUES('token','" + aListToken + "','','string','',0,1)");
+                Utils.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
             }
             site.setOrder(order++);
             siteRepository.save(site);
@@ -167,10 +165,8 @@ public class SiteService {
             } else {
                 aListToken = site.getToken();
             }
-            int code = Utils.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
-            if (code != 0) {
-                Utils.executeUpdate("INSERT INTO x_setting_items VALUES('token','" + aListToken + "','','string','',0,1)");
-            }
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('token','" + aListToken + "','','string','',0,1)");
+            Utils.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -189,10 +185,8 @@ public class SiteService {
         log.info("new token {}", token);
         if (StringUtils.isBlank(token)) {
             token = generateToken();
-            int code = Utils.executeUpdate("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");
-            if (code != 0) {
-                Utils.executeUpdate("INSERT INTO x_setting_items VALUES('token','" + token + "','','string','',0,1)");
-            }
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('token','" + token + "','','string','',0,1)");
+            Utils.executeUpdate("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");
         }
         for (Site site : siteRepository.findAll()) {
             if (aListToken.equals(site.getToken())) {
