@@ -10,7 +10,6 @@ usage(){
   echo "-d BASE_DIR  数据目录，默认：/etc/xiaoya"
   echo "-p PORT1     管理界面端口，默认：4567"
   echo "-P PORT2     小雅AList端口，默认：5344"
-  echo "-e PORT3     emby代理端口，默认：5345"
   echo "-t TAG       Docker镜像标签，默认：latest"
   echo "-m MEM_OPT   Java最大堆内存，默认：512M"
   exit 2
@@ -62,7 +61,7 @@ if [ $# -gt 2 ]; then
 fi
 
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
-echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80  $PORT3:2345"
+echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
 
 echo -e "\e[33m默认端口变更为4567\e[0m"
 
@@ -92,7 +91,7 @@ done
 
 echo -e "\e[33m重启应用\e[0m"
 docker rm -f xiaoya-tvbox 2>/dev/null && \
-docker run -d -p $PORT1:4567 -p $PORT2:80 -p $PORT3:2345 -e ALIST_PORT=$PORT2 -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
+docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
 
 echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
 echo -e "    docker logs -f xiaoya-tvbox\n"
