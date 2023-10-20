@@ -52,6 +52,7 @@ import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -742,12 +743,13 @@ public class DoubanService {
     }
 
     public Integer getYearFromPath(String path) {
+        int max = LocalDate.now().getYear() + 3;
         String[] parts = path.split("/");
         for (int i = parts.length - 1; i >= 0; i--) {
             Matcher m = YEAR2_PATTERN.matcher(parts[i]);
             while (m.find()) {
-                Integer year = Integer.parseInt(m.group(1));
-                if (year > 1960) {
+                int year = Integer.parseInt(m.group(1));
+                if (year > 1960 && year < max) {
                     log.debug("find year {} from path {}", year, path);
                     return year;
                 }

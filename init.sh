@@ -50,8 +50,12 @@ date
 
 if [ ! -f /etc/nginx/http.d/emby.js ]; then
   unzip -q /var/lib/data.zip -d /tmp
-  mv /tmp/emby.conf /etc/nginx/http.d/emby.conf
-  mv /tmp/emby.js /etc/nginx/http.d/emby.js
+  mv /tmp/emby.conf /etc/nginx/http.d/
+  mv /tmp/emby.js /etc/nginx/http.d/
+  mv /tmp/emby_ext.conf /etc/nginx/http.d/
+  mv /tmp/emby_ext.js /etc/nginx/http.d/
+  mv /tmp/externalPlayer.js /etc/nginx/http.d/
+  mv /tmp/externalUrl.js /etc/nginx/http.d/
 fi
 
 if [ -f /opt/alist/data/data.db ]; then
@@ -145,17 +149,15 @@ LOCAL="0.0"
 if [ -f /data/index/share_version ]; then
   LOCAL=$(head -n 1 </data/index/share_version)
 fi
-REMOTE=$(curl -fsSL http://data.har01d.cn/share_version | head -n 1)
+unzip -q -o /index.share.zip -d /tmp
+REMOTE=$(head -n 1 </tmp/share_version)
 echo "share index version: $LOCAL $REMOTE"
 if [ "$LOCAL" != "$REMOTE" ]; then
-  echo "Download index.share.zip"
-  wget http://data.har01d.cn/index.share.zip -O index.share.zip && \
-  unzip -q -o index.share.zip -d /data/index/ && \
-  rm -f index.share.zip
+  echo "upgrade share index"
+  mv /tmp/index.share.txt /data/index/index.share.txt
+  mv /tmp/share_version /data/index/share_version
   grep -v "/🈴我的阿里分享/" /data/index/index.video.txt >/data/index/index.video.txt.1
   grep -v "/🈴我的阿里分享/" /data/index/index.txt >/data/index/index.txt.1
-  grep -v "/🌞我的夸克网盘/Harold/" /data/index/index.video.txt >/data/index/index.video.txt.1
-  grep -v "/🌞我的夸克网盘/Harold/" /data/index/index.txt >/data/index/index.txt.1
   mv /data/index/index.video.txt.1 /data/index/index.video.txt
   mv /data/index/index.txt.1 /data/index/index.txt
   cat /data/index/index.share.txt >> /data/index/index.video.txt
@@ -174,10 +176,13 @@ LOCAL="0.0"
 if [ -f /data/atv/base_version ]; then
   LOCAL=$(head -n 1 </data/atv/base_version)
 fi
-REMOTE=$(curl -fsSL http://data.har01d.cn/base_version | head -n 1)
-echo "movie base version: $LOCAL $REMOTE"
-if [ "$LOCAL" != "$REMOTE" ]; then
-  wget http://data.har01d.cn/data.zip -O data.zip && \
-  unzip -q -o data.zip -d /tmp && \
-  cp /tmp/data/data.sql /data/atv/
+if [ -f /data.zip ]; then
+  unzip -q -o /data.zip -d /tmp
+  REMOTE=$(head -n 1 </tmp/base_version)
+  echo "movie base version: $LOCAL $REMOTE"
+  if [ "$LOCAL" != "$REMOTE" ]; then
+    echo "upgrade movie data"
+    mv /tmp/data.sql /data/atv/
+    mv /tmp/base_version /data/atv/
+  fi
 fi
