@@ -15,9 +15,8 @@ init() {
   mv sou /www/cgi-bin/sou
   mv whatsnew /www/cgi-bin/whatsnew
   mv header.html /www/cgi-bin/header.html
-  mv emby.conf /etc/nginx/http.d/emby.conf
-  mv emby.js /etc/nginx/http.d/emby.js
 
+  sed -i "s/127.0.0.1/0.0.0.0/" /opt/alist/data/config.json
   sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
 
   mv mobi.tgz /www/mobi.tgz
@@ -61,17 +60,6 @@ cat data/app_version
 version=$(head -n1 /docker.version)
 echo "xiaoya version: $version"
 date
-
-rm -f /etc/nginx/http.d/emby.conf /etc/nginx/http.d/emby.js
-#if [ ! -f /etc/nginx/http.d/emby.js ]; then
-#  unzip -q /var/lib/data.zip -d /tmp
-#  mv /tmp/emby.conf /etc/nginx/http.d/
-#  mv /tmp/emby.js /etc/nginx/http.d/
-#  mv /tmp/emby_ext.conf /etc/nginx/http.d/
-#  mv /tmp/emby_ext.js /etc/nginx/http.d/
-#  mv /tmp/externalPlayer.js /etc/nginx/http.d/
-#  mv /tmp/externalUrl.js /etc/nginx/http.d/
-#fi
 
 if [ -f /opt/alist/data/data.db ]; then
   echo "已经初始化成功"
