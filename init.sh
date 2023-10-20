@@ -28,7 +28,7 @@ init() {
   sqlite3 /opt/alist/data/data.db ".read /update.sql"
 
   wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/tvbox.zip || \
-  wget -T 30 -t 2 http://data.har01d.cn/tvbox.zip -O tvbox.zip
+  cp /tvbox.zip ./
 
   unzip -q -o tvbox.zip
   if [ -f /data/my.json ]; then
@@ -41,6 +41,20 @@ init() {
   fi
 
   rm -f tvbox.zip index.zip index.txt version.txt update.zip
+
+  LOCAL="0.0"
+  if [ -f /data/atv/base_version ]; then
+    LOCAL=$(head -n 1 </data/atv/base_version)
+  fi
+  unzip -q -o /data.zip -d /tmp
+  REMOTE=$(head -n 1 </tmp/base_version)
+  echo "movie base version: $LOCAL $REMOTE"
+  if [ "$LOCAL" != "$REMOTE" ]; then
+    echo "upgrade movie data"
+    mv /tmp/data.sql /data/atv/
+    mv /tmp/base_version /data/atv/
+  fi
+  rm -f /tmp/data.sql
 }
 
 cat data/app_version
@@ -48,15 +62,15 @@ version=$(head -n1 /docker.version)
 echo "xiaoya version: $version"
 date
 
-if [ ! -f /etc/nginx/http.d/emby.js ]; then
-  unzip -q /var/lib/data.zip -d /tmp
-  mv /tmp/emby.conf /etc/nginx/http.d/
-  mv /tmp/emby.js /etc/nginx/http.d/
-  mv /tmp/emby_ext.conf /etc/nginx/http.d/
-  mv /tmp/emby_ext.js /etc/nginx/http.d/
-  mv /tmp/externalPlayer.js /etc/nginx/http.d/
-  mv /tmp/externalUrl.js /etc/nginx/http.d/
-fi
+#if [ ! -f /etc/nginx/http.d/emby.js ]; then
+#  unzip -q /var/lib/data.zip -d /tmp
+#  mv /tmp/emby.conf /etc/nginx/http.d/
+#  mv /tmp/emby.js /etc/nginx/http.d/
+#  mv /tmp/emby_ext.conf /etc/nginx/http.d/
+#  mv /tmp/emby_ext.js /etc/nginx/http.d/
+#  mv /tmp/externalPlayer.js /etc/nginx/http.d/
+#  mv /tmp/externalUrl.js /etc/nginx/http.d/
+#fi
 
 if [ -f /opt/alist/data/data.db ]; then
   echo "已经初始化成功"
@@ -78,7 +92,7 @@ if [ -s /data/infuse_api_key.txt ]; then
 	sed -i "s#INFUSE_API_KEY#$infuse_api_key#" /etc/nginx/http.d/emby.js
 fi
 
-wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/update/version.txt || \
+wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/version.txt || \
 wget -T 10 -t 2 http://data.har01d.cn/version.txt -O version.txt
 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/update.zip || \
@@ -163,26 +177,9 @@ if [ "$LOCAL" != "$REMOTE" ]; then
   cat /data/index/index.share.txt >> /data/index/index.video.txt
   cat /data/index/index.share.txt >> /data/index/index.txt
 fi
-
-#wget http://data.har01d.cn/cat_open.zip -O cat_open.zip && \
-#unzip cat_open.zip -d /www/tvbox/
+rm -f /tmp/index.share.txt
 
 app_ver=$(head -n1 /opt/atv/data/app_version)
 sqlite3 /opt/alist/data/data.db <<EOF
 INSERT INTO x_storages VALUES(20000,'/©️ $version-$app_ver',0,'Alias',30,'work','{"paths":"/每日更新"}','','2022-11-12 13:05:12+00:00',0,'','','',0,'302_redirect','');
 EOF
-
-LOCAL="0.0"
-if [ -f /data/atv/base_version ]; then
-  LOCAL=$(head -n 1 </data/atv/base_version)
-fi
-if [ -f /data.zip ]; then
-  unzip -q -o /data.zip -d /tmp
-  REMOTE=$(head -n 1 </tmp/base_version)
-  echo "movie base version: $LOCAL $REMOTE"
-  if [ "$LOCAL" != "$REMOTE" ]; then
-    echo "upgrade movie data"
-    mv /tmp/data.sql /data/atv/
-    mv /tmp/base_version /data/atv/
-  fi
-fi

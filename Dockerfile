@@ -21,6 +21,7 @@ COPY scripts/alist.sql /
 COPY movie.sh /
 COPY entrypoint.sh /
 
+COPY data/tvbox.zip /
 COPY target/application/ ./
 
 COPY data/version data/app_version
