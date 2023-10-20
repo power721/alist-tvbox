@@ -24,6 +24,10 @@
       <code>docker run -d -p 4567:4567 -p 5344:80 -e ALIST_PORT=5344 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox</code>
     </p>
     <p>
+      一键部署(纯净版)：
+      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"</code><br>
+    </p>
+    <p>
       一键部署(小雅版)：
       <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"</code><br>
     </p>
