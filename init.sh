@@ -69,18 +69,6 @@ fi
 
 cd /tmp/
 
-if [ -s /data/emby_server.txt ]; then
-	emby_server=$(head -n1 /data/emby_server.txt)
-	_docker_address=$(head -n1 /data/docker_address.txt)
-	sed -i "s#EMBY_SERVER#$emby_server#" /etc/nginx/http.d/emby.conf
-	sed -i -e "s#EMBY_SERVER#$emby_server#" -e "s#_DOCKER_ADDRESS#$_docker_address#" /etc/nginx/http.d/emby.js
-fi
-
-if [ -s /data/infuse_api_key.txt ]; then
-	infuse_api_key=$(head -n1 /data/infuse_api_key.txt)
-	sed -i "s#INFUSE_API_KEY#$infuse_api_key#" /etc/nginx/http.d/emby.js
-fi
-
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/version.txt || \
 wget -T 10 -t 2 http://data.har01d.cn/version.txt -O version.txt
 
