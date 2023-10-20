@@ -9,7 +9,6 @@ init() {
   ln -sf /data/config .
   cd /var/lib/pxg
   unzip -q /var/lib/data.zip
-  ls -l
   mv search /www/cgi-bin/search
   mv sou /www/cgi-bin/sou
   mv header.html /www/cgi-bin/header.html
