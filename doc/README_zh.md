@@ -87,6 +87,12 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 
 4567 - 管理应用
 
+#### 纯净版
+没有内置数据。
+```bash
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
+```
+
 #### NAS
 对于群辉等NAS系统，请挂载Docker的/data目录到群辉文件系统，否则数据不会保留。
 
@@ -115,7 +121,7 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 
 访问AList，请加端口，http://your-ip:5344/ 。使用Docker映射的端口，默认是5344.
 
-自己可以添加三方站点，取代了xiaoya的套娃。会自动识别版本，如果不能正确识别，请手动配置版本。
+自己可以添加三方站点，功能与xiaoya的套娃类似。会自动识别版本，如果不能正确识别，请手动配置版本。
 
 ![添加站点](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_site_config.png)
 
@@ -126,7 +132,8 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 ### 账号
 ![账号列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account.png)
 
-第一次启动会自动读取/data/mytoken.txt,/data/myopentoken.txt,/data/temp_transfer_folder_id.txt里面的内容，以后这些文件不再生效。
+第一次启动会自动读取/data/mytoken.txt,/data/myopentoken.txt里面的内容，以后这些文件不再生效。
+自动创建转存文件夹，不需要再填写转存文件夹ID。
 
 ![账号详情](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_detail.png)
 
@@ -217,7 +224,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ![搜索](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_search.png)
 
-添加频道作为一级分类：
+添加频道作为一级分类：（目前不可用）
 
 ![频道](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_channel.png)
 

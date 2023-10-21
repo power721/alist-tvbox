@@ -19,14 +19,14 @@ COPY --from=BUILDER /app/atv-cli /
 COPY scripts/init.sh /
 COPY scripts/alist.sql /
 COPY movie.sh /
-COPY entrypoint.sh /
+COPY scripts/entrypoint.sh /
 
 COPY data/tvbox.zip /
 COPY target/application/ ./
 
 COPY data/version data/app_version
 
-EXPOSE 4567 5244 80
+EXPOSE 4567 5244
 
 ENTRYPOINT ["/entrypoint.sh"]
 

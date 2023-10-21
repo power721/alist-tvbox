@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.FsDetail;
@@ -41,13 +42,15 @@ public class AListService {
 
     private final RestTemplate restTemplate;
     private final SiteService siteService;
+    private final AppProperties appProperties;
 
-    public AListService(RestTemplateBuilder builder, SiteService siteService) {
+    public AListService(RestTemplateBuilder builder, SiteService siteService, AppProperties appProperties) {
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
         this.siteService = siteService;
+        this.appProperties = appProperties;
     }
 
     public List<SearchResult> search(Site site, String keyword) {
@@ -83,7 +86,7 @@ public class AListService {
 
     public FsResponse listFiles(Site site, String path, int page, int size) {
         int version = getVersion(site);
-        String url = site.getUrl() + (version == 2 ? "/api/public/path" : "/api/fs/list");
+        String url = getUrl(site) + (version == 2 ? "/api/public/path" : "/api/fs/list");
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
         request.setPath(path);
@@ -136,7 +139,7 @@ public class AListService {
     }
 
     private FsDetail getFileV3(Site site, String path) {
-        String url = site.getUrl() + "/api/fs/get";
+        String url = getUrl(site) + "/api/fs/get";
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
         request.setPath(path);
@@ -160,7 +163,7 @@ public class AListService {
     }
 
     private FsDetail getFileV2(Site site, String path) {
-        String url = site.getUrl() + "/api/public/path";
+        String url = getUrl(site) + "/api/public/path";
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
         request.setPath(path);
@@ -195,7 +198,7 @@ public class AListService {
             return site.getVersion();
         }
 
-        String url = site.getUrl() + "/api/public/settings";
+        String url = getUrl(site) + "/api/public/settings";
         log.debug("call api: {}", url);
         String text = get(site, url, String.class);
         int version;
@@ -209,6 +212,13 @@ public class AListService {
         siteService.save(site);
 
         return version;
+    }
+
+    private String getUrl(Site site) {
+        if (site.getId() == 1) {
+            return appProperties.isHostmode() ? "http://localhost:5234" : "http://localhost:5244";
+        }
+        return site.getUrl();
     }
 
     private <T> T get(Site site, String url, Class<T> responseType) {

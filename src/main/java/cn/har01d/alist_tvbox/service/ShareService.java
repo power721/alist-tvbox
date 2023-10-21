@@ -161,7 +161,7 @@ public class ShareService {
 
     private void loadSites() {
         for (Site site : siteRepository.findAll()) {
-            if (site.isDisabled() || site.getUrl().equals("http://localhost")) {
+            if (site.getId() == 1 || site.isDisabled() || site.getUrl().equals("http://localhost")) {
                 continue;
             }
             try {
