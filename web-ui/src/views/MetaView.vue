@@ -10,10 +10,12 @@
       <el-button @click="fixMeta">去重</el-button>
       <el-button @click="refresh">刷新</el-button>
       <el-button type="primary" @click="addMeta">添加</el-button>
+      <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
     </el-row>
     <div class="space"></div>
 
-    <el-table :data="files" border style="width: 100%">
+    <el-table :data="files" border @selection-change="handleSelectionChange" style="width: 100%">
+      <el-table-column type="selection" width="55"/>
       <el-table-column prop="id" label="ID" width="75"/>
       <el-table-column prop="name" label="电影名称" width="250"/>
       <el-table-column prop="movieId" label="豆瓣ID" width="100">
@@ -40,8 +42,8 @@
       </el-table-column>
     </el-table>
     <div>
-      <el-pagination layout="total, prev, pager, next, jumper" :current-page="page" :page-size="size" :total="total"
-                     @current-change="load"/>
+      <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" @current-change="load"
+                     :page-size="size" :page-sizes="sizes" :total="total" @size-change="handleSizeChange"/>
     </div>
 
     <el-dialog v-model="formVisible" :title="'编辑 '+form.id" width="60%">
@@ -92,8 +94,13 @@
     </el-dialog>
 
     <el-dialog v-model="dialogVisible" title="删除电影数据" width="30%">
-      <p>是否删除电影数据 - {{ form.name }}</p>
-      <p>{{ form.path }}</p>
+      <div v-if="batch">
+        <p>是否删除选中的{{ multipleSelection.length }}个电影数据?</p>
+      </div>
+      <div v-else>
+        <p>是否删除电影数据 - {{ form.name }} {{ form.year }}</p>
+        <p>{{ form.path }}</p>
+      </div>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -130,6 +137,16 @@ import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 import type {Site} from "@/model/Site";
 
+interface Meta {
+  id: number
+  name: string
+  path: string
+  year: number
+  score: number
+  movieId: number
+}
+
+const sizes = [20, 40, 60, 80, 100]
 const url = ref('http://' + window.location.hostname + ':5344')
 const keyword = ref('')
 const force = ref(false)
@@ -139,11 +156,13 @@ const size = ref(20)
 const total = ref(0)
 const files = ref([])
 const sites = ref([] as Site[])
+const multipleSelection = ref<Meta[]>([])
 const dialogVisible = ref(false)
 const formVisible = ref(false)
 const addVisible = ref(false)
 const scrapeVisible = ref(false)
 const fullscreen = ref(false)
+const batch = ref(false)
 const form = ref({
   id: 0,
   name: '',
@@ -153,17 +172,36 @@ const form = ref({
   movieId: 0,
 })
 
-const handleDelete = (data: any) => {
+const handleSelectionChange = (val: Meta[]) => {
+  multipleSelection.value = val
+}
+
+const handleDelete = (data: Meta) => {
   form.value = data
+  batch.value = false
+  dialogVisible.value = true
+}
+
+const handleDeleteBatch = () => {
+  batch.value = true
   dialogVisible.value = true
 }
 
 const deleteSub = () => {
-  axios.delete('/api/meta/' + form.value.id).then(() => {
-    dialogVisible.value = false
-    scrapeVisible.value = false
-    refresh()
-  })
+  dialogVisible.value = false
+  if (batch.value) {
+    axios.post('/api/meta-batch-delete', multipleSelection.value.map(s => s.id)).then(() => {
+      dialogVisible.value = false
+      scrapeVisible.value = false
+      refresh()
+    })
+  } else {
+    axios.delete('/api/meta/' + form.value.id).then(() => {
+      dialogVisible.value = false
+      scrapeVisible.value = false
+      refresh()
+    })
+  }
 }
 
 const search = () => {
@@ -239,6 +277,11 @@ const scrapeIndex = () => {
     ElMessage.success('刮削开始')
     scrapeVisible.value = false
   })
+}
+
+const handleSizeChange = (value: number) => {
+  size.value = value
+  load(1)
 }
 
 const load = (value: number) => {
