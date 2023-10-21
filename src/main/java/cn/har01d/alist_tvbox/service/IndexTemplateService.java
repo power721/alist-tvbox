@@ -33,7 +33,9 @@ public class IndexTemplateService {
     @PostConstruct
     public void setup() {
         if (settingRepository.existsById("auto_index")) {
-            fixAutoIndex();
+            if (environment.matchesProfiles("xiaoya")) {
+                fixAutoIndex();
+            }
             return;
         }
 
