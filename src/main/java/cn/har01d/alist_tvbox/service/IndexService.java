@@ -343,7 +343,8 @@ public class IndexService {
     }
 
     public IndexResponse index(IndexRequest indexRequest) {
-        if (indexRequest.getPaths().isEmpty() || StringUtils.isBlank(indexRequest.getPaths().get(0))) {
+        indexRequest.setPaths(indexRequest.getPaths().stream().filter(StringUtils::isNotBlank).toList());
+        if (indexRequest.getPaths().isEmpty()) {
             throw new BadRequestException("路径不能为空");
         }
         cn.har01d.alist_tvbox.entity.Site site = siteService.getById(indexRequest.getSiteId());
