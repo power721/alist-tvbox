@@ -354,6 +354,7 @@ public class IndexService {
             try {
                 index(indexRequest, site, task);
             } catch (Exception e) {
+                log.warn("index failed", e);
                 taskService.failTask(task.getId(), e.getMessage());
             }
         });
@@ -480,7 +481,7 @@ public class IndexService {
 
         FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 1000);
         if (fsResponse == null) {
-            log.debug("response null: {} {}", path, context.stats);
+            log.warn("response null: {} {}", path, context.stats);
             context.stats.errors++;
             return;
         }
@@ -512,6 +513,10 @@ public class IndexService {
                         if (context.getIndexRequest().getSleep() > 0) {
                             log.debug("sleep {}", context.getIndexRequest().getSleep());
                             Thread.sleep(context.getIndexRequest().getSleep());
+                        }
+
+                        if (isCancelled(context)) {
+                            break;
                         }
 
                         index(context, newPath, depth + 1);

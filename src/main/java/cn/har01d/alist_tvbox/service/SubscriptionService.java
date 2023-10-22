@@ -653,6 +653,9 @@ public class SubscriptionService {
         Map<String, Object> viewType = new HashMap<>();
         Map<String, Object> style = new HashMap<>();
         style.put("type", "rect");
+        if ("csp_BiliBili".equals(key)) {
+            style.put("ratio", 1.597);
+        }
         viewType.put("style", style);
         site.put("viewType", viewType);
         return site;

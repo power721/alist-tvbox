@@ -82,11 +82,11 @@ public class TaskService {
         taskRepository.save(task);
     }
 
-    public void updateTaskSummary(Integer id, String summary) {
+    public Task updateTaskSummary(Integer id, String summary) {
         Task task = getById(id);
         task.setSummary(summary);
         task.setUpdatedTime(Instant.now());
-        taskRepository.save(task);
+        return taskRepository.save(task);
     }
 
     public void completeTask(Integer id) {

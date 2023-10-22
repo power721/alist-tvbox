@@ -103,6 +103,9 @@ public class AListService {
     }
 
     private FsResponse getFiles(int version, FsResponse response) {
+        if (response == null) {
+            return null;
+        }
         if (version == 2) {
             for (FsInfo fsInfo : response.getFiles()) {
                 fsInfo.setThumb(fsInfo.getThumbnail());

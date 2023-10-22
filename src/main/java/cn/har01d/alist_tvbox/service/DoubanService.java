@@ -137,14 +137,15 @@ public class DoubanService {
         }
 
         if (metaRepository.count() > 10000) {
-            Path source = Path.of("/tmp/data/base_version");
+            Path source = Path.of("/tmp/base_version");
             if (Files.exists(source)) {
                 try {
-                    Utils.execute("mv /tmp/data/base_version /data/atv/base_version");
+                    Files.delete(source);
                 } catch (Exception e) {
                     log.warn("", e);
                 }
 
+                log.debug("reset data.sql");
                 writeText("/data/atv/data.sql", "SELECT COUNT(*) FROM META;");
             }
         }
