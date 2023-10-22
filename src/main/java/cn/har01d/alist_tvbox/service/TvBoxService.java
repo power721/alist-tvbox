@@ -313,10 +313,35 @@ public class TvBoxService {
 
     public MovieList recommend() {
         MovieList result = new MovieList();
-        result.setList(doubanService.getHotRank());
+        result.setList(getLatest());
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         return result;
+    }
+
+    private List<MovieDetail> getLatest() {
+        List<MovieDetail> list = new ArrayList<>();
+        Pageable pageable = PageRequest.of(0, 60, Sort.Direction.DESC, "id");
+        for (Meta meta : metaRepository.findAll(pageable).getContent()) {
+            Movie movie = meta.getMovie();
+            String name;
+            if (movie == null) {
+                name = getNameFromPath(meta.getPath());
+            } else {
+                name = movie.getName();
+            }
+
+            boolean isMediaFile = isMediaFile(meta.getPath());
+            String newPath = fixPath(meta.getPath() + (isMediaFile ? "" : PLAYLIST));
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(getXiaoyaSite().getId() + "$" + encodeUrl(newPath) + "$0");
+            movieDetail.setVod_name(name);
+            movieDetail.setVod_pic(Constants.ALIST_PIC);
+            movieDetail.setVod_content(meta.getPath());
+            setDoubanInfo(movieDetail, movie, false);
+            list.add(movieDetail);
+        }
+        return list;
     }
 
     public MovieList msearch(Integer type, String keyword) {

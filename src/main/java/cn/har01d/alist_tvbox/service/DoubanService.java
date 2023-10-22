@@ -20,7 +20,6 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
-import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.annotation.PostConstruct;
@@ -370,9 +369,15 @@ public class DoubanService {
 
     public Movie getByName(String name) {
         try {
+            Alias alias = aliasRepository.findById(name).orElse(null);
+            if (alias != null) {
+                log.debug("name: {} alias: {}", name, alias.getAlias());
+                return alias.getMovie();
+            }
+
             name = TextUtils.fixName(name);
 
-            Alias alias = aliasRepository.findById(name).orElse(null);
+            alias = aliasRepository.findById(name).orElse(null);
             if (alias != null) {
                 log.debug("name: {} alias: {}", name, alias.getAlias());
                 return alias.getMovie();

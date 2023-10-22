@@ -285,7 +285,7 @@ public class TextUtils {
                 .replace("+SP", " ")
                 .replace("+前传", " ")
                 .replace("中国大陆区", " ")
-                .replace("大陆", " ")
+                //.replace("大陆", " ")
                 .replace("未分级重剪加长版", " ")
                 .replace("【美剧】", " ")
                 .replace("【法国】", " ")
