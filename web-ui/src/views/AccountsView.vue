@@ -20,7 +20,11 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column prop="checkinDays" label="签到次数" width="90"/>
+      <el-table-column prop="checkinDays" label="签到次数" width="90">
+        <template #default="scope">
+          <el-button link @click="loadTimeline(scope.row.id)">{{ scope.row.checkinDays }}</el-button>
+        </template>
+      </el-table-column>
       <el-table-column prop="checkinTime" label="上次签到时间">
         <template #default="scope">
           {{ formatTime(scope.row.checkinTime) }}
@@ -189,6 +193,25 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="timelineVisible" title="签到日志" width="60%">
+      <el-timeline>
+        <el-timeline-item
+          v-for="(activity, index) in activities"
+          :key="index"
+          :type="activity.status!='end'?'primary':''"
+          :hollow="activity.status!='verification'"
+          :timestamp="activity.date"
+        >
+          {{ activity.name }}
+        </el-timeline-item>
+      </el-timeline>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="timelineVisible = false">关闭</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
     <div class="divider"></div>
 
     <PikPakView></PikPakView>
@@ -206,6 +229,7 @@ import PikPakView from '@/views/PikPakView.vue'
 
 const iat = ref([0])
 const exp = ref([0])
+const activities = ref<any[]>([])
 const forceCheckin = ref(false)
 const updateAction = ref(false)
 const dialogTitle = ref('')
@@ -214,6 +238,7 @@ const formVisible = ref(false)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const alistVisible = ref(false)
+const timelineVisible = ref(false)
 const form = ref({
   id: 0,
   nickname: '',
@@ -336,6 +361,13 @@ const restartAList = () => {
     alistVisible.value = false
     ElMessage.success('AList重启中')
     setTimeout(() => router.push('/wait'), 1000)
+  })
+}
+
+const loadTimeline = (id: number) => {
+  axios.get('/api/ali/accounts/' + id + '/checkin').then(({data}) => {
+    activities.value = data
+    timelineVisible.value = true
   })
 }
 

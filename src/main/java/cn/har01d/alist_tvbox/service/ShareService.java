@@ -322,14 +322,6 @@ public class ShareService {
                     }
                     if (parts.length > 2) {
                         share.setFolderId(parts[2]);
-                    } else {
-                        if (parts[1].startsWith("https://")) {
-                            if (share.getType() == 1) {
-                                parsePikPakUrl(share, parts[1]);
-                            } else if (share.getType() == 0) {
-                                parseAliUrl(share, parts[1]);
-                            }
-                        }
                     }
                     share.setPath(getMountPath(share));
                     if (shareRepository.existsByPath(share.getPath())) {
@@ -346,28 +338,6 @@ public class ShareService {
 
         log.info("loaded {} shares", count);
         return count;
-    }
-
-    private void parsePikPakUrl(Share share, String url) {
-        url = url.replace("https://mypikpak.com/s/", "");
-        String[] parts = url.split("/");
-        if (parts.length == 1) {
-            share.setShareId(parts[0]);
-        } else {
-            share.setShareId(parts[0]);
-            share.setFolderId(parts[1]);
-        }
-    }
-
-    private void parseAliUrl(Share share, String url) {
-        url = url.replace("https://www.aliyundrive.com/s/", "");
-        String[] parts = url.split("/");
-        if (parts.length == 1) {
-            share.setShareId(parts[0]);
-        } else if (parts.length == 3) {
-            share.setShareId(parts[0]);
-            share.setFolderId(parts[2]);
-        }
     }
 
     public String exportShare(HttpServletResponse response, int type) {

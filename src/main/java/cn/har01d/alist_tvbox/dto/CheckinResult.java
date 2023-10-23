@@ -12,4 +12,5 @@ public class CheckinResult {
     private int signInCount;
     private Instant checkinTime;
     private List<Map<String, Object>> signInLogs;
+    private List<Map<String, Object>> signInInfos;
 }
