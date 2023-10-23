@@ -103,7 +103,7 @@
         </el-radio-group>
       </el-form-item>
       <el-form-item label="分享内容" label-width="120">
-        <el-input v-model="sharesDto.content" type="textarea" :rows="15" placeholder="多行分享"/>
+        <el-input v-model="sharesDto.content" type="textarea" :rows="15" placeholder="多行分享，挂载路径+分享链接"/>
       </el-form-item>
       <el-progress v-if="uploading" :percentage="100" status="success" :indeterminate="true" :duration="5"/>
     </el-form>
