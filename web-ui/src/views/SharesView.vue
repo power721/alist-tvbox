@@ -95,19 +95,22 @@
   </el-dialog>
 
   <el-dialog v-model="uploadVisible" title="导入分享" width="50%">
-    <el-form-item label="类型" label-width="140">
-      <el-radio-group v-model="sharesDto.type" class="ml-4">
-        <el-radio :label="0" size="large">阿里云盘</el-radio>
-        <el-radio :label="1" size="large">PikPak分享</el-radio>
-      </el-radio-group>
-    </el-form-item>
-    <el-form-item label="分享内容" label-width="120">
-      <el-input v-model="sharesDto.content" type="textarea" :rows="15" placeholder="多行分享"/>
-    </el-form-item>
+    <el-form>
+      <el-form-item label="类型" label-width="140">
+        <el-radio-group v-model="sharesDto.type" class="ml-4">
+          <el-radio :label="0" size="large">阿里云盘</el-radio>
+          <el-radio :label="1" size="large">PikPak分享</el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item label="分享内容" label-width="120">
+        <el-input v-model="sharesDto.content" type="textarea" :rows="15" placeholder="多行分享"/>
+      </el-form-item>
+      <el-progress v-if="uploading" :percentage="100" status="success" :indeterminate="true" :duration="5"/>
+    </el-form>
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="uploadVisible = false">取消</el-button>
-        <el-button class="ml-3" type="success" @click="submitUpload">导入</el-button>
+        <el-button class="ml-3" type="success" :disabled="uploading" @click="submitUpload">导入</el-button>
       </span>
     </template>
   </el-dialog>
@@ -160,6 +163,7 @@ const shares = ref([])
 const dialogTitle = ref('')
 const formVisible = ref(false)
 const uploadVisible = ref(false)
+const uploading = ref(false)
 const exportVisible = ref(false)
 const dialogVisible = ref(false)
 const updateAction = ref(false)
@@ -280,11 +284,19 @@ const loadShares = (value: number) => {
 }
 
 const reload = () => {
-  axios.post('/api/tacit0924').then()
+  axios.post('/api/tacit0924').then(() => {
+    ElMessage.success('更新成功')
+    loadShares(page.value)
+  })
 }
 
 const submitUpload = () => {
-  axios.post('/api/import-shares', sharesDto.value).then()
+  uploading.value = true
+  axios.post('/api/import-shares', sharesDto.value).then(({data}) => {
+    uploadSuccess(data)
+  }, (err) => {
+    uploadError(err)
+  })
 }
 
 const exportShares = () => {
@@ -292,12 +304,15 @@ const exportShares = () => {
 }
 
 const uploadSuccess = (response: any) => {
+  uploading.value = false
   uploadVisible.value = false
+  sharesDto.value.content = ''
   loadShares(page.value)
   ElMessage.success('成功导入' + response + '个分享')
 }
 
 const uploadError = (error: Error) => {
+  uploading.value = false
   ElMessage.error('导入失败：' + error)
 }
 
