@@ -326,7 +326,7 @@ public class ShareService {
                         if (parts[1].startsWith("https://")) {
                             if (share.getType() == 1) {
                                 parsePikPakUrl(share, parts[1]);
-                            } else if (share.getType() == 2) {
+                            } else if (share.getType() == 0) {
                                 parseAliUrl(share, parts[1]);
                             }
                         }
