@@ -79,6 +79,8 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -515,7 +517,7 @@ public class BiliBiliService {
         movieDetail.setVod_name(info.getTitle());
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(fixCover(info.getCover()));
-        movieDetail.setVod_remarks(seconds2String(info.getDuration()));
+        movieDetail.setVod_remarks(playCount(info.getInfo().getPlay()) + seconds2String(info.getDuration()));
         return movieDetail;
     }
 
@@ -570,13 +572,31 @@ public class BiliBiliService {
             if (info.getOwner() != null) {
                 movieDetail.setVod_director(info.getOwner().getName());
             }
+            String time = "发布于" + Instant.ofEpochSecond(info.getPubdate()).atZone(ZoneId.systemDefault()).toLocalDateTime();
+            time = time.replace("T", " ");
             if (info.getStat() != null) {
-                movieDetail.setVod_content(info.getDesc() + "; " + info.getStat().getView() + "播放; " + info.getStat().getLike() + "点赞");
+                String stat = info.getStat().getCoin() + "投币; " + info.getStat().getLike() + "点赞; " + info.getStat().getFavorite() + "收藏";
+                movieDetail.setVod_content(time + "; " + info.getDesc() + "; " + stat);
             } else {
-                movieDetail.setVod_content(info.getDesc());
+                movieDetail.setVod_content(time + info.getDesc());
             }
         }
+
+        if (info.getStat() != null) {
+            movieDetail.setVod_remarks(playCount(info.getStat().getView()) + movieDetail.getVod_remarks());
+        }
+
         return movieDetail;
+    }
+
+    private String playCount(int view) {
+        if (view >= 10000) {
+            return (view / 10000) + "万播放 ";
+        } else if (view >= 1000) {
+            return (view / 1000) + "千播放 ";
+        } else {
+            return view + "播放 ";
+        }
     }
 
     private String seconds2String(long total) {
@@ -1540,7 +1560,7 @@ public class BiliBiliService {
         }
         String url = String.format(CHAN_API, tid, chanOffsets.get(page - 1));
         HttpEntity<Void> entity = buildHttpEntity(null);
-        log.debug("getFeeds: {}", url);
+        log.debug("getChannels: {}", url);
         ResponseEntity<BiliBiliChannelListResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliChannelListResponse.class);
         ChannelList channelList = response.getBody().getData();
         for (ChannelArchives archives : channelList.getArchive_channels()) {
@@ -1550,7 +1570,7 @@ public class BiliBiliService {
                 movieDetail.setVod_director(archive.getAuthor_name());
                 movieDetail.setVod_pic(archive.getCover());
                 movieDetail.setVod_name(archive.getName());
-                movieDetail.setVod_remarks(archive.getDuration());
+                movieDetail.setVod_remarks(archive.getViewCount() + "播放 " + archive.getDuration());
                 result.getList().add(movieDetail);
             }
         }
@@ -1595,7 +1615,13 @@ public class BiliBiliService {
             movieDetail.setVod_id(archive.get("bvid").asText());
             movieDetail.setVod_pic(archive.get("cover").asText());
             movieDetail.setVod_name(archive.get("title").asText());
-            movieDetail.setVod_remarks(archive.get("duration_text").asText());
+            String play = "";
+            try {
+                play = archive.get("stat").get("play").asText() + "播放 ";
+            } catch (Exception e) {
+                // ignore
+            }
+            movieDetail.setVod_remarks(play + archive.get("duration_text").asText());
             result.getList().add(movieDetail);
         }
         result.setTotal(1000);
@@ -1947,7 +1973,7 @@ public class BiliBiliService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setType_name(info.getTypename());
         movieDetail.setVod_pic(fixCover(info.getPic()));
-        movieDetail.setVod_remarks(info.getDuration());
+        movieDetail.setVod_remarks(playCount(info.getPlay()) + info.getDuration());
         return movieDetail;
     }
 
