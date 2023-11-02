@@ -337,9 +337,9 @@ public class SubscriptionService {
             configUrl = a[0];
             configKey = a[1];
         }
-        if (StringUtils.isNotBlank(configUrl) && !configUrl.startsWith("http")) {
-            configUrl = "http://" + configUrl;
-        }
+//        if (StringUtils.isNotBlank(configUrl) && !configUrl.startsWith("http")) {
+//            configUrl = "http://" + configUrl;
+//        }
 
         String json = loadConfigJson(configUrl);
 
@@ -498,8 +498,8 @@ public class SubscriptionService {
     }
 
     private static String fixUrl(String url) {
-        if (StringUtils.isBlank(url)) {
-            return url;
+        if (StringUtils.isBlank(url) || !url.startsWith("http")) {
+            return "";
         }
 
         int index = url.lastIndexOf('/');
@@ -661,7 +661,9 @@ public class SubscriptionService {
 
     private String loadConfigJson(String url) {
         if (url == null || url.isEmpty()) {
-            return loadConfigJsonXiaoya();
+            return loadLocalConfigJson("my.json");
+        } else if (!url.startsWith("http")) {
+            return loadLocalConfigJson(url);
         }
 
         try {
@@ -673,14 +675,15 @@ public class SubscriptionService {
         }
     }
 
-    private String loadConfigJsonXiaoya() {
+    private String loadLocalConfigJson(String name) {
         try {
-            File file = new File("/www/tvbox/my.json");
+            File file = new File("/www/tvbox/" + name);
             if (file.exists()) {
+                log.info("load json from {}", file);
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
                 String address = readHostAddress();
-                json = json.replaceAll("DOCKER_ADDRESS", address);
-                json = json.replaceAll("ATV_ADDRESS", address);
+                json = json.replace("DOCKER_ADDRESS", address);
+                json = json.replace("ATV_ADDRESS", address);
                 return json;
             }
         } catch (IOException e) {
@@ -717,7 +720,7 @@ public class SubscriptionService {
         }
 
         try {
-            String content = json;
+            String content = json.replace("\r", " ").replace("\n", " ");
             Pattern pattern = Pattern.compile("[A-Za-z0]{8}\\*\\*");
             Matcher matcher = pattern.matcher(content);
             if (matcher.find()) {
@@ -747,12 +750,13 @@ public class SubscriptionService {
                 json = json.substring(index);
             }
 
-            json = Pattern.compile("^\\s*#.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
-            json = Pattern.compile("^\\s*//.*\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
+            json = Pattern.compile("^\\s*#.*\r?\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
+            json = Pattern.compile("^\\s*//.*\r?\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
+            json = json.replace("\r", " ").replace("\n", " ");
 
             return objectMapper.readValue(json, Map.class);
         } catch (Exception e) {
-            log.warn("", e);
+            log.warn("load json failed", e);
             return map;
         }
     }
