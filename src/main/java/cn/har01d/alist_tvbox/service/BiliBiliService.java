@@ -714,7 +714,7 @@ public class BiliBiliService {
             list.add(movieDetail);
         }
 
-        long seconds = searchInfo.getList().getVlist().stream().map(BiliBiliSearchInfo.Video::getDescription).mapToLong(Utils::durationToSeconds).sum();
+        long seconds = searchInfo.getList().getVlist().stream().map(BiliBiliSearchInfo.Video::getLength).mapToLong(Utils::durationToSeconds).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("up$" + mid + "$" + sort + "$" + page);
         movieDetail.setVod_name("合集" + page);
@@ -766,7 +766,7 @@ public class BiliBiliService {
         List<BiliBiliSearchInfo.Video> videos = response.getData().getList().getVlist();
         list.addAll(videos);
 
-        long seconds = list.stream().map(BiliBiliSearchInfo.Video::getDescription).mapToLong(Utils::durationToSeconds).sum();
+        long seconds = list.stream().map(BiliBiliSearchInfo.Video::getLength).mapToLong(Utils::durationToSeconds).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("up$" + id + "$0$" + page);
         movieDetail.setVod_name("合集" + page);
@@ -1023,7 +1023,7 @@ public class BiliBiliService {
         if (info.getOwner() != null) {
             try {
                 MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
-                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主");
+                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
                 String others = movieList.getList().get(0).getVod_play_url();
                 movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
             } catch (Exception e) {
