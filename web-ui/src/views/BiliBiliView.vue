@@ -29,7 +29,7 @@
               style="width: 100%">
       <el-table-column prop="order" label="顺序" sortable width="100">
         <template #default="scope">
-          <span class="pointer">{{scope.row.order}}</span>
+          <span class="pointer">{{ scope.row.order }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="id" label="ID" sortable width="100"/>
@@ -76,7 +76,7 @@
           <el-input v-model="form.name" placeholder="显示的名称" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="值" label-width="140" required>
-          <el-input v-model="form.value" placeholder="频道ID、UP主ID或者搜索关键词" autocomplete="off"/>
+          <el-input v-model="form.value" placeholder="UP主ID或者搜索关键词" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="显示？" label-width="140">
           <el-switch v-model="form.show"/>
@@ -88,9 +88,9 @@
           <el-radio-group v-model="form.type" class="ml-4">
             <!--            <el-radio :label="1" size="large">一级分类</el-radio>-->
             <!--            <el-radio :label="2" size="large">二级分类</el-radio>-->
-            <el-radio :label="3" size="large">频道</el-radio>
+            <!--            <el-radio :label="3" size="large">频道</el-radio>-->
             <el-radio :label="4" size="large">搜索</el-radio>
-                        <el-radio :label="5" size="large">UP主</el-radio>
+            <el-radio :label="5" size="large">UP主</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="顺序" label-width="140">

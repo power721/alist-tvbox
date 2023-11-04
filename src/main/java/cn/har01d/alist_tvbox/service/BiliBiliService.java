@@ -79,7 +79,6 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1013,12 +1012,23 @@ public class BiliBiliService {
             List<BiliBiliInfo> list = response.getBody().getData();
             log.debug("related videos: {} {}", url, list);
             if (!list.isEmpty()) {
-                movieDetail.setVod_play_from(BILI_BILI + "$$$相关视频");
+                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$相关视频");
                 String related = list.stream().map(e -> fixTitle(e.getTitle()) + "$" + e.getAid() + "-" + e.getCid()).collect(Collectors.joining("#"));
                 movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + related);
             }
         } catch (Exception e) {
-            log.warn("", e);
+            log.warn("get related videos failed", e);
+        }
+
+        if (info.getOwner() != null) {
+            try {
+                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
+                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主");
+                String others = movieList.getList().get(0).getVod_play_url();
+                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
+            } catch (Exception e) {
+                log.warn("get UP playlist failed", e);
+            }
         }
 
         MovieList result = new MovieList();
