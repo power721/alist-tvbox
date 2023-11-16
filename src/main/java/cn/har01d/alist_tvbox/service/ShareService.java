@@ -696,7 +696,12 @@ public class ShareService {
             log.info("Tacit0924 link: {}", link);
             String shareId = shareRepository.findById(7000).map(Share::getShareId).orElse("");
             if (!shareId.equals(link)) {
-                String folder = getFolderId(link);
+                // 验证远程链接有效性
+                String shareToken = getShareToken(link);
+                if (StringUtils.isBlank(shareToken)) {
+                    return;
+                }
+                String folder = getFolderId(link, shareToken);
                 Share share = new Share();
                 share.setType(0);
                 share.setId(7000);
@@ -713,6 +718,15 @@ public class ShareService {
     private String getFolderId(String shareId) {
         try {
             String shareToken = getShareToken(shareId);
+            return getFolderId(shareId, shareToken);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return "root";
+    }
+
+    private String getFolderId(String shareId, String shareToken) {
+        try {
             String fileId = getFileId(shareId, shareToken, "root");
             return getFileId(shareId, shareToken, fileId);
         } catch (Exception e) {
