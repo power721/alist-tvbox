@@ -727,7 +727,7 @@ public class BiliBiliService {
             movieDetail.setVod_name(info.getTitle());
             movieDetail.setVod_tag(FILE);
             movieDetail.setVod_pic(fixCover(info.getPic()));
-            movieDetail.setVod_remarks(info.getLength());
+            movieDetail.setVod_remarks(playCount(info.getPlay()) + info.getLength());
             list.add(movieDetail);
         }
 

@@ -23,6 +23,7 @@ public class BiliBiliSearchInfo {
         private String description;
         private String pic;
         private String length;
+        private int play;
     }
 
     @Data
