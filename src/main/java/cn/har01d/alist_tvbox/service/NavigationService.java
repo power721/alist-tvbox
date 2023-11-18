@@ -42,6 +42,7 @@ public class NavigationService {
         } else {
             addRecommend();
             addIndex();
+            addUps();
         }
     }
 
@@ -54,6 +55,12 @@ public class NavigationService {
     private void addIndex() {
         if (navigationRepository.findAll().stream().filter(e -> "index$1".equals(e.getValue())).findAny().isEmpty()) {
             navigationRepository.save(new Navigation("番剧索引", "index$1", 1, true, true, 20));
+        }
+    }
+
+    private void addUps() {
+        if (navigationRepository.findAll().stream().filter(e -> "ups".equals(e.getValue())).findAny().isEmpty()) {
+            navigationRepository.save(new Navigation("UP主", "ups", 1, false, true, 20));
         }
     }
 
@@ -116,6 +123,7 @@ public class NavigationService {
         list.add(new Navigation(id++, "原创", "origin$0", 1, false, true, order++));
         list.add(new Navigation(id++, "新人", "rookie$0", 1, false, true, order++));
         list.add(new Navigation(id++, "番剧索引", "index$1", 1, true, true, 20));
+        list.add(new Navigation(id++, "UP主", "ups", 1, false, true, 3));
 
         navigationRepository.saveAll(list);
         list = new ArrayList<>();

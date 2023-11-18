@@ -379,10 +379,17 @@ public class BiliBiliService {
 
     public CategoryList getCategoryList() {
         getLoginStatus();
+        List<NavigationDto> ups = new ArrayList<>();
+        List<NavigationDto> list = navigationService.list();
+        boolean merge = list.stream().filter(NavigationDto::isShow).map(NavigationDto::getValue).anyMatch("ups"::equals);
         CategoryList result = new CategoryList();
-        navigationService.list().stream()
+        list.stream()
                 .filter(NavigationDto::isShow)
                 .forEach(item -> {
+                    if (merge && item.getType() == 5) {
+                        ups.add(item);
+                        return;
+                    }
                     Category category = new Category();
                     String value = item.getValue();
                     if (item.getType() == 3) {
@@ -434,6 +441,16 @@ public class BiliBiliService {
                     }
                     result.getCategories().add(category);
                 });
+
+        if (merge && !ups.isEmpty()) {
+            Category category = new Category();
+            category.setType_id("ups");
+            category.setType_name("UP主");
+            category.setType_flag(0);
+            List<FilterValue> filters = ups.stream().filter(NavigationDto::isShow).map(e -> new FilterValue(e.getName(), e.getValue())).toList();
+            result.getFilters().put(category.getType_id(), List.of(new Filter("type", "作者", filters)));
+            result.getCategories().add(category);
+        }
 
         result.setTotal(result.getCategories().size());
         result.setLimit(result.getCategories().size());
@@ -1446,6 +1463,9 @@ public class BiliBiliService {
     }
 
     public MovieList getMovieList(String tid, FilterDto filter, int page) {
+        if (tid.equals("ups")) {
+            return getUpMedia(filter.getType(), filter.getSort(), page);
+        }
         if (tid.startsWith("search:")) {
             String[] parts = tid.split(":");
             return search(parts[1], filter.getSort(), filter.getDuration(), page);
