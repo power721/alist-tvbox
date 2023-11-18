@@ -448,7 +448,7 @@ public class BiliBiliService {
             category.setType_name("UP主");
             category.setType_flag(0);
             List<FilterValue> filters = ups.stream().filter(NavigationDto::isShow).map(e -> new FilterValue(e.getName(), e.getValue())).toList();
-            result.getFilters().put(category.getType_id(), List.of(new Filter("type", "作者", filters)));
+            result.getFilters().put(category.getType_id(), List.of(new Filter("type", "作者", filters), new Filter("sort", "排序", filters6)));
             result.getCategories().add(category);
         }
 
@@ -1464,8 +1464,23 @@ public class BiliBiliService {
 
     public MovieList getMovieList(String tid, FilterDto filter, int page) {
         if (tid.equals("ups")) {
-            return getUpMedia(filter.getType(), filter.getSort(), page);
+            String id = filter.getType();
+            if (StringUtils.isBlank(id)) {
+                List<String> ups = new ArrayList<>();
+                for (var item : navigationService.list()) {
+                    if (item.getType() == 5) {
+                        ups.add(item.getValue());
+                    }
+                }
+                if (!ups.isEmpty()) {
+                    page--;
+                    id = ups.get(page % ups.size());
+                    page = page / ups.size() + 1;
+                }
+            }
+            return getUpMedia(id, filter.getSort(), page);
         }
+
         if (tid.startsWith("search:")) {
             String[] parts = tid.split(":");
             return search(parts[1], filter.getSort(), filter.getDuration(), page);
