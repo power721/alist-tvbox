@@ -60,7 +60,7 @@ public class NavigationService {
 
     private void addUps() {
         if (navigationRepository.findAll().stream().filter(e -> "ups".equals(e.getValue())).findAny().isEmpty()) {
-            navigationRepository.save(new Navigation("UP主", "ups", 1, false, true, 20));
+            navigationRepository.save(new Navigation("UP主", "ups", 1, false, true, 3));
         }
     }
 

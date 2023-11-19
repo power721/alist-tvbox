@@ -443,13 +443,8 @@ public class BiliBiliService {
                 });
 
         if (merge && !ups.isEmpty()) {
-            Category category = new Category();
-            category.setType_id("ups");
-            category.setType_name("UP主");
-            category.setType_flag(0);
             List<FilterValue> filters = ups.stream().filter(NavigationDto::isShow).map(e -> new FilterValue(e.getName(), e.getValue())).toList();
-            result.getFilters().put(category.getType_id(), List.of(new Filter("type", "作者", filters), new Filter("sort", "排序", filters6)));
-            result.getCategories().add(category);
+            result.getFilters().put("ups", List.of(new Filter("type", "作者", filters), new Filter("sort", "排序", filters6)));
         }
 
         result.setTotal(result.getCategories().size());
