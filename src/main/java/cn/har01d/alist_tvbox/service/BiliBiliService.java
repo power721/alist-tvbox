@@ -443,7 +443,7 @@ public class BiliBiliService {
                 });
 
         if (merge && !ups.isEmpty()) {
-            List<FilterValue> filters = ups.stream().filter(NavigationDto::isShow).map(e -> new FilterValue(e.getName(), e.getValue())).toList();
+            List<FilterValue> filters = ups.stream().map(e -> new FilterValue(e.getName(), e.getValue())).toList();
             result.getFilters().put("ups", List.of(new Filter("type", "作者", filters), new Filter("sort", "排序", filters6)));
         }
 
