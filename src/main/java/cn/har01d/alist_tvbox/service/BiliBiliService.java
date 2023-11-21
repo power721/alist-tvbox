@@ -290,7 +290,6 @@ public class BiliBiliService {
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.OK_USER_AGENT)
                 .build();
         this.restTemplate = builder
-                .defaultHeader(HttpHeaders.REFERER, "https://www.bilibili.com/")
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
@@ -1215,7 +1214,7 @@ public class BiliBiliService {
         headers.add(HttpHeaders.REFERER, "https://api.bilibili.com/");
         headers.add(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
         headers.add(HttpHeaders.ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
-        headers.add(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
+        headers.add(HttpHeaders.USER_AGENT, Constants.USER_AGENT);
         if (urlencoded) {
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         }
