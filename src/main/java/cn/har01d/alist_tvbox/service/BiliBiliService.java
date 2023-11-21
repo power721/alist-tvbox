@@ -1340,6 +1340,9 @@ public class BiliBiliService {
             HttpEntity<Void> entity = buildHttpEntity(null);
             ResponseEntity<BiliBiliV2InfoResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliV2InfoResponse.class);
             for (BiliBiliV2Info.Subtitle subtitle : response.getBody().getData().getSubtitle().getSubtitles()) {
+                if (subtitle.getLan_doc().contains("中文") && subtitle.getLan_doc().contains("自动生成")) {
+                    continue;
+                }
                 Sub sub = new Sub();
                 sub.setName(subtitle.getLan_doc());
                 sub.setLang(subtitle.getLan());
