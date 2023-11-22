@@ -704,6 +704,9 @@ public class BiliBiliService {
         map.put("order", sort);
         map.put("platform", "web");
         map.put("order_avoided", "true");
+        map.put("dm_img_list", "[]");
+        map.put("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ");
+        map.put("dm_cover_img_str", "QU5HTEUgKE5WSURJQSBDb3Jwb3JhdGlvbiwgTlZJRElBIEdlRm9yY2UgR1RYIDEwNTAgVGkvUENJZS9TU0UyLCBPcGVuR0wgNC41LjApR29vZ2xlIEluYy4gKE5WSURJQSBDb3Jwb3JhdGlvbi");
         map.put("pn", String.valueOf(page));
 
         getKeys(buildHttpEntity(null));
@@ -765,14 +768,17 @@ public class BiliBiliService {
         map.put("order", sort);
         map.put("platform", "web");
         map.put("order_avoided", "true");
+        map.put("dm_img_list", "[]");
+        map.put("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ");
+        map.put("dm_cover_img_str", "QU5HTEUgKE5WSURJQSBDb3Jwb3JhdGlvbiwgTlZJRElBIEdlRm9yY2UgR1RYIDEwNTAgVGkvUENJZS9TU0UyLCBPcGVuR0wgNC41LjApR29vZ2xlIEluYy4gKE5WSURJQSBDb3Jwb3JhdGlvbi");
         map.put("pn", page);
 
         getKeys(buildHttpEntity(null));
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
-        log.debug("getUpMedia: {}", url);
+        log.debug("getUpPlaylist: {}", url);
 
         BiliBiliSearchInfoResponse response = restTemplate.getForObject(url, BiliBiliSearchInfoResponse.class);
-        log.debug("getUpPlaylist: url {}", url, response);
+        log.debug("getUpPlaylist: url {} {}", url, response);
         List<BiliBiliSearchInfo.Video> list = new ArrayList<>();
         List<BiliBiliSearchInfo.Video> videos = response.getData().getList().getVlist();
         list.addAll(videos);
