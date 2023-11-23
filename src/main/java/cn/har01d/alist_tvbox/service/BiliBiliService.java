@@ -705,17 +705,18 @@ public class BiliBiliService {
         map.put("platform", "web");
         map.put("order_avoided", "true");
         map.put("dm_img_list", "[]");
-        map.put("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ");
-        map.put("dm_cover_img_str", "QU5HTEUgKE5WSURJQSBDb3Jwb3JhdGlvbiwgTlZJRElBIEdlRm9yY2UgR1RYIDEwNTAgVGkvUENJZS9TU0UyLCBPcGVuR0wgNC41LjApR29vZ2xlIEluYy4gKE5WSURJQSBDb3Jwb3JhdGlvbi");
+        map.put("dm_img_str", "bm8gd2ViZ2");
+        map.put("dm_cover_img_str", "bm8gd2ViZ2");
         map.put("pn", String.valueOf(page));
 
-        getKeys(buildHttpEntity(null));
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        getKeys(entity);
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpMedia: {}", url);
 
-        BiliBiliSearchInfoResponse response = restTemplate.getForObject(url, BiliBiliSearchInfoResponse.class);
-        log.debug("{}", response);
-        BiliBiliSearchInfo searchInfo = response.getData();
+        ResponseEntity<BiliBiliSearchInfoResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchInfoResponse.class);
+        log.debug("{}", response.getBody());
+        BiliBiliSearchInfo searchInfo = response.getBody().getData();
         List<MovieDetail> list = new ArrayList<>();
         MovieList result = new MovieList();
         for (BiliBiliSearchInfo.Video info : searchInfo.getList().getVlist()) {
@@ -769,18 +770,19 @@ public class BiliBiliService {
         map.put("platform", "web");
         map.put("order_avoided", "true");
         map.put("dm_img_list", "[]");
-        map.put("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ");
-        map.put("dm_cover_img_str", "QU5HTEUgKE5WSURJQSBDb3Jwb3JhdGlvbiwgTlZJRElBIEdlRm9yY2UgR1RYIDEwNTAgVGkvUENJZS9TU0UyLCBPcGVuR0wgNC41LjApR29vZ2xlIEluYy4gKE5WSURJQSBDb3Jwb3JhdGlvbi");
+        map.put("dm_img_str", "bm8gd2ViZ2");
+        map.put("dm_cover_img_str", "bm8gd2ViZ2");
         map.put("pn", page);
 
-        getKeys(buildHttpEntity(null));
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        getKeys(entity);
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
-        log.debug("getUpPlaylist: {}", url);
+        log.debug("getUpMedia: {}", url);
 
-        BiliBiliSearchInfoResponse response = restTemplate.getForObject(url, BiliBiliSearchInfoResponse.class);
-        log.debug("getUpPlaylist: url {} {}", url, response);
+        ResponseEntity<BiliBiliSearchInfoResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchInfoResponse.class);
+        log.debug("{}", response.getBody());
         List<BiliBiliSearchInfo.Video> list = new ArrayList<>();
-        List<BiliBiliSearchInfo.Video> videos = response.getData().getList().getVlist();
+        List<BiliBiliSearchInfo.Video> videos = response.getBody().getData().getList().getVlist();
         list.addAll(videos);
 
         long seconds = list.stream().map(BiliBiliSearchInfo.Video::getLength).mapToLong(Utils::durationToSeconds).sum();
@@ -1217,7 +1219,6 @@ public class BiliBiliService {
 
     private <T> HttpEntity<T> buildHttpEntity(T data, boolean urlencoded, Map<String, String> customHeaders) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.REFERER, "https://api.bilibili.com/");
         headers.add(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
         headers.add(HttpHeaders.ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
         headers.add(HttpHeaders.USER_AGENT, Constants.USER_AGENT);
