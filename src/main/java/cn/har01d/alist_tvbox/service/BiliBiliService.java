@@ -517,7 +517,7 @@ public class BiliBiliService {
         movieDetail.setVod_name(info.getTitle());
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(fixCover(info.getPic()));
-        movieDetail.setVod_remarks(seconds2String(info.getDuration()));
+        movieDetail.setVod_remarks(playCount(info.getPlay()) + seconds2String(info.getDuration()));
         return movieDetail;
     }
 
@@ -597,6 +597,14 @@ public class BiliBiliService {
         }
 
         return movieDetail;
+    }
+
+    private String playCount(String view) {
+        try {
+            return playCount(Integer.parseInt(view));
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private String playCount(int view) {
