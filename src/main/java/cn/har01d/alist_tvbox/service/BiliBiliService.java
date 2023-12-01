@@ -1285,15 +1285,7 @@ public class BiliBiliService {
         if (dash) {
             fnval = settingRepository.findById("bilibili_fnval").map(Setting::getValue).map(Integer::parseInt).orElse(FN_VAL);
         }
-        if (parts.length > 2) {
-            aid = parts[0];
-            cid = parts[1];
-            if (dash) {
-                url = String.format(PLAY_API1, aid, cid, parts[2], fnval);
-            } else {
-                url = String.format(PLAY_API2, aid, cid, parts[2]);
-            }
-        } else if (parts.length == 2) {
+       if (parts.length >= 2) {
             aid = parts[0];
             cid = parts[1];
             if (dash) {
