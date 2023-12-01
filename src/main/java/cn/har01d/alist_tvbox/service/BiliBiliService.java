@@ -116,6 +116,7 @@ public class BiliBiliService {
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s&view_at=%s";
     private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
     private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
+    private static final String PLAY_API_NOT_DASH = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&type=&otype=json&fourk=1&fnver=0"; //not dash
     private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&platform=html5&high_quality=1"; // mp4
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
     private static final String POPULAR_API = "https://api.bilibili.com/x/web-interface/popular?ps=30&pn=";
@@ -1291,7 +1292,7 @@ public class BiliBiliService {
             if (dash) {
                 url = String.format(PLAY_API, aid, cid, fnval);
             } else {
-                url = String.format(PLAY_API2, aid, cid);
+                url = String.format(PLAY_API_NOT_DASH, aid, cid);
             }
         } else {
             BiliBiliInfo info = getInfo(bvid);
@@ -1300,7 +1301,7 @@ public class BiliBiliService {
             if (dash) {
                 url = String.format(PLAY_API, aid, cid, fnval);
             } else {
-                url = String.format(PLAY_API2, aid, cid);
+                url = String.format(PLAY_API_NOT_DASH, aid, cid);
             }
         }
         log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
@@ -1315,8 +1316,6 @@ public class BiliBiliService {
 
             result = DashUtils.convert(response.getBody());
             result.put("dash", aid + "+" + cid + "+127");
-            String cookie = entity.getHeaders().getFirst("Cookie");
-            result.put("header", "{\"Referer\":\"https://www.bilibili.com\",\"cookie\":\"" + cookie + "\",\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36\"}");
         } else {
             ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
             BiliBiliPlayResponse res = response.getBody();
@@ -1328,6 +1327,8 @@ public class BiliBiliService {
             BiliBiliPlay data = res.getData() == null ? res.getResult() : res.getData();
             result.put("url", data.getDurl().get(0).getUrl());
         }
+        String cookie = entity.getHeaders().getFirst("Cookie");
+        result.put("header", "{\"Referer\":\"https://www.bilibili.com\",\"cookie\":\"" + cookie + "\",\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36\"}");
 
         result.put("subs", getSubtitles(aid, cid));
 
