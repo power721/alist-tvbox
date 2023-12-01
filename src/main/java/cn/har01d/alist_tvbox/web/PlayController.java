@@ -58,25 +58,26 @@ public class PlayController {
             path = parts[1];
         }
 
+        boolean sp = "com.fongmi.android.tv".equals(client);
         boolean getSub = true;
         Map<String, Object> result;
         if (path.contains("/")) {
             if (path.startsWith("/")) {
-                result = tvBoxService.getPlayUrl(site, path, getSub);
+                result = tvBoxService.getPlayUrl(site, path, getSub, sp);
             } else {
                 int index = path.indexOf('/');
                 id = path.substring(0, index);
                 path = path.substring(index);
-                result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path, getSub);
+                result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path, getSub, sp);
             }
         } else {
-            result = tvBoxService.getPlayUrl(site, Integer.parseInt(path), getSub);
+            result = tvBoxService.getPlayUrl(site, Integer.parseInt(path), getSub, sp);
         }
 
-        String url = (String) result.get("url");
-        if (url.contains("/redirect")) {
-            result.put("url", parseService.parse(url));
-        }
+//        String url = (String) result.get("url");
+//        if (url.contains("/redirect")) {
+//            result.put("url", parseService.parse(url));
+//        }
 
         return result;
     }

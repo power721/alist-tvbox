@@ -16,6 +16,8 @@ import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.model.SearchListResponse;
 import cn.har01d.alist_tvbox.model.SearchRequest;
 import cn.har01d.alist_tvbox.model.SearchResult;
+import cn.har01d.alist_tvbox.model.VideoPreview;
+import cn.har01d.alist_tvbox.model.VideoPreviewResponse;
 import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -132,6 +134,21 @@ public class AListService {
         return true;
     }
 
+    public VideoPreview preview(Site site, String path) {
+        String url = getUrl(site) + "/api/fs/other";
+        FsRequest request = new FsRequest();
+        request.setPassword(site.getPassword());
+        request.setPath(path);
+        if (StringUtils.isNotBlank(site.getFolder())) {
+            request.setPath(fixPath(site.getFolder() + "/" + path));
+        }
+        log.debug("call api: {} request: {}", url, request);
+        VideoPreviewResponse response = post(site, url, request, VideoPreviewResponse.class);
+        logError(response);
+        log.debug("preview urls: {} {}", path, response.getData());
+        return response.getData();
+    }
+
     public FsDetail getFile(Site site, String path) {
         int version = getVersion(site);
         if (version == 2) {
@@ -152,15 +169,6 @@ public class AListService {
         log.debug("call api: {} request: {}", url, request);
         FsDetailResponse response = post(site, url, request, FsDetailResponse.class);
         logError(response);
-        if (response.getData() == null && "object not found".equals(response.getMessage()) && site.getId() == 1) {
-            try {
-                Map<String, String> body = new HashMap<>();
-                body.put("path", path);
-                restTemplate.postForObject("http://stats.har01d.cn/movies", body, String.class);
-            } catch (Exception e) {
-                // ignore
-            }
-        }
         log.debug("get file: {} {}", path, response.getData());
         return response.getData();
     }

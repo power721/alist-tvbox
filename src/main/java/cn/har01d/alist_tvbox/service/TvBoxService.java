@@ -53,6 +53,7 @@ import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -909,39 +910,65 @@ public class TvBoxService {
         return list;
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub) {
+    public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub, boolean sp) {
         Site site = siteService.getById(siteId);
-        FsDetail fsDetail = null;
+        String url = null;
+        String name = getNameFromPath(path);
+        String fullPath = path;
         if (isMediaFile(path)) {
             log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path);
-            fsDetail = aListService.getFile(site, path);
-            if (fsDetail == null) {
-                throw new BadRequestException("找不到文件 " + path);
-            }
         } else {
             FsResponse fsResponse = aListService.listFiles(site, path, 1, 100);
             for (FsInfo fsInfo : fsResponse.getFiles()) {
                 if (isMediaFormat(fsInfo.getName())) {
-                    fsDetail = aListService.getFile(site, path + "/" + fsInfo.getName());
+                    name = fsInfo.getName();
+                    fullPath = fixPath(path + "/" + name);
                     break;
                 }
             }
-            if (fsDetail == null) {
-                throw new BadRequestException("找不到文件 " + path);
-            }
-            log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), path + "/" + fsDetail.getName());
+            log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), fullPath);
         }
-        String url = fixHttp(fsDetail.getRawUrl());
+
         Map<String, Object> result = new HashMap<>();
         result.put("parse", 0);
         result.put("playUrl", "");
-        result.put("url", url);
+
+        if (sp) {
+            var preview = aListService.preview(site, fullPath);
+            List<String> urls = new ArrayList<>();
+            Collections.reverse(preview.getPlayInfo().getList());
+            for (var item : preview.getPlayInfo().getList()) {
+                if (!"finished".equals(item.getStatus())) {
+                    continue;
+                }
+                urls.add(item.getId());
+                urls.add(item.getUrl());
+            }
+            if (urls.size() > 1) {
+                url = urls.get(1);
+                result.put("url", urls);
+            }
+        }
+
+        if (url == null) {
+            FsDetail fsDetail = aListService.getFile(site, path);
+            if (fsDetail == null) {
+                throw new BadRequestException("找不到文件 " + path);
+            }
+            url = fixHttp(fsDetail.getRawUrl());
+            result.put("url", url);
+        }
+
+        if (url.contains("aliyundrive")) {
+            result.put("format", "application/octet-stream");
+            result.put("header", "{\"User-Agent\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36\",\"Referer\":\"https://www.aliyundrive.com/\"}");
+        }
 
         if (!getSub) {
             return result;
         }
 
-        Subtitle subtitle = getSubtitle(site, isMediaFile(path) ? getParent(path) : path, fsDetail.getName());
+        Subtitle subtitle = getSubtitle(site, isMediaFile(path) ? getParent(path) : path, name);
         if (subtitle != null) {
             result.put("subs", List.of(subtitle));
             result.put("subt", subtitle.getUrl());
@@ -951,16 +978,16 @@ public class TvBoxService {
         return result;
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, boolean getSub) {
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, boolean getSub, boolean sp) {
         Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
         log.debug("getPlayUrl: {} {}", siteId, id);
-        return getPlayUrl(siteId, meta.getPath(), getSub);
+        return getPlayUrl(siteId, meta.getPath(), getSub, sp);
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path, boolean getSub) {
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path, boolean getSub, boolean sp) {
         Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
         log.debug("getPlayUrl: {} {}", siteId, id);
-        return getPlayUrl(siteId, meta.getPath() + path, getSub);
+        return getPlayUrl(siteId, meta.getPath() + path, getSub, sp);
     }
 
     private String findBestSubtitle(List<String> subtitles, String name) {
