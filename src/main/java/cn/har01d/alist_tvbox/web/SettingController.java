@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.service.AListLocalService;
 import cn.har01d.alist_tvbox.service.SettingService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,10 +18,12 @@ import java.util.Map;
 public class SettingController {
     private final SettingRepository settingRepository;
     private final SettingService service;
+    private final AListLocalService aListLocalService;
 
-    public SettingController(SettingRepository settingRepository, SettingService service) {
+    public SettingController(SettingRepository settingRepository, SettingService service, AListLocalService aListLocalService) {
         this.settingRepository = settingRepository;
         this.service = service;
+        this.aListLocalService = aListLocalService;
     }
 
     @GetMapping
@@ -35,7 +38,11 @@ public class SettingController {
 
     @PostMapping
     public Setting update(@RequestBody Setting setting) {
-        return service.update(setting);
+        setting = service.update(setting);
+        if ("delete_delay_time".equals(setting.getName())) {
+            aListLocalService.updateSetting("delete_delay_time", setting.getValue(), "number");
+        }
+        return setting;
     }
 
     @PostMapping("/export")

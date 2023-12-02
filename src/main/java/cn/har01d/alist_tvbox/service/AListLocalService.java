@@ -50,6 +50,8 @@ public class AListLocalService {
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_token_url','" + url + "','','string','',1,0);");
         String token = settingRepository.findById("token").map(Setting::getValue).orElse("");
         Utils.executeUpdate("UPDATE x_setting_items SET value = '" + StringUtils.isNotBlank(token) + "' WHERE key = 'sign_all'");
+        String time = settingRepository.findById("delete_delay_time").map(Setting::getValue).orElse("900");
+        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + time + "' WHERE key = 'delete_delay_time'");
     }
 
     public void updateSetting(String key, String value, String type) {

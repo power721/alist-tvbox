@@ -187,6 +187,13 @@
         <el-form-item label="AList管理密码" v-if="!store.xiaoya">
           <el-input v-model="atvPass" type="password" show-password/>
         </el-form-item>
+        <el-form-item label="阿里文件删除延时">
+          <el-input-number v-model="deleteDelayTime" min="0"></el-input-number>秒
+          <span class="hint">0表示不删除</span>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateDeleteDelayTime">更新</el-button>
+        </el-form-item>
         <el-form-item>
           <el-button @click="resetAListToken">重置AList认证Token</el-button>
         </el-form-item>
@@ -246,6 +253,7 @@ const movieVersion = ref(0)
 const movieRemoteVersion = ref(0)
 const cachedMovieVersion = ref(0)
 const fileExpireHour = ref(6)
+const deleteDelayTime = ref(900)
 const aListStartTime = ref('')
 const openTokenUrl = ref('')
 const dockerAddress = ref('')
@@ -289,6 +297,12 @@ const resetAListToken = () => {
 
 const updateOpenTokenUrl = () => {
   axios.post('/api/open-token-url', {url: openTokenUrl.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateDeleteDelayTime = () => {
+  axios.post('/api/settings', {name: 'delete_delay_time', value: deleteDelayTime.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -359,6 +373,7 @@ onMounted(() => {
     scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
     aListStartTime.value = data.alist_start_time
     fileExpireHour.value = +data.file_expire_hour || 6
+    deleteDelayTime.value = +data.delete_delay_time || 900
     movieVersion.value = data.movie_version
     indexVersion.value = data.index_version
     dockerVersion.value = data.docker_version
