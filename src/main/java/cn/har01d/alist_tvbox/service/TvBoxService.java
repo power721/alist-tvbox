@@ -933,11 +933,21 @@ public class TvBoxService {
         result.put("parse", 0);
         result.put("playUrl", "");
 
+        List<Subtitle> subtitles = new ArrayList<>();
+
         if (sp) {
             var preview = aListService.preview(site, fullPath);
+            log.debug("preview: {} {}", fullPath, preview);
             List<String> urls = new ArrayList<>();
-            Collections.reverse(preview.getPlayInfo().getList());
-            for (var item : preview.getPlayInfo().getList()) {
+
+            Collections.reverse(preview.getPlayInfo().getVideos());
+            if (preview.getPlayInfo().getVideos().size() > 1 && preview.getPlayInfo().getVideos().get(0).getId().contains("限速")) {
+                var item = preview.getPlayInfo().getVideos().get(0);
+                preview.getPlayInfo().getVideos().set(0, preview.getPlayInfo().getVideos().get(1));
+                preview.getPlayInfo().getVideos().set(1, item);
+            }
+
+            for (var item : preview.getPlayInfo().getVideos()) {
                 if (!"finished".equals(item.getStatus())) {
                     continue;
                 }
@@ -947,6 +957,18 @@ public class TvBoxService {
             if (urls.size() > 1) {
                 url = urls.get(1);
                 result.put("url", urls);
+            }
+
+            if (preview.getPlayInfo().getSubtitles() != null) {
+                for (var item : preview.getPlayInfo().getSubtitles()) {
+                    if (!"finished".equals(item.getStatus())) {
+                        continue;
+                    }
+                    Subtitle subtitle = new Subtitle();
+                    subtitle.setUrl(item.getUrl());
+                    subtitle.setLang(item.getLanguage());
+                    subtitles.add(subtitle);
+                }
             }
         }
 
@@ -970,9 +992,14 @@ public class TvBoxService {
 
         Subtitle subtitle = getSubtitle(site, isMediaFile(path) ? getParent(path) : path, name);
         if (subtitle != null) {
-            result.put("subs", List.of(subtitle));
-            result.put("subt", subtitle.getUrl());
+            subtitles.add(subtitle);
         }
+
+        if (!subtitles.isEmpty()) {
+            result.put("subt", subtitles.get(0).getUrl());
+        }
+
+        result.put("subs", subtitles);
 
         log.debug("result: {}", result);
         return result;
