@@ -32,7 +32,7 @@ public class IndexTemplateService {
 
     @PostConstruct
     public void setup() {
-        if (!environment.matchesProfiles("xiaoya") || settingRepository.existsById("auto_index_1")) {
+        if (!environment.matchesProfiles("xiaoya") || settingRepository.existsById("auto_index_2")) {
             return;
         }
 
@@ -45,11 +45,11 @@ public class IndexTemplateService {
         dto.setSiteId(1);
         dto.setScheduled(true);
         dto.setScheduleTime("10|14|18|22");
-        dto.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":2000,\"paths\":[\"/🈴我的阿里分享/Tacit0924/更新中的【电视剧】和完结的，还有一些大合集/近期还在【更新中】&完结的电视剧\",\"/🈴我的阿里分享/Tacit0924/更新中的【动漫.动画电影】和完结的，还有一些大合集/还在【更新中】的动漫\",\"/🈴我的阿里分享/Tacit0924/更新中的【综艺.纪录片.节目.晚会】和完结的/还在【更新中】的综艺\",\"/🈴我的阿里分享/Tacit0924/更新中的【动漫.动画电影】和完结的，还有一些大合集/【近期完结的动漫】\",\"/🈴我的阿里分享/Tacit0924/更新中的【电视剧】和完结的，还有一些大合集/【近期完结的电视剧】(22TB)\",\"/🈴我的阿里分享/Tacit0924/更新中的【综艺.纪录片.节目.晚会】和完结的/【近期的完结综艺】5TB\",\"/🈴我的阿里分享/Tacit0924/近期热门【电影】和一些电影大合集/【近期一些热门的电影】\",\"/电视剧/中国/同步更新中\",\"/🈴我的阿里分享/近期更新/01.电视剧.更新中\",\"/🈴我的阿里分享/近期更新/02.电视剧.完结/2022年\",\"/🈴我的阿里分享/近期更新/02.电视剧.完结/2023年\",\"/🈴我的阿里分享/近期更新/03.电影/最新电影\",\"/🈴我的阿里分享/近期更新/04.动漫剧集.更新中\",\"/🈴我的阿里分享/近期更新/05.动漫剧集.完结\",\"/🈴我的阿里分享/近期更新/06.综艺\",\"/🈴我的阿里分享/近期更新/07.纪录片\"],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
+        dto.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":2000,\"paths\":[\"/🈴我的阿里分享/Tacit0924/更新中的【电视剧】和完结的，还有一些大合集/近期【更新中】电视剧\",\"/🈴我的阿里分享/Tacit0924/更新中的【动漫.动画电影】和完结的，还有一些大合集/还在【更新中】的动漫 4.2TB\",\"/🈴我的阿里分享/Tacit0924/更新中的【综艺.纪录片.节目.晚会】和完结的/还在【更新中】的综艺 3TB\",\"/🈴我的阿里分享/Tacit0924/更新中的【动漫.动画电影】和完结的，还有一些大合集/【近期完结的动漫】3TB(未整理国内外仅首字母)\",\"/🈴我的阿里分享/Tacit0924/更新中的【电视剧】和完结的，还有一些大合集/【近期完结的电视剧】(590多部剧)(23TB)(未整理国内外仅首字母)\",\"/🈴我的阿里分享/Tacit0924/更新中的【综艺.纪录片.节目.晚会】和完结的/【近期的完结综艺】5TB(未整理国内外仅首字母)\",\"/🈴我的阿里分享/Tacit0924/近期热门【电影】和一些电影大合集/【近期一些热门的电影】18TB\",\"/电视剧/中国/同步更新中\",\"/🈴我的阿里分享/近期更新/01.电视剧.更新中\",\"/🈴我的阿里分享/近期更新/02.电视剧.完结/2022年\",\"/🈴我的阿里分享/近期更新/02.电视剧.完结/2023年\",\"/🈴我的阿里分享/近期更新/03.电影/最新电影\",\"/🈴我的阿里分享/近期更新/04.动漫剧集.更新中\",\"/🈴我的阿里分享/近期更新/05.动漫剧集.完结\",\"/🈴我的阿里分享/近期更新/06.综艺\",\"/🈴我的阿里分享/近期更新/07.纪录片\"],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
         IndexTemplate template = create(dto);
         log.info("auto index template created: {}", template.getId());
         settingRepository.save(new Setting("auto_index", String.valueOf(template.getId())));
-        settingRepository.save(new Setting("auto_index_1", String.valueOf(template.getId())));
+        settingRepository.save(new Setting("auto_index_2", String.valueOf(template.getId())));
     }
 
     private void fixAutoIndex() {
@@ -57,10 +57,10 @@ public class IndexTemplateService {
         IndexTemplate template = indexTemplateRepository.findById(id).orElse(null);
         if (template != null) {
             log.info("update auto index template ");
-            template.setData(template.getData().replace("/还在【更新中】的电视剧", "/近期还在【更新中】&完结的电视剧"));
-            settingRepository.save(new Setting("auto_index_1", String.valueOf(template.getId())));
+            template.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":2000,\"paths\":[\"/🈴我的阿里分享/Tacit0924/更新中的【电视剧】和完结的，还有一些大合集/近期【更新中】电视剧\",\"/🈴我的阿里分享/Tacit0924/更新中的【动漫.动画电影】和完结的，还有一些大合集/还在【更新中】的动漫 4.2TB\",\"/🈴我的阿里分享/Tacit0924/更新中的【综艺.纪录片.节目.晚会】和完结的/还在【更新中】的综艺 3TB\",\"/🈴我的阿里分享/Tacit0924/更新中的【动漫.动画电影】和完结的，还有一些大合集/【近期完结的动漫】3TB(未整理国内外仅首字母)\",\"/🈴我的阿里分享/Tacit0924/更新中的【电视剧】和完结的，还有一些大合集/【近期完结的电视剧】(590多部剧)(23TB)(未整理国内外仅首字母)\",\"/🈴我的阿里分享/Tacit0924/更新中的【综艺.纪录片.节目.晚会】和完结的/【近期的完结综艺】5TB(未整理国内外仅首字母)\",\"/🈴我的阿里分享/Tacit0924/近期热门【电影】和一些电影大合集/【近期一些热门的电影】18TB\",\"/电视剧/中国/同步更新中\",\"/🈴我的阿里分享/近期更新/01.电视剧.更新中\",\"/🈴我的阿里分享/近期更新/02.电视剧.完结/2022年\",\"/🈴我的阿里分享/近期更新/02.电视剧.完结/2023年\",\"/🈴我的阿里分享/近期更新/03.电影/最新电影\",\"/🈴我的阿里分享/近期更新/04.动漫剧集.更新中\",\"/🈴我的阿里分享/近期更新/05.动漫剧集.完结\",\"/🈴我的阿里分享/近期更新/06.综艺\",\"/🈴我的阿里分享/近期更新/07.纪录片\"],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
+            settingRepository.save(new Setting("auto_index_2", String.valueOf(template.getId())));
         } else {
-            settingRepository.save(new Setting("auto_index_1", "0"));
+            settingRepository.save(new Setting("auto_index_2", "0"));
         }
     }
 

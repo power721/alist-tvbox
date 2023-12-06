@@ -475,6 +475,9 @@ public class ShareService {
         if (url.startsWith("https://www.aliyundrive.com/s/")) {
             url = url.substring(30);
         }
+        if (url.startsWith("https://www.alipan.com/s/")) {
+            url = url.substring(25);
+        }
 
         String[] parts = url.split("/");
         if (parts.length == 3 && "folder".equals(parts[1])) {
