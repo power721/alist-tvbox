@@ -12,4 +12,5 @@ public class FsRequest {
     @JsonProperty("per_page")
     private int size = 25;
     private boolean refresh;
+    private String data;
 }

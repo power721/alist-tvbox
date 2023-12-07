@@ -139,6 +139,7 @@ public class AListService {
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
         request.setPath(path);
+        request.setData("preview");
         if (StringUtils.isNotBlank(site.getFolder())) {
             request.setPath(fixPath(site.getFolder() + "/" + path));
         }
