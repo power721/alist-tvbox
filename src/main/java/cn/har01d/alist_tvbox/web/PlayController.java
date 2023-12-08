@@ -45,6 +45,10 @@ public class PlayController {
         }
 
         String client = request.getHeader("X-CLIENT");
+        // com.mygithub0.tvbox0.osdX 影视仓
+        // com.fongmi.android.tv 影视
+        // com.github.tvbox.osc.bh 宝盒
+        // com.github.tvbox.osc.tk
         log.debug("{} {} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()), client);
         log.debug("get play url - site: {}  path: {}  id: {}  bvid: {}  type: ", site, path, id, bvid, type);
 
@@ -58,20 +62,19 @@ public class PlayController {
             path = parts[1];
         }
 
-        boolean sp = "com.fongmi.android.tv".equals(client);
         boolean getSub = true;
         Map<String, Object> result;
         if (path.contains("/")) {
             if (path.startsWith("/")) {
-                result = tvBoxService.getPlayUrl(site, path, getSub, sp);
+                result = tvBoxService.getPlayUrl(site, path, getSub, client);
             } else {
                 int index = path.indexOf('/');
                 id = path.substring(0, index);
                 path = path.substring(index);
-                result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path, getSub, sp);
+                result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path, getSub, client);
             }
         } else {
-            result = tvBoxService.getPlayUrl(site, Integer.parseInt(path), getSub, sp);
+            result = tvBoxService.getPlayUrl(site, Integer.parseInt(path), getSub, client);
         }
 
 //        String url = (String) result.get("url");

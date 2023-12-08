@@ -910,7 +910,7 @@ public class TvBoxService {
         return list;
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub, boolean sp) {
+    public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub, String client) {
         Site site = siteService.getById(siteId);
         String url = null;
         String name = getNameFromPath(path);
@@ -935,7 +935,7 @@ public class TvBoxService {
 
         List<Subtitle> subtitles = new ArrayList<>();
 
-        if (sp) {
+        if ("com.fongmi.android.tv".equals(client)) {
             var preview = aListService.preview(site, fullPath);
             log.debug("preview: {} {}", fullPath, preview);
             List<String> urls = new ArrayList<>();
@@ -977,7 +977,11 @@ public class TvBoxService {
             if (fsDetail == null) {
                 throw new BadRequestException("找不到文件 " + path);
             }
-            url = buildUrl(site, path, fsDetail.getSign());
+            if (client != null && client.contains("com.github.tvbox")) {
+                url = fixHttp(fsDetail.getRawUrl());
+            } else {
+                url = buildUrl(site, path, fsDetail.getSign());
+            }
             result.put("url", url);
         }
 
@@ -1005,16 +1009,16 @@ public class TvBoxService {
         return result;
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, boolean getSub, boolean sp) {
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, boolean getSub, String client) {
         Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
         log.debug("getPlayUrl: {} {}", siteId, id);
-        return getPlayUrl(siteId, meta.getPath(), getSub, sp);
+        return getPlayUrl(siteId, meta.getPath(), getSub, client);
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path, boolean getSub, boolean sp) {
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path, boolean getSub, String client) {
         Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
         log.debug("getPlayUrl: {} {}", siteId, id);
-        return getPlayUrl(siteId, meta.getPath() + path, getSub, sp);
+        return getPlayUrl(siteId, meta.getPath() + path, getSub, client);
     }
 
     private String findBestSubtitle(List<String> subtitles, String name) {
