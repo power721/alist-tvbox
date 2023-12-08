@@ -977,7 +977,7 @@ public class TvBoxService {
             if (fsDetail == null) {
                 throw new BadRequestException("找不到文件 " + path);
             }
-            url = fixHttp(fsDetail.getRawUrl());
+            url = buildUrl(path, fsDetail.getSign());
             result.put("url", url);
         }
 
@@ -1440,18 +1440,29 @@ public class TvBoxService {
         if (url.startsWith("//")) {
             url = "http:" + url;
         }
-        if (url.startsWith("http://localhost/p/")) {
+        if (url.startsWith("http://localhost/p/") || url.startsWith("http://localhost/d/")) {
             String proxy = ServletUriComponentsBuilder.fromCurrentRequest()
                     .scheme(appProperties.isEnableHttps() ? "https" : "http")
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
-                    .replacePath("/p")
+                    .replacePath("/d")
                     .replaceQuery("")
                     .build()
                     .toUriString();
+            url = url.replace("http://localhost/d", proxy);
             url = url.replace("http://localhost/p", proxy);
             log.debug("{}", url);
         }
         return url;
+    }
+
+    private String buildUrl(String path, String sign) {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() ? "https" : "http")
+                .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
+                .replacePath("/d" + path)
+                .replaceQuery("sign=" + sign)
+                .build()
+                .toUriString();
     }
 
     private String encodeUrl(String url) {
