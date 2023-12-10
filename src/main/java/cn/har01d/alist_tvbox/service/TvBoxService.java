@@ -41,12 +41,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.file.Files;
@@ -1458,21 +1457,22 @@ public class TvBoxService {
     }
 
     private String buildUrl(Site site, String path, String sign) {
-        try {
-            if (site.getUrl().contains("//localhost")) {
-                return ServletUriComponentsBuilder.fromCurrentRequest()
-                        .scheme(appProperties.isEnableHttps() ? "https" : "http")
-                        .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
-                        .replacePath("/d" + path)
-                        .replaceQuery("sign=" + sign)
-                        .build()
-                        .toUri()
-                        .toASCIIString();
-            } else {
-                return new URI(site.getUrl() + "/d" + path + "?sign=" + sign).toASCIIString();
-            }
-        } catch (URISyntaxException e) {
-            throw new BadRequestException(e);
+        if (site.getUrl().contains("//localhost")) {
+            return ServletUriComponentsBuilder.fromCurrentRequest()
+                    .scheme(appProperties.isEnableHttps() ? "https" : "http")
+                    .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
+                    .replacePath("/d" + path)
+                    .replaceQuery("sign=" + sign)
+                    .build()
+                    .toUri()
+                    .toASCIIString();
+        } else {
+            return UriComponentsBuilder.fromHttpUrl(site.getUrl())
+                    .replacePath("/d" + path)
+                    .replaceQuery("sign=" + sign)
+                    .build()
+                    .toUri()
+                    .toASCIIString();
         }
     }
 

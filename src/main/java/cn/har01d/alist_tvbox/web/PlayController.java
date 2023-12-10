@@ -50,6 +50,7 @@ public class PlayController {
         // com.github.tvbox.osc     q版
         // com.github.tvbox.osc.bh  宝盒
         // com.github.tvbox.osc.tk  takagen99
+        // com.qingsong.yingmi      影迷
         log.debug("{} {} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()), client);
         log.debug("get play url - site: {}  path: {}  id: {}  bvid: {}  type: ", site, path, id, bvid, type);
 
