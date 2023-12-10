@@ -1459,6 +1459,7 @@ public class TvBoxService {
     private String buildUrl(Site site, String path, String sign) {
         if (site.getUrl().contains("//localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
+                    .scheme(appProperties.isEnableHttps() ? "https" : "http")
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
                     .replacePath("/d" + path)
                     .replaceQuery("sign=" + sign)
