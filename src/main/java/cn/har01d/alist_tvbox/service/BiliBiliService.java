@@ -1275,7 +1275,7 @@ public class BiliBiliService {
         return response.getBody().getData().getToken();
     }
 
-    public Map<String, Object> getPlayUrl(String bvid, boolean dash) {
+    public Map<String, Object> getPlayUrl(String bvid, boolean dash, String client) {
         String url;
         String aid;
         String cid;
@@ -1286,7 +1286,7 @@ public class BiliBiliService {
         if (dash) {
             fnval = settingRepository.findById("bilibili_fnval").map(Setting::getValue).map(Integer::parseInt).orElse(FN_VAL);
         }
-       if (parts.length >= 2) {
+        if (parts.length >= 2) {
             aid = parts[0];
             cid = parts[1];
             if (dash) {
@@ -1331,6 +1331,10 @@ public class BiliBiliService {
         result.put("header", "{\"Referer\":\"https://www.bilibili.com\",\"cookie\":\"" + cookie + "\",\"User-Agent\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36\"}");
 
         result.put("subs", getSubtitles(aid, cid));
+
+        if ("com.fongmi.android.tv".equals(client)) {
+            result.put("danmaku", "https://comment.bilibili.com/" + cid + ".xml");
+        }
 
         if (appProperties.isHeartbeat()) {
             heartbeat(aid, cid);

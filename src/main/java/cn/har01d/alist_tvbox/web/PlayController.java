@@ -46,14 +46,15 @@ public class PlayController {
 
         String client = request.getHeader("X-CLIENT");
         // com.mygithub0.tvbox0.osdX 影视仓
-        // com.fongmi.android.tv 影视
-        // com.github.tvbox.osc.bh 宝盒
-        // com.github.tvbox.osc.tk
+        // com.fongmi.android.tv    影视
+        // com.github.tvbox.osc     q版
+        // com.github.tvbox.osc.bh  宝盒
+        // com.github.tvbox.osc.tk  takagen99
         log.debug("{} {} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()), client);
         log.debug("get play url - site: {}  path: {}  id: {}  bvid: {}  type: ", site, path, id, bvid, type);
 
         if (StringUtils.isNotBlank(bvid)) {
-            return biliBiliService.getPlayUrl(bvid, dash);
+            return biliBiliService.getPlayUrl(bvid, dash, client);
         }
 
         if (StringUtils.isNotBlank(id)) {
