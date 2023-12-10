@@ -1443,7 +1443,6 @@ public class TvBoxService {
         }
         if (url.startsWith("http://localhost/p/") || url.startsWith("http://localhost/d/")) {
             String proxy = ServletUriComponentsBuilder.fromCurrentRequest()
-                    .scheme(appProperties.isEnableHttps() ? "https" : "http")
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
                     .replacePath("/d")
                     .replaceQuery("")
@@ -1459,7 +1458,6 @@ public class TvBoxService {
     private String buildUrl(Site site, String path, String sign) {
         if (site.getUrl().contains("//localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .scheme(appProperties.isEnableHttps() ? "https" : "http")
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
                     .replacePath("/d" + path)
                     .replaceQuery("sign=" + sign)
