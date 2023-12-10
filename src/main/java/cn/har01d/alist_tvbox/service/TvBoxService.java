@@ -45,6 +45,8 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.file.Files;
@@ -977,11 +979,7 @@ public class TvBoxService {
             if (fsDetail == null) {
                 throw new BadRequestException("找不到文件 " + path);
             }
-            if (client != null && client.contains("com.github.tvbox")) {
-                url = fixHttp(fsDetail.getRawUrl());
-            } else {
-                url = buildUrl(site, path, fsDetail.getSign());
-            }
+            url = buildUrl(site, path, fsDetail.getSign());
             result.put("url", url);
         }
 
@@ -1460,16 +1458,21 @@ public class TvBoxService {
     }
 
     private String buildUrl(Site site, String path, String sign) {
-        if (site.getUrl().contains("//localhost")) {
-            return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .scheme(appProperties.isEnableHttps() ? "https" : "http")
-                    .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
-                    .replacePath("/d" + path)
-                    .replaceQuery("sign=" + sign)
-                    .build()
-                    .toUriString();
-        } else {
-            return site.getUrl() + "/d" + path + "?sign=" + sign;
+        try {
+            if (site.getUrl().contains("//localhost")) {
+                return ServletUriComponentsBuilder.fromCurrentRequest()
+                        .scheme(appProperties.isEnableHttps() ? "https" : "http")
+                        .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
+                        .replacePath("/d" + path)
+                        .replaceQuery("sign=" + sign)
+                        .build()
+                        .toUri()
+                        .toASCIIString();
+            } else {
+                return new URI(site.getUrl() + "/d" + path + "?sign=" + sign).toASCIIString();
+            }
+        } catch (URISyntaxException e) {
+            throw new BadRequestException(e);
         }
     }
 
