@@ -942,7 +942,13 @@ public class TvBoxService {
             if (fsDetail == null) {
                 throw new BadRequestException("找不到文件 " + path);
             }
-            url = buildUrl(site, path, fsDetail.getSign());
+
+            if (fsDetail.getProvider().contains("Aliyundrive")) {
+                url = buildUrl(site, path, fsDetail.getSign());
+            } else {
+                url = fixHttp(fsDetail.getRawUrl());
+            }
+
             result.put("url", url);
         }
 
