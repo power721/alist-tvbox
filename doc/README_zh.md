@@ -135,6 +135,8 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 第一次启动会自动读取/data/mytoken.txt,/data/myopentoken.txt里面的内容，以后这些文件不再生效。
 自动创建转存文件夹，不需要再填写转存文件夹ID。
 
+修改主账号后需要重启AList访问。
+
 ![账号详情](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_detail.png)
 
 ### 订阅
@@ -242,6 +244,8 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 - https://api-cf.nn.ci/alist/ali_open/token
 - https://api.xhofe.top/alist/ali_open/token
 - https://api.nn.ci/alist/ali_open/token
+
+如果nginx配置了SSL，需要在高级设置中打开`订阅域名支持HTTPS`开关。
 
 ### 索引
 对于阿里云盘资源，建议使用文件数量少的路径，并限速，防止被封号。
