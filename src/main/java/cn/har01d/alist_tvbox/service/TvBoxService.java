@@ -2,23 +2,10 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.Subtitle;
-import cn.har01d.alist_tvbox.entity.AListAlias;
-import cn.har01d.alist_tvbox.entity.AListAliasRepository;
-import cn.har01d.alist_tvbox.entity.Account;
-import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.Meta;
-import cn.har01d.alist_tvbox.entity.MetaRepository;
-import cn.har01d.alist_tvbox.entity.Movie;
-import cn.har01d.alist_tvbox.entity.ShareRepository;
-import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
-import cn.har01d.alist_tvbox.model.FileNameInfo;
-import cn.har01d.alist_tvbox.model.Filter;
-import cn.har01d.alist_tvbox.model.FilterValue;
-import cn.har01d.alist_tvbox.model.FsDetail;
-import cn.har01d.alist_tvbox.model.FsInfo;
-import cn.har01d.alist_tvbox.model.FsResponse;
+import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -34,11 +21,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.core.env.Environment;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -52,28 +35,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.ALIST_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.FILE;
-import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
-import static cn.har01d.alist_tvbox.util.Constants.FOLDER_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
+import static cn.har01d.alist_tvbox.util.Constants.*;
 
 @Slf4j
 @Service
@@ -939,36 +908,31 @@ public class TvBoxService {
         if ("com.fongmi.android.tv".equals(client)) {
             var preview = aListService.preview(site, fullPath);
             log.debug("preview: {} {}", fullPath, preview);
-            List<String> urls = new ArrayList<>();
-
-            Collections.reverse(preview.getPlayInfo().getVideos());
-            if (preview.getPlayInfo().getVideos().size() > 1 && preview.getPlayInfo().getVideos().get(0).getId().contains("限速")) {
-                var item = preview.getPlayInfo().getVideos().get(0);
-                preview.getPlayInfo().getVideos().set(0, preview.getPlayInfo().getVideos().get(1));
-                preview.getPlayInfo().getVideos().set(1, item);
-            }
-
-            for (var item : preview.getPlayInfo().getVideos()) {
-                if (!"finished".equals(item.getStatus())) {
-                    continue;
-                }
-                urls.add(item.getId());
-                urls.add(item.getUrl());
-            }
-            if (urls.size() > 1) {
-                url = urls.get(1);
-                result.put("url", urls);
-            }
-
-            if (preview.getPlayInfo().getSubtitles() != null) {
-                for (var item : preview.getPlayInfo().getSubtitles()) {
+            if (preview != null) {
+                Collections.reverse(preview.getPlayInfo().getVideos());
+                List<String> urls = new ArrayList<>();
+                for (var item : preview.getPlayInfo().getVideos()) {
                     if (!"finished".equals(item.getStatus())) {
                         continue;
                     }
-                    Subtitle subtitle = new Subtitle();
-                    subtitle.setUrl(item.getUrl());
-                    subtitle.setLang(item.getLanguage());
-                    subtitles.add(subtitle);
+                    urls.add(item.getId());
+                    urls.add(item.getUrl());
+                }
+                if (urls.size() > 1) {
+                    url = urls.get(1);
+                    result.put("url", urls);
+                }
+
+                if (preview.getPlayInfo().getSubtitles() != null) {
+                    for (var item : preview.getPlayInfo().getSubtitles()) {
+                        if (!"finished".equals(item.getStatus())) {
+                            continue;
+                        }
+                        Subtitle subtitle = new Subtitle();
+                        subtitle.setUrl(item.getUrl());
+                        subtitle.setLang(item.getLanguage());
+                        subtitles.add(subtitle);
+                    }
                 }
             }
         }
