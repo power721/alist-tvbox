@@ -32,11 +32,16 @@ public class IndexTemplateService {
 
     @PostConstruct
     public void setup() {
-        if (!environment.matchesProfiles("xiaoya") || settingRepository.existsById("auto_index_2")) {
+        if (!environment.matchesProfiles("xiaoya")) {
             return;
         }
 
-        if (settingRepository.existsById("auto_index")) {
+        long count = settingRepository.count();
+        if (count > 0 && settingRepository.existsById("auto_index_2")) {
+            return;
+        }
+
+        if (count > 0 && settingRepository.existsById("auto_index")) {
             fixAutoIndex();
             return;
         }

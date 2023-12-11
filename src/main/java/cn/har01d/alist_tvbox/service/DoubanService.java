@@ -352,7 +352,7 @@ public class DoubanService {
         if (movie != null) {
             if (movie.getCover() != null && !movie.getCover().isEmpty()) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .scheme(appProperties.isEnableHttps() ? "https" : "http")
+                        .scheme(appProperties.isEnableHttps() ? "https" : "http") // nginx https
                         .replacePath("/images")
                         .query("url=" + movie.getCover())
                         .build()
