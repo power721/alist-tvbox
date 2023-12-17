@@ -1084,7 +1084,7 @@ public class TvBoxService {
                 subtitle.setFormat("application/ttml+xml");
             }
             subtitle.setExt(getExt(best));
-            subtitle.setUrl(fsDetail.getRawUrl());
+            subtitle.setUrl(fixHttp(fsDetail.getRawUrl()));
             log.debug("subtitle: {}", subtitle);
             return subtitle;
         }
