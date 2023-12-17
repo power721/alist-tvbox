@@ -2,8 +2,9 @@ BASE_DIR=./data
 PORT1=4567
 PORT2=5344
 YES=false
+MOUNT=""
 
-while getopts ":d:p:P:y" arg; do
+while getopts ":d:p:P:v:y" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
@@ -13,6 +14,9 @@ while getopts ":d:p:P:y" arg; do
             ;;
         P)
             PORT2=${OPTARG}
+            ;;
+        v)
+            MOUNT="${MOUNT} -v ${OPTARG}"
             ;;
         y)
             YES=true
@@ -69,7 +73,7 @@ do
 done
 
 docker rm -f alist-tvbox && \
-docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 --restart=always -v "$BASE_DIR":/data --name=alist-tvbox haroldli/alist-tvbox:${tag}
+docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 --restart=always -v "$BASE_DIR":/data ${MOUNT} --name=alist-tvbox haroldli/alist-tvbox:${tag}
 
 echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
 echo -e "    docker logs -f alist-tvbox\n"

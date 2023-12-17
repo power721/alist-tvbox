@@ -4,18 +4,20 @@ PORT2=5344
 PORT3=5345
 TAG="latest"
 MEM_OPT="-Xmx512M"
+MOUNT=""
 
 usage(){
-  echo "Usage: $0 [ -d BASE_DIR ] [ -p PORT1 ] [ -P PORT2 ] [ -t TAG ] [ -m MEM_OPT ]"
-  echo "-d BASE_DIR  数据目录，默认：/etc/xiaoya"
-  echo "-p PORT1     管理界面端口，默认：4567"
-  echo "-P PORT2     小雅AList端口，默认：5344"
-  echo "-t TAG       Docker镜像标签，默认：latest"
-  echo "-m MEM_OPT   Java最大堆内存，默认：512M"
+  echo "Usage: $0 [ -d BASE_DIR ] [ -p PORT1 ] [ -P PORT2 ] [ -t TAG ] [ -v MOUNT ] [ -m MEM_OPT ]"
+  echo "-d BASE_DIR    数据目录，默认：/etc/xiaoya"
+  echo "-p PORT1       管理界面端口，默认：4567"
+  echo "-P PORT2       小雅AList端口，默认：5344"
+  echo "-t TAG         Docker镜像标签，默认：latest"
+  echo "-v Host:Docker 路径挂载"
+  echo "-m MEM_OPT     Java最大堆内存，默认：512M"
   exit 2
 }
 
-while getopts "d:p:P:e:m:t:h" arg; do
+while getopts "d:p:P:e:m:t:v:h" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
@@ -34,6 +36,9 @@ while getopts "d:p:P:e:m:t:h" arg; do
             ;;
         t)
             TAG=${OPTARG}
+            ;;
+        v)
+            MOUNT="${MOUNT} -v ${OPTARG}"
             ;;
         h)
             usage
@@ -91,7 +96,7 @@ done
 
 echo -e "\e[33m重启应用\e[0m"
 docker rm -f xiaoya-tvbox 2>/dev/null && \
-docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
+docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
 
 echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
 echo -e "    docker logs -f xiaoya-tvbox\n"

@@ -1,13 +1,17 @@
 BASE_DIR=/etc/xiaoya
 TAG="hostmode"
+MOUNT=""
 
-while getopts "d:t:" arg; do
+while getopts "d:t:v:" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
             ;;
         t)
             TAG=${OPTARG}
+            ;;
+        v)
+            MOUNT="${MOUNT} -v ${OPTARG}"
             ;;
         *)
             ;;
@@ -51,7 +55,7 @@ done
 
 echo -e "\e[33m重启应用，host网络模式\e[0m"
 docker rm -f xiaoya-tvbox 2>/dev/null && \
-docker run -d --network host -v "$BASE_DIR":/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
+docker run -d --network host -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
 
 echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
 echo -e "    docker logs -f xiaoya-tvbox\n"

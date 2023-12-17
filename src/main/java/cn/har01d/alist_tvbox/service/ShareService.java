@@ -595,7 +595,7 @@ public class ShareService {
             } else if (share.getType() == 0) {
                 share.setFolderId("root");
             } else if (share.getType() == 4) {
-                throw new BadRequestException("本地路径不能为空");
+                share.setFolderId("/");
             }
         }
 
