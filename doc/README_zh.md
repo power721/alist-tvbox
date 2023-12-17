@@ -47,6 +47,10 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
 ```bash
 sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /home/user/atv
 ```
+挂载本地目录：
+```bash
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -v /home/user/atv/Videos:/video
+```
 使用其它端口：
 
 - 第一个参数是挂载的数据目录，默认是/etc/xiaoya。
