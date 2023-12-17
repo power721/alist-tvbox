@@ -1,5 +1,5 @@
 <template>
-  <h2>分享列表</h2>
+  <h2>资源列表</h2>
   <el-row justify="end">
     <el-button type="success" @click="uploadVisible=true">导入</el-button>
     <el-button type="success" @click="exportVisible=true">导出</el-button>
@@ -84,12 +84,12 @@
     </template>
   </el-dialog>
 
-  <el-dialog v-model="dialogVisible" title="删除分享" width="30%">
+  <el-dialog v-model="dialogVisible" title="删除资源" width="30%">
     <div v-if="batch">
-      <p>是否删除选中的{{ multipleSelection.length }}个分享?</p>
+      <p>是否删除选中的{{ multipleSelection.length }}个资源?</p>
     </div>
     <div v-else>
-      <p>是否删除分享 - {{ form.shareId }}</p>
+      <p>是否删除资源 - {{ form.shareId }}</p>
       <p>{{ form.path }}</p>
     </div>
     <template #footer>
