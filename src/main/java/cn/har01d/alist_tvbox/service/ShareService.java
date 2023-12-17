@@ -385,6 +385,10 @@ public class ShareService {
                         String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
+                    } else if (share.getType() == 4) {
+                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Local',30,'work','{\"root_folder_path\":\"%s\",\"thumbnail\":false,\"thumb_cache_folder\":\"\",\"show_hidden\":true,\"mkdir_perm\":\"777\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
+                        int count = Utils.executeUpdate(String.format(sql, share.getId(), share.getPath(), share.getFolderId()));
+                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getPath(), share.getFolderId(), count);
                     }
                     if (share.getId() < 6000) {
                         shareId = Math.max(shareId, share.getId() + 1);
@@ -512,6 +516,10 @@ public class ShareService {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
                 log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
+            } else if (share.getType() == 4) {
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Local',30,'work','{\"root_folder_path\":\"%s\",\"thumbnail\":false,\"thumb_cache_folder\":\"\",\"show_hidden\":true,\"mkdir_perm\":\"777\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
+                int count = Utils.executeUpdate(String.format(sql, share.getId(), share.getPath(), share.getFolderId()));
+                log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getPath(), share.getFolderId(), count);
             }
             log.info("insert result: {}", result);
 
@@ -549,6 +557,10 @@ public class ShareService {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
                 log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
+            } else if (share.getType() == 4) {
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Local',30,'work','{\"root_folder_path\":\"%s\",\"thumbnail\":false,\"thumb_cache_folder\":\"\",\"show_hidden\":true,\"mkdir_perm\":\"777\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
+                int count = Utils.executeUpdate(String.format(sql, share.getId(), share.getPath(), share.getFolderId()));
+                log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getPath(), share.getFolderId(), count);
             }
             log.info("insert result: {}", result);
 
@@ -563,12 +575,15 @@ public class ShareService {
         if (StringUtils.isBlank(share.getPath())) {
             throw new BadRequestException("挂载路径不能为空");
         }
+        if (share.getPath().equals("/")) {
+            throw new BadRequestException("挂载路径不能为/");
+        }
 
         if (share.getType() == 2) {
             if (StringUtils.isBlank(share.getCookie())) {
                 throw new BadRequestException("Cookie不能为空");
             }
-        } else {
+        } else if (share.getType() != 4) {
             if (StringUtils.isBlank(share.getShareId())) {
                 throw new BadRequestException("分享ID不能为空");
             }
@@ -579,6 +594,8 @@ public class ShareService {
                 share.setFolderId("0");
             } else if (share.getType() == 0) {
                 share.setFolderId("root");
+            } else if (share.getType() == 4) {
+                throw new BadRequestException("本地路径不能为空");
             }
         }
 

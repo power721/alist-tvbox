@@ -15,13 +15,17 @@
     <el-table-column prop="path" label="路径" sortable/>
     <el-table-column label="完整路径" width="380" sortable>
       <template #default="scope">
-        {{fullPath(scope.row)}}
+        {{ fullPath(scope.row) }}
       </template>
     </el-table-column>
     <el-table-column prop="url" label="分享链接">
       <template #default="scope">
-        <a v-if="scope.row.type==1" :href="getShareLink(scope.row)" target="_blank">https://mypikpak.com/s/{{scope.row.shareId}}</a>
-        <a v-else-if="scope.row.type!=2" :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
+        <a v-if="scope.row.type==1" :href="getShareLink(scope.row)" target="_blank">
+          https://mypikpak.com/s/{{ scope.row.shareId }}
+        </a>
+        <a v-else-if="scope.row.type==0" :href="getShareLink(scope.row)" target="_blank">
+          https://www.aliyundrive.com/s/{{ scope.row.shareId }}
+        </a>
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
@@ -29,6 +33,7 @@
       <template #default="scope">
         <span v-if="scope.row.type==1">PikPak分享</span>
         <span v-else-if="scope.row.type==2">夸克网盘</span>
+        <span v-else-if="scope.row.type==4">本地存储</span>
         <span v-else>阿里云盘</span>
       </template>
     </el-table-column>
@@ -49,26 +54,27 @@
       <el-form-item label="挂载路径" label-width="140" required>
         <el-input v-model="form.path" autocomplete="off"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2" label="分享ID" label-width="140" required>
+      <el-form-item v-if="form.type!=2&&form.type!=4" label="分享ID" label-width="140" required>
         <el-input v-model="form.shareId" autocomplete="off" placeholder="分享ID或者分享链接"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2" label="密码" label-width="140">
+      <el-form-item v-if="form.type!=2&&form.type!=4" label="密码" label-width="140">
         <el-input v-model="form.password" autocomplete="off"/>
       </el-form-item>
       <el-form-item v-if="form.type==2" label="Cookie" label-width="140">
         <el-input v-model="form.cookie" type="textarea" :rows="5" autocomplete="off"/>
       </el-form-item>
-      <el-form-item label="文件夹ID" label-width="140">
-        <el-input v-model="form.folderId" autocomplete="off" placeholder="默认为根目录或者从分享链接读取"/>
+      <el-form-item :label="form.type==4?'本地路径':'文件夹ID'" label-width="140">
+        <el-input v-model="form.folderId" autocomplete="off" :placeholder="form.type==4?'':'默认为根目录或者从分享链接读取'"/>
       </el-form-item>
       <el-form-item label="类型" label-width="140">
         <el-radio-group v-model="form.type" class="ml-4">
           <el-radio :label="0" size="large">阿里云盘</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
           <el-radio :label="2" size="large">夸克网盘</el-radio>
+          <el-radio :label="4" size="large">本地存储</el-radio>
         </el-radio-group>
       </el-form-item>
-      <span v-if="form.path">完整路径： {{fullPath(form)}}</span>
+      <span v-if="form.path">完整路径： {{ fullPath(form) }}</span>
     </el-form>
     <template #footer>
       <span class="dialog-footer">
@@ -155,10 +161,6 @@ const multipleSelection = ref<ShareInfo[]>([])
 const page = ref(1)
 const size = ref(20)
 const total = ref(0)
-const page1 = ref(1)
-const size1 = ref(20)
-const total1 = ref(0)
-const resources = ref([])
 const shares = ref([])
 const dialogTitle = ref('')
 const formVisible = ref(false)
@@ -249,6 +251,8 @@ const fullPath = (share: any) => {
     return '/\uD83D\uDD78\uFE0F我的PikPak分享/' + path
   } else if (share.type == 2) {
     return '/\uD83C\uDF1E我的夸克网盘/' + path
+  } else if (share.type == 4) {
+    return path
   } else {
     return '/\uD83C\uDE34我的阿里分享/' + path
   }

@@ -23,6 +23,7 @@ COPY entrypoint.sh /
 COPY target/application/ ./
 
 COPY data/tvbox.zip /
+COPY data/base_version /
 COPY data/index.share.zip /
 COPY data/data.zip /
 

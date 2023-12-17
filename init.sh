@@ -1,5 +1,19 @@
 #!/bin/sh
 
+update_movie() {
+  LOCAL="0.0"
+  if [ -f /data/atv/base_version ]; then
+    LOCAL=$(head -n 1 </data/atv/base_version)
+  fi
+  REMOTE=$(head -n 1 </base_version)
+  echo "movie base version: $LOCAL $REMOTE"
+  if [ "$LOCAL" != "$REMOTE" ]; then
+    echo "upgrade movie data"
+    unzip -q -o /data.zip -d /data/atv/
+    cp /base_version /data/atv/
+  fi
+}
+
 init() {
   mkdir -p /var/lib/pxg /www/cgi-bin /index /data/atv /data/index /data/backup
   if [ -d /index ]; then
@@ -42,19 +56,7 @@ init() {
 
   rm -f tvbox.zip index.zip index.txt version.txt update.zip
 
-  LOCAL="0.0"
-  if [ -f /data/atv/base_version ]; then
-    LOCAL=$(head -n 1 </data/atv/base_version)
-  fi
-  unzip -q -o /data.zip -d /tmp
-  REMOTE=$(head -n 1 </tmp/base_version)
-  echo "movie base version: $LOCAL $REMOTE"
-  if [ "$LOCAL" != "$REMOTE" ]; then
-    echo "upgrade movie data"
-    mv /tmp/data.sql /data/atv/
-    mv /tmp/base_version /data/atv/
-  fi
-  rm -f /tmp/data.sql
+  update_movie
 }
 
 cat data/app_version
@@ -63,6 +65,7 @@ echo "xiaoya version: $version"
 date
 
 if [ -f /opt/alist/data/data.db ]; then
+  update_movie
   echo "已经初始化成功"
 else
   init
