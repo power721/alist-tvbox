@@ -139,6 +139,12 @@ public class DoubanService {
             Path source = Path.of("/tmp/base_version");
             if (Files.exists(source)) {
                 try {
+                    settingRepository.save(new Setting(MOVIE_VERSION, Files.readString(source).trim()));
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
+
+                try {
                     Files.delete(source);
                 } catch (Exception e) {
                     log.warn("", e);

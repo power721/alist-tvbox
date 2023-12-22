@@ -135,7 +135,7 @@
               />
             </el-form-item>
           </el-form>
-          <div>本地版本：{{ movieVersion }}</div>
+          <div>本地版本：<a href="/#/meta">{{ movieVersion }}</a></div>
           <div v-if="movieRemoteVersion&&movieRemoteVersion>movieVersion">
             最新版本：{{
               movieRemoteVersion

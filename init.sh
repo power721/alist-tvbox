@@ -10,7 +10,7 @@ update_movie() {
   if [ "$LOCAL" != "$REMOTE" ]; then
     echo "upgrade movie data"
     unzip -q -o /data.zip -d /data/atv/
-    cp /base_version /data/atv/
+    cp /base_version /tmp/
   fi
 }
 

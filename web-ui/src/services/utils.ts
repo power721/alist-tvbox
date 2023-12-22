@@ -12,10 +12,13 @@ export const formatDatetime = (date: Date) => {
 }
 
 export const formatDuration = (startTime: string, endTime: string) => {
-  let time = (endTime ? new Date(endTime) : new Date()).getTime() - new Date(startTime).getTime()
+  if (startTime == undefined) {
+    return ''
+  }
+  let time = (endTime != undefined ? new Date(endTime) : new Date()).getTime() - new Date(startTime).getTime()
   time = Math.floor(time / 1000)
-  let hour = Math.floor(time / 3600)
-  let minute = Math.floor((time - 3600 * hour) / 60)
-  let second = time % 60
+  const hour = Math.floor(time / 3600)
+  const minute = Math.floor((time - 3600 * hour) / 60)
+  const second = time % 60
   return padZero(hour) + ':' + padZero(minute) + ':' + padZero(second)
 }
