@@ -6,10 +6,10 @@
       <el-button type="primary" @click="search" :disabled="!keyword">
         搜索
       </el-button>
-      <el-button @click="scrapeVisible=true">刮削</el-button>
+      <el-button @click="scrapeVisible=true" v-if="showScrape">刮削</el-button>
       <el-button @click="fixMeta">去重</el-button>
       <el-button @click="refresh">刷新</el-button>
-      <el-button type="primary" @click="addMeta">添加</el-button>
+      <el-button type="primary" @click="addMeta" v-if="showScrape">添加</el-button>
       <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
     </el-row>
     <div class="space"></div>
@@ -161,6 +161,7 @@ const dialogVisible = ref(false)
 const formVisible = ref(false)
 const addVisible = ref(false)
 const scrapeVisible = ref(false)
+const showScrape = ref(false)
 const fullscreen = ref(false)
 const batch = ref(false)
 const form = ref({
@@ -307,6 +308,7 @@ const loadBaseUrl = () => {
     return
   }
 
+  showScrape.value = !store.xiaoya
   if (store.xiaoya) {
     axios.get('/api/sites/1').then(({data}) => {
       const re = /http:\/\/localhost:(\d+)/.exec(data.url)
