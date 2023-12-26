@@ -418,7 +418,7 @@ const handleExceed: UploadProps['onExceed'] = (files: File[]) => {
 
 onMounted(() => {
   load()
-  axios.get('/token').then(({data}) => {
+  axios.get('/api/token').then(({data}) => {
     token.value = data ? '/' + data : ''
   })
 })

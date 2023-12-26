@@ -162,6 +162,15 @@ public class SubscriptionService {
         }
     }
 
+    public String getToken(String apiKey) {
+        String key = settingRepository.findById("api_key").map(Setting::getValue).orElse("");
+        if (key.equals(apiKey)) {
+            return token;
+        } else {
+            return "";
+        }
+    }
+
     public String getToken() {
         return token;
     }

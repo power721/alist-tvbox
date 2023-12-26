@@ -55,7 +55,7 @@ const search = function () {
 }
 
 onMounted(() => {
-  axios.get('/token').then(({data}) => {
+  axios.get('/api/token').then(({data}) => {
     token.value = data ? '/' + data : ''
   })
 })

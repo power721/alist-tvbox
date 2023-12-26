@@ -83,16 +83,22 @@ public class TvBoxController {
     }
 
     @GetMapping("/token")
+    public String getToken2(HttpServletRequest request) {
+        String apiKey = request.getHeader("X-API-KEY");
+        return subscriptionService.getToken(apiKey);
+    }
+
+    @GetMapping("/api/token")
     public String getToken() {
         return subscriptionService.getToken();
     }
 
-    @PostMapping("/token")
+    @PostMapping("/api/token")
     public String createToken(@RequestBody TokenDto dto) {
         return subscriptionService.createToken(dto);
     }
 
-    @DeleteMapping("/token")
+    @DeleteMapping("/api/token")
     public void deleteToken() {
         subscriptionService.deleteToken();
     }
