@@ -11,6 +11,7 @@ import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -707,8 +708,8 @@ public class SubscriptionService {
     }
 
     private String readHostAddress(String path) {
-        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequestUri()
-                .scheme(appProperties.isEnableHttps() ? "https" : "http") // nginx https
+        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(path)
                 .build();
         return uriComponents.toUriString();

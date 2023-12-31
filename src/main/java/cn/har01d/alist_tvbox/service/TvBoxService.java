@@ -1327,7 +1327,7 @@ public class TvBoxService {
         try {
             if (movie.getVod_pic() != null && !movie.getVod_pic().isEmpty()) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .scheme(appProperties.isEnableHttps() ? "https" : "http") // nginx https
+                        .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                         .replacePath("/images")
                         .replaceQuery("url=" + movie.getVod_pic())
                         .build()
@@ -1344,7 +1344,7 @@ public class TvBoxService {
         try {
             if (movie.getCover() != null && !movie.getCover().isEmpty() && !movie.getCover().contains("/images")) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .scheme(appProperties.isEnableHttps() ? "https" : "http") // nginx https
+                        .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                         .replacePath("/images")
                         .replaceQuery("url=" + movie.getCover())
                         .build()

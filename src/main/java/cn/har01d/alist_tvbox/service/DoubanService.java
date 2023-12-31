@@ -20,6 +20,7 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.annotation.PostConstruct;
@@ -358,7 +359,7 @@ public class DoubanService {
         if (movie != null) {
             if (movie.getCover() != null && !movie.getCover().isEmpty()) {
                 String cover = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .scheme(appProperties.isEnableHttps() ? "https" : "http") // nginx https
+                        .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                         .replacePath("/images")
                         .query("url=" + movie.getCover())
                         .build()

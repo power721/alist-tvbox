@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -292,4 +293,11 @@ public final class Utils {
     public static String hashPassword(String password, String slat) {
         return hash(hash(password, StaticHashSalt), slat);
     }
+
+    public static boolean isLocalAddress() {
+        String uri = ServletUriComponentsBuilder.fromCurrentRequest().toUriString();
+        log.debug("RequestURI: {}", uri);
+        return uri.startsWith("http://192.168.");
+    }
+
 }
