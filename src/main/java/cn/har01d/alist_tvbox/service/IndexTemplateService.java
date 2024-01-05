@@ -21,7 +21,7 @@ import java.time.Instant;
 @Service
 public class IndexTemplateService {
     public static final String AUTO_INDEX_VERSION = "auto_index_version";
-    private static final int indexVersion = 2;
+    private static final int indexVersion = 3;
     public static final String paths = "\"/\uD83C\uDE34我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【 剧 l 集 】/【电 l 视 l 剧】和完结的/近期【更新中】电视剧\", " +
             "\"/\uD83C\uDE34我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【动.漫.动.画电.影】/更新中的【动漫.动画电影】和完结的，还有一些大合集/还在【更新中】的动漫 4.2TB\", " +
             "\"/\uD83C\uDE34我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【综艺.纪录片.节目.晚会】/更新中的【综艺.纪录片.节目.晚会】和完结的/还在【更新中】的综艺 3TB\", " +
