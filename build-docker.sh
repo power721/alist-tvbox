@@ -31,11 +31,12 @@ cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 
 mv application-backup.yaml src/main/resources/application.yaml
 
-date +%j.%H%M > data/version
+export TZ=Asia/Shanghai
+echo $((($(date +%Y) - 2023) * 366 + $(date +%j))).$(date +%H%M) > data/version
 docker build --tag=haroldli/alist-tvbox:latest .
 
 echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
-echo -e "\e[36m端口映射：\e[0m $PORT1:45670  $PORT2:5244"
+echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:5244"
 
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
 docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 -v "$MOUNT":/data --name=alist-tvbox haroldli/alist-tvbox:latest

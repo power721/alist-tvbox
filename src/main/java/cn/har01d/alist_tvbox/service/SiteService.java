@@ -155,6 +155,7 @@ public class SiteService {
             } else {
                 aListToken = site.getToken();
             }
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('token','" + aListToken + "','','string','',1,0);");
             Utils.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
         } catch (Exception e) {
             log.warn("", e);
