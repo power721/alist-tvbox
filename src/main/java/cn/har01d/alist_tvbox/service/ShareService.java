@@ -233,6 +233,8 @@ public class ShareService {
         } catch (Exception e) {
             log.warn("", e);
         }
+
+        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + url + "' WHERE key = 'open_token_url'");
     }
 
     private List<Share> loadSharesFromFile() {
