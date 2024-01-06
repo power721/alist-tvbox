@@ -22,7 +22,11 @@
       </el-table-column>
       <el-table-column prop="checkinDays" label="签到次数" width="90">
         <template #default="scope">
-          <el-button link @click="loadTimeline(scope.row.id)">{{ scope.row.checkinDays }}</el-button>
+          {{ scope.row.checkinDays }}
+          <span class="divider"></span>
+          <el-button link @click="loadTimeline(scope.row.id)">
+            <el-icon><Calendar /></el-icon>
+          </el-button>
         </template>
       </el-table-column>
       <el-table-column prop="checkinTime" label="上次签到时间">

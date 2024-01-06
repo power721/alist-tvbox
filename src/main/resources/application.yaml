@@ -16,7 +16,6 @@ spring:
     hibernate:
       # possible values: validate | update | create | create-drop
       ddl-auto: update
-    database-platform: org.hibernate.dialect.H2Dialect
     defer-datasource-initialization: true
     open-in-view: false
   sql:
