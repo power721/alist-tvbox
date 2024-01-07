@@ -1,7 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.SharesDto;
-import cn.har01d.alist_tvbox.dto.UrlDto;
+import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.service.ShareService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -76,7 +76,7 @@ public class ShareController {
     }
 
     @PostMapping("/api/open-token-url")
-    public void updateOpenTokenUrl(@RequestBody UrlDto dto) {
-        shareService.updateOpenTokenUrl(dto.getUrl());
+    public void updateOpenTokenUrl(@RequestBody OpenApiDto dto) {
+        shareService.updateOpenTokenUrl(dto);
     }
 }

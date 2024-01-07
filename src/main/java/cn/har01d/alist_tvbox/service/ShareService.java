@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.SharesDto;
+import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.entity.Account;
@@ -212,14 +213,14 @@ public class ShareService {
         }
     }
 
-    public void updateOpenTokenUrl(String url) {
+    public void updateOpenTokenUrl(OpenApiDto dto) {
+        String url = dto.getUrl();
         try {
             Path path = Paths.get("/opt/alist/data/config.json");
             if (Files.exists(path)) {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);
                 json.put("opentoken_auth_url", url);
-                settingRepository.save(new Setting(OPEN_TOKEN_URL, url));
                 text = objectMapper.writeValueAsString(json);
                 Files.writeString(path, text);
             }
@@ -234,7 +235,12 @@ public class ShareService {
             log.warn("", e);
         }
 
+        settingRepository.save(new Setting(OPEN_TOKEN_URL, url));
+        settingRepository.save(new Setting("open_api_client_id", dto.getClientId()));
+        settingRepository.save(new Setting("open_api_client_secret", dto.getClientSecret()));
         Utils.executeUpdate("UPDATE x_setting_items SET value = '" + url + "' WHERE key = 'open_token_url'");
+        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + dto.getClientId() + "' WHERE key = 'open_api_client_id'");
+        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + dto.getClientSecret() + "' WHERE key = 'open_api_client_secret'");
     }
 
     private List<Share> loadSharesFromFile() {

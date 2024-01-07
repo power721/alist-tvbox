@@ -145,7 +145,7 @@
       </el-col>
     </el-row>
 
-    <el-dialog v-model="dialogVisible" title="高级功能" width="40%">
+    <el-dialog v-model="dialogVisible" title="高级功能" width="50%">
       <el-form label-width="180px">
         <el-form-item label="开放Token认证URL">
           <el-select v-model="openTokenUrl" class="m-2" placeholder="Select">
@@ -157,6 +157,12 @@
             />
           </el-select>
           <el-input v-model="openTokenUrl"/>
+        </el-form-item>
+        <el-form-item label="Client ID">
+          <el-input v-model="apiClientId" type="text"/>
+        </el-form-item>
+        <el-form-item label="Client Secret">
+          <el-input v-model="apiClientSecret" type="password" show-password/>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateOpenTokenUrl">更新</el-button>
@@ -234,6 +240,8 @@ const options = [
   {label: 'api.xhofe.top', value: 'https://api.xhofe.top/alist/ali_open/token'},
   {label: 'api-cf.nn.ci', value: 'https://api-cf.nn.ci/alist/ali_open/token'},
   {label: 'api.nn.ci ✈', value: 'https://api.nn.ci/alist/ali_open/token'},
+  {label: 'openapi.alipan.com', value: 'https://openapi.alipan.com/oauth/access_token'},
+  {label: 'aliyundrive-webdav', value: 'https://aliyundrive-oauth.messense.me/oauth/access_token'},
 ]
 const tooltip = 'sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"'
 const aListStarted = ref(false)
@@ -259,6 +267,8 @@ const openTokenUrl = ref('')
 const dockerAddress = ref('')
 const aliSecret = ref('')
 const atvPass = ref('')
+const apiClientId = ref('')
+const apiClientSecret = ref('')
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const login = ref({
   username: '',
@@ -296,8 +306,8 @@ const resetAListToken = () => {
 }
 
 const updateOpenTokenUrl = () => {
-  axios.post('/api/open-token-url', {url: openTokenUrl.value}).then(() => {
-    ElMessage.success('更新成功')
+  axios.post('/api/open-token-url', {url: openTokenUrl.value, clientId: apiClientId.value, clientSecret: apiClientSecret.value}).then(() => {
+    ElMessage.success('更新成功，重启生效')
   })
 }
 
@@ -387,6 +397,8 @@ onMounted(() => {
     enableHttps.value = data.enable_https === 'true'
     mixSiteSource.value = data.mix_site_source !== 'false'
     atvPass.value = data.atv_password
+    apiClientId.value = data.open_api_client_id
+    apiClientSecret.value = data.open_api_client_secret
     login.value.username = data.alist_username
     login.value.password = data.alist_password
     login.value.enabled = data.alist_login === 'true'

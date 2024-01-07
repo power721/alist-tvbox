@@ -73,6 +73,8 @@
           <el-input v-model="form.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"
                     autocomplete="off"/>
           <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
+          <span class="divider"></span>
+          <a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" target="_blank">获取开放token</a>
         </el-form-item>
         <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
           <el-switch
@@ -142,6 +144,8 @@
         <el-form-item prop="openToken" label="开放refresh token" required>
           <el-input v-model="form.openToken" type="textarea" rows="4" minlength="256" placeholder="长度280位"/>
           <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a>
+          <span class="divider"></span>
+          <a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" target="_blank">获取开放token</a>
           <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
           <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>
           <span class="hint">过期时间： {{ formatTime(exp[2]) }}</span>

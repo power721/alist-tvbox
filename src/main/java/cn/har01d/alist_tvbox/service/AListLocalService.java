@@ -48,6 +48,10 @@ public class AListLocalService {
     public void setup() {
         String url = settingRepository.findById("open_token_url").map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token");
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_token_url','" + url + "','','string','',1,0);");
+        String clientId = settingRepository.findById("open_api_client_id").map(Setting::getValue).orElse("");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_api_client_id','" + clientId + "','','string','',1,0);");
+        String clientSecret = settingRepository.findById("open_api_client_secret").map(Setting::getValue).orElse("");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_api_client_secret','" + clientSecret + "','','string','',1,0);");
         String token = settingRepository.findById("token").map(Setting::getValue).orElse("");
         Utils.executeUpdate("UPDATE x_setting_items SET value = '" + StringUtils.isNotBlank(token) + "' WHERE key = 'sign_all'");
         String time = settingRepository.findById("delete_delay_time").map(Setting::getValue).orElse("900");
