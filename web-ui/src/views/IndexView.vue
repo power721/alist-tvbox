@@ -86,7 +86,7 @@
     <el-pagination layout="total, prev, pager, next" v-model:current-page="currentPage"
                    @current-change="handleCurrentChange" :total="total"/>
 
-    <el-dialog v-model="dialogVisible" :title="task.name" width="30%">
+    <el-dialog v-model="dialogVisible" :title="task.name" width="60%">
       <pre>{{ task.data }}</pre>
       <template #footer>
       <span class="dialog-footer">

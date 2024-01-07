@@ -483,6 +483,15 @@ public class IndexService {
         if (fsResponse == null) {
             log.warn("response null: {} {}", path, context.stats);
             context.stats.errors++;
+            if (depth == 0) {
+                Task task = taskService.getById(context.getTaskId());
+                String data = task.getData();
+                if (!data.contains("失效路径：")) {
+                    data += "\n\n失效路径：\n";
+                }
+                data += path + "\n";
+                taskService.updateTaskData(task.getId(), data);
+            }
             return;
         }
         if (context.isExcludeExternal() && fsResponse.getProvider().contains("AList")) {
