@@ -23,6 +23,7 @@
         <a v-if="scope.row.type==1" :href="getShareLink(scope.row)" target="_blank">
           https://mypikpak.com/s/{{ scope.row.shareId }}
         </a>
+        <a v-else-if="scope.row.type!=2&&scope.row.type!=3" :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
         <a v-else-if="scope.row.type==0" :href="getShareLink(scope.row)" target="_blank">
           https://www.aliyundrive.com/s/{{ scope.row.shareId }}
         </a>
@@ -33,6 +34,7 @@
       <template #default="scope">
         <span v-if="scope.row.type==1">PikPak分享</span>
         <span v-else-if="scope.row.type==2">夸克网盘</span>
+        <span v-else-if="scope.row.type==3">115网盘</span>
         <span v-else-if="scope.row.type==4">本地存储</span>
         <span v-else>阿里云盘</span>
       </template>
@@ -54,14 +56,14 @@
       <el-form-item label="挂载路径" label-width="140" required>
         <el-input v-model="form.path" autocomplete="off"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2&&form.type!=4" label="分享ID" label-width="140" required>
+      <el-form-item v-if="form.type!=2&&form.type!=3&&form.type!=4" label="分享ID" label-width="140" required>
         <el-input v-model="form.shareId" autocomplete="off" placeholder="分享ID或者分享链接"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2&&form.type!=4" label="密码" label-width="140">
+      <el-form-item v-if="form.type!=2&&form.type!=4" :label="form.type==3?'Token':'密码'" label-width="140">
         <el-input v-model="form.password" autocomplete="off"/>
       </el-form-item>
-      <el-form-item v-if="form.type==2" label="Cookie" label-width="140">
-        <el-input v-model="form.cookie" type="textarea" :rows="5" autocomplete="off"/>
+      <el-form-item v-if="form.type==2||form.type==3" label="Cookie" label-width="140">
+        <el-input v-model="form.cookie" type="textarea" :rows="5" autocomplete="off" :placeholder="form.type==3?'Cookie或者Token必填一项':'Cookie必填'"/>
       </el-form-item>
       <el-form-item :label="form.type==4?'本地路径':'文件夹ID'" label-width="140">
         <el-input v-model="form.folderId" autocomplete="off" :placeholder="form.type==4?'':'默认为根目录或者从分享链接读取'"/>
@@ -71,6 +73,7 @@
           <el-radio :label="0" size="large">阿里云盘</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
           <el-radio :label="2" size="large">夸克网盘</el-radio>
+          <el-radio :label="3" size="large">115网盘</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
         </el-radio-group>
       </el-form-item>
@@ -251,6 +254,8 @@ const fullPath = (share: any) => {
     return '/\uD83D\uDD78\uFE0F我的PikPak分享/' + path
   } else if (share.type == 2) {
     return '/\uD83C\uDF1E我的夸克网盘/' + path
+  } else if (share.type == 3) {
+    return '/115网盘/' + path
   } else if (share.type == 4) {
     return path
   } else {
