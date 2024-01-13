@@ -83,6 +83,11 @@ public class BiliBiliController {
         return biliBiliService.checkLogin(key);
     }
 
+    @PostMapping("/api/bilibili/checkin")
+    public void checkin() {
+        biliBiliService.checkin();
+    }
+
     @PostMapping("/api/bilibili/cookie")
     public Map<String, Object> updateCookie(@RequestBody CookieData cookieData) {
         return biliBiliService.updateCookie(cookieData);

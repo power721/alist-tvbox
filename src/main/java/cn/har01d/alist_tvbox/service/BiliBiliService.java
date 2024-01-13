@@ -718,7 +718,10 @@ public class BiliBiliService {
         map.put("dm_cover_img_str", "bm8gd2ViZ2");
         map.put("pn", String.valueOf(page));
 
-        HttpEntity<Void> entity = buildHttpEntity(null);
+        Map<String, String> headers = new HashMap<>();
+        headers.put(HttpHeaders.ORIGIN, "https://space.bilibili.com");
+        headers.put(HttpHeaders.REFERER, "https://space.bilibili.com");
+        HttpEntity<Void> entity = buildHttpEntity(null, headers);
         getKeys(entity);
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpMedia: {}", url);
@@ -783,10 +786,13 @@ public class BiliBiliService {
         map.put("dm_cover_img_str", "bm8gd2ViZ2");
         map.put("pn", page);
 
-        HttpEntity<Void> entity = buildHttpEntity(null);
+        Map<String, String> headers = new HashMap<>();
+        headers.put(HttpHeaders.ORIGIN, "https://space.bilibili.com");
+        headers.put(HttpHeaders.REFERER, "https://space.bilibili.com");
+        HttpEntity<Void> entity = buildHttpEntity(null, headers);
         getKeys(entity);
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
-        log.debug("getUpMedia: {}", url);
+        log.debug("getUpPlaylist: {}", url);
 
         ResponseEntity<BiliBiliSearchInfoResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchInfoResponse.class);
         log.debug("{}", response.getBody());
@@ -1972,7 +1978,9 @@ public class BiliBiliService {
         }
 
         String url = "https://api.bilibili.com/pgc/activity/score/task/sign";
-        HttpEntity<Void> entity = buildHttpEntity(null);
+        Map<String, String> headers = new HashMap<>();
+        headers.put(HttpHeaders.REFERER, "https://www.bilibili.com");
+        HttpEntity<Void> entity = buildHttpEntity(null, headers);
         ResponseEntity<BiliBiliInfoResponse> response = restTemplate.exchange(url, HttpMethod.POST, entity, BiliBiliInfoResponse.class);
         if (response.getBody() != null && response.getBody().getCode() == 0) {
             log.info("B站用户签到成功");

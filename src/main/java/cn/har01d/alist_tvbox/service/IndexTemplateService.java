@@ -51,7 +51,7 @@ public class IndexTemplateService {
             return;
         }
 
-        long count = settingRepository.count();
+        long count = indexTemplateRepository.count();
         if (count > 0) {
             fixAutoIndex();
             return;
