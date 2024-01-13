@@ -44,6 +44,8 @@ app:
     - dff
     - dsf
     - mp3
+    - m4v
+    - vob
     - aac
     - wav
     - wma

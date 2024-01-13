@@ -23,9 +23,8 @@
         <a v-if="scope.row.type==1" :href="getShareLink(scope.row)" target="_blank">
           https://mypikpak.com/s/{{ scope.row.shareId }}
         </a>
-        <a v-else-if="scope.row.type!=2&&scope.row.type!=3" :href="getShareLink(scope.row)" target="_blank">https://www.aliyundrive.com/s/{{ scope.row.shareId }}</a>
         <a v-else-if="scope.row.type==0" :href="getShareLink(scope.row)" target="_blank">
-          https://www.aliyundrive.com/s/{{ scope.row.shareId }}
+          https://www.alipan.com/s/{{ scope.row.shareId }}
         </a>
       </template>
     </el-table-column>
@@ -203,7 +202,7 @@ const handleAdd = () => {
 }
 
 const handleEdit = (data: ShareInfo) => {
-  dialogTitle.value = '更新分享 - ' + data.shareId
+  dialogTitle.value = '更新分享 - ' + data.id
   updateAction.value = true
   form.value = {
     id: data.id,
@@ -274,7 +273,7 @@ const getShareLink = (shareInfo: ShareInfo) => {
   if (shareInfo.type == 1) {
     return 'https://mypikpak.com/s/' + shareInfo.shareId
   }
-  let url = 'https://www.aliyundrive.com/s/' + shareInfo.shareId
+  let url = 'https://www.alipan.com/s/' + shareInfo.shareId
   if (shareInfo.folderId) {
     url = url + '/folder/' + shareInfo.folderId
   }
