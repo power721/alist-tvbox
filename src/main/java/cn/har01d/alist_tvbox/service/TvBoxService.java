@@ -985,7 +985,9 @@ public class TvBoxService {
 
         if (url.contains("aliyundrive")) {
             result.put("format", "application/octet-stream");
-            result.put("header", "{\"User-Agent\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36\",\"Referer\":\"https://www.aliyundrive.com/\"}");
+            result.put("header", "{\"User-Agent\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\",\"Referer\":\"https://www.aliyundrive.com/\"}");
+        } else if (url.contains("115.com")) {
+            result.put("header", "{\"User-Agent\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\",\"Referer\":\"https://115.com/\"}");
         }
 
         if (!getSub) {
