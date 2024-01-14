@@ -83,7 +83,7 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 ```
 使用的端口：
 
-6789 - nginx
+5678 - nginx
 
 5233 - httpd
 

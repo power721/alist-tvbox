@@ -3,7 +3,7 @@ app:
   hostmode: true
   sites:
     - name: 丫仙女
-      url: http://localhost:6789
+      url: http://localhost:5678
       version: 3
       searchable: true
       xiaoya: true
