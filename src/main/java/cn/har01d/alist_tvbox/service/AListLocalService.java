@@ -12,6 +12,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -34,18 +35,24 @@ public class AListLocalService {
 
     private final SettingRepository settingRepository;
     private final SiteRepository siteRepository;
+    private final AppProperties appProperties;
     private final RestTemplate restTemplate;
+    private final Environment environment;
 
     private volatile int aListStatus;
 
-    public AListLocalService(SettingRepository settingRepository, SiteRepository siteRepository, AppProperties appProperties, RestTemplateBuilder builder) {
+    public AListLocalService(SettingRepository settingRepository, SiteRepository siteRepository, AppProperties appProperties, RestTemplateBuilder builder, Environment environment) {
         this.settingRepository = settingRepository;
         this.siteRepository = siteRepository;
+        this.appProperties = appProperties;
+        this.environment = environment;
         this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
     }
 
     @PostConstruct
     public void setup() {
+        String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('external_port','" + port + "','','number','',1,0);");
         String url = settingRepository.findById("open_token_url").map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token");
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_token_url','" + url + "','','string','',1,0);");
         String clientId = settingRepository.findById("open_api_client_id").map(Setting::getValue).orElse("");

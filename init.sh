@@ -96,7 +96,6 @@ else
   fi
 
   sed -i 's/v3.9.2/v3.25.1/' update.sql
-  sed -i '/zhuifan.link/d' update.sql
 
   sqlite3 /opt/alist/data/data.db <<EOF
 drop table x_storages;
