@@ -708,7 +708,7 @@ public class BiliBiliService {
         return hotResponse.getData();
     }
 
-    private String getHtml(String url) throws IOException {
+    private <T> T getJson(String url, Class<T> clazz) throws IOException {
         Request request = new Request.Builder()
                 .url(url)
                 .addHeader("Accept", "*/*")
@@ -717,10 +717,10 @@ public class BiliBiliService {
 
         Call call = client.newCall(request);
         Response response = call.execute();
-        String html = response.body().string();
+        String json = response.body().string();
         response.close();
 
-        return html;
+        return objectMapper.readValue(json, clazz);
     }
 
     public MovieList getUpMedia(String mid, String sort, int page) throws IOException {
@@ -746,8 +746,7 @@ public class BiliBiliService {
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpMedia: {}", url);
 
-        String json = getHtml(url);
-        BiliBiliSearchInfoResponse response = objectMapper.readValue(json, BiliBiliSearchInfoResponse.class);
+        BiliBiliSearchInfoResponse response = getJson(url, BiliBiliSearchInfoResponse.class);
         log.debug("{}", response);
         BiliBiliSearchInfo searchInfo = response.getData();
         List<MovieDetail> list = new ArrayList<>();
@@ -814,8 +813,7 @@ public class BiliBiliService {
         log.debug("getUpPlaylist: {}", url);
 
 
-        String json = getHtml(url);
-        BiliBiliSearchInfoResponse response = objectMapper.readValue(json, BiliBiliSearchInfoResponse.class);
+        BiliBiliSearchInfoResponse response = getJson(url, BiliBiliSearchInfoResponse.class);
         log.debug("{}", response);
         List<BiliBiliSearchInfo.Video> list = new ArrayList<>();
         List<BiliBiliSearchInfo.Video> videos = response.getData().getList().getVlist();
