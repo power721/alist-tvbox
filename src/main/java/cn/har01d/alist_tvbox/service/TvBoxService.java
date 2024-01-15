@@ -78,6 +78,11 @@ import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
 @Slf4j
 @Service
 public class TvBoxService {
+    private static final Pattern NUMBER = Pattern.compile("^Season (\\d{1,2}).*");
+    private static final Pattern NUMBER1 = Pattern.compile("^SE(\\d{1,2}).*");
+    private static final Pattern NUMBER2 = Pattern.compile("^S(\\d{1,2}).*");
+    private static final Pattern NUMBER3 = Pattern.compile("^第(.{1,2})季.*");
+
     private final AccountRepository accountRepository;
     private final AListAliasRepository aliasRepository;
     private final ShareRepository shareRepository;
@@ -1153,6 +1158,19 @@ public class TvBoxService {
         return result;
     }
 
+    private String getMovieName(String filename, String path) {
+        if (filename.startsWith("4K") || filename.equalsIgnoreCase("1080P")
+                || NUMBER.matcher(filename).matches() || NUMBER1.matcher(filename).matches()
+                || NUMBER2.matcher(filename).matches() || NUMBER3.matcher(filename).matches()) {
+            String[] parts = path.split("/");
+            if (filename.contains(parts[parts.length - 2])) {
+                return filename;
+            }
+            return parts[parts.length - 2] + " " + filename;
+        }
+        return filename;
+    }
+
     private String buildPlaylist(Site site, Integer id, String path) {
         FsResponse fsResponse = aListService.listFiles(site, path, 1, 0);
         List<FsInfo> files = fsResponse.getFiles().stream()
@@ -1214,7 +1232,7 @@ public class TvBoxService {
 
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(site.getId() + "$" + encodeUrl(path) + "$1");
-        movieDetail.setVod_name(fsDetail.getName());
+        movieDetail.setVod_name(getMovieName(fsDetail.getName(), newPath));
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(site.getName());
         movieDetail.setVod_content(site.getName() + ":" + newPath);

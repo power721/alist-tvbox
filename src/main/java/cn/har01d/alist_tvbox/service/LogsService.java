@@ -65,9 +65,9 @@ public class LogsService {
     }
 
     public FileSystemResource downloadLog() throws IOException {
-        File alist = new File("/opt/alist/log/alist.log");
-        if (alist.exists()) {
-            FileUtils.copyFileToDirectory(alist, new File("/opt/atv/log/"));
+        File file = new File("/opt/alist/log/alist.log");
+        if (file.exists()) {
+            FileUtils.copyFileToDirectory(file, new File("/opt/atv/log/"));
         }
 
         File out = new File("/tmp/log.zip");
