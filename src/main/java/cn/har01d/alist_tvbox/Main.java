@@ -18,12 +18,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class Main {
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, ClassNotFoundException {
         Set<Class> classes = findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto");
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto.bili"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.tvbox"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.domain"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.model"));
+        classes.add(Class.forName("org.springframework.security.web.access.HandlerMappingIntrospectorRequestTransformer"));
         List<Map<String, Object>> result = new ArrayList<>();
         for (Class clazz : classes) {
             Map<String, Object> info = new HashMap<>();
