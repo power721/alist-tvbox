@@ -183,6 +183,10 @@ public class ShareService {
     }
 
     private void loadOpenTokenUrl() {
+        if (settingRepository.existsById(OPEN_TOKEN_URL)) {
+            return;
+        }
+
         try {
             String url = null;
             try {
