@@ -66,14 +66,16 @@
       <el-form :model="form">
         <el-form-item label="阿里refresh token" label-width="150" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位" autocomplete="off"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
+          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a>
           <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
         </el-form-item>
         <el-form-item label="开放refresh token" label-width="140" required>
           <el-input v-model="form.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"
                     autocomplete="off"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a><br/>
-          <a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" target="_blank">获取开放token</a>
+          AList:<a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
+          <div class="hint">
+            webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
+          </div>
         </el-form-item>
         <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
           <el-switch
@@ -136,14 +138,16 @@
         </el-form-item>
         <el-form-item prop="refreshToken" label="阿里refresh token" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a><br/>
+          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a>
           <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
           <span class="hint">更新时间： {{ formatTime(form.refreshTokenTime) }}</span>
         </el-form-item>
         <el-form-item prop="openToken" label="开放refresh token" required>
           <el-input v-model="form.openToken" type="textarea" rows="4" minlength="256" placeholder="长度280位"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" target="_blank">获取开放token</a><br/>
-          <a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" target="_blank">获取开放token</a>
+          AList:<a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
+          <div class="hint">
+            webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
+          </div>
           <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
           <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>
           <span class="hint">过期时间： {{ formatTime(exp[2]) }}</span>

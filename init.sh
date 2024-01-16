@@ -66,11 +66,6 @@ date
 
 if [ -f /opt/alist/data/data.db ]; then
   update_movie
-  LINES=$(wc -l </etc/nginx/http.d/default.conf)
-  if [ $LINES -lt 99 ]; then
-    echo "update /etc/nginx/http.d/default.conf"
-    sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' /var/lib/pxg/nginx.conf >/etc/nginx/http.d/default.conf
-  fi
   echo "已经初始化成功"
 else
   init
