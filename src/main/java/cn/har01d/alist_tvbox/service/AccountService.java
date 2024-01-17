@@ -785,6 +785,7 @@ public class AccountService {
         try {
             String token = login();
             updateTokenToAList("RefreshToken-" + account.getId(), account.getRefreshToken(), account.getRefreshTokenTime(), token);
+            updateTokenToAList("AccessToken-" + account.getId(), "", null, token);
             updateTokenToAList("RefreshTokenOpen-" + account.getId(), account.getOpenToken(), account.getOpenTokenTime(), token);
             updateTokenToAList("AccessTokenOpen-" + account.getId(), account.getOpenAccessToken(), account.getOpenAccessTokenTime(), token);
         } catch (Exception e) {
@@ -841,6 +842,7 @@ public class AccountService {
         }
 
         if (tokenChanged && account.isMaster()) {
+            account.setOpenAccessToken("");
             log.info("sync tokens for account {}", account);
             updateTokenToAList(account);
         }
@@ -974,9 +976,6 @@ public class AccountService {
     }
 
     private void updateTokenToAList(String key, String value, Instant time, String token) {
-        if (StringUtils.isBlank(value)) {
-            return;
-        }
         if (time == null) {
             time = Instant.now();
         }
