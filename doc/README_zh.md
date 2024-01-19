@@ -92,7 +92,7 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 4567 - 管理应用
 
 #### 纯净版
-没有内置数据。
+没有内置分享数据。
 ```bash
 sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 ```
@@ -118,7 +118,7 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 ### 站点
 ![站点列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sites.png)
 
-默认添加了站点：`http://localhost`，如果配置有域名，自行修改地址。
+默认添加了站点：`http://localhost`，如果AList配置有域名，自行修改地址。否则保持`http://localhost`！
 
 为什么是`http://localhost`？ 因为小雅用80端口代理了容器内的AList 5244端口。
 管理程序运行在同一个容器内，能够直接访问80端口。
@@ -126,6 +126,8 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 访问AList，请加端口，http://your-ip:5344/ 。使用Docker映射的端口，默认是5344.
 
 自己可以添加三方站点，功能与xiaoya的套娃类似。会自动识别版本，如果不能正确识别，请手动配置版本。
+
+选择TvBox第二个站源，观看三方站点内容。或者在我的套娃观看。
 
 ![添加站点](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_site_config.png)
 
@@ -208,8 +210,6 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ![filter](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_filter.jpg)
 
 ### BiliBili
-目前只有影视TV支持高清高速的DASH格式视频。
-
 拖动行可以改变顺序，需要点击保存按钮才能生效。
 
 打开、关闭显示开关后，需要点击保存按钮才能生效。
@@ -230,7 +230,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ![搜索](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_search.png)
 
-添加频道作为一级分类：（目前不可用）
+添加频道作为一级分类：
 
 ![频道](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_channel.png)
 
@@ -282,6 +282,15 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 把一些路径合并成一个路径。
 
 ![别名页面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_alias.png)
+
+### WebDAV
+如果没有开启强制登录，使用默认密码：
+
+用户: guest
+
+密码: guest_Api789
+
+![WebDAV](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/webdav.jpg)
 
 ### 其它
 不再生效的文件可以保留，以后删除数据库后可以恢复。

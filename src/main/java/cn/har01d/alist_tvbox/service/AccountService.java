@@ -1060,7 +1060,7 @@ public class AccountService {
                 updateTokenToAList(account);
             }
 
-            log.info("{} token time: {} {} {}", account.getId(), account.getRefreshTokenTime(), account.getOpenTokenTime(), account.getOpenAccessTokenTime());
+            log.info("account {} token time: {} {} {}", account.getId(), account.getRefreshTokenTime(), account.getOpenTokenTime(), account.getOpenAccessTokenTime());
         }
         accountRepository.saveAll(accounts);
     }

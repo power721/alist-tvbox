@@ -1814,8 +1814,9 @@ public class BiliBiliService {
         if (channelOffsets.get(page - 1) == null) {
             return result;
         }
+        HttpEntity<Void> entity = buildHttpEntity(null);
         String url = String.format(CHANNEL_API, id, sort, channelOffsets.get(page - 1));
-        ResponseEntity<BiliBiliChannelResponse> response = restTemplate1.getForEntity(url, BiliBiliChannelResponse.class);
+        ResponseEntity<BiliBiliChannelResponse> response = restTemplate1.exchange(url, HttpMethod.GET, entity, BiliBiliChannelResponse.class);
         log.debug("getChannel {} {}", url, response.getBody());
 
         List<MovieDetail> list = new ArrayList<>();
@@ -1865,8 +1866,9 @@ public class BiliBiliService {
             page = Integer.parseInt(parts[3]);
         }
 
+        HttpEntity<Void> entity = buildHttpEntity(null);
         String url = String.format(CHANNEL_API, id, sort, channelOffsets.get(page - 1));
-        ResponseEntity<BiliBiliChannelResponse> response = restTemplate1.getForEntity(url, BiliBiliChannelResponse.class);
+        ResponseEntity<BiliBiliChannelResponse> response = restTemplate1.exchange(url, HttpMethod.GET, entity, BiliBiliChannelResponse.class);
         log.debug("getChannelPlaylist: url {}", url, response.getBody());
         List<BiliBiliChannelItem> list = new ArrayList<>();
         List<BiliBiliChannelItem> videos = response.getBody().getData().getList();

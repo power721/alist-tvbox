@@ -426,6 +426,10 @@ public class IndexService {
     }
 
     private void removeLines(File file, List<String> prefix) {
+        if (!file.exists()) {
+            return;
+        }
+
         try {
             List<String> lines = Files.readAllLines(file.toPath())
                     .stream()
