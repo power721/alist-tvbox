@@ -784,10 +784,10 @@ public class AccountService {
     private void updateTokenToAList(Account account) {
         try {
             String token = login();
-            updateTokenToAList("RefreshToken-" + account.getId(), account.getRefreshToken(), account.getRefreshTokenTime(), token);
-            updateTokenToAList("AccessToken-" + account.getId(), "", null, token);
-            updateTokenToAList("RefreshTokenOpen-" + account.getId(), account.getOpenToken(), account.getOpenTokenTime(), token);
-            updateTokenToAList("AccessTokenOpen-" + account.getId(), account.getOpenAccessToken(), account.getOpenAccessTokenTime(), token);
+            updateTokenToAList(account.getId(), "RefreshToken-" + account.getId(), account.getRefreshToken(), account.getRefreshTokenTime(), token);
+            updateTokenToAList(account.getId(), "AccessToken-" + account.getId(), "", null, token);
+            updateTokenToAList(account.getId(), "RefreshTokenOpen-" + account.getId(), account.getOpenToken(), account.getOpenTokenTime(), token);
+            updateTokenToAList(account.getId(), "AccessTokenOpen-" + account.getId(), account.getOpenAccessToken(), account.getOpenAccessTokenTime(), token);
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -975,7 +975,7 @@ public class AccountService {
         }
     }
 
-    private void updateTokenToAList(String key, String value, Instant time, String token) {
+    private void updateTokenToAList(Integer accountId, String key, String value, Instant time, String token) {
         if (time == null) {
             time = Instant.now();
         }
@@ -984,6 +984,7 @@ public class AccountService {
         Map<String, Object> body = new HashMap<>();
         body.put("key", key);
         body.put("value", value);
+        body.put("accountId", accountId);
         body.put("modified", time.atOffset(ZONE_OFFSET).toString());
         log.debug("updateTokenToAList: {}", body);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);

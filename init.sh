@@ -19,6 +19,7 @@ init() {
   if [ -d /index ]; then
     rm -rf /index
   fi
+  [ -h /data/log/log ] && unlink /data/log/log
   ln -sf /data/index /
   ln -sf /data/config .
   cd /var/lib/pxg
