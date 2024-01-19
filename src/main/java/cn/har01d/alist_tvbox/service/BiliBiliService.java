@@ -56,7 +56,6 @@ import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -1437,9 +1436,9 @@ public class BiliBiliService {
                     return cookie;
                 }
 
-                String json = restTemplate1.getForObject("https://agit.ai/fantaiying/fty/raw/branch/master/json/bilibili.json", String.class);
-                Map map = objectMapper.readValue(json, Map.class);
-                cookie = (String) map.getOrDefault("cookie", "");
+                cookie = restTemplate1.getForObject("https://agit.ai/30215429/TVBox/raw/branch/master/bilibili/cookie.txt", String.class);
+//                Map map = objectMapper.readValue(json, Map.class);
+//                cookie = (String) map.getOrDefault("cookie", "");
                 log.info("{}", cookie);
                 BiliBiliUtils.setDefaultCookie(cookie);
                 return cookie;
