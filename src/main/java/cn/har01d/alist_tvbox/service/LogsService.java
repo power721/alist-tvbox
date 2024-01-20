@@ -86,21 +86,15 @@ public class LogsService {
         }
 
         if (fileToZip.isDirectory()) {
-            if (fileName.endsWith("/")) {
-                zipOut.putNextEntry(new ZipEntry(fileName));
-                zipOut.closeEntry();
-            } else {
-                zipOut.putNextEntry(new ZipEntry(fileName + "/"));
-                zipOut.closeEntry();
-            }
-
             File[] children = fileToZip.listFiles();
             if (children == null) {
                 return;
             }
 
             for (File childFile : children) {
-                zipFile(childFile, fileName + "/" + childFile.getName(), zipOut);
+                if (childFile.isFile()) {
+                    zipFile(childFile, childFile.getName(), zipOut);
+                }
             }
             return;
         }
