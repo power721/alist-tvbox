@@ -240,11 +240,11 @@ public class ShareService {
         }
 
         settingRepository.save(new Setting(OPEN_TOKEN_URL, url));
-        settingRepository.save(new Setting("open_api_client_id", dto.getClientId()));
-        settingRepository.save(new Setting("open_api_client_secret", dto.getClientSecret()));
+        settingRepository.save(new Setting("open_api_client_id", dto.getClientId().trim()));
+        settingRepository.save(new Setting("open_api_client_secret", dto.getClientSecret().trim()));
         Utils.executeUpdate("UPDATE x_setting_items SET value = '" + url + "' WHERE key = 'open_token_url'");
-        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + dto.getClientId() + "' WHERE key = 'open_api_client_id'");
-        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + dto.getClientSecret() + "' WHERE key = 'open_api_client_secret'");
+        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + dto.getClientId().trim() + "' WHERE key = 'open_api_client_id'");
+        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + dto.getClientSecret().trim() + "' WHERE key = 'open_api_client_secret'");
     }
 
     private List<Share> loadSharesFromFile() {

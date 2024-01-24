@@ -26,9 +26,10 @@ import java.util.zip.ZipOutputStream;
 @Service
 public class IndexFileService {
     public Page<String> getIndexContent(Pageable pageable, String siteId) throws IOException {
+        List<String> list = new ArrayList<>();
         Path file = Paths.get("/data/index", siteId, "custom_index.txt");
         if (!Files.exists(file)) {
-            throw new BadRequestException("索引文件不存在");
+            return new PageImpl<>(list);
         }
 
         List<String> lines = Files.readAllLines(file);
@@ -39,7 +40,6 @@ public class IndexFileService {
             end = lines.size();
         }
 
-        List<String> list = new ArrayList<>();
         if (start < end) {
             list = lines.subList(start, end);
         }
@@ -130,8 +130,12 @@ public class IndexFileService {
             }
 
             lines = lines.stream().map(e -> e.startsWith("./") ? e.substring(1) : e).toList();
-            String path = "/data/index/" + siteId + "/custom_index.txt";
-            Files.writeString(Path.of(path), String.join("\n", lines));
+            Path path = Path.of("/data/index/" + siteId + "/custom_index.txt");
+            if (!Files.exists(path)) {
+                Files.createDirectories(path.getParent());
+                Files.createFile(path);
+            }
+            Files.writeString(path, String.join("\n", lines));
             log.info("上传索引文件成功： {}", path);
         } finally {
             Files.delete(temp);

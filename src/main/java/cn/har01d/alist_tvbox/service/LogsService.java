@@ -75,7 +75,7 @@ public class LogsService {
         try (FileOutputStream fos = new FileOutputStream(out);
              ZipOutputStream zipOut = new ZipOutputStream(fos)) {
             File fileToZip = new File("/opt/atv/log/");
-            zipFile(fileToZip, fileToZip.getName(), zipOut);
+            zipFile(fileToZip, "", zipOut);
         }
         return new FileSystemResource(out);
     }
@@ -93,7 +93,7 @@ public class LogsService {
 
             for (File childFile : children) {
                 if (childFile.isFile()) {
-                    zipFile(childFile, childFile.getName(), zipOut);
+                    zipFile(childFile, fileName + "/" + childFile.getName(), zipOut);
                 }
             }
             return;
