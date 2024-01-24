@@ -116,7 +116,7 @@ jobs:
           sudo apt install build-essential libz-dev zlib1g-dev zlib1g -y
           wget https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
           tar xf x86_64-linux-musl-native.tgz -C /opt
-          wget https://zlib.net/zlib-1.3.tar.gz
+          wget https://zlib.net/zlib-1.3.1.tar.gz
           tar xf zlib-1.3.tar.gz
           cd zlib-1.3
           ./configure --prefix=$TOOLCHAIN_DIR --static
