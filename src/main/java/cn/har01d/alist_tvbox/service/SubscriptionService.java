@@ -163,6 +163,16 @@ public class SubscriptionService {
         }
     }
 
+    public boolean checkToken(String rawToken) {
+        for (String t : token.split(",")) {
+            if (t.equals(rawToken)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public String getToken() {
         return token;
     }
@@ -641,7 +651,7 @@ public class SubscriptionService {
         site.put("type", 3);
         Map<String, String> map = new HashMap<>();
         map.put("api", url);
-        map.put("token", token);
+        map.put("token", token.split(",")[0]);
         String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
@@ -816,7 +826,7 @@ public class SubscriptionService {
             File file = new File("/www/tvbox/juhe.json");
             if (file.exists()) {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-                String url = readHostAddress("/sub" + (StringUtils.isNotBlank(token) ? "/" + token : "") + "/" + id);
+                String url = readHostAddress("/sub" + (StringUtils.isNotBlank(token) ? "/" + token.split(",")[0] : "") + "/" + id);
                 json = json.replace("DOCKER_ADDRESS/tvbox/my.json", url);
                 return json;
             }

@@ -49,7 +49,7 @@ public class BiliBiliController {
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request,
                       HttpServletResponse response) throws IOException {
-        if (!subscriptionService.getToken().equals(token)) {
+        if (!subscriptionService.checkToken(token)) {
             throw new BadRequestException();
         }
         response.setContentType("application/json");

@@ -40,7 +40,7 @@ public class PlayController {
 
     @GetMapping("/play/{token}")
     public Object play(@PathVariable String token, Integer site, String path, String id, String bvid, String type, boolean dash, HttpServletRequest request) throws IOException {
-        if (!subscriptionService.getToken().equals(token)) {
+        if (!subscriptionService.checkToken(token)) {
             throw new BadRequestException();
         }
 
