@@ -720,10 +720,10 @@ public class ShareService {
 
         try {
             String link = restTemplate1.getForObject(TACIT_URL, String.class);
-            log.info("Tacit0924 link: {}", link);
             String[] parts = link.split(":");
             link = parts[0];
             String code = parts.length == 1 ? "" : parts[1];
+            log.info("Tacit0924 link: {} {}", link, code);
             String shareToken = getShareToken(link, code);
             String folder = getFolderId(link, shareToken);
             Share share = new Share();
@@ -748,10 +748,10 @@ public class ShareService {
 
         try {
             String link = restTemplate1.getForObject(TACIT_URL, String.class);
-            log.info("Tacit0924 link: {}", link);
             String[] parts = link.split(":");
             link = parts[0];
             String code = parts.length == 1 ? "" : parts[1];
+            log.info("Tacit0924 link: {} {}", link, code);
             String shareId = shareRepository.findById(7000).map(Share::getShareId).orElse("");
             if (!shareId.equals(link)) {
                 // 验证远程链接有效性

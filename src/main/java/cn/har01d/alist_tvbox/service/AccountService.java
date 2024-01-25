@@ -634,8 +634,11 @@ public class AccountService {
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<CheckinResponse> response = restTemplate.exchange("https://member.aliyundrive.com/v2/activity/sign_in_list", HttpMethod.POST, entity, CheckinResponse.class);
 
+        log.debug("sign_in_list: {}", response.getBody());
         List<CheckinLog> list = new ArrayList<>();
         CheckinResult result = response.getBody().getResult();
+        account.setCheckinDays(result.getSignInCount());
+        accountRepository.save(account);
         LocalDate date = LocalDate.now();
         for (Map<String, Object> signInLog : result.getSignInInfos()) {
             date = date.withDayOfMonth(Integer.parseInt(signInLog.get("day").toString()));
