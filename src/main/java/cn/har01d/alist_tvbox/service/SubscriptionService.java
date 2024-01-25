@@ -187,7 +187,7 @@ public class SubscriptionService {
         if (StringUtils.isBlank(dto.getToken())) {
             token = IdUtils.generate(8);
         } else {
-            token = dto.getToken();
+            token = Arrays.stream(dto.getToken().split(",")).filter(StringUtils::isNotBlank).collect(Collectors.joining(","));
         }
 
         settingRepository.save(new Setting(TOKEN, token));
