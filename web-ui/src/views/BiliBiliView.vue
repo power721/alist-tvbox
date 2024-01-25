@@ -88,7 +88,7 @@
           <el-radio-group v-model="form.type" class="ml-4">
             <!--            <el-radio :label="1" size="large">一级分类</el-radio>-->
             <!--            <el-radio :label="2" size="large">二级分类</el-radio>-->
-                        <el-radio :label="3" size="large">频道</el-radio>
+<!--                        <el-radio :label="3" size="large">频道</el-radio>-->
             <el-radio :label="4" size="large">搜索</el-radio>
             <el-radio :label="5" size="large">UP主</el-radio>
           </el-radio-group>

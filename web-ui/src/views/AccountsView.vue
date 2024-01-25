@@ -72,7 +72,7 @@
         <el-form-item label="开放refresh token" label-width="140" required>
           <el-input v-model="form.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"
                     autocomplete="off"/>
-          AList:<a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive_open.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
+          AList:<a href="https://alist.nn.ci/tool/aliyundrive/request.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
           <div class="hint">
             webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
           </div>

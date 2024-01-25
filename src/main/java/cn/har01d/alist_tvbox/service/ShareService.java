@@ -1,8 +1,8 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
+import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.entity.Account;
@@ -692,28 +692,6 @@ public class ShareService {
 
     private static final String TACIT_URL = "https://ycyup.cn/tacit0924";
 
-    private Share loadTacit0924() {
-        if (!environment.matchesProfiles("xiaoya")) {
-            return null;
-        }
-
-        try {
-            String link = restTemplate1.getForObject(TACIT_URL, String.class);
-            log.info("Tacit0924 link: {}", link);
-            String folder = getFolderId(link);
-            Share share = new Share();
-            share.setType(0);
-            share.setId(7000);
-            share.setShareId(link);
-            share.setFolderId(folder);
-            share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
-            return shareRepository.save(share);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-        return null;
-    }
-
     private Share loadLatestShare() {
         if (!environment.matchesProfiles("xiaoya")) {
             return null;
@@ -735,6 +713,33 @@ public class ShareService {
         return null;
     }
 
+    private Share loadTacit0924() {
+        if (!environment.matchesProfiles("xiaoya")) {
+            return null;
+        }
+
+        try {
+            String link = restTemplate1.getForObject(TACIT_URL, String.class);
+            log.info("Tacit0924 link: {}", link);
+            String[] parts = link.split(":");
+            link = parts[0];
+            String code = parts.length == 1 ? "" : parts[1];
+            String shareToken = getShareToken(link, code);
+            String folder = getFolderId(link, shareToken);
+            Share share = new Share();
+            share.setType(0);
+            share.setId(7000);
+            share.setShareId(link);
+            share.setPassword(code);
+            share.setFolderId(folder);
+            share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
+            return shareRepository.save(share);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return null;
+    }
+
     @Scheduled(cron = "0 20 0,9-23 * * ?")
     public void getTacit0924() {
         if (!environment.matchesProfiles("xiaoya")) {
@@ -744,10 +749,13 @@ public class ShareService {
         try {
             String link = restTemplate1.getForObject(TACIT_URL, String.class);
             log.info("Tacit0924 link: {}", link);
+            String[] parts = link.split(":");
+            link = parts[0];
+            String code = parts.length == 1 ? "" : parts[1];
             String shareId = shareRepository.findById(7000).map(Share::getShareId).orElse("");
             if (!shareId.equals(link)) {
                 // 验证远程链接有效性
-                String shareToken = getShareToken(link);
+                String shareToken = getShareToken(link, code);
                 if (StringUtils.isBlank(shareToken)) {
                     return;
                 }
@@ -756,6 +764,7 @@ public class ShareService {
                 share.setType(0);
                 share.setId(7000);
                 share.setShareId(link);
+                share.setPassword(code);
                 share.setFolderId(folder);
                 share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
                 update(7000, share);
@@ -763,16 +772,6 @@ public class ShareService {
         } catch (Exception e) {
             log.warn("", e);
         }
-    }
-
-    private String getFolderId(String shareId) {
-        try {
-            String shareToken = getShareToken(shareId);
-            return getFolderId(shareId, shareToken);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-        return "root";
     }
 
     private String getFolderId(String shareId, String shareToken) {
@@ -785,13 +784,13 @@ public class ShareService {
         return "root";
     }
 
-    private String getShareToken(String shareId) {
+    private String getShareToken(String shareId, String code) {
         HttpHeaders headers = new HttpHeaders();
         headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
         headers.put("X-Device-Id", List.of("92ac5d71-3747-4a37-8bfc-a02155edca4a"));
         Map<String, Object> body = new HashMap<>();
         body.put("share_id", shareId);
-        body.put("share_pwd", "");
+        body.put("share_pwd", code);
         HttpEntity<Map> entity = new HttpEntity<>(body, headers);
         ResponseEntity<Map> response = restTemplate1.exchange("https://api.aliyundrive.com/v2/share_link/get_share_token", HttpMethod.POST, entity, Map.class);
         log.debug("getShareToken {}", response.getBody());

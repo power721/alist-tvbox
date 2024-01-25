@@ -89,7 +89,7 @@ public class NavigationService {
         list.add(new Navigation(id++, "推荐", "recommend$0", 1, true, true, order++));
         list.add(new Navigation(id++, "动态", "feed$0", 1, false, true, order++));
         list.add(new Navigation(id++, "收藏夹", "fav$0", 1, false, true, order++));
-        list.add(new Navigation(id++, "频道", "channel$0", 1, true, true, order++));
+        list.add(new Navigation(id++, "频道", "channel$0", 1, false, true, order++));
         list.add(new Navigation(id++, "历史记录", "history$0", 1, false, true, order++));
         list.add(new Navigation(id++, "全站热榜", "0", 1, true, true, order++));
         list.add(new Navigation(id++, "电影热榜", "season$2", 1, true, true, order++));

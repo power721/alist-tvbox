@@ -1,6 +1,5 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
 import cn.har01d.alist_tvbox.service.ParseService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
