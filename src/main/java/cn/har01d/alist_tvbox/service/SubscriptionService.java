@@ -163,15 +163,6 @@ public class SubscriptionService {
         }
     }
 
-    public String getToken(String apiKey) {
-        String key = settingRepository.findById("api_key").map(Setting::getValue).orElse("");
-        if (key.equals(apiKey)) {
-            return token;
-        } else {
-            return "";
-        }
-    }
-
     public String getToken() {
         return token;
     }
@@ -650,7 +641,7 @@ public class SubscriptionService {
         site.put("type", 3);
         Map<String, String> map = new HashMap<>();
         map.put("api", url);
-        map.put("apiKey", settingRepository.findById("api_key").map(Setting::getValue).orElse(""));
+        map.put("token", token);
         String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
