@@ -55,9 +55,7 @@ public class TvBoxController {
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       @RequestParam(required = false, defaultValue = "1") Integer type,
                       HttpServletRequest request) {
-        if (!subscriptionService.checkToken(token)) {
-            throw new BadRequestException();
-        }
+        subscriptionService.checkToken(token);
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("type: {}  path: {}  folder: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, wd, f, sort, pg);
@@ -104,11 +102,9 @@ public class TvBoxController {
 
     @GetMapping("/sub/{token}/{id}")
     public Map<String, Object> subscription(@PathVariable String token, @PathVariable String id) {
-        if (!subscriptionService.checkToken(token)) {
-            throw new BadRequestException();
-        }
+        subscriptionService.checkToken(token);
 
-        return subscriptionService.subscription(id);
+        return subscriptionService.subscription(token, id);
     }
 
 //    @GetMapping("/open")
@@ -132,11 +128,9 @@ public class TvBoxController {
 
     @GetMapping(value = "/repo/{token}/{id}", produces = "application/json")
     public String repository(@PathVariable String token, @PathVariable int id) {
-        if (!subscriptionService.checkToken(token)) {
-            throw new BadRequestException();
-        }
+        subscriptionService.checkToken(token);
 
-        return subscriptionService.repository(id);
+        return subscriptionService.repository(token, id);
     }
 
     private String decodeUrl(String text) {

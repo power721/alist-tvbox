@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.entity.Subscription;
 import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
@@ -66,7 +67,7 @@ public class SubscriptionService {
     private final SiteRepository siteRepository;
     private final AListLocalService aListLocalService;
 
-    private String token = "";
+    private String tokens = "";
 
     public SubscriptionService(Environment environment,
                                AppProperties appProperties,
@@ -93,7 +94,7 @@ public class SubscriptionService {
 
     @PostConstruct
     public void init() {
-        token = settingRepository.findById(TOKEN)
+        tokens = settingRepository.findById(TOKEN)
                 .map(Setting::getValue)
                 .orElse("");
 
@@ -163,36 +164,36 @@ public class SubscriptionService {
         }
     }
 
-    public boolean checkToken(String rawToken) {
-        for (String t : token.split(",")) {
+    public void checkToken(String rawToken) {
+        for (String t : tokens.split(",")) {
             if (t.equals(rawToken)) {
-                return true;
+                return;
             }
         }
 
-        return false;
+        throw new BadRequestException();
     }
 
     public String getToken() {
-        return token;
+        return tokens;
     }
 
     public void deleteToken() {
-        token = "";
-        settingRepository.save(new Setting(TOKEN, token));
+        tokens = "";
+        settingRepository.save(new Setting(TOKEN, tokens));
         aListLocalService.updateSetting("sign_all", "false", "bool");
     }
 
     public String createToken(TokenDto dto) {
         if (StringUtils.isBlank(dto.getToken())) {
-            token = IdUtils.generate(8);
+            tokens = IdUtils.generate(8);
         } else {
-            token = Arrays.stream(dto.getToken().split(",")).filter(StringUtils::isNotBlank).collect(Collectors.joining(","));
+            tokens = Arrays.stream(dto.getToken().split(",")).filter(StringUtils::isNotBlank).collect(Collectors.joining(","));
         }
 
-        settingRepository.save(new Setting(TOKEN, token));
-        aListLocalService.updateSetting("sign_all", String.valueOf(StringUtils.isNotBlank(token)), "bool");
-        return token;
+        settingRepository.save(new Setting(TOKEN, tokens));
+        aListLocalService.updateSetting("sign_all", String.valueOf(StringUtils.isNotBlank(tokens)), "bool");
+        return tokens;
     }
 
     public List<String> getProfiles() {
@@ -262,16 +263,16 @@ public class SubscriptionService {
         return site;
     }
 
-    public Map<String, Object> subscription(String id) {
+    public Map<String, Object> subscription(String token, String id) {
         Subscription subscription = subscriptionRepository.findBySid(id).orElseThrow(NotFoundException::new);
         String apiUrl = subscription.getUrl();
         String override = subscription.getOverride();
         String sort = subscription.getSort();
 
-        return subscription(apiUrl, override, sort);
+        return subscription(token, apiUrl, override, sort);
     }
 
-    public Map<String, Object> subscription(String apiUrl, String override, String sort) {
+    public Map<String, Object> subscription(String token, String apiUrl, String override, String sort) {
         if (apiUrl == null) {
             apiUrl = "";
         }
@@ -292,7 +293,7 @@ public class SubscriptionService {
             config = overrideConfig(config, override);
         }
 
-        addSite(config);
+        addSite(token, config);
 
         // should after overrideConfig
         handleWhitelist(config);
@@ -606,14 +607,14 @@ public class SubscriptionService {
         }
     }
 
-    private void addSite(Map<String, Object> config) {
+    private void addSite(String token, Map<String, Object> config) {
         int id = 0;
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
 
         try {
             for (Site site1 : siteRepository.findAll()) {
                 if (site1.isSearchable() && !site1.isDisabled()) {
-                    Map<String, Object> site = buildSite("csp_XiaoYa", site1.getName());
+                    Map<String, Object> site = buildSite(token, "csp_XiaoYa", site1.getName());
                     sites.add(id++, site);
                     log.debug("add XiaoYa site: {}", site);
                     break;
@@ -625,7 +626,7 @@ public class SubscriptionService {
 
         try {
             String key = "Alist";
-            Map<String, Object> site = buildSite("csp_AList", "AList");
+            Map<String, Object> site = buildSite(token, "csp_AList", "AList");
             sites.removeIf(item -> key.equals(item.get("key")));
             sites.add(id++, site);
             log.debug("add AList site: {}", site);
@@ -634,7 +635,7 @@ public class SubscriptionService {
         }
 
         try {
-            Map<String, Object> site = buildSite("csp_BiliBili", "BiliBili");
+            Map<String, Object> site = buildSite(token, "csp_BiliBili", "BiliBili");
             sites.add(id, site);
             log.debug("add BiliBili site: {}", site);
         } catch (Exception e) {
@@ -642,7 +643,7 @@ public class SubscriptionService {
         }
     }
 
-    private Map<String, Object> buildSite(String key, String name) throws IOException {
+    private Map<String, Object> buildSite(String token, String key, String name) throws IOException {
         Map<String, Object> site = new HashMap<>();
         String url = readHostAddress("");
         site.put("key", key);
@@ -651,7 +652,7 @@ public class SubscriptionService {
         site.put("type", 3);
         Map<String, String> map = new HashMap<>();
         map.put("api", url);
-        map.put("token", token.split(",")[0]);
+        map.put("token", token);
         String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
@@ -821,12 +822,12 @@ public class SubscriptionService {
         return ret;
     }
 
-    public String repository(int id) {
+    public String repository(String token, int id) {
         try {
             File file = new File("/www/tvbox/juhe.json");
             if (file.exists()) {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-                String url = readHostAddress("/sub" + (StringUtils.isNotBlank(token) ? "/" + token.split(",")[0] : "") + "/" + id);
+                String url = readHostAddress("/sub" + (StringUtils.isNotBlank(token) ? "/" + token : "") + "/" + id);
                 json = json.replace("DOCKER_ADDRESS/tvbox/my.json", url);
                 return json;
             }
