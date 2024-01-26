@@ -230,10 +230,8 @@ public final class Utils {
         StringBuilder sb = new StringBuilder();
         for (String line : content.split("\\n")) {
             String[] parts = line.split(":");
-            line = parts[0];
-            parts = line.split("\\$");
             if (parts.length == 2) {
-                sb.append(parts[0]).append(":").append(parts[1]).append("\\n");
+                sb.append(parts[1]).append(":").append(parts[0]).append("\\n");
             } else {
                 sb.append("本地:").append(line).append("\\n");
             }
