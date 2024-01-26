@@ -423,6 +423,8 @@ public class AccountService {
         headers.put(HttpHeaders.REFERER, List.of("https://xhofe.top/"));
         Map<String, String> body = new HashMap<>();
         body.put(REFRESH_TOKEN, token);
+        body.put("client_id", settingRepository.findById("open_api_client_id").map(Setting::getValue).orElse(""));
+        body.put("client_secret", settingRepository.findById("open_api_client_secret").map(Setting::getValue).orElse(""));
         body.put("grant_type", REFRESH_TOKEN);
         log.debug("body: {}", body);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);

@@ -164,10 +164,10 @@
           </el-select>
           <el-input v-model="openTokenUrl"/>
         </el-form-item>
-        <el-form-item label="Client ID">
+        <el-form-item label="APP ID">
           <el-input v-model="apiClientId" type="text"/>
         </el-form-item>
-        <el-form-item label="Client Secret">
+        <el-form-item label="APP Secret">
           <el-input v-model="apiClientSecret" type="password" show-password/>
         </el-form-item>
         <el-form-item>
@@ -247,7 +247,6 @@ const options = [
     label: 'AList',
     options: [
       {label: 'api.xhofe.top', value: 'https://api.xhofe.top/alist/ali_open/token'},
-      {label: 'api-cf.nn.ci', value: 'https://api-cf.nn.ci/alist/ali_open/token'},
       {label: 'api.nn.ci ✈', value: 'https://api.nn.ci/alist/ali_open/token'},
     ]
   },
