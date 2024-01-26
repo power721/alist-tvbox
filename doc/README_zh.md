@@ -73,7 +73,7 @@ wget https://d.har01d.cn/update_xiaoya.sh; sh ./update_xiaoya.sh
 #### 内存优化版
 目前仅支持Linux x86_64平台。
 ```bash
-wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t native
+sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_native.sh)"
 ```
 
 #### host网络模式
@@ -83,13 +83,13 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 ```
 使用的端口：
 
+4567 - 管理应用
+
 5678 - nginx
 
 5233 - httpd
 
 5234 - AList
-
-4567 - 管理应用
 
 #### 纯净版
 没有内置分享数据。

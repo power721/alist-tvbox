@@ -154,7 +154,7 @@ jobs:
           port: 22
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
-          source: "data/app_version,config/update_new.sh,config/update_xiaoya.sh,config/update_hostmode.sh"
+          source: "data/app_version,scripts/update_new.sh,scripts/update_xiaoya.sh,scripts/update_hostmode.sh,scripts/update_native.sh"
           strip_components: 1
           target: /var/www/alist/
       - name: send telegram message

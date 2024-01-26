@@ -24,7 +24,7 @@
       <code>docker run -d -p 4567:4567 -p 5344:80 -e ALIST_PORT=5344 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox</code>
     </p>
     <p>
-      一键部署(纯净版)：
+      一键部署(纯净版|独立版)：
       <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"</code><br>
     </p>
     <p>
@@ -33,7 +33,7 @@
     </p>
     <p>
       一键部署(内存优化版)：
-      <code>wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t native</code><br>
+      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_native.sh)"</code><br>
     </p>
     <p>
       一键部署(开发版)：
