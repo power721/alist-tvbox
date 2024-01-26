@@ -24,7 +24,7 @@
           <el-input v-model="form.path" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="内容" label-width="120" required>
-          <el-input v-model="form.content" type="textarea" :rows="fullscreen?45:15" placeholder="多行路径"/>
+          <el-input v-model="form.content" type="textarea" :rows="fullscreen?45:15" placeholder="多行路径，每行一个路径或者路径:文件夹"/>
         </el-form-item>
       </el-form>
       <template #footer>
