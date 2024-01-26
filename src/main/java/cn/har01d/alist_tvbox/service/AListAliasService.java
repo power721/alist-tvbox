@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,11 @@ public class AListAliasService {
         this.accountService = accountService;
         this.shareService = shareService;
         this.aListLocalService = aListLocalService;
+    }
+
+    @PostConstruct
+    public void init() {
+        shareId += aliasRepository.count();
     }
 
     public AListAlias create(AListAliasDto dto) {
