@@ -321,7 +321,7 @@ public class TvBoxService {
         }
     }
 
-    public MovieList recommend(int pg) {
+    public MovieList recommend(String ac, int pg) {
         List<MovieDetail> list = new ArrayList<>();
         Pageable pageable = PageRequest.of(pg - 1, 60, Sort.Direction.DESC, "id");
         Page<Meta> page = metaRepository.findAll(pageable);
@@ -341,7 +341,7 @@ public class TvBoxService {
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_content(meta.getPath());
-            setDoubanInfo(movieDetail, movie, false);
+            setDoubanInfo(movieDetail, movie, "videolist".equals(ac));
             list.add(movieDetail);
         }
 
@@ -634,7 +634,7 @@ public class TvBoxService {
         return false;
     }
 
-    public MovieList getMovieList(String tid, String filter, String sort, int page) {
+    public MovieList getMovieList(String ac, String tid, String filter, String sort, int page) {
         Site site = getSite(tid);
         String[] parts = tid.split("\\$");
         String path = parts[1];
@@ -644,7 +644,7 @@ public class TvBoxService {
         }
 
         if (type == 0) {
-            return getMetaList(tid, filter, sort, page);
+            return getMetaList(ac, tid, filter, sort, page);
         }
 
         if (path.contains(PLAYLIST)) {
@@ -703,7 +703,7 @@ public class TvBoxService {
         return result;
     }
 
-    public MovieList getMetaList(String tid, String filter, String sort, int page) {
+    public MovieList getMetaList(String ac, String tid, String filter, String sort, int page) {
         Site site = getSite(tid);
         String[] parts = tid.split("\\$");
         String path = parts[1];
@@ -857,7 +857,7 @@ public class TvBoxService {
             }
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
-            setDoubanInfo(movieDetail, movie, false);
+            setDoubanInfo(movieDetail, movie, "videolist".equals(ac));
             files.add(movieDetail);
             log.debug("{}", movieDetail);
         }

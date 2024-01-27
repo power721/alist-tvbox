@@ -62,14 +62,14 @@ public class TvBoxController {
             if (ids.startsWith("msearch:")) {
                 return tvBoxService.msearch(type, ids.substring(8));
             } else if (ids.equals("recommend")) {
-                return tvBoxService.recommend(pg);
+                return tvBoxService.recommend(ac, pg);
             }
             return tvBoxService.getDetail(ac, ids);
         } else if (t != null && !t.isEmpty()) {
             if (t.equals("0")) {
-                return tvBoxService.recommend(pg);
+                return tvBoxService.recommend(ac, pg);
             }
-            return tvBoxService.getMovieList(t, f, sort, pg);
+            return tvBoxService.getMovieList(ac, t, f, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {
             return tvBoxService.search(type, wd);
         } else {
