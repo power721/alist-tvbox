@@ -347,7 +347,7 @@ public class TvBoxService {
 
         MovieList result = new MovieList();
         result.setList(list);
-        result.setTotal((int) page.getTotalElements());
+        result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         return result;
     }
