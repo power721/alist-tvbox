@@ -11,6 +11,7 @@ spring:
     password: password
     driverClassName: org.h2.Driver
   jackson:
+    default-property-inclusion: non_null
     serialization:
       INDENT_OUTPUT: true
       FAIL_ON_EMPTY_BEANS: false

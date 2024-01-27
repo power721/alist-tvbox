@@ -29,43 +29,46 @@ public class TvBoxController {
     }
 
     @GetMapping("/vod1")
-    public Object api1(String t, String f, String ids, String wd, String sort,
+    public Object api1(String t, String f, String ids, String ac, String wd, String sort,
                        @RequestParam(required = false, defaultValue = "1") Integer pg,
                        HttpServletRequest request) {
-        return api("", t, f, ids, wd, sort, pg, 0, request);
+        return api("", t, f, ids, ac, wd, sort, pg, 0, request);
     }
 
     @GetMapping("/vod1/{token}")
-    public Object api1(@PathVariable String token, String t, String f, String ids, String wd, String sort,
+    public Object api1(@PathVariable String token, String t, String f, String ids, String ac, String wd, String sort,
                        @RequestParam(required = false, defaultValue = "1") Integer pg,
                        HttpServletRequest request) {
-        return api(token, t, f, ids, wd, sort, pg, 0, request);
+        return api(token, t, f, ids, ac, wd, sort, pg, 0, request);
     }
 
     @GetMapping("/vod")
-    public Object api(String t, String f, String ids, String wd, String sort,
+    public Object api(String t, String f, String ids, String ac, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request) {
-        return api("", t, f, ids, wd, sort, pg, 1, request);
+        return api("", t, f, ids, ac, wd, sort, pg, 1, request);
     }
 
     @GetMapping("/vod/{token}")
-    public Object api(@PathVariable String token, String t, String f, String ids, String wd, String sort,
+    public Object api(@PathVariable String token, String t, String f, String ids, String ac, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       @RequestParam(required = false, defaultValue = "1") Integer type,
                       HttpServletRequest request) {
         subscriptionService.checkToken(token);
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        log.info("type: {}  path: {}  folder: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, wd, f, sort, pg);
+        log.info("type: {}  path: {}  folder: {}  ac: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, ac, wd, f, sort, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.startsWith("msearch:")) {
                 return tvBoxService.msearch(type, ids.substring(8));
             } else if (ids.equals("recommend")) {
-                return tvBoxService.recommend();
+                return tvBoxService.recommend(pg);
             }
-            return tvBoxService.getDetail(ids);
+            return tvBoxService.getDetail(ac, ids);
         } else if (t != null && !t.isEmpty()) {
+            if (t.equals("0")) {
+                return tvBoxService.recommend(pg);
+            }
             return tvBoxService.getMovieList(t, f, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {
             return tvBoxService.search(type, wd);
