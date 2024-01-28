@@ -639,8 +639,10 @@ public class AccountService {
         log.debug("sign_in_list: {}", response.getBody());
         List<CheckinLog> list = new ArrayList<>();
         CheckinResult result = response.getBody().getResult();
-        account.setCheckinDays(result.getSignInCount());
-        accountRepository.save(account);
+        if (result.getSignInCount() != account.getCheckinDays()) {
+            account.setCheckinDays(result.getSignInCount());
+            accountRepository.save(account);
+        }
         LocalDate date = LocalDate.now();
         for (Map<String, Object> signInLog : result.getSignInInfos()) {
             date = date.withDayOfMonth(Integer.parseInt(signInLog.get("day").toString()));
