@@ -303,12 +303,12 @@ const loadSites = () => {
 }
 
 const loadBaseUrl = () => {
+  showScrape.value = !store.xiaoya
   if (store.baseUrl) {
     url.value = store.baseUrl
     return
   }
 
-  showScrape.value = !store.xiaoya
   if (store.xiaoya) {
     axios.get('/api/sites/1').then(({data}) => {
       const re = /http:\/\/localhost:(\d+)/.exec(data.url)
