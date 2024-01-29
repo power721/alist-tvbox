@@ -44,8 +44,8 @@
 
     <el-row>
       猫影视配置接口：
-      <a :href="currentUrl.replace('http://', 'http://alist:alist@')+'/open'+token" target="_blank">
-        {{currentUrl.replace('http://', 'http://alist:alist@')}}/open{{token}}
+      <a :href="currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')+'/open'+token" target="_blank">
+        {{currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')}}/open{{token}}
       </a>
     </el-row>
 
