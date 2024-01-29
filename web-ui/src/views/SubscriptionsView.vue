@@ -42,6 +42,13 @@
       </el-table-column>
     </el-table>
 
+    <el-row>
+      猫影视配置接口：
+      <a :href="currentUrl.replace('http://', 'http://alist:alist@')+'/open'+token" target="_blank">
+        {{currentUrl.replace('http://', 'http://alist:alist@')}}/open{{token}}
+      </a>
+    </el-row>
+
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form">
         <el-form-item label="订阅ID" label-width="140" required>

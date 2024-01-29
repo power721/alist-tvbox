@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.net.URLDecoder;
 import java.util.List;
 import java.util.Map;
@@ -109,19 +110,17 @@ public class TvBoxController {
         return subscriptionService.subscription(token, id);
     }
 
-//    @GetMapping("/open")
-//    public Map<String, Object> open() {
-//        return open("");
-//    }
-//
-//    @GetMapping("/open/{token}")
-//    public Map<String, Object> open(@PathVariable String token) {
-//        if (!subscriptionService.checkToken(token)) {
-//            throw new BadRequestException();
-//        }
-//
-//        return subscriptionService.open();
-//    }
+    @GetMapping("/open")
+    public Map<String, Object> open() throws IOException {
+        return open("");
+    }
+
+    @GetMapping("/open/{token}")
+    public Map<String, Object> open(@PathVariable String token) throws IOException {
+        subscriptionService.checkToken(token);
+
+        return subscriptionService.open();
+    }
 
     @GetMapping(value = "/repo/{id}", produces = "application/json")
     public String repository(@PathVariable int id) {

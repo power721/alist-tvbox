@@ -10,8 +10,8 @@ public class MvcConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry
-                .addResourceHandler("/tvbox/**")
-                .addResourceLocations("file:/www/tvbox/");
+                .addResourceHandler("/cat/**")
+                .addResourceLocations("file:/www/cat/");
     }
 
     @Override

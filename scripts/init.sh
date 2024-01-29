@@ -39,3 +39,8 @@ if [ -f /opt/alist/data/data.db ]; then
 else
   init
 fi
+
+if [ ! -d /www/cat ]; then
+  mkdir /www/cat
+  unzip -q -o /cat.zip -d /www/cat
+fi

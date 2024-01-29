@@ -48,6 +48,13 @@ public class TokenFilter extends OncePerRequestFilter {
             if (token != null) {
                 Authentication authentication = buildAuthentication(token);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+            } else if ("/open".equals(request.getRequestURI()) || request.getRequestURI().startsWith("/cat/")) {
+                String auth = request.getHeader("Authorization");
+                if (StringUtils.isBlank(auth) || !"Basic YWxpc3Q6YWxpc3Q=".equals(auth)) {
+                    response.setHeader("Www-Authenticate", "Basic realm=\"alist\"");
+                    response.sendError(401);
+                    return;
+                }
             }
             filterChain.doFilter(request, response);
         } catch (UserUnauthorizedException e) {

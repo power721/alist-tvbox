@@ -35,6 +35,8 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -204,63 +206,17 @@ public class SubscriptionService {
         return subscriptionRepository.findAll();
     }
 
-    public Map<String, Object> open() {
-        Map<String, Object> config = new HashMap<>();
-        Map<String, Object> video = new HashMap<>();
-        Map<String, Object> pan = new HashMap<>();
-        List<Map<String, Object>> sites = new ArrayList<>();
-        List<Map<String, Object>> panSites = new ArrayList<>();
-        video.put("sites", sites);
-        config.put("video", video);
-        pan.put("sites", panSites);
-        config.put("pan", pan);
-        addOpenSite(video);
-        return config;
-    }
-
-    private void addOpenSite(Map<String, Object> config) {
-        int id = 0;
-        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
-        try {
-            String key = "Alist";
-            Map<String, Object> site = buildOpenSite("xiaoya", "xiaoya", "小雅AList");
-            sites.removeIf(item -> key.equals(item.get("key")));
-            sites.add(id++, site);
-            log.debug("add AList site: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            for (Site site1 : siteRepository.findAll()) {
-                if (site1.isSearchable() && !site1.isDisabled()) {
-                    Map<String, Object> site = buildOpenSite("xiaoya-tvbox", "xiaoya", site1.getName());
-                    sites.add(id++, site);
-                    log.debug("add XiaoYa site: {}", site);
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            Map<String, Object> site = buildOpenSite("bilibili", "bilibili", "BiliBili");
-            sites.add(id, site);
-            log.debug("add BiliBili site: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-    }
-
-    private Map<String, Object> buildOpenSite(String key, String api, String name) {
-        Map<String, Object> site = new HashMap<>();
-        site.put("key", key);
-        site.put("api", readHostAddress("/tvbox/" + api + ".js"));
-        site.put("name", name);
-        site.put("type", 3);
-        site.put("ext", readHostAddress("/" + api));
-        return site;
+    public Map<String, Object> open() throws IOException {
+        Path path = Path.of("/www/cat/config_open.json");
+        String json = Files.readString(path);
+        json = json.replace("VOD_EXT", readHostAddress("/vod1"));
+        json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili"));
+        json = json.replace("ALIST_URL", readAlistAddress());
+        String ali = settingRepository.findById("ali_secret").map(Setting::getValue).orElse("");
+        json = json.replace("ALI_TOKEN", readHostAddress("/ali/token/" + ali));
+        String token = siteRepository.findById(1).map(Site::getToken).orElse("");
+        json = json.replace("ALIST_TOKEN", token);
+        return objectMapper.readValue(json, Map.class);
     }
 
     public Map<String, Object> subscription(String token, String id) {
@@ -713,6 +669,15 @@ public class SubscriptionService {
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(path)
+                .build();
+        return uriComponents.toUriString();
+    }
+
+    private String readAlistAddress() {
+        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .port(appProperties.isHostmode() ? 5234 : 5344)
+                .replacePath("")
                 .build();
         return uriComponents.toUriString();
     }
