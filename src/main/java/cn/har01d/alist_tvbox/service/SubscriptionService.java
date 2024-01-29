@@ -207,10 +207,11 @@ public class SubscriptionService {
     }
 
     public Map<String, Object> open() throws IOException {
+        String secret = tokens.isEmpty() ? "" : ("/" + tokens.split(",")[0]);
         Path path = Path.of("/www/cat/config_open.json");
         String json = Files.readString(path);
-        json = json.replace("VOD_EXT", readHostAddress("/vod1"));
-        json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili"));
+        json = json.replace("VOD_EXT", readHostAddress("/vod1" + secret));
+        json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
         json = json.replace("ALIST_URL", readAlistAddress());
         String ali = settingRepository.findById("ali_secret").map(Setting::getValue).orElse("");
         json = json.replace("ALI_TOKEN", readHostAddress("/ali/token/" + ali));
