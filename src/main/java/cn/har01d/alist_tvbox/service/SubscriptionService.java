@@ -2,6 +2,8 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.TokenDto;
+import cn.har01d.alist_tvbox.entity.Account;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
@@ -66,6 +68,7 @@ public class SubscriptionService {
     private final JdbcTemplate jdbcTemplate;
     private final SettingRepository settingRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final AccountRepository accountRepository;
     private final SiteRepository siteRepository;
     private final AListLocalService aListLocalService;
 
@@ -78,6 +81,7 @@ public class SubscriptionService {
                                JdbcTemplate jdbcTemplate,
                                SettingRepository settingRepository,
                                SubscriptionRepository subscriptionRepository,
+                               AccountRepository accountRepository,
                                SiteRepository siteRepository,
                                AListLocalService aListLocalService) {
         this.environment = environment;
@@ -90,6 +94,7 @@ public class SubscriptionService {
         this.jdbcTemplate = jdbcTemplate;
         this.settingRepository = settingRepository;
         this.subscriptionRepository = subscriptionRepository;
+        this.accountRepository = accountRepository;
         this.siteRepository = siteRepository;
         this.aListLocalService = aListLocalService;
     }
@@ -213,8 +218,8 @@ public class SubscriptionService {
         json = json.replace("VOD_EXT", readHostAddress("/vod1" + secret));
         json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
         json = json.replace("ALIST_URL", readAlistAddress());
-        String ali = settingRepository.findById("ali_secret").map(Setting::getValue).orElse("");
-        json = json.replace("ALI_TOKEN", readHostAddress("/ali/token/" + ali));
+        String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
+        json = json.replace("ALI_TOKEN", ali);
         String token = siteRepository.findById(1).map(Site::getToken).orElse("");
         json = json.replace("ALIST_TOKEN", token);
         return objectMapper.readValue(json, Map.class);

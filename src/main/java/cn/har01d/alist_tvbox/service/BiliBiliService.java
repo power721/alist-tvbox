@@ -1306,7 +1306,7 @@ public class BiliBiliService {
         String[] parts = bvid.split("-");
         int fnval = 16;
         Map<String, Object> result = new HashMap<>();
-        dash = dash || appProperties.isSupportDash() || "open".equals(client);
+        dash = dash || "open".equals(client) || appProperties.isSupportDash();
         if (dash) {
             fnval = settingRepository.findById("bilibili_fnval").map(Setting::getValue).map(Integer::parseInt).orElse(FN_VAL);
         }
@@ -1339,7 +1339,6 @@ public class BiliBiliService {
             }
 
             result = DashUtils.convert(response.getBody(), "open".equals(client));
-            result.put("dash", aid + "+" + cid + "+127");
         } else {
             ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
             BiliBiliPlayResponse res = response.getBody();
@@ -1356,9 +1355,6 @@ public class BiliBiliService {
         headers.put("Referer", "https://www.bilibili.com");
         headers.put("cookie", cookie);
         headers.put("User-Agent", USER_AGENT);
-        if (dash) {
-            headers.put("Content-Type", "application/dash+xml");
-        }
         result.put("header", objectMapper.writeValueAsString(headers));
 
         result.put("subs", getSubtitles(aid, cid));

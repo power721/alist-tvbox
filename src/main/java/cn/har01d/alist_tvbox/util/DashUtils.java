@@ -57,11 +57,11 @@ public final class DashUtils {
         }
 
         String mpd = getMpd(dash, videoList.toString(), audioList.toString());
-        log.debug("{}", mpd);
         Map<String, Object> map = new HashMap<>();
         if (open) {
             map.put("mpd", mpd);
         } else {
+            log.debug("{}", mpd);
             String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
             String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
             map.put("url", url);
