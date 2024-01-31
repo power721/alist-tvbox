@@ -680,9 +680,10 @@ public class SubscriptionService {
     }
 
     private String readAlistAddress() {
+        String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                .port(appProperties.isHostmode() ? 5234 : 5344)
+                .port(port)
                 .replacePath("")
                 .build();
         return uriComponents.toUriString();
