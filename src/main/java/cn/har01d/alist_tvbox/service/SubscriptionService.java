@@ -680,13 +680,18 @@ public class SubscriptionService {
     }
 
     private String readAlistAddress() {
-        String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
-        UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                .port(port)
-                .replacePath("")
-                .build();
-        return uriComponents.toUriString();
+        Site site = siteRepository.findById(1).orElseThrow();
+        if (site.getUrl().contains("//localhost")) {
+            String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
+            UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
+                    .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                    .port(port)
+                    .replacePath("")
+                    .build();
+            return uriComponents.toUriString();
+        } else {
+            return site.getUrl();
+        }
     }
 
     public Map<String, Object> convertResult(String json, String configKey) {
