@@ -215,7 +215,8 @@ public class SubscriptionService {
         String secret = tokens.isEmpty() ? "" : ("/" + tokens.split(",")[0]);
         Path path = Path.of("/www/cat/config_open.json");
         String json = Files.readString(path);
-        json = json.replace("VOD_EXT", readHostAddress("/vod1" + secret));
+        json = json.replace("VOD_EXT", readHostAddress("/vod" + secret));
+        json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
         json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
         json = json.replace("ALIST_URL", readAlistAddress());
         String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
