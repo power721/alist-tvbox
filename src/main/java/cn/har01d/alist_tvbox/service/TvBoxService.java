@@ -678,6 +678,7 @@ public class TvBoxService {
             movieDetail.setSize(fsInfo.getSize());
             if (fsInfo.getType() == 1) {
                 if ("open".equals(client)) {
+                    movieDetail.setVod_pic("");
                     movieDetail.setCate(new CategoryList());
                 }
                 setDoubanInfo(site, movieDetail, newPath, false);

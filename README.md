@@ -43,8 +43,8 @@ e.g.: disable 2 sites by key, change 1 site name by key, add new site.
     "sites-blacklist": ["csp_Bili", "csp_Biliych"],
     "sites": [
         {
-        "key": "js豆瓣",
-        "name": "js豆瓣"
+          "key": "js豆瓣",
+          "name": "js豆瓣"
         },
         {
           "key": "测试",
