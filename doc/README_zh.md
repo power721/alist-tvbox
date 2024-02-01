@@ -292,6 +292,40 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ![WebDAV](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/webdav.jpg)
 
+### 猫影视
+#### 自定义猫影视配置
+
+在应用目录（默认/etc/xiaoya）创建cat文件夹(/etc/xiaoya/cat)。
+
+放入自己的js文件和my.json（格式和config_open.json一样），应用会合并配置。
+
+放入自己的config_open.json文件，将会覆盖内置的配置。
+
+my.json文件示例（/etc/xiaoya/cat/kkys_open.js、/etc/xiaoya/cat/kkys2_open.js）：
+
+[示例文件](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/my.json)
+
+``` json
+{
+    "video": {
+        "sites": [
+          {
+            "key": "kkys",
+            "name": "🟢 快看1",
+            "type": 3,
+            "api": "/cat/kkys_open.js"
+          },
+          {
+            "key": "kkys2",
+            "name": "🟢 快看2",
+            "type": 3,
+            "api": "/cat/kkys2_open.js"
+          }
+        ]
+    }
+}
+```
+
 ### 其它
 不再生效的文件可以保留，以后删除数据库后可以恢复。
 

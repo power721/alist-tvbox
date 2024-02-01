@@ -76,6 +76,7 @@ if [ ! -d /www/cat ]; then
   mkdir /www/cat
   unzip -q -o /cat.zip -d /www/cat
 fi
+[ -d /data/cat ] && cp -r /data/cat/* /www/cat/
 
 cd /tmp/
 

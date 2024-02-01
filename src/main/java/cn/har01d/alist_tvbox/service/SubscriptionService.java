@@ -212,9 +212,77 @@ public class SubscriptionService {
     }
 
     public Map<String, Object> open() throws IOException {
-        String secret = tokens.isEmpty() ? "" : ("/" + tokens.split(",")[0]);
         Path path = Path.of("/www/cat/config_open.json");
         String json = Files.readString(path);
+
+        Map<String, Object> config = objectMapper.readValue(json, Map.class);
+
+        path = Path.of("/www/cat/my.json");
+        if (Files.exists(path)) {
+            try {
+                log.info("read {}", path);
+                String ext = Files.readString(path);
+                Map<String, Object> source = objectMapper.readValue(ext, Map.class);
+                mergeOpen(config, source);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+
+        addCatSites(config);
+
+        json = objectMapper.writeValueAsString(config);
+        json = replaceOpen(json);
+
+        return objectMapper.readValue(json, Map.class);
+    }
+
+    private void addCatSites(Map<String, Object> config) {
+        List<Map<String, Object>> sites = getSites(config, "video");
+        Map<String, Object> site = new HashMap<>();
+        site.put("key", "bilibili");
+        site.put("name", "🟢 BiliBili");
+        site.put("type", 3);
+        site.put("api", "/cat/bilibili.js");
+        site.put("ext", "BILIBILI_EXT");
+        sites.add(0, site);
+
+        site = new HashMap<>();
+        site.put("key", "xiaoya_alist");
+        site.put("name", "🔍 AList");
+        site.put("type", 3);
+        site.put("api", "/cat/xiaoya_alist.js");
+        site.put("ext", "VOD_EXT");
+        sites.add(0, site);
+
+        site = new HashMap<>();
+        site.put("key", "xiaoya-tvbox");
+        site.put("name", "🟢 小雅TV");
+        site.put("type", 3);
+        site.put("api", "/cat/xiaoya.js");
+        site.put("ext", "VOD1_EXT");
+        sites.add(0, site);
+
+        sites = getSites(config, "pan");
+        Map<String, Object> ext = new HashMap<>();
+        ext.put("name", "小雅");
+        ext.put("server", "ALIST_URL");
+        ext.put("startPage", "/");
+        ext.put("showAll", false);
+        ext.put("search", true);
+        ext.put("headers", Map.of("Authorization", "ALIST_TOKEN"));
+        if (!sites.isEmpty()) {
+            List<Map<String, Object>> list = (List<Map<String, Object>>) sites.get(0).get("ext");
+            if (list == null) {
+                list = new ArrayList<>();
+                sites.get(0).put("ext", list);
+            }
+            list.add(0, ext);
+        }
+    }
+
+    private String replaceOpen(String json) {
+        String secret = tokens.isEmpty() ? "" : ("/" + tokens.split(",")[0]);
         json = json.replace("VOD_EXT", readHostAddress("/vod" + secret));
         json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
         json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
@@ -223,7 +291,50 @@ public class SubscriptionService {
         json = json.replace("ALI_TOKEN", ali);
         String token = siteRepository.findById(1).map(Site::getToken).orElse("");
         json = json.replace("ALIST_TOKEN", token);
-        return objectMapper.readValue(json, Map.class);
+        return json;
+    }
+
+    private void mergeOpen(Map<String, Object> config, Map<String, Object> source) {
+        log.info("merge cat config");
+        config.put("video", Map.of("sites", mergeOpen(getSites(config, "video"), getSites(source, "video"))));
+        config.put("read", Map.of("sites", mergeOpen(getSites(config, "read"), getSites(source, "read"))));
+        config.put("comic", Map.of("sites", mergeOpen(getSites(config, "comic"), getSites(source, "comic"))));
+        config.put("pan", Map.of("sites", mergeOpen(getSites(config, "pan"), getSites(source, "pan"))));
+        log.debug("{}", config);
+    }
+
+    private List<Map<String, Object>> getSites(Map<String, Object> config, String key) {
+        Map<String, Object> item = (Map<String, Object>) config.get(key);
+        if (item != null) {
+            try {
+                return (List<Map<String, Object>>) item.get("sites");
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    private List<Map<String, Object>> mergeOpen(List<Map<String, Object>> config, List<Map<String, Object>> source) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        Map<Object, Map<String, Object>> map = new HashMap<>();
+
+        for (Map<String, Object> item : config) {
+            map.put(item.get("key"), item);
+        }
+
+        if (source != null) {
+            for (Map<String, Object> item : source) {
+                if (map.containsKey(item.get("key"))) {
+                    map.get(item.get("key")).putAll(item);
+                } else {
+                    list.add(item);
+                }
+            }
+        }
+
+        list.addAll(config);
+        return list;
     }
 
     public Map<String, Object> subscription(String token, String id) {
