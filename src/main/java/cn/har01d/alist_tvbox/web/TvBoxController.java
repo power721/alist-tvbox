@@ -57,6 +57,7 @@ public class TvBoxController {
                       HttpServletRequest request) {
         subscriptionService.checkToken(token);
 
+        String client = request.getHeader("X-CLIENT");
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("type: {}  path: {}  folder: {}  ac: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, ac, wd, f, sort, pg);
         if (ids != null && !ids.isEmpty()) {
@@ -70,7 +71,7 @@ public class TvBoxController {
             if (t.equals("0")) {
                 return tvBoxService.recommend(ac, pg);
             }
-            return tvBoxService.getMovieList(ac, t, f, sort, pg);
+            return tvBoxService.getMovieList(client, ac, t, f, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {
             return tvBoxService.search(type, wd);
         } else {

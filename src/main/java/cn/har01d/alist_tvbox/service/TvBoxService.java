@@ -634,7 +634,7 @@ public class TvBoxService {
         return false;
     }
 
-    public MovieList getMovieList(String ac, String tid, String filter, String sort, int page) {
+    public MovieList getMovieList(String client, String ac, String tid, String filter, String sort, int page) {
         Site site = getSite(tid);
         String[] parts = tid.split("\\$");
         String path = parts[1];
@@ -677,6 +677,9 @@ public class TvBoxService {
             movieDetail.setVod_time(fsInfo.getModified());
             movieDetail.setSize(fsInfo.getSize());
             if (fsInfo.getType() == 1) {
+                if ("open".equals(client)) {
+                    movieDetail.setCate(new CategoryList());
+                }
                 setDoubanInfo(site, movieDetail, newPath, false);
                 folders.add(movieDetail);
             } else {

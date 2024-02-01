@@ -22,6 +22,7 @@ public class MovieDetail {
     private String vod_lang;
     private String vod_year;
     private long size;
+    private CategoryList cate;
 
     @Override
     public boolean equals(Object o) {

@@ -248,8 +248,8 @@ public class SubscriptionService {
         sites.add(0, site);
 
         site = new HashMap<>();
-        site.put("key", "xiaoya_alist");
-        site.put("name", "🔍 AList");
+        site.put("key", "xiaoya-alist");
+        site.put("name", "🟢 AList");
         site.put("type", 3);
         site.put("api", "/cat/xiaoya_alist.js");
         site.put("ext", "VOD_EXT");
