@@ -12,6 +12,13 @@
         "name": "🟢 快看2",
         "type": 3,
         "api": "/cat/kkys2_open.js"
+      },
+      {
+        "key": "云盘4K",
+        "name": "🔍 云盘",
+        "type": 3,
+        "api": "/cat/yunpan4k_open.js",
+        "ext": "ALI_TOKEN"
       }
     ]
   },

@@ -301,7 +301,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 放入自己的config_open.json文件，将会覆盖内置的配置。
 
-my.json文件示例（/etc/xiaoya/cat/kkys_open.js、/etc/xiaoya/cat/kkys2_open.js）：
+/etc/xiaoya/cat/my.json文件示例（/etc/xiaoya/cat/kkys_open.js、/etc/xiaoya/cat/kkys2_open.js）：
 
 [示例文件](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/my.json)
 
