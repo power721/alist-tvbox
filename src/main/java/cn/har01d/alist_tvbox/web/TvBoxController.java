@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
+import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -121,6 +122,11 @@ public class TvBoxController {
         subscriptionService.checkToken(token);
 
         return subscriptionService.open();
+    }
+
+    @PostMapping("/api/cat/sync")
+    public int syncCat() {
+        return Utils.execute("unzip -q -o /cat.zip -d /www/cat && cp -r /data/cat/* /www/cat/");
     }
 
     @GetMapping(value = "/repo/{id}", produces = "application/json")

@@ -297,7 +297,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 在应用目录（默认/etc/xiaoya）创建cat文件夹(/etc/xiaoya/cat)。
 
-放入自己的js文件和my.json（格式和config_open.json一样），应用会合并配置。
+放入自己的js文件和my.json（格式和config_open.json一样），在订阅页面点击同步文件按钮，应用会合并配置。
 
 放入自己的config_open.json文件，将会覆盖内置的配置。
 
