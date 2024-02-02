@@ -428,6 +428,8 @@ public class SubscriptionService {
 //        }
 
         String json = loadConfigJson(configUrl);
+        String url = fixUrl(apiUrl) + "/";
+        json = json.replace("./", url);
 
         return convertResult(json, configKey);
     }

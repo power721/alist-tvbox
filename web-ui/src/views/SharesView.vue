@@ -278,7 +278,7 @@ const getShareLink = (shareInfo: ShareInfo) => {
     url = url + '/folder/' + shareInfo.folderId
   }
   if (shareInfo.password) {
-    url = url + '?password=' + shareInfo.password
+    url = url + '?pwd=' + shareInfo.password
   }
   return url
 }
