@@ -319,7 +319,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
             "key": "kkys2",
             "name": "🟢 快看2",
             "type": 3,
-            "api": "/cat/kkys2_open.js"
+            "api": "/cat/kkys_open2.js"
           }
         ]
     }
