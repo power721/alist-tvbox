@@ -7,7 +7,7 @@
 
     <h2>API返回数据</h2>
     <div class="data" v-loading="loading">
-      <json-viewer :value="config" expanded copyable :expand-depth=5></json-viewer>
+      <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=5></json-viewer>
     </div>
   </div>
 </template>

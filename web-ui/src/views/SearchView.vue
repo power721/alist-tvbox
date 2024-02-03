@@ -22,7 +22,7 @@
 
     <h2>API返回数据</h2>
     <div class="data">
-      <json-viewer :value="config" expanded copyable :expand-depth=3></json-viewer>
+      <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=3></json-viewer>
     </div>
   </div>
 </template>
