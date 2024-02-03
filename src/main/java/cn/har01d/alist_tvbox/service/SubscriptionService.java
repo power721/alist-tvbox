@@ -335,7 +335,17 @@ public class SubscriptionService {
         }
 
         list.addAll(config);
+        fixSiteApi(list);
         return list;
+    }
+
+    private void fixSiteApi(List<Map<String, Object>> sites) {
+        for (Map<String, Object> site : sites) {
+            String api = (String) site.get("api");
+            if (api != null && api.startsWith("./")) {
+                site.put("api", api.replace("./", "/cat/"));
+            }
+        }
     }
 
     public Map<String, Object> subscription(String token, String id) {
