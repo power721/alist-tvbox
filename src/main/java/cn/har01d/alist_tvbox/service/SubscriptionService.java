@@ -213,7 +213,7 @@ public class SubscriptionService {
 
     public Map<String, Object> open() throws IOException {
         Path path = Path.of("/www/cat/config_open.json");
-        String json = Files.readString(path);
+        String json = Files.readString(path).replace("\ufeff", "");
 
         Map<String, Object> config = objectMapper.readValue(json, Map.class);
 
@@ -282,6 +282,7 @@ public class SubscriptionService {
     }
 
     private String replaceOpen(String json) {
+        json = json.replace("./", "/cat/");
         String secret = tokens.isEmpty() ? "" : ("/" + tokens.split(",")[0]);
         json = json.replace("VOD_EXT", readHostAddress("/vod" + secret));
         json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
@@ -336,17 +337,7 @@ public class SubscriptionService {
         }
 
         list.addAll(config);
-        fixSiteApi(list);
         return list;
-    }
-
-    private void fixSiteApi(List<Map<String, Object>> sites) {
-        for (Map<String, Object> site : sites) {
-            String api = (String) site.get("api");
-            if (api != null && api.startsWith("./")) {
-                site.put("api", api.replace("./", "/cat/"));
-            }
-        }
     }
 
     public Map<String, Object> subscription(String token, String id) {
