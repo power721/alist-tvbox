@@ -289,6 +289,7 @@ public class SubscriptionService {
         json = json.replace("ALIST_URL", readAlistAddress());
         String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
         json = json.replace("ALI_TOKEN", ali);
+        json = json.replace("填入阿里token", ali);
         json = json.replace("阿里token", ali);
         String token = siteRepository.findById(1).map(Site::getToken).orElse("");
         json = json.replace("ALIST_TOKEN", token);
