@@ -74,6 +74,7 @@ import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER_PIC;
 import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
 import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
+import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
@@ -987,7 +988,8 @@ public class TvBoxService {
                 throw new BadRequestException("找不到文件 " + path);
             }
 
-            if (fsDetail.getProvider().contains("Aliyundrive")) {
+            if (fsDetail.getProvider().contains("Aliyundrive")
+                    || ("open".equals(client) && fsDetail.getProvider().contains("115"))) {
                 url = buildUrl(site, path, fsDetail.getSign());
             } else {
                 url = fixHttp(fsDetail.getRawUrl());
@@ -996,11 +998,11 @@ public class TvBoxService {
             result.put("url", url);
         }
 
-        if (url.contains("aliyundrive")) {
+        if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
-            result.put("header", "{\"User-Agent\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\",\"Referer\":\"https://www.aliyundrive.com/\"}");
+            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://www.aliyundrive.com/\"}");
         } else if (url.contains("115.com")) {
-            result.put("header", "{\"User-Agent\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\",\"Referer\":\"https://115.com/\"}");
+            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
         }
 
         if (!getSub) {
