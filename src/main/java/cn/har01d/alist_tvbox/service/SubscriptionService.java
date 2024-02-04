@@ -283,6 +283,7 @@ public class SubscriptionService {
 
     private String replaceOpen(String json) {
         json = json.replace("./", "/cat/");
+        json = json.replace("assets://js/", "/cat/");
         String secret = tokens.isEmpty() ? "" : ("/" + tokens.split(",")[0]);
         json = json.replace("VOD_EXT", readHostAddress("/vod" + secret));
         json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
@@ -303,6 +304,10 @@ public class SubscriptionService {
         config.put("read", Map.of("sites", mergeOpen(getSites(config, "read"), getSites(source, "read"))));
         config.put("comic", Map.of("sites", mergeOpen(getSites(config, "comic"), getSites(source, "comic"))));
         config.put("pan", Map.of("sites", mergeOpen(getSites(config, "pan"), getSites(source, "pan"))));
+        Object color = source.get("color");
+        if (color != null) {
+            config.put("color", color);
+        }
         log.debug("{}", config);
     }
 

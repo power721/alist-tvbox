@@ -679,6 +679,9 @@ public class TvBoxService {
             if (fsInfo.getType() == 1) {
                 if ("open".equals(client)) {
                     movieDetail.setVod_pic("");
+                    if ("AliyundriveOpen".equals(fsResponse.getProvider())) {
+                        movieDetail.setVod_pic("https://pic.rmb.bdstatic.com/bjh/6a2278365c10139b5b03229c2ecfeea4.jpeg");
+                    }
                     movieDetail.setCate(new CategoryList());
                 }
                 setDoubanInfo(site, movieDetail, newPath, false);
