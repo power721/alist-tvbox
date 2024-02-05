@@ -175,6 +175,24 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ![订阅预览](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub_data.png)
 
+#### 自定义多仓订阅
+在文件页面新建文件，目录：/www/tvbox/repo，名称：订阅id.json，比如：1.json。
+内容留空(返回全部订阅)或者自定义内容：
+```json
+{
+  "urls": [
+    {
+      "url": "ATV_ADDRESS/sub/1",
+      "name": "内置小雅搜索源"
+    },
+    {
+      "url": "https://tvbox.cainisi.cf",
+      "name": "🦐菜妮丝"
+    }
+  ]
+}
+```
+
 ### 资源
 第一次启动会自动读取/data/alishare_list.txt文件里面的分享内容，并保存到数据库，以后这个文件就不再生效。
 
@@ -323,25 +341,6 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
           }
         ]
     }
-}
-```
-
-###  多仓订阅
-#### 自定义多仓订阅
-在文件页面新建文件，目录：www/tvbox/repo，名称：订阅id.json,比如：1.json。
-内容留空(返回全部订阅)或者自定义内容：
-```json
-{
-  "urls": [
-    {
-      "url": "ATV_ADDRESS/sub/1",
-      "name": "内置小雅搜索源"
-    },
-    {
-      "url": "https://tvbox.cainisi.cf",
-      "name": "🦐菜妮丝"
-    }
-  ]
 }
 ```
 
