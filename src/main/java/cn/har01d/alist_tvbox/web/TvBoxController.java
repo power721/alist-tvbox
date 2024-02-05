@@ -130,12 +130,12 @@ public class TvBoxController {
     }
 
     @GetMapping(value = "/repo/{id}", produces = "application/json")
-    public String repository(@PathVariable int id) {
+    public String repository(@PathVariable String id) {
         return repository("", id);
     }
 
     @GetMapping(value = "/repo/{token}/{id}", produces = "application/json")
-    public String repository(@PathVariable String token, @PathVariable int id) {
+    public String repository(@PathVariable String token, @PathVariable String id) {
         subscriptionService.checkToken(token);
 
         return subscriptionService.repository(token, id);

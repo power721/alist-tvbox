@@ -102,6 +102,7 @@ public class ConfigFileService {
 
     private void writeFileContent(ConfigFile configFile) throws IOException {
         log.info("write file: {}", configFile.getPath());
+        Files.createDirectories(Paths.get(configFile.getDir()));
         Path path = Paths.get(configFile.getDir(), configFile.getName());
         Files.writeString(path, configFile.getContent());
     }

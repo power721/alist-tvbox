@@ -923,13 +923,29 @@ public class SubscriptionService {
         return ret;
     }
 
-    public String repository(String token, int id) {
+    public String repository(String token, String id) {
         try {
-            File file = new File("/www/tvbox/juhe.json");
+            String baseUrl = readHostAddress("/sub" + (StringUtils.isNotBlank(token) ? "/" + token : "") + "/");
+            File file = new File("/www/tvbox/repo/" + id + ".json");
             if (file.exists()) {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-                String url = readHostAddress("/sub" + (StringUtils.isNotBlank(token) ? "/" + token : "") + "/" + id);
-                json = json.replace("DOCKER_ADDRESS/tvbox/my.json", url);
+                if (StringUtils.isBlank(json)) {
+                    List<Map<String, String>> urls = new ArrayList<>();
+                    for (var sub : subscriptionRepository.findAll()) {
+                        urls.add(Map.of("name", sub.getName(), "url", baseUrl + sub.getSid()));
+                    }
+                    Map<String, Object> map = Map.of("urls", urls);
+                    return objectMapper.writeValueAsString(map);
+                }
+                json = json.replace("DOCKER_ADDRESS/tvbox/my.json", baseUrl + id);
+                json = json.replace("ATV_ADDRESS", readHostAddress());
+                return json;
+            }
+
+            file = new File("/www/tvbox/juhe.json");
+            if (file.exists()) {
+                String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+                json = json.replace("DOCKER_ADDRESS/tvbox/my.json", baseUrl + id);
                 return json;
             }
         } catch (IOException e) {
