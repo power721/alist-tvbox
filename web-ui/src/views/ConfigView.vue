@@ -417,8 +417,8 @@ onMounted(() => {
     enableHttps.value = data.enable_https === 'true'
     mixSiteSource.value = data.mix_site_source !== 'false'
     atvPass.value = data.atv_password
-    apiClientId.value = data.open_api_client_id
-    apiClientSecret.value = data.open_api_client_secret
+    apiClientId.value = data.open_api_client_id || ''
+    apiClientSecret.value = data.open_api_client_secret || ''
     login.value.username = data.alist_username
     login.value.password = data.alist_password
     login.value.enabled = data.alist_login === 'true'
