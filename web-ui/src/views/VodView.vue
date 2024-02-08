@@ -23,7 +23,9 @@
       </el-radio-group>
     </el-form-item>
 
-    <a href="/#/meta">电影数据列表</a>
+    <a href="/#/meta">豆瓣电影数据列表</a>
+    <span class="divider"></span>
+    <a href="/#/tmdb">TMDB电影数据列表</a>
 
     <h2>API返回数据</h2>
     <div class="data">
@@ -83,5 +85,8 @@ onMounted(async () => {
 <style scoped>
 .description {
   margin-bottom: 12px;
+}
+.divider {
+  margin-left: 24px;
 }
 </style>

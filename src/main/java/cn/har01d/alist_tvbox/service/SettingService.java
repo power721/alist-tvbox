@@ -14,11 +14,13 @@ import java.util.stream.Collectors;
 public class SettingService {
     private final JdbcTemplate jdbcTemplate;
     private final AppProperties appProperties;
+    private final TmdbService tmdbService;
     private final SettingRepository settingRepository;
 
-    public SettingService(JdbcTemplate jdbcTemplate, AppProperties appProperties, SettingRepository settingRepository) {
+    public SettingService(JdbcTemplate jdbcTemplate, AppProperties appProperties, TmdbService tmdbService, SettingRepository settingRepository) {
         this.jdbcTemplate = jdbcTemplate;
         this.appProperties = appProperties;
+        this.tmdbService = tmdbService;
         this.settingRepository = settingRepository;
     }
 
@@ -68,6 +70,9 @@ public class SettingService {
         }
         if ("enable_https".equals(setting.getName())) {
             appProperties.setEnableHttps("true".equals(setting.getValue()));
+        }
+        if ("tmdb_api_key".equals(setting.getName())) {
+            tmdbService.setApiKey(setting.getValue());
         }
         return settingRepository.save(setting);
     }

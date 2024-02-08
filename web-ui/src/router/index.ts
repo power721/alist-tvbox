@@ -20,6 +20,7 @@ import IndexView from "@/views/IndexView.vue";
 import BiliBiliView from "@/views/BiliBiliView.vue";
 import SystemInfo from "@/views/SystemInfo.vue";
 import MetaView from "@/views/MetaView.vue";
+import TmdbView from "@/views/TmdbView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -89,6 +90,12 @@ const router = createRouter({
       path: '/meta',
       name: 'meta',
       component: MetaView,
+      meta: {auth: true}
+    },
+    {
+      path: '/tmdb',
+      name: 'tmdb',
+      component: TmdbView,
       meta: {auth: true}
     },
     {

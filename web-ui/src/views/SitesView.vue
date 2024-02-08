@@ -162,7 +162,7 @@
                 </div>
               </template>
             </el-upload>
-            <a href="/#/meta">电影数据列表</a>
+            <a href="/#/tmdb">TMDB电影数据列表</a>
           </div>
         </div>
         <div v-for="line of indexContent">

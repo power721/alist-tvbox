@@ -38,7 +38,7 @@ public class ConfigFileService {
             try {
                 writeFileContent(file);
             } catch (Exception e) {
-                log.warn("", e);
+                log.warn("write file " + file.getPath(), e);
             }
         }
     }
@@ -73,7 +73,7 @@ public class ConfigFileService {
                 log.info("load file: {}", path);
             }
         } catch (Exception e) {
-            log.warn("", e);
+            log.warn("read file " + filepath, e);
         }
     }
 

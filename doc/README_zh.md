@@ -296,6 +296,15 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 2. 提供豆瓣ID刮削：
 /电影/中国/F 封神：朝歌风云 [2023][4K]动作 战争 奇幻 古装[正式版]##10604086
 
+#### TMDB刮削
+1. 申请TMDB账号，https://www.themoviedb.org/
+2. 申请TMDB API key，https://developer.themoviedb.org/docs/getting-started
+3. 配置页面 -> 高级设置 -> TMDB API Key -> 填写你的 API Key
+4. 创建索引
+5. TMDB电影数据列表，使用索引文件进行刮削
+
+使用内置的API Key会限速，建议申请自己的API key。
+
 ### 别名
 把一些路径合并成一个路径。
 

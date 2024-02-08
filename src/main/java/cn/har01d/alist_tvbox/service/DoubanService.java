@@ -439,7 +439,7 @@ public class DoubanService {
         return false;
     }
 
-    public boolean scrape(@PathVariable Integer id, String name) {
+    public boolean scrape(Integer id, String name) {
         var meta = metaRepository.findById(id).orElse(null);
         if (meta == null) {
             return false;

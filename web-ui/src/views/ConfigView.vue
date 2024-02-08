@@ -173,6 +173,12 @@
         <el-form-item>
           <el-button type="primary" @click="updateOpenTokenUrl">更新</el-button>
         </el-form-item>
+        <el-form-item label="TMDB API Key">
+          <el-input v-model="tmdbApiKey" type="password" show-password/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateTmdbApiKey">更新</el-button>
+        </el-form-item>
         <el-form-item label="阿里Token地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
             {{ currentUrl + '/ali/token/' + aliSecret }}
@@ -286,6 +292,7 @@ const aListStartTime = ref('')
 const openTokenUrl = ref('')
 const dockerAddress = ref('')
 const aliSecret = ref('')
+const tmdbApiKey = ref('')
 const atvPass = ref('')
 const apiClientId = ref('')
 const apiClientSecret = ref('')
@@ -328,6 +335,12 @@ const resetAListToken = () => {
 const updateOpenTokenUrl = () => {
   axios.post('/api/open-token-url', {url: openTokenUrl.value, clientId: apiClientId.value, clientSecret: apiClientSecret.value}).then(() => {
     ElMessage.success('更新成功，重启生效')
+  })
+}
+
+const updateTmdbApiKey = () => {
+  axios.post('/api/settings', {name: 'tmdb_api_key', value: tmdbApiKey.value}).then(() => {
+    ElMessage.success('更新成功')
   })
 }
 
@@ -411,6 +424,7 @@ onMounted(() => {
     openTokenUrl.value = data.open_token_url
     dockerAddress.value = data.docker_address
     aliSecret.value = data.ali_secret
+    tmdbApiKey.value = data.tmdb_api_key
     autoCheckin.value = data.auto_checkin === 'true'
     aListRestart.value = data.alist_restart_required === 'true'
     replaceAliToken.value = data.replace_ali_token === 'true'
