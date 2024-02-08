@@ -72,8 +72,6 @@ import java.util.stream.Collectors;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_PIC;
 import static cn.har01d.alist_tvbox.util.Constants.FILE;
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
-import static cn.har01d.alist_tvbox.util.Constants.FOLDER_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.LIST_PIC;
 import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
 import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
@@ -930,7 +928,7 @@ public class TvBoxService {
         movieDetail.setVod_id(encodeUrl(path) + "$1");
         movieDetail.setVod_name("播放列表");
         movieDetail.setVod_tag(FILE);
-        movieDetail.setVod_pic(LIST_PIC);
+        movieDetail.setVod_pic(getListPic());
         if (total < appProperties.getPageSize()) {
             movieDetail.setVod_remarks("共" + files.size() + "集");
         }
@@ -939,6 +937,10 @@ public class TvBoxService {
         list.add(movieDetail);
 
         return list;
+    }
+
+    private String getListPic() {
+        return ServletUriComponentsBuilder.fromCurrentRequest().replacePath("/list.png").build().toUriString();
     }
 
     public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub, String client) {
@@ -1293,7 +1295,7 @@ public class TvBoxService {
         movieDetail.setVod_play_from(site.getName());
         movieDetail.setVod_content(site.getName() + ":" + newPath);
         movieDetail.setVod_tag(FILE);
-        movieDetail.setVod_pic(LIST_PIC);
+        movieDetail.setVod_pic(getListPic());
 
         setMovieInfo(site, movieDetail, newPath, true);
 
@@ -1501,7 +1503,7 @@ public class TvBoxService {
     private static String getCover(String thumb, int type) {
         String pic = thumb;
         if (pic.isEmpty() && type == 1) {
-            pic = FOLDER_PIC;
+            pic = ServletUriComponentsBuilder.fromCurrentRequest().replacePath("/folder.png").build().toUriString();
         }
         return pic;
     }

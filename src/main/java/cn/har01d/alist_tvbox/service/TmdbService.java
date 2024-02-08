@@ -106,6 +106,7 @@ public class TmdbService {
         } catch (Exception e) {
             log.warn("", e);
         }
+        countryNames.put("China", "中国");
         countryNames.put("Hong Kong", "中国香港");
         countryNames.put("Taiwan", "中国台湾");
     }
