@@ -18,10 +18,12 @@ import cn.har01d.alist_tvbox.entity.TmdbMetaRepository;
 import cn.har01d.alist_tvbox.entity.TmdbRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.TextUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Async;
@@ -29,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -57,19 +60,22 @@ public class TmdbService {
     private final SiteService siteService;
     private final TaskService taskService;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     private final int rateLimit = 2000;
-    private final Map<String, String> countryNames = new HashMap<>();
+    private Map<String, String> countryNames = new HashMap<>();
 
     private String apiKey;
     private long lastRequestTime;
 
     public TmdbService(TmdbRepository tmdbRepository,
-                       TmdbMetaRepository tmdbMetaRepository, MetaRepository metaRepository,
+                       TmdbMetaRepository tmdbMetaRepository,
+                       MetaRepository metaRepository,
                        SettingRepository settingRepository,
                        SiteService siteService,
                        TaskService taskService,
-                       RestTemplateBuilder builder) {
+                       RestTemplateBuilder builder,
+                       ObjectMapper objectMapper) {
         this.tmdbRepository = tmdbRepository;
         this.tmdbMetaRepository = tmdbMetaRepository;
         this.metaRepository = metaRepository;
@@ -77,6 +83,7 @@ public class TmdbService {
         this.siteService = siteService;
         this.taskService = taskService;
         restTemplate = builder.build();
+        this.objectMapper = objectMapper;
     }
 
     public void setApiKey(String apiKey) {
@@ -97,15 +104,19 @@ public class TmdbService {
             log.warn("", e);
         }
 
+        loadCountries();
+    }
+
+    private void loadCountries() {
         try {
-            List<Map<String, String>> countries = restTemplate.getForObject("https://api.themoviedb.org/3/configuration/countries?language=zh-CN&api_key=" + apiKey, List.class);
-            for (Map<String, String> item : countries) {
-                countryNames.put(item.get("english_name"), item.get("native_name"));
-            }
-            log.debug("get {} countries", countries.size());
+            var resource = new ClassPathResource("/countries.json");
+            String json = resource.getContentAsString(StandardCharsets.UTF_8);
+            countryNames = objectMapper.readValue(json, Map.class);
+            log.debug("load {} countries", countryNames.size());
         } catch (Exception e) {
             log.warn("", e);
         }
+
         countryNames.put("China", "中国");
         countryNames.put("Hong Kong", "中国香港");
         countryNames.put("Taiwan", "中国台湾");
@@ -113,9 +124,12 @@ public class TmdbService {
 
     @Async
     public void syncMeta() {
-        List<Meta> result = new ArrayList<>();
         var list = tmdbMetaRepository.findAll();
+        if (list.isEmpty()) {
+            return;
+        }
         log.info("sync {} meta", list.size());
+        List<Meta> result = new ArrayList<>();
         for (var meta : list) {
             result.add(syncMeta(meta));
         }
@@ -127,8 +141,8 @@ public class TmdbService {
         var page = metaRepository.findAll(PageRequest.of(1, 1, Sort.Direction.DESC, "id"));
         if (page.hasContent() && page.getContent().get(0).getId() < 500000) {
             var list = tmdbMetaRepository.findAll();
-            List<Meta> result = new ArrayList<>();
             log.info("sync {} meta", list.size());
+            List<Meta> result = new ArrayList<>();
             for (var meta : list) {
                 result.add(syncMeta(meta));
             }
