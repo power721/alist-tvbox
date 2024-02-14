@@ -51,6 +51,11 @@ public class SiteController {
         return aListService.browse(id, path);
     }
 
+    @GetMapping("/{id}/index")
+    public List<FileItem> listIndexFiles(@PathVariable int id) {
+        return indexService.listIndexFiles(id);
+    }
+
     @PostMapping("/{id}")
     public Site update(@PathVariable int id, @RequestBody SiteDto dto) {
         return siteService.update(id, dto);

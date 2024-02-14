@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
+import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.IndexResponse;
 import cn.har01d.alist_tvbox.entity.IndexTemplate;
@@ -602,4 +603,16 @@ public class IndexService {
         return path.replaceAll("/+", "/").replace("\n", "%20");
     }
 
+    public List<FileItem> listIndexFiles(int id) {
+        try {
+            Path path = Paths.get("/data/index/" + id);
+            return Files.list(path)
+                    .filter(p -> p.getFileName().toString().endsWith(".txt"))
+                    .map(p -> new FileItem(p.getFileName().toString().replace(".txt", ""), p.toString(), 0))
+                    .toList();
+        } catch (Exception e) {
+            log.warn("list index files " + id, e);
+        }
+        return List.of();
+    }
 }

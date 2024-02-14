@@ -13,6 +13,7 @@ public class MetaDto {
     private Integer score;
     private Integer movieId;
     private Integer tmId;
+    private Integer siteId;
     private String type = "movie";
 
     public MetaDto() {
@@ -24,6 +25,7 @@ public class MetaDto {
         this.path = meta.getPath();
         this.year = meta.getYear();
         this.score = meta.getScore();
+        this.siteId = meta.getSiteId();
         if (meta.getMovie() != null) {
             this.movieId = meta.getMovie().getId();
         }
@@ -39,6 +41,7 @@ public class MetaDto {
         this.path = meta.getPath();
         this.year = meta.getYear();
         this.score = meta.getScore();
+        this.siteId = meta.getSiteId();
         if (meta.getTmdb() != null) {
             this.tmId = meta.getTmdb().getTmdbId();
             this.type = meta.getTmdb().getType();

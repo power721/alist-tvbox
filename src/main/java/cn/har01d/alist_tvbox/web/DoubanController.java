@@ -45,9 +45,9 @@ public class DoubanController {
         return service.addMeta(dto);
     }
 
-    @PostMapping("/api/meta/{id}/movie")
-    public boolean updateMetaMovie(@PathVariable Integer id, Integer movieId) {
-        return service.updateMetaMovie(id, movieId);
+    @PostMapping("/api/meta/{id}")
+    public boolean updateMetaMovie(@PathVariable Integer id, @RequestBody MetaDto dto) {
+        return service.updateMetaMovie(id, dto);
     }
 
     @PostMapping("/api/fix-meta")

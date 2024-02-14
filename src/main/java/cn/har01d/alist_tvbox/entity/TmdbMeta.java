@@ -30,6 +30,7 @@ public class TmdbMeta {
     private Integer year;
     private Integer score;
     private Integer tmId;
+    private Integer siteId;
     @ManyToOne
     private Tmdb tmdb;
 }

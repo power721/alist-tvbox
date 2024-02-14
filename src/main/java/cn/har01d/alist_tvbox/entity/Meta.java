@@ -32,6 +32,7 @@ public class Meta {
     private Movie movie;
     private String type;
     private Integer tmId;
+    private Integer siteId;
     @ManyToOne
     private Tmdb tmdb;
 }

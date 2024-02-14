@@ -67,6 +67,7 @@ public class TmdbService {
 
     private String apiKey;
     private long lastRequestTime;
+    private int siteId = 1;  // TODO: move to context
 
     public TmdbService(TmdbRepository tmdbRepository,
                        TmdbMetaRepository tmdbMetaRepository,
@@ -170,6 +171,7 @@ public class TmdbService {
             meta = new TmdbMeta();
             meta.setPath(path);
             meta.setType(dto.getType());
+            meta.setSiteId(dto.getSiteId());
         }
         Tmdb movie = getById(dto.getType(), dto.getTmId());
         if (movie != null) {
@@ -217,6 +219,7 @@ public class TmdbService {
         if (tmdbMeta.getScore() != null) {
             meta.setScore(tmdbMeta.getScore());
         }
+        meta.setSiteId(tmdbMeta.getSiteId());
         meta.setType(tmdbMeta.getType());
         meta.setTmId(tmdbMeta.getTmId());
         meta.setTmdb(tmdbMeta.getTmdb());
@@ -234,6 +237,7 @@ public class TmdbService {
         Tmdb movie = getDetails(dto.getType(), dto.getTmId());
         if (movie != null) {
             meta.setType(dto.getType());
+            meta.setSiteId(dto.getSiteId());
             meta.setTmdb(movie);
             meta.setTmId(movie.getTmdbId());
             meta.setYear(movie.getYear());
@@ -259,6 +263,7 @@ public class TmdbService {
         log.info("get {} lines from index file {}", lines.size(), path);
         Site site = siteService.getById(siteId);
         Task task = taskService.addScrapeTask(site);
+        this.siteId = siteId;
         scrapeIndexFile(task, lines, force);
     }
 
@@ -336,6 +341,7 @@ public class TmdbService {
         if (meta == null) {
             meta = new TmdbMeta();
             meta.setPath(path);
+            meta.setSiteId(siteId);
         } else if (meta.getTmdb() != null && !force) {
             return meta.getTmdb();
         }
@@ -407,7 +413,7 @@ public class TmdbService {
             }
 
             if (movie == null) {
-                parts = original.split("[ \t\r\n\\[\\]、【】()（）《》.丨-]+");
+                parts = original.split("[ \t\r\n\\[\\]、【】()（）《》.丨_-]+");
                 if (parts.length > 1) {
                     int count = 0;
                     for (int i = 0; i < parts.length && count < 3; i++) {

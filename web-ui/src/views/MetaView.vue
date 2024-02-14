@@ -35,7 +35,7 @@
       </el-table-column>
       <el-table-column prop="path" label="路径">
         <template #default="scope">
-          <a :href="url + scope.row.path" target="_blank">
+          <a :href="getUrl(scope.row)" target="_blank">
             {{ scope.row.path }}
           </a>
         </template>
@@ -56,6 +56,11 @@
 
     <el-dialog v-model="formVisible" :title="'编辑 '+form.id" width="60%">
       <el-form label-width="140px">
+        <el-form-item label="站点" required>
+          <el-select v-model="form.siteId">
+            <el-option :label="site.name" :value="site.id" v-for="site of sites"/>
+          </el-select>
+        </el-form-item>
         <el-form-item label="路径" required>
           <el-input v-model="form.path" autocomplete="off" readonly/>
         </el-form-item>
@@ -152,6 +157,7 @@ interface Meta {
   year: number
   score: number
   movieId: number
+  siteId: number
 }
 
 const sizes = [20, 40, 60, 80, 100]
@@ -179,6 +185,7 @@ const form = ref({
   year: 0,
   score: 0,
   movieId: 0,
+  siteId: 1,
 })
 
 const handleSelectionChange = (val: Meta[]) => {
@@ -227,6 +234,14 @@ const fixMeta = () => {
   })
 }
 
+const getUrl = (meta: Meta) => {
+  const site = sites.value.find(e => e.id == meta.siteId)
+  if (site && site.url !== 'http://localhost') {
+    return site.url + meta.path
+  }
+  return url.value + meta.path
+}
+
 const addMeta = () => {
   form.value = {
     id: 0,
@@ -235,6 +250,7 @@ const addMeta = () => {
     year: 0,
     score: 0,
     movieId: 0,
+    siteId: 1,
   }
   addVisible.value = true
 }
@@ -253,12 +269,12 @@ const saveMeta = () => {
 }
 
 const editMeta = (data: any) => {
-  form.value = Object.assign({}, data)
+  form.value = Object.assign({siteId: 1}, data)
   formVisible.value = true
 }
 
 const updateMeta = () => {
-  axios.post('/api/meta/' + form.value.id + '/movie?movieId=' + form.value.movieId).then(({data}) => {
+  axios.post('/api/meta/' + form.value.id, form.value).then(({data}) => {
     if (data) {
       ElMessage.success('更新成功')
       formVisible.value = false
