@@ -65,10 +65,10 @@
           <el-input v-model="form.path" autocomplete="off" readonly/>
         </el-form-item>
         <el-form-item label="豆瓣ID" required>
-          <el-input-number v-model="form.movieId" autocomplete="off"/>
+          <el-input-number v-model="form.movieId" min="0" autocomplete="off"/>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="updateMeta">更新</el-button>
+          <el-button type="primary" :disabled="!form.movieId" @click="updateMeta">更新</el-button>
         </el-form-item>
         <el-form-item label="名称" required>
           <el-input v-model="form.name" autocomplete="off"/>
@@ -83,7 +83,7 @@
       </el-form>
       <template #footer>
       <span class="dialog-footer">
-        <el-button type="danger" size="small" @click="dialogVisible=true">删除</el-button>
+        <el-button type="danger" @click="dialogVisible=true">删除</el-button>
         <el-button @click="formVisible=false">取消</el-button>
       </span>
       </template>
@@ -95,7 +95,7 @@
           <el-input v-model="form.path" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="豆瓣ID" required>
-          <el-input-number v-model="form.movieId" autocomplete="off"/>
+          <el-input-number v-model="form.movieId" min="0" autocomplete="off"/>
         </el-form-item>
       </el-form>
       <template #footer>

@@ -71,10 +71,10 @@
           <el-input v-model="form.path" autocomplete="off" readonly/>
         </el-form-item>
         <el-form-item label="TMDB ID" required>
-          <el-input-number v-model="form.tmId" autocomplete="off"/>
+          <el-input-number v-model="form.tmId" min="0" autocomplete="off"/>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="updateMeta">更新</el-button>
+          <el-button type="primary" :disabled="!form.tmId" @click="updateMeta">更新</el-button>
         </el-form-item>
         <el-form-item label="名称" required>
           <el-input v-model="form.name" autocomplete="off"/>
@@ -84,12 +84,12 @@
              target="_blank">{{ form.name }}</a>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="scrape">刮削</el-button>
+          <el-button type="primary" :disabled="!form.name" @click="scrape">刮削</el-button>
         </el-form-item>
       </el-form>
       <template #footer>
       <span class="dialog-footer">
-        <el-button type="danger" size="small" @click="dialogVisible=true">删除</el-button>
+        <el-button type="danger" @click="dialogVisible=true">删除</el-button>
         <el-button @click="formVisible=false">取消</el-button>
       </span>
       </template>
@@ -112,7 +112,7 @@
           <el-input v-model="form.path" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="TMDB ID" required>
-          <el-input-number v-model="form.tmId" autocomplete="off"/>
+          <el-input-number v-model="form.tmId" min="0" autocomplete="off"/>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -153,7 +153,7 @@
           <el-option v-for="item in index" :key="item.name" :label="item.name" :value="item.name"/>
         </el-select>
       </el-form-item>
-      <p>索引文件：/data/index/{{ siteId }}/{{ indexName }}.txt</p>
+      <p v-if="indexName">索引文件：/data/index/{{ siteId }}/{{ indexName }}.txt</p>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="scrapeVisible = false">取消</el-button>
