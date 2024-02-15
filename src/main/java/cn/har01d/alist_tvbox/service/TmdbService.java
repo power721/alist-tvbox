@@ -129,26 +129,33 @@ public class TmdbService {
         if (list.isEmpty()) {
             return;
         }
-        log.info("sync {} meta", list.size());
-        List<Meta> result = new ArrayList<>();
-        for (var meta : list) {
-            result.add(syncMeta(meta));
+        var task = taskService.addSyncMeta();
+        taskService.startTask(task.getId());
+        int count = list.size();
+        log.info("sync {} meta", count);
+        int start = 0;
+        while (start < count) {
+            int end = start + 1000;
+            if (end > count) {
+                end = count;
+            }
+            List<Meta> result = new ArrayList<>();
+            for (var meta : list.subList(start, end)) {
+                result.add(syncMeta(meta));
+            }
+            metaRepository.saveAll(result);
+            taskService.updateTaskSummary(task.getId(), "已经同步" + end + "/" + count);
+            start = end;
         }
-        metaRepository.saveAll(result);
+
+        taskService.completeTask(task.getId());
         log.info("sync meta completed");
     }
 
     public void sync() {
         var page = metaRepository.findAll(PageRequest.of(1, 1, Sort.Direction.DESC, "id"));
         if (page.hasContent() && page.getContent().get(0).getId() < 500000) {
-            var list = tmdbMetaRepository.findAll();
-            log.info("sync {} meta", list.size());
-            List<Meta> result = new ArrayList<>();
-            for (var meta : list) {
-                result.add(syncMeta(meta));
-            }
-            metaRepository.saveAll(result);
-            log.info("sync meta completed");
+            new Thread(this::syncMeta).start();
         }
     }
 

@@ -573,7 +573,7 @@ public class AccountService {
         request.setUsername(username);
         request.setPassword(password);
         LoginResponse response = aListClient.postForObject("/api/auth/login", request, LoginResponse.class);
-        log.debug("AList login response: {}", response.getData());
+        log.debug("AList login response: {}", response);
         return response.getData().getToken();
     }
 

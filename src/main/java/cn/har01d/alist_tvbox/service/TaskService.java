@@ -67,6 +67,14 @@ public class TaskService {
         return taskRepository.save(task);
     }
 
+    public Task addSyncMeta() {
+        Task task = new Task();
+        task.setType(TaskType.SYNC_META);
+        task.setName("同步电影数据");
+        task.setCreatedTime(Instant.now());
+        return taskRepository.save(task);
+    }
+
     public void startTask(Integer id) {
         Task task = getById(id);
         log.info("start task {}: {}", id, task.getName());
