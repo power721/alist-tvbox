@@ -104,7 +104,7 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
-public class BiliBiliService {
+public class  BiliBiliService {
     private static final int VIDEO_DASH = 16;
     private static final int VIDEO_HDR = 64;
     private static final int VIDEO_4K = 128;
@@ -737,6 +737,7 @@ public class BiliBiliService {
         map.put("web_location", "1550101");
         map.put("order_avoided", "true");
         map.put("dm_img_list", "[]");
+        map.put("dm_img_inter", "{\"ds\":[{\"t\":4,\"c\":\"bW9yZQ\",\"p\":[36,12,12],\"s\":[218,218,436]}],\"wh\":[5622,4674,22],\"of\":[431,862,431]}");
         map.put("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ");
         map.put("dm_cover_img_str", "QU5HTEUgKE5WSURJQSBDb3Jwb3JhdGlvbiwgTlZJRElBIEdlRm9yY2UgUlRYIDQwNjAgVGkvUENJZS9TU0UyLCBPcGVuR0wgNC41LjApR29vZ2xlIEluYy4gKE5WSURJQSBDb3Jwb3JhdGlvbi");
 
@@ -803,6 +804,7 @@ public class BiliBiliService {
         map.put("web_location", "1550101");
         map.put("order_avoided", "true");
         map.put("dm_img_list", "[]");
+        map.put("dm_img_inter", "{\"ds\":[{\"t\":4,\"c\":\"bW9yZQ\",\"p\":[36,12,12],\"s\":[218,218,436]}],\"wh\":[5622,4674,22],\"of\":[431,862,431]}");
         map.put("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ");
         map.put("dm_cover_img_str", "QU5HTEUgKE5WSURJQSBDb3Jwb3JhdGlvbiwgTlZJRElBIEdlRm9yY2UgUlRYIDQwNjAgVGkvUENJZS9TU0UyLCBPcGVuR0wgNC41LjApR29vZ2xlIEluYy4gKE5WSURJQSBDb3Jwb3JhdGlvbi");
 

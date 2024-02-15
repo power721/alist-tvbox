@@ -741,7 +741,10 @@ public class TvBoxService {
         int total = fsResponse.getTotal();
 
         for (FsInfo fsInfo : fsResponse.getFiles()) {
+            String filepath = path + fsInfo.getName();
             if ((fsInfo.getType() == 1 && exclude(fsInfo.getName()))
+                    || filepath.equals("/元数据")
+                    || filepath.equals("/\uD83D\uDEE0\uFE0F安装，配置，修复 xiaoya docker 指南")
                     || (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName()))) {
                 total--;
                 continue;
