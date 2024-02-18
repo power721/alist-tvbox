@@ -155,7 +155,7 @@ public class AListService {
         VideoPreviewResponse response = post(site, url, request, VideoPreviewResponse.class);
         logError(response);
         log.debug("preview urls: {} {}", path, response.getData());
-        cache = new Cache<>(id, response.getData(), System.currentTimeMillis() + 5000);
+        cache = new Cache<>(id, response.getData(), System.currentTimeMillis() + 900000);
         return response.getData();
     }
 
