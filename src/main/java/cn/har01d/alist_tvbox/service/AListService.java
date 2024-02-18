@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.Cache;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.FsDetail;
@@ -31,9 +32,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -137,7 +136,13 @@ public class AListService {
         return true;
     }
 
+    private Cache<VideoPreview> cache;
+
     public VideoPreview preview(Site site, String path) {
+        String id = site.getId() + "-" + path;
+        if (cache != null && id.equals(cache.id()) && cache.isValid()) {
+            return cache.data();
+        }
         String url = getUrl(site) + "/api/fs/other";
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
@@ -150,6 +155,7 @@ public class AListService {
         VideoPreviewResponse response = post(site, url, request, VideoPreviewResponse.class);
         logError(response);
         log.debug("preview urls: {} {}", path, response.getData());
+        cache = new Cache<>(id, response.getData(), System.currentTimeMillis() + 5000);
         return response.getData();
     }
 
