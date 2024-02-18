@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.dto.FileDto;
+import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.entity.ConfigFile;
 import cn.har01d.alist_tvbox.entity.ConfigFileRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
@@ -15,12 +16,16 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 @Slf4j
 @Service
 
 public class ConfigFileService {
     private final ConfigFileRepository repository;
+    private List<FileItem> labels = new ArrayList<>();
 
     public ConfigFileService(ConfigFileRepository repository) {
         this.repository = repository;
@@ -30,6 +35,36 @@ public class ConfigFileService {
     public void setup() {
         if (repository.count() == 0) {
             readFiles();
+        }
+        loadLabels();
+    }
+
+    public List<FileItem> getLabels() {
+        return labels;
+    }
+
+    private void loadLabels() {
+        try {
+            Path path = Path.of("/data/label.txt");
+            if (Files.exists(path)) {
+                loadLabels(Files.readAllLines(path));
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    private void loadLabels(List<String> lines) {
+        try {
+            labels = lines.stream()
+                    .map(e -> e.split("#")[0])
+                    .filter(StringUtils::isNotBlank)
+                    .map(e -> e.split(":"))
+                    .filter(e -> e.length == 2)
+                    .map(parts -> new FileItem(parts[0].trim(), parts[1].trim(), 0))
+                    .toList();
+        } catch (Exception e) {
+            log.warn("", e);
         }
     }
 
@@ -105,6 +140,9 @@ public class ConfigFileService {
         Files.createDirectories(Paths.get(configFile.getDir()));
         Path path = Paths.get(configFile.getDir(), configFile.getName());
         Files.writeString(path, configFile.getContent());
+        if (path.toString().equals("/data/label.txt")) {
+            loadLabels(Arrays.asList(configFile.getContent().split("\n")));
+        }
     }
 
     public ConfigFile update(Integer id, FileDto dto) throws IOException {

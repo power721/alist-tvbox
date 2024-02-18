@@ -95,6 +95,7 @@ public class TvBoxService {
     private final DoubanService doubanService;
     private final TmdbService tmdbService;
     private final SubscriptionService subscriptionService;
+    private final ConfigFileService configFileService;
     private final ObjectMapper objectMapper;
     private final Environment environment;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
@@ -137,6 +138,7 @@ public class TvBoxService {
                         DoubanService doubanService,
                         TmdbService tmdbService,
                         SubscriptionService subscriptionService,
+                        ConfigFileService configFileService,
                         ObjectMapper objectMapper,
                         Environment environment) {
         this.accountRepository = accountRepository;
@@ -150,6 +152,7 @@ public class TvBoxService {
         this.doubanService = doubanService;
         this.tmdbService = tmdbService;
         this.subscriptionService = subscriptionService;
+        this.configFileService = configFileService;
         this.objectMapper = objectMapper;
         this.environment = environment;
     }
@@ -371,6 +374,15 @@ public class TvBoxService {
     }
 
     private String getLabel(String path) {
+        for (var item : configFileService.getLabels()) {
+            if (item.getPath().startsWith("/") && path.startsWith(item.getPath())) {
+                return item.getName() + " ";
+            }
+            if (path.contains(item.getPath())) {
+                return item.getName() + " ";
+            }
+        }
+
         if (path.startsWith("/电影")) {
             return "\uD83C\uDF9E  ";
         }
@@ -955,6 +967,9 @@ public class TvBoxService {
             }
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
+            if (path.equals("/")) {
+                movieDetail.setVod_remarks(getLabel(meta.getPath()));
+            }
             setMovieInfo(movieDetail, movie, meta.getTmdb(), "videolist".equals(ac));
             files.add(movieDetail);
             log.debug("{}", movieDetail);
