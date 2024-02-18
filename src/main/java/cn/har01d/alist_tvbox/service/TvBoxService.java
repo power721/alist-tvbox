@@ -347,7 +347,7 @@ public class TvBoxService {
             boolean isMediaFile = isMediaFile(meta.getPath());
             String newPath = fixPath(meta.getPath() + (isMediaFile ? "" : PLAYLIST));
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(meta.getSiteId() + "$" + encodeUrl(newPath) + "$0");
+            movieDetail.setVod_id(Objects.toString(meta.getSiteId(), "1") + "$" + encodeUrl(newPath) + "$0");
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_content(meta.getPath());
@@ -468,7 +468,7 @@ public class TvBoxService {
                 boolean isMediaFile = isMediaFile(meta.getPath());
                 String newPath = fixPath(meta.getPath() + (isMediaFile ? "" : PLAYLIST));
                 MovieDetail movieDetail = new MovieDetail();
-                movieDetail.setVod_id(meta.getSiteId() + "$" + encodeUrl(newPath) + "$0");
+                movieDetail.setVod_id(Objects.toString(meta.getSiteId(), "1") + "$" + encodeUrl(newPath) + "$0");
                 movieDetail.setVod_name(name);
                 movieDetail.setVod_pic(Constants.ALIST_PIC);
                 movieDetail.setVod_content(meta.getPath());
@@ -703,7 +703,7 @@ public class TvBoxService {
     private Site getSite(String tid) {
         int index = tid.indexOf('$');
         String id = tid.substring(0, index);
-        if ("0".equals(id)) {
+        if ("0".equals(id) || "null".equals(id)) {
             return getXiaoyaSite();
         }
         try {
