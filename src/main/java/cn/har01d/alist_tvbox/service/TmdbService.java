@@ -324,13 +324,13 @@ public class TmdbService {
     }
 
     private String guessType(String path) {
-        if (path.contains("电影")) {
+        if (path.contains("电影") || path.toLowerCase().contains("movie")) {
             return "movie";
         }
         if (path.contains("电视剧") || path.contains("连续剧") || path.contains("剧集") || path.contains("短剧")
                 || path.contains("国产剧") || path.contains("港台剧") || path.contains("港剧") || path.contains("台剧")
                 || path.contains("美剧") || path.contains("日剧") || path.contains("韩剧")
-                || path.contains("Season")) {
+                || path.toLowerCase().contains("season")) {
             return "tv";
         }
         return null;
