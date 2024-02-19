@@ -838,7 +838,7 @@ public class TvBoxService {
             }
         }
         if (StringUtils.isBlank(sort)) {
-            sort = "id,desc";
+            sort = "time,desc";
         }
 
         int size = 60;

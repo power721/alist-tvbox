@@ -218,6 +218,9 @@ public class SiteService {
 
     public Site create(SiteDto dto) {
         validate(dto);
+        if (dto.getUrl().endsWith("/")) {
+            dto.setUrl(dto.getUrl().substring(0, dto.getUrl().length() - 1));
+        }
         if (siteRepository.existsByName(dto.getName())) {
             throw new BadRequestException("站点名字重复");
         }
@@ -260,6 +263,9 @@ public class SiteService {
 
     public Site update(int id, SiteDto dto) {
         validate(dto);
+        if (dto.getUrl().endsWith("/")) {
+            dto.setUrl(dto.getUrl().substring(0, dto.getUrl().length() - 1));
+        }
         Site site = siteRepository.findById(id).orElseThrow(() -> new NotFoundException("站点不存在"));
         Optional<Site> other = siteRepository.findByName(dto.getName());
         if (other.isPresent() && other.get().getId() != id) {
