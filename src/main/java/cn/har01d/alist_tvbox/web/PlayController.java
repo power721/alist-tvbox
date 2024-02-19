@@ -65,10 +65,6 @@ public class PlayController {
             }
         }
 
-        if (site == null) {
-            site = 1;
-        }
-
         boolean getSub = true;
         Map<String, Object> result;
         if (path.contains("/")) {
