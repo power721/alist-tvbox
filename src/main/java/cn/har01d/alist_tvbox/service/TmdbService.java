@@ -227,6 +227,9 @@ public class TmdbService {
             meta.setScore(tmdbMeta.getScore());
         }
         meta.setSiteId(tmdbMeta.getSiteId());
+        if (meta.getSiteId() == null) {
+            meta.setSiteId(1);
+        }
         meta.setType(tmdbMeta.getType());
         meta.setTmId(tmdbMeta.getTmId());
         meta.setTmdb(tmdbMeta.getTmdb());
