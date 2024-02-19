@@ -20,6 +20,10 @@
       <a href="https://hub.docker.com/r/haroldli/xiaoya-tvbox" target="_blank">https://hub.docker.com/r/haroldli/xiaoya-tvbox</a>
     </p>
     <p>
+      Telegram：
+      <a href="https://t.me/alist_tvbox_group" target="_blank">https://t.me/alist_tvbox_group</a>
+    </p>
+    <p>
       使用方式：
       <code>docker run -d -p 4567:4567 -p 5344:80 -e ALIST_PORT=5344 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox</code>
     </p>

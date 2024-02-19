@@ -57,8 +57,16 @@ public class PlayController {
 
         if (StringUtils.isNotBlank(id)) {
             String[] parts = id.split("\\~\\~\\~");
-            site = Integer.parseInt(parts[0]);
-            path = parts[1];
+            if (parts.length > 1) {
+                site = Integer.parseInt(parts[0]);
+                path = parts[1];
+            } else {
+                path = id;
+            }
+        }
+
+        if (site == null) {
+            site = 1;
         }
 
         boolean getSub = true;
@@ -72,6 +80,11 @@ public class PlayController {
                 path = path.substring(index);
                 result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path, getSub, client);
             }
+        } else if (path.contains("-")) {
+            String[] parts = path.split("-");
+            id = parts[0];
+            int index = Integer.parseInt(parts[1]);
+            result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), index, getSub, client);
         } else {
             result = tvBoxService.getPlayUrl(site, Integer.parseInt(path), getSub, client);
         }
