@@ -233,6 +233,7 @@ public class TmdbService {
         meta.setType(tmdbMeta.getType());
         meta.setTmId(tmdbMeta.getTmId());
         meta.setTmdb(tmdbMeta.getTmdb());
+        meta.setTime(tmdbMeta.getTime());
         return meta;
     }
 
@@ -529,6 +530,9 @@ public class TmdbService {
     }
 
     private boolean isSpecialFolder(String name) {
+        if (name.matches("Season \\d+")) {
+            return true;
+        }
         if (name.toLowerCase().startsWith("4k")) {
             return true;
         }

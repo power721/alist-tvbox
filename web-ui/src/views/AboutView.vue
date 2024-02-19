@@ -36,6 +36,10 @@
       <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_native.sh)"</code><br>
     </p>
     <p>
+      一键部署(host网络模式)：
+      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"</code><br>
+    </p>
+    <p>
       一键部署(开发版)：
       <code>wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t dev</code><br>
     </p>

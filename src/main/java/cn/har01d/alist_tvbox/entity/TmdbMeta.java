@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.time.Instant;
+
 @Getter
 @Setter
 @ToString
@@ -33,4 +35,5 @@ public class TmdbMeta {
     private Integer siteId;
     @ManyToOne
     private Tmdb tmdb;
+    private Instant time = Instant.now();
 }

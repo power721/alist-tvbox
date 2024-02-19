@@ -116,6 +116,8 @@ public class TvBoxService {
             new FilterValue("年份⬆️", "year,asc;score,desc"),
             new FilterValue("名字⬇️", "name,desc;year,desc;score,desc"),
             new FilterValue("名字⬆️", "name,asc;year,desc;score,desc"),
+            new FilterValue("时间⬇️", "time,desc"),
+            new FilterValue("时间⬆️", "time,asc"),
             new FilterValue("ID⬇️", "movie_id,desc"),
             new FilterValue("ID⬆️", "movie_id,asc")
     );
@@ -329,7 +331,7 @@ public class TvBoxService {
 
     public MovieList recommend(String ac, int pg) {
         List<MovieDetail> list = new ArrayList<>();
-        Pageable pageable = PageRequest.of(pg - 1, 60, Sort.Direction.DESC, "id");
+        Pageable pageable = PageRequest.of(pg - 1, 60, Sort.Direction.DESC, "time", "id");
         Page<Meta> page = metaRepository.findAll(pageable);
         for (Meta meta : page.getContent()) {
             Movie movie = meta.getMovie();
