@@ -262,7 +262,11 @@ const fixMeta = () => {
 const getUrl = (meta: Meta) => {
   const site = sites.value.find(e => e.id == meta.siteId)
   if (site && !site.url.startsWith('http://localhost')) {
-    return (site.url + meta.path).replace('//', '/')
+    let surl = site.url
+    if (surl.endsWith('/')) {
+      surl = surl.substring(0, surl.length - 1)
+    }
+    return surl + meta.path
   }
   return url.value + meta.path
 }
@@ -374,6 +378,7 @@ const loadIndexFiles = () => {
 }
 
 const loadBaseUrl = () => {
+  showScrape.value = !store.xiaoya
   if (store.baseUrl) {
     url.value = store.baseUrl
     return
@@ -381,17 +386,18 @@ const loadBaseUrl = () => {
 
   if (store.xiaoya) {
     axios.get('/api/sites/1').then(({data}) => {
+      url.value = data.url
       const re = /http:\/\/localhost:(\d+)/.exec(data.url)
       if (re) {
         url.value = 'http://' + window.location.hostname + ':' + re[1]
+        console.log('site: ' + url.value)
       } else if (data.url == 'http://localhost') {
         axios.get('/api/alist/port').then(({data}) => {
           if (data) {
             url.value = 'http://' + window.location.hostname + ':' + data
           }
+          store.baseUrl = url.value
         })
-      } else {
-        url.value = data.url
       }
       store.baseUrl = url.value
       console.log('load AList ' + url.value)
