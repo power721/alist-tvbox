@@ -6,12 +6,12 @@
       <el-button type="primary" @click="search" :disabled="!keyword">
         搜索
       </el-button>
-      <el-button @click="showScrapeIndex" v-if="showScrape">刮削</el-button>
+      <el-button @click="showScrapeIndex">刮削</el-button>
       <!--      <el-button @click="fixMeta">去重</el-button>-->
       <el-button @click="syncMeta">同步</el-button>
       <el-button>|</el-button>
       <el-button @click="refresh">刷新</el-button>
-      <el-button type="primary" @click="addMeta" v-if="showScrape">添加</el-button>
+      <el-button type="primary" @click="addMeta">添加</el-button>
       <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
     </el-row>
     <div class="space"></div>
@@ -200,7 +200,6 @@ const dialogVisible = ref(false)
 const formVisible = ref(false)
 const addVisible = ref(false)
 const scrapeVisible = ref(false)
-const showScrape = ref(true)
 const batch = ref(false)
 const form = ref({
   id: 0,
@@ -378,7 +377,6 @@ const loadIndexFiles = () => {
 }
 
 const loadBaseUrl = () => {
-  showScrape.value = !store.xiaoya
   if (store.baseUrl) {
     url.value = store.baseUrl
     return
@@ -390,17 +388,20 @@ const loadBaseUrl = () => {
       const re = /http:\/\/localhost:(\d+)/.exec(data.url)
       if (re) {
         url.value = 'http://' + window.location.hostname + ':' + re[1]
-        console.log('site: ' + url.value)
+        store.baseUrl = url.value
+        console.log('load AList ' + url.value)
       } else if (data.url == 'http://localhost') {
         axios.get('/api/alist/port').then(({data}) => {
           if (data) {
             url.value = 'http://' + window.location.hostname + ':' + data
+            store.baseUrl = url.value
+            console.log('load AList ' + url.value)
           }
-          store.baseUrl = url.value
         })
+      } else {
+        store.baseUrl = url.value
+        console.log('load AList ' + url.value)
       }
-      store.baseUrl = url.value
-      console.log('load AList ' + url.value)
     })
   }
 }

@@ -331,7 +331,6 @@ const loadSites = () => {
 }
 
 const loadBaseUrl = () => {
-  showScrape.value = !store.xiaoya
   if (store.baseUrl) {
     url.value = store.baseUrl
     return
@@ -343,17 +342,20 @@ const loadBaseUrl = () => {
       const re = /http:\/\/localhost:(\d+)/.exec(data.url)
       if (re) {
         url.value = 'http://' + window.location.hostname + ':' + re[1]
-        console.log('site: ' + url.value)
+        store.baseUrl = url.value
+        console.log('load AList ' + url.value)
       } else if (data.url == 'http://localhost') {
         axios.get('/api/alist/port').then(({data}) => {
           if (data) {
             url.value = 'http://' + window.location.hostname + ':' + data
+            store.baseUrl = url.value
+            console.log('load AList ' + url.value)
           }
-          store.baseUrl = url.value
         })
+      } else {
+        store.baseUrl = url.value
+        console.log('load AList ' + url.value)
       }
-      store.baseUrl = url.value
-      console.log('load AList ' + url.value)
     })
   }
 }
