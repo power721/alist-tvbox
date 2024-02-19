@@ -53,7 +53,7 @@ onMounted(() => {
           <el-menu-item index="/sites" v-if="account.authenticated">站点</el-menu-item>
           <el-menu-item index="/accounts" v-if="account.authenticated&&show">账号</el-menu-item>
 <!--          <el-menu-item index="/pikpak" v-if="account.authenticated&&show&&full">PikPak</el-menu-item>-->
-          <el-menu-item index="/bilibili" v-if="account.authenticated&&show&&full">BiliBili</el-menu-item>
+          <el-menu-item index="/bilibili" v-if="account.authenticated&&full">BiliBili</el-menu-item>
           <el-menu-item index="/subscriptions" v-if="account.authenticated">订阅</el-menu-item>
           <el-menu-item index="/shares" v-if="account.authenticated&&show&&full">资源</el-menu-item>
           <el-menu-item index="/config" v-if="account.authenticated">配置</el-menu-item>

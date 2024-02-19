@@ -296,8 +296,9 @@ public class TmdbService {
             try {
                 log.debug("handle {} {}", i, line);
                 taskService.updateTaskSummary(task.getId(), (i + 1) + ":" + line);
-                Tmdb movie = handleIndexLine(i, line, "tv", force, failed);
-                if (movie == null) {
+                String type = guessType(line);
+                Tmdb movie = handleIndexLine(i, line, type == null ? "tv" : type, force, failed);
+                if (movie == null && type == null) {
                     handleIndexLine(i, line, "movie", force, failed);
                 }
                 if (movie != null) {
@@ -320,6 +321,19 @@ public class TmdbService {
 
         writeText("/data/atv/tmdb_paths.txt", String.join("\n", paths));
         writeText("/data/atv/tmdb_failed.txt", String.join("\n", failed));
+    }
+
+    private String guessType(String path) {
+        if (path.contains("电影")) {
+            return "movie";
+        }
+        if (path.contains("电视剧") || path.contains("连续剧") || path.contains("剧集") || path.contains("短剧")
+                || path.contains("国产剧") || path.contains("港台剧") || path.contains("港剧") || path.contains("台剧")
+                || path.contains("美剧") || path.contains("日剧") || path.contains("韩剧")
+                || path.contains("Season")) {
+            return "tv";
+        }
+        return null;
     }
 
     private static void writeText(String path, String content) {
@@ -586,7 +600,7 @@ public class TmdbService {
         if (meta == null) {
             return false;
         }
-        Tmdb movie = scrape(type, name, meta.getPath());
+        Tmdb movie = scrape(type, name, meta);
         if (movie != null) {
             meta.setTmdb(movie);
             meta.setTmId(movie.getTmdbId());
@@ -601,12 +615,11 @@ public class TmdbService {
         return false;
     }
 
-    public Tmdb scrape(String type, String name, String path) {
+    public Tmdb scrape(String type, String name, TmdbMeta meta) {
         if (StringUtils.isBlank(name)) {
-            name = TextUtils.fixName(getNameFromPath(path));
+            name = TextUtils.fixName(getNameFromPath(meta.getPath()));
         }
-        TmdbMeta meta = new TmdbMeta();
-        Integer year = getYearFromPath(path);
+        Integer year = getYearFromPath(meta.getPath());
         Tmdb movie = search(type, name, year);
         if (movie != null) {
             meta.setTmdb(movie);

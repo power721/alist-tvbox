@@ -262,7 +262,7 @@ const fixMeta = () => {
 const getUrl = (meta: Meta) => {
   const site = sites.value.find(e => e.id == meta.siteId)
   if (site && site.url !== 'http://localhost') {
-    return site.url + meta.path
+    return (site.url + meta.path).replace('//', '/')
   }
   return url.value + meta.path
 }
