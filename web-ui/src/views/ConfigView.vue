@@ -216,12 +216,12 @@
           <el-button @click="resetAListToken">重置AList认证Token</el-button>
         </el-form-item>
         <el-form-item>
-          <el-button @click="exportDatabase">备份数据库</el-button>
+          <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>
       </el-form>
       <template #footer>
       <span class="dialog-footer">
-        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button @click="dialogVisible=false">取消</el-button>
       </span>
       </template>
     </el-dialog>
@@ -376,9 +376,7 @@ const updateLogin = () => {
 }
 
 const exportDatabase = () => {
-  axios.post('/api/settings/export').then(() => {
-    ElMessage.success('导出数据库成功')
-  })
+  window.location.href = '/api/settings/export' + '?t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
 }
 
 const updateScheduleTime = () => {
