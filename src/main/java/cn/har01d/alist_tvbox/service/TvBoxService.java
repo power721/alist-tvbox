@@ -1065,34 +1065,38 @@ public class TvBoxService {
         List<Subtitle> subtitles = new ArrayList<>();
 
         if ("com.fongmi.android.tv".equals(client)) {
-            var preview = aListService.preview(site, fullPath);
-            log.debug("preview: {} {}", fullPath, preview);
-            if (preview != null) {
-                Collections.reverse(preview.getPlayInfo().getVideos());
-                List<String> urls = new ArrayList<>();
-                for (var item : preview.getPlayInfo().getVideos()) {
-                    if (!"finished".equals(item.getStatus())) {
-                        continue;
-                    }
-                    urls.add(item.getId());
-                    urls.add(item.getUrl());
-                }
-                if (urls.size() > 1) {
-                    url = urls.get(1);
-                    result.put("url", urls);
-                }
-
-                if (preview.getPlayInfo().getSubtitles() != null) {
-                    for (var item : preview.getPlayInfo().getSubtitles()) {
+            try {
+                var preview = aListService.preview(site, fullPath);
+                log.debug("preview: {} {}", fullPath, preview);
+                if (preview != null) {
+                    Collections.reverse(preview.getPlayInfo().getVideos());
+                    List<String> urls = new ArrayList<>();
+                    for (var item : preview.getPlayInfo().getVideos()) {
                         if (!"finished".equals(item.getStatus())) {
                             continue;
                         }
-                        Subtitle subtitle = new Subtitle();
-                        subtitle.setUrl(item.getUrl());
-                        subtitle.setLang(item.getLanguage());
-                        subtitles.add(subtitle);
+                        urls.add(item.getId());
+                        urls.add(item.getUrl());
+                    }
+                    if (urls.size() > 1) {
+                        url = urls.get(1);
+                        result.put("url", urls);
+                    }
+
+                    if (preview.getPlayInfo().getSubtitles() != null) {
+                        for (var item : preview.getPlayInfo().getSubtitles()) {
+                            if (!"finished".equals(item.getStatus())) {
+                                continue;
+                            }
+                            Subtitle subtitle = new Subtitle();
+                            subtitle.setUrl(item.getUrl());
+                            subtitle.setLang(item.getLanguage());
+                            subtitles.add(subtitle);
+                        }
                     }
                 }
+            } catch (Exception e) {
+                log.warn("preview failed", e);
             }
         }
 

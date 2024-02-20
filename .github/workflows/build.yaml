@@ -29,6 +29,7 @@ on:
       - '.github/workflows/build-dev.yaml'
       - '.github/workflows/build-java.yaml'
       - '.github/workflows/build-v7.yaml'
+      - '.github/ISSUE_TEMPLATE/**'
 
 jobs:
   release:
