@@ -1,7 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.domain.Cache;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.FsDetail;
@@ -20,6 +19,8 @@ import cn.har01d.alist_tvbox.model.SearchResult;
 import cn.har01d.alist_tvbox.model.VideoPreview;
 import cn.har01d.alist_tvbox.model.VideoPreviewResponse;
 import cn.har01d.alist_tvbox.util.Constants;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -45,6 +46,10 @@ public class AListService {
     private final RestTemplate restTemplate;
     private final SiteService siteService;
     private final AppProperties appProperties;
+    private final Cache<String, VideoPreview> cache = Caffeine.newBuilder()
+            .maximumSize(10)
+            .expireAfterWrite(Duration.ofSeconds(895))
+            .build();
 
     public AListService(RestTemplateBuilder builder, SiteService siteService, AppProperties appProperties) {
         this.restTemplate = builder
@@ -136,13 +141,14 @@ public class AListService {
         return true;
     }
 
-    private Cache<VideoPreview> cache;
-
     public VideoPreview preview(Site site, String path) {
         String id = site.getId() + "-" + path;
-        if (cache != null && id.equals(cache.id()) && cache.isValid()) {
-            return cache.data();
+        VideoPreview preview = cache.getIfPresent(id);
+        if (preview != null) {
+            log.debug("cache: {}", id);
+            return preview;
         }
+
         String url = getUrl(site) + "/api/fs/other";
         FsRequest request = new FsRequest();
         request.setPassword(site.getPassword());
@@ -155,7 +161,7 @@ public class AListService {
         VideoPreviewResponse response = post(site, url, request, VideoPreviewResponse.class);
         logError(response);
         log.debug("preview urls: {} {}", path, response.getData());
-        cache = new Cache<>(id, response.getData(), System.currentTimeMillis() + 895000);
+        cache.put(id, response.getData());
         return response.getData();
     }
 

@@ -10,7 +10,7 @@ FROM haroldli/alist-base:hostmode
 
 LABEL MAINTAINER="Har01d"
 
-ENV MEM_OPT="-Xmx512M" ALIST_PORT=5234
+ENV MEM_OPT="-Xmx512M" ALIST_PORT=5678
 
 COPY config/config-host.json /opt/alist/data/config.json
 

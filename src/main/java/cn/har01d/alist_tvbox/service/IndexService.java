@@ -385,6 +385,7 @@ public class IndexService {
             taskService.updateTaskData(task.getId(), detail);
             IndexContext context = new IndexContext(indexRequest, site, writer, task.getId());
             context.getExcludes().addAll(loadExcluded(file));
+            int total = 0;
             for (String path : indexRequest.getPaths()) {
                 if (isCancelled(context)) {
                     break;
@@ -395,6 +396,8 @@ public class IndexService {
                 stopWatch.start("index " + path);
                 index(context, path, 0);
                 stopWatch.stop();
+                log.info("{} {}", path, context.stats.indexed - total);
+                total = context.stats.indexed;
             }
             writer2.write(time.toString());
             log.info("index stats: {}", context.stats);
