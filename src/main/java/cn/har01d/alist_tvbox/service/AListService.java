@@ -145,6 +145,7 @@ public class AListService {
         String id = site.getId() + "-" + path;
         VideoPreview preview = cache.getIfPresent(id);
         if (preview != null) {
+            log.debug("cache: {}", id);
             return preview;
         }
 
