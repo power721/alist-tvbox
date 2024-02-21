@@ -193,6 +193,7 @@
                                     --enable-http
                                     --enable-https
                                     -march=compatibility
+                                    -H:IncludeResources=".*/countries.json$"
                                 </buildArg>
                             </buildArgs>
                         </configuration>
