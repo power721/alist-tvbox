@@ -41,6 +41,7 @@ public class Main {
             result.add(info);
         }
         addCollections(result);
+        result.add(addCustom("com.github.benmanes.caffeine.cache.SSMS"));
         ObjectMapper objectMapper = new ObjectMapper();
         String json = objectMapper.writeValueAsString(result);
         System.out.println("Working Directory = " + System.getProperty("user.dir"));
@@ -60,6 +61,15 @@ public class Main {
             info.put("methods", methods);
             result.add(info);
         }
+    }
+
+    private static Map<String, Object> addCustom(String name) {
+        Map<String, Object> info = new HashMap<>();
+        info.put("name", name);
+        info.put("allDeclaredFields", true);
+        info.put("allDeclaredMethods", true);
+        info.put("allDeclaredConstructors", true);
+        return info;
     }
 
     public static Set<Class> findAllClassesUsingClassLoader(String packageName) {
