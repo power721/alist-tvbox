@@ -960,16 +960,17 @@ public class TvBoxService {
                 continue;
             }
 
-            List<Meta> metas = map.get(name);
             MovieDetail movieDetail = new MovieDetail();
-            log.debug("{} {}", name, metas.size());
-            if (metas.size() > 1) {
-                String ids = metas.stream().map(Meta::getId).map(String::valueOf).collect(Collectors.joining("-"));
-                movieDetail.setVod_id(site.getId() + "$" + encodeUrl(ids) + "$0");
-                added.put(name, true);
-            } else {
-                movieDetail.setVod_id(String.valueOf(meta.getId()));
-            }
+//            List<Meta> metas = map.get(name);
+//            log.debug("{} {}", name, metas.size());
+//            if (metas.size() > 1) {
+//                String ids = metas.stream().map(Meta::getId).map(String::valueOf).collect(Collectors.joining("-"));
+//                movieDetail.setVod_id(site.getId() + "$" + encodeUrl(ids) + "$0");
+//                added.put(name, true);
+//            } else {
+//                movieDetail.setVod_id(String.valueOf(meta.getId()));
+//            }
+            movieDetail.setVod_id(String.valueOf(meta.getId()));
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             if (path.equals("/")) {
@@ -1290,7 +1291,22 @@ public class TvBoxService {
                 from.add("版本" + i);
             }
             movieDetail.setVod_play_from(String.join("$$$", from));
-            String playUrl = list.stream().map(Meta::getId).map(String::valueOf).collect(Collectors.joining("$$$"));
+            String playUrl;
+            if (isMediaFile(meta.getPath())) {
+                if ("detail".equals(ac)) {
+                    playUrl = list.stream().map(m -> {
+                        String sign = subscriptionService.getToken().isEmpty() ? "" : aListService.getFile(site, m.getPath()).getSign();
+                        return getNameFromPath(m.getPath()) + "$" + buildUrl(site, m.getPath(), sign);
+                    }).collect(Collectors.joining("$$$"));
+                } else {
+                    playUrl = list.stream().map(m -> String.valueOf(m.getId())).collect(Collectors.joining("$$$"));
+                }
+            } else {
+                playUrl = list.stream().map(e -> {
+                    var m = getPlaylist(ac, site, e);
+                    return m.getList().get(0).getVod_play_url();
+                }).collect(Collectors.joining("$$$"));
+            }
             movieDetail.setVod_play_url(playUrl);
 
             movieDetail.setVod_content(getParent(path));

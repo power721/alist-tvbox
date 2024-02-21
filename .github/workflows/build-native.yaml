@@ -38,6 +38,23 @@ jobs:
           echo ${{ github.event.head_commit.message }} >> data/version
           cp data/version data/app_version
           cat data/version
+      - name: Build native with Maven
+        run: |
+          export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
+          export CC=$TOOLCHAIN_DIR/bin/gcc
+          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
+          sudo apt update
+          sudo apt install build-essential libz-dev zlib1g-dev zlib1g -y
+          wget https://more.musl.cc/10.2.1/x86_64-linux-musl/x86_64-linux-musl-native.tgz
+          tar xf x86_64-linux-musl-native.tgz -C /opt
+          wget https://zlib.net/zlib-1.3.1.tar.gz
+          tar xf zlib-1.3.1.tar.gz
+          cd zlib-1.3.1
+          ./configure --prefix=$TOOLCHAIN_DIR --static
+          make
+          sudo make install
+          cd ..
+          mvn -B -Pnative package --file pom.xml
       - name: Build docker and push
         uses: docker/build-push-action@v4
         with:
