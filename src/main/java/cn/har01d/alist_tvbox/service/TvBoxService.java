@@ -733,7 +733,6 @@ public class TvBoxService {
     }
 
     public MovieList getMovieList(String client, String ac, String tid, String filter, String sort, int page) {
-        Site site = getSite(tid);
         String[] parts = tid.split("\\$");
         String path = parts[1];
         int type = 1;
@@ -745,6 +744,7 @@ public class TvBoxService {
             return getMetaList(ac, tid, filter, sort, page);
         }
 
+        Site site = getSite(tid);
         if (path.contains(PLAYLIST)) {
             return getPlaylist("", site, path);
         }
@@ -812,13 +812,8 @@ public class TvBoxService {
     }
 
     public MovieList getMetaList(String ac, String tid, String filter, String sort, int page) {
-        Site site = getSite(tid);
         String[] parts = tid.split("\\$");
         String path = parts[1];
-//        if (path.contains(PLAYLIST)) {
-//            return getPlaylist(site, path);
-//        }
-
         List<MovieDetail> files = new ArrayList<>();
         MovieList result = new MovieList();
 
@@ -924,7 +919,6 @@ public class TvBoxService {
 
         log.debug("{} {} {}", pageable, list, list.getContent().size());
         Map<String, List<Meta>> map = new LinkedHashMap<>();
-        Map<String, Boolean> added = new HashMap<>();
         for (Meta meta : list) {
             Movie movie = meta.getMovie();
             String name;
@@ -955,21 +949,7 @@ public class TvBoxService {
                 name = movie.getName();
             }
 
-            if (added.containsKey(name)) {
-                log.debug("skip {}: {}", name, meta.getPath());
-                continue;
-            }
-
             MovieDetail movieDetail = new MovieDetail();
-//            List<Meta> metas = map.get(name);
-//            log.debug("{} {}", name, metas.size());
-//            if (metas.size() > 1) {
-//                String ids = metas.stream().map(Meta::getId).map(String::valueOf).collect(Collectors.joining("-"));
-//                movieDetail.setVod_id(site.getId() + "$" + encodeUrl(ids) + "$0");
-//                added.put(name, true);
-//            } else {
-//                movieDetail.setVod_id(String.valueOf(meta.getId()));
-//            }
             movieDetail.setVod_id(String.valueOf(meta.getId()));
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);

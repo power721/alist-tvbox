@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Async;
@@ -110,7 +111,7 @@ public class TmdbService {
 
     private void loadCountries() {
         try {
-            var resource = new ClassPathResource("/countries.json");
+            var resource = new FileSystemResource("/countries.json");
             String json = resource.getContentAsString(StandardCharsets.UTF_8);
             countryNames = objectMapper.readValue(json, Map.class);
             log.debug("load {} countries", countryNames.size());

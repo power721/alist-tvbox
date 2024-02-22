@@ -119,13 +119,23 @@ public class SubscriptionService {
             sub = new Subscription();
             sub.setSid("2");
             sub.setName("菜妮丝");
-            sub.setUrl("https://tvbox.cainisi.cf");
+            sub.setUrl("https://tv.菜妮丝.top");
             subscriptionRepository.save(sub);
             settingRepository.save(new Setting("fix_sid", "true"));
             settingRepository.save(new Setting("fix_sub_id", "true"));
         } else {
+            fixUrl(list);
             fixSid(list);
             fixId(list);
+        }
+    }
+
+    private void fixUrl(List<Subscription> list) {
+        for (Subscription sub : list) {
+            if (sub.getUrl().equals("https://tvbox.cainisi.cf")) {
+                sub.setUrl("https://tv.菜妮丝.top");
+                subscriptionRepository.save(sub);
+            }
         }
     }
 

@@ -10,6 +10,7 @@ ENV JAVA_HOME=/jre
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 COPY data/update.sql /
+COPY data/countries.json /
 
 COPY --from=corretto-jdk /jre $JAVA_HOME
 
