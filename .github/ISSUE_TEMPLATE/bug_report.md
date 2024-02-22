@@ -1,5 +1,5 @@
 ---
-name: Bug report
+name: 报告问题
 about: Create a report to help us improve
 title: ''
 labels: ''
@@ -22,6 +22,9 @@ assignees: ''
 
 **截图**
 问题相关截图。
+
+**日志**
+问题相关日志。
 
 **环境**
  - 系统平台：[e.g. Linux / ARM]

@@ -158,7 +158,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 站点`key`是必须的，其它字段可选。对于lives，rules，parses，doh类型，`name`字段是必须的。
 
-站点名称可以加前缀，通过订阅URL前面加前缀，使用`@`分割。比如：`饭@http://饭太硬.top/tv,菜@https://tvbox.cainisi.cf`
+站点名称可以加前缀，通过订阅URL前面加前缀，使用`@`分割。比如：`饭@http://饭太硬.top/tv,菜@https://tv.菜妮丝.top`
 
 替换功能：
 
@@ -186,7 +186,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
       "name": "内置小雅搜索源"
     },
     {
-      "url": "https://tvbox.cainisi.cf",
+      "url": "https://tv.菜妮丝.top",
       "name": "🦐菜妮丝"
     }
   ]

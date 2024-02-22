@@ -132,7 +132,7 @@ public class SubscriptionService {
 
     private void fixUrl(List<Subscription> list) {
         for (Subscription sub : list) {
-            if (sub.getUrl().equals("https://tvbox.cainisi.cf")) {
+            if ("https://tvbox.cainisi.cf".equals(sub.getUrl())) {
                 sub.setUrl("https://tv.菜妮丝.top");
                 subscriptionRepository.save(sub);
             }
