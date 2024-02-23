@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -393,6 +394,7 @@ public class IndexService {
                 if (StringUtils.isBlank(path)) {
                     continue;
                 }
+                path = decodeUrl(path);
                 stopWatch.start("index " + path);
                 index(context, path, 0);
                 stopWatch.stop();
@@ -617,5 +619,13 @@ public class IndexService {
             log.warn("list index files " + id, e);
         }
         return List.of();
+    }
+
+    private String decodeUrl(String url) {
+        try {
+            return URLDecoder.decode(url, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return url;
+        }
     }
 }
