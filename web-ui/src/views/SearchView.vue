@@ -22,6 +22,25 @@
     <span class="divider"></span>
     <a href="/#/tmdb">TMDB电影数据列表</a>
 
+    <el-table v-if="type!='2'&&config" :data="config.list" border style="width: 100%">
+      <el-table-column prop="vod_name" label="名称" width="300">
+        <template #default="scope">
+          <a :href="scope.row.vod_play_url" target="_blank">
+            {{ scope.row.vod_name }}
+          </a>
+        </template>
+      </el-table-column>
+      <el-table-column prop="vod_content" label="路径">
+        <template #default="scope">
+          <a :href="scope.row.vod_play_url" target="_blank">
+            {{ scope.row.vod_content }}
+          </a>
+        </template>
+      </el-table-column>
+      <el-table-column prop="vod_year" label="年份" width="90" />
+      <el-table-column prop="vod_remarks" label="评分" width="100" />
+    </el-table>
+
     <h2>API返回数据</h2>
     <div class="data">
       <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=3></json-viewer>
@@ -37,7 +56,7 @@ import {store} from "@/services/store";
 const token = ref('')
 const type = ref('1')
 const keyword = ref('')
-const config = ref('')
+const config = ref<any>('')
 const currentUrl = window.location.origin
 
 const getPath = (type: string) => {
@@ -51,7 +70,7 @@ const getPath = (type: string) => {
 }
 
 const search = function () {
-  axios.get(getPath(type.value) + token.value + '?wd=' + keyword.value).then(({data}) => {
+  axios.get(getPath(type.value) + token.value + '?ac=web&wd=' + keyword.value).then(({data}) => {
     config.value = data
   })
 }

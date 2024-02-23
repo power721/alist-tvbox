@@ -74,7 +74,7 @@ public class TvBoxController {
             }
             return tvBoxService.getMovieList(client, ac, t, f, sort, pg);
         } else if (wd != null && !wd.isEmpty()) {
-            return tvBoxService.search(type, wd);
+            return tvBoxService.search(type, ac, wd);
         } else {
             return tvBoxService.getCategoryList(type);
         }
