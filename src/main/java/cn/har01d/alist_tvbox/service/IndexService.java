@@ -372,9 +372,10 @@ public class IndexService {
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
         File info = new File(dir, indexRequest.getIndexName() + ".info");
 
-        indexRequest.setPaths(indexRequest.getPaths().stream().filter(e -> !e.isBlank()).toList());
+        indexRequest.setPaths(indexRequest.getPaths().stream().filter(e -> !e.isBlank()).map(this::decodeUrl).toList());
+        List<String> paths = indexRequest.getPaths().stream().map(e -> e.split(":")[0]).toList();
         if (indexRequest.isIncremental()) {
-            removeLines(file, indexRequest.getPaths());
+            removeLines(file, paths);
         }
 
         String summary;
@@ -382,7 +383,7 @@ public class IndexService {
              FileWriter writer2 = new FileWriter(info)) {
             Instant time = Instant.now();
             taskService.startTask(task.getId());
-            String detail = getTaskDetails(indexRequest.getPaths()) + "\n\n索引文件:\n" + file.getAbsolutePath();
+            String detail = getTaskDetails(paths) + "\n\n索引文件:\n" + file.getAbsolutePath();
             taskService.updateTaskData(task.getId(), detail);
             IndexContext context = new IndexContext(indexRequest, site, writer, task.getId());
             context.getExcludes().addAll(loadExcluded(file));
@@ -391,10 +392,7 @@ public class IndexService {
                 if (isCancelled(context)) {
                     break;
                 }
-                if (StringUtils.isBlank(path)) {
-                    continue;
-                }
-                path = decodeUrl(path);
+                path = customize(context, indexRequest, path);
                 stopWatch.start("index " + path);
                 index(context, path, 0);
                 stopWatch.stop();
@@ -415,6 +413,16 @@ public class IndexService {
 
         log.info("index done, total time : {} {}", Duration.ofNanos(stopWatch.getTotalTimeNanos()), stopWatch.prettyPrint());
         log.info("index file: {}", file.getAbsolutePath());
+    }
+
+    private static String customize(IndexContext context, IndexRequest indexRequest, String path) {
+        String[] parts = path.split(":");
+        path = parts[0];
+        boolean includeFiles = parts.length > 1 && "file".equals(parts[1]);
+        context.setIncludeFiles(indexRequest.isIncludeFiles() || includeFiles);
+        int maxDepth = parts.length > 2 ? Integer.parseInt(parts[2]) : indexRequest.getMaxDepth();
+        context.setMaxDepth(maxDepth);
+        return path;
     }
 
     private String getTaskDetails(List<String> paths) {
@@ -526,7 +534,7 @@ public class IndexService {
                         continue;
                     }
 
-                    if (context.getMaxDepth() == depth + 1 && !context.getIndexRequest().isIncludeFiles()) {
+                    if (context.getMaxDepth() == depth + 1 && !context.isIncludeFiles()) {
                         files.add(fsInfo.getName());
                     } else {
                         if (context.getIndexRequest().getSleep() > 0) {
@@ -542,7 +550,7 @@ public class IndexService {
                     }
                 } else if (isMediaFormat(fsInfo.getName())) { // file
                     hasFile = true;
-                    if (context.getIndexRequest().isIncludeFiles()) {
+                    if (context.isIncludeFiles()) {
                         String newPath = fixPath(path + "/" + fsInfo.getName());
                         if (exclude(context.getExcludes(), newPath)) {
                             log.warn("exclude file {}", newPath);

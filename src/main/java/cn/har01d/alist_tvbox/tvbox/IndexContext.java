@@ -16,6 +16,8 @@ public class IndexContext {
     private final FileWriter writer;
     private final Integer taskId;
     private Set<String> set = new HashSet<>();
+    private boolean includeFiles;
+    private int maxDepth = 10;
 
     public String getSiteName() {
         return site.getName();
@@ -23,10 +25,6 @@ public class IndexContext {
 
     public boolean isExcludeExternal() {
         return indexRequest.isExcludeExternal();
-    }
-
-    public int getMaxDepth() {
-        return indexRequest.getMaxDepth();
     }
 
     public Set<String> getExcludes() {
