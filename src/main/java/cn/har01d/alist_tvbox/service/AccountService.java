@@ -390,6 +390,7 @@ public class AccountService {
                 log.info("update refresh token {}: {}", account.getId(), time);
                 account.setRefreshTokenTime(Instant.now());
                 Map<Object, Object> response = getAliToken(account.getRefreshToken());
+                account.setNickname((String) response.get("nick_name"));
                 account.setRefreshToken((String) response.get(REFRESH_TOKEN));
                 changed = true;
             }
@@ -624,6 +625,7 @@ public class AccountService {
     public List<CheckinLog> getCheckinLogs(Integer id) {
         Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
         Map<Object, Object> map = getAliToken(account.getRefreshToken());
+        account.setNickname((String) map.get("nick_name"));
         String accessToken = (String) map.get(ACCESS_TOKEN);
         Map<String, Object> body = new HashMap<>();
 
