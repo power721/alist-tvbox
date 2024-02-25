@@ -31,6 +31,7 @@ init() {
   rm -f mobi.tgz tvbox.zip index.zip index.txt version.txt update.zip
 }
 
+echo "Install mode: $INSTALL"
 cat data/app_version
 date
 uname -mor

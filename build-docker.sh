@@ -39,7 +39,7 @@ echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
 echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:5244"
 
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
-docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 -v "$MOUNT":/data --name=alist-tvbox haroldli/alist-tvbox:latest
+docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 -e INSTALL=new -v "$MOUNT":/data --name=alist-tvbox haroldli/alist-tvbox:latest
 
 sleep 1
 

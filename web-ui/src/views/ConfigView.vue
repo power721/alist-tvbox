@@ -206,7 +206,8 @@
           <el-input v-model="atvPass" type="password" show-password/>
         </el-form-item>
         <el-form-item label="阿里文件删除延时">
-          <el-input-number v-model="deleteDelayTime" min="0"></el-input-number>秒
+          <el-input-number v-model="deleteDelayTime" min="0"></el-input-number>
+          秒
           <span class="hint">0表示不删除</span>
         </el-form-item>
         <el-form-item>
@@ -269,7 +270,7 @@ const options = [
     ]
   }
 ]
-const tooltip = 'sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"'
+const tooltip = ref('sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"')
 const aListStarted = ref(false)
 const aListRestart = ref(false)
 const mixSiteSource = ref(false)
@@ -333,7 +334,11 @@ const resetAListToken = () => {
 }
 
 const updateOpenTokenUrl = () => {
-  axios.post('/api/open-token-url', {url: openTokenUrl.value, clientId: apiClientId.value, clientSecret: apiClientSecret.value}).then(() => {
+  axios.post('/api/open-token-url', {
+    url: openTokenUrl.value,
+    clientId: apiClientId.value,
+    clientSecret: apiClientSecret.value
+  }).then(() => {
     ElMessage.success('更新成功，重启生效')
   })
 }
@@ -434,6 +439,7 @@ onMounted(() => {
     login.value.username = data.alist_username
     login.value.password = data.alist_password
     login.value.enabled = data.alist_login === 'true'
+    tooltip.value = 'sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_' + data.install_mode + '.sh)"'
   })
   axios.get('/api/alist/status').then(({data}) => {
     store.aListStatus = data

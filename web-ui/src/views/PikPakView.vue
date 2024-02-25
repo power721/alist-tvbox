@@ -8,7 +8,7 @@
     <div class="space"></div>
 
     <el-table :data="accounts" border style="width: 100%">
-      <el-table-column prop="id" label="ID" sortable width="70"/>
+<!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="nickname" label="昵称" sortable width="180"/>
       <el-table-column prop="username" label="用户名"/>
       <el-table-column prop="master" label="主账号？" width="120">

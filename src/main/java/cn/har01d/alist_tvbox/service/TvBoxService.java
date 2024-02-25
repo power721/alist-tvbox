@@ -1041,7 +1041,12 @@ public class TvBoxService {
     }
 
     private String getListPic() {
-        return ServletUriComponentsBuilder.fromCurrentRequest().replacePath("/list.png").build().toUriString();
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/list.png")
+                .replaceQuery(null)
+                .build()
+                .toUriString();
     }
 
     public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub, String client) {
@@ -1682,10 +1687,15 @@ public class TvBoxService {
         }
     }
 
-    private static String getCover(String thumb, int type) {
+    private String getCover(String thumb, int type) {
         String pic = thumb;
         if (pic.isEmpty() && type == 1) {
-            pic = ServletUriComponentsBuilder.fromCurrentRequest().replacePath("/folder.png").build().toUriString();
+            pic = ServletUriComponentsBuilder.fromCurrentRequest()
+                    .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                    .replacePath("/folder.png")
+                    .replaceQuery(null)
+                    .build()
+                    .toUriString();
         }
         return pic;
     }

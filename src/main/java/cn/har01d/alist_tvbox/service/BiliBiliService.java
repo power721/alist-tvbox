@@ -2098,7 +2098,12 @@ public class BiliBiliService {
     }
 
     private String getListPic() {
-        return ServletUriComponentsBuilder.fromCurrentRequest().replacePath("/list.png").build().toUriString();
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/list.png")
+                .replaceQuery(null)
+                .build()
+                .toUriString();
     }
 
     private static String fixUrl(String url) {

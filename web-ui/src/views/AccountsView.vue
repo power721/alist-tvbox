@@ -8,7 +8,7 @@
     <div class="space"></div>
 
     <el-table :data="accounts" border style="width: 100%">
-      <el-table-column prop="id" label="ID" sortable width="70"/>
+<!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="nickname" label="昵称" sortable width="180"/>
       <el-table-column prop="autoCheckin" label="自动签到" width="90">
         <template #default="scope">

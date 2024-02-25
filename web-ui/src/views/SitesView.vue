@@ -8,7 +8,7 @@
     <div class="space"></div>
 
     <el-table :data="sites" border style="width: 100%">
-      <el-table-column prop="id" label="ID" sortable width="70"/>
+<!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="name" label="名称" sortable width="180"/>
       <el-table-column prop="url" label="URL地址" sortable>
         <template #default="scope">
