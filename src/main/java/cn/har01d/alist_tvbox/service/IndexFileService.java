@@ -24,9 +24,9 @@ import java.util.zip.ZipOutputStream;
 @Slf4j
 @Service
 public class IndexFileService {
-    public Page<String> getIndexContent(Pageable pageable, String siteId) throws IOException {
+    public Page<String> getIndexContent(Pageable pageable, String siteId, String index) throws IOException {
         List<String> list = new ArrayList<>();
-        Path file = Paths.get("/data/index", siteId, "custom_index.txt");
+        Path file = Paths.get("/data/index", siteId, index + ".txt");
         if (!Files.exists(file)) {
             return new PageImpl<>(list);
         }
@@ -46,11 +46,11 @@ public class IndexFileService {
         return new PageImpl<>(list, pageable, lines.size());
     }
 
-    public void toggleExcluded(String siteId, int index) throws IOException {
+    public void toggleExcluded(String siteId, int index, String indexName) throws IOException {
         if (index < 0) {
             throw new BadRequestException("行数不正确");
         }
-        Path file = Paths.get("/data/index", siteId, "custom_index.txt");
+        Path file = Paths.get("/data/index", siteId, indexName + ".txt");
         if (!Files.exists(file)) {
             throw new BadRequestException("索引文件不存在");
         }
@@ -83,8 +83,8 @@ public class IndexFileService {
         return new FileSystemResource(out);
     }
 
-    public void uploadIndexFile(String siteId, MultipartFile file) throws IOException {
-        Path temp = Path.of("/tmp/custom_index.txt");
+    public void uploadIndexFile(String siteId, String indexName, MultipartFile file) throws IOException {
+        Path temp = Paths.get("/tmp/index.txt");
         try {
             FileUtils.copyToFile(file.getInputStream(), temp.toFile());
             List<String> lines = Files.readAllLines(temp);
@@ -93,7 +93,7 @@ public class IndexFileService {
             }
 
             lines = lines.stream().map(e -> e.startsWith("./") ? e.substring(1) : e).toList();
-            Path path = Path.of("/data/index/" + siteId + "/custom_index.txt");
+            Path path = Paths.get("/data/index", siteId, indexName + ".txt");
             if (!Files.exists(path)) {
                 Files.createDirectories(path.getParent());
                 Files.createFile(path);

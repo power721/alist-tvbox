@@ -1,6 +1,7 @@
 <template>
   <div class="files">
     <h1>豆瓣电影数据列表</h1>
+    <a href="/#/tmdb">TMDB电影数据列表</a>
     <el-row justify="end">
       <el-input v-model="keyword" @change="search" class="search" autocomplete="off"/>
       <el-button type="primary" @click="search" :disabled="!keyword">
@@ -149,16 +150,7 @@ import axios from "axios"
 import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 import type {Site} from "@/model/Site";
-
-interface Meta {
-  id: number
-  name: string
-  path: string
-  year: number
-  score: number
-  movieId: number
-  siteId: number
-}
+import type {Meta} from "@/model/Meta";
 
 const sizes = [20, 40, 60, 80, 100]
 const url = ref('http://' + window.location.hostname + ':5344')

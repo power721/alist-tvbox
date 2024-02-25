@@ -126,7 +126,8 @@
       <el-divider/>
       <h2>JSON数据</h2>
       <el-scrollbar height="600px">
-        <json-viewer :value="jsonData" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=3></json-viewer>
+        <json-viewer :value="jsonData" expanded copyable show-double-quotes :show-array-index="false"
+                     :expand-depth=3></json-viewer>
       </el-scrollbar>
       <div class="json"></div>
       <template #footer>
@@ -139,20 +140,24 @@
     <el-dialog v-model="indexVisible" title="索引数据" width="98%">
       <div>
         <div class="flex">
-          <el-pagination layout="prev, pager, next" :page-size="50" :current-page="indexPage" :total="indexTotal"
-                         @current-change="loadIndexFile"/>
+          <el-form-item label="索引名称">
+            <el-select v-model="indexName" @change="onIndexChange">
+              <el-option v-for="item in index" :key="item.name" :label="item.name" :value="item.name"/>
+            </el-select>
+          </el-form-item>
           <div class="flex">
+            <el-button v-if="indexTotal" @click="scrapeIndex">刮削</el-button>
             <el-button type="primary" class="download" v-if="indexTotal" @click="downloadIndexFile">下载文件</el-button>
             <el-upload ref="upload"
                        accept=".txt"
-                       :action="'/api/index-files/upload?siteId='+form.id"
+                       :action="'/api/index-files/upload?siteId='+form.id+'&indexName='+indexName"
                        :headers="headers"
                        :limit="1"
                        :show-file-list="false"
                        :on-exceed="handleExceed"
                        :on-success="handleUploadSuccess"
                        :on-error="handleUploadError"
-                       >
+            >
               <template #trigger>
                 <el-button type="primary">上传文件</el-button>
               </template>
@@ -165,6 +170,8 @@
             <a href="/#/tmdb">TMDB电影数据列表</a>
           </div>
         </div>
+        <el-pagination layout="prev, pager, next" :page-size="50" :current-page="indexPage" :total="indexTotal"
+                       @current-change="loadIndexFile"/>
         <div v-for="line of indexContent">
           {{ line.id }}
           <el-button size="small" @click="toggleExcluded(line.id)">
@@ -209,6 +216,7 @@ import axios from "axios"
 import type {UploadInstance, UploadProps, UploadRawFile} from 'element-plus'
 import {ElMessage, genFileId} from "element-plus";
 import type {VodList} from "@/model/VodList";
+import type {Meta} from "@/model/Meta";
 
 const upload = ref<UploadInstance>()
 const headers = {
@@ -225,6 +233,8 @@ interface IndexLine {
   id: number
 }
 
+const indexName = ref('custom_index')
+const index = ref<Meta[]>([])
 const token = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
@@ -366,12 +376,27 @@ const showIndex = (data: any) => {
   form.value = data
   indexTotal.value = 0
   indexCount.value = 0
+  loadIndexFiles()
+}
+
+const loadIndexFiles = () => {
+  indexName.value = ''
+  axios.get('/api/sites/' + form.value.id + '/index').then(({data}) => {
+    index.value = data
+    if (index.value && index.value.length > 0) {
+      indexName.value = index.value[0].name
+      loadIndexFile(1)
+    }
+  })
+}
+
+const onIndexChange = () => {
   loadIndexFile(1)
 }
 
 const loadIndexFile = (pageNumber: number) => {
   indexPage.value = pageNumber
-  axios.get('/api/index-files?siteId=' + form.value.id + '&size=50&page=' + (pageNumber - 1)).then(({data}) => {
+  axios.get('/api/index-files?siteId=' + form.value.id + '&indexName=' + indexName.value + '&size=50&page=' + (pageNumber - 1)).then(({data}) => {
     indexContent.value = []
     for (let i in data.content) {
       indexContent.value.push({
@@ -388,13 +413,19 @@ const loadIndexFile = (pageNumber: number) => {
 }
 
 const toggleExcluded = (id: number) => {
-  axios.post("/api/index-files/exclude?siteId=" + form.value.id + '&index=' + (id - 1)).then(() => {
+  axios.post("/api/index-files/exclude?siteId=" + form.value.id + '&indexName=' + indexName.value + '&index=' + (id - 1)).then(() => {
     loadIndexFile(indexPage.value)
   })
 }
 
 const downloadIndexFile = () => {
-  window.location.href = '/api/index-files/download?siteId=' + form.value.id + '&t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
+  window.location.href = '/api/index-files/download?siteId=' + form.value.id + '&indexName=' + indexName.value + '&t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
+}
+
+const scrapeIndex = () => {
+  axios.post('/api/tmdb/meta-scrape?siteId=' + form.value.id + '&indexName=' + indexName.value).then(() => {
+    ElMessage.success('刮削开始')
+  })
 }
 
 const handleUploadSuccess = () => {

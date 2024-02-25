@@ -621,6 +621,7 @@ public class IndexService {
             Path path = Paths.get("/data/index/" + id);
             return Files.list(path)
                     .filter(p -> p.getFileName().toString().endsWith(".txt"))
+                    .sorted()
                     .map(p -> new FileItem(p.getFileName().toString().replace(".txt", ""), p.toString(), 0))
                     .toList();
         } catch (Exception e) {

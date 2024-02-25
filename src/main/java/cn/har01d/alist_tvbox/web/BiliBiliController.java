@@ -35,15 +35,17 @@ public class BiliBiliController {
 
     @GetMapping("/bilibili")
     public String api(String t, String ids, String wd,
+                      boolean quick,
                       FilterDto filter,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request,
                       HttpServletResponse response) throws IOException {
-        return api("", t, ids, wd, filter, pg, request, response);
+        return api("", t, ids, wd, quick, filter, pg, request, response);
     }
 
     @GetMapping("/bilibili/{token}")
     public String api(@PathVariable String token, String t, String ids, String wd,
+                      boolean quick,
                       FilterDto filter,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
                       HttpServletRequest request,
@@ -52,7 +54,7 @@ public class BiliBiliController {
         response.setContentType("application/json");
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        log.info("path: {}  folder: {}  keyword: {}  filter: {} page: {}", ids, t, wd, filter, pg);
+        log.info("path: {}  folder: {}  keyword: {}  filter: {}  quick: {} page: {}", ids, t, wd, filter, quick, pg);
         Object result;
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
@@ -63,7 +65,7 @@ public class BiliBiliController {
         } else if (t != null && !t.isEmpty()) {
             result = biliBiliService.getMovieList(t, filter, pg);
         } else if (wd != null && !wd.isEmpty()) {
-            result = biliBiliService.search(wd, filter.getSort(), filter.getDuration(), 0);
+            result = biliBiliService.search(wd, filter.getSort(), filter.getDuration(), 0, quick);
         } else {
             result = biliBiliService.getCategoryList();
         }

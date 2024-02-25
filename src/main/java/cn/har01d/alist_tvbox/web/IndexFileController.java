@@ -25,18 +25,18 @@ public class IndexFileController {
     }
 
     @GetMapping
-    public Page<String> getIndexContent(Pageable pageable, String siteId) throws IOException {
-        return service.getIndexContent(pageable, siteId);
+    public Page<String> getIndexContent(Pageable pageable, String siteId, String indexName) throws IOException {
+        return service.getIndexContent(pageable, siteId, indexName);
     }
 
     @PostMapping("/exclude")
-    public void toggleExcluded(String siteId, int index) throws IOException {
-        service.toggleExcluded(siteId, index);
+    public void toggleExcluded(String siteId, int index, String indexName) throws IOException {
+        service.toggleExcluded(siteId, index, indexName);
     }
 
     @PostMapping("/upload")
-    public void uploadIndexFile(String siteId, @RequestParam("file") MultipartFile file) throws IOException {
-        service.uploadIndexFile(siteId, file);
+    public void uploadIndexFile(String siteId, String indexName, @RequestParam("file") MultipartFile file) throws IOException {
+        service.uploadIndexFile(siteId, indexName, file);
     }
 
     @GetMapping("/download")

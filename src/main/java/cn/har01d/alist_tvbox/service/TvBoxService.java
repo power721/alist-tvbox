@@ -1808,12 +1808,14 @@ public class TvBoxService {
             return ServletUriComponentsBuilder.fromCurrentRequest()
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
                     .replacePath(path)
+                    .replaceQuery(null)
                     .build()
                     .toUri()
                     .toASCIIString();
         } else {
             return UriComponentsBuilder.fromHttpUrl(site.getUrl())
                     .replacePath(path)
+                    .replaceQuery(null)
                     .build()
                     .toUri()
                     .toASCIIString();

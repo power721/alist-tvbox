@@ -6,12 +6,12 @@
     </div>
 
     <div>
-      <el-input v-model="keyword" autocomplete="off"/>
+      <el-input v-model="keyword" @change="search"/>
       <el-button type="primary" @click="search" :disabled="!keyword">搜索</el-button>
     </div>
 
     <el-form-item label="类型" label-width="140">
-      <el-radio-group v-model="type" class="ml-4">
+      <el-radio-group v-model="type" @change="search" class="ml-4">
         <el-radio label="1" size="large">点播模式</el-radio>
         <el-radio label="" size="large">网盘模式</el-radio>
         <el-radio label="2" size="large">BiliBili</el-radio>
@@ -70,7 +70,11 @@ const getPath = (type: string) => {
 }
 
 const search = function () {
-  axios.get(getPath(type.value) + token.value + '?ac=web&wd=' + keyword.value).then(({data}) => {
+  if (!keyword.value) {
+    return
+  }
+  config.value = ''
+  axios.get(getPath(type.value) + token.value + '?ac=web&wd=' + keyword.value.trim()).then(({data}) => {
     config.value = data
   })
 }

@@ -9,6 +9,8 @@ import java.util.List;
 public interface MetaRepository extends JpaRepository<Meta, Integer> {
     Meta findByPath(String path);
 
+    List<Meta> findByTmdb(Tmdb tmdb);
+
     List<Meta> findByPathContains(String text);
 
     Page<Meta> findByPathContains(String text, Pageable pageable);

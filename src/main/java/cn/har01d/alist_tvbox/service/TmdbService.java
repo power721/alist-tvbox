@@ -23,7 +23,6 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -236,6 +235,43 @@ public class TmdbService {
         meta.setTmdb(tmdbMeta.getTmdb());
         meta.setTime(tmdbMeta.getTime());
         return meta;
+    }
+
+    public void delete(Integer id) {
+        var meta = tmdbMetaRepository.findById(id).orElseThrow();
+        delete(meta);
+    }
+
+    public void delete(TmdbMeta meta) {
+        var list = metaRepository.findByTmdb(meta.getTmdb());
+        for (var db : list) {
+            var movie = db.getMovie();
+            if (movie == null) {
+                metaRepository.delete(db);
+                log.info("delete douban meta {}", db.getId());
+            } else {
+                db.setTmdb(null);
+                db.setYear(movie.getYear());
+                db.setName(movie.getName());
+                if (StringUtils.isNotBlank(movie.getDbScore())) {
+                    db.setScore((int) (Double.parseDouble(movie.getDbScore()) * 10));
+                }
+                metaRepository.save(db);
+                log.info("update douban meta {}", db.getId());
+            }
+        }
+        log.info("delete {} {}", meta.getId(), meta.getPath());
+        tmdbMetaRepository.delete(meta);
+    }
+
+    public void batchDelete(List<Integer> ids) {
+        tmdbMetaRepository.findAllById(ids).forEach(meta -> {
+            try {
+                delete(meta);
+            } catch (Exception e) {
+                log.warn("delete {} {} failed", meta.getId(), meta.getPath(), e);
+            }
+        });
     }
 
     public boolean updateMetaMovie(Integer id, MetaDto dto) {

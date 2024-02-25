@@ -56,7 +56,6 @@ import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -104,7 +103,7 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
-public class  BiliBiliService {
+public class BiliBiliService {
     private static final int VIDEO_DASH = 16;
     private static final int VIDEO_HDR = 64;
     private static final int VIDEO_4K = 128;
@@ -1520,7 +1519,7 @@ public class  BiliBiliService {
 
         if (tid.startsWith("search:")) {
             String[] parts = tid.split(":");
-            return search(parts[1], filter.getSort(), filter.getDuration(), page);
+            return search(parts[1], filter.getSort(), filter.getDuration(), page, false);
         } else if (tid.startsWith("channel:")) {
             String[] parts = tid.split(":");
             return getChannel(parts[1], filter.getSort(), page);
@@ -1894,7 +1893,7 @@ public class  BiliBiliService {
         return result;
     }
 
-    public MovieList search(String wd, String sort, String duration, int pg) {
+    public MovieList search(String wd, String sort, String duration, int pg, boolean quick) {
         MovieList result = new MovieList();
         if (!appProperties.isSearchable()) {
             return result;
@@ -1940,11 +1939,15 @@ public class  BiliBiliService {
                 pages = response.getBody().getData().getNumPages();
             }
 
+            if (quick) {
+                list = list.subList(0, Math.min(10, list.size()));
+            }
+
             long seconds = list.stream().map(BiliBiliSearchResult.Video::getDuration).mapToLong(Utils::durationToSeconds).sum();
             keyword = wd;
             searchPage = 0;
             pages = (pages + 1) / 2;
-            for (int i = 0; i < pages; i++) {
+            for (int i = 0; i < pages && !quick; i++) {
                 MovieDetail movieDetail = new MovieDetail();
                 movieDetail.setVod_id("search$" + wd + "$0$" + i);
                 movieDetail.setVod_name(wd + "合集" + (i + 1));
@@ -1967,6 +1970,10 @@ public class  BiliBiliService {
         for (BiliBiliSearchResult.Video info : list) {
             MovieDetail movieDetail = getSearchMovieDetail(info);
             result.getList().add(movieDetail);
+        }
+
+        if (quick) {
+            result.setList(result.getList().subList(0, Math.min(10, result.getList().size())));
         }
 
         result.setTotal(1020);
