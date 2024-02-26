@@ -372,7 +372,7 @@ public class IndexService {
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
         File info = new File(dir, indexRequest.getIndexName() + ".info");
 
-        indexRequest.setPaths(indexRequest.getPaths().stream().filter(e -> !e.isBlank()).map(this::decodeUrl).toList());
+        indexRequest.setPaths(indexRequest.getPaths().stream().filter(e -> !e.isBlank()).toList());
         List<String> paths = indexRequest.getPaths().stream().map(e -> e.split(":")[0]).toList();
         if (indexRequest.isIncremental()) {
             removeLines(file, paths);

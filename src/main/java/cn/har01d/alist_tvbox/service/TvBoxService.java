@@ -1781,6 +1781,7 @@ public class TvBoxService {
         if (url.startsWith("http://localhost")) {
             String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
             String proxy = ServletUriComponentsBuilder.fromCurrentRequest()
+                    .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                     .port(port)
                     .replacePath("/")
                     .replaceQuery("")
@@ -1795,7 +1796,7 @@ public class TvBoxService {
     }
 
     private String buildProxyUrl(Site site, String path, String sign) {
-        if (site.getUrl().contains("//localhost")) {
+        if ("http://localhost".equals(site.getUrl())) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
                     .replacePath("/d" + path)

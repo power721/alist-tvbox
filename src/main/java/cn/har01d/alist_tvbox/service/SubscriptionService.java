@@ -298,7 +298,7 @@ public class SubscriptionService {
         json = json.replace("VOD_EXT", readHostAddress("/vod" + secret));
         json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
         json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
-        json = json.replace("ALIST_URL", readAlistAddress());
+        json = json.replace("ALIST_URL", readAListAddress());
         String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
         json = json.replace("ALI_TOKEN", ali);
         json = json.replace("填入阿里token", ali);
@@ -813,16 +813,16 @@ public class SubscriptionService {
         return uriComponents.toUriString();
     }
 
-    private String readAlistAddress() {
+    private String readAListAddress() {
         Site site = siteRepository.findById(1).orElseThrow();
-        if (site.getUrl().contains("//localhost")) {
+        if ("http://localhost".equals(site.getUrl())) {
             String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
-            UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
-                    .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+            return ServletUriComponentsBuilder.fromCurrentRequest()
                     .port(port)
                     .replacePath("")
-                    .build();
-            return uriComponents.toUriString();
+                    .replaceQuery(null)
+                    .build()
+                    .toUriString();
         } else {
             return site.getUrl();
         }
