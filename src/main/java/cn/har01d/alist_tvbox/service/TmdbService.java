@@ -343,6 +343,7 @@ public class TmdbService {
                     count++;
                     taskService.updateTaskData(task.getId(), "成功刮削数量：" + count);
                 } else {
+                    log.warn("刮削失败：{}", line.split("#")[0]);
                     paths.add(line.split("#")[0]);
                 }
 
