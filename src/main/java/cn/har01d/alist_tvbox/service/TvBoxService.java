@@ -60,7 +60,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -340,26 +340,35 @@ public class TvBoxService {
         List<MovieDetail> list = new ArrayList<>();
         Pageable pageable = PageRequest.of(pg - 1, 60, Sort.Direction.DESC, "time", "id");
         Page<Meta> page = metaRepository.findAll(pageable);
+        Map<String, List<Meta>> map = new HashMap<>();
+        Set<String> added = new HashSet<>();
         for (Meta meta : page.getContent()) {
-            Movie movie = meta.getMovie();
-            String name;
-            if (movie == null) {
-                if (meta.getTmdb() != null) {
-                    name = meta.getTmdb().getName();
-                } else {
-                    name = getNameFromPath(meta.getPath());
-                }
-            } else {
-                name = movie.getName();
-            }
+            String name = getName(meta);
+            List<Meta> metas = map.computeIfAbsent(name, id -> new ArrayList<>());
+            metas.add(meta);
+        }
 
+        for (Meta meta : page.getContent()) {
+            String name = getName(meta);
+            if (added.contains(name)) {
+                log.debug("skip {}: {}", name, meta.getPath());
+                continue;
+            }
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(String.valueOf(meta.getId()));
+            List<Meta> metas = map.get(name);
+            if (metas.size() > 1) {
+                String ids = metas.stream().map(Meta::getId).map(String::valueOf).collect(Collectors.joining("-"));
+                log.debug("duplicate: {} {} {}", name, metas.size(), ids);
+                movieDetail.setVod_id(Objects.toString(meta.getSiteId(), "1") + "$" + encodeUrl(ids) + "$0");
+                added.add(name);
+            } else {
+                movieDetail.setVod_id(String.valueOf(meta.getId()));
+                movieDetail.setVod_remarks(getLabel(meta.getPath()));
+            }
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_content(meta.getPath());
-            movieDetail.setVod_remarks(getLabel(meta.getPath()));
-            setMovieInfo(movieDetail, movie, meta.getTmdb(), "videolist".equals(ac));
+            setMovieInfo(movieDetail, meta, "videolist".equals(ac));
             list.add(movieDetail);
         }
 
@@ -475,18 +484,7 @@ public class TvBoxService {
 
         if (type != null && type == 0) {
             for (Meta meta : metaRepository.findByPathContains(keyword)) {
-                Movie movie = meta.getMovie();
-                String name;
-                if (movie == null) {
-                    if (meta.getTmdb() != null) {
-                        name = meta.getTmdb().getName();
-                    } else {
-                        name = getNameFromPath(meta.getPath());
-                    }
-                } else {
-                    name = movie.getName();
-                }
-
+                String name = getName(meta);
                 boolean isMediaFile = isMediaFile(meta.getPath());
                 String newPath = fixPath(meta.getPath() + (isMediaFile ? "" : PLAYLIST));
                 MovieDetail movieDetail = new MovieDetail();
@@ -499,7 +497,7 @@ public class TvBoxService {
                 } else {
                     movieDetail.setVod_remarks(getLabel(newPath));
                 }
-                setMovieInfo(movieDetail, movie, meta.getTmdb(), false);
+                setMovieInfo(movieDetail, meta, false);
                 list.add(movieDetail);
             }
         } else {
@@ -942,45 +940,36 @@ public class TvBoxService {
         }
 
         log.debug("{} {} {}", pageable, list, list.getContent().size());
-        Map<String, List<Meta>> map = new LinkedHashMap<>();
+        Map<String, List<Meta>> map = new HashMap<>();
+        Set<String> added = new HashSet<>();
         for (Meta meta : list) {
-            Movie movie = meta.getMovie();
-            String name;
-            if (movie == null) {
-                if (meta.getTmdb() != null) {
-                    name = meta.getTmdb().getName();
-                } else {
-                    name = getNameFromPath(meta.getPath());
-                }
-            } else {
-                name = movie.getName();
-            }
-            List<Meta> metas = map.getOrDefault(name, new ArrayList<>());
+            String name = getName(meta);
+            List<Meta> metas = map.computeIfAbsent(name, id -> new ArrayList<>());
             metas.add(meta);
-            map.put(name, metas);
         }
 
         for (Meta meta : list) {
-            Movie movie = meta.getMovie();
-            String name;
-            if (movie == null) {
-                if (meta.getTmdb() != null) {
-                    name = meta.getTmdb().getName();
-                } else {
-                    name = getNameFromPath(meta.getPath());
-                }
-            } else {
-                name = movie.getName();
+            String name = getName(meta);
+            if (added.contains(name)) {
+                log.debug("skip {}: {}", name, meta.getPath());
+                continue;
             }
-
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(String.valueOf(meta.getId()));
+            List<Meta> metas = map.get(name);
+            if (metas.size() > 1) {
+                String ids = metas.stream().map(Meta::getId).map(String::valueOf).collect(Collectors.joining("-"));
+                log.debug("duplicate: {} {} {}", name, metas.size(), ids);
+                movieDetail.setVod_id(Objects.toString(meta.getSiteId(), "1") + "$" + encodeUrl(ids) + "$0");
+                added.add(name);
+            } else {
+                movieDetail.setVod_id(String.valueOf(meta.getId()));
+                if (path.equals("/")) {
+                    movieDetail.setVod_remarks(getLabel(meta.getPath()));
+                }
+            }
             movieDetail.setVod_name(name);
             movieDetail.setVod_pic(Constants.ALIST_PIC);
-            if (path.equals("/")) {
-                movieDetail.setVod_remarks(getLabel(meta.getPath()));
-            }
-            setMovieInfo(movieDetail, movie, meta.getTmdb(), "videolist".equals(ac));
+            setMovieInfo(movieDetail, meta, "videolist".equals(ac));
             files.add(movieDetail);
             log.debug("{}", movieDetail);
         }
@@ -993,6 +982,18 @@ public class TvBoxService {
         result.setPagecount(pages + 1);
         log.debug("list: {}", result);
         return result;
+    }
+
+    private static String getName(Meta meta) {
+        String name;
+        if (meta.getTmdb() != null) {
+            name = meta.getTmdb().getName();
+        } else if (meta.getMovie() != null) {
+            name = meta.getMovie().getName();
+        } else {
+            name = getNameFromPath(meta.getPath());
+        }
+        return name;
     }
 
     private void sortFiles(String sort, List<MovieDetail> folders, List<MovieDetail> files) {
@@ -1263,7 +1264,7 @@ public class TvBoxService {
         movieDetail.setVod_play_from(site.getName());
         movieDetail.setVod_play_url(String.valueOf(id));
         movieDetail.setVod_content(meta.getPath());
-        setMovieInfo(movieDetail, meta.getMovie(), meta.getTmdb(), true);
+        setMovieInfo(movieDetail, meta, true);
         result.getList().add(movieDetail);
 
         result.setTotal(result.getList().size());
@@ -1296,12 +1297,12 @@ public class TvBoxService {
             movieDetail.setVod_time(String.valueOf(meta.getYear()));
             movieDetail.setVod_pic(ALIST_PIC);
             List<String> from = new ArrayList<>();
-            for (int i = 1; i <= list.size(); ++i) {
-                from.add("版本" + i);
-            }
-            movieDetail.setVod_play_from(String.join("$$$", from));
+            List<String> url = new ArrayList<>();
             String playUrl;
             if (isMediaFile(meta.getPath())) {
+                for (int i = 0; i < list.size(); ++i) {
+                    from.add("版本" + (i + 1));
+                }
                 if ("detail".equals(ac)) {
                     playUrl = list.stream().map(m -> {
                         String sign = subscriptionService.getToken().isEmpty() ? "" : aListService.getFile(site, m.getPath()).getSign();
@@ -1311,15 +1312,24 @@ public class TvBoxService {
                     playUrl = list.stream().map(m -> String.valueOf(m.getId())).collect(Collectors.joining("$$$"));
                 }
             } else {
-                playUrl = list.stream().map(e -> {
-                    var m = getPlaylist(ac, site, e);
-                    return m.getList().get(0).getVod_play_url();
-                }).collect(Collectors.joining("$$$"));
+                for (int i = 0; i < list.size(); ++i) {
+                    var m = getPlaylist(ac, site, list.get(i)).getList().get(0);
+                    if (site.getName().equals(m.getVod_play_from())) {
+                        from.add("版本" + (i + 1));
+                    } else {
+                        for (String folder : m.getVod_play_from().split("\\$\\$\\$")) {
+                            from.add("版本" + (i + 1) + "-" + folder);
+                        }
+                    }
+                    url.add(m.getVod_play_url());
+                }
+                playUrl = String.join("$$$", url);
             }
+            movieDetail.setVod_play_from(String.join("$$$", from));
             movieDetail.setVod_play_url(playUrl);
 
             movieDetail.setVod_content(getParent(path));
-            setMovieInfo(movieDetail, meta.getMovie(), meta.getTmdb(), true);
+            setMovieInfo(movieDetail, meta, true);
             result.getList().add(movieDetail);
         } else {
             FsDetail fsDetail = aListService.getFile(site, path);
@@ -1477,7 +1487,7 @@ public class TvBoxService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(getListPic());
 
-        setMovieInfo(movieDetail, meta.getMovie(), meta.getTmdb(), true);
+        setMovieInfo(movieDetail, meta, true);
 
         FsResponse fsResponse = aListService.listFiles(site, path, 1, 0);
         List<FsInfo> files = fsResponse.getFiles().stream()
@@ -1582,6 +1592,10 @@ public class TvBoxService {
         } catch (Exception e) {
             log.warn("", e);
         }
+    }
+
+    private void setMovieInfo(MovieDetail movieDetail, Meta meta, boolean details) {
+        setMovieInfo(movieDetail, meta.getMovie(), meta.getTmdb(), details);
     }
 
     private void setMovieInfo(MovieDetail movieDetail, Movie movie, Tmdb tmdb, boolean details) {
