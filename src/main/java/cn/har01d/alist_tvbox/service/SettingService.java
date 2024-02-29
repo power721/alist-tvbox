@@ -20,12 +20,14 @@ import java.util.zip.ZipOutputStream;
 @Service
 public class SettingService {
     private final JdbcTemplate jdbcTemplate;
+    private final Environment environment;
     private final AppProperties appProperties;
     private final TmdbService tmdbService;
     private final SettingRepository settingRepository;
 
-    public SettingService(JdbcTemplate jdbcTemplate, AppProperties appProperties, TmdbService tmdbService, SettingRepository settingRepository) {
+    public SettingService(JdbcTemplate jdbcTemplate, Environment environment, AppProperties appProperties, TmdbService tmdbService, SettingRepository settingRepository) {
         this.jdbcTemplate = jdbcTemplate;
+        this.environment = environment;
         this.appProperties = appProperties;
         this.tmdbService = tmdbService;
         this.settingRepository = settingRepository;
@@ -33,7 +35,7 @@ public class SettingService {
 
     @PostConstruct
     public void setup() {
-        settingRepository.save(new Setting("install_mode", System.getProperty("INSTALL", "xiaoya")));
+        settingRepository.save(new Setting("install_mode", environment.getProperty("INSTALL", "xiaoya")));
         appProperties.setMerge(settingRepository.findById("merge_site_source").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setHeartbeat(settingRepository.findById("bilibili_heartbeat").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setSupportDash(settingRepository.findById("bilibili_dash").map(Setting::getValue).orElse("").equals("true"));

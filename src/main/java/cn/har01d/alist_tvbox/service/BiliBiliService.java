@@ -2011,6 +2011,7 @@ public class BiliBiliService {
         String url = "https://api.bilibili.com/pgc/activity/score/task/sign";
         Map<String, String> headers = new HashMap<>();
         headers.put(HttpHeaders.REFERER, "https://www.bilibili.com");
+        headers.put(HttpHeaders.USER_AGENT, "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1");
         HttpEntity<Void> entity = buildHttpEntity(null, headers);
         ResponseEntity<BiliBiliInfoResponse> response = restTemplate.exchange(url, HttpMethod.POST, entity, BiliBiliInfoResponse.class);
         if (response.getBody() != null && response.getBody().getCode() == 0) {
