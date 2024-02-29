@@ -327,6 +327,22 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
+        if (shareRepository.countByType(2) > 0) {
+            Category category = new Category();
+            category.setType_id("1$/\uD83C\uDF1E我的夸克网盘$1");
+            category.setType_name("夸克网盘");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        }
+
+        if (shareRepository.countByType(3) > 0) {
+            Category category = new Category();
+            category.setType_id("1$/115网盘$1");
+            category.setType_name("115网盘");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        }
+
         if (pp > 0) {
             Category category = new Category();
             category.setType_id("1$/\uD83D\uDD78️我的PikPak分享$1");
@@ -1314,12 +1330,12 @@ public class TvBoxService {
             } else {
                 for (int i = 0; i < list.size(); ++i) {
                     var m = getPlaylist(ac, site, list.get(i)).getList().get(0);
-                    if (site.getName().equals(m.getVod_play_from())) {
-                        from.add("版本" + (i + 1));
-                    } else {
+                    if (m.getVod_play_from().contains("$$$")) {
                         for (String folder : m.getVod_play_from().split("\\$\\$\\$")) {
                             from.add("版本" + (i + 1) + "-" + folder);
                         }
+                    } else {
+                        from.add("版本" + (i + 1));
                     }
                     url.add(m.getVod_play_url());
                 }
@@ -1609,7 +1625,7 @@ public class TvBoxService {
         }
         movieDetail.setVod_pic(movie.getCover());
         movieDetail.setVod_year(String.valueOf(movie.getYear()));
-        movieDetail.setVod_remarks(movieDetail.getVod_remarks() + Objects.toString(movie.getDbScore(), ""));
+        movieDetail.setVod_remarks(Utils.trim(movieDetail.getVod_remarks() + Objects.toString(movie.getDbScore(), "")));
         if (!details) {
             return;
         }
@@ -1653,7 +1669,7 @@ public class TvBoxService {
         if ("0.0".equals(movie.getScore())) {
             movie.setScore("");
         }
-        movieDetail.setVod_remarks(movieDetail.getVod_remarks() + Objects.toString(movie.getScore(), ""));
+        movieDetail.setVod_remarks(Utils.trim(movieDetail.getVod_remarks() + Objects.toString(movie.getScore(), "")));
         if (!details) {
             return;
         }

@@ -78,6 +78,7 @@ jobs:
           echo "${{ github.event.head_commit.message }}" >> data/version
           cp data/version data/app_version
           cat data/version
+          echo "WEEKDAY=$(date +%u)" >> $GITHUB_ENV
       - name: Build docker and push
         uses: docker/build-push-action@v4
         with:
@@ -85,7 +86,7 @@ jobs:
           file: Dockerfile-xiaoya
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest, ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:$WEEKDAY
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build host mode docker and push

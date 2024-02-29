@@ -13,7 +13,7 @@
     </p>
     <p>
       AList：
-      <a href="https://alist.nn.ci/" target="_blank">https://alist.nn.ci/</a>
+      <a href="https://alist.nn.ci/zh/guide/" target="_blank">https://alist.nn.ci/</a>
     </p>
     <p>
       Docker：
