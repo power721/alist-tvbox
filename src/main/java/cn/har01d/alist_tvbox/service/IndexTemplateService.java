@@ -21,9 +21,10 @@ import java.time.Instant;
 @Service
 public class IndexTemplateService {
     public static final String AUTO_INDEX_VERSION = "auto_index_version";
-    private static final int indexVersion = 13;
+    private static final int indexVersion = 14;
     public static final String paths =
             "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【 剧 l 集 】/【电 l 视 l 剧】和完结的/【更新中】电视剧::2\"," +
+                    "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【 剧 l 集 】/【电 l 视 l 剧】和完结的/【更新中】电视剧/【国产港台等剧】/【2024近期已完结的】\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【 剧 l 集 】/【电 l 视 l 剧】和完结的/【更新中】电视剧/【最新热门爽剧无脑短剧超大合集】合集版1000多部:file:2\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【 剧 l 集 】/【电 l 视 l 剧】和完结的/【更新中】电视剧/最强爽文短剧合集361部:file:2\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【 剧 l 集 】/【电 l 视 l 剧】和完结的/【国产电视剧】合集1500多部(39TB)/【国产电视剧】1500部 41T\"," +
