@@ -46,7 +46,7 @@ public class SettingService {
     }
 
     public FileSystemResource exportDatabase() throws IOException {
-        jdbcTemplate.execute("SCRIPT TO '/data/data-h2.sql' TABLE ACCOUNT, ALIST_ALIAS, CONFIG_FILE, INDEX_TEMPLATE, NAVIGATION, PIK_PAK_ACCOUNT, SETTING, SHARE, SITE, SUBSCRIPTION, USERS");
+        jdbcTemplate.execute("SCRIPT TO '/data/data-h2.sql' TABLE ACCOUNT, ALIST_ALIAS, CONFIG_FILE, INDEX_TEMPLATE, NAVIGATION, PIK_PAK_ACCOUNT, SETTING, SHARE, SITE, SUBSCRIPTION, USERS, TMDB, TMDB_META");
         File out = new File("/tmp/alist-tvbox.zip");
         out.createNewFile();
         try (FileOutputStream fos = new FileOutputStream(out);

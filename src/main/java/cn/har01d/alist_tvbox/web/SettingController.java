@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
@@ -51,7 +52,7 @@ public class SettingController {
 
     @GetMapping("/export")
     public FileSystemResource exportDatabase(HttpServletResponse response) throws IOException {
-        response.addHeader("Content-Disposition", "attachment; filename=\"alist-tvbox.zip\"");
+        response.addHeader("Content-Disposition", "attachment; filename=\"database-" + LocalDate.now() + ".zip\"");
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
         return service.exportDatabase();
     }
