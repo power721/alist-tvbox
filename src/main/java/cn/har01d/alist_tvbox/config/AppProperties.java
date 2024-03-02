@@ -20,7 +20,7 @@ public class AppProperties {
     private boolean searchable;
     private boolean enableHttps;
     private int pageSize = 100;
-    private int maxSearchResult = 100;
+    private int maxSearchResult = 60;
     private String secretKey;
     private Set<String> formats;
     private Set<String> subtitles;

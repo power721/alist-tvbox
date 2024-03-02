@@ -108,4 +108,9 @@ public class IndexFileService {
     private boolean isValid(String line) {
         return line.startsWith("-/") || line.startsWith("+/") || line.startsWith("/") || line.startsWith("./") || line.isBlank();
     }
+
+    public void deleteIndexFile(String siteId, String indexName) throws IOException {
+        Path path = Paths.get("/data/index", siteId, indexName + ".txt");
+        Files.delete(path);
+    }
 }

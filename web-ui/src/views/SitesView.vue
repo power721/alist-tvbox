@@ -147,6 +147,7 @@
           </el-form-item>
           <div class="flex">
             <el-button v-if="indexTotal" @click="scrapeIndex">刮削</el-button>
+            <el-button type="danger" @click="deleteIndexFile">删除</el-button>
             <el-button type="primary" class="download" v-if="indexTotal" @click="downloadIndexFile">下载文件</el-button>
             <el-upload ref="upload"
                        accept=".txt"
@@ -415,6 +416,13 @@ const loadIndexFile = (pageNumber: number) => {
 const toggleExcluded = (id: number) => {
   axios.post("/api/index-files/exclude?siteId=" + form.value.id + '&indexName=' + indexName.value + '&index=' + (id - 1)).then(() => {
     loadIndexFile(indexPage.value)
+  })
+}
+
+const deleteIndexFile = () => {
+  axios.delete("/api/index-files?siteId=" + form.value.id + '&indexName=' + indexName.value).then(() => {
+    ElMessage.success('索引文件删除成功')
+    loadIndexFiles()
   })
 }
 

@@ -6,7 +6,6 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.FileUtils;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -79,7 +78,7 @@ public class SettingService {
 
     private void cleanBackups() {
         LocalDate day = LocalDate.now().minusDays(7);
-        for (File file : FileUtils.listFiles(new File("/data/backup"), new String[]{"zip"}, false)) {
+        for (File file : Utils.listFiles("/data/backup", "zip")) {
             if (file.getName().startsWith("database-")) {
                 try {
                     String name = file.getName().replace("database-", "").replace(".zip", "");

@@ -398,7 +398,7 @@ public class TvBoxService {
 
     public MovieList msearch(Integer type, String keyword) {
         String name = TextUtils.fixName(keyword);
-        MovieList result = search(type, "", name);
+        MovieList result = search(type, "", name, 1);
         if (result.getTotal() > 0) {
             return getDetail("", result.getList().get(0).getVod_id());
         }
@@ -488,7 +488,7 @@ public class TvBoxService {
         return null;
     }
 
-    public MovieList search(Integer type, String ac, String keyword) {
+    public MovieList search(Integer type, String ac, String keyword, int page) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
         sites = siteService.findAll();
@@ -499,7 +499,7 @@ public class TvBoxService {
         }
 
         if (type != null && type == 0) {
-            for (Meta meta : metaRepository.findByPathContains(keyword)) {
+            for (Meta meta : metaRepository.findByPathContains(keyword, PageRequest.of(page - 1, appProperties.getMaxSearchResult(), Sort.Direction.DESC, "time", "id"))) {
                 String name = getName(meta);
                 boolean isMediaFile = isMediaFile(meta.getPath());
                 String newPath = fixPath(meta.getPath() + (isMediaFile ? "" : PLAYLIST));
@@ -536,7 +536,7 @@ public class TvBoxService {
                 }
             }
 
-            list = list.stream().distinct().toList();
+            list = list.stream().distinct().limit(appProperties.getMaxSearchResult()).toList();
             for (MovieDetail movie : list) {
                 if (movie.getVod_pic() != null && movie.getVod_pic().contains(".doubanio.com/")) {
                     fixCover(movie);
@@ -636,10 +636,8 @@ public class TvBoxService {
         }
 
         List<MovieDetail> result = new ArrayList<>();
-        File customIndexFile = new File("/data/index/" + site.getId() + "/custom_index.txt");
-        if (customIndexFile.exists()) {
-            result.addAll(searchFromIndexFile(site, ac, keyword, customIndexFile.getAbsolutePath()));
-            log.debug("search \"{}\" from site {}:{}, result: {}", keyword, site.getId(), customIndexFile, result.size());
+        for (File file : Utils.listFiles("/data/index/" + site.getId(), "txt")) {
+            result.addAll(searchFromIndexFile(site, ac, keyword, file.getAbsolutePath()));
         }
 
         try {
@@ -679,10 +677,8 @@ public class TvBoxService {
 
     private List<MovieDetail> searchByXiaoya(Site site, String ac, String keyword) throws IOException {
         List<MovieDetail> list = new ArrayList<>();
-        File customIndexFile = new File("/data/index/" + site.getId() + "/custom_index.txt");
-        if (customIndexFile.exists()) {
-            list.addAll(searchFromIndexFile(site, ac, keyword, customIndexFile.getAbsolutePath()));
-            log.debug("search \"{}\" from site {}:{}, result: {}", keyword, site.getId(), customIndexFile, list.size());
+        for (File file : Utils.listFiles("/data/index/" + site.getId(), "txt")) {
+            list.addAll(searchFromIndexFile(site, ac, keyword, file.getAbsolutePath()));
         }
 
         if (site.getId() == 1) {

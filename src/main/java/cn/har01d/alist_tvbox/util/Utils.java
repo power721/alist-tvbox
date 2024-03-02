@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.util;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -14,6 +15,7 @@ import java.io.InputStreamReader;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
@@ -343,5 +345,9 @@ public final class Utils {
             return null;
         }
         return text.trim();
+    }
+
+    public static Collection<File> listFiles(String path, String... ext) {
+        return FileUtils.listFiles(new File(path), ext, false);
     }
 }
