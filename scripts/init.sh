@@ -3,8 +3,9 @@
 restore_database() {
   if [ -f "/data/database.zip" ]; then
     echo "=== restore database ==="
+    rm -f /data/atv.mv.db /data/atv.trace.db
     java -cp /opt/atv/BOOT-INF/lib/h2-*.jar org.h2.tools.RunScript -url jdbc:h2:/data/atv -user sa -password password -script /data/database.zip -options compression zip
-    rm -f /data/database.zip /data/atv/base_version
+    rm -f /data/database.zip
   fi
 }
 
