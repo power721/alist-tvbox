@@ -1,5 +1,13 @@
 #!/bin/sh
 
+restore_database() {
+  if [ -f "/data/database.zip" ]; then
+    echo "=== restore database ==="
+    java -cp /opt/atv/BOOT-INF/lib/h2-*.jar org.h2.tools.RunScript -url jdbc:h2:/data/atv -user sa -password password -script /data/database.zip -options compression zip
+    rm -f /data/database.zip /data/atv/base_version
+  fi
+}
+
 init() {
   mkdir -p /var/lib/pxg /www/cgi-bin /data/atv /data/index /data/backup
   if [ -d /index ]; then
@@ -36,6 +44,7 @@ cat data/app_version
 date
 uname -mor
 
+restore_database
 if [ -f /opt/alist/data/data.db ]; then
   echo "已经初始化成功"
 else

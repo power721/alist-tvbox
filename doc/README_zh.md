@@ -379,6 +379,14 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 🎎:我的套娃
 ```
 
+### 数据备份与恢复
+每天6点自动备份数据库，保存在/etc/xiaoya/backup/目录。
+
+如何恢复？
+1. 将保存的备份文件复制到/etc/xiaoya/database.zip
+2. 删除/etc/xiaoya/atv.mv.db和/etc/xiaoya/atv.trace.db
+3. 重启
+
 ### 其它
 不再生效的文件可以保留，以后删除数据库后可以恢复。
 

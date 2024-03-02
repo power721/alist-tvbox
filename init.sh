@@ -11,6 +11,15 @@ update_movie() {
     echo "upgrade movie data"
     unzip -q -o /data.zip -d /data/atv/
     cp /base_version /tmp/
+    rm -f /data/atv/sql/*.sql
+  fi
+}
+
+restore_database() {
+  if [ -f "/data/database.zip" ]; then
+    echo "=== restore database ==="
+    java -cp /opt/atv/BOOT-INF/lib/h2-*.jar org.h2.tools.RunScript -url jdbc:h2:/data/atv -user sa -password password -script /data/database.zip -options compression zip
+    rm -f /data/database.zip /data/atv/base_version /data/atv/movie_version
   fi
 }
 
@@ -67,6 +76,7 @@ echo "xiaoya version: $version"
 uname -mor
 date
 
+restore_database
 if [ -f /opt/alist/data/data.db ]; then
   update_movie
   echo "已经初始化成功"

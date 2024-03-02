@@ -6,6 +6,11 @@ labels: ''
 assignees: ''
 
 ---
+您必须勾选以下所有内容，否则您的issue可能会被直接关闭。
+- [ ] 我已经阅读了[文档](https://github.com/power721/alist-tvbox/blob/master/doc/README_zh.md)。
+- [ ] 我确定没有重复的issue或讨论。
+- [ ] 我确定是AList-TvBox的问题，而不是其他原因（例如网络，依赖或操作）。
+- [ ] 我确定这个问题在最新版本中没有被修复。
 
 **描述**
 简单描述你遇到的问题。
