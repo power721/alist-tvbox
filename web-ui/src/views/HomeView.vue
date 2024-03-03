@@ -3,7 +3,7 @@ import {onMounted, ref} from "vue";
 import axios from "axios";
 import {store} from "@/services/store";
 
-const url = ref('http://' + window.location.hostname + ':5344')
+const url = ref('http://' + window.location.hostname + ':' + (store.hostmode ? 5678 : 5344))
 const height = ref(window.innerHeight - 175)
 const width = ref(window.innerWidth - 40)
 

@@ -153,7 +153,7 @@ import type {Site} from "@/model/Site";
 import type {Meta} from "@/model/Meta";
 
 const sizes = [20, 40, 60, 80, 100]
-const url = ref('http://' + window.location.hostname + ':5344')
+const url = ref('http://' + window.location.hostname + ':' + (store.hostmode ? 5678 : 5344))
 const keyword = ref('')
 const force = ref(false)
 const siteId = ref(1)
