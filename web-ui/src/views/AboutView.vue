@@ -38,6 +38,7 @@
     <p>
       一键部署(内存优化版)：
       <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_native.sh)"</code><br>
+      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_native_host.sh)"</code><br>
     </p>
     <p>
       一键部署(host网络模式)：

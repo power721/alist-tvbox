@@ -77,7 +77,9 @@ then
 	echo -e "127.0.0.1\taccess.mypikpak.com" >> /etc/hosts
 fi
 
-docker image prune -f
+docker container prune -f --filter "label=MAINTAINER=Har01d"
+docker image prune -f --filter "label=MAINTAINER=Har01d"
+docker volume prune -f --filter "label=MAINTAINER=Har01d"
 
 platform="linux/amd64"
 ARCH=$(uname -m)
@@ -96,7 +98,7 @@ done
 
 echo -e "\e[33m重启应用\e[0m"
 docker rm -f xiaoya-tvbox 2>/dev/null && \
-docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e INSTALL=xiaoya -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
+docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:${TAG}
 
 echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
 echo -e "    docker logs -f xiaoya-tvbox\n"

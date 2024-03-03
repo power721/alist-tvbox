@@ -10,6 +10,8 @@ FROM haroldli/alist:hostmode
 
 LABEL MAINTAINER="Har01d"
 
+ENV INSTALL=native-host
+
 VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
@@ -40,4 +42,4 @@ EXPOSE 4567 5678
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-CMD ["5233", "--spring.profiles.active=production,xiaoya,host"]
+CMD ["5233", "--spring.profiles.active=production,xiaoya,native,host"]

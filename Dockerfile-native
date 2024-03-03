@@ -10,6 +10,8 @@ FROM haroldli/alist:latest
 
 LABEL MAINTAINER="Har01d"
 
+ENV INSTALL=native
+
 VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
@@ -40,4 +42,4 @@ EXPOSE 4567 80
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-CMD ["81", "--spring.profiles.active=production,xiaoya"]
+CMD ["81", "--spring.profiles.active=production,xiaoya,native"]

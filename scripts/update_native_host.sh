@@ -1,5 +1,5 @@
 BASE_DIR=/etc/xiaoya
-TAG="hostmode"
+TAG="native-host"
 MOUNT=""
 
 while getopts "d:t:v:" arg; do

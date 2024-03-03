@@ -13,7 +13,6 @@ if [ ! -d /data/log ]; then
   mkdir -p /data/log
 fi
 ln -sf /data/log /opt/atv/log
-[ -h /opt/atv/log/log ] && unlink /opt/atv/log/log
 
 /init.sh 2>&1 | tee /opt/atv/log/init.log 2>&1
 

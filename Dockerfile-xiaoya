@@ -10,7 +10,7 @@ FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 
-ENV MEM_OPT="-Xmx512M" ALIST_PORT=5344
+ENV MEM_OPT="-Xmx512M" ALIST_PORT=5344 INSTALL=xiaoya
 
 COPY config/config.json /opt/alist/data/config.json
 
