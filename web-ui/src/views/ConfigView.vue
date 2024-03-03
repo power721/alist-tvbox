@@ -401,7 +401,7 @@ const updateDebugLog = () => {
 
 const updateAListDebug = () => {
   axios.post('/api/settings', {name: 'alist_debug', value: debugLog.value}).then(() => {
-    ElMessage.success('更新成功，重启失效')
+    ElMessage.success('更新成功，重启生效')
   })
 }
 

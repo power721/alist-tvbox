@@ -30,13 +30,15 @@ public class SettingService {
     private final Environment environment;
     private final AppProperties appProperties;
     private final TmdbService tmdbService;
+    private final AListLocalService aListLocalService;
     private final SettingRepository settingRepository;
 
-    public SettingService(JdbcTemplate jdbcTemplate, Environment environment, AppProperties appProperties, TmdbService tmdbService, SettingRepository settingRepository) {
+    public SettingService(JdbcTemplate jdbcTemplate, Environment environment, AppProperties appProperties, TmdbService tmdbService, AListLocalService aListLocalService, SettingRepository settingRepository) {
         this.jdbcTemplate = jdbcTemplate;
         this.environment = environment;
         this.appProperties = appProperties;
         this.tmdbService = tmdbService;
+        this.aListLocalService = aListLocalService;
         this.settingRepository = settingRepository;
     }
 
@@ -107,6 +109,10 @@ public class SettingService {
         return map;
     }
 
+    public Setting get(String name) {
+        return settingRepository.findById(name).orElse(null);
+    }
+
     public Setting update(Setting setting) {
         if ("merge_site_source".equals(setting.getName())) {
             appProperties.setMerge("true".equals(setting.getValue()));
@@ -134,6 +140,9 @@ public class SettingService {
         }
         if ("debug_log".equals(setting.getName())) {
             setLogLevel(setting);
+        }
+        if ("delete_delay_time".equals(setting.getName())) {
+            aListLocalService.updateSetting("delete_delay_time", setting.getValue(), "number");
         }
         return settingRepository.save(setting);
     }
