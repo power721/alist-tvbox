@@ -6,12 +6,12 @@
     </div>
 
     <div>
-      <el-input v-model="id"  @keyup.enter="getDetail" placeholder="vod_id"/>
+      <el-input v-model="id" @keyup.enter="getDetail" placeholder="vod_id"/>
       <el-button type="primary" @click="getDetail">资源详情</el-button>
     </div>
 
     <div>
-      <el-input v-model="path"  @keyup.enter="load" placeholder="目录完整路径"/>
+      <el-input v-model="path" @keyup.enter="load" placeholder="目录完整路径"/>
       <el-button type="primary" @click="load">加载目录</el-button>
     </div>
 

@@ -206,10 +206,9 @@ public class DoubanService {
         return list.size();
     }
 
-    @Scheduled(cron = "0 0 22 * * ?")
+    @Scheduled(cron = "0 0 20,22 * * ?")
     public void update() {
-        Versions versions = new Versions();
-        getRemoteVersion(versions);
+        getRemoteVersion(new Versions());
     }
 
     public String getRemoteVersion(Versions versions) {
