@@ -30,7 +30,7 @@ COPY data/base_version /
 
 COPY data/version data/app_version
 
-EXPOSE 4567 80
+EXPOSE 4567 5678
 
 ENTRYPOINT ["/entrypoint.sh"]
 
