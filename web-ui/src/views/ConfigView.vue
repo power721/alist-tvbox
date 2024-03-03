@@ -202,6 +202,24 @@
             @change="updateEnableHttps"
           />
         </el-form-item>
+        <el-form-item label="开启调试日志">
+          <el-switch
+            v-model="debugLog"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateDebugLog"
+          />
+        </el-form-item>
+        <el-form-item label="开启AList调试模式">
+          <el-switch
+            v-model="aListDebug"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateAListDebug"
+          />
+        </el-form-item>
         <el-form-item label="AList管理密码" v-if="!store.xiaoya">
           <el-input v-model="atvPass" type="password" show-password/>
         </el-form-item>
@@ -275,6 +293,8 @@ const aListStarted = ref(false)
 const aListRestart = ref(false)
 const mixSiteSource = ref(false)
 const replaceAliToken = ref(false)
+const debugLog = ref(false)
+const aListDebug = ref(false)
 const enableHttps = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -373,6 +393,18 @@ const updateEnableHttps = () => {
   })
 }
 
+const updateDebugLog = () => {
+  axios.post('/api/settings', {name: 'debug_log', value: debugLog.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateAListDebug = () => {
+  axios.post('/api/settings', {name: 'alist_debug', value: debugLog.value}).then(() => {
+    ElMessage.success('更新成功，重启失效')
+  })
+}
+
 const updateLogin = () => {
   axios.post('/api/alist/login', login.value).then(({data}) => {
     ElMessage.success('保存成功')
@@ -432,6 +464,8 @@ onMounted(() => {
     aListRestart.value = data.alist_restart_required === 'true'
     replaceAliToken.value = data.replace_ali_token === 'true'
     enableHttps.value = data.enable_https === 'true'
+    debugLog.value = data.debug_log === 'true'
+    aListDebug.value = data.alist_debug === 'true'
     mixSiteSource.value = data.mix_site_source !== 'false'
     atvPass.value = data.atv_password
     apiClientId.value = data.open_api_client_id || ''

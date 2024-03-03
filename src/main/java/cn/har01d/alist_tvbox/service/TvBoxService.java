@@ -1132,6 +1132,7 @@ public class TvBoxService {
             if (fsDetail.getProvider().contains("Aliyundrive")
                     || ("open".equals(client) && fsDetail.getProvider().contains("115"))) {
                 url = buildProxyUrl(site, path, fsDetail.getSign());
+                log.info("play url: {}", url);
             } else {
                 url = fixHttp(fsDetail.getRawUrl());
             }
@@ -1688,23 +1689,6 @@ public class TvBoxService {
         }
     }
 
-    private void fixCover(Movie movie) {
-        try {
-            if (movie.getCover() != null && !movie.getCover().isEmpty() && !movie.getCover().contains("/images")) {
-                String cover = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                        .replacePath("/images")
-                        .replaceQuery("url=" + movie.getCover())
-                        .build()
-                        .toUriString();
-                log.debug("movie: {} cover url: {}", movie.getId(), cover);
-                movie.setCover(cover);
-            }
-        } catch (Exception e) {
-            // ignore
-        }
-    }
-
     private String getCover(String thumb, int type) {
         String pic = thumb;
         if (pic.isEmpty() && type == 1) {
@@ -1814,7 +1798,7 @@ public class TvBoxService {
     }
 
     private String buildProxyUrl(Site site, String path, String sign) {
-        if ("http://localhost".equals(site.getUrl())) {
+        if (site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
                     .replacePath("/d" + path)
@@ -1833,7 +1817,7 @@ public class TvBoxService {
     }
 
     private String buildUrl(Site site, String path) {
-        if (site == null || "http://localhost".equals(site.getUrl())) {
+        if (site == null || site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
                     .replacePath(path)

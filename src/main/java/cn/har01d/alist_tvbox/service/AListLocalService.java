@@ -99,7 +99,12 @@ public class AListLocalService {
             File outFile = new File("/opt/atv/log/app.log");
             builder.redirectOutput(ProcessBuilder.Redirect.appendTo(outFile));
             builder.redirectError(ProcessBuilder.Redirect.appendTo(outFile));
-            builder.command("/opt/alist/alist", "server", "--no-prefix");
+            boolean debug = settingRepository.findById("alist_debug").map(Setting::getValue).orElse("").equals("true");
+            if (debug) {
+                builder.command("/opt/alist/alist", "server", "--no-prefix", "--debug");
+            } else {
+                builder.command("/opt/alist/alist", "server", "--no-prefix");
+            }
             builder.directory(new File("/opt/alist"));
             Process process = builder.start();
             settingRepository.save(new Setting(ALIST_RESTART_REQUIRED, "false"));

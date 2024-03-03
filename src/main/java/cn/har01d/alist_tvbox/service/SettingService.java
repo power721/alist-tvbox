@@ -1,11 +1,14 @@
 package cn.har01d.alist_tvbox.service;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -47,6 +50,7 @@ public class SettingService {
         appProperties.setEnableHttps(settingRepository.findById("enable_https").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
+        settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
     }
 
     public FileSystemResource exportDatabase() throws IOException {
@@ -128,7 +132,21 @@ public class SettingService {
         if ("tmdb_api_key".equals(setting.getName())) {
             tmdbService.setApiKey(setting.getValue());
         }
+        if ("debug_log".equals(setting.getName())) {
+            setLogLevel(setting);
+        }
         return settingRepository.save(setting);
     }
 
+    private void setLogLevel(Setting setting) {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        ch.qos.logback.classic.Logger logger = loggerContext.getLogger("cn.har01d");
+        if ("true".equals(setting.getValue())) {
+            log.info("enable debug log");
+            logger.setLevel(Level.DEBUG);
+        } else {
+            log.info("disable debug log");
+            logger.setLevel(Level.INFO);
+        }
+    }
 }
