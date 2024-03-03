@@ -26,6 +26,8 @@ COPY entrypoint-native.sh /entrypoint.sh
 
 COPY target/atv ./
 
+COPY data/update.sql /
+COPY data/countries.json /
 COPY data/tvbox.zip /
 COPY data/index.share.zip /
 COPY data/cat.zip /
