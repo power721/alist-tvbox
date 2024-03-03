@@ -546,7 +546,12 @@ public class IndexService {
                             break;
                         }
 
-                        index(context, newPath, depth + 1);
+                        try {
+                            index(context, newPath, depth + 1);
+                        } catch (Exception e) {
+                            context.stats.errors++;
+                            log.warn("index failed: {}", newPath, e);
+                        }
                     }
                 } else if (isMediaFormat(fsInfo.getName())) { // file
                     hasFile = true;
