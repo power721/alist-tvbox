@@ -115,6 +115,7 @@ jobs:
           token: ${{ secrets.BOT_TOKEN }}
           message: |
             一键部署(开发版)： wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t ${{ inputs.tag }}
+            一键部署(开发版)： wget https://d.har01d.cn/update_hostmode.sh -O update_hostmode.sh && sh ./update_hostmode.sh -t hostmode-dev
 
             ${{ github.actor }} created commit on ${{ inputs.branch }} branch:
             Commit message: ${{ env.HEAD_MESSAGE }}
