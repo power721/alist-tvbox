@@ -10,7 +10,7 @@ FROM haroldli/alist-base-new:hostmode
 
 LABEL MAINTAINER="Har01d"
 
-ENV MEM_OPT="-Xmx512M"
+ENV MEM_OPT="-Xmx512M" ALIST_PORT=5678 INSTALL=hostmode
 
 COPY config/config-host.json /opt/alist/data/config.json
 
@@ -23,10 +23,10 @@ COPY entrypoint.sh /
 COPY target/application/ ./
 
 COPY data/tvbox.zip /
+COPY data/base_version /
 COPY data/index.share.zip /
 COPY data/cat.zip /
 COPY data/data.zip /
-COPY data/base_version /
 
 COPY data/version data/app_version
 
