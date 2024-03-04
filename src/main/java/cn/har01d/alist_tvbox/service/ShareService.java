@@ -97,7 +97,7 @@ public class ShareService {
         this.configFileService = configFileService;
         this.pikPakService = pikPakService;
         this.environment = environment;
-        this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
+        this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5144" : "5244")).build();
         this.restTemplate1 = builder
                 .defaultHeader(HttpHeaders.REFERER, "https://docs.qq.com/")
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)

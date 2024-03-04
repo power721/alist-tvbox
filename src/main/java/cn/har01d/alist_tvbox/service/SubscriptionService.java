@@ -816,7 +816,7 @@ public class SubscriptionService {
     private String readAListAddress() {
         Site site = siteRepository.findById(1).orElseThrow();
         if (site.getUrl().startsWith("http://localhost")) {
-            String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
+            String port = appProperties.isHostmode() ? "5144" : environment.getProperty("ALIST_PORT", "5344");
             return ServletUriComponentsBuilder.fromCurrentRequest()
                     .port(port)
                     .replacePath("")

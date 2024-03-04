@@ -17,7 +17,7 @@
   },
   "scheme": {
     "address": "127.0.0.1",
-    "http_port": 5234,
+    "http_port": 5144,
     "https_port": -1,
     "force_https": false,
     "cert_file": "",

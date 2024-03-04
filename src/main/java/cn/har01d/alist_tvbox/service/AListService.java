@@ -243,7 +243,7 @@ public class AListService {
 
     private String getUrl(Site site) {
         if (site.getId() == 1) {
-            return appProperties.isHostmode() ? "http://localhost:5234" : "http://localhost:5244";
+            return appProperties.isHostmode() ? "http://localhost:5144" : "http://localhost:5244";
         }
         return site.getUrl();
     }
