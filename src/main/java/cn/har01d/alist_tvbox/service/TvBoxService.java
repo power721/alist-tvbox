@@ -212,13 +212,22 @@ public class TvBoxService {
             years.add(new FilterValue(String.valueOf(year - i), String.valueOf(year - i)));
         }
         years.add(new FilterValue("其它", "others"));
-        int type = appProperties.isMix() ? 1 : 0;
+
         Category category = new Category();
-        category.setType_id(site.getId() + "$/" + "$" + type);
+        category.setType_id(site.getId() + "$/$0");
         category.setType_name("\uD83C\uDFAC" + site.getName());
-        category.setType_flag(type);
+        category.setType_flag(0);
         result.getCategories().add(category);
         result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters2), new Filter("score", "评分", filters3), new Filter("year", "年份", years)));
+
+        if (appProperties.isMix()) {
+            category = new Category();
+            category.setType_id(site.getId() + "$/$1");
+            category.setType_name("网盘");
+            category.setType_flag(1);
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        }
 
         try {
             Path file = Paths.get("/data/category.txt");

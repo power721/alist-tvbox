@@ -1,14 +1,18 @@
 BASE_DIR=/etc/xiaoya
 TAG="hostmode"
+UPDATE=false
 MOUNT=""
 
-while getopts "d:t:v:" arg; do
+while getopts "d:t:v:u" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
             ;;
         t)
             TAG=${OPTARG}
+            ;;
+        u)
+            UPDATE=true
             ;;
         v)
             MOUNT="${MOUNT} -v ${OPTARG}"
@@ -49,11 +53,18 @@ elif [ "$ARCH" = "aarch64" ]; then
     platform="linux/arm64"
 fi
 
+IMAGE_ID=$(docker images -q haroldli/xiaoya-tvbox:${TAG})
 echo -e "\e[32m下载最新Docker镜像，平台：${platform}\e[0m"
 for i in 1 2 3 4 5
 do
    docker pull --platform ${platform} haroldli/xiaoya-tvbox:${TAG} && break
 done
+
+NEW_IMAGE=$(docker images -q haroldli/xiaoya-tvbox:${TAG})
+if [ "$UPDATE" = "true" ] && [ "$IMAGE_ID" = "$NEW_IMAGE" ]; then
+  echo "镜像没有更新"
+  exit
+fi
 
 echo -e "\e[33m重启应用，host网络模式\e[0m"
 docker rm -f xiaoya-tvbox 2>/dev/null && \
