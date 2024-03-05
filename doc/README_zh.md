@@ -45,11 +45,11 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
 ```
 使用其它配置目录：
 ```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /home/user/atv
+wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/user/atv
 ```
 挂载本地目录：
 ```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -v /home/user/Videos:/video
+wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -v /home/user/Videos:/video
 ```
 使用其它端口：
 
@@ -57,8 +57,8 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -v /home/user/
 - 第二个参数是管理界面端口，默认是4567。
 - 第三个参数是小雅AList端口，默认是5344。
 ```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /home/alist 8080
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /home/alist 8080 5544
+wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/alist 8080
+wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/alist 8080 5544
 ```
 OpenWrt去掉sudo，或者已经是root账号：
 ```bash
@@ -67,7 +67,7 @@ bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
 
 如果没有安装curl:
 ```bash
-wget https://d.har01d.cn/update_xiaoya.sh; sh ./update_xiaoya.sh
+wget https://d.har01d.cn/update_xiaoya.sh; bash ./update_xiaoya.sh
 ```
 
 #### 内存优化版
