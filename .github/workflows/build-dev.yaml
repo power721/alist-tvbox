@@ -91,7 +91,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: Dockerfile-host-dev
+          file: Dockerfile-host
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:hostmode-${{ inputs.tag }}
@@ -104,7 +104,7 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ inputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - if: ${{ inputs.publish }}

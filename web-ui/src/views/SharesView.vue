@@ -46,7 +46,7 @@
     </el-table-column>
   </el-table>
   <div>
-    <el-pagination layout="total, prev, pager, next" :current-page="page" :page-size="size" :total="total"
+    <el-pagination layout="total, prev, pager, next, sizes" :current-page="page" :page-size="size" :total="total"
                    @current-change="loadShares"/>
   </div>
 

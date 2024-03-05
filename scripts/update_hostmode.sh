@@ -62,7 +62,7 @@ done
 
 NEW_IMAGE=$(docker images -q haroldli/xiaoya-tvbox:${TAG})
 if [ "$UPDATE" = "true" ] && [ "$IMAGE_ID" = "$NEW_IMAGE" ]; then
-  echo "镜像没有更新"
+  echo -e "\e[33m镜像没有更新\e[0m"
   exit
 fi
 
