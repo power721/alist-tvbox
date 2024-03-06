@@ -335,6 +335,9 @@ public class ShareService {
                     if (parts.length > 2) {
                         share.setFolderId(parts[2]);
                     }
+                    if (parts.length > 3) {
+                        share.setPassword(parts[3]);
+                    }
                     share.setPath(getMountPath(share));
                     if (shareRepository.existsByPath(share.getPath())) {
                         continue;
@@ -362,7 +365,7 @@ public class ShareService {
         }
 
         for (Share share : list) {
-            sb.append(share.getPath()).append("  ").append(share.getShareId()).append("  ").append(share.getFolderId()).append("\n");
+            sb.append(getMountPath(share)).append("  ").append(share.getShareId()).append("  ").append(share.getFolderId()).append("  ").append(share.getPassword()).append("\n");
         }
 
         log.info("export {} shares to file: {}", list.size(), fileName);

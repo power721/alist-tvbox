@@ -35,7 +35,7 @@
         <span v-else-if="scope.row.type==2">夸克网盘</span>
         <span v-else-if="scope.row.type==3">115网盘</span>
         <span v-else-if="scope.row.type==4">本地存储</span>
-        <span v-else>阿里云盘</span>
+        <span v-else>阿里分享</span>
       </template>
     </el-table-column>
     <el-table-column fixed="right" label="操作" width="200">
@@ -69,7 +69,7 @@
       </el-form-item>
       <el-form-item label="类型" label-width="140">
         <el-radio-group v-model="form.type" class="ml-4">
-          <el-radio :label="0" size="large">阿里云盘</el-radio>
+          <el-radio :label="0" size="large">阿里分享</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
           <el-radio :label="2" size="large">夸克网盘</el-radio>
           <el-radio :label="3" size="large">115网盘</el-radio>
@@ -106,7 +106,7 @@
     <el-form>
       <el-form-item label="类型" label-width="140">
         <el-radio-group v-model="sharesDto.type" class="ml-4">
-          <el-radio :label="0" size="large">阿里云盘</el-radio>
+          <el-radio :label="0" size="large">阿里分享</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
         </el-radio-group>
       </el-form-item>
@@ -126,7 +126,7 @@
   <el-dialog v-model="exportVisible" title="导出分享" width="30%">
     <el-form-item label="类型" label-width="140">
       <el-radio-group v-model="form.type" class="ml-4">
-        <el-radio :label="0" size="large">阿里云盘</el-radio>
+        <el-radio :label="0" size="large">阿里分享</el-radio>
         <el-radio :label="1" size="large">PikPak分享</el-radio>
       </el-radio-group>
     </el-form-item>
