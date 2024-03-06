@@ -46,8 +46,8 @@
     </el-table-column>
   </el-table>
   <div>
-    <el-pagination layout="total, prev, pager, next, sizes" :current-page="page" :page-size="size" :total="total"
-                   @current-change="loadShares"/>
+    <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" :page-size="size" :total="total"
+                   @current-change="loadShares" @size-change="handleSizeChange"/>
   </div>
 
   <el-dialog v-model="formVisible" :title="dialogTitle">
@@ -285,6 +285,15 @@ const getShareLink = (shareInfo: ShareInfo) => {
 
 const loadShares = (value: number) => {
   page.value = value
+  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
+    shares.value = data.content
+    total.value = data.totalElements
+  })
+}
+
+const handleSizeChange = (value: number) => {
+  size.value = value
+  page.value = 1
   axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
     shares.value = data.content
     total.value = data.totalElements
