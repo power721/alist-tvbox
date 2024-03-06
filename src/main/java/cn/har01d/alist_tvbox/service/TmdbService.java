@@ -328,6 +328,13 @@ public class TmdbService {
             }
             String line = lines.get(i).trim();
             if (line.isEmpty() || line.startsWith("-") || line.startsWith("+")) {
+                log.debug("ignore line {}", line);
+                continue;
+            }
+
+            String path = line.split("#")[0];
+            if (metaRepository.existsByPath(path)) {
+                log.debug("ignore path {}", path);
                 continue;
             }
 
@@ -396,9 +403,9 @@ public class TmdbService {
         return new HashSet<>();
     }
 
-    private Tmdb handleIndexLine(int id, String path, String type, boolean force, Set<String> failed) {
-        String[] parts = path.split("#");
-        path = parts[0];
+    private Tmdb handleIndexLine(int id, String line, String type, boolean force, Set<String> failed) {
+        String[] parts = line.split("#");
+        String path = parts[0];
 
         TmdbMeta meta = tmdbMetaRepository.findByPath(path);
         if (meta == null) {

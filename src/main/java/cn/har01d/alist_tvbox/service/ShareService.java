@@ -341,7 +341,6 @@ public class ShareService {
                     }
                     create(share);
                     count++;
-                    shareId++;
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
                 }
