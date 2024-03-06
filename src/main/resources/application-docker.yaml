@@ -9,7 +9,7 @@ logging:
   file:
     name: log/app.log
   level:
-    cn.har01d: debug
+    cn.har01d: info
 
 app:
   sites:
