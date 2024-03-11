@@ -126,7 +126,7 @@ public class TvBoxController {
 
     @PostMapping("/api/cat/sync")
     public int syncCat() {
-        return Utils.execute("unzip -q -o /cat.zip -d /www/cat && cp -r /data/cat/* /www/cat/");
+        return Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && cp -r /data/cat/* /www/cat/");
     }
 
     @GetMapping(value = "/repo/{id}", produces = "application/json")

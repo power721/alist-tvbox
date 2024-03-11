@@ -17,6 +17,7 @@ import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -155,6 +156,7 @@ public class IndexService {
         try {
             String remote = getVersion();
             String local = settingRepository.findById(INDEX_VERSION).map(Setting::getValue).orElse("").trim();
+            log.debug("xiaoya index file local: {} remote: {}", local, remote);
             if (remote != null && !local.equals(remote)) {
                 executor.execute(() -> updateXiaoyaIndexFile(remote));
             }
@@ -172,10 +174,7 @@ public class IndexService {
         } catch (ResourceAccessException e) {
             remote = restTemplate.getForObject("http://data.har01d.cn/version.txt", String.class);
         }
-        if (remote == null) {
-            return null;
-        }
-        return remote.trim();
+        return Utils.trim(remote);
     }
 
     public void updateXiaoyaIndexFile(String remote) {
