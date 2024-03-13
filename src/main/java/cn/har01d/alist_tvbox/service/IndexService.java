@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -372,7 +373,9 @@ public class IndexService {
         File info = new File(dir, indexRequest.getIndexName() + ".info");
 
         indexRequest.setPaths(indexRequest.getPaths().stream().filter(e -> !e.isBlank()).toList());
-        List<String> paths = indexRequest.getPaths().stream().map(e -> e.split(":")[0]).toList();
+        List<String> paths = indexRequest.getPaths().stream().map(e -> e.split(":")[0]).collect(Collectors.toList());
+        List<String> excludes = paths.stream().filter(e -> e.startsWith("-")).map(e -> e.substring(1)).toList();
+        paths.removeAll(excludes);
         if (indexRequest.isIncremental()) {
             removeLines(file, paths);
         }
@@ -385,6 +388,7 @@ public class IndexService {
             String detail = getTaskDetails(paths) + "\n\n索引文件:\n" + file.getAbsolutePath();
             taskService.updateTaskData(task.getId(), detail);
             IndexContext context = new IndexContext(indexRequest, site, writer, task.getId());
+            context.getExcludes().addAll(excludes);
             context.getExcludes().addAll(loadExcluded(file));
             int total = 0;
             for (String path : indexRequest.getPaths()) {
@@ -590,6 +594,9 @@ public class IndexService {
         for (String rule : rules) {
             if (StringUtils.isBlank(rule)) {
                 continue;
+            }
+            if (rule.startsWith("/") && path.startsWith(rule)) {
+                return true;
             }
             if (rule.startsWith("^") && rule.endsWith("$") && path.equals(rule.substring(1, rule.length() - 1))) {
                 return true;
