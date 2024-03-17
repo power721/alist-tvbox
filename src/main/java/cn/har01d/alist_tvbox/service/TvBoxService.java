@@ -1081,13 +1081,13 @@ public class TvBoxService {
         } else {
             FsResponse fsResponse = aListService.listFiles(site, path, 1, 100);
             for (FsInfo fsInfo : fsResponse.getFiles()) {
-                if (isMediaFormat(fsInfo.getName())) {
+                if (fsInfo.getType() != 1 && isMediaFormat(fsInfo.getName())) {
                     name = fsInfo.getName();
                     fullPath = fixPath(path + "/" + name);
                     break;
                 }
             }
-            log.info("get play url - site {}:{}  path: {}", site.getId(), site.getName(), fullPath);
+            log.info("get play url -- site {}:{}  path: {}", site.getId(), site.getName(), fullPath);
         }
 
         Map<String, Object> result = new HashMap<>();
@@ -1506,7 +1506,7 @@ public class TvBoxService {
 
         FsResponse fsResponse = aListService.listFiles(site, path, 1, 0);
         List<FsInfo> files = fsResponse.getFiles().stream()
-                .filter(e -> isMediaFormat(e.getName()))
+                .filter(e -> e.getType() != 1 && isMediaFormat(e.getName()))
                 .toList();
         List<String> playFrom = new ArrayList<>();
         List<String> playUrl = new ArrayList<>();
@@ -1540,14 +1540,20 @@ public class TvBoxService {
             String fsuffix = Utils.getCommonSuffix(folders);
             log.debug("folders common prefix: '{}'  common suffix: '{}'", fprefix, fsuffix);
 
+            boolean empty = files.isEmpty();
+            List<String> subFolders = new ArrayList<>();
             for (String folder : folders) {
                 fsResponse = aListService.listFiles(site, path + "/" + folder, 1, 0);
                 files = fsResponse.getFiles().stream()
-                        .filter(e -> isMediaFormat(e.getName()))
+                        .filter(e -> e.getType() != 1 && isMediaFormat(e.getName()))
                         .toList();
                 if (files.isEmpty()) {
+                    fsResponse.getFiles().stream()
+                            .filter(e -> e.getType() == 1)
+                            .forEach(e -> subFolders.add(folder + "/" + e.getName()));
                     continue;
                 }
+                empty = false;
                 List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
                 String prefix = Utils.getCommonPrefix(fileNames);
                 String suffix = Utils.getCommonSuffix(fileNames);
@@ -1565,6 +1571,40 @@ public class TvBoxService {
                 }
                 playFrom.add(fixName(folder, fprefix, fsuffix));
                 playUrl.add(String.join("#", urls));
+            }
+
+            if (empty) {
+                log.debug("subFolders: {}", subFolders);
+                fprefix = Utils.getCommonPrefix(subFolders);
+                fsuffix = Utils.getCommonSuffix(subFolders);
+                log.debug("sub folders common prefix: '{}'  common suffix: '{}'", fprefix, fsuffix);
+
+                for (String folder : subFolders) {
+                    fsResponse = aListService.listFiles(site, path + "/" + folder, 1, 0);
+                    files = fsResponse.getFiles().stream()
+                            .filter(e -> e.getType() != 1 && isMediaFormat(e.getName()))
+                            .toList();
+                    if (files.isEmpty()) {
+                        continue;
+                    }
+                    List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
+                    String prefix = Utils.getCommonPrefix(fileNames);
+                    String suffix = Utils.getCommonSuffix(fileNames);
+                    log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
+
+                    if (appProperties.isSort()) {
+                        fileNames.sort(Comparator.comparing(FileNameInfo::new));
+                    }
+
+                    List<String> urls = new ArrayList<>();
+                    for (String name : fileNames) {
+                        paths.add("/" + folder + "/" + name);
+                        String url = meta.getId() + "-" + id++;
+                        urls.add(fixName(name, prefix, suffix) + "$" + url);
+                    }
+                    playFrom.add(fixName(folder, fprefix, fsuffix));
+                    playUrl.add(String.join("#", urls));
+                }
             }
         }
 
