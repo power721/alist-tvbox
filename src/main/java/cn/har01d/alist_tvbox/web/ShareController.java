@@ -1,8 +1,9 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
+import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.Share;
+import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.service.ShareService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.domain.Page;
@@ -63,6 +64,11 @@ public class ShareController {
     @GetMapping("/api/storages")
     public Object listStorages(Pageable pageable) {
         return shareService.listStorages(pageable);
+    }
+
+    @PostMapping("/api/storages/{id}")
+    public Response reloadStorage(@PathVariable Integer id) {
+        return shareService.reloadStorage(id);
     }
 
     @PostMapping("/api/import-shares")

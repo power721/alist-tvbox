@@ -7,7 +7,6 @@
     <el-button type="primary" @click="handleAdd">添加</el-button>
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
   </el-row>
-  <div class="space"></div>
 
   <el-table :data="shares" border @selection-change="handleSelectionChange" style="width: 100%">
     <el-table-column type="selection" width="55"/>
@@ -48,6 +47,34 @@
   <div>
     <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" :page-size="size" :total="total"
                    @current-change="loadShares" @size-change="handleSizeChange"/>
+  </div>
+
+  <div class="space"></div>
+  <h2>失败列表</h2>
+  <el-table :data="storages" border style="width: 100%">
+    <el-table-column prop="id" label="ID" width="70"/>
+    <el-table-column prop="mount_path" label="路径"/>
+    <el-table-column prop="status" label="状态" width="260"/>
+    <el-table-column prop="driver" label="类型" width="120">
+      <template #default="scope">
+        <span v-if="scope.row.driver=='AliyundriveShare2Open'">阿里分享</span>
+        <span v-else-if="scope.row.driver=='PikPakShare'">PikPak分享</span>
+        <span v-else-if="scope.row.driver=='Quark'">夸克网盘</span>
+        <span v-else-if="scope.row.driver=='115 Cloud'">115网盘</span>
+        <span v-else-if="scope.row.driver=='Local'">本地存储</span>
+        <span v-else-if="scope.row.driver=='Alias'">别名</span>
+        <span v-else>{{scope.row.driver}}</span>
+      </template>
+    </el-table-column>
+    <el-table-column fixed="right" label="操作" width="80">
+      <template #default="scope">
+        <el-button link type="primary" size="small" @click="reloadStorage(scope.row.id)">重新加载</el-button>
+      </template>
+    </el-table-column>
+  </el-table>
+  <div>
+    <el-pagination layout="total, prev, pager, next" :current-page="page1" :total="total1" :page-size="20"
+                   @current-change="loadStorages"/>
   </div>
 
   <el-dialog v-model="formVisible" :title="dialogTitle">
@@ -159,10 +186,21 @@ interface ShareInfo {
   type: number
 }
 
+interface Storage {
+  id: number
+  mount_path: string
+  driver: string
+  status: string
+  addition: string
+}
+
 const multipleSelection = ref<ShareInfo[]>([])
+const storages = ref<Storage[]>([])
 const page = ref(1)
+const page1 = ref(1)
 const size = ref(20)
 const total = ref(0)
+const total1 = ref(0)
 const shares = ref([])
 const dialogTitle = ref('')
 const formVisible = ref(false)
@@ -291,6 +329,25 @@ const loadShares = (value: number) => {
   })
 }
 
+const loadStorages = (value: number) => {
+  page1.value = value
+  axios.get('/api/storages?page=' + (page1.value - 1) + '&size=20').then(({data}) => {
+    storages.value = data.data.content
+    total1.value = data.data.total
+  })
+}
+
+const reloadStorage = (id: number) => {
+  axios.post('/api/storages/' + id).then(({data}) => {
+    if (data.code == 200) {
+      ElMessage.success('加载成功')
+      loadStorages(page1.value)
+    } else {
+      ElMessage.error(data.message)
+    }
+  })
+}
+
 const handleSizeChange = (value: number) => {
   size.value = value
   page.value = 1
@@ -339,9 +396,12 @@ const handleSelectionChange = (val: ShareInfo[]) => {
 
 onMounted(() => {
   loadShares(page.value)
+  loadStorages(page1.value)
 })
 </script>
 
 <style scoped>
-
+.space {
+  margin: 12px 0;
+}
 </style>

@@ -16,6 +16,7 @@ import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -692,7 +693,17 @@ public class ShareService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(accountService.login()));
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<Object> response = restTemplate.exchange("/api/admin/storage/list?page=" + pageable.getPageNumber() + "&per_page=" + pageable.getPageSize(), HttpMethod.GET, entity, Object.class);
+        ResponseEntity<Object> response = restTemplate.exchange("/api/admin/storage/failed?page=" + pageable.getPageNumber() + "&per_page=" + pageable.getPageSize(), HttpMethod.GET, entity, Object.class);
+        return response.getBody();
+    }
+
+    public Response reloadStorage(Integer id) {
+        aListLocalService.validateAListStatus();
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("Authorization", Collections.singletonList(accountService.login()));
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
+        ResponseEntity<Response> response = restTemplate.exchange("/api/admin/storage/reload?id=" + id, HttpMethod.POST, entity, Response.class);
+        log.debug("reload storage {}: {}", id, response.getBody());
         return response.getBody();
     }
 
