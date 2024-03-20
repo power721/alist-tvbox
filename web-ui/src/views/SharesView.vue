@@ -331,7 +331,7 @@ const loadShares = (value: number) => {
 
 const loadStorages = (value: number) => {
   page1.value = value
-  axios.get('/api/storages?page=' + (page1.value - 1) + '&size=20').then(({data}) => {
+  axios.get('/api/storages?page=' + page1.value + '&size=20').then(({data}) => {
     storages.value = data.data.content
     total1.value = data.data.total
   })

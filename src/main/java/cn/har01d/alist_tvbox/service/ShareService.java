@@ -117,7 +117,7 @@ public class ShareService {
             list = loadSharesFromFile();
         }
 
-        Share share = loadTacit0924();
+        Share share = loadTacit0924(list.stream().filter(e -> e.getId() == 7000).findAny().orElse(null));
         if (share != null) {
             list = list.stream().filter(e -> e.getId() != 7000).collect(Collectors.toList());
             list.add(share);
@@ -730,7 +730,7 @@ public class ShareService {
         return null;
     }
 
-    private Share loadTacit0924() {
+    private Share loadTacit0924(Share old) {
         if (!environment.matchesProfiles("xiaoya")) {
             return null;
         }
@@ -740,6 +740,9 @@ public class ShareService {
             String[] parts = link.split(":");
             link = parts[0];
             String code = parts.length == 1 ? "" : parts[1];
+            if (old != null && old.getShareId().equals(link) && old.getPassword().equals(code)) {
+                return null;
+            }
             log.info("Tacit0924 link: {} {}", link, code);
             String shareToken = getShareToken(link, code);
             String folder = getFolderId(link, shareToken);
@@ -792,13 +795,16 @@ public class ShareService {
     }
 
     private String getFolderId(String shareId, String shareToken) {
+        String fileId = "root";
         try {
-            String fileId = getFileId(shareId, shareToken, "root");
-            return getFileId(shareId, shareToken, fileId);
+            Thread.sleep(1500);
+            fileId = getFileId(shareId, shareToken, fileId);
+            Thread.sleep(1500);
+            fileId = getFileId(shareId, shareToken, fileId);
         } catch (Exception e) {
             log.warn("", e);
         }
-        return "root";
+        return fileId;
     }
 
     private String getShareToken(String shareId, String code) {
