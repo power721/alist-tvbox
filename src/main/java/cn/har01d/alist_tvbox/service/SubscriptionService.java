@@ -451,7 +451,25 @@ public class SubscriptionService {
             json = json.replace("./", url);
         }
 
-        return convertResult(json, configKey);
+        Map<String, Object> config = convertResult(json, configKey);
+        if (configUrl == null || configUrl.isEmpty()) {
+            return handleIptv(config);
+        }
+        return config;
+    }
+
+    private Map<String, Object> handleIptv(Map<String, Object> config) {
+        if (Files.exists(Path.of("/www/tvbox/iptv.m3u"))) {
+            return config;
+        }
+
+        Object obj = config.get("lives");
+        if (obj instanceof List) {
+            List<Map<String, Object>> list = (List<Map<String, Object>>) obj;
+            list = list.stream().filter(e -> !"我的私用".equals(e.get("name"))).toList();
+            config.put("lives", list);
+        }
+        return config;
     }
 
     private void handleWhitelist(Map<String, Object> config) {
@@ -488,6 +506,44 @@ public class SubscriptionService {
             config.remove("sites-blacklist");
         } catch (Exception e) {
             log.warn("", e);
+        }
+
+        try {
+            Object obj = config.get("blacklist");
+            if (obj instanceof Map) {
+                Map<String, Object> blacklist = (Map<String, Object>) obj;
+                removeBlacklist(config, blacklist, "sites");
+                removeBlacklist(config, blacklist, "lives");
+                removeBlacklist(config, blacklist, "rules");
+                removeBlacklist(config, blacklist, "parses");
+            }
+            config.remove("blacklist");
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+    }
+
+    private void removeBlacklist(Map<String, Object> config, Map<String, Object> blacklist, String type) {
+        Object obj1 = blacklist.get(type);
+        if (obj1 == null) {
+            obj1 = new ArrayList<String>();
+        }
+        Object obj2 = config.get(type);
+        if (obj2 instanceof List) {
+            List<Map<String, Object>> list = (List<Map<String, Object>>) obj2;
+            Set<String> set = new HashSet<>((List<String>) obj1);
+            String key;
+            if ("sites".equals(type)) {
+                key = "key";
+                set.add("Alist1");
+            } else {
+                key = "name";
+            }
+            if (!set.isEmpty()) {
+                list = list.stream().filter(e -> !set.contains(e.get(key))).toList();
+                config.put(type, list);
+                log.info("remove {}: {}", type, set);
+            }
         }
     }
 

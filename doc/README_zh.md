@@ -174,7 +174,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ![添加订阅](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub_config.png)
 
-添加订阅支持多个URL，用逗号隔开。定制部分基本和TvBox的配置json一致，添加了站点白名单`sites-whitelist`和黑名单`sites-blacklist`。
+添加订阅支持多个URL，用逗号隔开。定制部分基本和TvBox的配置json一致，添加了站点白名单`sites-whitelist`和黑名单`blacklist`。
 
 定制属于高级功能，不懂TvBox配置格式不要轻易改动。
 
@@ -188,10 +188,13 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ```json
 {
-    "sites-blacklist": ["说明1","说明2", "说明3","说明4","公告", "ext_live_protocol", "cc"],
     "sites": [
      
-    ]
+    ],
+   "blacklist": {
+      "sites": ["说明1","说明2", "说明3","说明4","公告", "ext_live_protocol", "cc","豆豆"],
+      "parses": ["聚合"]
+   }
 }
 ```
 
