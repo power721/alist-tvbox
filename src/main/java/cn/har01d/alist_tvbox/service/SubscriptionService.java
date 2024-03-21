@@ -466,7 +466,7 @@ public class SubscriptionService {
         Object obj = config.get("lives");
         if (obj instanceof List) {
             List<Map<String, Object>> list = (List<Map<String, Object>>) obj;
-            list = list.stream().filter(e -> !"我的私用".equals(e.get("name"))).toList();
+            list = list.stream().filter(e -> !"我的私用".equals(e.get("name"))).collect(Collectors.toList());
             config.put("lives", list);
         }
         return config;
@@ -540,7 +540,7 @@ public class SubscriptionService {
                     key = "name";
                 }
                 List<Map<String, Object>> list = (List<Map<String, Object>>) obj2;
-                list = list.stream().filter(e -> !set.contains(e.get(key))).toList();
+                list = list.stream().filter(e -> !set.contains(e.get(key))).collect(Collectors.toList());
                 config.put(type, list);
                 log.info("remove {}: {}", type, set);
             }
@@ -586,7 +586,7 @@ public class SubscriptionService {
         return config;
     }
 
-    private static void overrideConfig(Map<String, Object> config, String url, String prefix, Map<String, Object> override) {
+    protected static void overrideConfig(Map<String, Object> config, String url, String prefix, Map<String, Object> override) {
         for (Map.Entry<String, Object> entry : override.entrySet()) {
             try {
                 String key = entry.getKey();
@@ -610,6 +610,7 @@ public class SubscriptionService {
                             }
                         }
                     }
+                    log.debug("overrideConfig: {} {}", key, value);
                     overrideList(config, override, prefix, spider, key, keyName);
                 } else {
                     config.put(key, value);
