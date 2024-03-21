@@ -40,28 +40,36 @@ Backed URL support multiple values, use comma as separator.
 e.g.: disable 2 sites by key, change 1 site name by key, add new site.
 ```json
 {
-    "sites-blacklist": ["csp_Bili", "csp_Biliych"],
+  "sites": [
+    {
+      "key": "js豆瓣",
+      "name": "js豆瓣"
+    },
+    {
+      "key": "测试",
+      "name": "测试",
+      "type": 3,
+      "api": "DOCKER_ADDRESS/tvbox/libs/drpy.min.js",
+      "searchable": 2,
+      "quickSearch": 0,
+      "filterable": 1
+    }
+  ],
+  "parses": [
+    {
+      "name": "测试1",
+      "type": 3,
+      "url": "测试"
+    }
+  ],
+  "blacklist": {
     "sites": [
-        {
-          "key": "js豆瓣",
-          "name": "js豆瓣"
-        },
-        {
-          "key": "测试",
-          "name": "测试",
-          "type": 3,
-          "api": "/tvbox/libs/drpy.min.js",
-          "searchable": 2,
-          "quickSearch": 0,
-          "filterable": 1
-        }
+      "csp_Bili",
+      "csp_Biliych"
     ],
     "parses": [
-        {
-            "name":"测试1",
-            "type":3,
-            "url":"测试"
-        }
+      "聚合"
     ]
+  }
 }
 ```
