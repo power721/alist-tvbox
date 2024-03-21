@@ -188,13 +188,44 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ```json
 {
+  "sites": [
+    {
+      "key": "玩偶哥哥",
+      "name": "👽玩偶哥哥┃4K弹幕",
+      "type": 3,
+      "api": "csp_WoGG",
+      "searchable": 1,
+      "quickSearch": 1,
+      "changeable": 0,
+      "ext": "http://127.0.0.1:9978/file/tvfan/token.txt+4k|auto|fhd$$$https://www.wogg.xyz/$$$弹",
+      "jar": "https://fs-im-kefu.7moor-fs1.com/29397395/4d2c3f00-7d4c-11e5-af15-41bf63ae4ea0/1708249660012/fan.txt;md5;87d5916b7bb5c8acacac5490e802828e"
+    }
+  ],
+  "lives": [
+    {
+      "name": "范明明•ipv6",
+      "type": 0,
+      "url": "https://github.moeyy.xyz/https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u",
+      "playerType": 1,
+      "epg": "http://epg.112114.xyz/?ch={name}&date={date}",
+      "logo": "https://epg.112114.xyz/logo/{name}.png"
+    }
+  ],
+  "blacklist": {
     "sites": [
-     
+      "说明1",
+      "说明2",
+      "说明3",
+      "说明4",
+      "公告",
+      "ext_live_protocol",
+      "cc",
+      "豆豆"
     ],
-   "blacklist": {
-      "sites": ["说明1","说明2", "说明3","说明4","公告", "ext_live_protocol", "cc","豆豆"],
-      "parses": ["聚合"]
-   }
+    "parses": [
+      "聚合"
+    ]
+  }
 }
 ```
 
