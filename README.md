@@ -49,7 +49,7 @@ e.g.: disable 2 sites by key, change 1 site name by key, add new site.
       "key": "测试",
       "name": "测试",
       "type": 3,
-      "api": "DOCKER_ADDRESS/tvbox/libs/drpy.min.js",
+      "api": "ATV_ADDRESS/tvbox/libs/drpy.min.js",
       "searchable": 2,
       "quickSearch": 0,
       "filterable": 1
