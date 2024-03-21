@@ -526,20 +526,20 @@ public class SubscriptionService {
     private void removeBlacklist(Map<String, Object> config, Map<String, Object> blacklist, String type) {
         Object obj1 = blacklist.get(type);
         if (obj1 == null) {
-            obj1 = new ArrayList<String>();
+            obj1 = new ArrayList<String>(); // to remove Alist1 site
         }
         Object obj2 = config.get(type);
-        if (obj2 instanceof List) {
-            List<Map<String, Object>> list = (List<Map<String, Object>>) obj2;
+        if (obj1 instanceof List && obj2 instanceof List) {
             Set<String> set = new HashSet<>((List<String>) obj1);
-            String key;
-            if ("sites".equals(type)) {
-                key = "key";
-                set.add("Alist1");
-            } else {
-                key = "name";
-            }
             if (!set.isEmpty()) {
+                String key;
+                if ("sites".equals(type)) {
+                    key = "key";
+                    set.add("Alist1");
+                } else {
+                    key = "name";
+                }
+                List<Map<String, Object>> list = (List<Map<String, Object>>) obj2;
                 list = list.stream().filter(e -> !set.contains(e.get(key))).toList();
                 config.put(type, list);
                 log.info("remove {}: {}", type, set);
