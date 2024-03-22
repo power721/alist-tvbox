@@ -32,6 +32,8 @@ public class IndexTemplate {
     private Integer sleep;
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean scheduled;
+    @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean scrape;
     private String scheduleTime;
     private Instant createdTime;
 

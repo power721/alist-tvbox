@@ -70,6 +70,7 @@ public class IndexTemplateService {
         IndexTemplateDto dto = new IndexTemplateDto();
         dto.setSiteId(1);
         dto.setScheduled(true);
+        dto.setScrape(true);
         dto.setScheduleTime("10|14|18|22");
         dto.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":1000,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
         IndexTemplate template = create(dto);
@@ -114,6 +115,7 @@ public class IndexTemplateService {
         template.setName(dto.getName());
         template.setData(dto.getData());
         template.setSleep(dto.getSleep());
+        template.setScrape(dto.isScrape());
         template.setScheduled(dto.isScheduled());
         template.setScheduleTime(dto.getScheduleTime());
         template.setCreatedTime(Instant.now());
@@ -132,6 +134,7 @@ public class IndexTemplateService {
         template.setSiteId(dto.getSiteId());
         template.setName(dto.getName());
         template.setData(dto.getData());
+        template.setScrape(dto.isScrape());
         template.setScheduled(dto.isScheduled());
         template.setScheduleTime(dto.getScheduleTime());
         template.setCreatedTime(Instant.now());

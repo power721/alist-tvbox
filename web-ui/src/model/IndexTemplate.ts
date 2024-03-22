@@ -5,4 +5,5 @@ export interface IndexTemplate {
   createdTime: string
   scheduleTime: string
   scheduled: boolean
+  scrape: boolean
 }

@@ -14,6 +14,7 @@ public class IndexRequest {
     private boolean excludeExternal;
     private boolean incremental;
     private boolean compress;
+    private boolean scrape;
     private boolean includeFiles;
     private int maxDepth = 10;
     private int sleep = 2000;

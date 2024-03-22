@@ -23,6 +23,9 @@
       <el-form-item label="排除外部AList站点？">
         <el-switch v-model="form.excludeExternal"/>
       </el-form-item>
+      <el-form-item label="自动刮削？">
+        <el-switch v-model="form.scrape"/>
+      </el-form-item>
       <el-form-item label="包含文件？">
         <el-switch v-model="form.includeFiles"/>
       </el-form-item>
@@ -190,6 +193,7 @@ const form = reactive({
   siteId: 1,
   indexName: 'custom_index',
   excludeExternal: false,
+  scrape: true,
   incremental: true,
   includeFiles: false,
   compress: false,
@@ -245,9 +249,10 @@ const loadTemplate = (data: IndexTemplate) => {
   form.includeFiles = template.includeFiles
   form.incremental = template.incremental
   form.compress = template.compress
-  form.scheduled = data.scheduled
+  form.scrape = template.scrape
   form.sleep = template.sleep
   form.maxDepth = template.maxDepth
+  form.scheduled = data.scheduled
   form.scheduleTime = data.scheduleTime
   form.paths = template.paths.join('\n')
   form.excludes = template.excludes.join(',')
@@ -282,6 +287,7 @@ const saveTemplate = (id: number|null) => {
   const request = {
     name: form.indexName,
     siteId: form.siteId,
+    scrape: form.scrape,
     scheduled: form.scheduled,
     scheduleTime: timeList.value.join('|'),
     data: JSON.stringify(data)
@@ -329,6 +335,7 @@ const handleForm = () => {
     includeFiles: form.includeFiles,
     incremental: form.incremental,
     compress: form.compress,
+    scrape: form.scrape,
     scheduled: form.scheduled,
     sleep: form.sleep,
     maxDepth: form.maxDepth,

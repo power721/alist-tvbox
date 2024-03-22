@@ -8,6 +8,7 @@ public class IndexTemplateDto {
     private String name = "custom_index";
     private String data;
     private boolean scheduled;
+    private boolean scrape;
     private String scheduleTime = "";
     private int sleep = 2000;
 }

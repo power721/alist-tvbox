@@ -75,6 +75,7 @@ public class IndexService {
     private final SiteService siteService;
     private final TaskService taskService;
     private final AListLocalService aListLocalService;
+    private final TmdbService tmdbService;
     private final AppProperties appProperties;
     private final SettingRepository settingRepository;
     private final IndexTemplateRepository indexTemplateRepository;
@@ -88,6 +89,7 @@ public class IndexService {
                         SiteService siteService,
                         TaskService taskService,
                         AListLocalService aListLocalService,
+                        TmdbService tmdbService,
                         AppProperties appProperties,
                         SettingRepository settingRepository,
                         IndexTemplateRepository indexTemplateRepository,
@@ -99,6 +101,7 @@ public class IndexService {
         this.siteService = siteService;
         this.taskService = taskService;
         this.aListLocalService = aListLocalService;
+        this.tmdbService = tmdbService;
         this.appProperties = appProperties;
         this.settingRepository = settingRepository;
         this.indexTemplateRepository = indexTemplateRepository;
@@ -343,6 +346,7 @@ public class IndexService {
                 try {
                     log.info("auto index for template: {}", template.getId());
                     IndexRequest indexRequest = objectMapper.readValue(template.getData(), IndexRequest.class);
+                    indexRequest.setScrape(template.isScrape());
                     index(indexRequest);
                 } catch (Exception e) {
                     log.error("start index failed: {}", template.getId(), e);
@@ -422,6 +426,10 @@ public class IndexService {
         }
         taskService.completeTask(task.getId());
         taskService.updateTaskSummary(task.getId(), summary);
+
+        if (indexRequest.isScrape()) {
+            tmdbService.scrape(site.getId(), indexRequest.getIndexName(), false);
+        }
 
         log.info("index done, total time : {} {}", Duration.ofNanos(stopWatch.getTotalTimeNanos()), stopWatch.prettyPrint());
         log.info("index file: {}", file.getAbsolutePath());
