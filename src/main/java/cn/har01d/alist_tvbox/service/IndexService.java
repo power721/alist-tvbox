@@ -8,6 +8,8 @@ import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.IndexResponse;
 import cn.har01d.alist_tvbox.entity.IndexTemplate;
 import cn.har01d.alist_tvbox.entity.IndexTemplateRepository;
+import cn.har01d.alist_tvbox.entity.Meta;
+import cn.har01d.alist_tvbox.entity.MetaRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
@@ -26,6 +28,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -52,6 +55,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -74,6 +78,7 @@ public class IndexService {
     private final AppProperties appProperties;
     private final SettingRepository settingRepository;
     private final IndexTemplateRepository indexTemplateRepository;
+    private final MetaRepository metaRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final Environment environment;
@@ -86,6 +91,7 @@ public class IndexService {
                         AppProperties appProperties,
                         SettingRepository settingRepository,
                         IndexTemplateRepository indexTemplateRepository,
+                        MetaRepository metaRepository,
                         RestTemplateBuilder builder,
                         ObjectMapper objectMapper,
                         Environment environment) {
@@ -96,6 +102,7 @@ public class IndexService {
         this.appProperties = appProperties;
         this.settingRepository = settingRepository;
         this.indexTemplateRepository = indexTemplateRepository;
+        this.metaRepository = metaRepository;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT1)
@@ -395,9 +402,11 @@ public class IndexService {
                 if (isCancelled(context)) {
                     break;
                 }
+                context.getTime().clear();
                 path = customize(context, indexRequest, path);
                 stopWatch.start("index " + path);
                 index(context, path, 0);
+                handleUpdateTime(path, context.getTime());
                 stopWatch.stop();
                 log.info("{} {}", path, context.stats.indexed - total);
                 total = context.stats.indexed;
@@ -416,6 +425,29 @@ public class IndexService {
 
         log.info("index done, total time : {} {}", Duration.ofNanos(stopWatch.getTotalTimeNanos()), stopWatch.prettyPrint());
         log.info("index file: {}", file.getAbsolutePath());
+    }
+
+    private void handleUpdateTime(String path, Map<String, String> times) {
+        log.debug("handle update time for {}", path);
+        try {
+            var list = metaRepository.findByPathStartsWith(path, PageRequest.of(0, 1000)).getContent();
+            List<Meta> updated = new ArrayList<>();
+            for (var meta : list) {
+                String text = times.get(meta.getPath());
+                if (text != null) {
+                    Instant time = Instant.parse(text);
+                    log.debug("{} {} {}", meta.getPath(), meta.getTime(), time);
+                    if (time != null && (meta.getTime() == null || time.isAfter(meta.getTime()))) {
+                        meta.setTime(time);
+                        updated.add(meta);
+                    }
+                }
+            }
+            log.info("update time for {} path {}", updated.size(), path);
+            metaRepository.saveAll(updated);
+        } catch (Exception e) {
+            log.warn("handleUpdateTime error", e);
+        }
     }
 
     private static String customize(IndexContext context, IndexRequest indexRequest, String path) {
@@ -537,6 +569,7 @@ public class IndexService {
                         continue;
                     }
 
+                    context.getTime().put(newPath, fsInfo.getModified());
                     if (context.getMaxDepth() == depth + 1 && !context.isIncludeFiles()) {
                         files.add(fsInfo.getName());
                     } else {
@@ -569,6 +602,7 @@ public class IndexService {
                         context.stats.files++;
                         log.debug("{}, add file: {}", path, fsInfo.getName());
                         files.add(fsInfo.getName());
+                        context.getTime().put(newPath, fsInfo.getModified());
                     }
                 } else {
                     log.debug("ignore file: {}", fsInfo.getName());

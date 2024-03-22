@@ -5,7 +5,10 @@ import lombok.Data;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 @Data
@@ -16,6 +19,7 @@ public class IndexContext {
     private final FileWriter writer;
     private final Integer taskId;
     private Set<String> set = new HashSet<>();
+    private Map<String, String> time = new HashMap<>();
     private boolean includeFiles;
     private int maxDepth = 10;
 

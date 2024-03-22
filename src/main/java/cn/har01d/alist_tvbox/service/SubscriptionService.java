@@ -586,7 +586,7 @@ public class SubscriptionService {
         return config;
     }
 
-    protected static void overrideConfig(Map<String, Object> config, String url, String prefix, Map<String, Object> override) {
+    private static void overrideConfig(Map<String, Object> config, String url, String prefix, Map<String, Object> override) {
         for (Map.Entry<String, Object> entry : override.entrySet()) {
             try {
                 String key = entry.getKey();
