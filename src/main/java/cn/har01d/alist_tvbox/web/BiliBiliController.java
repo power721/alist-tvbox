@@ -5,7 +5,6 @@ import cn.har01d.alist_tvbox.dto.bili.CookieData;
 import cn.har01d.alist_tvbox.dto.bili.QrCode;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -25,16 +24,14 @@ import java.util.Map;
 public class BiliBiliController {
     private final BiliBiliService biliBiliService;
     private final SubscriptionService subscriptionService;
-    private final ObjectMapper objectMapper;
 
-    public BiliBiliController(BiliBiliService biliBiliService, SubscriptionService subscriptionService, ObjectMapper objectMapper) {
+    public BiliBiliController(BiliBiliService biliBiliService, SubscriptionService subscriptionService) {
         this.biliBiliService = biliBiliService;
         this.subscriptionService = subscriptionService;
-        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/bilibili")
-    public String api(String t, String ids, String wd,
+    public Object api(String t, String ids, String wd,
                       boolean quick,
                       FilterDto filter,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
@@ -44,7 +41,7 @@ public class BiliBiliController {
     }
 
     @GetMapping("/bilibili/{token}")
-    public String api(@PathVariable String token, String t, String ids, String wd,
+    public Object api(@PathVariable String token, String t, String ids, String wd,
                       boolean quick,
                       FilterDto filter,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
@@ -69,7 +66,7 @@ public class BiliBiliController {
         } else {
             result = biliBiliService.getCategoryList();
         }
-        return objectMapper.writeValueAsString(result);
+        return result;
     }
 
     @GetMapping("/api/bilibili/status")

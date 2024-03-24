@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.dto.bili;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,8 +18,10 @@ public class Data {
     private String format;
     private Long duration;
     private String desc;
-    private List<String> acceptDescription;
-    private List<Integer> acceptQuality;
+    @JsonProperty("accept_description")
+    private List<String> acceptDescription = new ArrayList<>();
+    @JsonProperty("accept_quality")
+    private List<Integer> acceptQuality = new ArrayList<>();
     private List<Page> pages;
     private Dash dash;
     private List<BiliBiliPlay.DUrl> durl = new ArrayList<>();

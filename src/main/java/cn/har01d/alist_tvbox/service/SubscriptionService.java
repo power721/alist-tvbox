@@ -182,6 +182,10 @@ public class SubscriptionService {
     }
 
     public void checkToken(String rawToken) {
+        if (rawToken.equals("-") && tokens.isBlank()) {
+            return;
+        }
+
         for (String t : tokens.split(",")) {
             if (t.equals(rawToken)) {
                 return;
@@ -219,6 +223,29 @@ public class SubscriptionService {
 
     public List<Subscription> findAll() {
         return subscriptionRepository.findAll();
+    }
+
+    public String node(String file) throws IOException {
+        log.debug("load file {}", file);
+        if (file.contains("index.config.js")) {
+            Path config = Path.of("/www/cat/index.config.js");
+            String json = Files.readString(config);
+            String secret = tokens.isEmpty() ? "" : ("/" + tokens.split(",")[0]);
+            json = json.replace("VOD_URL", readHostAddress("/vod" + secret));
+            json = json.replace("VOD1_URL", readHostAddress("/vod1" + secret));
+            json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret));
+
+            if ("index.config.js".equals(file)) {
+                return json;
+            } else if ("index.config.js.md5".equals(file)) {
+                return Utils.md5(json);
+            }
+        }
+        return Files.readString(Path.of("/www/cat", file));
+    }
+
+    public int syncCat() {
+        return Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && cp -r /data/cat/* /www/cat/");
     }
 
     public Map<String, Object> open() throws IOException {

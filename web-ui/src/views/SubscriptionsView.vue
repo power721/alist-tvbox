@@ -51,6 +51,14 @@
       </a>
     </el-row>
     <el-row>
+      猫影视node配置接口：
+      <a
+        :href="currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')+'/node'+(token ? token : '/-')+'/index.config.js'"
+        target="_blank">
+        {{ currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@') }}/node{{ token ? token : '/-' }}/index.js.md5
+      </a>
+    </el-row>
+    <el-row>
       <el-button @click="syncCat">同步文件</el-button>
     </el-row>
 

@@ -1,75 +1,96 @@
 package cn.har01d.alist_tvbox.util;
 
+import cn.har01d.alist_tvbox.dto.CatAudio;
 import cn.har01d.alist_tvbox.dto.bili.Dash;
 import cn.har01d.alist_tvbox.dto.bili.Data;
 import cn.har01d.alist_tvbox.dto.bili.Media;
 import cn.har01d.alist_tvbox.dto.bili.Resp;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 @Slf4j
 public final class DashUtils {
-    private static final Map<String, String> audios = new HashMap<>();
+    private static final Map<String, Integer> audioIds = new HashMap<>();
 
     static {
-        audios.put("30280", "192000");
-        audios.put("30232", "132000");
-        audios.put("30216", "64000");
+        audioIds.put("30280", 192000);
+        audioIds.put("30232", 132000);
+        audioIds.put("30216", 64000);
     }
 
     private DashUtils() {
         throw new AssertionError();
     }
 
-    public static Map<String, Object> convert(Resp resp, boolean open) {
+    public static Map<String, Object> convert(Resp resp, String client) {
+        Data data = resp.getData() == null ? resp.getResult() : resp.getData();
         Dash dash = resp.getData() == null ? resp.getResult().getDash() : resp.getData().getDash();
         if (dash == null) {
-            Data data = resp.getData() == null ? resp.getResult() : resp.getData();
             String url = data.getDurl().get(0).getUrl();
             Map<String, Object> map = new HashMap<>();
             map.put("url", url);
             return map;
         }
 
+        List<String> urls = new ArrayList<>();
+        List<CatAudio> audios = new ArrayList<>();
         int qn = 16;
         StringBuilder videoList = new StringBuilder();
         for (Media video : dash.getVideo()) {
             qn = Math.max(qn, Integer.parseInt(video.getId()));
         }
 
+        Map<String, String> quality = new HashMap<>();
+        for (int i = 0; i < data.getAcceptQuality().size(); i++) {
+            quality.put(String.valueOf(data.getAcceptQuality().get(i)), data.getAcceptDescription().get(i));
+        }
+
         for (Media video : dash.getVideo()) {
             if (video.getId().equals(String.valueOf(qn))) {
                 videoList.append(getMedia(video));
             }
+            urls.add(quality.get(video.getId()) + " " + (video.getCodecid().equals("7") ? "AVC" : "HEVC"));
+            urls.add(video.getBaseUrl());
         }
 
         StringBuilder audioList = new StringBuilder();
         for (Media audio : dash.getAudio()) {
-            for (String key : audios.keySet()) {
-                if (audio.getId().equals(key)) {
-                    audioList.append(getMedia(audio));
-                }
+            if (audioIds.containsKey(audio.getId())) {
+                audioList.append(getMedia(audio));
+                CatAudio catAudio = new CatAudio();
+                catAudio.setBit(audioIds.get(audio.getId()));
+                catAudio.setTitle((audioIds.get(audio.getId()) / 1024) + "Kbps");
+                catAudio.setUrl(audio.getBaseUrl());
+                audios.add(catAudio);
             }
         }
 
         String mpd = getMpd(dash, videoList.toString(), audioList.toString());
         Map<String, Object> map = new HashMap<>();
-        if (open) {
+        if ("open".equals(client)) {
             map.put("mpd", mpd);
+            map.put("format", "application/dash+xml");
+        } else if ("node".equals(client)) {
+            audios.sort(Comparator.comparingInt(CatAudio::getBit).reversed());
+            map.put("extra", Map.of("audio", audios));
+            map.put("url", urls);
         } else {
             log.debug("{}", mpd);
             String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
             String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
             map.put("url", url);
+            map.put("format", "application/dash+xml");
         }
         map.put("jx", "0");
         map.put("parse", "0");
         map.put("key", "BiliBili");
-        map.put("format", "application/dash+xml");
         return map;
     }
 
@@ -77,7 +98,7 @@ public final class DashUtils {
         if (media.getMimeType().startsWith("video")) {
             return getAdaptationSet(media, String.format(Locale.getDefault(), "height='%s' width='%s' frameRate='%s' sar='%s'", media.getHeight(), media.getWidth(), media.getFrameRate(), media.getSar()));
         } else if (media.getMimeType().startsWith("audio")) {
-            return getAdaptationSet(media, String.format("numChannels='2' sampleRate='%s'", audios.get(media.getId())));
+            return getAdaptationSet(media, String.format("numChannels='2' sampleRate='%s'", audioIds.get(media.getId())));
         } else {
             return "";
         }

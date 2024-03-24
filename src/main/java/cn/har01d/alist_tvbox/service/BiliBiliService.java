@@ -409,6 +409,8 @@ public class BiliBiliService {
                     category.setType_id(value);
                     category.setType_name(item.getName());
                     category.setType_flag(0);
+                    category.setLand(1);
+                    category.setRatio(1.33);
                     if (!item.getChildren().isEmpty()) {
                         List<FilterValue> filters = new ArrayList<>();
                         filters.add(new FilterValue("主分区", ""));
@@ -1306,27 +1308,22 @@ public class BiliBiliService {
         String[] parts = bvid.split("-");
         int fnval = 16;
         Map<String, Object> result = new HashMap<>();
-        dash = dash || "open".equals(client) || appProperties.isSupportDash();
+        dash = dash || "open".equals(client) || "node".equals(client) || appProperties.isSupportDash();
         if (dash) {
             fnval = settingRepository.findById("bilibili_fnval").map(Setting::getValue).map(Integer::parseInt).orElse(FN_VAL);
         }
         if (parts.length >= 2) {
             aid = parts[0];
             cid = parts[1];
-            if (dash) {
-                url = String.format(PLAY_API, aid, cid, fnval);
-            } else {
-                url = String.format(PLAY_API_NOT_DASH, aid, cid);
-            }
         } else {
             BiliBiliInfo info = getInfo(bvid);
             aid = String.valueOf(info.getAid());
             cid = String.valueOf(info.getCid());
-            if (dash) {
-                url = String.format(PLAY_API, aid, cid, fnval);
-            } else {
-                url = String.format(PLAY_API_NOT_DASH, aid, cid);
-            }
+        }
+        if (dash) {
+            url = String.format(PLAY_API, aid, cid, fnval);
+        } else {
+            url = String.format(PLAY_API_NOT_DASH, aid, cid);
         }
         log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
 
@@ -1338,7 +1335,7 @@ public class BiliBiliService {
                 log.warn("获取失败: {} {}", response.getBody().getCode(), response.getBody().getMessage());
             }
 
-            result = DashUtils.convert(response.getBody(), "open".equals(client));
+            result = DashUtils.convert(response.getBody(), client);
         } else {
             ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
             BiliBiliPlayResponse res = response.getBody();
@@ -1355,7 +1352,7 @@ public class BiliBiliService {
         headers.put("Referer", "https://www.bilibili.com");
         headers.put("cookie", cookie);
         headers.put("User-Agent", USER_AGENT);
-        result.put("header", objectMapper.writeValueAsString(headers));
+        result.put("header", headers);
 
         result.put("subs", getSubtitles(aid, cid));
 

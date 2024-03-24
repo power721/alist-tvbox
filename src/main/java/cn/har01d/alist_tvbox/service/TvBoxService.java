@@ -223,7 +223,7 @@ public class TvBoxService {
         if (appProperties.isMix()) {
             category = new Category();
             category.setType_id(site.getId() + "$/$1");
-            category.setType_name("网盘");
+            category.setType_name("AList");
             category.setType_flag(1);
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
