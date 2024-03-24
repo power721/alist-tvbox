@@ -4,6 +4,7 @@
     <el-button type="success" @click="uploadVisible=true">导入</el-button>
     <el-button type="success" @click="exportVisible=true">导出</el-button>
     <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>
+    <el-button @click="refreshShares">刷新</el-button>
     <el-button type="primary" @click="handleAdd">添加</el-button>
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
   </el-row>
@@ -50,8 +51,13 @@
   </div>
 
   <div class="space"></div>
-  <h2>失败列表</h2>
-  <el-table :data="storages" border style="width: 100%">
+  <h2>失败资源</h2>
+  <el-row justify="end">
+    <el-button @click="refreshStorages">刷新</el-button>
+    <el-button type="danger" @click="dialogVisible1=true" v-if="selectedStorages.length">删除</el-button>
+  </el-row>
+  <el-table :data="storages" border @selection-change="handleSelectionStorages" style="width: 100%">
+    <el-table-column type="selection" width="55"/>
     <el-table-column prop="id" label="ID" width="70"/>
     <el-table-column prop="mount_path" label="路径"/>
     <el-table-column prop="status" label="状态" width="260"/>
@@ -131,7 +137,10 @@
   </el-dialog>
 
   <el-dialog v-model="dialogVisible1" title="删除资源" width="30%">
-    <div>
+    <div v-if="selectedStorages.length">
+      <p>是否删除选中的{{ selectedStorages.length }}个资源?</p>
+    </div>
+    <div v-else>
       <p>是否删除资源 - {{ storage.id }}</p>
       <p>{{ storage.mount_path}}</p>
     </div>
@@ -210,6 +219,7 @@ interface Storage {
 
 const multipleSelection = ref<ShareInfo[]>([])
 const storages = ref<Storage[]>([])
+const selectedStorages = ref<Storage[]>([])
 const storage = ref<Storage>({
   id: 0,
   mount_path: '',
@@ -307,9 +317,15 @@ const deleteSub = () => {
 
 const deleteStorage = () => {
   dialogVisible1.value = false
+  if (selectedStorages.value.length) {
+    axios.post('/api/delete-shares', selectedStorages.value.map(s => s.id)).then(() => {
+      loadStorages(page1.value)
+    })
+  } else {
     axios.delete('/api/shares/' + storage.value.id).then(() => {
       loadStorages(page1.value)
     })
+  }
 }
 
 const handleCancel = () => {
@@ -382,6 +398,14 @@ const reloadStorage = (id: number) => {
   })
 }
 
+const refreshShares = () => {
+  loadShares(page.value)
+}
+
+const refreshStorages = () => {
+  loadStorages(page1.value)
+}
+
 const handleSizeChange = (value: number) => {
   size.value = value
   page.value = 1
@@ -426,6 +450,10 @@ const uploadError = (error: Error) => {
 
 const handleSelectionChange = (val: ShareInfo[]) => {
   multipleSelection.value = val
+}
+
+const handleSelectionStorages = (val: Storage[]) => {
+  selectedStorages.value = val
 }
 
 onMounted(() => {
