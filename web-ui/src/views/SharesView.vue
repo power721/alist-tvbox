@@ -66,9 +66,10 @@
         <span v-else>{{scope.row.driver}}</span>
       </template>
     </el-table-column>
-    <el-table-column fixed="right" label="操作" width="80">
+    <el-table-column fixed="right" label="操作" width="130">
       <template #default="scope">
         <el-button link type="primary" size="small" @click="reloadStorage(scope.row.id)">重新加载</el-button>
+        <el-button link type="danger" size="small" @click="handleDeleteStorage(scope.row)">删除</el-button>
       </template>
     </el-table-column>
   </el-table>
@@ -125,6 +126,19 @@
       <span class="dialog-footer">
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="danger" @click="deleteSub">删除</el-button>
+      </span>
+    </template>
+  </el-dialog>
+
+  <el-dialog v-model="dialogVisible1" title="删除资源" width="30%">
+    <div>
+      <p>是否删除资源 - {{ storage.id }}</p>
+      <p>{{ storage.mount_path}}</p>
+    </div>
+    <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="dialogVisible1 = false">取消</el-button>
+        <el-button type="danger" @click="deleteStorage">删除</el-button>
       </span>
     </template>
   </el-dialog>
@@ -196,6 +210,13 @@ interface Storage {
 
 const multipleSelection = ref<ShareInfo[]>([])
 const storages = ref<Storage[]>([])
+const storage = ref<Storage>({
+  id: 0,
+  mount_path: '',
+  driver: '',
+  status: '',
+  addition: ''
+})
 const page = ref(1)
 const page1 = ref(1)
 const size = ref(20)
@@ -208,6 +229,7 @@ const uploadVisible = ref(false)
 const uploading = ref(false)
 const exportVisible = ref(false)
 const dialogVisible = ref(false)
+const dialogVisible1 = ref(false)
 const updateAction = ref(false)
 const batch = ref(false)
 const form = ref({
@@ -260,6 +282,11 @@ const handleDelete = (data: any) => {
   dialogVisible.value = true
 }
 
+const handleDeleteStorage = (data: any) => {
+  storage.value = data
+  dialogVisible1.value = true
+}
+
 const handleDeleteBatch = () => {
   batch.value = true
   dialogVisible.value = true
@@ -276,6 +303,13 @@ const deleteSub = () => {
       loadShares(page.value)
     })
   }
+}
+
+const deleteStorage = () => {
+  dialogVisible1.value = false
+    axios.delete('/api/shares/' + storage.value.id).then(() => {
+      loadStorages(page1.value)
+    })
 }
 
 const handleCancel = () => {
