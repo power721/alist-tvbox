@@ -571,7 +571,7 @@ public class IndexService {
                 return response.getBody();
             } catch (HttpClientErrorException.TooManyRequests e) {
                 exception = e;
-                log.warn("list files failed {} {}: {}", i + 1, path, e.getMessage());
+                log.warn("Too many requests: {} {}", i + 1, path);
             }
 
             try {
