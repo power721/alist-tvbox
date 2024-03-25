@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.AliFileList;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
@@ -49,6 +50,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
+import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
@@ -810,7 +812,7 @@ public class ShareService {
     private String getShareToken(String shareId, String code) {
         HttpHeaders headers = new HttpHeaders();
         headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
-        headers.put("X-Device-Id", List.of("92ac5d71-3747-4a37-8bfc-a02155edca4a"));
+        headers.put("X-Device-Id", List.of("da6d23f39e3e4673b56aaa204caddba8"));
         Map<String, Object> body = new HashMap<>();
         body.put("share_id", shareId);
         body.put("share_pwd", code);
@@ -821,29 +823,31 @@ public class ShareService {
     }
 
     private String getFileId(String shareId, String shareToken, String parentId) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
-        headers.put("X-Device-Id", List.of("92ac5d71-3747-4a37-8bfc-a02155edca4a"));
-        headers.put("X-Share-Token", List.of(shareToken));
-        Map<String, Object> body = new HashMap<>();
-        body.put("share_id", shareId);
-        body.put("image_thumbnail_process", "image/resize,w_256/format,jpeg");
-        body.put("image_url_process", "image/resize,w_1920/format,jpeg/interlace,1");
-        body.put("limit", 20);
-        body.put("order_by", "name");
-        body.put("order_direction", "DESC");
-        body.put("parent_file_id", parentId);
-        body.put("video_thumbnail_process", "video/snapshot,t_1000,f_jpg,ar_auto,w_256");
-        HttpEntity<Map> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> response = restTemplate1.exchange("https://api.aliyundrive.com/adrive/v2/file/list_by_share", HttpMethod.POST, entity, Map.class);
-        log.debug("getFileId {}", response.getBody());
-        List<Map> items = (List<Map>) response.getBody().get("items");
-        for (Map item : items) {
-            if ("folder".equals(item.get("type"))) {
-                return (String) item.get("file_id");
+        var response = listFiles(shareId, shareToken, parentId);
+        for (var item : response.getItems()) {
+            if ("folder".equals(item.getType())) {
+                return item.getFileId();
             }
         }
         return "root";
     }
 
+    private AliFileList listFiles(String shareId, String shareToken, String parentId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
+        headers.put("X-Device-Id", List.of("da6d23f39e3e4673b56aaa204caddba8"));
+        headers.put("X-Share-Token", List.of(shareToken));
+        headers.put("Referer", List.of("https://www.alipan.com/"));
+        headers.put("User-Agent", List.of(USER_AGENT));
+        Map<String, Object> body = new HashMap<>();
+        body.put("share_id", shareId);
+        body.put("limit", 200);
+        body.put("order_by", "name");
+        body.put("order_direction", "ASC");
+        body.put("parent_file_id", parentId);
+        HttpEntity<Object> entity = new HttpEntity<>(body, headers);
+        ResponseEntity<AliFileList> response = restTemplate1.exchange("https://api.aliyundrive.com/adrive/v2/file/list_by_share", HttpMethod.POST, entity, AliFileList.class);
+        log.debug("listFiles {}", response.getBody());
+        return response.getBody();
+    }
 }

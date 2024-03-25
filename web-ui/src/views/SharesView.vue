@@ -80,8 +80,8 @@
     </el-table-column>
   </el-table>
   <div>
-    <el-pagination layout="total, prev, pager, next" :current-page="page1" :total="total1" :page-size="20"
-                   @current-change="loadStorages"/>
+    <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page1" :total="total1" :page-size="size1"
+                   @current-change="loadStorages" @size-change="handleSize1Change"/>
   </div>
 
   <el-dialog v-model="formVisible" :title="dialogTitle">
@@ -230,6 +230,7 @@ const storage = ref<Storage>({
 const page = ref(1)
 const page1 = ref(1)
 const size = ref(20)
+const size1 = ref(20)
 const total = ref(0)
 const total1 = ref(0)
 const shares = ref([])
@@ -381,7 +382,7 @@ const loadShares = (value: number) => {
 
 const loadStorages = (value: number) => {
   page1.value = value
-  axios.get('/api/storages?page=' + page1.value + '&size=20').then(({data}) => {
+  axios.get('/api/storages?page=' + page1.value + '&size=' + size1.value).then(({data}) => {
     storages.value = data.data.content
     total1.value = data.data.total
   })
@@ -413,6 +414,11 @@ const handleSizeChange = (value: number) => {
     shares.value = data.content
     total.value = data.totalElements
   })
+}
+
+const handleSize1Change = (value: number) => {
+  size1.value = value
+  loadStorages(1)
 }
 
 const reload = () => {

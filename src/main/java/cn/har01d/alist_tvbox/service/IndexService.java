@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
+import cn.har01d.alist_tvbox.dto.AliFileList;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.dto.IndexRequest;
 import cn.har01d.alist_tvbox.dto.IndexResponse;
@@ -17,6 +18,7 @@ import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.FsInfo;
 import cn.har01d.alist_tvbox.model.FsResponse;
+import cn.har01d.alist_tvbox.model.ShareInfo;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -29,11 +31,15 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
@@ -54,9 +60,11 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -67,6 +75,7 @@ import java.util.zip.ZipOutputStream;
 import static cn.har01d.alist_tvbox.util.Constants.APP_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.DOCKER_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.INDEX_VERSION;
+import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
@@ -409,7 +418,12 @@ public class IndexService {
                 context.getTime().clear();
                 path = customize(context, indexRequest, path);
                 stopWatch.start("index " + path);
-                index(context, path, 0);
+                var shareInfo = aListService.getShareInfo(site, path);
+                if (shareInfo != null) {
+                    index(context, shareInfo, shareInfo.getFileId(), path, 0);
+                } else {
+                    index(context, path, 0);
+                }
                 handleUpdateTime(path, context.getTime());
                 stopWatch.stop();
                 log.info("{} {}", path, context.stats.indexed - total);
@@ -451,8 +465,11 @@ public class IndexService {
                     }
                 }
             }
-            log.info("update time for {} path {}", updated.size(), path);
-            metaRepository.saveAll(updated);
+
+            if (!updated.isEmpty()) {
+                log.info("update time for {} path {}", updated.size(), path);
+                metaRepository.saveAll(updated);
+            }
         } catch (Exception e) {
             log.warn("handleUpdateTime error", e);
         }
@@ -527,6 +544,146 @@ public class IndexService {
                 zipOut.write(bytes, 0, length);
             }
         }
+    }
+
+    private AliFileList listFiles(ShareInfo shareInfo, String parentId, String path, String marker) {
+        Exception exception = null;
+        for (int i = 0; i < 5; i++) {
+            String deviceID = UUID.randomUUID().toString().replace("-", "");
+            HttpHeaders headers = new HttpHeaders();
+            headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
+            headers.put("X-Device-Id", List.of(deviceID));
+            headers.put("X-Share-Token", List.of(shareInfo.getShareToken()));
+            headers.put("Referer", List.of("https://www.alipan.com/"));
+            headers.put("User-Agent", List.of(USER_AGENT));
+            Map<String, Object> body = new HashMap<>();
+            body.put("share_id", shareInfo.getShareId());
+            body.put("limit", 200);
+            body.put("order_by", "name");
+            body.put("order_direction", "ASC");
+            body.put("parent_file_id", parentId);
+            body.put("marker", marker);
+            HttpEntity<Object> entity = new HttpEntity<>(body, headers);
+
+            try {
+                ResponseEntity<AliFileList> response = restTemplate.exchange("https://api.aliyundrive.com/adrive/v2/file/list_by_share", HttpMethod.POST, entity, AliFileList.class);
+                log.debug("listFiles {} {}", path, response.getBody());
+                return response.getBody();
+            } catch (HttpClientErrorException.TooManyRequests e) {
+                exception = e;
+                log.warn("list files failed {} {}: {}", i + 1, path, e.getMessage());
+            }
+
+            try {
+                Thread.sleep(2000L + i * 1000L);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        log.error("list files failed {}", path, exception);
+        return null;
+    }
+
+    private void index(IndexContext context, ShareInfo shareInfo, String parentId, String path, int depth) throws IOException {
+        log.debug("path: {}  depth: {}  context: {}", path, depth, context);
+        if ((context.getMaxDepth() > 0 && depth == context.getMaxDepth()) || isCancelled(context)) {
+            log.debug("exit {}", depth);
+            return;
+        }
+
+        if (!log.isDebugEnabled()) {
+            log.info("index {} : {}", context.getSiteName(), path);
+        }
+
+        List<String> files = new ArrayList<>();
+        boolean hasFile = false;
+        String marker = "";
+        do {
+            var fsResponse = listFiles(shareInfo, parentId, path, marker);
+            if (fsResponse == null) {
+                log.warn("response null: {} {}", path, context.stats);
+                context.stats.errors++;
+                Task task = taskService.getById(context.getTaskId());
+                String data = task.getData();
+                if (!data.contains("失效路径：")) {
+                    data += "\n\n失效路径：\n";
+                }
+                data += path + "\n";
+                taskService.updateTaskData(task.getId(), data);
+                return;
+            }
+
+            for (var fsInfo : fsResponse.getItems()) {
+                try {
+                    if ("folder".equals(fsInfo.getType())) { // folder
+                        if (fsInfo.getName().equals("字幕")) {
+                            continue;
+                        }
+                        String newPath = fixPath(path + "/" + fsInfo.getName());
+                        log.debug("new path: {}", newPath);
+                        if (exclude(context.getExcludes(), newPath)) {
+                            log.warn("exclude folder {}", newPath);
+                            context.stats.excluded++;
+                            continue;
+                        }
+
+                        context.getTime().put(newPath, fsInfo.getUpdatedAt());
+                        if (context.getMaxDepth() == depth + 1 && !context.isIncludeFiles()) {
+                            files.add(fsInfo.getName());
+                        } else {
+                            if (context.getIndexRequest().getSleep() > 0) {
+                                log.debug("sleep {}", context.getIndexRequest().getSleep());
+                                Thread.sleep(context.getIndexRequest().getSleep());
+                            }
+
+                            if (isCancelled(context)) {
+                                break;
+                            }
+
+                            try {
+                                index(context, shareInfo, fsInfo.getFileId(), newPath, depth + 1);
+                            } catch (Exception e) {
+                                context.stats.errors++;
+                                log.warn("index failed: {}", newPath, e);
+                            }
+                        }
+                    } else if (isMediaFormat(fsInfo.getName())) { // file
+                        hasFile = true;
+                        if (context.isIncludeFiles()) {
+                            String newPath = fixPath(path + "/" + fsInfo.getName());
+                            if (exclude(context.getExcludes(), newPath)) {
+                                log.warn("exclude file {}", newPath);
+                                context.stats.excluded++;
+                                continue;
+                            }
+
+                            context.stats.files++;
+                            log.debug("{}, add file: {}", path, fsInfo.getName());
+                            files.add(fsInfo.getName());
+                            context.getTime().put(newPath, fsInfo.getUpdatedAt());
+                        }
+                    } else {
+                        log.debug("ignore file: {}", fsInfo.getName());
+                    }
+                } catch (Exception e) {
+                    log.warn("index error", e);
+                }
+            }
+
+            marker = fsResponse.getNext();
+        } while (StringUtils.isNotEmpty(marker));
+
+        if (hasFile) {
+            context.write(path);
+        }
+
+        for (String name : files) {
+            String newPath = fixPath(path + "/" + name);
+            context.write(newPath);
+        }
+
+        taskService.updateTaskSummary(context.getTaskId(), context.stats.toString());
     }
 
     private void index(IndexContext context, String path, int depth) throws IOException {

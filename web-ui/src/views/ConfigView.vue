@@ -220,6 +220,15 @@
             @change="updateAListDebug"
           />
         </el-form-item>
+<!--        <el-form-item label="开启阿里延迟加载">-->
+<!--          <el-switch-->
+<!--            v-model="aliLazyLoad"-->
+<!--            inline-prompt-->
+<!--            active-text="开启"-->
+<!--            inactive-text="关闭"-->
+<!--            @change="updateAliLazyLoad"-->
+<!--          />-->
+<!--        </el-form-item>-->
         <el-form-item label="AList管理密码" v-if="!store.xiaoya">
           <el-input v-model="atvPass" type="password" show-password/>
         </el-form-item>
@@ -295,6 +304,7 @@ const mixSiteSource = ref(false)
 const replaceAliToken = ref(false)
 const debugLog = ref(false)
 const aListDebug = ref(false)
+const aliLazyLoad = ref(false)
 const enableHttps = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -405,6 +415,12 @@ const updateAListDebug = () => {
   })
 }
 
+const updateAliLazyLoad = () => {
+  axios.post('/api/settings', {name: 'ali_lazy_load', value: aliLazyLoad.value}).then(() => {
+    ElMessage.success('更新成功，重启生效')
+  })
+}
+
 const updateLogin = () => {
   axios.post('/api/alist/login', login.value).then(({data}) => {
     ElMessage.success('保存成功')
@@ -466,6 +482,7 @@ onMounted(() => {
     enableHttps.value = data.enable_https === 'true'
     debugLog.value = data.debug_log === 'true'
     aListDebug.value = data.alist_debug === 'true'
+    aliLazyLoad.value = data.ali_lazy_load === 'true'
     mixSiteSource.value = data.mix_site_source !== 'false'
     atvPass.value = data.atv_password
     apiClientId.value = data.open_api_client_id || ''

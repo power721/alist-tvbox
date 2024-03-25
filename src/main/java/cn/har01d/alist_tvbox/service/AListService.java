@@ -16,6 +16,8 @@ import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.model.SearchListResponse;
 import cn.har01d.alist_tvbox.model.SearchRequest;
 import cn.har01d.alist_tvbox.model.SearchResult;
+import cn.har01d.alist_tvbox.model.ShareInfo;
+import cn.har01d.alist_tvbox.model.ShareInfoResponse;
 import cn.har01d.alist_tvbox.model.VideoPreview;
 import cn.har01d.alist_tvbox.model.VideoPreviewResponse;
 import cn.har01d.alist_tvbox.util.Constants;
@@ -139,6 +141,22 @@ public class AListService {
             }
         }
         return true;
+    }
+
+    public ShareInfo getShareInfo(Site site, String path) {
+        String url = getUrl(site) + "/api/fs/other";
+        FsRequest request = new FsRequest();
+        request.setMethod("share_info");
+        request.setPassword(site.getPassword());
+        request.setPath(path);
+        if (StringUtils.isNotBlank(site.getFolder())) {
+            request.setPath(fixPath(site.getFolder() + "/" + path));
+        }
+        log.debug("call api: {} request: {}", url, request);
+        ShareInfoResponse response = post(site, url, request, ShareInfoResponse.class);
+        logError(response);
+        log.debug("getShareInfo: {} {}", path, response.getData());
+        return response.getData();
     }
 
     public VideoPreview preview(Site site, String path) {

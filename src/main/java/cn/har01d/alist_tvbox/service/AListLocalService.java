@@ -63,6 +63,8 @@ public class AListLocalService {
         Utils.executeUpdate("UPDATE x_setting_items SET value = '" + StringUtils.isNotBlank(token) + "' WHERE key = 'sign_all'");
         String time = settingRepository.findById("delete_delay_time").map(Setting::getValue).orElse("900");
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('delete_delay_time','" + time + "','','number','',1,0)");
+        String lazy = settingRepository.findById("ali_lazy_load").map(Setting::getValue).orElse("false");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_lazy_load','" + lazy + "','','bool','',1,0)");
     }
 
     public void updateSetting(String key, String value, String type) {
