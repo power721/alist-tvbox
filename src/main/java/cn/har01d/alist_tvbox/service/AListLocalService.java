@@ -46,12 +46,12 @@ public class AListLocalService {
         this.siteRepository = siteRepository;
         this.appProperties = appProperties;
         this.environment = environment;
-        this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
+        this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5144" : "5244")).build();
     }
 
     @PostConstruct
     public void setup() {
-        String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
+        String port = appProperties.isHostmode() ? "5144" : environment.getProperty("ALIST_PORT", "5344");
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('external_port','" + port + "','','number','',1,0);");
         String url = settingRepository.findById("open_token_url").map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token");
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_token_url','" + url + "','','string','',1,0);");

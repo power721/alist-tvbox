@@ -89,7 +89,7 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 
 5233 - httpd
 
-5234 - AList
+5144 - AList
 
 #### 纯净版
 没有内置分享数据。
