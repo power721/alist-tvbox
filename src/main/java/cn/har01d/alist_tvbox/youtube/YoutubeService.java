@@ -12,13 +12,16 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.kiulian.downloader.Config;
 import com.github.kiulian.downloader.YoutubeDownloader;
+import com.github.kiulian.downloader.downloader.request.RequestChannelUploads;
+import com.github.kiulian.downloader.downloader.request.RequestPlaylistInfo;
 import com.github.kiulian.downloader.downloader.request.RequestSearchContinuation;
 import com.github.kiulian.downloader.downloader.request.RequestSearchResult;
 import com.github.kiulian.downloader.downloader.request.RequestVideoInfo;
 import com.github.kiulian.downloader.downloader.request.RequestVideoStreamDownload;
 import com.github.kiulian.downloader.downloader.response.Response;
+import com.github.kiulian.downloader.model.AbstractVideoDetails;
+import com.github.kiulian.downloader.model.playlist.PlaylistInfo;
 import com.github.kiulian.downloader.model.search.SearchResult;
-import com.github.kiulian.downloader.model.search.SearchResultVideoDetails;
 import com.github.kiulian.downloader.model.search.field.FormatField;
 import com.github.kiulian.downloader.model.search.field.SortField;
 import com.github.kiulian.downloader.model.search.field.TypeField;
@@ -44,6 +47,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -65,13 +69,31 @@ public class YoutubeService {
             new FilterValue("本年", "YEAR")
     );
 
-    private final Config config = new Config.Builder().header("User-Agent", Constants.USER_AGENT).build();
-    private final MyDownloader myDownloader = new MyDownloader(config);
-    private final YoutubeDownloader downloader = new YoutubeDownloader(config, myDownloader);
+    private final MyDownloader myDownloader;
+    private final YoutubeDownloader downloader;
     private final LoadingCache<String, VideoInfo> cache = Caffeine.newBuilder()
             .maximumSize(10)
             .expireAfterWrite(Duration.ofSeconds(900))
             .build(this::getVideoInfo);
+
+    public YoutubeService() {
+        Config config = new Config.Builder().header("User-Agent", Constants.USER_AGENT).build();
+
+        try {
+            Path path = Path.of("/data/proxy.txt");
+            if (Files.exists(path)) {
+                String line = Files.readString(path).trim();
+                URI uri = URI.create(line);
+                log.debug("use http proxy: {} {}", uri.getHost(), uri.getPort());
+                config.setProxy(uri.getHost(), uri.getPort());
+            }
+        } catch (Exception e) {
+            log.warn("set http proxy failed", e);
+        }
+
+        myDownloader = new MyDownloader(config);
+        downloader = new YoutubeDownloader(config, myDownloader);
+    }
 
     public MovieList home() {
         return list("电影", "", "", 1);
@@ -99,7 +121,9 @@ public class YoutubeService {
                 category.setLand(1);
                 category.setRatio(1.33);
                 result.getCategories().add(category);
-                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times)));
+                if (!id.contains("@")) {
+                    result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times)));
+                }
             }
         } else {
             List<String> keywords = List.of("电影", "电视剧", "动漫", "综艺", "纪录片", "音乐", "英语", "科技", "新闻", "游戏", "风景", "旅游", "美食", "健身", "运动", "体育");
@@ -121,7 +145,57 @@ public class YoutubeService {
     }
 
     public MovieList list(String text, String sort, String time, int page) {
+        if (text.startsWith("channel@")) {
+            return getChannelVideo(text.substring(8));
+        }
+        if (text.startsWith("playlist@")) {
+            return getPlaylistVideo(text.substring(9));
+        }
         return search(text, sort, time, page);
+    }
+
+    public MovieList getChannelVideo(String id) {
+        List<MovieDetail> list = new ArrayList<>();
+        for (var item : downloader.getChannelUploads(new RequestChannelUploads(id)).data().videos()) {
+            MovieDetail video = new MovieDetail();
+            video.setVod_id(item.videoId());
+            video.setVod_name(item.title());
+            if (item.thumbnails() != null && !item.thumbnails().isEmpty()) {
+                video.setVod_pic(item.thumbnails().get(0));
+            }
+            video.setVod_remarks(Utils.secondsToDuration(item.lengthSeconds()));
+            list.add(video);
+        }
+
+        MovieList result = new MovieList();
+        result.setList(list);
+        result.setTotal(result.getList().size());
+        result.setLimit(result.getList().size());
+        log.debug("channel result: {}", result);
+
+        return result;
+    }
+
+    public MovieList getPlaylistVideo(String id) {
+        List<MovieDetail> list = new ArrayList<>();
+        for (var item : downloader.getPlaylistInfo(new RequestPlaylistInfo(id)).data().videos()) {
+            MovieDetail video = new MovieDetail();
+            video.setVod_id(item.videoId());
+            video.setVod_name(item.title());
+            if (item.thumbnails() != null && !item.thumbnails().isEmpty()) {
+                video.setVod_pic(item.thumbnails().get(0));
+            }
+            video.setVod_remarks(Utils.secondsToDuration(item.lengthSeconds()));
+            list.add(video);
+        }
+
+        MovieList result = new MovieList();
+        result.setList(list);
+        result.setTotal(result.getList().size());
+        result.setLimit(result.getList().size());
+        log.debug("Playlist result: {}", result);
+
+        return result;
     }
 
     private final Map<String, RequestSearchContinuation> continuations = new HashMap<>();
@@ -143,8 +217,7 @@ public class YoutubeService {
         }
 
         List<MovieDetail> list = new ArrayList<>();
-        List<SearchResultVideoDetails> videos = searchResult.videos();
-        for (var item : videos) {
+        for (var item : searchResult.videos()) {
             MovieDetail video = new MovieDetail();
             video.setVod_id(item.videoId());
             video.setVod_name(item.title());
@@ -152,6 +225,26 @@ public class YoutubeService {
                 video.setVod_pic(item.richThumbnails().get(0));
             }
             video.setVod_remarks(Utils.secondsToDuration(item.lengthSeconds()));
+            list.add(video);
+        }
+        for (var item : searchResult.channels()) {
+            MovieDetail video = new MovieDetail();
+            video.setVod_id("channel@" + item.channelId());
+            video.setVod_name(item.title());
+            if (item.thumbnails() != null && !item.thumbnails().isEmpty()) {
+                video.setVod_pic(item.thumbnails().get(0));
+            }
+            video.setVod_remarks(item.videoCountText());
+            list.add(video);
+        }
+        for (var item : searchResult.playlists()) {
+            MovieDetail video = new MovieDetail();
+            video.setVod_id("playlist@" + item.playlistId());
+            video.setVod_name(item.title());
+            if (item.thumbnails() != null && !item.thumbnails().isEmpty()) {
+                video.setVod_pic(item.thumbnails().get(0));
+            }
+            video.setVod_remarks(item.videoCount() + "个视频");
             list.add(video);
         }
 
@@ -179,6 +272,29 @@ public class YoutubeService {
     }
 
     public MovieList detail(String id) {
+        if (id.startsWith("channel@") || id.startsWith("playlist@")) {
+            PlaylistInfo playlistInfo;
+            if (id.startsWith("channel@")) {
+                playlistInfo = downloader.getChannelUploads(new RequestChannelUploads(id.substring(8))).data();
+            } else {
+                playlistInfo = downloader.getPlaylistInfo(new RequestPlaylistInfo(id.substring(9))).data();
+            }
+            MovieList result = new MovieList();
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(id);
+            movieDetail.setVod_name(playlistInfo.details().title());
+            movieDetail.setVod_director(playlistInfo.details().author());
+            movieDetail.setVod_tag("file");
+            movieDetail.setVod_play_from(id.startsWith("channel@") ? "频道" : "播放列表");
+            movieDetail.setVod_play_url(playlistInfo.videos().stream().map(AbstractVideoDetails::videoId).collect(Collectors.joining("#")));
+            result.getList().add(movieDetail);
+
+            result.setTotal(result.getList().size());
+            result.setLimit(result.getList().size());
+            log.debug("detail: {}", result);
+            return result;
+        }
+
         VideoInfo video = cache.get(id);
 
         MovieList result = new MovieList();
@@ -236,18 +352,6 @@ public class YoutubeService {
         var download = new RequestVideoStreamDownload(format, response.getOutputStream());
         if (range != null) {
             download.header("range", range);
-        }
-
-        try {
-            Path path = Path.of("/data/proxy.txt");
-            if (Files.exists(path)) {
-                String line = Files.readString(path).trim();
-                URI uri = URI.create(line);
-                log.debug("use http proxy: {} {}", uri.getHost(), uri.getPort());
-                download.proxy(uri.getHost(), uri.getPort());
-            }
-        } catch (Exception e) {
-            log.warn("set http proxy failed", e);
         }
 
         myDownloader.setHttpServletResponse(response);
