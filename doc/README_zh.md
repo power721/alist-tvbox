@@ -308,6 +308,27 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ![频道](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_channel.png)
 
+### YouTube
+服务端代理，需要消耗服务器流量！
+
+订阅定制可以屏蔽：
+```json
+{
+  "blacklist": {
+    "sites": ["csp_Youtube"]
+  }
+}
+```
+
+自定义分类（搜索关键词），新建文件/data/youtube.txt
+```text
+电影
+动漫
+纪录片
+英语
+美食
+```
+
 ### 配置
 ![配置页面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_config.png)
 
