@@ -36,7 +36,7 @@ public class MyDownloader implements Downloader {
 
     private final InheritableThreadLocal<HttpServletResponse> httpServletResponse = new InheritableThreadLocal<>();
 
-    private static final int BUFFER_SIZE = 4 * 1024;
+    private static final int BUFFER_SIZE = 64 * 1024;
     private static final int PART_LENGTH = 2 * 1024 * 1024;
 
     private final Config config;
