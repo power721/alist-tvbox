@@ -6,9 +6,11 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.github.kiulian.downloader.Config;
 import com.github.kiulian.downloader.YoutubeDownloader;
 import com.github.kiulian.downloader.downloader.request.RequestSearchContinuation;
 import com.github.kiulian.downloader.downloader.request.RequestSearchResult;
@@ -23,6 +25,7 @@ import com.github.kiulian.downloader.model.search.field.TypeField;
 import com.github.kiulian.downloader.model.videos.VideoInfo;
 import com.github.kiulian.downloader.model.videos.formats.Format;
 import com.github.kiulian.downloader.model.videos.formats.VideoWithAudioFormat;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -51,7 +54,9 @@ public class YoutubeService {
             new FilterValue("播放量", "VIEW_COUNT")
     );
 
-    private final YoutubeDownloader downloader = new YoutubeDownloader();
+    private final Config config = new Config.Builder().header("User-Agent", Constants.USER_AGENT).build();
+    private final MyDownloader myDownloader = new MyDownloader(config);
+    private final YoutubeDownloader downloader = new YoutubeDownloader(config, myDownloader);
     private final LoadingCache<String, VideoInfo> cache = Caffeine.newBuilder()
             .maximumSize(10)
             .expireAfterWrite(Duration.ofSeconds(900))
@@ -201,16 +206,19 @@ public class YoutubeService {
         return result;
     }
 
-    public void proxy(String id, int tag, HttpServletResponse response) throws IOException {
+    public void proxy(String id, int tag, HttpServletRequest request, HttpServletResponse response) throws IOException {
         VideoInfo video = cache.get(id);
         Format format = video.findFormatByItag(tag);
         if (format == null) {
             format = video.bestVideoWithAudioFormat();
         }
 
-        log.debug("format {} {}", format.itag().id(), format.extension().value());
-        var request = new RequestVideoStreamDownload(format, response.getOutputStream());
-        downloader.downloadVideoStream(request);
+        String range = request.getHeader("range");
+        log.debug("format {} {} {} {}", format.itag().id(), format.extension().value(), range, format.duration());
+        var download = new RequestVideoStreamDownload(format, response.getOutputStream());
+        download.header("range", range);
+        myDownloader.setHttpServletResponse(response);
+        downloader.downloadVideoStream(download);
     }
 
     private String buildProxyUrl(String id, int tag) {

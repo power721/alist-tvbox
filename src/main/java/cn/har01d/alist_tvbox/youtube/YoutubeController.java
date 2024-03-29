@@ -72,7 +72,7 @@ public class YoutubeController {
         subscriptionService.checkToken(token);
 
         log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
-        youtubeService.proxy(id, q, response);
+        youtubeService.proxy(id, q, request, response);
     }
 
     private String decodeUrl(String text) {
