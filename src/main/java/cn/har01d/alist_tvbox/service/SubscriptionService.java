@@ -816,8 +816,16 @@ public class SubscriptionService {
 
         try {
             Map<String, Object> site = buildSite(token, "csp_BiliBili", "BiliBili");
-            sites.add(id, site);
+            sites.add(id++, site);
             log.debug("add BiliBili site: {}", site);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        try {
+            Map<String, Object> site = buildSite(token, "csp_Youtube", "Youtube");
+            sites.add(id++, site);
+            log.debug("add Youtube site: {}", site);
         } catch (Exception e) {
             log.warn("", e);
         }
