@@ -278,6 +278,14 @@ public class SubscriptionService {
     private void addCatSites(Map<String, Object> config) {
         List<Map<String, Object>> sites = getSites(config, "video");
         Map<String, Object> site = new HashMap<>();
+        site.put("key", "youtube");
+        site.put("name", "🟢 YouTube");
+        site.put("type", 3);
+        site.put("api", "/cat/youtube.js");
+        site.put("ext", "YOUTUBE_EXT");
+        sites.add(0, site);
+
+        site = new HashMap<>();
         site.put("key", "bilibili");
         site.put("name", "🟢 BiliBili");
         site.put("type", 3);
@@ -326,6 +334,7 @@ public class SubscriptionService {
         json = json.replace("VOD_EXT", readHostAddress("/vod" + secret));
         json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
         json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
+        json = json.replace("YOUTUBE_EXT", readHostAddress("/youtube" + secret));
         json = json.replace("ALIST_URL", readAListAddress());
         String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
         json = json.replace("ALI_TOKEN", ali);
@@ -824,7 +833,7 @@ public class SubscriptionService {
         }
 
         try {
-            Map<String, Object> site = buildSite(token, "csp_Youtube", "Youtube");
+            Map<String, Object> site = buildSite(token, "csp_Youtube", "YouTube");
             sites.add(id++, site);
             log.debug("add Youtube site: {}", site);
         } catch (Exception e) {

@@ -22,6 +22,7 @@ import com.github.kiulian.downloader.model.search.SearchResultVideoDetails;
 import com.github.kiulian.downloader.model.search.field.FormatField;
 import com.github.kiulian.downloader.model.search.field.SortField;
 import com.github.kiulian.downloader.model.search.field.TypeField;
+import com.github.kiulian.downloader.model.search.field.UploadDateField;
 import com.github.kiulian.downloader.model.videos.VideoInfo;
 import com.github.kiulian.downloader.model.videos.formats.Format;
 import com.github.kiulian.downloader.model.videos.formats.VideoWithAudioFormat;
@@ -55,6 +56,15 @@ public class YoutubeService {
             new FilterValue("播放量", "VIEW_COUNT")
     );
 
+    private final List<FilterValue> times = Arrays.asList(
+            new FilterValue("全部", ""),
+            new FilterValue("最近", "HOUR"),
+            new FilterValue("本日", "DAY"),
+            new FilterValue("本周", "WEEK"),
+            new FilterValue("本月", "MONTH"),
+            new FilterValue("本年", "YEAR")
+    );
+
     private final Config config = new Config.Builder().header("User-Agent", Constants.USER_AGENT).build();
     private final MyDownloader myDownloader = new MyDownloader(config);
     private final YoutubeDownloader downloader = new YoutubeDownloader(config, myDownloader);
@@ -64,7 +74,7 @@ public class YoutubeService {
             .build(this::getVideoInfo);
 
     public MovieList home() {
-        return list("电影", "", 1);
+        return list("电影", "", "", 1);
     }
 
     public CategoryList category() throws IOException {
@@ -89,7 +99,7 @@ public class YoutubeService {
                 category.setLand(1);
                 category.setRatio(1.33);
                 result.getCategories().add(category);
-                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts)));
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times)));
             }
         } else {
             List<String> keywords = List.of("电影", "电视剧", "动漫", "综艺", "纪录片", "音乐", "英语", "科技", "新闻", "游戏", "风景", "旅游", "美食", "健身", "运动", "体育");
@@ -101,7 +111,7 @@ public class YoutubeService {
                 category.setLand(1);
                 category.setRatio(1.33);
                 result.getCategories().add(category);
-                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts)));
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times)));
             }
         }
 
@@ -110,13 +120,13 @@ public class YoutubeService {
         return result;
     }
 
-    public MovieList list(String text, String sort, int page) {
-        return search(text, sort, page);
+    public MovieList list(String text, String sort, String time, int page) {
+        return search(text, sort, time, page);
     }
 
     private final Map<String, RequestSearchContinuation> continuations = new HashMap<>();
 
-    public MovieList search(String text, String sort, int page) {
+    public MovieList search(String text, String sort, String time, int page) {
         SearchResult searchResult;
         String query = text + "@@@" + sort;
         if (page > 1 && continuations.containsKey(query)) {
@@ -125,6 +135,9 @@ public class YoutubeService {
             var request = new RequestSearchResult(text).filter(TypeField.VIDEO, FormatField.HD);
             if (sort != null && !sort.isEmpty()) {
                 request.sortBy(SortField.valueOf(sort));
+            }
+            if (time != null && !time.isEmpty()) {
+                request.filter(UploadDateField.valueOf(time));
             }
             searchResult = downloader.search(request).data();
         }
