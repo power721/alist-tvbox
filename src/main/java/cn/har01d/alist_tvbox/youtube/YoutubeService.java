@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -217,6 +218,19 @@ public class YoutubeService {
         log.debug("format {} {} {} {}", format.itag().id(), format.extension().value(), range, format.duration());
         var download = new RequestVideoStreamDownload(format, response.getOutputStream());
         download.header("range", range);
+
+        try {
+            Path path = Path.of("/data/proxy.txt");
+            if (Files.exists(path)) {
+                String line = Files.readString(path).trim();
+                URI uri = URI.create(line);
+                log.debug("use http proxy: {} {}", uri.getHost(), uri.getPort());
+                download.proxy(uri.getHost(), uri.getPort());
+            }
+        } catch (Exception e) {
+            log.warn("set proxy failed", e);
+        }
+
         myDownloader.setHttpServletResponse(response);
         downloader.downloadVideoStream(download);
     }
