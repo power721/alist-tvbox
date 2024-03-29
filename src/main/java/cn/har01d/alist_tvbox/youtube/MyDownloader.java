@@ -5,15 +5,29 @@ import com.github.kiulian.downloader.YoutubeException;
 import com.github.kiulian.downloader.downloader.Downloader;
 import com.github.kiulian.downloader.downloader.YoutubeCallback;
 import com.github.kiulian.downloader.downloader.YoutubeProgressCallback;
-import com.github.kiulian.downloader.downloader.request.*;
+import com.github.kiulian.downloader.downloader.request.Request;
+import com.github.kiulian.downloader.downloader.request.RequestVideoFileDownload;
+import com.github.kiulian.downloader.downloader.request.RequestVideoStreamDownload;
+import com.github.kiulian.downloader.downloader.request.RequestWebpage;
 import com.github.kiulian.downloader.downloader.response.ResponseImpl;
 import com.github.kiulian.downloader.model.videos.formats.Format;
 import jakarta.servlet.http.HttpServletResponse;
 
-import java.io.*;
-import java.net.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.net.HttpURLConnection;
+import java.net.Proxy;
+import java.net.URL;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.zip.GZIPInputStream;
 
 import static com.github.kiulian.downloader.model.Utils.closeSilently;
@@ -22,7 +36,7 @@ public class MyDownloader implements Downloader {
 
     private final InheritableThreadLocal<HttpServletResponse> httpServletResponse = new InheritableThreadLocal<>();
 
-    private static final int BUFFER_SIZE = 16 * 1024;
+    private static final int BUFFER_SIZE = 4 * 1024;
     private static final int PART_LENGTH = 2 * 1024 * 1024;
 
     private final Config config;
@@ -65,7 +79,7 @@ public class MyDownloader implements Downloader {
                 urlConnection.setRequestMethod(request.getMethod());
                 if (request.getBody() != null) {
                     urlConnection.setDoOutput(true);
-                    try (OutputStreamWriter outputWriter = new OutputStreamWriter(urlConnection.getOutputStream(), "UTF-8")){
+                    try (OutputStreamWriter outputWriter = new OutputStreamWriter(urlConnection.getOutputStream(), "UTF-8")) {
                         outputWriter.write(request.getBody());
                         outputWriter.flush();
                     }
