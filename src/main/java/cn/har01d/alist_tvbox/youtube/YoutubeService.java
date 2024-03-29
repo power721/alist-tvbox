@@ -227,26 +227,26 @@ public class YoutubeService {
             video.setVod_remarks(Utils.secondsToDuration(item.lengthSeconds()));
             list.add(video);
         }
-        for (var item : searchResult.channels()) {
-            MovieDetail video = new MovieDetail();
-            video.setVod_id("channel@" + item.channelId());
-            video.setVod_name(item.title());
-            if (item.thumbnails() != null && !item.thumbnails().isEmpty()) {
-                video.setVod_pic(item.thumbnails().get(0));
-            }
-            video.setVod_remarks(item.videoCountText());
-            list.add(video);
-        }
-        for (var item : searchResult.playlists()) {
-            MovieDetail video = new MovieDetail();
-            video.setVod_id("playlist@" + item.playlistId());
-            video.setVod_name(item.title());
-            if (item.thumbnails() != null && !item.thumbnails().isEmpty()) {
-                video.setVod_pic(item.thumbnails().get(0));
-            }
-            video.setVod_remarks(item.videoCount() + "个视频");
-            list.add(video);
-        }
+//        for (var item : searchResult.channels()) {
+//            MovieDetail video = new MovieDetail();
+//            video.setVod_id("channel@" + item.channelId());
+//            video.setVod_name(item.title());
+//            if (item.thumbnails() != null && !item.thumbnails().isEmpty()) {
+//                video.setVod_pic(item.thumbnails().get(0));
+//            }
+//            video.setVod_remarks(item.videoCountText());
+//            list.add(video);
+//        }
+//        for (var item : searchResult.playlists()) {
+//            MovieDetail video = new MovieDetail();
+//            video.setVod_id("playlist@" + item.playlistId());
+//            video.setVod_name(item.title());
+//            if (item.thumbnails() != null && !item.thumbnails().isEmpty()) {
+//                video.setVod_pic(item.thumbnails().get(0));
+//            }
+//            video.setVod_remarks(item.videoCount() + "个视频");
+//            list.add(video);
+//        }
 
         MovieList result = new MovieList();
         result.setList(list);
@@ -272,28 +272,28 @@ public class YoutubeService {
     }
 
     public MovieList detail(String id) {
-        if (id.startsWith("channel@") || id.startsWith("playlist@")) {
-            PlaylistInfo playlistInfo;
-            if (id.startsWith("channel@")) {
-                playlistInfo = downloader.getChannelUploads(new RequestChannelUploads(id.substring(8))).data();
-            } else {
-                playlistInfo = downloader.getPlaylistInfo(new RequestPlaylistInfo(id.substring(9))).data();
-            }
-            MovieList result = new MovieList();
-            MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(id);
-            movieDetail.setVod_name(playlistInfo.details().title());
-            movieDetail.setVod_director(playlistInfo.details().author());
-            movieDetail.setVod_tag("file");
-            movieDetail.setVod_play_from(id.startsWith("channel@") ? "频道" : "播放列表");
-            movieDetail.setVod_play_url(playlistInfo.videos().stream().map(AbstractVideoDetails::videoId).collect(Collectors.joining("#")));
-            result.getList().add(movieDetail);
-
-            result.setTotal(result.getList().size());
-            result.setLimit(result.getList().size());
-            log.debug("detail: {}", result);
-            return result;
-        }
+//        if (id.startsWith("channel@") || id.startsWith("playlist@")) {
+//            PlaylistInfo playlistInfo;
+//            if (id.startsWith("channel@")) {
+//                playlistInfo = downloader.getChannelUploads(new RequestChannelUploads(id.substring(8))).data();
+//            } else {
+//                playlistInfo = downloader.getPlaylistInfo(new RequestPlaylistInfo(id.substring(9))).data();
+//            }
+//            MovieList result = new MovieList();
+//            MovieDetail movieDetail = new MovieDetail();
+//            movieDetail.setVod_id(id);
+//            movieDetail.setVod_name(playlistInfo.details().title());
+//            movieDetail.setVod_director(playlistInfo.details().author());
+//            movieDetail.setVod_tag("file");
+//            movieDetail.setVod_play_from(id.startsWith("channel@") ? "频道" : "播放列表");
+//            movieDetail.setVod_play_url(playlistInfo.videos().stream().map(AbstractVideoDetails::videoId).collect(Collectors.joining("#")));
+//            result.getList().add(movieDetail);
+//
+//            result.setTotal(result.getList().size());
+//            result.setLimit(result.getList().size());
+//            log.debug("detail: {}", result);
+//            return result;
+//        }
 
         VideoInfo video = cache.get(id);
 

@@ -327,6 +327,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 纪录片
 英语
 美食
+channel@UCp1nO1bgVwks9b5EhKQGVag:幻海航行
 ```
 
 ### 配置
