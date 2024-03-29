@@ -370,7 +370,7 @@ public class IndexService {
             throw new BadRequestException("路径不能为空");
         }
         cn.har01d.alist_tvbox.entity.Site site = siteService.getById(indexRequest.getSiteId());
-        Task task = taskService.addIndexTask(site);
+        Task task = taskService.addIndexTask(site, indexRequest.getIndexName());
 
         executor.submit(() -> {
             try {

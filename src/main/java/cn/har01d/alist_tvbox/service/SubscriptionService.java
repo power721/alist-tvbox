@@ -853,7 +853,7 @@ public class SubscriptionService {
         site.put("filterable", 1);
         Map<String, Object> style = new HashMap<>();
         style.put("type", "rect");
-        if ("csp_BiliBili".equals(key)) {
+        if ("csp_BiliBili".equals(key) || "csp_Youtube".equals(key)) {
             style.put("ratio", 1.597);
         }
         site.put("style", style);

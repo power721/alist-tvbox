@@ -86,6 +86,8 @@ public class YoutubeService {
                 category.setType_id(id);
                 category.setType_name(name);
                 category.setType_flag(0);
+                category.setLand(1);
+                category.setRatio(1.33);
                 result.getCategories().add(category);
                 result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts)));
             }
@@ -96,6 +98,8 @@ public class YoutubeService {
                 category.setType_id(name);
                 category.setType_name(name);
                 category.setType_flag(0);
+                category.setLand(1);
+                category.setRatio(1.33);
                 result.getCategories().add(category);
                 result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts)));
             }
@@ -215,9 +219,11 @@ public class YoutubeService {
         }
 
         String range = request.getHeader("range");
-        log.debug("format {} {} {} {}", format.itag().id(), format.extension().value(), range, format.duration());
+        log.debug("format {} {} {}", format.itag().id(), format.extension().value(), range);
         var download = new RequestVideoStreamDownload(format, response.getOutputStream());
-        download.header("range", range);
+        if (range != null) {
+            download.header("range", range);
+        }
 
         try {
             Path path = Path.of("/data/proxy.txt");
@@ -228,7 +234,7 @@ public class YoutubeService {
                 download.proxy(uri.getHost(), uri.getPort());
             }
         } catch (Exception e) {
-            log.warn("set proxy failed", e);
+            log.warn("set http proxy failed", e);
         }
 
         myDownloader.setHttpServletResponse(response);

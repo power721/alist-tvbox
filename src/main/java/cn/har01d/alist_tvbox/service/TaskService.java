@@ -51,10 +51,10 @@ public class TaskService {
         });
     }
 
-    public Task addIndexTask(Site site) {
+    public Task addIndexTask(Site site, String indexName) {
         Task task = new Task();
         task.setType(TaskType.INDEX);
-        task.setName("索引站点 - " + site.getName());
+        task.setName("索引站点 - " + site.getName() + " - " + indexName);
         task.setCreatedTime(Instant.now());
         return taskRepository.save(task);
     }
