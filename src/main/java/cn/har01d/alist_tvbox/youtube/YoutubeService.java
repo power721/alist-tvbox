@@ -29,8 +29,9 @@ import com.github.kiulian.downloader.model.search.field.SortField;
 import com.github.kiulian.downloader.model.search.field.TypeField;
 import com.github.kiulian.downloader.model.search.field.UploadDateField;
 import com.github.kiulian.downloader.model.videos.VideoInfo;
+import com.github.kiulian.downloader.model.videos.formats.AudioFormat;
 import com.github.kiulian.downloader.model.videos.formats.Format;
-import com.github.kiulian.downloader.model.videos.formats.VideoWithAudioFormat;
+import com.github.kiulian.downloader.model.videos.formats.VideoFormat;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -45,11 +46,14 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.Base64;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -354,19 +358,56 @@ public class YoutubeService {
     }
 
     public Object play(String id, String client) {
-        VideoInfo video = cache.get(id);
+        VideoInfo info = cache.get(id);
         List<String> urls = new ArrayList<>();
-        List<VideoWithAudioFormat> formats = new ArrayList<>(video.videoWithAudioFormats());
-        Collections.reverse(formats);
-        for (var format : formats) {
-            urls.add(format.qualityLabel() + " " + format.extension().value());
-            urls.add(buildProxyUrl(id, format.itag().id()));
+        List<Format> videos = new ArrayList<>();
+        if ("node".equals(client)) {
+            info.videoFormats()
+                    .stream()
+                    .filter(e -> e.videoQuality().ordinal() > 5)
+                    .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
+                    .forEach(format -> {
+                        videos.add(format);
+                        urls.add(format.qualityLabel() + " " + format.extension().value());
+                        urls.add(buildProxyUrl(id, format.itag().id()));
+                    });
+        }/* else if ("com.fongmi.android.tv".equals(client)) {
+            info.videoFormats()
+                    .stream()
+                    .filter(e -> e.videoQuality().ordinal() > 5)
+                    .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
+                    .forEach(videos::add);
+        }*/ else {
+            info.videoWithAudioFormats()
+                    .stream()
+                    .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
+                    .forEach(format -> {
+                        urls.add(format.qualityLabel() + " " + format.extension().value());
+                        urls.add(buildProxyUrl(id, format.itag().id()));
+                    });
         }
+
+        //List<Format> audios = new ArrayList<>(info.audioFormats());
+
+        var audio = info.bestAudioFormat();
 
         Map<String, Object> result = new HashMap<>();
         result.put("parse", "0");
         if ("com.fongmi.android.tv".equals(client)) {
+//            String mpd = getMpd(info, List.of(info.bestVideoFormat()), List.of(info.bestAudioFormat()));
+//            log.debug("{}", mpd);
+//            String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
+//            String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
+//            result.put("url", url);
+//            result.put("format", "application/dash+xml");
             result.put("url", urls);
+        } else if ("node".equals(client)) {
+            result.put("url", urls);
+            Map<String, Object> catAudio = new HashMap<>();
+            catAudio.put("bit", audio.bitrate());
+            catAudio.put("title", (audio.bitrate() / 1024) + "Kbps");
+            catAudio.put("url", buildProxyUrl(id, audio.itag().id()));
+            result.put("extra", Map.of("audio", List.of(catAudio)));
         } else {
             result.put("url", urls.get(1));
         }
@@ -401,4 +442,55 @@ public class YoutubeService {
                 .toUriString();
     }
 
+    private String getMedia(String id, Format media) {
+        if (media.itag().isVideo()) {
+            VideoFormat video = (VideoFormat) media;
+            return getAdaptationSet(id, media, String.format("height=\"%s\" width=\"%s\" frameRate=\"%d\" sar=\"1:1\"", video.height(), video.width(), video.fps()));
+        } else if (media.itag().isAudio()) {
+            AudioFormat audio = (AudioFormat) media;
+            return getAdaptationSet(id, media, String.format("numChannels=\"2\" sampleRate=\"%s\"", audio.audioSampleRate()));
+        } else {
+            return "";
+        }
+    }
+
+    private static final Pattern CODECS = Pattern.compile("codecs=\"(.+)\"");
+
+    private String getAdaptationSet(String id, Format media, String params) {
+        int tag = media.itag().id();
+        String type = media.mimeType().split("/")[0];
+        String mimeType = media.mimeType().split(";")[0];
+        var m = CODECS.matcher(media.mimeType());
+        String codecs = "";
+        if (m.find()) {
+            codecs = m.group(1);
+        }
+        String baseUrl = buildProxyUrl(id, tag).replace("&", "&amp;");
+        return String.format(
+                "<AdaptationSet>\n" +
+                        "<ContentComponent contentType=\"%s\"/>\n" +
+                        "<Representation id=\"%d\" bandwidth=\"%s\" codecs=\"%s\" mimeType=\"%s\" %s startWithSAP=\"%s\">\n" +
+                        "<BaseURL>%s</BaseURL>\n" +
+                        "</Representation>\n" +
+                        "</AdaptationSet>\n",
+                type,
+                tag, media.contentLength(), codecs, mimeType, params, media.itag().isVideo() ? "1" : "0",
+                baseUrl
+        );
+    }
+
+    private String getMpd(VideoInfo info, List<Format> videoList, List<Format> audioList) {
+        String id = info.details().videoId();
+        return String.format(
+                "<MPD xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:mpeg:dash:schema:mpd:2011\" xsi:schemaLocation=\"urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd\" type=\"static\" mediaPresentationDuration=\"PT%sS\" minBufferTime=\"PT1.5S\" profiles=\"urn:mpeg:dash:profile:isoff-on-demand:2011\">\n" +
+                        "<Period duration=\"PT%sS\" start=\"PT0S\">\n" +
+                        "%s\n" +
+                        "%s\n" +
+                        "</Period>\n" +
+                        "</MPD>",
+                info.details().lengthSeconds(),
+                info.details().lengthSeconds(),
+                videoList.stream().map(e -> getMedia(id, e)).collect(Collectors.joining()),
+                audioList.stream().map(e -> getMedia(id, e)).collect(Collectors.joining()));
+    }
 }

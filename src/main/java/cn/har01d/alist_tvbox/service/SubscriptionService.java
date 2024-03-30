@@ -865,6 +865,9 @@ public class SubscriptionService {
         if ("csp_BiliBili".equals(key) || "csp_Youtube".equals(key)) {
             style.put("ratio", 1.597);
         }
+        if ("csp_Youtube".equals(key)) {
+            site.put("playerType", 1);
+        }
         site.put("style", style);
         return site;
     }
