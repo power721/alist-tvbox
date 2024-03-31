@@ -866,7 +866,7 @@ public class SubscriptionService {
             style.put("ratio", 1.597);
         }
         if ("csp_Youtube".equals(key)) {
-            site.put("playerType", 1);
+            site.put("playerType", 2);
         }
         site.put("style", style);
         return site;

@@ -50,7 +50,6 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -360,24 +359,16 @@ public class YoutubeService {
     public Object play(String id, String client) {
         VideoInfo info = cache.get(id);
         List<String> urls = new ArrayList<>();
-        List<Format> videos = new ArrayList<>();
         if ("node".equals(client)) {
             info.videoFormats()
                     .stream()
                     .filter(e -> e.videoQuality().ordinal() > 5)
                     .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
                     .forEach(format -> {
-                        videos.add(format);
                         urls.add(format.qualityLabel() + " " + format.extension().value());
                         urls.add(buildProxyUrl(id, format.itag().id()));
                     });
-        }/* else if ("com.fongmi.android.tv".equals(client)) {
-            info.videoFormats()
-                    .stream()
-                    .filter(e -> e.videoQuality().ordinal() > 5)
-                    .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
-                    .forEach(videos::add);
-        }*/ else {
+        } else {
             info.videoWithAudioFormats()
                     .stream()
                     .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
@@ -387,27 +378,36 @@ public class YoutubeService {
                     });
         }
 
-        //List<Format> audios = new ArrayList<>(info.audioFormats());
-
-        var audio = info.bestAudioFormat();
+        List<Format> audios = info.audioFormats().stream().filter(Format::isAdaptive).collect(Collectors.toList());
 
         Map<String, Object> result = new HashMap<>();
         result.put("parse", "0");
         if ("com.fongmi.android.tv".equals(client)) {
-//            String mpd = getMpd(info, List.of(info.bestVideoFormat()), List.of(info.bestAudioFormat()));
-//            log.debug("{}", mpd);
-//            String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
-//            String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
-//            result.put("url", url);
-//            result.put("format", "application/dash+xml");
             result.put("url", urls);
+            List<Format> videos = new ArrayList<>();
+            info.videoFormats()
+                    .stream()
+                    .filter(Format::isAdaptive)
+                    .filter(e -> e.videoQuality().ordinal() > 5)
+                    .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
+                    .forEach(videos::add);
+            String mpd = getMpd(info, videos, audios);
+            log.debug("{}", mpd);
+            String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
+            String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
+            result.put("url", url);
+            result.put("format", "application/dash+xml");
         } else if ("node".equals(client)) {
             result.put("url", urls);
-            Map<String, Object> catAudio = new HashMap<>();
-            catAudio.put("bit", audio.bitrate());
-            catAudio.put("title", (audio.bitrate() / 1024) + "Kbps");
-            catAudio.put("url", buildProxyUrl(id, audio.itag().id()));
-            result.put("extra", Map.of("audio", List.of(catAudio)));
+            List<Map<String, Object>> list = new ArrayList<>();
+            for (var audio : audios) {
+                Map<String, Object> catAudio = new HashMap<>();
+                catAudio.put("bit", audio.bitrate());
+                catAudio.put("title", (audio.bitrate() / 1024) + "Kbps");
+                catAudio.put("url", buildProxyUrl(id, audio.itag().id()));
+                list.add(catAudio);
+            }
+            result.put("extra", Map.of("audio", list));
         } else {
             result.put("url", urls.get(1));
         }
@@ -465,17 +465,17 @@ public class YoutubeService {
         if (m.find()) {
             codecs = m.group(1);
         }
-        String baseUrl = buildProxyUrl(id, tag).replace("&", "&amp;");
+        String url = buildProxyUrl(id, tag).replace("&", "&amp;");
         return String.format(
                 "<AdaptationSet>\n" +
                         "<ContentComponent contentType=\"%s\"/>\n" +
-                        "<Representation id=\"%d\" bandwidth=\"%s\" codecs=\"%s\" mimeType=\"%s\" %s startWithSAP=\"%s\">\n" +
+                        "<Representation id=\"%d\" bandwidth=\"%s\" codecs=\"%s\" mimeType=\"%s\" %s startWithSAP=\"%d\">\n" +
                         "<BaseURL>%s</BaseURL>\n" +
                         "</Representation>\n" +
                         "</AdaptationSet>\n",
                 type,
-                tag, media.contentLength(), codecs, mimeType, params, media.itag().isVideo() ? "1" : "0",
-                baseUrl
+                tag, media.bitrate(), codecs, mimeType, params, media.itag().isVideo() ? 1 : 0,
+                url
         );
     }
 
