@@ -20,6 +20,7 @@ import com.github.kiulian.downloader.downloader.request.RequestSearchResult;
 import com.github.kiulian.downloader.downloader.request.RequestVideoInfo;
 import com.github.kiulian.downloader.downloader.request.RequestVideoStreamDownload;
 import com.github.kiulian.downloader.downloader.response.Response;
+import com.github.kiulian.downloader.model.Extension;
 import com.github.kiulian.downloader.model.playlist.PlaylistInfo;
 import com.github.kiulian.downloader.model.playlist.PlaylistVideoDetails;
 import com.github.kiulian.downloader.model.search.SearchResult;
@@ -378,16 +379,20 @@ public class YoutubeService {
                     });
         }
 
-        List<Format> audios = info.audioFormats().stream().filter(Format::isAdaptive).collect(Collectors.toList());
+        List<Format> audios = info.audioFormats()
+                .stream()
+                .filter(Format::isAdaptive)
+                .filter(e -> e.extension() == Extension.M4A)
+                .collect(Collectors.toList());
 
         Map<String, Object> result = new HashMap<>();
         result.put("parse", "0");
         if ("com.fongmi.android.tv".equals(client)) {
-            result.put("url", urls);
             List<Format> videos = new ArrayList<>();
             info.videoFormats()
                     .stream()
                     .filter(Format::isAdaptive)
+                    .filter(e -> e.extension() == Extension.MPEG4)
                     .filter(e -> e.videoQuality().ordinal() > 5)
                     .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
                     .forEach(videos::add);
@@ -395,17 +400,18 @@ public class YoutubeService {
             log.debug("{}", mpd);
             String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
             String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
-            result.put("url", url);
-            result.put("format", "application/dash+xml");
+            urls.add("Dash");
+            urls.add(url);
+            result.put("url", urls);
         } else if ("node".equals(client)) {
             result.put("url", urls);
             List<Map<String, Object>> list = new ArrayList<>();
             for (var audio : audios) {
-                Map<String, Object> catAudio = new HashMap<>();
-                catAudio.put("bit", audio.bitrate());
-                catAudio.put("title", (audio.bitrate() / 1024) + "Kbps");
-                catAudio.put("url", buildProxyUrl(id, audio.itag().id()));
-                list.add(catAudio);
+                Map<String, Object> map = new HashMap<>();
+                map.put("bit", audio.bitrate());
+                map.put("title", (audio.bitrate() / 1024) + "Kbps");
+                map.put("url", buildProxyUrl(id, audio.itag().id()));
+                list.add(map);
             }
             result.put("extra", Map.of("audio", list));
         } else {

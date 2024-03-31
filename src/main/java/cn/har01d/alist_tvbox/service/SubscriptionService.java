@@ -278,12 +278,12 @@ public class SubscriptionService {
     private void addCatSites(Map<String, Object> config) {
         List<Map<String, Object>> sites = getSites(config, "video");
         Map<String, Object> site = new HashMap<>();
-        site.put("key", "youtube");
-        site.put("name", "🟢 YouTube");
-        site.put("type", 3);
-        site.put("api", "/cat/youtube.js");
-        site.put("ext", "YOUTUBE_EXT");
-        sites.add(0, site);
+//        site.put("key", "youtube");
+//        site.put("name", "🟢 YouTube");
+//        site.put("type", 3);
+//        site.put("api", "/cat/youtube.js");
+//        site.put("ext", "YOUTUBE_EXT");
+//        sites.add(0, site);
 
         site = new HashMap<>();
         site.put("key", "bilibili");
@@ -832,13 +832,13 @@ public class SubscriptionService {
             log.warn("", e);
         }
 
-        try {
-            Map<String, Object> site = buildSite(token, "csp_Youtube", "YouTube");
-            sites.add(id++, site);
-            log.debug("add Youtube site: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
+//        try {
+//            Map<String, Object> site = buildSite(token, "csp_Youtube", "YouTube");
+//            sites.add(id++, site);
+//            log.debug("add Youtube site: {}", site);
+//        } catch (Exception e) {
+//            log.warn("", e);
+//        }
     }
 
     private Map<String, Object> buildSite(String token, String key, String name) throws IOException {
