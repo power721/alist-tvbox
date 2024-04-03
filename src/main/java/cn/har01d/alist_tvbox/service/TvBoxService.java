@@ -1856,6 +1856,9 @@ public class TvBoxService {
                     .toUri()
                     .toASCIIString();
         } else {
+            if (StringUtils.isNotBlank(site.getFolder())) {
+                path = fixPath(site.getFolder() + "/" + path);
+            }
             return UriComponentsBuilder.fromHttpUrl(site.getUrl())
                     .replacePath("/d" + path)
                     .replaceQuery("sign=" + sign)
