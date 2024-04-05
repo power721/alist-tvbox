@@ -179,7 +179,9 @@ public class AListService {
         VideoPreviewResponse response = post(site, url, request, VideoPreviewResponse.class);
         logError(response);
         log.debug("preview urls: {} {}", path, response.getData());
-        cache.put(id, response.getData());
+        if (response.getData() != null) {
+            cache.put(id, response.getData());
+        }
         return response.getData();
     }
 

@@ -26,6 +26,9 @@
         <a v-else-if="scope.row.type==0" :href="getShareLink(scope.row)" target="_blank">
           https://www.alipan.com/s/{{ scope.row.shareId }}
         </a>
+        <a v-else-if="scope.row.type==5" :href="getShareLink(scope.row)" target="_blank">
+          https://pan.quark.cn/s/{{ scope.row.shareId }}
+        </a>
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
@@ -35,6 +38,7 @@
         <span v-else-if="scope.row.type==2">夸克网盘</span>
         <span v-else-if="scope.row.type==3">115网盘</span>
         <span v-else-if="scope.row.type==4">本地存储</span>
+        <span v-else-if="scope.row.type==5">夸克分享</span>
         <span v-else>阿里分享</span>
       </template>
     </el-table-column>
@@ -66,6 +70,7 @@
         <span v-if="scope.row.driver=='AliyundriveShare2Open'">阿里分享</span>
         <span v-else-if="scope.row.driver=='PikPakShare'">PikPak分享</span>
         <span v-else-if="scope.row.driver=='Quark'">夸克网盘</span>
+        <span v-else-if="scope.row.driver=='QuarkShare'">夸克分享</span>
         <span v-else-if="scope.row.driver=='115 Cloud'">115网盘</span>
         <span v-else-if="scope.row.driver=='Local'">本地存储</span>
         <span v-else-if="scope.row.driver=='Alias'">别名</span>
@@ -106,6 +111,7 @@
           <el-radio :label="0" size="large">阿里分享</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
           <el-radio :label="2" size="large">夸克网盘</el-radio>
+          <el-radio :label="5" size="large">夸克分享</el-radio>
           <el-radio :label="3" size="large">115网盘</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
         </el-radio-group>
@@ -158,6 +164,7 @@
         <el-radio-group v-model="sharesDto.type" class="ml-4">
           <el-radio :label="0" size="large">阿里分享</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
+          <el-radio :label="5" size="large">夸克分享</el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="分享内容" label-width="120">
@@ -178,6 +185,7 @@
       <el-radio-group v-model="form.type" class="ml-4">
         <el-radio :label="0" size="large">阿里分享</el-radio>
         <el-radio :label="1" size="large">PikPak分享</el-radio>
+        <el-radio :label="5" size="large">夸克分享</el-radio>
       </el-radio-group>
     </el-form-item>
     <template #footer>
@@ -342,6 +350,8 @@ const fullPath = (share: any) => {
     return '/\uD83D\uDD78\uFE0F我的PikPak分享/' + path
   } else if (share.type == 2) {
     return '/\uD83C\uDF1E我的夸克网盘/' + path
+  } else if (share.type == 5) {
+    return '/我的夸克分享/' + path
   } else if (share.type == 3) {
     return '/115网盘/' + path
   } else if (share.type == 4) {
@@ -361,6 +371,9 @@ const handleConfirm = () => {
 const getShareLink = (shareInfo: ShareInfo) => {
   if (shareInfo.type == 1) {
     return 'https://mypikpak.com/s/' + shareInfo.shareId
+  }
+  if (shareInfo.type == 5) {
+    return 'https://pan.quark.cn/s/' + shareInfo.shareId
   }
   let url = 'https://www.alipan.com/s/' + shareInfo.shareId
   if (shareInfo.folderId) {

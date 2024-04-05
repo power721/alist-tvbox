@@ -485,7 +485,7 @@ public class YoutubeService {
         );
     }
 
-    private String getMpd(VideoInfo info, List<Format> videoList, List<Format> audioList) {
+    private String getMpd(VideoInfo info, List<Format> videos, List<Format> audios) {
         String id = info.details().videoId();
         return String.format(
                 "<MPD xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:mpeg:dash:schema:mpd:2011\" xsi:schemaLocation=\"urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd\" type=\"static\" mediaPresentationDuration=\"PT%sS\" minBufferTime=\"PT1.5S\" profiles=\"urn:mpeg:dash:profile:isoff-on-demand:2011\">\n" +
@@ -496,7 +496,7 @@ public class YoutubeService {
                         "</MPD>",
                 info.details().lengthSeconds(),
                 info.details().lengthSeconds(),
-                videoList.stream().map(e -> getMedia(id, e)).collect(Collectors.joining()),
-                audioList.stream().map(e -> getMedia(id, e)).collect(Collectors.joining()));
+                videos.stream().map(e -> getMedia(id, e)).collect(Collectors.joining()),
+                audios.stream().map(e -> getMedia(id, e)).collect(Collectors.joining()));
     }
 }
