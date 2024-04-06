@@ -546,7 +546,7 @@ public class IndexService {
         }
     }
 
-    private AliFileList listFiles(ShareInfo shareInfo, String parentId, String path, String marker) {
+    private AliFileList listFiles(IndexContext context, ShareInfo shareInfo, String parentId, String path, String marker) {
         Exception exception = null;
         for (int i = 0; i < 5; i++) {
             String deviceID = UUID.randomUUID().toString().replace("-", "");
@@ -572,10 +572,16 @@ public class IndexService {
             } catch (HttpClientErrorException.TooManyRequests e) {
                 exception = e;
                 log.warn("Too many requests: {} {}", i + 1, path);
+            } catch (HttpClientErrorException.Unauthorized e) {
+                if (e.getMessage().contains("ShareLinkToken is invalid")) {
+                    shareInfo.setShareToken(aListService.getShareInfo(context.getSite(), path).getShareToken());
+                } else {
+                    throw e;
+                }
             }
 
             try {
-                Thread.sleep(2000L + i * 1000L);
+                Thread.sleep(context.getIndexRequest().getSleep() + i * 1000L);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
@@ -600,7 +606,7 @@ public class IndexService {
         boolean hasFile = false;
         String marker = "";
         do {
-            var fsResponse = listFiles(shareInfo, parentId, path, marker);
+            var fsResponse = listFiles(context, shareInfo, parentId, path, marker);
             if (fsResponse == null) {
                 log.warn("response null: {} {}", path, context.stats);
                 context.stats.errors++;

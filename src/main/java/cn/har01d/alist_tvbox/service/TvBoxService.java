@@ -344,6 +344,14 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
+        if (shareRepository.countByType(5) > 0) {
+            Category category = new Category();
+            category.setType_id("1$/我的夸克分享$1");
+            category.setType_name("夸克分享");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        }
+
         if (shareRepository.countByType(3) > 0) {
             Category category = new Category();
             category.setType_id("1$/115网盘$1");
