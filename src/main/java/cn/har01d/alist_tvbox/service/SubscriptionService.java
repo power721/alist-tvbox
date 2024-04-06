@@ -127,6 +127,13 @@ public class SubscriptionService {
             fixUrl(list);
             fixSid(list);
             fixId(list);
+            if (subscriptionRepository.findBySid("pg").isEmpty()) {
+                Subscription sub = new Subscription();
+                sub.setSid("pg");
+                sub.setName("PG");
+                sub.setUrl("/pg/jsm.json");
+                subscriptionRepository.save(sub);
+            }
         }
     }
 
@@ -890,11 +897,21 @@ public class SubscriptionService {
 
     private String loadLocalConfigJson(String name) {
         try {
-            File file = new File("/www/tvbox/" + name);
+            File file;
+            String folder;
+            if (name.startsWith("/")) {
+                file = new File("/www" + name);
+                folder = getFolder(name);
+            } else {
+                file = new File("/www/tvbox/" + name);
+                folder = "/tvbox/" + getFolder(name);
+            }
             if (file.exists()) {
                 log.info("load json from {}", file);
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
                 String address = readHostAddress();
+                json = json.replace("./", address + folder);
+                //json = json.replace(address + folder + "lib/tokenm.json", "./lib/tokenm.json");
                 json = json.replace("DOCKER_ADDRESS", address);
                 json = json.replace("ATV_ADDRESS", address);
                 return json;
@@ -904,6 +921,14 @@ public class SubscriptionService {
             return null;
         }
         return null;
+    }
+
+    private String getFolder(String path) {
+        int index = path.lastIndexOf("/");
+        if (index > 0) {
+            return path.substring(0, index + 1);
+        }
+        return "";
     }
 
     private String readHostAddress() {

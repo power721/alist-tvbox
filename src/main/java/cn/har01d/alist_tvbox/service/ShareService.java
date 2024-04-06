@@ -503,6 +503,7 @@ public class ShareService {
     }
 
     private static final Pattern QUARK_SHARE_LINK = Pattern.compile("https://pan.quark.cn/s/(\\w+)#/list/share/(\\w+)");
+    private static final Pattern QUARK_SHARE_LINK2 = Pattern.compile("https://pan.quark.cn/s/(\\w+)#/list/share");
     private void parseShare(Share share) {
         if (StringUtils.isBlank(share.getShareId())) {
             return;
@@ -513,6 +514,12 @@ public class ShareService {
         if (m.find()) {
             share.setShareId(m.group(1));
             share.setFolderId(m.group(2));
+            return;
+        }
+
+        m = QUARK_SHARE_LINK2.matcher(url);
+        if (m.find()) {
+            share.setShareId(m.group(1));
             return;
         }
 

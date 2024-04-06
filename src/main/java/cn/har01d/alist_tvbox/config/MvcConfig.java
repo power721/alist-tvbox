@@ -11,6 +11,7 @@ public class MvcConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/cat/**").addResourceLocations("file:/www/cat/");
         registry.addResourceHandler("/tvbox/**").addResourceLocations("file:/www/tvbox/");
+        registry.addResourceHandler("/pg/**").addResourceLocations("file:/www/pg/");
     }
 
     @Override

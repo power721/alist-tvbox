@@ -56,3 +56,8 @@ if [ ! -d /www/cat ]; then
   mkdir /www/cat
   unzip -q -o /cat.zip -d /www/cat
 fi
+
+if [ ! -d /www/pg ]; then
+  mkdir /www/pg
+  unzip -q -o /pg.zip -d /www/pg
+fi
