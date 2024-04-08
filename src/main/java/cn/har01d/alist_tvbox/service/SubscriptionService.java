@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.entity.Subscription;
@@ -70,6 +71,7 @@ public class SubscriptionService {
     private final SubscriptionRepository subscriptionRepository;
     private final AccountRepository accountRepository;
     private final SiteRepository siteRepository;
+    private final ShareRepository shareRepository;
     private final AListLocalService aListLocalService;
 
     private String tokens = "";
@@ -83,6 +85,7 @@ public class SubscriptionService {
                                SubscriptionRepository subscriptionRepository,
                                AccountRepository accountRepository,
                                SiteRepository siteRepository,
+                               ShareRepository shareRepository,
                                AListLocalService aListLocalService) {
         this.environment = environment;
         this.appProperties = appProperties;
@@ -96,6 +99,7 @@ public class SubscriptionService {
         this.subscriptionRepository = subscriptionRepository;
         this.accountRepository = accountRepository;
         this.siteRepository = siteRepository;
+        this.shareRepository = shareRepository;
         this.aListLocalService = aListLocalService;
     }
 
@@ -449,20 +453,32 @@ public class SubscriptionService {
 
     private void replaceAliToken(Map<String, Object> config) {
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
-        String path = "/ali/token/" + settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
-        String tokenUrl = readHostAddress(path);
+        String secret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
+        String tokenUrl = shareRepository.countByType(0) > 0 ? readHostAddress("/ali/token/" + secret) : null;
+        String cookieUrl = shareRepository.countByType(2) > 0 ? readHostAddress("/quark/cookie/" + secret) : null;
         for (Map<String, Object> site : list) {
             Object obj = site.get("ext");
             if (obj instanceof String) {
                 String ext = (String) obj;
-                String text = ext.replace("http://127.0.0.1:9978/file/tvfan/token.txt", tokenUrl)
-                        .replace("http://127.0.0.1:9978/file/tvfan/tokengo.txt", tokenUrl)
-                        .replace("http://127.0.0.1:9978/file/tvbox/token.txt", tokenUrl)
-                        .replace("http://127.0.0.1:9978/file/cainisi/token.txt", tokenUrl)
-                        .replace("http://127.0.0.1:9978/file/fatcat/token.txt", tokenUrl);
+                String text = ext;
+                if (tokenUrl != null) {
+                    text.replace("http://127.0.0.1:9978/file/tvfan/token.txt", tokenUrl)
+                            .replace("http://127.0.0.1:9978/file/tvfan/tokengo.txt", tokenUrl)
+                            .replace("http://127.0.0.1:9978/file/tvbox/token.txt", tokenUrl)
+                            .replace("http://127.0.0.1:9978/file/cainisi/token.txt", tokenUrl)
+                            .replace("http://127.0.0.1:9978/file/fatcat/token.txt", tokenUrl);
+                }
                 if (!ext.equals(text)) {
                     log.info("replace token url in ext: {}", ext);
                     site.put("ext", text);
+                }
+            } else if (obj instanceof Map) {
+                Map map = (Map) obj;
+                if (tokenUrl != null && map.containsKey("aliToken")) {
+                    map.put("aliToken", tokenUrl);
+                }
+                if (cookieUrl != null && map.containsKey("quarkCookie")) {
+                    map.put("quarkCookie", cookieUrl);
                 }
             }
         }

@@ -61,6 +61,11 @@ public class ShareController {
 //        return shareService.listResources(pageable);
 //    }
 
+    @GetMapping("/quark/cookie/{id}")
+    public String getQuarkCookie(@PathVariable String id) {
+        return shareService.getQuarkCookie(id);
+    }
+
     @GetMapping("/api/storages")
     public Object listStorages(Pageable pageable) {
         return shareService.listStorages(pageable);

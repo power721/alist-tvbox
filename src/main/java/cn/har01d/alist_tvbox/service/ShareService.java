@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
 import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
@@ -534,6 +535,14 @@ public class ShareService {
 
     public Page<Share> list(Pageable pageable) {
         return shareRepository.findAll(pageable);
+    }
+
+    public String getQuarkCookie(String id) {
+        String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
+        if (aliSecret.equals(id)) {
+            return shareRepository.findByType(2).stream().findFirst().map(Share::getCookie).orElse(null);
+        }
+        return null;
     }
 
     private static final Pattern QUARK_SHARE_LINK = Pattern.compile("https://pan.quark.cn/s/(\\w+)#/list/share/(\\w+)");
