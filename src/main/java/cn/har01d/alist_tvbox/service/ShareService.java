@@ -35,7 +35,6 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -50,7 +49,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
@@ -124,16 +122,13 @@ public class ShareService {
             list = loadSharesFromFile();
         }
 
-        Share share = loadTacit0924(list.stream().filter(e -> e.getId() == 7000).findAny().orElse(null));
-        if (share != null) {
-            list = list.stream().filter(e -> e.getId() != 7000).collect(Collectors.toList());
-            list.add(share);
-        }
+//        Share share = loadTacit0924(list.stream().filter(e -> e.getId() == 7000).findAny().orElse(null));
+//        if (share != null) {
+//            list = list.stream().filter(e -> e.getId() != 7000).collect(Collectors.toList());
+//            list.add(share);
+//        }
 
-        share = loadLatestShare();
-        if (share != null) {
-            list.add(share);
-        }
+        list.addAll(loadLatestShare());
 
         loadAListShares(list);
         loadAListAlias();
@@ -540,13 +535,14 @@ public class ShareService {
     public String getQuarkCookie(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
-            return shareRepository.findByType(2).stream().findFirst().map(Share::getCookie).orElse(null);
+            return shareRepository.findByType(2).stream().findFirst().map(Share::getCookie).orElse("").trim();
         }
-        return null;
+        return "";
     }
 
     private static final Pattern QUARK_SHARE_LINK = Pattern.compile("https://pan.quark.cn/s/(\\w+)#/list/share/(\\w+)");
     private static final Pattern QUARK_SHARE_LINK2 = Pattern.compile("https://pan.quark.cn/s/(\\w+)#/list/share");
+
     private void parseShare(Share share) {
         if (StringUtils.isBlank(share.getShareId())) {
             return;
@@ -791,9 +787,25 @@ public class ShareService {
 
     private static final String TACIT_URL = "https://ycyup.cn/tacit0924";
 
-    private Share loadLatestShare() {
+    private List<Share> loadLatestShare() {
+        List<Share> shares = new ArrayList<>();
         if (!environment.matchesProfiles("xiaoya")) {
-            return null;
+            return shares;
+        }
+
+        try {
+            if (!shareRepository.existsById(7000)) {
+                Share share = new Share();
+                share.setType(0);
+                share.setId(7000);
+                share.setShareId("wbrhqM5HkSV");
+                share.setPassword("6666");
+                share.setFolderId("6329beff6a2e552896574e26a21f370c6fa19c6a");
+                share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
+                shares.add(shareRepository.save(share));
+            }
+        } catch (Exception e) {
+            log.warn("", e);
         }
 
         try {
@@ -804,7 +816,7 @@ public class ShareService {
                 share.setShareId("mxAfB6eRgY4");
                 share.setFolderId("63833bb670c164d4eeb14aa09c62ee770d9112ba");
                 share.setPath("/\uD83C\uDE34我的阿里分享/近期更新");
-                return shareRepository.save(share);
+                shares.add(shareRepository.save(share));
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -818,12 +830,12 @@ public class ShareService {
                 share.setShareId("4ydLxf7VgH7");
                 share.setFolderId("6411b6c459de9db58ea5439cb7f537bbed4f4f4b");
                 share.setPath("/\uD83C\uDE34我的阿里分享/每日更新");
-                return shareRepository.save(share);
+                shares.add(shareRepository.save(share));
             }
         } catch (Exception e) {
             log.warn("", e);
         }
-        return null;
+        return shares;
     }
 
     private Share loadTacit0924(Share old) {
@@ -856,7 +868,7 @@ public class ShareService {
         return null;
     }
 
-    @Scheduled(cron = "0 20 0,9-23 * * ?")
+    //@Scheduled(cron = "0 20 0,9-23 * * ?")
     public void getTacit0924() {
         if (!environment.matchesProfiles("xiaoya")) {
             return;

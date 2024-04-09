@@ -455,7 +455,7 @@ public class SubscriptionService {
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
         String secret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         String tokenUrl = shareRepository.countByType(0) > 0 ? readHostAddress("/ali/token/" + secret) : null;
-        String cookieUrl = shareRepository.countByType(2) > 0 ? readHostAddress("/quark/cookie/" + secret) : null;
+        //String cookieUrl = shareRepository.countByType(2) > 0 ? readHostAddress("/quark/cookie/" + secret) : null;
         for (Map<String, Object> site : list) {
             Object obj = site.get("ext");
             if (obj instanceof String) {
@@ -473,13 +473,13 @@ public class SubscriptionService {
                     site.put("ext", text);
                 }
             } else if (obj instanceof Map) {
-                Map map = (Map) obj;
-                if (tokenUrl != null && map.containsKey("aliToken")) {
-                    map.put("aliToken", tokenUrl);
-                }
-                if (cookieUrl != null && map.containsKey("quarkCookie")) {
-                    map.put("quarkCookie", cookieUrl);
-                }
+//                Map map = (Map) obj;
+//                if (tokenUrl != null && map.containsKey("aliToken")) {
+//                    map.put("aliToken", tokenUrl); // tvfan/token.txt
+//                }
+//                if (cookieUrl != null && map.containsKey("quarkCookie")) {
+//                    map.put("quarkCookie", cookieUrl); // tvfan/cookie.txt
+//                }
             }
         }
     }
