@@ -410,7 +410,7 @@ const updateDebugLog = () => {
 }
 
 const updateAListDebug = () => {
-  axios.post('/api/settings', {name: 'alist_debug', value: debugLog.value}).then(() => {
+  axios.post('/api/settings', {name: 'alist_debug', value: aListDebug.value}).then(() => {
     ElMessage.success('更新成功，重启生效')
   })
 }

@@ -548,7 +548,7 @@ public class IndexService {
 
     private AliFileList listFiles(IndexContext context, ShareInfo shareInfo, String parentId, String path, String marker) {
         Exception exception = null;
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 10; i++) {
             String deviceID = UUID.randomUUID().toString().replace("-", "");
             HttpHeaders headers = new HttpHeaders();
             headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
@@ -703,7 +703,7 @@ public class IndexService {
             log.info("index {} : {}", context.getSiteName(), path);
         }
 
-        FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 1000);
+        FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 5000);
         if (fsResponse == null) {
             log.warn("response null: {} {}", path, context.stats);
             context.stats.errors++;
