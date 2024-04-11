@@ -23,13 +23,14 @@ cd web-ui && \
 npm run build || exit 1
 cd ..
 
-cp src/main/resources/application.yaml application-backup.yaml
-sed -i '/- name: 本地/,+2d' src/main/resources/application.yaml
-sed -i '/sites:/r add.txt' src/main/resources/application.yaml
+#cp src/main/resources/application.yaml application-backup.yaml
+#sed -i '/- name: 本地/,+2d' src/main/resources/application.yaml
+#sed -i '/sites:/r add.txt' src/main/resources/application.yaml
+
 mvn clean package || exit 1
 cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 
-mv application-backup.yaml src/main/resources/application.yaml
+#mv application-backup.yaml src/main/resources/application.yaml
 
 export TZ=Asia/Shanghai
 echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version

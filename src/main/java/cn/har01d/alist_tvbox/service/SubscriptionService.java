@@ -289,12 +289,12 @@ public class SubscriptionService {
     private void addCatSites(Map<String, Object> config) {
         List<Map<String, Object>> sites = getSites(config, "video");
         Map<String, Object> site = new HashMap<>();
-//        site.put("key", "youtube");
-//        site.put("name", "🟢 YouTube");
-//        site.put("type", 3);
-//        site.put("api", "/cat/youtube.js");
-//        site.put("ext", "YOUTUBE_EXT");
-//        sites.add(0, site);
+        site.put("key", "youtube");
+        site.put("name", "🟢 YouTube");
+        site.put("type", 3);
+        site.put("api", "/cat/youtube.js");
+        site.put("ext", "YOUTUBE_EXT");
+        sites.add(0, site);
 
         site = new HashMap<>();
         site.put("key", "bilibili");
