@@ -985,6 +985,10 @@ public class AccountService {
     }
 
     private void updateTokenToAList(Integer accountId, String key, String value, Instant time, String token) {
+        if (StringUtils.isEmpty(value)) {
+            log.warn("Token is empty: {} {} ", accountId, key);
+            return;
+        }
         if (time == null) {
             time = Instant.now();
         }
@@ -1049,19 +1053,19 @@ public class AccountService {
         List<Account> accounts = accountRepository.findAll();
         for (Account account : accounts) {
             AliToken token = map.get("RefreshToken-" + account.getId());
-            if (token != null && (account.getRefreshTokenTime() == null || token.getModified().isAfter(account.getRefreshTokenTime()))) {
+            if (token != null && StringUtils.isNotEmpty(token.getValue()) && (account.getRefreshTokenTime() == null || token.getModified().isAfter(account.getRefreshTokenTime()))) {
                 account.setRefreshToken(token.getValue());
                 account.setRefreshTokenTime(token.getModified());
             }
 
             token = map.get("RefreshTokenOpen-" + account.getId());
-            if (token != null && (account.getOpenTokenTime() == null || token.getModified().isAfter(account.getOpenTokenTime()))) {
+            if (token != null && StringUtils.isNotEmpty(token.getValue()) && (account.getOpenTokenTime() == null || token.getModified().isAfter(account.getOpenTokenTime()))) {
                 account.setOpenToken(token.getValue());
                 account.setOpenTokenTime(token.getModified());
             }
 
             token = map.get("AccessTokenOpen-" + account.getId());
-            if (token != null && (account.getOpenAccessTokenTime() == null || token.getModified().isAfter(account.getOpenAccessTokenTime()))) {
+            if (token != null && StringUtils.isNotEmpty(token.getValue()) && (account.getOpenAccessTokenTime() == null || token.getModified().isAfter(account.getOpenAccessTokenTime()))) {
                 account.setOpenAccessToken(token.getValue());
                 account.setOpenAccessTokenTime(token.getModified());
             }
