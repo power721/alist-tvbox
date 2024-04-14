@@ -198,7 +198,7 @@ const form = reactive({
   includeFiles: false,
   compress: false,
   scheduled: false,
-  sleep: 2000,
+  sleep: 5000,
   maxDepth: 10,
   paths: '',
   stopWords: '',

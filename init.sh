@@ -97,6 +97,7 @@ if [ ! -d /www/pg ]; then
   mkdir /www/pg
   unzip -q -o /pg.zip -d /www/pg
 fi
+[ -d /data/pg ] && cp -r /data/pg/* /www/pg/
 
 cd /tmp/
 

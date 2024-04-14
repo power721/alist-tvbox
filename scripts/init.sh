@@ -58,8 +58,10 @@ if [ ! -d /www/cat ]; then
   mkdir /www/cat
   unzip -q -o /cat.zip -d /www/cat
 fi
+[ -d /data/cat ] && cp -r /data/cat/* /www/cat/
 
 if [ ! -d /www/pg ]; then
   mkdir /www/pg
   unzip -q -o /pg.zip -d /www/pg
 fi
+[ -d /data/pg ] && cp -r /data/pg/* /www/pg/

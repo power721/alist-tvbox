@@ -131,13 +131,13 @@ public class SubscriptionService {
             fixUrl(list);
             fixSid(list);
             fixId(list);
-            if (subscriptionRepository.findBySid("pg").isEmpty()) {
-                Subscription sub = new Subscription();
-                sub.setSid("pg");
-                sub.setName("PG");
-                sub.setUrl("/pg/jsm.json");
-                subscriptionRepository.save(sub);
-            }
+        }
+        if (subscriptionRepository.findBySid("pg").isEmpty()) {
+            Subscription sub = new Subscription();
+            sub.setSid("pg");
+            sub.setName("PG");
+            sub.setUrl("/pg/jsm.json");
+            subscriptionRepository.save(sub);
         }
     }
 

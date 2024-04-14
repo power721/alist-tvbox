@@ -21,10 +21,12 @@ import java.time.Instant;
 @Service
 public class IndexTemplateService {
     public static final String AUTO_INDEX_VERSION = "auto_index_version";
-    private static final int indexVersion = 19;
+    private static final int indexVersion = 20;
     public static final String paths =
             "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【  剧  l  集  】/【电 丨视 丨剧】和完结的/【更新中】电视剧::2\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【  剧  l  集  】/【电 丨视 丨剧】和完结的/【更新中】电视剧/【国丨产港台等剧】/【2024近期已完结的】\"," +
+                    "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【  剧  l  集  】/【电 丨视 丨剧】和完结的/【更新中】电视剧/【日丨韩印泰等剧】/【2024已完结的】\"," +
+                    "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【  剧  l  集  】/【电 丨视 丨剧】和完结的/【更新中】电视剧/【欧丨美英法等剧】/【2024已完结的】\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【动.漫.动.画电.影】/更新中的【动漫.动画电影】和完结的，还有一些大合集/还在【更新中】的动漫 4.2TB\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【动.漫.动.画电.影】/更新中的【动漫.动画电影】和完结的，还有一些大合集/【近期完结的动漫】3TB(未整理国内外仅首字母)\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【更新中的】和完结的电视剧.动漫.电影.综艺纪录片/【综艺 纪录片 节目 晚会】/更新中的【综丨艺纪丨录片节丨目晚丨会 】和完结的/还在【更新中】的综艺 5 TB\"," +
@@ -68,7 +70,7 @@ public class IndexTemplateService {
         dto.setScheduled(true);
         dto.setScrape(true);
         dto.setScheduleTime("10|14|18|22");
-        dto.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":9000,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
+        dto.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":9500,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
         IndexTemplate template = create(dto);
         log.info("auto index template created: {}", template.getId());
         settingRepository.save(new Setting("auto_index", String.valueOf(template.getId())));
@@ -84,7 +86,7 @@ public class IndexTemplateService {
         IndexTemplate template = indexTemplateRepository.findById(id).orElse(null);
         if (template != null) {
             log.info("update auto index template ");
-            template.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":9000,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
+            template.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":9500,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
             indexTemplateRepository.save(template);
         }
         settingRepository.save(new Setting(AUTO_INDEX_VERSION, String.valueOf(indexVersion)));
