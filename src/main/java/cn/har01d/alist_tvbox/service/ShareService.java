@@ -799,7 +799,7 @@ public class ShareService {
             share.setId(7000);
             share.setShareId("cdqCsAWD9wC");
             share.setPassword("6666");
-            share.setFolderId("6329beff6a2e552896574e26a21f370c6fa19c6a");
+            share.setFolderId("635151fc53641440ad95492c8174c57584c56f68");
             share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
             shares.add(shareRepository.save(share));
         } catch (Exception e) {

@@ -395,9 +395,11 @@ public class IndexService {
         indexRequest.setPaths(indexRequest.getPaths().stream().filter(e -> !e.isBlank()).toList());
         List<String> paths = indexRequest.getPaths().stream().map(e -> e.split(":")[0]).collect(Collectors.toList());
         List<String> excludes = paths.stream().filter(e -> e.startsWith("-")).map(e -> e.substring(1)).toList();
-        paths.removeAll(excludes);
+        List<String> reset = paths.stream().filter(e -> e.startsWith(">")).map(e -> e.substring(1)).toList();
+        paths.removeIf(e -> excludes.contains("-" + e));
+        paths.removeIf(e -> reset.contains(">" + e));
         if (indexRequest.isIncremental()) {
-            removeLines(file, paths);
+            removeLines(file, paths, reset);
         }
 
         String summary;
@@ -414,6 +416,9 @@ public class IndexService {
             for (String path : indexRequest.getPaths()) {
                 if (isCancelled(context)) {
                     break;
+                }
+                if (path.startsWith(">") || path.startsWith("-")) {
+                    continue;
                 }
                 context.getTime().clear();
                 path = customize(context, indexRequest, path);
@@ -499,11 +504,12 @@ public class IndexService {
         return task.getStatus() == TaskStatus.COMPLETED && task.getResult() == TaskResult.CANCELLED;
     }
 
-    private void removeLines(File file, List<String> prefix) {
+    private void removeLines(File file, List<String> prefix, List<String> reset) {
         if (!file.exists()) {
             return;
         }
 
+        prefix.addAll(reset);
         try {
             List<String> lines = Files.readAllLines(file.toPath())
                     .stream()
