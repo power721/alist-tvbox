@@ -794,44 +794,38 @@ public class ShareService {
         }
 
         try {
-            if (!shareRepository.existsById(7000)) {
-                Share share = new Share();
-                share.setType(0);
-                share.setId(7000);
-                share.setShareId("wbrhqM5HkSV");
-                share.setPassword("6666");
-                share.setFolderId("6329beff6a2e552896574e26a21f370c6fa19c6a");
-                share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
-                shares.add(shareRepository.save(share));
-            }
+            Share share = new Share();
+            share.setType(0);
+            share.setId(7000);
+            share.setShareId("cdqCsAWD9wC");
+            share.setPassword("6666");
+            share.setFolderId("6329beff6a2e552896574e26a21f370c6fa19c6a");
+            share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
+            shares.add(shareRepository.save(share));
         } catch (Exception e) {
             log.warn("", e);
         }
 
         try {
-            if (!shareRepository.existsById(7001)) {
-                Share share = new Share();
-                share.setType(0);
-                share.setId(7001);
-                share.setShareId("mxAfB6eRgY4");
-                share.setFolderId("63833bb670c164d4eeb14aa09c62ee770d9112ba");
-                share.setPath("/\uD83C\uDE34我的阿里分享/近期更新");
-                shares.add(shareRepository.save(share));
-            }
+            Share share = new Share();
+            share.setType(0);
+            share.setId(7001);
+            share.setShareId("mxAfB6eRgY4");
+            share.setFolderId("63833bb670c164d4eeb14aa09c62ee770d9112ba");
+            share.setPath("/\uD83C\uDE34我的阿里分享/近期更新");
+            shares.add(shareRepository.save(share));
         } catch (Exception e) {
             log.warn("", e);
         }
 
         try {
-            if (!shareRepository.existsById(7002)) {
-                Share share = new Share();
-                share.setType(0);
-                share.setId(7002);
-                share.setShareId("4ydLxf7VgH7");
-                share.setFolderId("6411b6c459de9db58ea5439cb7f537bbed4f4f4b");
-                share.setPath("/\uD83C\uDE34我的阿里分享/每日更新");
-                shares.add(shareRepository.save(share));
-            }
+            Share share = new Share();
+            share.setType(0);
+            share.setId(7002);
+            share.setShareId("4ydLxf7VgH7");
+            share.setFolderId("6411b6c459de9db58ea5439cb7f537bbed4f4f4b");
+            share.setPath("/\uD83C\uDE34我的阿里分享/每日更新");
+            shares.add(shareRepository.save(share));
         } catch (Exception e) {
             log.warn("", e);
         }

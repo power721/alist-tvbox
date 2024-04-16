@@ -3,7 +3,7 @@
   <el-row justify="end">
     <el-button type="success" @click="uploadVisible=true">导入</el-button>
     <el-button type="success" @click="exportVisible=true">导出</el-button>
-    <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>
+<!--    <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>-->
     <el-button @click="refreshShares">刷新</el-button>
     <el-button type="primary" @click="handleAdd">添加</el-button>
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
