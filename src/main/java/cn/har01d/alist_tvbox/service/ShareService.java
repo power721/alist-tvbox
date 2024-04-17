@@ -48,6 +48,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
@@ -126,6 +127,7 @@ public class ShareService {
 //            list.add(share);
 //        }
 
+        list = list.stream().filter(e -> e.getId() < 7000).collect(Collectors.toList());
         list.addAll(loadLatestShare());
 
         loadAListShares(list);
