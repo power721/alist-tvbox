@@ -121,12 +121,6 @@ public class ShareService {
             list = loadSharesFromFile();
         }
 
-//        Share share = loadTacit0924(list.stream().filter(e -> e.getId() == 7000).findAny().orElse(null));
-//        if (share != null) {
-//            list = list.stream().filter(e -> e.getId() != 7000).collect(Collectors.toList());
-//            list.add(share);
-//        }
-
         list = list.stream().filter(e -> e.getId() < 7000).collect(Collectors.toList());
         list.addAll(loadLatestShare());
 
