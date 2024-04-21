@@ -883,15 +883,15 @@ public class SubscriptionService {
         site.put("searchable", 1);
         site.put("quickSearch", 1);
         site.put("filterable", 1);
-        Map<String, Object> style = new HashMap<>();
-        style.put("type", "rect");
         if ("csp_BiliBili".equals(key) || "csp_Youtube".equals(key)) {
+            Map<String, Object> style = new HashMap<>();
+            style.put("type", "rect");
             style.put("ratio", 1.597);
+            site.put("style", style);
         }
         if ("csp_Youtube".equals(key)) {
-            site.put("playerType", 2);
+            site.put("playerType", 1);
         }
-        site.put("style", style);
         return site;
     }
 
@@ -994,6 +994,7 @@ public class SubscriptionService {
             Matcher matcher = pattern.matcher(content);
             if (matcher.find()) {
                 content = content.substring(content.indexOf(matcher.group()) + 10);
+                content = content.replace(" ", "");
                 content = new String(Base64.getDecoder().decode(content));
             }
 

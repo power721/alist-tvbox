@@ -293,9 +293,10 @@ const saveTemplate = (id: number|null) => {
     data: JSON.stringify(data)
   }
   const url = id ? '/api/index-templates/' + templateId.value : '/api/index-templates'
-  axios.post(url, request).then(() => {
+  axios.post(url, request).then(({data}) => {
     ElMessage.success('保存模板成功')
     settingVisible.value = false
+    loadTemplate(data)
   })
 }
 

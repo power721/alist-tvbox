@@ -662,7 +662,7 @@ public class IndexService {
                         }
                     } else if (isMediaFormat(fsInfo.getName())) { // file
                         hasFile = true;
-                        if (context.isIncludeFiles()) {
+                        if (context.isIncludeFiles() || path.contains("电影")) {
                             String newPath = fixPath(path + "/" + fsInfo.getName());
                             if (exclude(context.getExcludes(), newPath)) {
                                 log.warn("exclude file {}", newPath);
