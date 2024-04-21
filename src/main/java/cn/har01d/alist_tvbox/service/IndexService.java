@@ -67,6 +67,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -80,6 +81,11 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 @Slf4j
 @Service
 public class IndexService {
+    private static final Pattern SEASON1 = Pattern.compile("Season ?\\d{1,2}.*");
+    private static final Pattern SEASON2 = Pattern.compile("SE\\d{1,2}.*");
+    private static final Pattern SEASON3 = Pattern.compile("^[Ss](\\d{1,2})$");
+    private static final Pattern SEASON4 = Pattern.compile("第.{1,3}季.*");
+
     private final AListService aListService;
     private final SiteService siteService;
     private final TaskService taskService;
@@ -738,7 +744,7 @@ public class IndexService {
                     if (fsInfo.getName().equals("字幕")) {
                         continue;
                     }
-                    if (fsInfo.getName().matches("Season \\d+.*") || fsInfo.getName().matches("SE\\d+.*")) {
+                    if (isSeason(fsInfo.getName())) {
                         hasFile = true;
                     }
                     String newPath = fixPath(path + "/" + fsInfo.getName());
@@ -802,6 +808,14 @@ public class IndexService {
         }
 
         taskService.updateTaskSummary(context.getTaskId(), context.stats.toString());
+    }
+
+    private static boolean isSeason(String name) {
+        return SEASON1.matcher(name).matches()
+                || SEASON2.matcher(name).matches()
+                || SEASON3.matcher(name).matches()
+                || SEASON4.matcher(name).matches()
+                ;
     }
 
     private boolean exclude(Set<String> rules, String path) {
