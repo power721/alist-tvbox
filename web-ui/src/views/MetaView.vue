@@ -43,6 +43,7 @@
       </el-table-column>
       <el-table-column prop="year" label="年份" width="65"/>
       <el-table-column prop="score" label="评分" width="60"/>
+<!--      <el-table-column prop="time" label="更新时间" width="100"/>-->
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button type="primary" size="small" @click="editMeta(scope.row)">编辑</el-button>

@@ -809,6 +809,9 @@ public class IndexService {
             if (rule.startsWith("/") && path.startsWith(rule)) {
                 return true;
             }
+            if (rule.startsWith("~") && path.matches(rule.substring(1))) {
+                return true;
+            }
             if (rule.startsWith("^") && rule.endsWith("$") && path.equals(rule.substring(1, rule.length() - 1))) {
                 return true;
             }

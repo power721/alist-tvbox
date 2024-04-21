@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.entity.TmdbMeta;
 import lombok.Data;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @Data
 public class MetaDto {
@@ -30,6 +31,9 @@ public class MetaDto {
         this.score = meta.getScore();
         this.siteId = meta.getSiteId();
         this.time = meta.getTime();
+        if (time != null) {
+            time = time.truncatedTo(ChronoUnit.SECONDS);
+        }
         if (meta.getMovie() != null) {
             this.movieId = meta.getMovie().getId();
         }
@@ -47,6 +51,9 @@ public class MetaDto {
         this.score = meta.getScore();
         this.siteId = meta.getSiteId();
         this.time = meta.getTime();
+        if (time != null) {
+            time = time.truncatedTo(ChronoUnit.SECONDS);
+        }
         if (meta.getTmdb() != null) {
             this.tmId = meta.getTmdb().getTmdbId();
             this.type = meta.getTmdb().getType();
