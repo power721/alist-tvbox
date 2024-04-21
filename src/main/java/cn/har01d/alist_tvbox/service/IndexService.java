@@ -738,7 +738,7 @@ public class IndexService {
                     if (fsInfo.getName().equals("字幕")) {
                         continue;
                     }
-                    if (fsInfo.getName().matches("Season \\d+")) {
+                    if (fsInfo.getName().matches("Season \\d+.*") || fsInfo.getName().matches("SE\\d+.*")) {
                         hasFile = true;
                     }
                     String newPath = fixPath(path + "/" + fsInfo.getName());
