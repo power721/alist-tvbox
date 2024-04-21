@@ -230,7 +230,7 @@ public class DoubanService {
             }
             return remote;
         } catch (Exception e) {
-            log.warn("", e);
+            log.debug("", e);
         }
         return "";
     }
