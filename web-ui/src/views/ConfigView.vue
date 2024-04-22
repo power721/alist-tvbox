@@ -199,7 +199,7 @@
             @change="updateReplaceAliToken"
           />
         </el-form-item>
-        <el-form-item label="订阅域名支持HTTPS">
+        <el-form-item label="订阅域名支持HTTPS" v-if="!appBaseUrl">
           <el-switch
             v-model="enableHttps"
             inline-prompt
@@ -387,8 +387,9 @@ const updateTmdbApiKey = () => {
 }
 
 const updateAppBaseUrl = () => {
-  axios.post('/api/settings', {name: 'app_base_url', value: appBaseUrl.value}).then(() => {
+  axios.post('/api/settings', {name: 'app_base_url', value: appBaseUrl.value}).then(({data}) => {
     ElMessage.success('更新成功')
+    appBaseUrl.value = data.value
   })
 }
 
