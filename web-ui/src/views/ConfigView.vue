@@ -190,42 +190,44 @@
             {{ currentUrl + '/ali/token/' + aliSecret }}
           </a>
         </el-form-item>
-        <el-form-item label="订阅替换阿里token地址">
-          <el-switch
-            v-model="replaceAliToken"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateReplaceAliToken"
-          />
-        </el-form-item>
-        <el-form-item label="订阅域名支持HTTPS" v-if="!appBaseUrl">
-          <el-switch
-            v-model="enableHttps"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateEnableHttps"
-          />
-        </el-form-item>
-        <el-form-item label="开启调试日志">
-          <el-switch
-            v-model="debugLog"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateDebugLog"
-          />
-        </el-form-item>
-        <el-form-item label="开启AList调试模式">
-          <el-switch
-            v-model="aListDebug"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateAListDebug"
-          />
-        </el-form-item>
+        <el-form inline label-width="180px">
+          <el-form-item label="订阅替换阿里token地址">
+            <el-switch
+              v-model="replaceAliToken"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateReplaceAliToken"
+            />
+          </el-form-item>
+          <el-form-item label="订阅域名支持HTTPS" v-if="!appBaseUrl">
+            <el-switch
+              v-model="enableHttps"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateEnableHttps"
+            />
+          </el-form-item>
+          <el-form-item label="开启调试日志">
+            <el-switch
+              v-model="debugLog"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateDebugLog"
+            />
+          </el-form-item>
+          <el-form-item label="开启AList调试模式">
+            <el-switch
+              v-model="aListDebug"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateAListDebug"
+            />
+          </el-form-item>
+        </el-form>
 <!--        <el-form-item label="开启阿里延迟加载">-->
 <!--          <el-switch-->
 <!--            v-model="aliLazyLoad"-->
