@@ -2087,6 +2087,10 @@ public class BiliBiliService {
     }
 
     private String fixSubtitleUrl(String url) {
+        String baseUrl = settingRepository.findById("app_base_url").map(Setting::getValue).orElse("");
+        if (StringUtils.isNotBlank(baseUrl)) {
+            return baseUrl + "/subtitles?url=" + fixUrl(url);
+        }
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath("/subtitles")
@@ -2096,6 +2100,10 @@ public class BiliBiliService {
     }
 
     private String getListPic() {
+        String baseUrl = settingRepository.findById("app_base_url").map(Setting::getValue).orElse("");
+        if (StringUtils.isNotBlank(baseUrl)) {
+            return baseUrl + "/list.png";
+        }
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath("/list.png")

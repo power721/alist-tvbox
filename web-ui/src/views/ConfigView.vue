@@ -179,6 +179,12 @@
         <el-form-item>
           <el-button type="primary" @click="updateTmdbApiKey">更新</el-button>
         </el-form-item>
+        <el-form-item label="管理应用地址">
+          <el-input v-model="appBaseUrl" type="url"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateAppBaseUrl">更新</el-button>
+        </el-form-item>
         <el-form-item label="阿里Token地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
             {{ currentUrl + '/ali/token/' + aliSecret }}
@@ -324,6 +330,7 @@ const openTokenUrl = ref('')
 const dockerAddress = ref('')
 const aliSecret = ref('')
 const tmdbApiKey = ref('')
+const appBaseUrl = ref('')
 const atvPass = ref('')
 const apiClientId = ref('')
 const apiClientSecret = ref('')
@@ -375,6 +382,12 @@ const updateOpenTokenUrl = () => {
 
 const updateTmdbApiKey = () => {
   axios.post('/api/settings', {name: 'tmdb_api_key', value: tmdbApiKey.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateAppBaseUrl = () => {
+  axios.post('/api/settings', {name: 'app_base_url', value: appBaseUrl.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -476,6 +489,7 @@ onMounted(() => {
     dockerAddress.value = data.docker_address
     aliSecret.value = data.ali_secret
     tmdbApiKey.value = data.tmdb_api_key
+    appBaseUrl.value = data.app_base_url
     autoCheckin.value = data.auto_checkin === 'true'
     aListRestart.value = data.alist_restart_required === 'true'
     replaceAliToken.value = data.replace_ali_token === 'true'

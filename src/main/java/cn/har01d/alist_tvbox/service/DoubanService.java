@@ -356,12 +356,7 @@ public class DoubanService {
         Movie movie = getByName(detail.getVod_name());
         if (movie != null) {
             if (movie.getCover() != null && !movie.getCover().isEmpty()) {
-                String cover = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                        .replacePath("/images")
-                        .query("url=" + movie.getCover())
-                        .build()
-                        .toUriString();
+                String cover = getCoverUrl(movie);
                 log.debug("cover url: {}", cover);
                 movie.setCover(cover);
             }
@@ -370,6 +365,19 @@ public class DoubanService {
             detail.setVod_year(String.valueOf(movie.getYear()));
             detail.setVod_remarks(movie.getDbScore());
         }
+    }
+
+    private String getCoverUrl(Movie movie) {
+        String baseUrl = settingRepository.findById("app_base_url").map(Setting::getValue).orElse("");
+        if (StringUtils.isNotBlank(baseUrl)) {
+            return baseUrl + "/images?url=" + movie.getCover();
+        }
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/images")
+                .query("url=" + movie.getCover())
+                .build()
+                .toUriString();
     }
 
     public Movie getByName(String name) {

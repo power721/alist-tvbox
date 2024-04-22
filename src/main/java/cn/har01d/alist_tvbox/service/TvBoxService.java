@@ -9,6 +9,8 @@ import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Meta;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
 import cn.har01d.alist_tvbox.entity.Movie;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.Tmdb;
@@ -89,6 +91,7 @@ public class TvBoxService {
     private final AListAliasRepository aliasRepository;
     private final ShareRepository shareRepository;
     private final MetaRepository metaRepository;
+    private final SettingRepository settingRepository;
 
     private final AListService aListService;
     private final IndexService indexService;
@@ -140,6 +143,7 @@ public class TvBoxService {
                         AListAliasRepository aliasRepository,
                         ShareRepository shareRepository,
                         MetaRepository metaRepository,
+                        SettingRepository settingRepository,
                         AListService aListService,
                         IndexService indexService,
                         SiteService siteService,
@@ -154,6 +158,7 @@ public class TvBoxService {
         this.aliasRepository = aliasRepository;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
+        this.settingRepository = settingRepository;
         this.aListService = aListService;
         this.indexService = indexService;
         this.siteService = siteService;
@@ -1071,6 +1076,10 @@ public class TvBoxService {
     }
 
     private String getListPic() {
+        String baseUrl = settingRepository.findById("app_base_url").map(Setting::getValue).orElse("");
+        if (StringUtils.isNotBlank(baseUrl)) {
+            return baseUrl + "/list.png";
+        }
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath("/list.png")
@@ -1732,12 +1741,7 @@ public class TvBoxService {
     private void fixCover(MovieDetail movie) {
         try {
             if (movie.getVod_pic() != null && !movie.getVod_pic().isEmpty()) {
-                String cover = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                        .replacePath("/images")
-                        .replaceQuery("url=" + movie.getVod_pic())
-                        .build()
-                        .toUriString();
+                String cover = getCoverUrl(movie);
                 log.debug("cover url: {}", cover);
                 movie.setVod_pic(cover);
             }
@@ -1746,9 +1750,26 @@ public class TvBoxService {
         }
     }
 
+    private String getCoverUrl(MovieDetail movie) {
+        String baseUrl = settingRepository.findById("app_base_url").map(Setting::getValue).orElse("");
+        if (StringUtils.isNotBlank(baseUrl)) {
+            return baseUrl + "/images?url=" + movie.getVod_pic();
+        }
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/images")
+                .query("url=" + movie.getVod_pic())
+                .build()
+                .toUriString();
+    }
+
     private String getCover(String thumb, int type) {
         String pic = thumb;
         if (pic.isEmpty() && type == 1) {
+            String baseUrl = settingRepository.findById("app_base_url").map(Setting::getValue).orElse("");
+            if (StringUtils.isNotBlank(baseUrl)) {
+                return baseUrl + "/folder.png";
+            }
             pic = ServletUriComponentsBuilder.fromCurrentRequest()
                     .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                     .replacePath("/folder.png")
