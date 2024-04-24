@@ -391,20 +391,20 @@ public class YoutubeService {
         Map<String, Object> result = new HashMap<>();
         result.put("parse", "0");
         if ("com.fongmi.android.tv".equals(client)) {
-            List<Format> videos = new ArrayList<>();
-            info.videoFormats()
-                    .stream()
-                    .filter(Format::isAdaptive)
-                    .filter(e -> e.extension() == Extension.MPEG4)
-                    .filter(e -> e.videoQuality().ordinal() > 5)
-                    .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
-                    .forEach(videos::add);
-            String mpd = getMpd(info, videos, audios);
-            log.debug("{}", mpd);
-            String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
-            String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
-            urls.add("Dash");
-            urls.add(url);
+//            List<Format> videos = new ArrayList<>();
+//            info.videoFormats()
+//                    .stream()
+//                    .filter(Format::isAdaptive)
+//                    .filter(e -> e.extension() == Extension.MPEG4)
+//                    .filter(e -> e.videoQuality().ordinal() > 5)
+//                    .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
+//                    .forEach(videos::add);
+//            String mpd = getMpd(info, videos, audios);
+//            log.debug("{}", mpd);
+//            String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
+//            String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
+//            urls.add("Dash");
+//            urls.add(url);
             result.put("url", urls);
         } else if ("node".equals(client)) {
             result.put("url", urls);

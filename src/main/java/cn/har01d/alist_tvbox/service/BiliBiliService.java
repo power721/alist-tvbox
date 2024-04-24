@@ -96,6 +96,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_CODE;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.BILI_BILI;
 import static cn.har01d.alist_tvbox.util.Constants.FILE;
@@ -1264,7 +1265,7 @@ public class BiliBiliService {
             headers.set(entry.getKey(), entry.getValue());
         }
         String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
-        if (StringUtils.isBlank(cookie) || "666".equals(cookie)) {
+        if (StringUtils.isBlank(cookie) || BILIBILI_CODE.equals(cookie)) {
             cookie = getCookie(cookie);
         }
         headers.set(HttpHeaders.COOKIE, cookie.trim());
@@ -1428,24 +1429,8 @@ public class BiliBiliService {
     }
 
     private String getCookie(String token) {
-        if ("666".equals(token)) {
+        if (BILIBILI_CODE.equals(token)) {
             return BiliBiliUtils.getCookie();
-        } else {
-            try {
-                String cookie = BiliBiliUtils.getDefaultCookie();
-                if (cookie != null) {
-                    return cookie;
-                }
-
-                cookie = restTemplate1.getForObject("https://agit.ai/30215429/TVBox/raw/branch/master/bilibili/cookie.txt", String.class);
-//                Map map = objectMapper.readValue(json, Map.class);
-//                cookie = (String) map.getOrDefault("cookie", "");
-                log.info("{}", cookie);
-                BiliBiliUtils.setDefaultCookie(cookie);
-                return cookie;
-            } catch (Exception e) {
-                log.warn("", e);
-            }
         }
         return "";
     }
@@ -1454,7 +1439,7 @@ public class BiliBiliService {
         try {
             String csrf = "";
             String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
-            if (StringUtils.isBlank(cookie) || "666".equals(cookie)) {
+            if (StringUtils.isBlank(cookie) || BILIBILI_CODE.equals(cookie)) {
                 cookie = getCookie(cookie);
             }
             String[] parts = cookie.split(";");
@@ -2001,7 +1986,7 @@ public class BiliBiliService {
     @Scheduled(cron = "0 30 9 * * *")
     public void checkin() {
         String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(null);
-        if (cookie == null || cookie.equals("666") || cookie.contains(String.valueOf(BiliBiliUtils.getMid())) || cookie.contains("3493271303096985")) {
+        if (cookie == null || cookie.equals(BILIBILI_CODE) || cookie.contains(String.valueOf(BiliBiliUtils.getMid())) || cookie.contains("3493271303096985")) {
             return;
         }
 
