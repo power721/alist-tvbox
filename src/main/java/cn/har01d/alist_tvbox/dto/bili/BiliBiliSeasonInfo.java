@@ -25,6 +25,6 @@ public class BiliBiliSeasonInfo {
     public static class Stats {
         private int danmaku;
         private int follow;
-        private int view;
+        private long view;
     }
 }

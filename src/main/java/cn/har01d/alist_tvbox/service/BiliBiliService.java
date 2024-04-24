@@ -915,6 +915,7 @@ public class BiliBiliService {
         }
         String url = String.format(SEASON_RANK_API, type);
         HttpEntity<Void> entity = buildHttpEntity(null);
+        log.debug("getSeasonRank: {}", url);
         ResponseEntity<BiliBiliSeasonResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSeasonResponse.class);
         BiliBiliSeasonResponse hotResponse = response.getBody();
         for (BiliBiliSeasonInfo info : hotResponse.getData().getList()) {
