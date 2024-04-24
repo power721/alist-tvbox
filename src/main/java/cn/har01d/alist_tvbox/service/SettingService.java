@@ -5,9 +5,11 @@ import ch.qos.logback.classic.LoggerContext;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.FileSystemResource;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -137,6 +140,19 @@ public class SettingService {
         }
         if ("tmdb_api_key".equals(setting.getName())) {
             tmdbService.setApiKey(setting.getValue());
+        }
+        if ("app_base_url".equals(setting.getName())) {
+            String url = setting.getValue();
+            if (StringUtils.isNotBlank(url)) {
+                try {
+                    new URL(url);
+                } catch (Exception e) {
+                    throw new BadRequestException("错误的URL地址：" + e.getMessage(), e);
+                }
+                if (url.endsWith("/")) {
+                    setting.setValue(url.substring(0, url.length() - 1));
+                }
+            }
         }
         if ("debug_log".equals(setting.getName())) {
             setLogLevel(setting);

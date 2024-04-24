@@ -179,47 +179,55 @@
         <el-form-item>
           <el-button type="primary" @click="updateTmdbApiKey">更新</el-button>
         </el-form-item>
+        <el-form-item label="管理应用地址">
+          <el-input v-model="appBaseUrl" type="url"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateAppBaseUrl">更新</el-button>
+        </el-form-item>
         <el-form-item label="阿里Token地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
             {{ currentUrl + '/ali/token/' + aliSecret }}
           </a>
         </el-form-item>
-        <el-form-item label="订阅替换阿里token地址">
-          <el-switch
-            v-model="replaceAliToken"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateReplaceAliToken"
-          />
-        </el-form-item>
-        <el-form-item label="订阅域名支持HTTPS">
-          <el-switch
-            v-model="enableHttps"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateEnableHttps"
-          />
-        </el-form-item>
-        <el-form-item label="开启调试日志">
-          <el-switch
-            v-model="debugLog"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateDebugLog"
-          />
-        </el-form-item>
-        <el-form-item label="开启AList调试模式">
-          <el-switch
-            v-model="aListDebug"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateAListDebug"
-          />
-        </el-form-item>
+        <el-form inline label-width="180px">
+          <el-form-item label="订阅替换阿里token地址">
+            <el-switch
+              v-model="replaceAliToken"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateReplaceAliToken"
+            />
+          </el-form-item>
+          <el-form-item label="订阅域名支持HTTPS" v-if="!appBaseUrl">
+            <el-switch
+              v-model="enableHttps"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateEnableHttps"
+            />
+          </el-form-item>
+          <el-form-item label="开启调试日志">
+            <el-switch
+              v-model="debugLog"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateDebugLog"
+            />
+          </el-form-item>
+          <el-form-item label="开启AList调试模式">
+            <el-switch
+              v-model="aListDebug"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateAListDebug"
+            />
+          </el-form-item>
+        </el-form>
 <!--        <el-form-item label="开启阿里延迟加载">-->
 <!--          <el-switch-->
 <!--            v-model="aliLazyLoad"-->
@@ -324,6 +332,7 @@ const openTokenUrl = ref('')
 const dockerAddress = ref('')
 const aliSecret = ref('')
 const tmdbApiKey = ref('')
+const appBaseUrl = ref('')
 const atvPass = ref('')
 const apiClientId = ref('')
 const apiClientSecret = ref('')
@@ -376,6 +385,13 @@ const updateOpenTokenUrl = () => {
 const updateTmdbApiKey = () => {
   axios.post('/api/settings', {name: 'tmdb_api_key', value: tmdbApiKey.value}).then(() => {
     ElMessage.success('更新成功')
+  })
+}
+
+const updateAppBaseUrl = () => {
+  axios.post('/api/settings', {name: 'app_base_url', value: appBaseUrl.value}).then(({data}) => {
+    ElMessage.success('更新成功')
+    appBaseUrl.value = data.value
   })
 }
 
@@ -476,6 +492,7 @@ onMounted(() => {
     dockerAddress.value = data.docker_address
     aliSecret.value = data.ali_secret
     tmdbApiKey.value = data.tmdb_api_key
+    appBaseUrl.value = data.app_base_url
     autoCheckin.value = data.auto_checkin === 'true'
     aListRestart.value = data.alist_restart_required === 'true'
     replaceAliToken.value = data.replace_ali_token === 'true'

@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.youtube;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
 import cn.har01d.alist_tvbox.tvbox.Category;
@@ -84,9 +86,11 @@ public class YoutubeService {
             .build(this::getVideoInfo);
 
     private final AppProperties appProperties;
+    private final SettingRepository settingRepository;
 
-    public YoutubeService(AppProperties appProperties) {
+    public YoutubeService(AppProperties appProperties, SettingRepository settingRepository) {
         this.appProperties = appProperties;
+        this.settingRepository = settingRepository;
         Config config = new Config.Builder().header("User-Agent", Constants.USER_AGENT).build();
 
         try {
@@ -222,6 +226,10 @@ public class YoutubeService {
     }
 
     private String getListPic() {
+        String baseUrl = settingRepository.findById("app_base_url").map(Setting::getValue).orElse("");
+        if (StringUtils.isNotBlank(baseUrl)) {
+            return baseUrl + "/list.png";
+        }
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath("/list.png")

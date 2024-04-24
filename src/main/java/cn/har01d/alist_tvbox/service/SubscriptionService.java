@@ -952,6 +952,10 @@ public class SubscriptionService {
     }
 
     private String readHostAddress(String path) {
+        String baseUrl = settingRepository.findById("app_base_url").map(Setting::getValue).orElse("");
+        if (StringUtils.isNotBlank(baseUrl)) {
+            return baseUrl + path;
+        }
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(path)
@@ -1102,6 +1106,7 @@ public class SubscriptionService {
             file = new File("/www/tvbox/juhe.json");
             if (file.exists()) {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+                json = json.replace("https://tvbox.cainisi.cf", "https://tv.菜妮丝.top");
                 json = json.replace("DOCKER_ADDRESS/tvbox/my.json", baseUrl + id);
                 return json;
             }

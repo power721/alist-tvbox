@@ -1430,22 +1430,6 @@ public class BiliBiliService {
     private String getCookie(String token) {
         if ("666".equals(token)) {
             return BiliBiliUtils.getCookie();
-        } else {
-            try {
-                String cookie = BiliBiliUtils.getDefaultCookie();
-                if (cookie != null) {
-                    return cookie;
-                }
-
-                cookie = restTemplate1.getForObject("https://agit.ai/30215429/TVBox/raw/branch/master/bilibili/cookie.txt", String.class);
-//                Map map = objectMapper.readValue(json, Map.class);
-//                cookie = (String) map.getOrDefault("cookie", "");
-                log.info("{}", cookie);
-                BiliBiliUtils.setDefaultCookie(cookie);
-                return cookie;
-            } catch (Exception e) {
-                log.warn("", e);
-            }
         }
         return "";
     }
@@ -2087,6 +2071,10 @@ public class BiliBiliService {
     }
 
     private String fixSubtitleUrl(String url) {
+        String baseUrl = settingRepository.findById("app_base_url").map(Setting::getValue).orElse("");
+        if (StringUtils.isNotBlank(baseUrl)) {
+            return baseUrl + "/subtitles?url=" + fixUrl(url);
+        }
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath("/subtitles")
@@ -2096,6 +2084,10 @@ public class BiliBiliService {
     }
 
     private String getListPic() {
+        String baseUrl = settingRepository.findById("app_base_url").map(Setting::getValue).orElse("");
+        if (StringUtils.isNotBlank(baseUrl)) {
+            return baseUrl + "/list.png";
+        }
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath("/list.png")

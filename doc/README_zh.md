@@ -345,7 +345,11 @@ channel@UCp1nO1bgVwks9b5EhKQGVag:幻海航行
 - https://api.xhofe.top/alist/ali_open/token
 - https://api.nn.ci/alist/ali_open/token
 
-如果nginx配置了SSL，需要在高级设置中打开`订阅域名支持HTTPS`开关。
+如果配置了nginx代理，可以在高级设置中配置`管理应用地址`。
+默认为空，后台会根据当前访问地址组装URL。
+配置了nginx代理后，组装的URL可能不正确，就需要手动填写管理应用地址。
+
+如果nginx配置了SSL并且没有配置管理应用地址，需要在高级设置中打开`订阅域名支持HTTPS`开关。
 
 ### 索引
 对于阿里云盘资源，建议使用文件数量少的路径，并限速，防止被封号。
