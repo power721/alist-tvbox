@@ -1080,6 +1080,10 @@ public class BiliBiliService {
             return getSearchPlaylist(bvid);
         }
 
+        if (bvid.startsWith("up:")) {
+            bvid = bvid.replace("up:", "up$");
+        }
+
         if (bvid.startsWith("up$")) {
             return getUpPlaylist(bvid);
         }
@@ -1359,7 +1363,7 @@ public class BiliBiliService {
         String[] parts = bvid.split("-");
         int fnval = 16;
         Map<String, Object> result = new HashMap<>();
-        dash = dash || "open".equals(client) || "node".equals(client) || appProperties.isSupportDash();
+        dash = dash || appProperties.isSupportDash();
         if (dash) {
             fnval = settingRepository.findById("bilibili_fnval").map(Setting::getValue).map(Integer::parseInt).orElse(FN_VAL);
         }
