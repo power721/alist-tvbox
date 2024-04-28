@@ -139,6 +139,13 @@ public class SubscriptionService {
             sub.setUrl("/pg/jsm.json");
             subscriptionRepository.save(sub);
         }
+        if (subscriptionRepository.findBySid("ok").isEmpty()) {
+            Subscription sub = new Subscription();
+            sub.setSid("ok");
+            sub.setName("OK");
+            sub.setUrl("http://ok321.top/ok");
+            subscriptionRepository.save(sub);
+        }
     }
 
     private void fixUrl(List<Subscription> list) {
@@ -460,14 +467,14 @@ public class SubscriptionService {
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
         String secret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         String tokenUrl = shareRepository.countByType(0) > 0 ? readHostAddress("/ali/token/" + secret) : null;
-        //String cookieUrl = shareRepository.countByType(2) > 0 ? readHostAddress("/quark/cookie/" + secret) : null;
+        String cookieUrl = shareRepository.countByType(2) > 0 ? readHostAddress("/quark/cookie/" + secret) : null;
         for (Map<String, Object> site : list) {
             Object obj = site.get("ext");
             if (obj instanceof String) {
                 String ext = (String) obj;
                 String text = ext;
                 if (tokenUrl != null) {
-                    text.replace("http://127.0.0.1:9978/file/tvfan/token.txt", tokenUrl)
+                    text = text.replace("http://127.0.0.1:9978/file/tvfan/token.txt", tokenUrl)
                             .replace("http://127.0.0.1:9978/file/tvfan/tokengo.txt", tokenUrl)
                             .replace("http://127.0.0.1:9978/file/tvbox/token.txt", tokenUrl)
                             .replace("http://127.0.0.1:9978/file/cainisi/token.txt", tokenUrl)
@@ -478,13 +485,19 @@ public class SubscriptionService {
                     site.put("ext", text);
                 }
             } else if (obj instanceof Map) {
-//                Map map = (Map) obj;
-//                if (tokenUrl != null && map.containsKey("aliToken")) {
-//                    map.put("aliToken", tokenUrl); // tvfan/token.txt
-//                }
-//                if (cookieUrl != null && map.containsKey("quarkCookie")) {
-//                    map.put("quarkCookie", cookieUrl); // tvfan/cookie.txt
-//                }
+                Map map = (Map) obj;
+                if (tokenUrl != null && "file://TV/ali_token.txt".equals(map.get("token"))) {
+                    map.put("token", tokenUrl);
+                }
+                if (cookieUrl != null && "file://TV/quark_cookie.txt".equals(map.get("cookie"))) {
+                    map.put("cookie", cookieUrl);
+                }
+                if (tokenUrl != null && map.containsKey("aliToken")) {
+                    map.put("aliToken", tokenUrl); // tvfan/token.txt
+                }
+                if (cookieUrl != null && map.containsKey("quarkCookie")) {
+                    map.put("quarkCookie", cookieUrl); // tvfan/cookie.txt
+                }
             }
         }
     }
@@ -1101,6 +1114,7 @@ public class SubscriptionService {
                 }
                 json = json.replace("DOCKER_ADDRESS/tvbox/my.json", baseUrl + id);
                 json = json.replace("ATV_ADDRESS", readHostAddress());
+                json = json.replace("TOKEN", StringUtils.isBlank(token) ? "-" : token);
                 return json;
             }
 

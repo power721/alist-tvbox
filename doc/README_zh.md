@@ -238,7 +238,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 {
   "urls": [
     {
-      "url": "ATV_ADDRESS/sub/1",
+      "url": "ATV_ADDRESS/sub/TOKEN/1",
       "name": "内置小雅搜索源"
     },
     {
