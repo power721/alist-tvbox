@@ -732,6 +732,11 @@ public class BiliBiliService {
         if (mid == null) {
             getLoginStatus();
         }
+        MovieList result = new MovieList();
+        if (mid == BiliBiliUtils.getMid()) {
+            return result;
+        }
+
         Map<String, Object> map = new HashMap<>();
         map.put("vmid", mid);
         map.put("pn", page);
@@ -751,7 +756,6 @@ public class BiliBiliService {
         BiliBiliFollowings followings = response.getBody().getData();
 
         List<MovieDetail> list = new ArrayList<>();
-        MovieList result = new MovieList();
         for (var info : followings.getList()) {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id("up:" + info.getMid());
