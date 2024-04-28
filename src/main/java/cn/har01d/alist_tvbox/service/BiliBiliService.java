@@ -762,6 +762,7 @@ public class BiliBiliService {
             movieDetail.setVod_name(info.getUname());
             movieDetail.setVod_tag(FOLDER);
             movieDetail.setVod_pic(fixCover(info.getFace()));
+            movieDetail.setCate(new CategoryList());
             list.add(movieDetail);
         }
 

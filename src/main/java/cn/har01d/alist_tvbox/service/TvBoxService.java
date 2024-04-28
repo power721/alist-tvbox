@@ -829,7 +829,7 @@ public class TvBoxService {
             movieDetail.setVod_time(fsInfo.getModified());
             movieDetail.setSize(fsInfo.getSize());
             if (fsInfo.getType() == 1) {
-                if ("open".equals(client)) {
+                if ("open".equals(client) || "node".equals(client)) {
                     movieDetail.setVod_pic("");
                     if ("AliyundriveOpen".equals(fsResponse.getProvider())) {
                         movieDetail.setVod_pic("https://pic.rmb.bdstatic.com/bjh/6a2278365c10139b5b03229c2ecfeea4.jpeg");
@@ -1147,7 +1147,7 @@ public class TvBoxService {
             }
 
             if (fsDetail.getProvider().contains("Aliyundrive")
-                    || ("open".equals(client) && fsDetail.getProvider().contains("115"))) {
+                    || (("open".equals(client) || "node".equals(client)) && fsDetail.getProvider().contains("115"))) {
                 url = buildProxyUrl(site, path, fsDetail.getSign());
                 log.info("play url: {}", url);
             } else {
