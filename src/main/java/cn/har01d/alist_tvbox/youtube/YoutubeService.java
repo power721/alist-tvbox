@@ -139,7 +139,7 @@ public class YoutubeService {
                 }
             }
         } else {
-            List<String> keywords = List.of("电影", "电视剧", "动漫", "综艺", "纪录片", "音乐", "英语", "科技", "新闻", "游戏", "风景", "旅游", "美食", "健身", "运动", "体育");
+            List<String> keywords = List.of("电影", "电视剧", "动漫", "综艺", "纪录片", "音乐", "英语", "科技", "新闻", "游戏", "风景", "旅游", "美食", "健身", "运动", "体育", "搞笑");
             for (var name : keywords) {
                 Category category = new Category();
                 category.setType_id(name);

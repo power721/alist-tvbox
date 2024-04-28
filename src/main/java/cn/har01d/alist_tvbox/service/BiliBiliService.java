@@ -9,6 +9,8 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliFavItemsResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliFavListResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliFeedResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliFollowings;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliFollowingsResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResult;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliHotResponse;
@@ -100,6 +102,7 @@ import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_CODE;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.BILI_BILI;
 import static cn.har01d.alist_tvbox.util.Constants.FILE;
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
@@ -137,6 +140,7 @@ public class BiliBiliService {
     public static final String REGION_API = "https://api.bilibili.com/x/web-interface/dynamic/region?ps=%d&rid=%s&pn=%d";
     public static final String CHANNEL_API = "https://api.bilibili.com/x/web-interface/web/channel/multiple/list?channel_id=%s&sort_type=%s&offset=%s&page_size=30";
     public static final String FAV_API = "https://api.bilibili.com/x/v3/fav/resource/list?media_id=%s&keyword=&order=%s&type=0&tid=0&platform=web&pn=%d&ps=20";
+    public static final String FOLLOW_API = "https://api.bilibili.com/x/relation/followings";
 
     private final List<FilterValue> filters1 = Arrays.asList(
             new FilterValue("综合排序", ""),
@@ -722,6 +726,47 @@ public class BiliBiliService {
         response.close();
 
         return objectMapper.readValue(json, clazz);
+    }
+
+    public MovieList getFollowings(int page) {
+        if (mid == null) {
+            getLoginStatus();
+        }
+        Map<String, Object> map = new HashMap<>();
+        map.put("vmid", mid);
+        map.put("pn", page);
+        map.put("ps", 30);
+        map.put("order", "desc");
+        map.put("order_type", "attention");
+        map.put("gaia_source", "main_web");
+        map.put("web_location", "333.999");
+
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        getKeys(entity);
+        String url = FOLLOW_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
+        log.debug("getFollowings: {}", url);
+
+        ResponseEntity<BiliBiliFollowingsResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliFollowingsResponse.class);
+        log.debug("{}", response.getBody());
+        BiliBiliFollowings followings = response.getBody().getData();
+
+        List<MovieDetail> list = new ArrayList<>();
+        MovieList result = new MovieList();
+        for (var info : followings.getList()) {
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id("up:" + info.getMid());
+            movieDetail.setVod_name(info.getUname());
+            movieDetail.setVod_tag(FOLDER);
+            movieDetail.setVod_pic(fixCover(info.getFace()));
+            list.add(movieDetail);
+        }
+
+        result.getList().addAll(list);
+        result.setLimit(result.getList().size());
+        result.setTotal(followings.getTotal());
+        result.setPagecount((followings.getTotal() + 29) / 30);
+        log.debug("getFollowings: {}", result);
+        return result;
     }
 
     public MovieList getUpMedia(String mid, String sort, int page) throws IOException {
@@ -1540,6 +1585,8 @@ public class BiliBiliService {
             return getFeeds(page);
         } else if ("recommend".equals(parts[0])) {
             return recommend(page, true);
+        } else if ("follow".equals(parts[0])) {
+            return getFollowings(page);
         } else {
             int rid = Integer.parseInt(parts[1]);
             list = getHotRank(parts[0], rid, page);
