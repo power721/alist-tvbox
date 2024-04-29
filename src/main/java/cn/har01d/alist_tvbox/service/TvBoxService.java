@@ -1365,7 +1365,7 @@ public class TvBoxService {
             movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
             movieDetail.setVod_play_from(site.getName());
             if ("detail".equals(ac)) {
-                String sign = subscriptionService.getToken().isEmpty() ? "" : aListService.getFile(site, path).getSign();
+                String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, path).getSign();
                 movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
             } else {
                 movieDetail.setVod_play_url(fsDetail.getName() + "$" + buildPlayUrl(site, path));
@@ -1446,7 +1446,7 @@ public class TvBoxService {
                 for (String name : fileNames) {
                     String filepath = newPath + "/" + folder + "/" + name;
                     if ("detail".equals(ac)) {
-                        String sign = subscriptionService.getToken().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
+                        String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
                         String url = buildProxyUrl(site, filepath, sign);
                         urls.add(fixName(name, prefix, suffix) + "$" + url);
                     } else {
@@ -1475,7 +1475,7 @@ public class TvBoxService {
             for (String name : fileNames) {
                 String filepath = newPath + "/" + name;
                 if ("detail".equals(ac)) {
-                    String sign = subscriptionService.getToken().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
+                    String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
                     String url = buildProxyUrl(site, filepath, sign);
                     list.add(fixName(name, prefix, suffix) + "$" + url);
                 } else {

@@ -48,7 +48,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -445,8 +444,8 @@ public class YoutubeService {
 
     private String buildProxyUrl(String id, int tag) {
         String path = "/youtube-proxy";
-        if (StringUtils.isNotBlank(subscriptionService.getToken())) {
-            path = path + "/" + subscriptionService.getToken();
+        if (StringUtils.isNotBlank(subscriptionService.getTokens())) {
+            path = path + "/" + subscriptionService.getTokens().split(",")[0];
         }
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .replacePath(path)

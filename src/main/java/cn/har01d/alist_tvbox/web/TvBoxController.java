@@ -86,7 +86,7 @@ public class TvBoxController {
 
     @GetMapping("/api/token")
     public String getToken() {
-        return subscriptionService.getToken();
+        return subscriptionService.getTokens();
     }
 
     @PostMapping("/api/token")

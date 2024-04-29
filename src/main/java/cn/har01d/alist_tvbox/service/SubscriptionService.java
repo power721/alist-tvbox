@@ -213,7 +213,7 @@ public class SubscriptionService {
         throw new BadRequestException();
     }
 
-    public String getToken() {
+    public String getTokens() {
         return tokens;
     }
 
