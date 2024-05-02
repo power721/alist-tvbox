@@ -59,7 +59,7 @@ public class YoutubeController {
 
         String client = request.getHeader("X-CLIENT");
         log.debug("{} {} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()), client);
-        return youtubeService.play(id, client);
+        return youtubeService.play(token, id, client);
     }
 
     @GetMapping("/youtube-proxy")

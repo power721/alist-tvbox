@@ -359,7 +359,7 @@ public class YoutubeService {
         return result;
     }
 
-    public Object play(String id, String client) {
+    public Object play(String token, String id, String client) {
         VideoInfo info = cache.get(id);
         List<String> urls = new ArrayList<>();
         if ("node".equals(client)) {
@@ -369,7 +369,7 @@ public class YoutubeService {
                     .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
                     .forEach(format -> {
                         urls.add(format.qualityLabel() + " " + format.extension().value());
-                        urls.add(buildProxyUrl(id, format.itag().id()));
+                        urls.add(buildProxyUrl(token, id, format.itag().id()));
                     });
         } else {
             info.videoWithAudioFormats()
@@ -377,7 +377,7 @@ public class YoutubeService {
                     .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
                     .forEach(format -> {
                         urls.add(format.qualityLabel() + " " + format.extension().value());
-                        urls.add(buildProxyUrl(id, format.itag().id()));
+                        urls.add(buildProxyUrl(token, id, format.itag().id()));
                     });
         }
 
@@ -412,7 +412,7 @@ public class YoutubeService {
                 Map<String, Object> map = new HashMap<>();
                 map.put("bit", audio.bitrate());
                 map.put("title", (audio.bitrate() / 1024) + "Kbps");
-                map.put("url", buildProxyUrl(id, audio.itag().id()));
+                map.put("url", buildProxyUrl(token, id, audio.itag().id()));
                 list.add(map);
             }
             result.put("extra", Map.of("audio", list));
@@ -442,10 +442,10 @@ public class YoutubeService {
         downloader.downloadVideoStream(download);
     }
 
-    private String buildProxyUrl(String id, int tag) {
+    private String buildProxyUrl(String token, String id, int tag) {
         String path = "/youtube-proxy";
-        if (StringUtils.isNotBlank(subscriptionService.getTokens())) {
-            path = path + "/" + subscriptionService.getTokens().split(",")[0];
+        if (StringUtils.isNotBlank(token)) {
+            path = path + "/" + token;
         }
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .replacePath(path)
@@ -454,13 +454,13 @@ public class YoutubeService {
                 .toUriString();
     }
 
-    private String getMedia(String id, Format media) {
+    private String getMedia(String token, String id, Format media) {
         if (media.itag().isVideo()) {
             VideoFormat video = (VideoFormat) media;
-            return getAdaptationSet(id, media, String.format("height=\"%s\" width=\"%s\" frameRate=\"%d\" sar=\"1:1\"", video.height(), video.width(), video.fps()));
+            return getAdaptationSet(token, id, media, String.format("height=\"%s\" width=\"%s\" frameRate=\"%d\" sar=\"1:1\"", video.height(), video.width(), video.fps()));
         } else if (media.itag().isAudio()) {
             AudioFormat audio = (AudioFormat) media;
-            return getAdaptationSet(id, media, String.format("numChannels=\"2\" sampleRate=\"%s\"", audio.audioSampleRate()));
+            return getAdaptationSet(token, id, media, String.format("numChannels=\"2\" sampleRate=\"%s\"", audio.audioSampleRate()));
         } else {
             return "";
         }
@@ -468,7 +468,7 @@ public class YoutubeService {
 
     private static final Pattern CODECS = Pattern.compile("codecs=\"(.+)\"");
 
-    private String getAdaptationSet(String id, Format media, String params) {
+    private String getAdaptationSet(String token, String id, Format media, String params) {
         int tag = media.itag().id();
         String type = media.mimeType().split("/")[0];
         String mimeType = media.mimeType().split(";")[0];
@@ -477,7 +477,7 @@ public class YoutubeService {
         if (m.find()) {
             codecs = m.group(1);
         }
-        String url = buildProxyUrl(id, tag).replace("&", "&amp;");
+        String url = buildProxyUrl(token, id, tag).replace("&", "&amp;");
         return String.format(
                 "<AdaptationSet>\n" +
                         "<ContentComponent contentType=\"%s\"/>\n" +
@@ -491,7 +491,7 @@ public class YoutubeService {
         );
     }
 
-    private String getMpd(VideoInfo info, List<Format> videos, List<Format> audios) {
+    private String getMpd(String token, VideoInfo info, List<Format> videos, List<Format> audios) {
         String id = info.details().videoId();
         return String.format(
                 "<MPD xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"urn:mpeg:dash:schema:mpd:2011\" xsi:schemaLocation=\"urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd\" type=\"static\" mediaPresentationDuration=\"PT%sS\" minBufferTime=\"PT1.5S\" profiles=\"urn:mpeg:dash:profile:isoff-on-demand:2011\">\n" +
@@ -502,7 +502,7 @@ public class YoutubeService {
                         "</MPD>",
                 info.details().lengthSeconds(),
                 info.details().lengthSeconds(),
-                videos.stream().map(e -> getMedia(id, e)).collect(Collectors.joining()),
-                audios.stream().map(e -> getMedia(id, e)).collect(Collectors.joining()));
+                videos.stream().map(e -> getMedia(token, id, e)).collect(Collectors.joining()),
+                audios.stream().map(e -> getMedia(token, id, e)).collect(Collectors.joining()));
     }
 }
