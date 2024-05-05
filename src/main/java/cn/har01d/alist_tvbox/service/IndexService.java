@@ -650,6 +650,11 @@ public class IndexService {
                         if (context.getMaxDepth() == depth + 1 && !context.isIncludeFiles()) {
                             files.add(fsInfo.getName());
                         } else {
+                            if (isSeason(fsInfo.getName())) {
+                                hasFile = true;
+                                continue;
+                            }
+
                             if (context.getIndexRequest().getSleep() > 0) {
                                 log.debug("sleep {}", context.getIndexRequest().getSleep());
                                 Thread.sleep(context.getIndexRequest().getSleep());
