@@ -220,7 +220,7 @@ const load = () => {
 
 onMounted(() => {
   axios.get('/api/token').then(({data}) => {
-    token.value = data ? '/' + data.split(',')[0] : ''
+    token.value = data ? '/' + (data + '').split(',')[0] : ''
     load()
   })
 })

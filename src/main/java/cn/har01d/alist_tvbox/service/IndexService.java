@@ -655,11 +655,6 @@ public class IndexService {
                                 continue;
                             }
 
-//                            if (context.getIndexRequest().getSleep() > 0) {
-//                                log.debug("sleep {}", context.getIndexRequest().getSleep());
-//                                Thread.sleep(context.getIndexRequest().getSleep());
-//                            }
-
                             if (isCancelled(context)) {
                                 break;
                             }

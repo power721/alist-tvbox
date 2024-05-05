@@ -44,7 +44,7 @@ watch(
 
 onMounted(async () => {
   token.value = await axios.get('/api/token').then(({data}) => {
-    return  data ? '/' + data.split(',')[0] : ''
+    return  data ? '/' + (data + '').split(',')[0] : ''
   })
   id.value = route.params.id as string
   config.value = await load(id.value)
