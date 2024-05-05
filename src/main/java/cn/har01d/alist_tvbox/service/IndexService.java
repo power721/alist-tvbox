@@ -655,10 +655,10 @@ public class IndexService {
                                 continue;
                             }
 
-                            if (context.getIndexRequest().getSleep() > 0) {
-                                log.debug("sleep {}", context.getIndexRequest().getSleep());
-                                Thread.sleep(context.getIndexRequest().getSleep());
-                            }
+//                            if (context.getIndexRequest().getSleep() > 0) {
+//                                log.debug("sleep {}", context.getIndexRequest().getSleep());
+//                                Thread.sleep(context.getIndexRequest().getSleep());
+//                            }
 
                             if (isCancelled(context)) {
                                 break;
@@ -758,9 +758,6 @@ public class IndexService {
                     if (fsInfo.getName().equals("字幕")) {
                         continue;
                     }
-                    if (isSeason(fsInfo.getName())) {
-                        hasFile = true;
-                    }
                     String newPath = fixPath(path + "/" + fsInfo.getName());
                     log.debug("new path: {}", newPath);
                     if (exclude(context.getExcludes(), newPath)) {
@@ -773,6 +770,11 @@ public class IndexService {
                     if (context.getMaxDepth() == depth + 1 && !context.isIncludeFiles()) {
                         files.add(fsInfo.getName());
                     } else {
+                        if (isSeason(fsInfo.getName())) {
+                            hasFile = true;
+                            continue;
+                        }
+
                         if (context.getIndexRequest().getSleep() > 0) {
                             log.debug("sleep {}", context.getIndexRequest().getSleep());
                             Thread.sleep(context.getIndexRequest().getSleep());
