@@ -46,6 +46,10 @@ public class TextUtils {
         return text.codePoints().allMatch(TextUtils::isAlphabetic);
     }
 
+    public static boolean isNumber(String text) {
+        return NUMBER1.matcher(text).matches();
+    }
+
     public static String fixName(String name) {
         int index = name.lastIndexOf('/');
         String newName = name.trim();

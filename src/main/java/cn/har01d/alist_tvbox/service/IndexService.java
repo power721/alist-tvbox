@@ -21,6 +21,7 @@ import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.model.ShareInfo;
 import cn.har01d.alist_tvbox.tvbox.IndexContext;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -85,6 +86,7 @@ public class IndexService {
     private static final Pattern SEASON2 = Pattern.compile("SE\\d{1,2}.*");
     private static final Pattern SEASON3 = Pattern.compile("^[Ss](\\d{1,2})$");
     private static final Pattern SEASON4 = Pattern.compile("第.{1,3}季.*");
+    private static final Pattern EPISODE = Pattern.compile("S\\d+E\\d+");
 
     private final AListService aListService;
     private final SiteService siteService;
@@ -615,6 +617,7 @@ public class IndexService {
         }
 
         List<String> files = new ArrayList<>();
+        List<String> folders = new ArrayList<>();
         boolean hasFile = false;
         String marker = "";
         do {
@@ -648,7 +651,7 @@ public class IndexService {
 
                         context.getTime().put(newPath, fsInfo.getUpdatedAt());
                         if (context.getMaxDepth() == depth + 1 && !context.isIncludeFiles()) {
-                            files.add(fsInfo.getName());
+                            folders.add(fsInfo.getName());
                         } else {
                             if (isSeason(fsInfo.getName())) {
                                 hasFile = true;
@@ -696,18 +699,41 @@ public class IndexService {
             context.write(path);
         }
 
-        for (String name : files) {
+        for (String name : folders) {
             String newPath = fixPath(path + "/" + name);
             context.write(newPath);
         }
 
+        if (!shouldSkipFiles(files)) {
+            for (String name : files) {
+                String newPath = fixPath(path + "/" + name);
+                context.write(newPath);
+            }
+        }
+
         taskService.updateTaskSummary(context.getTaskId(), context.stats.toString());
+    }
+
+    private boolean shouldSkipFiles(List<String> files) {
+        double threshold = files.size() * 0.9;
+        long count = files.stream().filter(e -> EPISODE.matcher(e).find()).count();
+        if (count >= threshold) {
+            return true;
+        }
+
+        String prefix = Utils.getCommonPrefix(files);
+        String suffix = Utils.getCommonSuffix(files);
+        count = files.stream().filter(e -> TextUtils.isNumber(e.replace(prefix, "").replace(suffix, ""))).count();
+        return count >= threshold;
     }
 
     private boolean isMovie(String path) {
         if (SEASON1.matcher(path).find()
                 || SEASON2.matcher(path).find()
                 || SEASON4.matcher(path).find()) {
+            return false;
+        }
+        if (path.contains("+电影") || path.contains("+剧场版")) {
             return false;
         }
         return path.replace("【动漫.动画电影】", "").contains("电影") || path.contains("剧场版");
