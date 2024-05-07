@@ -718,6 +718,7 @@ public class BiliBiliService {
                 .url(url)
                 .addHeader("Accept", "*/*")
                 .addHeader("User-Agent", USER_AGENT)
+                .addHeader("referer", "https://space.bilibili.com")
                 .build();
 
         Call call = client.newCall(request);
