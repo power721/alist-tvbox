@@ -87,6 +87,7 @@ public class IndexService {
     private static final Pattern SEASON3 = Pattern.compile("^[Ss](\\d{1,2})$");
     private static final Pattern SEASON4 = Pattern.compile("第.{1,3}季.*");
     private static final Pattern EPISODE = Pattern.compile("S\\d+E\\d+");
+    private static final Pattern EPISODE1 = Pattern.compile("全\\d+集");
 
     private final AListService aListService;
     private final SiteService siteService;
@@ -638,9 +639,6 @@ public class IndexService {
             for (var fsInfo : fsResponse.getItems()) {
                 try {
                     if ("folder".equals(fsInfo.getType())) { // folder
-                        if (fsInfo.getName().equals("字幕")) {
-                            continue;
-                        }
                         String newPath = fixPath(path + "/" + fsInfo.getName());
                         log.debug("new path: {}", newPath);
                         if (exclude(context.getExcludes(), newPath)) {
@@ -653,7 +651,7 @@ public class IndexService {
                         if (context.getMaxDepth() == depth + 1 && !context.isIncludeFiles()) {
                             folders.add(fsInfo.getName());
                         } else {
-                            if (isSeason(fsInfo.getName())) {
+                            if (isSeason(fsInfo.getName()) || isSpecial(fsInfo.getName())) {
                                 hasFile = true;
                                 continue;
                             }
@@ -715,6 +713,10 @@ public class IndexService {
     }
 
     private boolean shouldSkipFiles(List<String> files) {
+        if (files.size() <= 1) {
+            return true;
+        }
+
         double threshold = files.size() * 0.9;
         long count = files.stream().filter(e -> EPISODE.matcher(e).find()).count();
         if (count >= threshold) {
@@ -725,18 +727,6 @@ public class IndexService {
         String suffix = Utils.getCommonSuffix(files);
         count = files.stream().filter(e -> TextUtils.isNumber(e.replace(prefix, "").replace(suffix, ""))).count();
         return count >= threshold;
-    }
-
-    private boolean isMovie(String path) {
-        if (SEASON1.matcher(path).find()
-                || SEASON2.matcher(path).find()
-                || SEASON4.matcher(path).find()) {
-            return false;
-        }
-        if (path.contains("+电影") || path.contains("+剧场版")) {
-            return false;
-        }
-        return path.replace("【动漫.动画电影】", "").contains("电影") || path.contains("剧场版");
     }
 
     private void index(IndexContext context, String path, int depth) throws IOException {
@@ -776,9 +766,6 @@ public class IndexService {
         for (FsInfo fsInfo : fsResponse.getFiles()) {
             try {
                 if (fsInfo.getType() == 1) { // folder
-                    if (fsInfo.getName().equals("字幕")) {
-                        continue;
-                    }
                     String newPath = fixPath(path + "/" + fsInfo.getName());
                     log.debug("new path: {}", newPath);
                     if (exclude(context.getExcludes(), newPath)) {
@@ -791,7 +778,7 @@ public class IndexService {
                     if (context.getMaxDepth() == depth + 1 && !context.isIncludeFiles()) {
                         files.add(fsInfo.getName());
                     } else {
-                        if (isSeason(fsInfo.getName())) {
+                        if (isSeason(fsInfo.getName()) || isSpecial(fsInfo.getName())) {
                             hasFile = true;
                             continue;
                         }
@@ -847,12 +834,55 @@ public class IndexService {
         taskService.updateTaskSummary(context.getTaskId(), context.stats.toString());
     }
 
+    private boolean isMovie(String path) {
+        if (SEASON1.matcher(path).find()
+                || SEASON2.matcher(path).find()
+                || SEASON4.matcher(path).find()
+                || EPISODE1.matcher(path).find()
+        ) {
+            return false;
+        }
+        path = path.replace("+电影", "");
+        path = path.replace("+大电影", "");
+        path = path.replace("+剧场版", "");
+        path = path.replace("含剧场版", "");
+        path = path.replace("【动漫.动画电影】", "");
+        return path.contains("电影") || path.contains("剧场版");
+    }
+
     private static boolean isSeason(String name) {
         return SEASON1.matcher(name).matches()
                 || SEASON2.matcher(name).matches()
                 || SEASON3.matcher(name).matches()
                 || SEASON4.matcher(name).matches()
+                || EPISODE1.matcher(name).find()
                 ;
+    }
+
+    private static boolean isSpecial(String name) {
+        return name.equalsIgnoreCase("sp")
+                || name.equalsIgnoreCase("extra")
+                || name.equalsIgnoreCase("ova")
+                || name.equalsIgnoreCase("sc")
+                || name.equalsIgnoreCase("tc")
+                || name.equalsIgnoreCase("pv")
+                || name.equalsIgnoreCase("MV")
+                || name.equalsIgnoreCase("1080P")
+                || name.equalsIgnoreCase("4K")
+                || name.equalsIgnoreCase("4K.HEVC")
+                || name.equals("4K HDR 内封简繁")
+                || name.equals("1080P高码[内封字幕]")
+                || name.equals("SPs")
+                || name.equals("简体")
+                || name.equals("繁体")
+                || name.equals("字幕")
+                || name.equals("中文字幕")
+                || name.equals("日文字幕")
+                || name.equals("正片")
+                || name.equals("花絮")
+                || name.equals("彩蛋")
+                || name.equals("短片")
+                || name.equals("其它");
     }
 
     private boolean exclude(Set<String> rules, String path) {
