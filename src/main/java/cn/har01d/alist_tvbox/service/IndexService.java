@@ -861,6 +861,7 @@ public class IndexService {
 
     private static boolean isSpecial(String name) {
         return name.equalsIgnoreCase("sp")
+                || name.equalsIgnoreCase("Specials")
                 || name.equalsIgnoreCase("extra")
                 || name.equalsIgnoreCase("ova")
                 || name.equalsIgnoreCase("sc")
@@ -870,8 +871,15 @@ public class IndexService {
                 || name.equalsIgnoreCase("1080P")
                 || name.equalsIgnoreCase("4K")
                 || name.equalsIgnoreCase("4K.HEVC")
+                || name.equals("4K高码")
+                || name.equals("4K 高码")
+                || name.equals("4K HDR")
                 || name.equals("4K HDR 内封简繁")
+                || name.equals("4K HDR高码[内封字幕]")
                 || name.equals("1080P高码[内封字幕]")
+                || name.equals("1080P官中压制")
+                || name.equals("1080P官中")
+                || name.equals("杜比视界版")
                 || name.equals("SPs")
                 || name.equals("简体")
                 || name.equals("繁体")
@@ -880,8 +888,13 @@ public class IndexService {
                 || name.equals("日文字幕")
                 || name.equals("正片")
                 || name.equals("花絮")
+                || name.equals("彩蛋＋番外")
                 || name.equals("彩蛋")
+                || name.equals("番外")
+                || name.equals("特辑")
                 || name.equals("短片")
+                || name.equals("国语")
+                || name.equals("粤语")
                 || name.equals("其它");
     }
 
