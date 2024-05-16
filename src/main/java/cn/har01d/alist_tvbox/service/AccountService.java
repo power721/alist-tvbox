@@ -794,7 +794,7 @@ public class AccountService {
         try {
             String token = login();
             updateTokenToAList(account.getId(), "RefreshToken-" + account.getId(), account.getRefreshToken(), account.getRefreshTokenTime(), token);
-            updateTokenToAList(account.getId(), "AccessToken-" + account.getId(), "", null, token);
+            //updateTokenToAList(account.getId(), "AccessToken-" + account.getId(), "", null, token);
             updateTokenToAList(account.getId(), "RefreshTokenOpen-" + account.getId(), account.getOpenToken(), account.getOpenTokenTime(), token);
             updateTokenToAList(account.getId(), "AccessTokenOpen-" + account.getId(), account.getOpenAccessToken(), account.getOpenAccessTokenTime(), token);
         } catch (Exception e) {
