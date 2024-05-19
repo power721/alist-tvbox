@@ -908,7 +908,7 @@ public class SubscriptionService {
             site.put("style", style);
         }
         if ("csp_Youtube".equals(key)) {
-            site.put("playerType", 1);
+            site.put("playerType", 2);
         }
         return site;
     }

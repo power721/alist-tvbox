@@ -11,15 +11,23 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 public final class DashUtils {
     private static final Map<String, Integer> audioIds = new HashMap<>();
+    private static final Set<String> clients = new HashSet<>();
 
     static {
+        clients.add("com.fongmi.android.tv");
+        clients.add("com.github.tvbox.osc.tk");
+        clients.add("com.yek.android.c");
+        clients.add("com.mygithub0.tvbox0.osdX");
+
         audioIds.put("30280", 192000);
         audioIds.put("30232", 132000);
         audioIds.put("30216", 64000);
@@ -27,6 +35,10 @@ public final class DashUtils {
 
     private DashUtils() {
         throw new AssertionError();
+    }
+
+    public static boolean isClientSupport(String client) {
+        return clients.contains(client);
     }
 
     public static Map<String, Object> convert(Resp resp, String client) {
