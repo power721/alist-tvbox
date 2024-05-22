@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.youtube;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
+import cn.har01d.alist_tvbox.service.SettingService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
@@ -22,6 +23,7 @@ import com.github.kiulian.downloader.downloader.request.RequestSearchResult;
 import com.github.kiulian.downloader.downloader.request.RequestVideoInfo;
 import com.github.kiulian.downloader.downloader.request.RequestVideoStreamDownload;
 import com.github.kiulian.downloader.downloader.response.Response;
+import com.github.kiulian.downloader.model.BrowseRequest;
 import com.github.kiulian.downloader.model.Extension;
 import com.github.kiulian.downloader.model.playlist.PlaylistInfo;
 import com.github.kiulian.downloader.model.playlist.PlaylistVideoDetails;
@@ -86,11 +88,11 @@ public class YoutubeService {
             .build(this::getVideoInfo);
 
     private final AppProperties appProperties;
-    private final SubscriptionService subscriptionService;
+    private final SettingService settingService;
 
-    public YoutubeService(AppProperties appProperties, SubscriptionService subscriptionService) {
+    public YoutubeService(AppProperties appProperties, SettingService settingService) {
         this.appProperties = appProperties;
-        this.subscriptionService = subscriptionService;
+        this.settingService = settingService;
         Config config = new Config.Builder().header("User-Agent", Constants.USER_AGENT).build();
 
         try {
@@ -164,6 +166,10 @@ public class YoutubeService {
         }
         if (text.startsWith("playlist@")) {
             return getPlaylistVideo(text.substring(9));
+        }
+        if (text.startsWith("sub@")) {
+            downloader.browse(new BrowseRequest(settingService.getString("youtube_cookie")));
+            return new MovieList();
         }
         return search(text, sort, time, page);
     }

@@ -113,6 +113,10 @@ public class SettingService {
         return settingRepository.findById(name).orElse(null);
     }
 
+    public String getString(String name) {
+        return settingRepository.findById(name).map(Setting::getValue).orElse(null);
+    }
+
     public Setting update(Setting setting) {
         if ("merge_site_source".equals(setting.getName())) {
             appProperties.setMerge("true".equals(setting.getValue()));

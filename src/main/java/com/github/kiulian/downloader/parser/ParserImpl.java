@@ -21,6 +21,7 @@ import com.github.kiulian.downloader.downloader.request.RequestWebpage;
 import com.github.kiulian.downloader.downloader.response.Response;
 import com.github.kiulian.downloader.downloader.response.ResponseImpl;
 import com.github.kiulian.downloader.extractor.Extractor;
+import com.github.kiulian.downloader.model.BrowseRequest;
 import com.github.kiulian.downloader.model.playlist.PlaylistDetails;
 import com.github.kiulian.downloader.model.playlist.PlaylistInfo;
 import com.github.kiulian.downloader.model.playlist.PlaylistVideoDetails;
@@ -46,10 +47,14 @@ import com.github.kiulian.downloader.model.videos.formats.Format;
 import com.github.kiulian.downloader.model.videos.formats.Itag;
 import com.github.kiulian.downloader.model.videos.formats.VideoFormat;
 import com.github.kiulian.downloader.model.videos.formats.VideoWithAudioFormat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -61,6 +66,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
 public class ParserImpl implements Parser {
+    private static final Logger logger = LoggerFactory.getLogger(ParserImpl.class);
     private static final String ANDROID_APIKEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 
     private final Config config;
@@ -758,6 +764,131 @@ public class ParserImpl implements Parser {
         String clientVersion = extractor.extractClientVersionFromContext(initialData.getJSONObject("responseContext"));
         SearchContinuation continuation = getSearchContinuation(rootContents, clientVersion);
         return parseSearchResult(estimatedCount, rootContents, continuation);
+    }
+
+    @Override
+    public void browse(BrowseRequest browseRequest) {
+        String url = "https://www.youtube.com/youtubei/v1/browse?key=" + ANDROID_APIKEY + "&prettyPrint=false";
+
+        JSONObject body = new JSONObject()
+                .fluentPut("context", new JSONObject()
+                        .fluentPut("client", new JSONObject()
+                                .fluentPut("clientName", "WEB")
+                                .fluentPut("clientVersion", "2.20201021.03.00"))
+                        .fluentPut("user", new JSONObject()
+                                .fluentPut("lockedSafetyMode", false))
+                )
+                .fluentPut("browseId", "FEsubscriptions");
+
+        RequestWebpage request = new RequestWebpage(url, "POST", body.toJSONString())
+                .header("X-YouTube-Client-Name", "1")
+                .header("x-youtube-client-version", "2.20201021.03.00")
+                .header("x-origin", "https://www.youtube.com")
+                .header("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+                .header("authorization", getSAPISIDHASH(browseRequest.getCookie()))
+                .header("cookie", browseRequest.getCookie())
+                .header("Content-Type", "application/json");
+
+        Response<String> response = downloader.downloadWebpage(request);
+        if (!response.ok()) {
+            throw new RuntimeException(String.format("Could not load url: %s, exception: %s", url, response.error().getMessage()));
+        }
+        String html = response.data();
+        logger.info("{}", html);
+
+        JSONObject jsonResponse = JSON.parseObject(html);
+        JSONObject content = jsonResponse.getJSONObject("contents")
+                .getJSONObject("twoColumnBrowseResultsRenderer")
+                .getJSONArray("tabs")
+                .getJSONObject(0)
+                .getJSONObject("tabRenderer")
+                .getJSONObject("content");
+
+        JSONArray rootContents;
+        if (content.containsKey("")) {
+            rootContents = content
+                    .getJSONObject("richGridRenderer")
+                    .getJSONArray("contents");
+        } else {
+            rootContents = content
+                    .getJSONObject("sectionListRenderer")
+                    .getJSONArray("contents");
+        }
+        // contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.richGridRenderer.contents[2].richItemRenderer.content.videoRenderer
+
+        logger.info("size: {}", rootContents.size());
+        for (int i = 0; i < rootContents.size(); i++) {
+            JSONObject item = rootContents.getJSONObject(i);
+            if (item.containsKey("itemSectionRenderer")) {
+                JSONObject shelfRenderer = item
+                        .getJSONObject("itemSectionRenderer").
+                        getJSONArray("contents")
+                        .getJSONObject(0)
+                        .getJSONObject("shelfRenderer");
+
+                logger.info("author: {}", shelfRenderer.getJSONObject("title").getString("simpleText"));
+                JSONObject videoRenderer = shelfRenderer.getJSONObject("content")
+                        .getJSONObject("expandedShelfContentsRenderer")
+                        .getJSONArray("items")
+                        .getJSONObject(0)
+                        .getJSONObject("videoRenderer");
+                String viewCount = videoRenderer.getJSONObject("viewCountText").getString("simpleText");
+                String title = videoRenderer.getJSONObject("title").getJSONArray("runs").getJSONObject(0).getString("text");
+                logger.info("video id: {} title: {} viewCount: {}", videoRenderer.getString("videoId"), title, viewCount);
+            } else {
+                JSONObject videoRenderer = item.getJSONObject("richItemRenderer")
+                        .getJSONObject("content")
+                        .getJSONObject("videoRenderer");
+                String viewCount = videoRenderer.getJSONObject("viewCountText").getString("simpleText");
+                String title = videoRenderer.getJSONObject("title").getJSONArray("runs").getJSONObject(0).getString("text");
+                logger.info("video id: {} title: {} viewCount: {}", videoRenderer.getString("videoId"), title, viewCount);
+                //
+            }
+        }
+    }
+
+    private String getSAPISIDHASH(String cookie) {
+        String time = String.valueOf(System.currentTimeMillis());
+        String sid = getSAPISID(cookie);
+        String text = "SAPISIDHASH " + time + "_" + sha1(time + " " + sid + " https://www.youtube.com");
+        logger.info("{} {}", sid, text);
+        return text;
+    }
+
+    private String getSAPISID(String cookie) {
+        Map<String, String> map = parseCookie(cookie);
+        if (map.containsKey("__Secure-3PAPISID")) {
+            return map.get("__Secure-3PAPISID");
+        }
+        return map.get("SAPISID");
+    }
+
+    private Map<String, String> parseCookie(String cookie) {
+        Map<String, String> map = new HashMap<>();
+        for (String item : cookie.split(";")) {
+            String[] parts = item.trim().split("=");
+            String key = parts[0].trim();
+            String value = parts[1].trim();
+            map.put(key, value);
+        }
+        return map;
+    }
+
+    private String sha1(String text) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            md.update(text.getBytes(StandardCharsets.UTF_8));
+            byte[] digest = md.digest();
+
+            StringBuilder hexString = new StringBuilder();
+
+            for (byte b : digest) {
+                hexString.append(String.format("%02x", b));
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private SearchResult parseSearchContinuation(SearchContinuation continuation, YoutubeCallback<SearchResult> callback) throws YoutubeException {
