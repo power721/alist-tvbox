@@ -12,6 +12,8 @@ import com.github.kiulian.downloader.downloader.request.RequestWebpage;
 import com.github.kiulian.downloader.downloader.response.ResponseImpl;
 import com.github.kiulian.downloader.model.videos.formats.Format;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -33,6 +35,7 @@ import java.util.zip.GZIPInputStream;
 import static com.github.kiulian.downloader.model.Utils.closeSilently;
 
 public class MyDownloader implements Downloader {
+    private static final Logger logger = LoggerFactory.getLogger(MyDownloader.class);
 
     private final InheritableThreadLocal<HttpServletResponse> httpServletResponse = new InheritableThreadLocal<>();
 
@@ -201,9 +204,10 @@ public class MyDownloader implements Downloader {
         IOException exception;
         do {
             try {
-                if (format.isAdaptive() && format.contentLength() != null) {
-                    downloadByPart(format, os, headers, proxy, callback);
-                } else {
+//                if (format.isAdaptive() && format.contentLength() != null) {
+//                    downloadByPart(format, os, headers, proxy, callback);
+//                } else
+                {
                     downloadStraight(format, os, headers, proxy, callback);
                 }
                 // reset error in case of successful retry
@@ -230,8 +234,10 @@ public class MyDownloader implements Downloader {
         if (responseCode != 200 && responseCode != 206) {
             throw new RuntimeException("Failed to download: HTTP " + responseCode);
         }
-        if (httpServletResponse.get() != null) {
-            urlConnection.getHeaderFields().forEach((key, value) -> httpServletResponse.get().setHeader(key, value.get(0)));
+        var response = httpServletResponse.get();
+        if (response != null) {
+            response.setStatus(responseCode);
+            urlConnection.getHeaderFields().forEach((key, value) -> response.setHeader(key, value.get(0)));
         }
         int contentLength = urlConnection.getContentLength();
         InputStream is = urlConnection.getInputStream();

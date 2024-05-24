@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.DashUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -48,6 +49,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -365,7 +367,7 @@ public class YoutubeService {
         if ("node".equals(client)) {
             info.videoFormats()
                     .stream()
-                    .filter(e -> e.videoQuality().ordinal() > 5)
+                    .filter(e -> e.videoQuality().ordinal() > 4)
                     .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
                     .forEach(format -> {
                         urls.add(format.qualityLabel() + " " + format.extension().value());
@@ -389,22 +391,20 @@ public class YoutubeService {
 
         Map<String, Object> result = new HashMap<>();
         result.put("parse", "0");
-        if ("com.fongmi.android.tv".equals(client)) {
-//            List<Format> videos = new ArrayList<>();
-//            info.videoFormats()
-//                    .stream()
-//                    .filter(Format::isAdaptive)
-//                    .filter(e -> e.extension() == Extension.MPEG4)
-//                    .filter(e -> e.videoQuality().ordinal() > 5)
-//                    .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
-//                    .forEach(videos::add);
-//            String mpd = getMpd(info, videos, audios);
-//            log.debug("{}", mpd);
-//            String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
-//            String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
-//            urls.add("Dash");
-//            urls.add(url);
-            result.put("url", urls);
+        if (DashUtils.isClientSupport(client)) {
+            List<Format> videos = new ArrayList<>();
+            info.videoFormats()
+                    .stream()
+                    .filter(Format::isAdaptive)
+                    .filter(e -> e.videoQuality().ordinal() > 4)
+                    .sorted(Comparator.comparing(VideoFormat::videoQuality).reversed())
+                    .forEach(videos::add);
+            String mpd = getMpd(token, info, videos, audios);
+            log.debug("{}", mpd);
+            String encoded = Base64.getMimeEncoder().encodeToString(mpd.getBytes());
+            String url = "data:application/dash+xml;base64," + encoded.replaceAll("\\r\\n", "\n") + "\n";
+            result.put("format", "application/dash+xml");
+            result.put("url", url);
         } else if ("node".equals(client)) {
             result.put("url", urls);
             List<Map<String, Object>> list = new ArrayList<>();
@@ -432,7 +432,7 @@ public class YoutubeService {
         }
 
         String range = request.getHeader("range");
-        log.debug("format {} {} {}", format.itag().id(), format.extension().value(), range);
+        log.debug("format {} {} {} {}", format.itag().id(), format.extension().value(), format.url(), range);
         var download = new RequestVideoStreamDownload(format, response.getOutputStream());
         if (range != null) {
             download.header("range", range);
@@ -483,12 +483,22 @@ public class YoutubeService {
                         "<ContentComponent contentType=\"%s\"/>\n" +
                         "<Representation id=\"%d\" bandwidth=\"%s\" codecs=\"%s\" mimeType=\"%s\" %s startWithSAP=\"%d\">\n" +
                         "<BaseURL>%s</BaseURL>\n" +
+                        getSegmentBase(media) +
                         "</Representation>\n" +
                         "</AdaptationSet>\n",
                 type,
                 tag, media.bitrate(), codecs, mimeType, params, media.itag().isVideo() ? 1 : 0,
                 url
         );
+    }
+
+    private String getSegmentBase(Format media) {
+        if (media.initRange() == null || media.indexRange() == null) {
+            return "";
+        }
+        return "<SegmentBase indexRange=\"" + media.indexRange().getStart() + "-" + media.indexRange().getEnd() + "\">\n" +
+                "<Initialization range=\"" + media.initRange().getStart() + "-" + media.initRange().getEnd() + "\"/>\n" +
+                "</SegmentBase>\n";
     }
 
     private String getMpd(String token, VideoInfo info, List<Format> videos, List<Format> audios) {

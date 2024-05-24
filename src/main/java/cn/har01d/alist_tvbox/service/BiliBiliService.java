@@ -1365,7 +1365,7 @@ public class BiliBiliService {
         String[] parts = bvid.split("-");
         int fnval = 16;
         Map<String, Object> result = new HashMap<>();
-        dash = dash || appProperties.isSupportDash();
+        dash = appProperties.isSupportDash() || DashUtils.isClientSupport(client);
         if (dash) {
             fnval = settingRepository.findById("bilibili_fnval").map(Setting::getValue).map(Integer::parseInt).orElse(FN_VAL);
         }
