@@ -51,7 +51,6 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -709,18 +708,22 @@ public class AccountService {
 
         for (Map<String, Object> signInLog : result.getSignInLogs()) {
             if (signInLog.get("status").equals("normal") && !signInLog.get("isReward").equals(true)) {
-                body = new HashMap<>();
-                body.put("signInDay", signInLog.get("day"));
-                log.debug("body: {}", body);
+                try {
+                    body = new HashMap<>();
+                    body.put("signInDay", signInLog.get("day"));
+                    log.debug("body: {}", body);
 
-                headers = new HttpHeaders();
-                headers.put(HttpHeaders.USER_AGENT, List.of(USER_AGENT));
-                headers.put(HttpHeaders.REFERER, List.of("https://www.aliyundrive.com/"));
-                headers.put(HttpHeaders.AUTHORIZATION, List.of("Bearer " + accessToken));
-                entity = new HttpEntity<>(body, headers);
-                ResponseEntity<RewardResponse> res = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_reward?_rx-s=mobile", HttpMethod.POST, entity, RewardResponse.class);
-                log.debug("RewardResponse: {}", res.getBody());
-                log.info("今日签到获得 {} {}", res.getBody().getResult().getName(), res.getBody().getResult().getDescription());
+                    headers = new HttpHeaders();
+                    headers.put(HttpHeaders.USER_AGENT, List.of(USER_AGENT));
+                    headers.put(HttpHeaders.REFERER, List.of("https://www.aliyundrive.com/"));
+                    headers.put(HttpHeaders.AUTHORIZATION, List.of("Bearer " + accessToken));
+                    entity = new HttpEntity<>(body, headers);
+                    ResponseEntity<RewardResponse> res = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_reward?_rx-s=mobile", HttpMethod.POST, entity, RewardResponse.class);
+                    log.debug("RewardResponse: {}", res.getBody());
+                    log.info("今日签到获得 {} {}", res.getBody().getResult().getName(), res.getBody().getResult().getDescription());
+                } catch (Exception e) {
+                    log.warn("领取奖励失败 {}", signInLog.get("day"), e);
+                }
             }
         }
 
