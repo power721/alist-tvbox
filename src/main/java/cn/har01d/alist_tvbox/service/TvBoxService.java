@@ -1157,13 +1157,13 @@ public class TvBoxService {
             result.put("url", url);
         }
 
-        if (url.contains("ali")) {
-            result.put("format", "application/octet-stream");
-            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://www.aliyundrive.com/\"}");
+        if (url.contains("xunlei.com")) {
+            result.put("header", "{\"User-Agent\":\"Dalvik/2.1.0 (Linux; U; Android 12; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (url.contains("115.com")) {
             result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
-        } else if (url.contains("xunlei.com")) {
-            result.put("header", "{\"User-Agent\":\"Dalvik/2.1.0 (Linux; U; Android 12; M2004J7AC Build/SP1A.210812.016)\"}");
+        } else if (url.contains("ali")) {
+            result.put("format", "application/octet-stream");
+            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://www.aliyundrive.com/\"}");
         }
 
         if (!getSub) {
