@@ -1163,7 +1163,7 @@ public class TvBoxService {
         } else if (url.contains("115.com")) {
             result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
         } else if (url.contains("xunlei.com")) {
-            result.put("header", "{\"User-Agent\":\"Dalvik/2.1.0 (Linux; U; Android 12; M2004J7AC Build/SP1A.210812.016)\"");
+            result.put("header", "{\"User-Agent\":\"Dalvik/2.1.0 (Linux; U; Android 12; M2004J7AC Build/SP1A.210812.016)\"}");
         }
 
         if (!getSub) {
