@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
@@ -258,6 +259,9 @@ public class SubscriptionService {
             ali = accountRepository.getFirstByMasterTrue().map(Account::getOpenToken).orElse("");
             json = json.replace("ALI_OPEN_TOKEN", ali);
 
+            String quarkCookie = shareRepository.findByType(2).stream().findFirst().map(Share::getCookie).orElse("");
+            json = json.replace("QUARK_COOKIE", quarkCookie);
+
             if ("index.config.js".equals(file)) {
                 return json;
             } else if ("index.config.js.md5".equals(file)) {
@@ -269,7 +273,8 @@ public class SubscriptionService {
 
     public int syncCat() {
         Utils.execute("rm -rf /www/pg/* && unzip -q -o /pg.zip -d /www/pg && cp -r /data/pg/* /www/pg/");
-        return Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && cp -r /data/cat/* /www/cat/");
+        Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && cp -r /data/cat/* /www/cat/");
+        return 0;
     }
 
     public Map<String, Object> open() throws IOException {

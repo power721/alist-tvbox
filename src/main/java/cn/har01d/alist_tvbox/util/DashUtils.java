@@ -23,7 +23,6 @@ public final class DashUtils {
     private static final Set<String> clients = new HashSet<>();
 
     static {
-        clients.add("node");
         clients.add("open");
         clients.add("com.fongmi.android.tv");
         clients.add("com.github.tvbox.osc.tk");

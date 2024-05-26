@@ -563,7 +563,7 @@ public class IndexService {
 
     private AliFileList listFiles(IndexContext context, ShareInfo shareInfo, String parentId, String path, String marker) {
         Exception exception = null;
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 20; i++) {
             String deviceID = UUID.randomUUID().toString().replace("-", "");
             HttpHeaders headers = new HttpHeaders();
             headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
@@ -596,7 +596,7 @@ public class IndexService {
             }
 
             try {
-                Thread.sleep(context.getIndexRequest().getSleep() + i * 1000L);
+                Thread.sleep(context.getIndexRequest().getSleep());
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
