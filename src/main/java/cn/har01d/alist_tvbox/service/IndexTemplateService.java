@@ -71,7 +71,7 @@ public class IndexTemplateService {
         dto.setScheduled(true);
         dto.setScrape(true);
         dto.setScheduleTime("10|14|18|22");
-        dto.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":9500,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
+        dto.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":5000,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
         IndexTemplate template = create(dto);
         log.info("auto index template created: {}", template.getId());
         settingRepository.save(new Setting("auto_index", String.valueOf(template.getId())));
@@ -87,7 +87,7 @@ public class IndexTemplateService {
         IndexTemplate template = indexTemplateRepository.findById(id).orElse(null);
         if (template != null) {
             log.info("update auto index template ");
-            template.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":9500,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
+            template.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":5000,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
             indexTemplateRepository.save(template);
         }
         settingRepository.save(new Setting(AUTO_INDEX_VERSION, String.valueOf(indexVersion)));
