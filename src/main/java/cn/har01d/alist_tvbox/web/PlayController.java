@@ -48,7 +48,6 @@ public class PlayController {
         // com.github.tvbox.osc.bh  宝盒
         // com.github.tvbox.osc.tk  takagen99
         // com.qingsong.yingmi      影迷
-        log.debug("{} {} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()), client);
         log.debug("get play url - site: {}  path: {}  id: {}  bvid: {}  type: ", site, path, id, bvid, type);
 
         if (StringUtils.isNotBlank(bvid)) {
@@ -91,17 +90,5 @@ public class PlayController {
 //        }
 
         return result;
-    }
-
-    private String decodeUrl(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-
-        try {
-            return URLDecoder.decode(text, "UTF-8");
-        } catch (Exception e) {
-            return text;
-        }
     }
 }

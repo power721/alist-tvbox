@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
-import java.net.URLDecoder;
 
 @Slf4j
 @RestController
@@ -31,7 +30,6 @@ public class YoutubeController {
     @GetMapping("/youtube/{token}")
     public Object browse(@PathVariable String token, String ids, String wd, String sort, String time, String t, @RequestParam(required = false, defaultValue = "1") Integer pg,HttpServletRequest request) throws IOException {
         subscriptionService.checkToken(token);
-        log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
                 return youtubeService.home();
@@ -58,7 +56,6 @@ public class YoutubeController {
         subscriptionService.checkToken(token);
 
         String client = request.getHeader("X-CLIENT");
-        log.debug("{} {} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()), client);
         return youtubeService.play(token, id, client);
     }
 
@@ -71,19 +68,6 @@ public class YoutubeController {
     public void proxy(@PathVariable String token, String id, @RequestParam(defaultValue = "18") int q, HttpServletRequest request, HttpServletResponse response) throws IOException {
         subscriptionService.checkToken(token);
 
-        log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         youtubeService.proxy(id, q, request, response);
-    }
-
-    private String decodeUrl(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-
-        try {
-            return URLDecoder.decode(text, "UTF-8");
-        } catch (Exception e) {
-            return text;
-        }
     }
 }

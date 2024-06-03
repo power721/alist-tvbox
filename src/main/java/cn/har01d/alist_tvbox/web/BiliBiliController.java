@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
-import java.net.URLDecoder;
 import java.util.Map;
 
 @Slf4j
@@ -50,7 +49,6 @@ public class BiliBiliController {
         subscriptionService.checkToken(token);
         response.setContentType("application/json");
 
-        log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("path: {}  folder: {}  keyword: {}  filter: {}  quick: {} page: {}", ids, t, wd, filter, quick, pg);
         Object result;
         if (ids != null && !ids.isEmpty()) {
@@ -92,17 +90,5 @@ public class BiliBiliController {
     @PostMapping("/api/bilibili/login")
     public QrCode scanLogin() throws IOException {
         return biliBiliService.scanLogin();
-    }
-
-    private String decodeUrl(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-
-        try {
-            return URLDecoder.decode(text, "UTF-8");
-        } catch (Exception e) {
-            return text;
-        }
     }
 }

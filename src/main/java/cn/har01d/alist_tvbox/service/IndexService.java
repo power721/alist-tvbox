@@ -189,7 +189,7 @@ public class IndexService {
             if (remote != null && !local.equals(remote)) {
                 executor.execute(() -> updateXiaoyaIndexFile(remote));
             }
-            return remote;
+            return remote == null ? "" : remote;
         } catch (Exception e) {
             log.debug("", e);
         }

@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
-import java.net.URLDecoder;
 import java.util.List;
 import java.util.Map;
 
@@ -58,7 +57,6 @@ public class TvBoxController {
         subscriptionService.checkToken(token);
 
         String client = request.getHeader("X-CLIENT");
-        log.debug("{} {} {}", request.getMethod(), request.getRequestURI(), decodeUrl(request.getQueryString()));
         log.info("type: {}  path: {}  folder: {}  ac: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, ac, wd, f, sort, pg);
         if (ids != null && !ids.isEmpty()) {
             if (ids.startsWith("msearch:")) {
@@ -145,17 +143,5 @@ public class TvBoxController {
         subscriptionService.checkToken(token);
 
         return subscriptionService.repository(token, id);
-    }
-
-    private String decodeUrl(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-
-        try {
-            return URLDecoder.decode(text, "UTF-8");
-        } catch (Exception e) {
-            return text;
-        }
     }
 }
