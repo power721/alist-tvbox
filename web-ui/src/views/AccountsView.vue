@@ -225,6 +225,10 @@
     <div class="divider"></div>
 
     <PikPakView></PikPakView>
+
+    <div class="divider"></div>
+
+    <YouTubeView></YouTubeView>
   </div>
 </template>
 
@@ -236,6 +240,7 @@ import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 import router from "@/router";
 import PikPakView from '@/views/PikPakView.vue'
+import YouTubeView from "@/views/YouTubeView.vue";
 
 const iat = ref([0])
 const exp = ref([0])
