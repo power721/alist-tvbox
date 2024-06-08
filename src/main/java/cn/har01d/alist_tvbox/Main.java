@@ -43,6 +43,8 @@ public class Main {
         addCollections(result);
         result.add(addCustom("com.github.benmanes.caffeine.cache.SSMS"));
         result.add(addCustom("com.github.benmanes.caffeine.cache.SSMSA"));
+        result.add(addCustom("com.github.benmanes.caffeine.cache.SSSW"));
+        result.add(addCustom("com.github.benmanes.caffeine.cache.PSAMS"));
         ObjectMapper objectMapper = new ObjectMapper();
         String json = objectMapper.writeValueAsString(result);
         System.out.println("Working Directory = " + System.getProperty("user.dir"));
