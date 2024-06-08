@@ -94,7 +94,7 @@ public class YoutubeService {
     private final MyDownloader myDownloader;
     private final YoutubeDownloader downloader;
 
-    private final LoadingCache<String, VideoInfo> video = Caffeine.newBuilder()
+    private final LoadingCache<String, VideoInfo> cache = Caffeine.newBuilder()
             .maximumSize(10)
             .expireAfterAccess(Duration.ofSeconds(900))
             .build(this::getVideoInfo);
@@ -400,7 +400,7 @@ public class YoutubeService {
             return result;
         }
 
-        VideoInfo video = this.video.get(id);
+        VideoInfo video = this.cache.get(id);
 
         MovieList result = new MovieList();
         MovieDetail movieDetail = new MovieDetail();
@@ -423,7 +423,7 @@ public class YoutubeService {
     }
 
     public Object play(String token, String id, String client) {
-        VideoInfo info = video.get(id);
+        VideoInfo info = cache.get(id);
         List<String> urls = new ArrayList<>();
         if ("node".equals(client)) {
             info.videoFormats()
@@ -486,7 +486,7 @@ public class YoutubeService {
     }
 
     public void proxy(String id, int tag, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        VideoInfo video = this.video.get(id);
+        VideoInfo video = this.cache.get(id);
         Format format = video.findFormatByItag(tag);
         if (format == null) {
             format = video.bestVideoWithAudioFormat();
