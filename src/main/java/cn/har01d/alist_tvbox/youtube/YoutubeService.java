@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.youtube;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.model.FileNameInfo;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
@@ -340,7 +341,7 @@ public class YoutubeService {
             movieDetail.setVod_name(playlistInfo.details().title());
             movieDetail.setVod_director(playlistInfo.details().author());
             movieDetail.setVod_play_from(id.startsWith("channel@") ? "频道" : "播放列表");
-            movieDetail.setVod_play_url(playlistInfo.videos().stream().map(e -> e.title().replace("#", "").replace("$", "") + "$" + e.videoId()).collect(Collectors.joining("#")));
+            movieDetail.setVod_play_url(playlistInfo.videos().stream().map(e -> e.title().replace("#", "").replace("$", "") + "$" + e.videoId()).sorted(Comparator.comparing(FileNameInfo::new)).collect(Collectors.joining("#")));
             result.getList().add(movieDetail);
 
             result.setTotal(result.getList().size());
