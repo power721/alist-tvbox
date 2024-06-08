@@ -4,7 +4,6 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.model.FileNameInfo;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
-import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -104,11 +103,9 @@ public class YoutubeService {
             .build(this::getChannelId);
 
     private final AppProperties appProperties;
-    private final SubscriptionService subscriptionService;
 
-    public YoutubeService(AppProperties appProperties, SubscriptionService subscriptionService) {
+    public YoutubeService(AppProperties appProperties) {
         this.appProperties = appProperties;
-        this.subscriptionService = subscriptionService;
         Config config = new Config.Builder().header("User-Agent", Constants.USER_AGENT).build();
 
         try {
@@ -197,7 +194,9 @@ public class YoutubeService {
             String html = response.data();
             Matcher matcher = CHANNEL_URL.matcher(html);
             if (matcher.find()) {
-                return matcher.group(1);
+                String id = matcher.group(1);
+                log.debug("Channel: {} {}", name, id);
+                return id;
             }
         }
         return "";
@@ -368,7 +367,13 @@ public class YoutubeService {
             movieDetail.setVod_name(playlistInfo.details().title());
             movieDetail.setVod_director(playlistInfo.details().author());
             movieDetail.setVod_play_from(id.startsWith("channel@") ? "频道" : "播放列表");
-            movieDetail.setVod_play_url(playlistInfo.videos().stream().map(e -> e.title().replace("#", "").replace("$", "") + "$" + e.videoId()).sorted(Comparator.comparing(FileNameInfo::new)).collect(Collectors.joining("#")));
+            List<String> list = playlistInfo.videos().stream().map(e -> e.title().replace("#", "").replace("$", "") + "$" + e.videoId()).collect(Collectors.toList());
+            String prefix = Utils.getCommonPrefix(list);
+            if (prefix.length() > 1) {
+                log.debug("Sort: {}", prefix);
+                list.sort(Comparator.comparing(FileNameInfo::new));
+            }
+            movieDetail.setVod_play_url(String.join("#", list));
             result.getList().add(movieDetail);
 
             result.setTotal(result.getList().size());
