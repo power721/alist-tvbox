@@ -94,12 +94,11 @@ public class YoutubeService {
     private final YoutubeDownloader downloader;
     private final LoadingCache<String, VideoInfo> cache = Caffeine.newBuilder()
             .maximumSize(10)
-            .expireAfterWrite(Duration.ofSeconds(900))
+            .expireAfterAccess(Duration.ofSeconds(900))
             .build(this::getVideoInfo);
 
     private final LoadingCache<String, String> channel = Caffeine.newBuilder()
-            .maximumSize(10)
-            .expireAfterWrite(Duration.ofSeconds(900))
+            .maximumSize(100)
             .build(this::getChannelId);
 
     private final AppProperties appProperties;
