@@ -320,14 +320,15 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 }
 ```
 
-自定义分类（搜索关键词），新建文件/data/youtube.txt
+自定义分类（搜索关键词或者频道），新建文件/data/youtube.txt
 ```text
 电影
 动漫
 纪录片
 英语
 美食
-channel@UCp1nO1bgVwks9b5EhKQGVag:幻海航行
+@yuge
+@laogao:老高
 ```
 
 ### 配置

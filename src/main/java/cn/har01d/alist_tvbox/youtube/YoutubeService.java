@@ -22,7 +22,9 @@ import com.github.kiulian.downloader.downloader.request.RequestSearchContinuatio
 import com.github.kiulian.downloader.downloader.request.RequestSearchResult;
 import com.github.kiulian.downloader.downloader.request.RequestVideoInfo;
 import com.github.kiulian.downloader.downloader.request.RequestVideoStreamDownload;
+import com.github.kiulian.downloader.downloader.request.RequestWebpage;
 import com.github.kiulian.downloader.downloader.response.Response;
+import com.github.kiulian.downloader.downloader.response.ResponseImpl;
 import com.github.kiulian.downloader.model.Extension;
 import com.github.kiulian.downloader.model.playlist.PlaylistInfo;
 import com.github.kiulian.downloader.model.playlist.PlaylistVideoDetails;
@@ -55,12 +57,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class YoutubeService {
+    private static final Pattern CHANNEL_URL = Pattern.compile("href=\"https://www.youtube.com/channel/(.+?)\"");
+
     private final List<FilterValue> sorts = Arrays.asList(
             new FilterValue("原始顺序", ""),
             new FilterValue("相关性", "RELEVANCE"),
@@ -92,6 +97,11 @@ public class YoutubeService {
             .maximumSize(10)
             .expireAfterWrite(Duration.ofSeconds(900))
             .build(this::getVideoInfo);
+
+    private final LoadingCache<String, String> channel = Caffeine.newBuilder()
+            .maximumSize(10)
+            .expireAfterWrite(Duration.ofSeconds(900))
+            .build(this::getChannelId);
 
     private final AppProperties appProperties;
     private final SubscriptionService subscriptionService;
@@ -170,10 +180,27 @@ public class YoutubeService {
         if (text.startsWith("channel@")) {
             return getChannelVideo(text.substring(8));
         }
+        if (text.startsWith("@")) {
+            return getChannelVideo(channel.get(text));
+        }
         if (text.startsWith("playlist@")) {
             return getPlaylistVideo(text.substring(9));
         }
         return search(text, sort, time, type, page);
+    }
+
+    private String getChannelId(String name) {
+        String url = "https://www.youtube.com/" + name;
+        log.info("Get channel page: {}", url);
+        ResponseImpl<String> response = myDownloader.downloadWebpage(new RequestWebpage(url));
+        if (response.ok()) {
+            String html = response.data();
+            Matcher matcher = CHANNEL_URL.matcher(html);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        }
+        return "";
     }
 
     public MovieList getChannelVideo(String id) {
