@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.youtube;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.FileNameInfo;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
@@ -92,12 +93,23 @@ public class YoutubeService {
 
     private final MyDownloader myDownloader;
     private final YoutubeDownloader downloader;
-    private final LoadingCache<String, VideoInfo> cache = Caffeine.newBuilder()
+
+    private final LoadingCache<String, VideoInfo> video = Caffeine.newBuilder()
             .maximumSize(10)
             .expireAfterAccess(Duration.ofSeconds(900))
             .build(this::getVideoInfo);
 
-    private final LoadingCache<String, String> channel = Caffeine.newBuilder()
+    private final LoadingCache<String, PlaylistInfo> channel = Caffeine.newBuilder()
+            .maximumSize(10)
+            .expireAfterWrite(Duration.ofSeconds(900))
+            .build(this::getChannel);
+
+    private final LoadingCache<String, PlaylistInfo> playlist = Caffeine.newBuilder()
+            .maximumSize(10)
+            .expireAfterWrite(Duration.ofSeconds(900))
+            .build(this::getPlaylist);
+
+    private final LoadingCache<String, String> channelIds = Caffeine.newBuilder()
             .maximumSize(100)
             .build(this::getChannelId);
 
@@ -177,7 +189,7 @@ public class YoutubeService {
             return getChannelVideo(text.substring(8));
         }
         if (text.startsWith("@")) {
-            return getChannelVideo(channel.get(text));
+            return getChannelVideo(channelIds.get(text));
         }
         if (text.startsWith("playlist@")) {
             return getPlaylistVideo(text.substring(9));
@@ -198,11 +210,19 @@ public class YoutubeService {
                 return id;
             }
         }
-        return "";
+        throw new BadRequestException("Cannot get channel id by name " + name);
+    }
+
+    private PlaylistInfo getChannel(String id) {
+        return downloader.getChannelUploads(new RequestChannelUploads(id)).data();
+    }
+
+    private PlaylistInfo getPlaylist(String id) {
+        return downloader.getPlaylistInfo(new RequestPlaylistInfo(id)).data();
     }
 
     public MovieList getChannelVideo(String id) {
-        var info = downloader.getChannelUploads(new RequestChannelUploads(id)).data();
+        var info = channel.get(id);
         var videos = info.videos();
         List<MovieDetail> list = new ArrayList<>();
         MovieDetail video = new MovieDetail();
@@ -225,7 +245,7 @@ public class YoutubeService {
     }
 
     public MovieList getPlaylistVideo(String id) {
-        var info = downloader.getPlaylistInfo(new RequestPlaylistInfo(id)).data();
+        var info = playlist.get(id);
         var videos = info.videos();
         List<MovieDetail> list = new ArrayList<>();
         MovieDetail video = new MovieDetail();
@@ -276,7 +296,6 @@ public class YoutubeService {
             searchResult = downloader.searchContinuation(continuations.get(query)).data();
         } else {
             var request = new RequestSearchResult(text);
-            //request.filter(FormatField.HD);
             if (sort != null && !sort.isEmpty()) {
                 request.sortBy(SortField.valueOf(sort));
             }
@@ -356,9 +375,9 @@ public class YoutubeService {
         if (id.startsWith("channel@") || id.startsWith("playlist@")) {
             PlaylistInfo playlistInfo;
             if (id.startsWith("channel@")) {
-                playlistInfo = downloader.getChannelUploads(new RequestChannelUploads(id.substring(8))).data();
+                playlistInfo = channel.get(id.substring(8));
             } else {
-                playlistInfo = downloader.getPlaylistInfo(new RequestPlaylistInfo(id.substring(9))).data();
+                playlistInfo = playlist.get(id.substring(9));
             }
             MovieList result = new MovieList();
             MovieDetail movieDetail = new MovieDetail();
@@ -381,7 +400,7 @@ public class YoutubeService {
             return result;
         }
 
-        VideoInfo video = cache.get(id);
+        VideoInfo video = this.video.get(id);
 
         MovieList result = new MovieList();
         MovieDetail movieDetail = new MovieDetail();
@@ -404,7 +423,7 @@ public class YoutubeService {
     }
 
     public Object play(String token, String id, String client) {
-        VideoInfo info = cache.get(id);
+        VideoInfo info = video.get(id);
         List<String> urls = new ArrayList<>();
         if ("node".equals(client)) {
             info.videoFormats()
@@ -467,7 +486,7 @@ public class YoutubeService {
     }
 
     public void proxy(String id, int tag, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        VideoInfo video = cache.get(id);
+        VideoInfo video = this.video.get(id);
         Format format = video.findFormatByItag(tag);
         if (format == null) {
             format = video.bestVideoWithAudioFormat();
