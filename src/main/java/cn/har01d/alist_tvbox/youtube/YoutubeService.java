@@ -27,7 +27,6 @@ import com.github.kiulian.downloader.model.playlist.PlaylistInfo;
 import com.github.kiulian.downloader.model.playlist.PlaylistVideoDetails;
 import com.github.kiulian.downloader.model.search.SearchResult;
 import com.github.kiulian.downloader.model.search.SearchResultItemType;
-import com.github.kiulian.downloader.model.search.field.FormatField;
 import com.github.kiulian.downloader.model.search.field.SortField;
 import com.github.kiulian.downloader.model.search.field.TypeField;
 import com.github.kiulian.downloader.model.search.field.UploadDateField;
@@ -78,6 +77,14 @@ public class YoutubeService {
             new FilterValue("本年", "YEAR")
     );
 
+    private final List<FilterValue> types = Arrays.asList(
+            new FilterValue("全部", ""),
+            new FilterValue("视频", "VIDEO"),
+            new FilterValue("频道", "CHANNEL"),
+            new FilterValue("播放列表", "PLAYLIST"),
+            new FilterValue("电影", "MOVIE")
+    );
+
     private final MyDownloader myDownloader;
     private final YoutubeDownloader downloader;
     private final LoadingCache<String, VideoInfo> cache = Caffeine.newBuilder()
@@ -110,7 +117,7 @@ public class YoutubeService {
     }
 
     public MovieList home() {
-        return list("电影", "", "", 1);
+        return list("电影", "", "", "", 1);
     }
 
     public CategoryList category() throws IOException {
@@ -136,7 +143,7 @@ public class YoutubeService {
                 category.setRatio(1.33);
                 result.getCategories().add(category);
                 if (!id.contains("@")) {
-                    result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times)));
+                    result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times), new Filter("type", "类型", types)));
                 }
             }
         } else {
@@ -149,7 +156,7 @@ public class YoutubeService {
                 category.setLand(1);
                 category.setRatio(1.33);
                 result.getCategories().add(category);
-                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times)));
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times), new Filter("type", "类型", types)));
             }
         }
 
@@ -158,14 +165,14 @@ public class YoutubeService {
         return result;
     }
 
-    public MovieList list(String text, String sort, String time, int page) {
+    public MovieList list(String text, String sort, String time, String type, int page) {
         if (text.startsWith("channel@")) {
             return getChannelVideo(text.substring(8));
         }
         if (text.startsWith("playlist@")) {
             return getPlaylistVideo(text.substring(9));
         }
-        return search(text, sort, time, page);
+        return search(text, sort, time, type, page);
     }
 
     public MovieList getChannelVideo(String id) {
@@ -236,19 +243,22 @@ public class YoutubeService {
 
     private final Map<String, RequestSearchContinuation> continuations = new HashMap<>();
 
-    public MovieList search(String text, String sort, String time, int page) {
+    public MovieList search(String text, String sort, String time, String type, int page) {
         SearchResult searchResult;
         String query = text + "@@@" + sort;
         if (page > 1 && continuations.containsKey(query)) {
             searchResult = downloader.searchContinuation(continuations.get(query)).data();
         } else {
             var request = new RequestSearchResult(text);
-            request.filter(TypeField.VIDEO, FormatField.HD);
+            //request.filter(FormatField.HD);
             if (sort != null && !sort.isEmpty()) {
                 request.sortBy(SortField.valueOf(sort));
             }
             if (time != null && !time.isEmpty()) {
                 request.filter(UploadDateField.valueOf(time));
+            }
+            if (type != null && !type.isEmpty()) {
+                request.filter(TypeField.valueOf(type));
             }
             searchResult = downloader.search(request).data();
         }
