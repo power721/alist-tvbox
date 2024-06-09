@@ -509,6 +509,7 @@ public class YoutubeService {
             path = path + "/" + token;
         }
         return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(path)
                 .replaceQuery("id=" + id + "&q=" + tag)
                 .build()
