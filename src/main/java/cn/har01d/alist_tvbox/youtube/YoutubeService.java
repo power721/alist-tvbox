@@ -46,6 +46,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -360,9 +361,14 @@ public class YoutubeService {
 
     private String fixCover(String url) {
         if (url.startsWith("//")) {
-            return "https:" + url;
+            url = "https:" + url;
         }
-        return url;
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/images")
+                .replaceQuery("url=" + URLEncoder.encode(url))
+                .build()
+                .toUriString();
     }
 
     private VideoInfo getVideoInfo(String id) {
