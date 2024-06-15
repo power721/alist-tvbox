@@ -8,16 +8,17 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -48,20 +49,25 @@ public class LogsService {
 
     public Page<String> getLogs(Pageable pageable, String type) throws IOException {
         Path file = getLogFile(type);
-        List<String> lines = Files.readAllLines(file);
         int size = pageable.getPageSize();
         int start = pageable.getPageNumber() * size;
         int end = start + size;
-        if (end > lines.size()) {
-            end = lines.size();
-        }
 
-        List<String> list = new ArrayList<>();
-        if (start < end) {
-            list = lines.subList(start, end).stream().map(this::fixLine).collect(Collectors.toList());
-        }
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            List<String> result = new ArrayList<>();
+            int i = 0;
+            for (; ; i++) {
+                String line = reader.readLine();
+                if (line == null) {
+                    break;
+                }
+                if (i >= start && i < end) {
+                    result.add(fixLine(line));
+                }
+            }
 
-        return new PageImpl<>(list, pageable, lines.size());
+            return new PageImpl<>(result, pageable, i);
+        }
     }
 
     public FileSystemResource downloadLog() throws IOException {
