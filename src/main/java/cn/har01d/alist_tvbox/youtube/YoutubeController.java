@@ -23,12 +23,12 @@ public class YoutubeController {
     }
 
     @GetMapping("/youtube")
-    public Object browse(String ids, String wd, String sort, String time, String type, String t, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
-        return browse("", ids, wd, sort, time, type, t, pg);
+    public Object browse(String ids, String wd, String sort, String time, String type, String format, String t, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
+        return browse("", ids, wd, sort, time, type, format, t, pg);
     }
 
     @GetMapping("/youtube/{token}")
-    public Object browse(@PathVariable String token, String ids, String wd, String sort, String time, String type, String t, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
+    public Object browse(@PathVariable String token, String ids, String wd, String sort, String time, String type, String format, String t, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
         subscriptionService.checkToken(token);
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
@@ -36,12 +36,12 @@ public class YoutubeController {
             }
             return youtubeService.detail(ids);
         } else if (wd != null && !wd.isEmpty()) {
-            return youtubeService.search(wd, sort, time, type, pg);
+            return youtubeService.search(wd, sort, time, type, format, pg);
         } else if (t != null && !t.isEmpty()) {
             if (t.equals("0")) {
                 return youtubeService.home();
             }
-            return youtubeService.list(t, sort, time, type, pg);
+            return youtubeService.list(t, sort, time, type, format, pg);
         }
         return youtubeService.category();
     }

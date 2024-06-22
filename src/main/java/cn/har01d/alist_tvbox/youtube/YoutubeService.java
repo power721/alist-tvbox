@@ -30,6 +30,7 @@ import com.github.kiulian.downloader.model.playlist.PlaylistInfo;
 import com.github.kiulian.downloader.model.playlist.PlaylistVideoDetails;
 import com.github.kiulian.downloader.model.search.SearchResult;
 import com.github.kiulian.downloader.model.search.SearchResultItemType;
+import com.github.kiulian.downloader.model.search.field.FormatField;
 import com.github.kiulian.downloader.model.search.field.SortField;
 import com.github.kiulian.downloader.model.search.field.TypeField;
 import com.github.kiulian.downloader.model.search.field.UploadDateField;
@@ -92,6 +93,13 @@ public class YoutubeService {
             new FilterValue("电影", "MOVIE")
     );
 
+    private final List<FilterValue> formats = Arrays.asList(
+            new FilterValue("全部", ""),
+            new FilterValue("HD", "HD"),
+            new FilterValue("4K", "_4K"),
+            new FilterValue("HDR", "HDR")
+    );
+
     private final MyDownloader myDownloader;
     private final YoutubeDownloader downloader;
 
@@ -137,7 +145,7 @@ public class YoutubeService {
     }
 
     public MovieList home() {
-        return list("电影", "", "", "", 1);
+        return list("电影", "", "", "", "", 1);
     }
 
     public CategoryList category() throws IOException {
@@ -163,11 +171,11 @@ public class YoutubeService {
                 category.setRatio(1.33);
                 result.getCategories().add(category);
                 if (!id.contains("@")) {
-                    result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times), new Filter("type", "类型", types)));
+                    result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times), new Filter("type", "类型", types), new Filter("format", "格式", formats)));
                 }
             }
         } else {
-            List<String> keywords = List.of("电影", "电视剧", "动漫", "综艺", "纪录片", "音乐", "英语", "科技", "新闻", "游戏", "风景", "旅游", "美食", "健身", "运动", "体育", "搞笑");
+            List<String> keywords = List.of("电影", "电视剧", "动漫", "综艺", "纪录片", "音乐", "英语", "科技", "新闻", "游戏", "风景", "旅游", "美食", "健身", "运动", "体育", "搞笑", "短剧");
             for (var name : keywords) {
                 Category category = new Category();
                 category.setType_id(name);
@@ -176,7 +184,7 @@ public class YoutubeService {
                 category.setLand(1);
                 category.setRatio(1.33);
                 result.getCategories().add(category);
-                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times), new Filter("type", "类型", types)));
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", sorts), new Filter("time", "时间", times), new Filter("type", "类型", types), new Filter("format", "格式", formats)));
             }
         }
 
@@ -185,7 +193,7 @@ public class YoutubeService {
         return result;
     }
 
-    public MovieList list(String text, String sort, String time, String type, int page) {
+    public MovieList list(String text, String sort, String time, String type, String format, int page) {
         if (text.startsWith("channel@")) {
             return getChannelVideo(text.substring(8));
         }
@@ -195,7 +203,7 @@ public class YoutubeService {
         if (text.startsWith("playlist@")) {
             return getPlaylistVideo(text.substring(9));
         }
-        return search(text, sort, time, type, page);
+        return search(text, sort, time, type, format, page);
     }
 
     private String getChannelId(String name) {
@@ -290,7 +298,7 @@ public class YoutubeService {
 
     private final Map<String, RequestSearchContinuation> continuations = new HashMap<>();
 
-    public MovieList search(String text, String sort, String time, String type, int page) {
+    public MovieList search(String text, String sort, String time, String type, String format, int page) {
         SearchResult searchResult;
         String query = text + "@@@" + sort;
         if (page > 1 && continuations.containsKey(query)) {
@@ -305,6 +313,9 @@ public class YoutubeService {
             }
             if (type != null && !type.isEmpty()) {
                 request.filter(TypeField.valueOf(type));
+            }
+            if (format != null && !format.isEmpty()) {
+                request.filter(FormatField.valueOf(format));
             }
             searchResult = downloader.search(request).data();
         }
