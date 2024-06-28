@@ -125,6 +125,7 @@ else
   fi
 
   sed -i 's/v3.9.2/v3.25.1/' update.sql
+  sed -i 's/pass_code/share_pwd/' update.sql
 
   sqlite3 /opt/alist/data/data.db <<EOF
 drop table x_storages;
