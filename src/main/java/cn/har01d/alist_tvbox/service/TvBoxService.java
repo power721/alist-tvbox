@@ -12,6 +12,7 @@ import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.Tmdb;
+import cn.har01d.alist_tvbox.entity.UnavailablePathRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.FileNameInfo;
@@ -89,6 +90,7 @@ public class TvBoxService {
     private final AListAliasRepository aliasRepository;
     private final ShareRepository shareRepository;
     private final MetaRepository metaRepository;
+    private final UnavailablePathRepository unavailablePathRepository;
 
     private final AListService aListService;
     private final IndexService indexService;
@@ -140,6 +142,7 @@ public class TvBoxService {
                         AListAliasRepository aliasRepository,
                         ShareRepository shareRepository,
                         MetaRepository metaRepository,
+                        UnavailablePathRepository unavailablePathRepository,
                         AListService aListService,
                         IndexService indexService,
                         SiteService siteService,
@@ -154,6 +157,7 @@ public class TvBoxService {
         this.aliasRepository = aliasRepository;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
+        this.unavailablePathRepository = unavailablePathRepository;
         this.aListService = aListService;
         this.indexService = indexService;
         this.siteService = siteService;
@@ -376,12 +380,20 @@ public class TvBoxService {
         Map<String, List<Meta>> map = new HashMap<>();
         Set<String> added = new HashSet<>();
         for (Meta meta : page.getContent()) {
+            if (unavailablePathRepository.existsByPath(meta.getPath())) {
+                log.debug("ignore {} {}", meta.getId(), meta.getPath());
+                continue;
+            }
             String name = getName(meta);
             List<Meta> metas = map.computeIfAbsent(name, id -> new ArrayList<>());
             metas.add(meta);
         }
 
         for (Meta meta : page.getContent()) {
+            if (unavailablePathRepository.existsByPath(meta.getPath())) {
+                log.debug("ignore {} {}", meta.getId(), meta.getPath());
+                continue;
+            }
             String name = getName(meta);
             if (added.contains(name)) {
                 log.debug("skip {}: {}", name, meta.getPath());
@@ -517,6 +529,10 @@ public class TvBoxService {
 
         if (type != null && type == 0) {
             for (Meta meta : metaRepository.findByPathContains(keyword, PageRequest.of(page - 1, appProperties.getMaxSearchResult(), Sort.Direction.DESC, "time", "id"))) {
+                if (unavailablePathRepository.existsByPath(meta.getPath())) {
+                    log.debug("ignore {} {}", meta.getId(), meta.getPath());
+                    continue;
+                }
                 String name = getName(meta);
                 boolean isMediaFile = isMediaFile(meta.getPath());
                 String newPath = fixPath(meta.getPath() + (isMediaFile ? "" : PLAYLIST));
@@ -613,6 +629,10 @@ public class TvBoxService {
 
             boolean isMediaFile = isMediaFile(line);
             if (isMediaFile && lines.contains(getParent(raw))) {
+                continue;
+            }
+            if (unavailablePathRepository.existsByPath(line)) {
+                log.debug("ignore {}", line);
                 continue;
             }
             String path = fixPath("/" + line + (isMediaFile ? "" : PLAYLIST));
@@ -978,6 +998,10 @@ public class TvBoxService {
         }
 
         for (Meta meta : list) {
+            if (unavailablePathRepository.existsByPath(meta.getPath())) {
+                log.debug("ignore {} {}", meta.getId(), meta.getPath());
+                continue;
+            }
             String name = getName(meta);
             if (added.contains(name)) {
                 log.debug("skip {}: {}", name, meta.getPath());
