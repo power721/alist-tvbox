@@ -228,6 +228,7 @@
             inactive-text="关闭"
             @change="updateAliTo115"
           />
+          <span class="hint">资源页面添加115网盘</span>
         </el-form-item>
 <!--        <el-form-item label="开启阿里延迟加载">-->
 <!--          <el-switch-->

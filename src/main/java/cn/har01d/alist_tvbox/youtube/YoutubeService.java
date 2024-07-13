@@ -330,7 +330,7 @@ public class YoutubeService {
                 if (video.richThumbnails() != null && !video.richThumbnails().isEmpty()) {
                     movie.setVod_pic(fixCover(video.richThumbnails().get(0)));
                 }
-                movie.setVod_remarks(Utils.secondsToDuration(video.lengthSeconds()));
+                movie.setVod_remarks(video.isLive() ? "直播" : Utils.secondsToDuration(video.lengthSeconds()));
                 list.add(movie);
             } else if (item.type() == SearchResultItemType.CHANNEL) {
                 var video = item.asChannel();
@@ -428,8 +428,8 @@ public class YoutubeService {
         if (video.details().thumbnails() != null && !video.details().thumbnails().isEmpty()) {
             movieDetail.setVod_pic(fixCover(video.details().thumbnails().get(0)));
         }
-        movieDetail.setVod_remarks(Utils.secondsToDuration(video.details().lengthSeconds()));
-        movieDetail.setVod_play_from("视频");
+        movieDetail.setVod_remarks(video.details().isLive() ? "" : Utils.secondsToDuration(video.details().lengthSeconds()));
+        movieDetail.setVod_play_from(video.details().isLive() ? "直播" : "视频");
         movieDetail.setVod_play_url(id);
         result.getList().add(movieDetail);
 
