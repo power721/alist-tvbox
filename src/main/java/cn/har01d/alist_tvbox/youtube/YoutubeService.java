@@ -469,7 +469,9 @@ public class YoutubeService {
 
         Map<String, Object> result = new HashMap<>();
         result.put("parse", "0");
-        if (DashUtils.isClientSupport(client)) {
+        if (info.details().isLive()) {
+            result.put("url", buildProxyUrl(token, id, 0));
+        } else if (DashUtils.isClientSupport(client)) {
             List<Format> videos = new ArrayList<>();
             info.videoFormats()
                     .stream()
@@ -507,6 +509,9 @@ public class YoutubeService {
         Format format = video.findFormatByItag(tag);
         if (format == null) {
             format = video.bestVideoWithAudioFormat();
+        }
+        if (video.details().isLive()) {
+            format = new LiveFormat(video.details().liveUrl());
         }
 
         String range = request.getHeader("range");
