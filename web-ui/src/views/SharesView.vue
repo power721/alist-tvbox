@@ -387,6 +387,9 @@ const getShareLink = (shareInfo: ShareInfo) => {
   if (shareInfo.type == 5) {
     return 'https://pan.quark.cn/s/' + shareInfo.shareId
   }
+  if (shareInfo.type == 7) {
+    return 'https://fast.uc.cn/s/' + shareInfo.shareId
+  }
   let url = 'https://www.alipan.com/s/' + shareInfo.shareId
   if (shareInfo.folderId) {
     url = url + '/folder/' + shareInfo.folderId

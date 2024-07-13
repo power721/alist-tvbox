@@ -57,7 +57,6 @@ import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1104,41 +1103,41 @@ public class TvBoxService {
 
         List<Subtitle> subtitles = new ArrayList<>();
 
-        if ("com.fongmi.android.tv".equals(client)) {
-            try {
-                var preview = aListService.preview(site, fullPath);
-                log.debug("preview: {} {}", fullPath, preview);
-                if (preview != null) {
-                    Collections.reverse(preview.getPlayInfo().getVideos());
-                    List<String> urls = new ArrayList<>();
-                    for (var item : preview.getPlayInfo().getVideos()) {
-                        if (!"finished".equals(item.getStatus())) {
-                            continue;
-                        }
-                        urls.add(item.getId());
-                        urls.add(item.getUrl());
-                    }
-                    if (urls.size() > 1) {
-                        url = urls.get(1);
-                        result.put("url", urls);
-                    }
-
-                    if (preview.getPlayInfo().getSubtitles() != null) {
-                        for (var item : preview.getPlayInfo().getSubtitles()) {
-                            if (!"finished".equals(item.getStatus())) {
-                                continue;
-                            }
-                            Subtitle subtitle = new Subtitle();
-                            subtitle.setUrl(item.getUrl());
-                            subtitle.setLang(item.getLanguage());
-                            subtitles.add(subtitle);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("preview failed", e);
-            }
-        }
+//        if ("com.fongmi.android.tv".equals(client)) {
+//            try {
+//                var preview = aListService.preview(site, fullPath);
+//                log.debug("preview: {} {}", fullPath, preview);
+//                if (preview != null) {
+//                    Collections.reverse(preview.getPlayInfo().getVideos());
+//                    List<String> urls = new ArrayList<>();
+//                    for (var item : preview.getPlayInfo().getVideos()) {
+//                        if (!"finished".equals(item.getStatus())) {
+//                            continue;
+//                        }
+//                        urls.add(item.getId());
+//                        urls.add(item.getUrl());
+//                    }
+//                    if (urls.size() > 1) {
+//                        url = urls.get(1);
+//                        result.put("url", urls);
+//                    }
+//
+//                    if (preview.getPlayInfo().getSubtitles() != null) {
+//                        for (var item : preview.getPlayInfo().getSubtitles()) {
+//                            if (!"finished".equals(item.getStatus())) {
+//                                continue;
+//                            }
+//                            Subtitle subtitle = new Subtitle();
+//                            subtitle.setUrl(item.getUrl());
+//                            subtitle.setLang(item.getLanguage());
+//                            subtitles.add(subtitle);
+//                        }
+//                    }
+//                }
+//            } catch (Exception e) {
+//                log.warn("preview failed", e);
+//            }
+//        }
 
         if (url == null) {
             FsDetail fsDetail = aListService.getFile(site, path);
@@ -1146,7 +1145,9 @@ public class TvBoxService {
                 throw new BadRequestException("找不到文件 " + path);
             }
 
-            if (fsDetail.getProvider().contains("Aliyundrive")
+            if ("com.fongmi.android.tv".equals(client)) {
+                url = fixHttp(fsDetail.getRawUrl());
+            } else if ((fsDetail.getProvider().contains("Aliyundrive") && !fsDetail.getRawUrl().contains("115.com"))
                     || (("open".equals(client) || "node".equals(client)) && fsDetail.getProvider().contains("115"))) {
                 url = buildProxyUrl(site, path, fsDetail.getSign());
                 log.info("play url: {}", url);
@@ -1160,7 +1161,8 @@ public class TvBoxService {
         if (url.contains("xunlei.com")) {
             result.put("header", "{\"User-Agent\":\"Dalvik/2.1.0 (Linux; U; Android 12; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (url.contains("115.com")) {
-            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
+            // 115会把UA生成签名校验，使用默认的driver115.UA115Browser
+            result.put("header", "{\"User-Agent\":\"Mozilla/5.0 115Browser/23.9.3.2\",\"Referer\":\"https://115.com/\"}");
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
             result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://www.aliyundrive.com/\"}");

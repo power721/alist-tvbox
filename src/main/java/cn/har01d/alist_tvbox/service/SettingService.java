@@ -144,6 +144,9 @@ public class SettingService {
         if ("delete_delay_time".equals(setting.getName())) {
             aListLocalService.updateSetting("delete_delay_time", setting.getValue(), "number");
         }
+        if ("ali_to_115".equals(setting.getName())) {
+            aListLocalService.updateSetting("ali_to_115", setting.getValue(), "bool");
+        }
         return settingRepository.save(setting);
     }
 
