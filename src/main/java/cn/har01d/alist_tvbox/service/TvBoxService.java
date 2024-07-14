@@ -1139,12 +1139,14 @@ public class TvBoxService {
 //            }
 //        }
 
+        boolean aliShare = false;
         if (url == null) {
             FsDetail fsDetail = aListService.getFile(site, path);
             if (fsDetail == null) {
                 throw new BadRequestException("找不到文件 " + path);
             }
 
+            aliShare = "AliyundriveShare2Open".equals(fsDetail.getProvider());
             if ("com.fongmi.android.tv".equals(client)) {
                 url = fixHttp(fsDetail.getRawUrl());
             } else if ((fsDetail.getProvider().contains("Aliyundrive") && !fsDetail.getRawUrl().contains("115.com"))
@@ -1161,8 +1163,9 @@ public class TvBoxService {
         if (url.contains("xunlei.com")) {
             result.put("header", "{\"User-Agent\":\"Dalvik/2.1.0 (Linux; U; Android 12; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (url.contains("115.com")) {
-            // 115会把UA生成签名校验，使用默认的driver115.UA115Browser
-            result.put("header", "{\"User-Agent\":\"Mozilla/5.0 115Browser/23.9.3.2\",\"Referer\":\"https://115.com/\"}");
+            String ua = aliShare ? "Mozilla/5.0 115Browser/23.9.3.2" : USER_AGENT;
+            // 115会把UA生成签名校验
+            result.put("header", "{\"User-Agent\":\"" + ua + "\",\"Referer\":\"https://115.com/\"}");
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
             result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://www.aliyundrive.com/\"}");
