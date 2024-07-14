@@ -585,7 +585,6 @@ public class ShareService {
             url = url.substring(0, index);
         }
 
-
         String[] parts = url.split("/");
         if (parts.length == 3 && "folder".equals(parts[1])) {
             share.setShareId(parts[0]);
