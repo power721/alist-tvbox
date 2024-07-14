@@ -409,6 +409,11 @@ public class ShareService {
                         String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getPassword(), share.getFolderId()));
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
+                        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_cookie','" + share.getCookie() + "','','text','',1,0);");
+                    } else if (share.getType() == 8) {
+                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Share',30,'work','{\"share_code\":\"%s\",\"receive_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
+                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     } else if (share.getType() == 4) {
                         String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Local',30,'work','{\"root_folder_path\":\"%s\",\"thumbnail\":false,\"thumb_cache_folder\":\"\",\"show_hidden\":true,\"mkdir_perm\":\"777\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), share.getPath(), share.getFolderId()));
@@ -416,12 +421,10 @@ public class ShareService {
                     } else if (share.getType() == 5) {
                         String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'QuarkShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-                        pikpak = true;
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     } else if (share.getType() == 7) {
                         String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-                        pikpak = true;
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     }
                     if (share.getId() < 6000) {
@@ -453,10 +456,10 @@ public class ShareService {
         }
     }
 
-    private void updateQuarkCookieByApi(String cookie) {
+    private void updateCookieByApi(String key, String cookie) {
         int status = aListLocalService.getAListStatus();
         if (status == 1) {
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('quark_cookie','" + cookie + "','','text','',1,0);");
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('" + key + "','" + cookie + "','','text','',1,0);");
             throw new BadRequestException("AList服务启动中");
         }
 
@@ -464,33 +467,13 @@ public class ShareService {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", List.of(token));
         Map<String, Object> body = new HashMap<>();
-        body.put("key", "quark_cookie");
+        body.put("key", key);
         body.put("type", "text");
         body.put("flag", 1);
         body.put("value", cookie);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<String> response = restTemplate.exchange("/api/admin/setting/update", HttpMethod.POST, entity, String.class);
-        log.info("updateQuarkCookieByApi {} response: {}", response.getBody());
-    }
-
-    private void updateUcCookieByApi(String cookie) {
-        int status = aListLocalService.getAListStatus();
-        if (status == 1) {
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('uc_cookie','" + cookie + "','','text','',1,0);");
-            throw new BadRequestException("AList服务启动中");
-        }
-
-        String token = status == 2 ? login() : "";
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", List.of(token));
-        Map<String, Object> body = new HashMap<>();
-        body.put("key", "uc_cookie");
-        body.put("type", "text");
-        body.put("flag", 1);
-        body.put("value", cookie);
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<String> response = restTemplate.exchange("/api/admin/setting/update", HttpMethod.POST, entity, String.class);
-        log.info("updateUcCookieByApi {} response: {}", response.getBody());
+        log.info("updateCookieByApi {} response: {}", response.getBody());
     }
 
     public String login() {
@@ -523,6 +506,8 @@ public class ShareService {
             return "/我的夸克分享/" + path;
         } else if (share.getType() == 7) {
             return "/我的UC分享/" + path;
+        } else if (share.getType() == 8) {
+            return "/我的115分享/" + path;
         }
         return path;
     }
@@ -568,8 +553,7 @@ public class ShareService {
         return "";
     }
 
-    private static final Pattern QUARK_SHARE_LINK = Pattern.compile("https://pan.quark.cn/s/(\\w+)#/list/share/(\\w+)");
-    private static final Pattern QUARK_SHARE_LINK2 = Pattern.compile("https://pan.quark.cn/s/(\\w+)#/list/share");
+    private static final Pattern SHARE_115_LINK = Pattern.compile("https://115.com/s/(\\w+)\\?password=(\\w+)#?");
 
     private void parseShare(Share share) {
         if (StringUtils.isBlank(share.getShareId())) {
@@ -577,30 +561,28 @@ public class ShareService {
         }
 
         String url = share.getShareId();
-        var m = QUARK_SHARE_LINK.matcher(url);
+        var m = SHARE_115_LINK.matcher(url);
         if (m.find()) {
             share.setShareId(m.group(1));
-            share.setFolderId(m.group(2));
+            share.setPassword(m.group(2));
             return;
         }
 
-        m = QUARK_SHARE_LINK2.matcher(url);
-        if (m.find()) {
-            share.setShareId(m.group(1));
-            return;
+        int index = url.indexOf("/s/");
+        if (index > 0) {
+            url = url.substring(index + 3);
         }
-
-        if (url.startsWith("https://mypikpak.com/s/")) {
-            url = url.substring(23);
+        index = url.indexOf("#/list/share/");
+        if (index > 0) {
+            String path = url.substring(index + 13);
+            String[] parts = path.split("/");
+            path = parts[parts.length - 1].split("-")[0];
+            share.setFolderId(path);
+            url = url.substring(0, index);
         }
-        if (url.startsWith("https://www.aliyundrive.com/s/")) {
-            url = url.substring(30);
-        }
-        if (url.startsWith("https://www.alipan.com/s/")) {
-            url = url.substring(25);
-        }
-        if (url.startsWith("https://pan.quark.cn/s/")) {
-            url = url.substring(23);
+        index = url.indexOf('?');
+        if (index > 0) {
+            url = url.substring(0, index);
         }
 
         String[] parts = url.split("/");
@@ -636,16 +618,19 @@ public class ShareService {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
                 log.info("insert Share {} : {}, result: {}", share.getId(), getMountPath(share), count);
-                updateQuarkCookieByApi(share.getCookie());
+                updateCookieByApi("quark_cookie", share.getCookie());
             } else if (share.getType() == 6) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UC',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
                 log.info("insert Share {} : {}, result: {}", share.getId(), getMountPath(share), count);
-                updateUcCookieByApi(share.getCookie());
+                updateCookieByApi("uc_cookie", share.getCookie());
             } else if (share.getType() == 3) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getPassword(), share.getFolderId()));
                 log.info("insert Share {} : {}, result: {}", share.getId(), getMountPath(share), count);
+            } else if (share.getType() == 8) {
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Share',30,'work','{\"share_code\":\"%s\",\"receive_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
             } else if (share.getType() == 4) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Local',30,'work','{\"root_folder_path\":\"%s\",\"thumbnail\":false,\"thumb_cache_folder\":\"\",\"show_hidden\":true,\"mkdir_perm\":\"777\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), share.getPath(), share.getFolderId()));
@@ -653,7 +638,7 @@ public class ShareService {
             } else if (share.getType() == 5) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'QuarkShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 5) {
+            } else if (share.getType() == 7) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
             }
@@ -693,16 +678,19 @@ public class ShareService {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
                 log.info("insert Share {} : {}, result: {}", share.getId(), getMountPath(share), count);
-                updateQuarkCookieByApi(share.getCookie());
+                updateCookieByApi("quark_cookie", share.getCookie());
             } else if (share.getType() == 6) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UC',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getFolderId()));
                 log.info("insert Share {} : {}, result: {}", share.getId(), getMountPath(share), count);
-                updateUcCookieByApi(share.getCookie());
+                updateCookieByApi("uc_cookie", share.getCookie());
             } else if (share.getType() == 3) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getPassword(), share.getFolderId()));
                 log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
+            } else if (share.getType() == 8) {
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Share',30,'work','{\"share_code\":\"%s\",\"receive_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
             } else if (share.getType() == 4) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Local',30,'work','{\"root_folder_path\":\"%s\",\"thumbnail\":false,\"thumb_cache_folder\":\"\",\"show_hidden\":true,\"mkdir_perm\":\"777\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), share.getPath(), share.getFolderId()));

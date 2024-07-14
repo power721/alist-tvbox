@@ -3,7 +3,7 @@
   <el-row justify="end">
     <el-button type="success" @click="uploadVisible=true">导入</el-button>
     <el-button type="success" @click="exportVisible=true">导出</el-button>
-<!--    <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>-->
+    <!--    <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>-->
     <el-button @click="refreshShares">刷新</el-button>
     <el-button type="primary" @click="handleAdd">添加</el-button>
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
@@ -29,6 +29,12 @@
         <a v-else-if="scope.row.type==5" :href="getShareLink(scope.row)" target="_blank">
           https://pan.quark.cn/s/{{ scope.row.shareId }}
         </a>
+        <a v-else-if="scope.row.type==7" :href="getShareLink(scope.row)" target="_blank">
+          https://fast.uc.cn/s/{{ scope.row.shareId }}
+        </a>
+        <a v-else-if="scope.row.type==8" :href="getShareLink(scope.row)" target="_blank">
+          https://115.com/s/{{ scope.row.shareId }}
+        </a>
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
@@ -41,6 +47,7 @@
         <span v-else-if="scope.row.type==4">本地存储</span>
         <span v-else-if="scope.row.type==5">夸克分享</span>
         <span v-else-if="scope.row.type==7">UC分享</span>
+        <span v-else-if="scope.row.type==8">115分享</span>
         <span v-else>阿里分享</span>
       </template>
     </el-table-column>
@@ -52,7 +59,8 @@
     </el-table-column>
   </el-table>
   <div>
-    <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" :page-size="size" :total="total"
+    <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" :page-size="size"
+                   :total="total"
                    @current-change="loadShares" @size-change="handleSizeChange"/>
   </div>
 
@@ -76,9 +84,10 @@
         <span v-else-if="scope.row.driver=='QuarkShare'">夸克分享</span>
         <span v-else-if="scope.row.driver=='UCShare'">UC分享</span>
         <span v-else-if="scope.row.driver=='115 Cloud'">115网盘</span>
+        <span v-else-if="scope.row.driver=='115 Share'">115分享</span>
         <span v-else-if="scope.row.driver=='Local'">本地存储</span>
         <span v-else-if="scope.row.driver=='Alias'">别名</span>
-        <span v-else>{{scope.row.driver}}</span>
+        <span v-else>{{ scope.row.driver }}</span>
       </template>
     </el-table-column>
     <el-table-column fixed="right" label="操作" width="130">
@@ -89,7 +98,8 @@
     </el-table-column>
   </el-table>
   <div>
-    <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page1" :total="total1" :page-size="size1"
+    <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page1" :total="total1"
+                   :page-size="size1"
                    @current-change="loadStorages" @size-change="handleSize1Change"/>
   </div>
 
@@ -98,27 +108,32 @@
       <el-form-item label="挂载路径" label-width="140" required>
         <el-input v-model="form.path" autocomplete="off"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2&&form.type!=6&&form.type!=3&&form.type!=4" label="分享ID" label-width="140" required>
+      <el-form-item v-if="form.type!=2&&form.type!=6&&form.type!=3&&form.type!=4" label="分享ID" label-width="140"
+                    required>
         <el-input v-model="form.shareId" autocomplete="off" placeholder="分享ID或者分享链接"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2&&form.type!=6&&form.type!=4" :label="form.type==3?'Token':'密码'" label-width="140">
+      <el-form-item v-if="form.type!=2&&form.type!=6&&form.type!=4" :label="form.type==3?'Token':'密码'"
+                    label-width="140">
         <el-input v-model="form.password" autocomplete="off"/>
       </el-form-item>
       <el-form-item v-if="form.type==2||form.type==6||form.type==3" label="Cookie" label-width="140">
-        <el-input v-model="form.cookie" type="textarea" :rows="5" autocomplete="off" :placeholder="form.type==3?'Cookie或者Token必填一项':'Cookie必填'"/>
+        <el-input v-model="form.cookie" type="textarea" :rows="5" autocomplete="off"
+                  :placeholder="form.type==3?'Cookie或者Token必填一项':'Cookie必填'"/>
       </el-form-item>
       <el-form-item :label="form.type==4?'本地路径':'文件夹ID'" label-width="140">
-        <el-input v-model="form.folderId" autocomplete="off" :placeholder="form.type==4?'':'默认为根目录或者从分享链接读取'"/>
+        <el-input v-model="form.folderId" autocomplete="off"
+                  :placeholder="form.type==4?'':'默认为根目录或者从分享链接读取'"/>
       </el-form-item>
       <el-form-item label="类型" label-width="140">
         <el-radio-group v-model="form.type" class="ml-4">
           <el-radio :label="0" size="large">阿里分享</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
           <el-radio :label="2" size="large">夸克网盘</el-radio>
-          <el-radio :label="6" size="large">UC网盘</el-radio>
           <el-radio :label="5" size="large">夸克分享</el-radio>
+          <el-radio :label="6" size="large">UC网盘</el-radio>
           <el-radio :label="7" size="large">UC分享</el-radio>
           <el-radio :label="3" size="large">115网盘</el-radio>
+          <el-radio :label="8" size="large">115分享</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
         </el-radio-group>
       </el-form-item>
@@ -154,7 +169,7 @@
     </div>
     <div v-else>
       <p>是否删除资源 - {{ storage.id }}</p>
-      <p>{{ storage.mount_path}}</p>
+      <p>{{ storage.mount_path }}</p>
     </div>
     <template #footer>
       <span class="dialog-footer">
@@ -172,6 +187,7 @@
           <el-radio :label="1" size="large">PikPak分享</el-radio>
           <el-radio :label="5" size="large">夸克分享</el-radio>
           <el-radio :label="7" size="large">UC分享</el-radio>
+          <el-radio :label="8" size="large">115分享</el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="分享内容" label-width="120">
@@ -194,6 +210,7 @@
         <el-radio :label="1" size="large">PikPak分享</el-radio>
         <el-radio :label="5" size="large">夸克分享</el-radio>
         <el-radio :label="7" size="large">UC分享</el-radio>
+        <el-radio :label="8" size="large">115分享</el-radio>
       </el-radio-group>
     </el-form-item>
     <template #footer>
@@ -364,6 +381,8 @@ const fullPath = (share: any) => {
     return '/我的夸克分享/' + path
   } else if (share.type == 7) {
     return '/我的UC分享/' + path
+  } else if (share.type == 8) {
+    return '/我的115分享/' + path
   } else if (share.type == 3) {
     return '/115网盘/' + path
   } else if (share.type == 4) {
@@ -381,21 +400,23 @@ const handleConfirm = () => {
 }
 
 const getShareLink = (shareInfo: ShareInfo) => {
+  let url = ''
   if (shareInfo.type == 1) {
-    return 'https://mypikpak.com/s/' + shareInfo.shareId
-  }
-  if (shareInfo.type == 5) {
-    return 'https://pan.quark.cn/s/' + shareInfo.shareId
-  }
-  if (shareInfo.type == 7) {
-    return 'https://fast.uc.cn/s/' + shareInfo.shareId
-  }
-  let url = 'https://www.alipan.com/s/' + shareInfo.shareId
-  if (shareInfo.folderId) {
-    url = url + '/folder/' + shareInfo.folderId
+    url = 'https://mypikpak.com/s/' + shareInfo.shareId
+  } else if (shareInfo.type == 5) {
+    url = 'https://pan.quark.cn/s/' + shareInfo.shareId
+  } else if (shareInfo.type == 7) {
+    url = 'https://fast.uc.cn/s/' + shareInfo.shareId
+  } else if (shareInfo.type == 8) {
+    url = 'https://115.com/s/' + shareInfo.shareId
+  } else {
+    url = 'https://www.alipan.com/s/' + shareInfo.shareId
+    if (shareInfo.folderId) {
+      url = url + '/folder/' + shareInfo.folderId
+    }
   }
   if (shareInfo.password) {
-    url = url + '?pwd=' + shareInfo.password
+    url = url + '?password=' + shareInfo.password
   }
   return url
 }
