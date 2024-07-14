@@ -473,7 +473,7 @@ public class ShareService {
         body.put("value", cookie);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<String> response = restTemplate.exchange("/api/admin/setting/update", HttpMethod.POST, entity, String.class);
-        log.info("updateQuarkCookieByApi {} response: {}", response.getBody());
+        log.info("updateCookieByApi {} response: {}", response.getBody());
     }
 
     public String login() {
@@ -553,8 +553,7 @@ public class ShareService {
         return "";
     }
 
-    private static final Pattern QUARK_SHARE_LINK = Pattern.compile("https://pan.quark.cn/s/(\\w+)#/list/share/(\\w+)");
-    private static final Pattern QUARK_SHARE_LINK2 = Pattern.compile("https://pan.quark.cn/s/(\\w+)#/list/share");
+    private static final Pattern SHARE_115_LINK = Pattern.compile("https://115.com/s/(\\w+)\\?password=(\\w+)#?");
 
     private void parseShare(Share share) {
         if (StringUtils.isBlank(share.getShareId())) {
@@ -562,31 +561,30 @@ public class ShareService {
         }
 
         String url = share.getShareId();
-        var m = QUARK_SHARE_LINK.matcher(url);
+        var m = SHARE_115_LINK.matcher(url);
         if (m.find()) {
             share.setShareId(m.group(1));
-            share.setFolderId(m.group(2));
+            share.setPassword(m.group(2));
             return;
         }
 
-        m = QUARK_SHARE_LINK2.matcher(url);
-        if (m.find()) {
-            share.setShareId(m.group(1));
-            return;
+        int index = url.indexOf("/s/");
+        if (index > 0) {
+            url = url.substring(index + 3);
+        }
+        index = url.indexOf("#/list/share/");
+        if (index > 0) {
+            String path = url.substring(index + 13);
+            String[] parts = path.split("/");
+            path = parts[parts.length - 1].split("-")[0];
+            share.setFolderId(path);
+            url = url.substring(0, index);
+        }
+        index = url.indexOf('?');
+        if (index > 0) {
+            url = url.substring(0, index);
         }
 
-        if (url.startsWith("https://mypikpak.com/s/")) {
-            url = url.substring(23);
-        }
-        if (url.startsWith("https://www.aliyundrive.com/s/")) {
-            url = url.substring(30);
-        }
-        if (url.startsWith("https://www.alipan.com/s/")) {
-            url = url.substring(25);
-        }
-        if (url.startsWith("https://pan.quark.cn/s/")) {
-            url = url.substring(23);
-        }
 
         String[] parts = url.split("/");
         if (parts.length == 3 && "folder".equals(parts[1])) {
@@ -631,7 +629,6 @@ public class ShareService {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getPassword(), share.getFolderId()));
                 log.info("insert Share {} : {}, result: {}", share.getId(), getMountPath(share), count);
-                updateCookieByApi("115_cookie", share.getCookie());
             } else if (share.getType() == 8) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Share',30,'work','{\"share_code\":\"%s\",\"receive_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
@@ -692,7 +689,6 @@ public class ShareService {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getPassword(), share.getFolderId()));
                 log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
-                updateCookieByApi("115_cookie", share.getCookie());
             } else if (share.getType() == 8) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Share',30,'work','{\"share_code\":\"%s\",\"receive_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
