@@ -19,6 +19,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.Response;
+import cn.har01d.alist_tvbox.model.SettingResponse;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +35,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -628,6 +630,7 @@ public class ShareService {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getPassword(), share.getFolderId()));
                 log.info("insert Share {} : {}, result: {}", share.getId(), getMountPath(share), count);
+                updateCookieByApi("115_cookie", share.getCookie());
             } else if (share.getType() == 8) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Share',30,'work','{\"share_code\":\"%s\",\"receive_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
@@ -688,6 +691,7 @@ public class ShareService {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getCookie(), share.getPassword(), share.getFolderId()));
                 log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
+                updateCookieByApi("115_cookie", share.getCookie());
             } else if (share.getType() == 8) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Share',30,'work','{\"share_code\":\"%s\",\"receive_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
@@ -748,6 +752,10 @@ public class ShareService {
 
         if (share.getType() == 1 && "root".equals(share.getFolderId())) {
             share.setFolderId("");
+        }
+
+        if (share.getCookie() != null) {
+            share.setCookie(share.getCookie().trim());
         }
     }
 
@@ -860,5 +868,32 @@ public class ShareService {
             log.warn("", e);
         }
         return shares;
+    }
+
+    @Scheduled(initialDelay = 1800_000, fixedDelay = 1800_000)
+    public void syncCookies() {
+        if (aListLocalService.getAListStatus() != 2) {
+            return;
+        }
+        var cookie = aListLocalService.getSetting("quark_cookie");
+        log.debug("quark_cookie={}", cookie);
+        saveCookie(2, cookie);
+        cookie = aListLocalService.getSetting("uc_cookie");
+        log.debug("uc_cookie={}", cookie);
+        saveCookie(6, cookie);
+        cookie = aListLocalService.getSetting("115_cookie");
+        log.debug("115_cookie={}", cookie);
+        saveCookie(3, cookie);
+    }
+
+    private void saveCookie(int type, SettingResponse response) {
+        if (response.getCode() == 200) {
+            List<Share> shares = shareRepository.findByType(type);
+            if (!shares.isEmpty()) {
+                Share share = shares.get(shares.size() - 1);
+                share.setCookie(response.getData().getValue());
+                shareRepository.save(share);
+            }
+        }
     }
 }

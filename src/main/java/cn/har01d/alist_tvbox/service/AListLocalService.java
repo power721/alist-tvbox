@@ -15,6 +15,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -90,6 +91,16 @@ public class AListLocalService {
             int code = Utils.executeUpdate(String.format("UPDATE x_setting_items SET value = '%s' WHERE key = '%s'", key, value));
             log.info("update setting by SQL: {}", code);
         }
+    }
+
+    public SettingResponse getSetting(String key) {
+        HttpHeaders headers = new HttpHeaders();
+        Site site = siteRepository.findById(1).orElseThrow();
+        headers.add("Authorization", site.getToken());
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
+        String url = "/api/admin/setting/get?key=" + key;
+        ResponseEntity<SettingResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, SettingResponse.class);
+        return response.getBody();
     }
 
     public void startAListServer() {
