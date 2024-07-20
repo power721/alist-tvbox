@@ -328,9 +328,6 @@ public class ShareService {
                     share.setPath(parts[0]);
                     share.setShareId(parts[1]);
                     share.setType(dto.getType());
-                    if (share.getType() == 1) {
-                        share.setFolderId("");
-                    }
                     if (parts.length > 2) {
                         share.setFolderId(parts[2]);
                     }
@@ -361,13 +358,17 @@ public class ShareService {
             fileName = "pikpak_share_list.txt";
         } else if (type == 5) {
             fileName = "quark_share_list.txt";
+        } else if (type == 7) {
+            fileName = "uc_share_list.txt";
+        } else if (type == 8) {
+            fileName = "115_share_list.txt";
         } else {
             fileName = "ali_share_list.txt";
         }
 
         for (Share share : list) {
             sb.append(getMountPath(share).replace(" ", "")).append("  ").append(share.getShareId())
-                    .append("  ").append(share.getFolderId()).append("  ").append(share.getPassword()).append("\n");
+                    .append("  ").append(StringUtils.isBlank(share.getFolderId()) ? "root" : share.getFolderId()).append("  ").append(share.getPassword()).append("\n");
         }
 
         log.info("export {} shares to file: {}", list.size(), fileName);
@@ -750,7 +751,7 @@ public class ShareService {
             }
         }
 
-        if (share.getType() == 1 && "root".equals(share.getFolderId())) {
+        if ((share.getType() == 1 || share.getType() == 8) && "root".equals(share.getFolderId())) {
             share.setFolderId("");
         }
 
