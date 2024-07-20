@@ -334,6 +334,9 @@ public class ShareService {
                     if (parts.length > 2) {
                         share.setFolderId(parts[2]);
                     }
+                    if (share.getType() == 1 && "root".equals(share.getFolderId())) {
+                        share.setFolderId("");
+                    }
                     if (share.getType() == 8 && "root".equals(share.getFolderId())) {
                         share.setFolderId("");
                     }
