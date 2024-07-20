@@ -331,9 +331,6 @@ public class ShareService {
                     if (parts.length > 2) {
                         share.setFolderId(parts[2]);
                     }
-                    if ((share.getType() == 1 || share.getType() == 8) && "root".equals(share.getFolderId())) {
-                        share.setFolderId("");
-                    }
                     if (parts.length > 3) {
                         share.setPassword(parts[3]);
                     }
@@ -754,7 +751,7 @@ public class ShareService {
             }
         }
 
-        if (share.getType() == 1 && "root".equals(share.getFolderId())) {
+        if ((share.getType() == 1 || share.getType() == 8) && "root".equals(share.getFolderId())) {
             share.setFolderId("");
         }
 
