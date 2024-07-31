@@ -93,7 +93,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_CODE;
@@ -1149,14 +1148,7 @@ public class BiliBiliService {
         return result;
     }
 
-    private static final Pattern SCRIPT = Pattern.compile("<script\\s+id=\"__NEXT_DATA__\"\\s+type=\"application/json\"\\s*>(.*?)</script\\s*>");
-    private static final Pattern EP_MAP = Pattern.compile("\"episodes\"\\s*:\\s*(.+?)\\s*,\\s*\"user_status\"");
-    private static final Pattern DESC = Pattern.compile("\"evaluate\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"freya\"");
-    private static final Pattern COVER = Pattern.compile("\"bkg_cover\"\\s*:\\s*\".+?\"\\s*,\\s*\"cover\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"delivery_fragment_video\"");
-    private static final Pattern MEDIA_INFO = Pattern.compile("\"season_id\"\\s*:\\s*.+?\"season_title\":\"(.+?)\",\\s*.+?\\s*\"season_type\"");
-    private static final Pattern VIDEO_ID = Pattern.compile("\"videoId\"\\s*:\\s*\"(ep|ss)(\\d+)\"");
-
-    private MovieList getBangumi(String tid) throws IOException {
+    private MovieList getBangumi(String tid) {
         MovieList result = new MovieList();
 
         String[] parts = tid.split("\\$");
@@ -1295,6 +1287,9 @@ public class BiliBiliService {
     }
 
     private BiliBiliInfo getInfo(String bvid) {
+        if (bvid.startsWith("av")) {
+            bvid = BiliBiliUtils.av2bv(Long.parseLong(bvid.substring(2)));
+        }
         BiliBiliInfoResponse infoResponse = restTemplate.getForObject(INFO_API + bvid, BiliBiliInfoResponse.class);
         log.debug("get info {} : {}", INFO_API + bvid, infoResponse);
         if (infoResponse.getCode() == 0) {
