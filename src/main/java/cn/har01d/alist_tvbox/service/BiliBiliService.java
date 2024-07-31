@@ -29,6 +29,7 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchPgcResult;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResult;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfoList;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliTokenResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
@@ -91,10 +92,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.UUID;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -1153,9 +1151,9 @@ public class BiliBiliService {
 
     private static final Pattern SCRIPT = Pattern.compile("<script\\s+id=\"__NEXT_DATA__\"\\s+type=\"application/json\"\\s*>(.*?)</script\\s*>");
     private static final Pattern EP_MAP = Pattern.compile("\"episodes\"\\s*:\\s*(.+?)\\s*,\\s*\"user_status\"");
-    private static final Pattern DESC = Pattern.compile("\"evaluate\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"jp_title\"");
-    private static final Pattern COVER = Pattern.compile("\"squareCover\"\\s*:\\s*\".+?\"\\s*,\\s*\"cover\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"publish\"");
-    private static final Pattern MEDIA_INFO = Pattern.compile("\"mediaInfo\"\\s*:\\s*.+?\"title\":\"(.+?)\",\\s*.+?\\s*\"sectionsMap\"");
+    private static final Pattern DESC = Pattern.compile("\"evaluate\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"freya\"");
+    private static final Pattern COVER = Pattern.compile("\"bkg_cover\"\\s*:\\s*\".+?\"\\s*,\\s*\"cover\"\\s*:\\s*\"(.+?)\"\\s*,\\s*\"delivery_fragment_video\"");
+    private static final Pattern MEDIA_INFO = Pattern.compile("\"season_id\"\\s*:\\s*.+?\"season_title\":\"(.+?)\",\\s*.+?\\s*\"season_type\"");
     private static final Pattern VIDEO_ID = Pattern.compile("\"videoId\"\\s*:\\s*\"(ep|ss)(\\d+)\"");
 
     private MovieList getBangumi(String tid) throws IOException {
@@ -1163,82 +1161,46 @@ public class BiliBiliService {
 
         String[] parts = tid.split("\\$");
         String sid = parts.length == 1 ? tid : parts[1];
-        String url = "https://www.bilibili.com/bangumi/play/ss" + sid;
+        String url = "https://api.bilibili.com/pgc/view/web/season?season_id=" + sid;
         log.debug("Bangumi: {}", url);
         HttpEntity<Void> entity = buildHttpEntity(null);
-        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-        String html = response.getBody();
-        Matcher m = SCRIPT.matcher(html);
-        if (m.find()) {
-            String json = m.group(1);
-            String title = BILI_BILI;
-            String desc = "";
-            String cover = "";
-            m = MEDIA_INFO.matcher(json);
-            if (m.find()) {
-                title = m.group(1);
-            }
-            m = DESC.matcher(json);
-            if (m.find()) {
-                desc = m.group(1);
-            }
-            m = COVER.matcher(json);
-            if (m.find()) {
-                cover = m.group(1);
-            }
-            log.debug("title: {} cover: {} desc: {}", title, cover, desc);
-            m = EP_MAP.matcher(json);
-            SortedMap<Integer, List<BiliBiliSeasonInfo>> sections = new TreeMap<>();
-            if (m.find()) {
-                String data = m.group(1);
-                for (Object item : objectMapper.readValue(data, List.class)) {
-                    data = objectMapper.writeValueAsString(item);
-                    log.debug("EP: {}", data);
-                    BiliBiliSeasonInfo info = objectMapper.readValue(data, BiliBiliSeasonInfo.class);
-                    List<BiliBiliSeasonInfo> list = sections.getOrDefault(info.getSectionType(), new ArrayList<>());
-                    list.add(info);
-                    sections.put(info.getSectionType(), list);
-                }
-            }
-
-            m = VIDEO_ID.matcher(json);
-            if (m.find()) {
-                String type = m.group(1);
-                String videoId = m.group(2);
-                MovieDetail movieDetail = new MovieDetail();
-                movieDetail.setVod_id(type + videoId);
-                movieDetail.setVod_name(title);
-                movieDetail.setVod_tag(FILE);
-                movieDetail.setVod_pic(cover.isEmpty() ? getListPic() : fixCover(cover));
-                movieDetail.setVod_content(desc);
-                movieDetail.setVod_play_from(sections.keySet().stream().map(this::getSectionType).collect(Collectors.joining("$$$")));
-                String playUrl = sections.values().stream()
-                        .map(this::build)
-                        .collect(Collectors.joining("$$$"));
-                movieDetail.setVod_play_url(playUrl);
-                result.getList().add(movieDetail);
-            }
+        ResponseEntity<BiliBiliSeasonResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSeasonResponse.class);
+        BiliBiliSeasonInfoList info = response.getBody().getResult();
+        String cover = info.getCover();
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id("ss" + sid);
+        movieDetail.setVod_name(info.getTitle());
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_pic(cover.isEmpty() ? getListPic() : fixCover(cover));
+        movieDetail.setVod_content(info.getEvaluate());
+        BiliBiliSeasonInfoList.Section section = new BiliBiliSeasonInfoList.Section();
+        section.setEpisodes(info.getEpisodes());
+        section.setTitle("正片");
+        List<BiliBiliSeasonInfoList.Section> sections = new ArrayList<>();
+        sections.add(section);
+        if (info.getSection() != null) {
+            sections.addAll(info.getSection());
         }
+        Map<String, Integer> count = new HashMap<>();
+        List<String> from = new ArrayList<>();
+        for (var s : sections) {
+            String title = s.getTitle();
+            if (count.containsKey(title)) {
+                int id = count.get(title) + 1;
+                count.put(title, id);
+                title = title + id;
+            } else {
+                count.put(title, 1);
+            }
+            from.add(title);
+        }
+        movieDetail.setVod_play_from(String.join("$$$", from));
+        movieDetail.setVod_play_url(sections.stream().map(e -> build(e.getEpisodes())).collect(Collectors.joining("$$$")));
+        result.getList().add(movieDetail);
+
         result.setHeader("{\"Referer\":\"https://www.bilibili.com\"}");
         log.debug("{}: {}", tid, result);
         return result;
-    }
-
-    private String getSectionType(int type) {
-        switch (type) {
-            case 0:
-                return "正片";
-            case 1:
-                return "预告";
-            case 2:
-                return "看点";
-            case 5:
-                return "UP主";
-            case 8:
-                return "更多精彩";
-            default:
-                return BILI_BILI + type;
-        }
     }
 
     private String build(List<BiliBiliSeasonInfo> list) {
@@ -1525,6 +1487,10 @@ public class BiliBiliService {
     }
 
     private String buildPlayUrl(BiliBiliSeasonInfo info) {
+        if (info.getCid() == 0 && info.getLink() != null) {
+            String[] parts = info.getLink().split("/");
+            return parts[parts.length - 1];
+        }
         return info.getAid() + "-" + info.getCid() + "-" + info.getId();
     }
 
