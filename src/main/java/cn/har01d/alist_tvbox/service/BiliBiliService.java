@@ -543,6 +543,9 @@ public class BiliBiliService {
 
     private MovieDetail getMovieDetail(BiliBiliHistoryResult.Video info) {
         String id = info.getHistory().getBvid();
+        if (id == null || id.isEmpty()) {
+            id = "ep" + info.getHistory().getEpid();
+        }
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(id);
         movieDetail.setVod_name(info.getTitle());
@@ -1066,6 +1069,7 @@ public class BiliBiliService {
         result.setTotal(2000);
         result.setPagecount(50);
         result.setPage(page);
+        log.debug("{}", result);
         return result;
     }
 
@@ -1105,6 +1109,10 @@ public class BiliBiliService {
 
         if (bvid.startsWith("ss")) {
             return getBangumi(bvid.substring(2));
+        }
+
+        if (bvid.startsWith("ep")) {
+            return getBangumi(bvid);
         }
 
         if (bvid.startsWith("season$")) {
@@ -1153,7 +1161,13 @@ public class BiliBiliService {
 
         String[] parts = tid.split("\\$");
         String sid = parts.length == 1 ? tid : parts[1];
-        String url = "https://api.bilibili.com/pgc/view/web/season?season_id=" + sid;
+        String url;
+        if (sid.startsWith("ep")) {
+            url = "https://api.bilibili.com/pgc/view/web/season?ep_id=" + sid.substring(2);
+        } else {
+            url = "https://api.bilibili.com/pgc/view/web/season?season_id=" + sid;
+        }
+
         log.debug("Bangumi: {}", url);
         HttpEntity<Void> entity = buildHttpEntity(null);
         ResponseEntity<BiliBiliSeasonResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSeasonResponse.class);
