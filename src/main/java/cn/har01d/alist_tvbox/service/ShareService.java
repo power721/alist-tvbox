@@ -556,6 +556,22 @@ public class ShareService {
         return "";
     }
 
+    public String getUcCookie(String id) {
+        String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
+        if (aliSecret.equals(id)) {
+            return shareRepository.findByType(6).stream().findFirst().map(Share::getCookie).orElse("").trim();
+        }
+        return "";
+    }
+
+    public String get115Cookie(String id) {
+        String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
+        if (aliSecret.equals(id)) {
+            return shareRepository.findByType(3).stream().findFirst().map(Share::getCookie).orElse("").trim();
+        }
+        return "";
+    }
+
     private static final Pattern SHARE_115_LINK = Pattern.compile("https://115.com/s/(\\w+)\\?password=(\\w+)#?");
 
     private void parseShare(Share share) {
