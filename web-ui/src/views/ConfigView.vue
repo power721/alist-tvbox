@@ -179,9 +179,18 @@
         <el-form-item>
           <el-button type="primary" @click="updateTmdbApiKey">更新</el-button>
         </el-form-item>
-        <el-form-item label="阿里Token地址">
+        <el-form-item label="Cookie地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
-            {{ currentUrl + '/ali/token/' + aliSecret }}
+            阿里Token
+          </a><span class="hint"></span>
+          <a :href="currentUrl + '/quark/cookie/' + aliSecret" target="_blank">
+            夸克 Cookie
+          </a><span class="hint"></span>
+          <a :href="currentUrl + '/uc/cookie/' + aliSecret" target="_blank">
+            UC Cookie
+          </a><span class="hint"></span>
+          <a :href="currentUrl + '/115/cookie/' + aliSecret" target="_blank">
+            115 Cookie
           </a>
         </el-form-item>
         <el-form-item label="订阅替换阿里token地址">
@@ -230,15 +239,15 @@
           />
           <span class="hint">资源页面添加115网盘</span>
         </el-form-item>
-<!--        <el-form-item label="开启阿里延迟加载">-->
-<!--          <el-switch-->
-<!--            v-model="aliLazyLoad"-->
-<!--            inline-prompt-->
-<!--            active-text="开启"-->
-<!--            inactive-text="关闭"-->
-<!--            @change="updateAliLazyLoad"-->
-<!--          />-->
-<!--        </el-form-item>-->
+        <!--        <el-form-item label="开启阿里延迟加载">-->
+        <!--          <el-switch-->
+        <!--            v-model="aliLazyLoad"-->
+        <!--            inline-prompt-->
+        <!--            active-text="开启"-->
+        <!--            inactive-text="关闭"-->
+        <!--            @change="updateAliLazyLoad"-->
+        <!--          />-->
+        <!--        </el-form-item>-->
         <el-form-item label="AList管理密码" v-if="!store.xiaoya">
           <el-input v-model="atvPass" type="password" show-password/>
         </el-form-item>
