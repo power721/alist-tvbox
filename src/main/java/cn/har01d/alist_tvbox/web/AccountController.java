@@ -63,6 +63,11 @@ public class AccountController {
         return accountService.getAliRefreshToken(id);
     }
 
+    @GetMapping("/ali/open/{id}")
+    public String getAliOpenRefreshToken(@PathVariable String id) {
+        return accountService.getAliOpenRefreshToken(id);
+    }
+
     @PostMapping("/api/alist/login")
     public AListLogin updateAListLogin(@RequestBody AListLogin login) {
         return accountService.updateAListLogin(login);
