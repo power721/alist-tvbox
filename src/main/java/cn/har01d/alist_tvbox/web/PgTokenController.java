@@ -47,6 +47,8 @@ public class PgTokenController {
         subscriptionService.checkToken(token);
 
         Map<String, Object> map = new HashMap<>();
+        map.put("token", "");
+        map.put("open_token", "");
         accountRepository.getFirstByMasterTrue().ifPresent(account -> {
             map.put("token", account.getRefreshToken());
             map.put("open_token", account.getOpenToken());
@@ -56,7 +58,7 @@ public class PgTokenController {
         map.put("vip_thread_limit", 32);
         map.put("quark_thread_limit", 32);
         map.put("quark_vip_thread_limit", 32);
-        map.put("quark_is_vip", false);
+        //map.put("quark_is_vip", false);
         map.put("quark_is_guest", false);
         map.put("vod_flags", "4kz|auto");
         map.put("quark_flags", "4kz|auto");
@@ -73,12 +75,23 @@ public class PgTokenController {
         map.put("open_api_url", settingRepository.findById("open_token_url").map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token"));
         map.put("danmu", true);
         map.put("quark_danmu", true);
+        map.put("quark_cookie", "");
+        map.put("pan115_cookie", "");
+        map.put("uc_cookie", "");
         shareRepository.findByType(2).stream().findFirst().ifPresent(share -> map.put("quark_cookie", share.getCookie()));
-        shareRepository.findByType(3).stream().findFirst().ifPresent(share -> map.put("115_cookie", share.getCookie()));
+        shareRepository.findByType(3).stream().findFirst().ifPresent(share -> map.put("pan115_cookie", share.getCookie()));
         shareRepository.findByType(6).stream().findFirst().ifPresent(share -> map.put("uc_cookie", share.getCookie()));
+        map.put("pan115_thread_limit", 0);
+        map.put("pan115_vip_thread_limit", 0);
+        map.put("pan115_is_vip", false);
+        map.put("pan115_flags", "4kz");
+        map.put("pan115_auto_delete", true);
+        map.put("pan115_delete_code", "");
         map.put("thunder_username", "");
         map.put("thunder_password", "");
         map.put("thunder_captchatoken", "");
+        map.put("pikpak_username", "");
+        map.put("pikpak_password", "");
         pikPakAccountRepository.getFirstByMasterTrue().ifPresent(account -> {
             map.put("pikpak_username", account.getUsername());
             map.put("pikpak_password", account.getPassword());
