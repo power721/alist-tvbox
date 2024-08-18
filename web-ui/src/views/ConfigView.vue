@@ -313,6 +313,7 @@ const options = [
     label: '阿里',
     options: [
       {label: 'openapi.alipan.com', value: 'https://openapi.alipan.com/oauth/access_token'},
+      {label: '会员TV Token', value: 'https://www.voicehub.top/api/v1/oauth/alipan/token'},
     ]
   }
 ]
