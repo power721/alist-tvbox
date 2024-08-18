@@ -1018,6 +1018,16 @@ public class AccountService {
         return null;
     }
 
+    public String getAliOpenRefreshToken(String id) {
+        String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
+        if (aliSecret.equals(id)) {
+            return accountRepository.getFirstByMasterTrue()
+                    .map(Account::getOpenToken)
+                    .orElseThrow(NotFoundException::new);
+        }
+        return null;
+    }
+
     public AliTokensResponse getTokens() {
         try {
             String token = login();

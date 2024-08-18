@@ -181,7 +181,10 @@
         </el-form-item>
         <el-form-item label="Cookie地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
-            阿里Token
+            阿里 Token
+          </a><span class="hint"></span>
+          <a :href="currentUrl + '/ali/open/' + aliSecret" target="_blank">
+            阿里 Open Token
           </a><span class="hint"></span>
           <a :href="currentUrl + '/quark/cookie/' + aliSecret" target="_blank">
             夸克 Cookie
