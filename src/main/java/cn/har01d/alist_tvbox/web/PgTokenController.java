@@ -37,12 +37,12 @@ public class PgTokenController {
         this.objectMapper = objectMapper;
     }
 
-    @GetMapping("/tokenm")
+    @GetMapping("/lib/tokenm")
     public Map<String, Object> tokenm() throws IOException {
         return tokenm("");
     }
 
-    @GetMapping("/tokenm/{token}")
+    @GetMapping("/lib/tokenm/{token}")
     public Map<String, Object> tokenm(@PathVariable String token) throws IOException {
         subscriptionService.checkToken(token);
 
