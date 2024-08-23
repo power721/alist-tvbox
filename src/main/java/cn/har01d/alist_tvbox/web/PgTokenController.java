@@ -40,12 +40,8 @@ public class PgTokenController {
     }
 
     @GetMapping("/lib/tokenm")
-    public Map<String, Object> tokenm(HttpServletRequest request) throws IOException {
-        String ua = request.getHeader("user-agent");
-        if (!ua.contains("okhttp")) {
-            log.warn("Unknown user agent: {}", ua);
-            return null;
-        }
+    public Map<String, Object> tokenm(String token) throws IOException {
+        subscriptionService.checkToken(token);
 
         Map<String, Object> map = new HashMap<>();
         map.put("token", "");

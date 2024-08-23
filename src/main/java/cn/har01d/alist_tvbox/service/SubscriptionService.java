@@ -204,7 +204,7 @@ public class SubscriptionService {
     }
 
     public void checkToken(String rawToken) {
-        if (rawToken.equals("-") && tokens.isBlank()) {
+        if (tokens.isBlank()) {
             return;
         }
 
@@ -952,7 +952,7 @@ public class SubscriptionService {
                 log.info("load json from {}", file);
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
                 String address = readHostAddress();
-                json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm");
+                json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm?token=" + tokens.split(",")[0]);
                 json = json.replace("./", address + folder);
                 //json = json.replace(address + folder + "lib/tokenm.json", "./lib/tokenm.json");
                 json = json.replace("DOCKER_ADDRESS", address);
