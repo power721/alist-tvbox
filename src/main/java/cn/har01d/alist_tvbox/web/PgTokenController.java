@@ -8,7 +8,6 @@ import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -39,13 +38,6 @@ public class PgTokenController {
 
     @GetMapping("/lib/tokenm")
     public Map<String, Object> tokenm() throws IOException {
-        return tokenm("");
-    }
-
-    @GetMapping("/lib/tokenm/{token}")
-    public Map<String, Object> tokenm(@PathVariable String token) throws IOException {
-        subscriptionService.checkToken(token);
-
         Map<String, Object> map = new HashMap<>();
         map.put("token", "");
         map.put("open_token", "");
