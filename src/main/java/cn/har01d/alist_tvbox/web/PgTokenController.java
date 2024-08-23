@@ -7,6 +7,8 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,6 +19,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/pg")
 public class PgTokenController {
@@ -37,7 +40,13 @@ public class PgTokenController {
     }
 
     @GetMapping("/lib/tokenm")
-    public Map<String, Object> tokenm() throws IOException {
+    public Map<String, Object> tokenm(HttpServletRequest request) throws IOException {
+        String ua = request.getHeader("user-agent");
+        if (!ua.contains("okhttp")) {
+            log.warn("Unknown user agent: {}", ua);
+            return null;
+        }
+
         Map<String, Object> map = new HashMap<>();
         map.put("token", "");
         map.put("open_token", "");
