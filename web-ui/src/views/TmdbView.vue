@@ -113,6 +113,9 @@
         <el-form-item label="路径" required>
           <el-input v-model="form.path" autocomplete="off"/>
         </el-form-item>
+        <el-form-item label="搜索">
+          <a href="https://www.themoviedb.org/search?query=" target="_blank">https://www.themoviedb.org/search?query=</a>
+        </el-form-item>
         <el-form-item label="TMDB ID" required>
           <el-input-number v-model="form.tmId" min="0" autocomplete="off"/>
         </el-form-item>
