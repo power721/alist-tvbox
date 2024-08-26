@@ -3,6 +3,8 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.UnavailablePath;
+import cn.har01d.alist_tvbox.entity.UnavailablePathRepository;
 import cn.har01d.alist_tvbox.model.FsDetail;
 import cn.har01d.alist_tvbox.model.FsDetailResponse;
 import cn.har01d.alist_tvbox.model.FsInfo;
@@ -48,12 +50,16 @@ public class AListService {
     private final RestTemplate restTemplate;
     private final SiteService siteService;
     private final AppProperties appProperties;
+    private final UnavailablePathRepository unavailablePathRepository;
     private final Cache<String, VideoPreview> cache = Caffeine.newBuilder()
             .maximumSize(10)
             .expireAfterWrite(Duration.ofSeconds(895))
             .build();
 
-    public AListService(RestTemplateBuilder builder, SiteService siteService, AppProperties appProperties) {
+    public AListService(RestTemplateBuilder builder,
+                        SiteService siteService,
+                        AppProperties appProperties,
+                        UnavailablePathRepository unavailablePathRepository) {
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
@@ -62,6 +68,7 @@ public class AListService {
                 .build();
         this.siteService = siteService;
         this.appProperties = appProperties;
+        this.unavailablePathRepository = unavailablePathRepository;
     }
 
     public List<SearchResult> search(Site site, String keyword) {
@@ -205,6 +212,19 @@ public class AListService {
         log.debug("call api: {} request: {}", url, request);
         FsDetailResponse response = post(site, url, request, FsDetailResponse.class);
         logError(response);
+        if (site.getId() == 1 && response != null) {
+            if (response.getCode() < 400) {
+                unavailablePathRepository.deleteByPath(request.getPath());
+            } else if (response.getMessage() != null && response.getMessage().contains("object not found")) {
+                var unavailablePath = unavailablePathRepository.findByPath(request.getPath());
+                if (unavailablePath == null) {
+                    unavailablePath = new UnavailablePath();
+                    unavailablePath.setPath(path);
+                }
+                unavailablePath.setCount(unavailablePath.getCount() + 1);
+                unavailablePathRepository.save(unavailablePath);
+            }
+        }
         log.debug("get file: {} {}", path, response.getData());
         return response.getData();
     }
