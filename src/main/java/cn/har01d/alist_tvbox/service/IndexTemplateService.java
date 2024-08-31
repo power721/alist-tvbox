@@ -21,11 +21,11 @@ import java.time.Instant;
 @Service
 public class IndexTemplateService {
     public static final String AUTO_INDEX_VERSION = "auto_index_version";
-    private static final int indexVersion = 30;
+    private static final int indexVersion = 31;
     public static final String paths =
             "\">/🈴我的阿里分享/Tacit0924\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【剧a集】/【剧丨集】更新中和完结的/【更新中】电视剧::2\"," +
-                    "\"/🈴我的阿里分享/Tacit0924/【剧a集】/【剧丨集】更新中和完结的/【更新中】电视剧/【国丨港台等剧】/【2024已完结的】\"," +
+                    "\"/🈴我的阿里分享/Tacit0924/【剧a集】/【剧丨集】更新中和完结的/【更新中】电视剧/111/【已完结的】\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【剧a集】/【剧丨集】更新中和完结的/【更新中】电视剧/【日丨韩印泰等剧】/【2024已完结的】\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【剧a集】/【剧丨集】更新中和完结的/【更新中】电视剧/【欧丨美英法等剧】/【2024已完结的】\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【动.漫.动.画电.影】/更新中的【动漫.动画电影】和完结的，还有一些大合集/还在【更新中】的动漫 4.2TB\"," +
