@@ -147,6 +147,9 @@ public class SettingService {
         if ("ali_to_115".equals(setting.getName())) {
             aListLocalService.updateSetting("ali_to_115", setting.getValue(), "bool");
         }
+        if ("delete_code_115".equals(setting.getName())) {
+            aListLocalService.updateSetting("delete_code_115", setting.getValue(), "string");
+        }
         return settingRepository.save(setting);
     }
 
