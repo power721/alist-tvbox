@@ -62,6 +62,8 @@ public class AListLocalService {
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_api_client_secret','" + clientSecret + "','','string','',1,0);");
         String token = settingRepository.findById("token").map(Setting::getValue).orElse("");
         Utils.executeUpdate("UPDATE x_setting_items SET value = '" + StringUtils.isNotBlank(token) + "' WHERE key = 'sign_all'");
+        String code = settingRepository.findById("delete_code_115").map(Setting::getValue).orElse("");
+        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('delete_code_115','" + code + "','','string','',1,0);");
         String time = settingRepository.findById("delete_delay_time").map(Setting::getValue).orElse("900");
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('delete_delay_time','" + time + "','','number','',1,0)");
         String aliTo115 = settingRepository.findById("ali_to_115").map(Setting::getValue).orElse("false");

@@ -241,6 +241,10 @@
             @change="updateAliTo115"
           />
           <span class="hint">资源页面添加115网盘</span>
+          <el-form-item label="115删除码">
+            <el-input v-model="deleteCode115" type="password" show-password/>
+            <el-button type="primary" @click="updateDeleteCode115">更新</el-button>
+          </el-form-item>
         </el-form-item>
         <!--        <el-form-item label="开启阿里延迟加载">-->
         <!--          <el-switch-->
@@ -351,6 +355,7 @@ const tmdbApiKey = ref('')
 const atvPass = ref('')
 const apiClientId = ref('')
 const apiClientSecret = ref('')
+const deleteCode115 = ref('')
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const login = ref({
   username: '',
@@ -445,6 +450,12 @@ const updateAliTo115 = () => {
   })
 }
 
+const updateDeleteCode115 = () => {
+  axios.post('/api/settings', {name: 'delete_code_115', value: deleteCode115.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateAliLazyLoad = () => {
   axios.post('/api/settings', {name: 'ali_lazy_load', value: aliLazyLoad.value}).then(() => {
     ElMessage.success('更新成功，重启生效')
@@ -518,6 +529,7 @@ onMounted(() => {
     atvPass.value = data.atv_password
     apiClientId.value = data.open_api_client_id || ''
     apiClientSecret.value = data.open_api_client_secret || ''
+    deleteCode115.value = data.delete_code_115 || ''
     login.value.username = data.alist_username
     login.value.password = data.alist_password
     login.value.enabled = data.alist_login === 'true'
