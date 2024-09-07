@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.EmbyRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
@@ -73,6 +74,7 @@ public class SubscriptionService {
     private final AccountRepository accountRepository;
     private final SiteRepository siteRepository;
     private final ShareRepository shareRepository;
+    private final EmbyRepository embyRepository;
     private final AListLocalService aListLocalService;
 
     private String tokens = "";
@@ -87,6 +89,7 @@ public class SubscriptionService {
                                AccountRepository accountRepository,
                                SiteRepository siteRepository,
                                ShareRepository shareRepository,
+                               EmbyRepository embyRepository,
                                AListLocalService aListLocalService) {
         this.environment = environment;
         this.appProperties = appProperties;
@@ -101,6 +104,7 @@ public class SubscriptionService {
         this.accountRepository = accountRepository;
         this.siteRepository = siteRepository;
         this.shareRepository = shareRepository;
+        this.embyRepository = embyRepository;
         this.aListLocalService = aListLocalService;
     }
 
@@ -888,6 +892,16 @@ public class SubscriptionService {
         } catch (Exception e) {
             log.warn("", e);
         }
+
+        try {
+            if (embyRepository.count() > 0) {
+                Map<String, Object> site = buildSite(token, "csp_Emby", "Emby");
+                sites.add(id++, site);
+                log.debug("add Emby site: {}", site);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
     }
 
     private Map<String, Object> buildSite(String token, String key, String name) throws IOException {
@@ -914,6 +928,9 @@ public class SubscriptionService {
             style.put("type", "rect");
             style.put("ratio", 1.597);
             site.put("style", style);
+        } else if ("csp_Emby".equals(key)) {
+            site.put("searchable", 0);
+            site.put("quickSearch", 0);
         }
         if ("csp_Youtube".equals(key)) {
             site.put("playerType", 2);
