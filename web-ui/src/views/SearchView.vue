@@ -15,6 +15,8 @@
         <el-radio label="1" size="large">点播模式</el-radio>
         <el-radio label="" size="large">网盘模式</el-radio>
         <el-radio label="2" size="large">BiliBili</el-radio>
+        <el-radio label="3" size="large">YouTube</el-radio>
+        <el-radio label="4" size="large">Emby</el-radio>
       </el-radio-group>
     </el-form-item>
 
@@ -22,7 +24,7 @@
     <span class="divider"></span>
     <a href="/#/tmdb">TMDB电影数据列表</a>
 
-    <el-table v-if="type!='2'&&config" :data="config.list" border style="width: 100%">
+    <el-table v-if="(type==''||type=='1')&&config" :data="config.list" border style="width: 100%">
       <el-table-column prop="vod_name" label="名称" width="300">
         <template #default="scope">
           <a :href="scope.row.vod_play_url" target="_blank">
@@ -60,10 +62,14 @@ const config = ref<any>('')
 const currentUrl = window.location.origin
 
 const getPath = (type: string) => {
-  if (type == '2') {
-    return '/bilibili'
-  } else if (type == '1') {
+  if (type == '1') {
     return '/vod1'
+  } else if (type == '2') {
+    return '/bilibili'
+  } else if (type == '3') {
+    return '/youtube'
+  } else if (type == '4') {
+    return '/emby'
   } else {
     return '/vod'
   }

@@ -212,12 +212,13 @@ public class EmbyService {
             List<String> urls = new ArrayList<>();
             String name = "";
             for (EmbyItem video : list) {
-                if (!name.equals(video.getSeasonName())) {
+                String sname = video.getSeasonName().replace("未知季", "剧集");
+                if (!name.equals(sname)) {
                     if (!urls.isEmpty()) {
                         names.add(name);
                         playUrl.add(String.join("#", urls));
                     }
-                    name = video.getSeasonName();
+                    name = sname;
                     urls = new ArrayList<>();
                 }
                 if (video.getName().equals("第 " + video.getIndexNumber() + " 集")) {
@@ -293,7 +294,7 @@ public class EmbyService {
         String[] sorts = sort.split(":");
         Emby emby = embyRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
         var info = getEmbyInfo(emby);
-        var view = info.getViews().get(Integer.parseInt(parts[2]));
+        var view = info.getViews().get(Integer.parseInt(parts[1]));
         String type = "";
         if (view.getCollectionType().equals("movies")) {
             type = "Movie";
@@ -311,7 +312,7 @@ public class EmbyService {
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", getAuthorizationHeader(info));
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?SortBy=" + sorts[0] + "&SortOrder=" + sorts[1] + "&IncludeItemTypes=" + type + "&Recursive=true&Fields=BasicSyncInfo,PrimaryImageAspectRatio,ProductionYear,Status,EndDate&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&StartIndex=" + start + "&Limit=" + size + "&ParentId=" + parts[1];
+        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?SortBy=" + sorts[0] + "&SortOrder=" + sorts[1] + "&IncludeItemTypes=" + type + "&Recursive=true&Fields=BasicSyncInfo,PrimaryImageAspectRatio,ProductionYear,Status,EndDate&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&StartIndex=" + start + "&Limit=" + size + "&ParentId=" + view.getId();
         var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
         for (var item : response.getItems()) {
             var movie = getMovieDetail(item, emby);
@@ -339,7 +340,7 @@ public class EmbyService {
             int i = 0;
             for (EmbyItem item : info.getViews()) {
                 var category = new Category();
-                category.setType_id(emby.getId() + "-" + item.getId() + "-" + i++);
+                category.setType_id(emby.getId() + "-" + i++);
                 category.setType_name(emby.getName() + ":" + item.getName());
                 category.setType_flag(0);
 

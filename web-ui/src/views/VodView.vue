@@ -20,6 +20,8 @@
         <el-radio label="1" size="large">点播模式</el-radio>
         <el-radio label="" size="large">网盘模式</el-radio>
         <el-radio label="2" size="large">BiliBili</el-radio>
+        <el-radio label="3" size="large">YouTube</el-radio>
+        <el-radio label="4" size="large">Emby</el-radio>
       </el-radio-group>
     </el-form-item>
 
@@ -48,10 +50,14 @@ const config = ref('')
 const currentUrl = window.location.origin
 
 const getPath = (type: string) => {
-  if (type == '2') {
-    return '/bilibili'
-  } else if (type == '1') {
+  if (type == '1') {
     return '/vod1'
+  } else if (type == '2') {
+    return '/bilibili'
+  } else if (type == '3') {
+    return '/youtube'
+  } else if (type == '4') {
+    return '/emby'
   } else {
     return '/vod'
   }
