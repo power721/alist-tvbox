@@ -1,6 +1,6 @@
 <template>
   <div class="sites">
-    <h1>站点列表</h1>
+    <h1>AList站点列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
