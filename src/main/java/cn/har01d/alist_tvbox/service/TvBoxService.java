@@ -1853,8 +1853,8 @@ public class TvBoxService {
                     .replaceQuery("")
                     .build()
                     .toUriString();
-            url = url.replace("http://localhost:5244/", proxy);
-            url = url.replace("http://localhost/", proxy);
+            int index = url.indexOf('/', 16);
+            url = proxy + url.substring(index + 1);
             log.debug("fixHttp: {}", url);
         }
 
