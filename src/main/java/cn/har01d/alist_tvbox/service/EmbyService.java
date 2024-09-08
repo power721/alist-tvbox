@@ -192,7 +192,6 @@ public class EmbyService {
         return result;
     }
 
-    @NotNull
     private static MovieDetail getMovieDetail(EmbyItem item, Emby emby) {
         var movie = new MovieDetail();
         movie.setVod_id(emby.getId() + "-" + item.getId());
@@ -304,10 +303,27 @@ public class EmbyService {
         String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?IncludePeople=false&IncludeMedia=true&IncludeGenres=false&IncludeStudios=false&IncludeArtists=false&IncludeItemTypes=" + type + "&Limit=30&Fields=PrimaryImageAspectRatio,CanDelete,BasicSyncInfo,ProductionYear&Recursive=true&EnableTotalRecordCount=false&ImageTypeLimit=1&searchTerm=" + wd;
         var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
         for (var item : response.getItems()) {
-            var movie = getMovieDetail(item, emby);
+            var movie = getSearchDetail(item, emby);
             list.add(movie);
         }
         return list;
+    }
+
+    private static MovieDetail getSearchDetail(EmbyItem item, Emby emby) {
+        var movie = new MovieDetail();
+        movie.setVod_id(emby.getId() + "-" + item.getId());
+        if ("Episode".equals(item.getType())) {
+            movie.setVod_name(item.getSeriesName());
+        } else {
+            movie.setVod_name(item.getName());
+        }
+
+        if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
+            movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
+        }
+        movie.setVod_remarks(emby.getName() + " " + Objects.toString(item.getRating(), ""));
+        movie.setVod_year(Objects.toString(item.getYear(), ""));
+        return movie;
     }
 
     public MovieList list(String id, String sort, Integer pg) {
