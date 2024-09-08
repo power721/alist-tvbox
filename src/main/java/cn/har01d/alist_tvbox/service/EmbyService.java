@@ -86,7 +86,9 @@ public class EmbyService {
     }
 
     public List<Emby> findAll() {
-        return embyRepository.findAll();
+        List<Emby> list = new ArrayList<>(embyRepository.findAll());
+        list.sort(Comparator.comparing(Emby::getOrder));
+        return list;
     }
 
     public Emby getById(Integer id) {
@@ -154,8 +156,7 @@ public class EmbyService {
 
     public MovieList home() {
         MovieList result = new MovieList();
-        List<Emby> sites = embyRepository.findAll();
-        for (Emby emby : sites) {
+        for (Emby emby : findAll()) {
             var info = getEmbyInfo(emby);
             if (info == null) {
                 continue;
@@ -164,7 +165,7 @@ public class EmbyService {
             HttpHeaders headers = new HttpHeaders();
             headers.add("Authorization", getAuthorizationHeader(info));
             HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-            String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items/Resume?Limit=12&Recursive=true&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&EnableTotalRecordCount=false&MediaTypes=Video";
+            String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items/Resume?Limit=12&Recursive=true&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&EnableTotalRecordCount=false&MediaTypes=Video";
             var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
 
             for (var item : response.getItems()) {
@@ -173,7 +174,7 @@ public class EmbyService {
             }
 
             for (var parent : info.getViews()) {
-                url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items/Latest?Limit=12&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,Status,EndDate&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&ParentId=" + parent.getId();
+                url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items/Latest?Limit=12&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&ParentId=" + parent.getId();
                 var items = restTemplate.exchange(url, HttpMethod.GET, entity, new ParameterizedTypeReference<List<EmbyItem>>() {
                 }).getBody();
                 for (var item : items) {
@@ -192,7 +193,6 @@ public class EmbyService {
         return result;
     }
 
-    @NotNull
     private static MovieDetail getMovieDetail(EmbyItem item, Emby emby) {
         var movie = new MovieDetail();
         movie.setVod_id(emby.getId() + "-" + item.getId());
@@ -202,14 +202,11 @@ public class EmbyService {
             movie.setVod_name(item.getName());
         }
 
-        movie.setVod_content(emby.getName() + ": " + item.getOverview());
         if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
             movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
         }
-        movie.setVod_remarks(Objects.toString(item.getRating(), emby.getName()));
-        movie.setVod_year(Objects.toString(item.getYear(), ""));
-        movie.setVod_play_from(emby.getName());
-        movie.setVod_play_url(movie.getVod_id());
+        movie.setVod_remarks(Objects.toString(item.getRating(), null));
+        movie.setVod_year(Objects.toString(item.getYear(), null));
         return movie;
     }
 
@@ -229,6 +226,9 @@ public class EmbyService {
 
         MovieList result = new MovieList();
         MovieDetail movie = getMovieDetail(item, emby);
+        movie.setVod_content(emby.getName() + ": " + item.getOverview());
+        movie.setVod_play_from(emby.getName());
+        movie.setVod_play_url(movie.getVod_id());
         if ("Episode".equals(item.getType()) || "Series".equals(item.getType())) {
             List<EmbyItem> list = getAll(emby, info, item.getSeriesId() == null ? item.getId() : item.getSeriesId());
             List<String> names = new ArrayList<>();
@@ -279,8 +279,7 @@ public class EmbyService {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        List<Emby> sites = embyRepository.findAll();
-        for (Emby emby : sites) {
+        for (Emby emby : findAll()) {
             var info = getEmbyInfo(emby);
             if (info == null) {
                 continue;
@@ -301,13 +300,30 @@ public class EmbyService {
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", getAuthorizationHeader(info));
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?IncludePeople=false&IncludeMedia=true&IncludeGenres=false&IncludeStudios=false&IncludeArtists=false&IncludeItemTypes=" + type + "&Limit=30&Fields=PrimaryImageAspectRatio,CanDelete,BasicSyncInfo,ProductionYear&Recursive=true&EnableTotalRecordCount=false&ImageTypeLimit=1&searchTerm=" + wd;
+        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?IncludePeople=false&IncludeMedia=true&IncludeGenres=false&IncludeStudios=false&IncludeArtists=false&IncludeItemTypes=" + type + "&Limit=30&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating&Recursive=true&EnableTotalRecordCount=false&ImageTypeLimit=1&searchTerm=" + wd;
         var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
         for (var item : response.getItems()) {
-            var movie = getMovieDetail(item, emby);
+            var movie = getSearchDetail(item, emby);
             list.add(movie);
         }
         return list;
+    }
+
+    private static MovieDetail getSearchDetail(EmbyItem item, Emby emby) {
+        var movie = new MovieDetail();
+        movie.setVod_id(emby.getId() + "-" + item.getId());
+        if ("Episode".equals(item.getType())) {
+            movie.setVod_name(item.getSeriesName());
+        } else {
+            movie.setVod_name(item.getName());
+        }
+
+        if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
+            movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
+        }
+        movie.setVod_remarks(emby.getName() + " " + Objects.toString(item.getRating(), ""));
+        movie.setVod_year(Objects.toString(item.getYear(), null));
+        return movie;
     }
 
     public MovieList list(String id, String sort, Integer pg) {
@@ -336,7 +352,7 @@ public class EmbyService {
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", getAuthorizationHeader(info));
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?SortBy=" + sorts[0] + "&SortOrder=" + sorts[1] + "&IncludeItemTypes=" + type + "&Recursive=true&Fields=BasicSyncInfo,PrimaryImageAspectRatio,ProductionYear,Status,EndDate&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&StartIndex=" + start + "&Limit=" + size + "&ParentId=" + view.getId();
+        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?SortBy=" + sorts[0] + "&SortOrder=" + sorts[1] + "&IncludeItemTypes=" + type + "&Recursive=true&Fields=BasicSyncInfo,PrimaryImageAspectRatio,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&StartIndex=" + start + "&Limit=" + size + "&ParentId=" + view.getId();
         var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
         for (var item : response.getItems()) {
             var movie = getMovieDetail(item, emby);
@@ -356,9 +372,7 @@ public class EmbyService {
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
 
-        List<Emby> sites = new ArrayList<>(embyRepository.findAll());
-        sites.sort(Comparator.comparing(Emby::getOrder));
-        for (Emby emby : sites) {
+        for (Emby emby : findAll()) {
             var info = getEmbyInfo(emby);
             if (info == null) {
                 continue;
