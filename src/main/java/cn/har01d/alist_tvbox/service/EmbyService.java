@@ -6,6 +6,8 @@ import cn.har01d.alist_tvbox.dto.emby.EmbyItems;
 import cn.har01d.alist_tvbox.dto.emby.EmbyMediaSources;
 import cn.har01d.alist_tvbox.entity.Emby;
 import cn.har01d.alist_tvbox.entity.EmbyRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.Filter;
@@ -19,6 +21,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -34,13 +37,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -48,6 +45,7 @@ public class EmbyService {
     private final EmbyRepository embyRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final SettingRepository settingRepository;
     private final Cache<Integer, EmbyInfo> cache = Caffeine.newBuilder().build();
 
     private final List<FilterValue> filters = Arrays.asList(
@@ -63,12 +61,28 @@ public class EmbyService {
             new FilterValue("时长⬇️", "Runtime,SortName:Descending")
     );
 
-    public EmbyService(EmbyRepository embyRepository, RestTemplateBuilder builder, ObjectMapper objectMapper) {
+    public EmbyService(EmbyRepository embyRepository, RestTemplateBuilder builder, ObjectMapper objectMapper, SettingRepository settingRepository) {
         this.embyRepository = embyRepository;
         restTemplate = builder
                 .defaultHeader("User-Agent", Constants.USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
+        this.settingRepository = settingRepository;
+    }
+
+    @PostConstruct
+    public void init() {
+        if (settingRepository.existsByName("fix_emby_order")) {
+            return;
+        }
+        log.info("Fix Emby order.");
+        int i = 1;
+        List<Emby> list = embyRepository.findAll();
+        for (Emby emby : list) {
+            emby.setOrder(i++);
+        }
+        embyRepository.saveAll(list);
+        settingRepository.save(new Setting("fix_emby_order", "true"));
     }
 
     public List<Emby> findAll() {
@@ -101,6 +115,7 @@ public class EmbyService {
         emby.setUrl(dto.getUrl());
         emby.setUsername(dto.getUsername());
         emby.setPassword(dto.getPassword());
+        emby.setOrder(dto.getOrder());
 
         return embyRepository.save(emby);
     }
@@ -187,11 +202,11 @@ public class EmbyService {
             movie.setVod_name(item.getName());
         }
 
-        movie.setVod_content(item.getOverview());
+        movie.setVod_content(emby.getName() + ": " + item.getOverview());
         if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
             movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
         }
-        movie.setVod_remarks(Objects.toString(item.getRating(), ""));
+        movie.setVod_remarks(Objects.toString(item.getRating(), emby.getName()));
         movie.setVod_year(Objects.toString(item.getYear(), ""));
         movie.setVod_play_from(emby.getName());
         movie.setVod_play_url(movie.getVod_id());
@@ -255,7 +270,7 @@ public class EmbyService {
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", getAuthorizationHeader(info));
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?ParentId=" + sid + "&Filters=IsNotFolder&Recursive=true&Limit=600&Fields=Chapters,ProductionYear,PremiereDate&ExcludeLocationTypes=Virtual&EnableTotalRecordCount=false&CollapseBoxSetItems=false";
+        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?ParentId=" + sid + "&Filters=IsNotFolder&Recursive=true&Limit=2000&Fields=Chapters,ProductionYear,PremiereDate&ExcludeLocationTypes=Virtual&EnableTotalRecordCount=false&CollapseBoxSetItems=false";
         var items = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
         return items.getItems();
     }
@@ -341,7 +356,9 @@ public class EmbyService {
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
 
-        for (Emby emby : embyRepository.findAll()) {
+        List<Emby> sites = new ArrayList<>(embyRepository.findAll());
+        sites.sort(Comparator.comparing(Emby::getOrder));
+        for (Emby emby : sites) {
             var info = getEmbyInfo(emby);
             if (info == null) {
                 continue;

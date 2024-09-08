@@ -10,6 +10,7 @@
     <el-table :data="sites" border style="width: 100%">
 <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="name" label="名称" sortable width="180"/>
+      <el-table-column prop="order" label="顺序" sortable width="90"/>
       <el-table-column prop="username" label="用户名" sortable width="180"/>
       <el-table-column prop="url" label="URL地址" sortable>
         <template #default="scope">
@@ -37,6 +38,9 @@
         </el-form-item>
         <el-form-item label="密码" label-width="140" required>
           <el-input v-model="form.password" type="password" show-password autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="顺序" label-width="140">
+          <el-input-number v-model="form.order" :min="0"/>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -76,6 +80,7 @@ const form = ref({
   url: '',
   username: '',
   password: '',
+  order: 0,
 })
 
 const handleAdd = () => {
@@ -87,6 +92,7 @@ const handleAdd = () => {
     url: '',
     username: '',
     password: '',
+    order: 0,
   }
   formVisible.value = true
 }
