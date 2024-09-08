@@ -420,7 +420,7 @@ public class EmbyService {
     private List<Sub> getSubtitles(Emby emby, EmbyMediaSources.MediaSources mediaSources) {
         List<Sub> list = new ArrayList<>();
         for (EmbyMediaSources.MediaStreams stream : mediaSources.getMediaStreams()) {
-            if (stream.getType().equals("Subtitle") && (stream.getLanguage().equals("chi") || stream.getLanguage().equals("eng"))) {
+            if (stream.getType().equals("Subtitle")) {
                 Sub sub = new Sub();
                 sub.setName(stream.getTitle());
                 sub.setLang(stream.getLanguage());

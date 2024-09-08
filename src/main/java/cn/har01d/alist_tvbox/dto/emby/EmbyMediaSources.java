@@ -25,7 +25,7 @@ public class EmbyMediaSources {
         private String type;
         @JsonProperty("Language")
         private String language;
-        @JsonProperty("Title")
+        @JsonProperty("DisplayTitle")
         private String title;
         @JsonProperty("DeliveryUrl")
         private String url;
