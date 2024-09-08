@@ -14,6 +14,7 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -26,7 +27,10 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URL;
@@ -61,7 +65,9 @@ public class EmbyService {
 
     public EmbyService(EmbyRepository embyRepository, RestTemplateBuilder builder, ObjectMapper objectMapper) {
         this.embyRepository = embyRepository;
-        restTemplate = builder.defaultHeader("User-Agent", "Yamby/1.0.2(Android").build();
+        restTemplate = builder
+                .defaultHeader("User-Agent", Constants.USER_AGENT)
+                .build();
         this.objectMapper = objectMapper;
     }
 
@@ -193,7 +199,7 @@ public class EmbyService {
     }
 
     private static String getAuthorizationHeader(EmbyInfo info) {
-        return "Emby UserId=\"" + info.getUser().getId() + "\", Client=\"Android\", Device=\"Samsung Galaxy SIII\", DeviceId=\"Yamby\", Version=\"1.0.0.0\", Token=\"" + info.getAccessToken() + "\"";
+        return "Emby UserId=\"" + info.getUser().getId() + "\", Client=\"Emby Web\", Device=\"Chrome\", DeviceId=\"4310d84d-66a2-4f91-8d11-6627110be71c\", Version=\"4.7.5.0\", Token=\"" + info.getAccessToken() + "\"";
     }
 
     public MovieList detail(String tid) throws JsonProcessingException {
@@ -373,7 +379,7 @@ public class EmbyService {
 
         Map<String, Object> result = new HashMap<>();
         result.put("url", emby.getUrl() + media.getItems().get(0).getUrl());
-        result.put("header", "{\"User-Agent\": \"Yamby/1.0.2(Android\"}");
+        result.put("header", "{\"User-Agent\": \"" + Constants.USER_AGENT + "\"}");
         result.put("parse", 0);
         log.debug("{}", result);
         return result;
@@ -385,14 +391,14 @@ public class EmbyService {
             return result;
         }
         try {
-            Map<String, String> body = new HashMap<>();
-            body.put("Username", emby.getUsername());
-            body.put("Pw", emby.getPassword());
+            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+            body.add("Username", emby.getUsername());
+            body.add("Pw", emby.getPassword());
             log.debug("get Emby info: {} {} {} {}", emby.getId(), emby.getName(), emby.getUrl(), emby.getUsername());
             HttpHeaders headers = new HttpHeaders();
-            headers.add("Authorization", "Emby Client=\"Android\", Device=\"Samsung Galaxy SIII\", DeviceId=\"Yamby\", Version=\"1.0.0.0\"");
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
             HttpEntity<Object> entity = new HttpEntity<>(body, headers);
-            EmbyInfo info = restTemplate.exchange(emby.getUrl() + "/emby/Users/AuthenticateByName", HttpMethod.POST, entity, EmbyInfo.class).getBody();
+            EmbyInfo info = restTemplate.exchange(emby.getUrl() + "/emby/Users/AuthenticateByName?X-Emby-Client=Emby%20Web&X-Emby-Device-Name=Google%20Chrome%20Linux&X-Emby-Device-Id=4310d84d-66a2-4f91-8d11-6627110be71c&X-Emby-Client-Version=4.7.5.0", HttpMethod.POST, entity, EmbyInfo.class).getBody();
             cache.put(emby.getId(), info);
 
             headers.add("Authorization", getAuthorizationHeader(info));
