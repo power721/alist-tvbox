@@ -14,5 +14,20 @@ public class EmbyMediaSources {
     public static class MediaSources {
         @JsonProperty("DirectStreamUrl")
         private String url;
+
+        @JsonProperty("MediaStreams")
+        private List<MediaStreams> mediaStreams;
+    }
+
+    @Data
+    public static class MediaStreams {
+        @JsonProperty("Type")
+        private String type;
+        @JsonProperty("Language")
+        private String language;
+        @JsonProperty("DisplayTitle")
+        private String title;
+        @JsonProperty("DeliveryUrl")
+        private String url;
     }
 }
