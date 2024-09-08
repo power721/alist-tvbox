@@ -204,10 +204,8 @@ public class EmbyService {
         if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
             movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
         }
-        movie.setVod_remarks(Objects.toString(item.getRating(), ""));
-        movie.setVod_year(Objects.toString(item.getYear(), ""));
-        movie.setVod_play_from(emby.getName());
-        movie.setVod_play_url(movie.getVod_id());
+        movie.setVod_remarks(Objects.toString(item.getRating(), null));
+        movie.setVod_year(Objects.toString(item.getYear(), null));
         return movie;
     }
 
@@ -228,6 +226,8 @@ public class EmbyService {
         MovieList result = new MovieList();
         MovieDetail movie = getMovieDetail(item, emby);
         movie.setVod_content(emby.getName() + ": " + item.getOverview());
+        movie.setVod_play_from(emby.getName());
+        movie.setVod_play_url(movie.getVod_id());
         if ("Episode".equals(item.getType()) || "Series".equals(item.getType())) {
             List<EmbyItem> list = getAll(emby, info, item.getSeriesId() == null ? item.getId() : item.getSeriesId());
             List<String> names = new ArrayList<>();
@@ -322,7 +322,7 @@ public class EmbyService {
             movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
         }
         movie.setVod_remarks(emby.getName() + " " + Objects.toString(item.getRating(), ""));
-        movie.setVod_year(Objects.toString(item.getYear(), ""));
+        movie.setVod_year(Objects.toString(item.getYear(), null));
         return movie;
     }
 
