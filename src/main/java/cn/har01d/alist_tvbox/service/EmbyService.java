@@ -65,8 +65,8 @@ public class EmbyService {
         this.objectMapper = objectMapper;
     }
 
-    public Page<Emby> findAll(Pageable pageable) {
-        return embyRepository.findAll(pageable);
+    public List<Emby> findAll() {
+        return embyRepository.findAll();
     }
 
     public Emby getById(Integer id) {
@@ -108,12 +108,22 @@ public class EmbyService {
             throw new BadRequestException("站点名称不能为空");
         }
 
-        if (StringUtils.isNotBlank(dto.getUrl())) {
-            try {
-                new URL(dto.getUrl());
-            } catch (Exception e) {
-                throw new BadRequestException("站点地址不正确", e);
-            }
+        if (StringUtils.isBlank(dto.getUrl())) {
+            throw new BadRequestException("站点Url不能为空");
+        }
+
+        if (StringUtils.isBlank(dto.getUsername())) {
+            throw new BadRequestException("用户名不能为空");
+        }
+
+        if (StringUtils.isBlank(dto.getPassword())) {
+            throw new BadRequestException("密码不能为空");
+        }
+
+        try {
+            new URL(dto.getUrl());
+        } catch (Exception e) {
+            throw new BadRequestException("站点地址不正确", e);
         }
 
         if (dto.getUrl().endsWith("/")) {
@@ -123,24 +133,26 @@ public class EmbyService {
 
     public MovieList home() {
         MovieList result = new MovieList();
-        List<MovieDetail> list = new ArrayList<>();
         List<Emby> sites = embyRepository.findAll();
-        if (!sites.isEmpty()) {
-            Emby emby = sites.get(0);
+        for (Emby emby : sites) {
             var info = getEmbyInfo(emby);
+            if (info == null) {
+                continue;
+            }
+            List<MovieDetail> list = new ArrayList<>();
             HttpHeaders headers = new HttpHeaders();
             headers.add("Authorization", getAuthorizationHeader(info));
             HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-//            String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items/Resume?Limit=12&Recursive=true&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&EnableTotalRecordCount=false&MediaTypes=Video";
-//            var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
+            String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items/Resume?Limit=12&Recursive=true&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&EnableTotalRecordCount=false&MediaTypes=Video";
+            var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
 
-//            for (var item : response.getItems()) {
-//                var movie = getMovieDetail(item, emby);
-//                list.add(movie);
-//            }
+            for (var item : response.getItems()) {
+                var movie = getMovieDetail(item, emby);
+                list.add(movie);
+            }
 
             for (var parent : info.getViews()) {
-                String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items/Latest?Limit=12&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,Status,EndDate&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&ParentId=" + parent.getId();
+                url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items/Latest?Limit=12&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,Status,EndDate&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&ParentId=" + parent.getId();
                 var items = restTemplate.exchange(url, HttpMethod.GET, entity, new ParameterizedTypeReference<List<EmbyItem>>() {
                 }).getBody();
                 for (var item : items) {
@@ -150,10 +162,11 @@ public class EmbyService {
             }
 
             result.setList(list);
-            result.setTotal(result.getList().size());
-            result.setLimit(result.getList().size());
+            result.setTotal(list.size());
+            result.setLimit(list.size());
 
             log.debug("home result: {}", result);
+            return result;
         }
         return result;
     }
@@ -287,11 +300,14 @@ public class EmbyService {
 
         for (Emby emby : embyRepository.findAll()) {
             var info = getEmbyInfo(emby);
+            if (info == null) {
+                continue;
+            }
             int i = 0;
             for (EmbyItem item : info.getViews()) {
                 var category = new Category();
                 category.setType_id(emby.getId() + "-" + item.getId() + "-" + i++);
-                category.setType_name(emby.getName() + " " + item.getName());
+                category.setType_name(emby.getName() + ":" + item.getName());
                 category.setType_flag(0);
 
                 result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
@@ -331,22 +347,27 @@ public class EmbyService {
         if (result != null) {
             return result;
         }
-        Map<String, String> body = new HashMap<>();
-        body.put("Username", emby.getUsername());
-        body.put("Pw", emby.getPassword());
-        log.debug("get Emby info: {} {} {} {}", emby.getId(), emby.getName(), emby.getUrl(), emby.getUsername());
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", "Emby Client=\"Android\", Device=\"Samsung Galaxy SIII\", DeviceId=\"Yamby\", Version=\"1.0.0.0\"");
-        HttpEntity<Object> entity = new HttpEntity<>(body, headers);
-        EmbyInfo info = restTemplate.exchange(emby.getUrl() + "/emby/Users/AuthenticateByName", HttpMethod.POST, entity, EmbyInfo.class).getBody();
-        cache.put(emby.getId(), info);
+        try {
+            Map<String, String> body = new HashMap<>();
+            body.put("Username", emby.getUsername());
+            body.put("Pw", emby.getPassword());
+            log.debug("get Emby info: {} {} {} {}", emby.getId(), emby.getName(), emby.getUrl(), emby.getUsername());
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("Authorization", "Emby Client=\"Android\", Device=\"Samsung Galaxy SIII\", DeviceId=\"Yamby\", Version=\"1.0.0.0\"");
+            HttpEntity<Object> entity = new HttpEntity<>(body, headers);
+            EmbyInfo info = restTemplate.exchange(emby.getUrl() + "/emby/Users/AuthenticateByName", HttpMethod.POST, entity, EmbyInfo.class).getBody();
+            cache.put(emby.getId(), info);
 
-        headers.add("Authorization", getAuthorizationHeader(info));
-        entity = new HttpEntity<>(null, headers);
-        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Views";
-        var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
-        info.setViews(response.getItems());
+            headers.add("Authorization", getAuthorizationHeader(info));
+            entity = new HttpEntity<>(null, headers);
+            String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Views";
+            var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
+            info.setViews(response.getItems());
 
-        return info;
+            return info;
+        } catch (Exception e) {
+            log.error("Get Emby info failed.", e);
+        }
+        return null;
     }
 }

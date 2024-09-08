@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 public class EmbyController {
@@ -27,8 +28,8 @@ public class EmbyController {
     }
 
     @GetMapping("/api/emby")
-    public Page<Emby> list(Pageable pageable) {
-        return embyService.findAll(pageable);
+    public List<Emby> list() {
+        return embyService.findAll();
     }
 
     @PostMapping("/api/emby")

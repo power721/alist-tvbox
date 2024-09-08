@@ -21,6 +21,7 @@ import BiliBiliView from "@/views/BiliBiliView.vue";
 import SystemInfo from "@/views/SystemInfo.vue";
 import MetaView from "@/views/MetaView.vue";
 import TmdbView from "@/views/TmdbView.vue";
+import EmbyView from "@/views/EmbyView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -72,6 +73,12 @@ const router = createRouter({
       path: '/sites',
       name: 'sites',
       component: SitesView,
+      meta: {auth: true}
+    },
+    {
+      path: '/emby',
+      name: 'emby',
+      component: EmbyView,
       meta: {auth: true}
     },
     {
