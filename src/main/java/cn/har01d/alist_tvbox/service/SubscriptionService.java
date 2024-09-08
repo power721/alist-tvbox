@@ -928,9 +928,6 @@ public class SubscriptionService {
             style.put("type", "rect");
             style.put("ratio", 1.597);
             site.put("style", style);
-        } else if ("csp_Emby".equals(key)) {
-            site.put("searchable", 0);
-            site.put("quickSearch", 0);
         }
         if ("csp_Youtube".equals(key)) {
             site.put("playerType", 2);

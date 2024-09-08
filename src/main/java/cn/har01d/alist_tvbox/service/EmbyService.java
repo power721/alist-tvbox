@@ -23,8 +23,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -247,13 +245,44 @@ public class EmbyService {
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", getAuthorizationHeader(info));
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?ParentId=" + sid + "&Filters=IsNotFolder&Recursive=true&Limit=300&Fields=Chapters,ProductionYear,PremiereDate&ExcludeLocationTypes=Virtual&EnableTotalRecordCount=false&CollapseBoxSetItems=false";
+        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?ParentId=" + sid + "&Filters=IsNotFolder&Recursive=true&Limit=600&Fields=Chapters,ProductionYear,PremiereDate&ExcludeLocationTypes=Virtual&EnableTotalRecordCount=false&CollapseBoxSetItems=false";
         var items = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
         return items.getItems();
     }
 
-    public Object search(String wd, Integer pg) {
-        return null;
+    public MovieList search(String wd, Integer pg) {
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        List<Emby> sites = embyRepository.findAll();
+        for (Emby emby : sites) {
+            var info = getEmbyInfo(emby);
+            if (info == null) {
+                continue;
+            }
+            list.addAll(search(emby, info, wd, "Movie"));
+            list.addAll(search(emby, info, wd, "Series"));
+        }
+
+        result.setList(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
+
+        return result;
+    }
+
+    private List<MovieDetail> search(Emby emby, EmbyInfo info, String wd, String type) {
+        List<MovieDetail> list = new ArrayList<>();
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("Authorization", getAuthorizationHeader(info));
+        HttpEntity<Object> entity = new HttpEntity<>(null, headers);
+        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?IncludePeople=false&IncludeMedia=true&IncludeGenres=false&IncludeStudios=false&IncludeArtists=false&IncludeItemTypes=" + type + "&Limit=30&Fields=PrimaryImageAspectRatio,CanDelete,BasicSyncInfo,ProductionYear&Recursive=true&EnableTotalRecordCount=false&ImageTypeLimit=1&searchTerm=" + wd;
+        var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
+        for (var item : response.getItems()) {
+            var movie = getMovieDetail(item, emby);
+            list.add(movie);
+        }
+        return list;
     }
 
     public MovieList list(String id, String sort, Integer pg) {
