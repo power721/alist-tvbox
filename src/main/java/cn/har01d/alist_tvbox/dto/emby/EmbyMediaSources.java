@@ -21,6 +21,8 @@ public class EmbyMediaSources {
 
     @Data
     public static class MediaStreams {
+        @JsonProperty("Codec")
+        private String codec;
         @JsonProperty("Type")
         private String type;
         @JsonProperty("Language")

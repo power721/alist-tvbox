@@ -420,11 +420,15 @@ public class EmbyService {
     private List<Sub> getSubtitles(Emby emby, EmbyMediaSources.MediaSources mediaSources) {
         List<Sub> list = new ArrayList<>();
         for (EmbyMediaSources.MediaStreams stream : mediaSources.getMediaStreams()) {
-            if (stream.getType().equals("Subtitle")) {
+            if ("Subtitle".equals(stream.getType()) && stream.getUrl() != null) {
                 Sub sub = new Sub();
                 sub.setName(stream.getTitle());
                 sub.setLang(stream.getLanguage());
-                sub.setFormat("application/x-subrip");
+                if ("ass".equals(stream.getCodec())) {
+                    sub.setFormat("text/x-ssa");
+                } else {
+                    sub.setFormat("application/x-subrip");
+                }
                 sub.setUrl(emby.getUrl() + stream.getUrl());
                 list.add(sub);
             }
