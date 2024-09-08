@@ -4,8 +4,6 @@ import cn.har01d.alist_tvbox.entity.Emby;
 import cn.har01d.alist_tvbox.service.EmbyService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -66,7 +64,7 @@ public class EmbyController {
             }
             return embyService.detail(ids);
         } else if (wd != null && !wd.isEmpty()) {
-            return embyService.search(wd, pg);
+            return embyService.search(wd);
         } else if (t != null && !t.isEmpty()) {
             if (t.equals("0")) {
                 return embyService.home();
