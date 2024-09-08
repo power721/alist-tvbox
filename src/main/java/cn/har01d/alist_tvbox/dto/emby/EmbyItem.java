@@ -23,6 +23,9 @@ public class EmbyItem {
     @JsonProperty("ProductionYear")
     private Integer year;
 
+    @JsonProperty("IndexNumber")
+    private Integer indexNumber;
+
     @JsonProperty("SeriesId")
     private String seriesId;
 

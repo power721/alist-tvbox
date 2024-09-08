@@ -222,7 +222,11 @@ public class EmbyService {
                     name = video.getSeasonName();
                     urls = new ArrayList<>();
                 }
-                urls.add(video.getName() + "$" + emby.getId() + "-" + video.getId());
+                if (video.getName().equals("第 " + video.getIndexNumber() + " 集")) {
+                    urls.add(video.getName() + "$" + emby.getId() + "-" + video.getId());
+                } else {
+                    urls.add(video.getIndexNumber() + "." + video.getName() + "$" + emby.getId() + "-" + video.getId());
+                }
             }
             if (!urls.isEmpty()) {
                 names.add(name);
