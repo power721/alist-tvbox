@@ -41,6 +41,9 @@ public class EmbyItem {
     @JsonProperty("ImageTags")
     private ImageTags imageTags;
 
+    @JsonProperty("CommunityRating")
+    private Double rating;
+
     @Data
     public static class ImageTags {
         @JsonProperty("Primary")

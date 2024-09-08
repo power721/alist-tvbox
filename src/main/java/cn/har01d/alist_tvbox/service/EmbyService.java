@@ -185,8 +185,9 @@ public class EmbyService {
         if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
             movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
         }
-        movie.setVod_remarks(Objects.toString(item.getYear(), ""));
-        movie.setVod_play_from("Emby");
+        movie.setVod_remarks(Objects.toString(item.getRating(), ""));
+        movie.setVod_year(Objects.toString(item.getYear(), ""));
+        movie.setVod_play_from(emby.getName());
         movie.setVod_play_url(movie.getVod_id());
         return movie;
     }
