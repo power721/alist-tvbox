@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.bili.Sub;
 import cn.har01d.alist_tvbox.dto.emby.EmbyInfo;
 import cn.har01d.alist_tvbox.dto.emby.EmbyItem;
 import cn.har01d.alist_tvbox.dto.emby.EmbyItems;
@@ -409,10 +410,26 @@ public class EmbyService {
 
         Map<String, Object> result = new HashMap<>();
         result.put("url", emby.getUrl() + media.getItems().get(0).getUrl());
+        result.put("subs", getSubtitles(emby, media.getItems().get(0)));
         result.put("header", "{\"User-Agent\": \"" + Constants.USER_AGENT + "\"}");
         result.put("parse", 0);
         log.debug("{}", result);
         return result;
+    }
+
+    private List<Sub> getSubtitles(Emby emby, EmbyMediaSources.MediaSources mediaSources) {
+        List<Sub> list = new ArrayList<>();
+        for (EmbyMediaSources.MediaStreams stream : mediaSources.getMediaStreams()) {
+            if (stream.getType().equals("Subtitle") && (stream.getLanguage().equals("chi") || stream.getLanguage().equals("eng"))) {
+                Sub sub = new Sub();
+                sub.setName(stream.getTitle());
+                sub.setLang(stream.getLanguage());
+                sub.setFormat("application/x-subrip");
+                sub.setUrl(emby.getUrl() + stream.getUrl());
+                list.add(sub);
+            }
+        }
+        return list;
     }
 
     private EmbyInfo getEmbyInfo(Emby emby) {
