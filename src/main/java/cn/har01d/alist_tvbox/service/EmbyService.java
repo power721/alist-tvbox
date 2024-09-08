@@ -49,8 +49,10 @@ public class EmbyService {
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("评分⬆️", "CommunityRating,SortName:Ascending"),
             new FilterValue("评分⬇️", "CommunityRating,SortName:Descending"),
-            new FilterValue("日期⬆️", "PremiereDate,ProductionYear,SortName:Ascending"),
-            new FilterValue("日期⬇️", "PremiereDate,ProductionYear,SortName:Descending"),
+            new FilterValue("发行日期⬆️", "PremiereDate,ProductionYear,SortName:Ascending"),
+            new FilterValue("发行日期⬇️", "PremiereDate,ProductionYear,SortName:Descending"),
+            new FilterValue("加入日期⬆️", "DateCreated,SortName:Ascending"),
+            new FilterValue("加入日期⬇️", "DateCreated,SortName:Descending"),
             new FilterValue("名字⬆️", "SortName:Ascending"),
             new FilterValue("名字⬇️", "SortName:Descending"),
             new FilterValue("时长⬆️", "Runtime,SortName:Ascending"),
@@ -289,7 +291,7 @@ public class EmbyService {
     public MovieList list(String id, String sort, Integer pg) {
         String[] parts = id.split("-");
         if (sort == null) {
-            sort = "SortName:Ascending";
+            sort = "DateCreated,SortName:Descending";
         }
         String[] sorts = sort.split(":");
         Emby emby = embyRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
