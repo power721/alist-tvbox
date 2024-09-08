@@ -201,7 +201,6 @@ public class EmbyService {
             movie.setVod_name(item.getName());
         }
 
-        movie.setVod_content(emby.getName() + ": " + item.getOverview());
         if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
             movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
         }
@@ -228,6 +227,7 @@ public class EmbyService {
 
         MovieList result = new MovieList();
         MovieDetail movie = getMovieDetail(item, emby);
+        movie.setVod_content(emby.getName() + ": " + item.getOverview());
         if ("Episode".equals(item.getType()) || "Series".equals(item.getType())) {
             List<EmbyItem> list = getAll(emby, info, item.getSeriesId() == null ? item.getId() : item.getSeriesId());
             List<String> names = new ArrayList<>();
