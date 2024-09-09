@@ -12,6 +12,9 @@ public class EmbyMediaSources {
 
     @Data
     public static class MediaSources {
+        @JsonProperty("Name")
+        private String name;
+
         @JsonProperty("DirectStreamUrl")
         private String url;
 

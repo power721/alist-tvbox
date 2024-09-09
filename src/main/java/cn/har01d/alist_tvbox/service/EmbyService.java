@@ -408,8 +408,13 @@ public class EmbyService {
         String url = emby.getUrl() + "/emby/Items/" + parts[1] + "/PlaybackInfo?IsPlayback=false&AutoOpenLiveStream=false&StartTimeTicks=0&MaxStreamingBitrate=2147483647&UserId=" + info.getUser().getId();
         var media = restTemplate.exchange(url, HttpMethod.POST, entity, EmbyMediaSources.class).getBody();
 
+        List<String> urls = new ArrayList<>();
+        for (var source : media.getItems()) {
+            urls.add(source.getName());
+            urls.add(emby.getUrl() + source.getUrl());
+        }
         Map<String, Object> result = new HashMap<>();
-        result.put("url", emby.getUrl() + media.getItems().get(0).getUrl());
+        result.put("url", urls);
         result.put("subs", getSubtitles(emby, media.getItems().get(0)));
         result.put("header", "{\"User-Agent\": \"" + Constants.USER_AGENT + "\"}");
         result.put("parse", 0);
