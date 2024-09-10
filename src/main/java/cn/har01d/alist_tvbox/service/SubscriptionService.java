@@ -261,6 +261,7 @@ public class SubscriptionService {
             json = json.replace("VOD1_URL", readHostAddress("/vod1" + secret));
             json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret));
             json = json.replace("YOUTUBE_URL", readHostAddress("/youtube" + secret));
+            json = json.replace("EMBY_URL", readHostAddress("/emby" + secret));
             String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
             json = json.replace("ALI_TOKEN", ali);
             ali = accountRepository.getFirstByMasterTrue().map(Account::getOpenToken).orElse("");
