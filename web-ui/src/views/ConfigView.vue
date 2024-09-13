@@ -142,6 +142,22 @@
             }}，后台更新中。
           </div>
         </el-card>
+        <el-card class="box-card" v-if="!store.xiaoya">
+          <template #header>
+            <div class="card-header">海报墙</div>
+          </template>
+          <el-form label-width="110px">
+            <el-form-item label="海报墙混合模式">
+              <el-switch
+                v-model="mixSiteSource"
+                inline-prompt
+                active-text="开启"
+                inactive-text="关闭"
+                @change="updateMixed"
+              />
+            </el-form-item>
+          </el-form>
+        </el-card>
       </el-col>
     </el-row>
 
