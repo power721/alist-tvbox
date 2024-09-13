@@ -462,7 +462,7 @@ public class EmbyService {
             entity = new HttpEntity<>(null, headers);
             String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Views";
             var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
-            info.setViews(response.getItems());
+            info.setViews(new ArrayList<>(new LinkedHashSet<>(response.getItems())));
 
             return info;
         } catch (Exception e) {
