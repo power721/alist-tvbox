@@ -139,8 +139,8 @@ public class EmbyService {
             throw new BadRequestException("用户名不能为空");
         }
 
-        if (StringUtils.isBlank(dto.getPassword())) {
-            throw new BadRequestException("密码不能为空");
+        if (dto.getPassword() == null) {
+            dto.setPassword("");
         }
 
         try {
