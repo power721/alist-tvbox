@@ -3,6 +3,8 @@ package cn.har01d.alist_tvbox.dto.emby;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
+import java.util.Objects;
+
 @Data
 public class EmbyItem {
     @JsonProperty("Id")
@@ -48,5 +50,18 @@ public class EmbyItem {
     public static class ImageTags {
         @JsonProperty("Primary")
         private String primary;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        EmbyItem embyItem = (EmbyItem) o;
+        return Objects.equals(id, embyItem.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(id);
     }
 }

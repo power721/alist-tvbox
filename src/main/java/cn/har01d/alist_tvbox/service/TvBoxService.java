@@ -2,16 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.Subtitle;
-import cn.har01d.alist_tvbox.entity.AListAlias;
-import cn.har01d.alist_tvbox.entity.AListAliasRepository;
-import cn.har01d.alist_tvbox.entity.Account;
-import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.Meta;
-import cn.har01d.alist_tvbox.entity.MetaRepository;
-import cn.har01d.alist_tvbox.entity.Movie;
-import cn.har01d.alist_tvbox.entity.ShareRepository;
-import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.entity.Tmdb;
+import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.FileNameInfo;
@@ -148,7 +139,7 @@ public class TvBoxService {
                         SubscriptionService subscriptionService,
                         ConfigFileService configFileService,
                         ObjectMapper objectMapper,
-                        Environment environment) {
+                        Environment environment, TmdbMetaRepository tmdbMetaRepository) {
         this.accountRepository = accountRepository;
         this.aliasRepository = aliasRepository;
         this.shareRepository = shareRepository;
@@ -174,11 +165,27 @@ public class TvBoxService {
         return null;
     }
 
+    private Site getXiaoyaOrFirstSite() {
+        List<Site> list = siteService.list();
+        Site result = null;
+        for (Site site : list) {
+            if (site.isSearchable() && !site.isDisabled()) {
+                if (site.isXiaoya()) {
+                    return site;
+                }
+                if (result == null) {
+                    result = site;
+                }
+            }
+        }
+        return result;
+    }
+
     public CategoryList getCategoryList(Integer type) {
         CategoryList result = new CategoryList();
 
         if (type == 0) {
-            Site site = getXiaoyaSite();
+            Site site = getXiaoyaOrFirstSite();
             if (site != null) {
                 setTypes(result, site);
             }
