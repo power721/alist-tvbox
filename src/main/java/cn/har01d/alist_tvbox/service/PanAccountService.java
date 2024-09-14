@@ -4,10 +4,12 @@ import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.model.SettingResponse;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -240,6 +242,12 @@ public class PanAccountService {
                 a.setMaster(false);
             }
             account.setMaster(true);
+            String key = switch (account.getType()) {
+                case QUARK -> "quark_cookie";
+                case PAN115 -> "115_cookie";
+                case UC -> "uc_cookie";
+            };
+            aListLocalService.updateSetting(key, account.getCookie(), "string");
             panAccountRepository.saveAll(list);
         }
     }
@@ -258,6 +266,31 @@ public class PanAccountService {
             }
         } catch (Exception e) {
             throw new BadRequestException(e);
+        }
+    }
+
+    @Scheduled(initialDelay = 1800_000, fixedDelay = 1800_000)
+    public void syncCookies() {
+        if (aListLocalService.getAListStatus() != 2) {
+            return;
+        }
+        var cookie = aListLocalService.getSetting("quark_cookie");
+        log.debug("quark_cookie={}", cookie);
+        saveCookie(DriverType.QUARK, cookie);
+        cookie = aListLocalService.getSetting("uc_cookie");
+        log.debug("uc_cookie={}", cookie);
+        saveCookie(DriverType.UC, cookie);
+        cookie = aListLocalService.getSetting("115_cookie");
+        log.debug("115_cookie={}", cookie);
+        saveCookie(DriverType.PAN115, cookie);
+    }
+
+    private void saveCookie(DriverType type, SettingResponse response) {
+        if (response.getCode() == 200) {
+            panAccountRepository.findByTypeAndMasterTrue(type).ifPresent(account -> {
+                account.setCookie(response.getData().getValue());
+                panAccountRepository.save(account);
+            });
         }
     }
 }

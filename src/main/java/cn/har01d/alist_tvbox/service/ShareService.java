@@ -839,30 +839,4 @@ public class ShareService {
         return shares;
     }
 
-    @Scheduled(initialDelay = 1800_000, fixedDelay = 1800_000)
-    public void syncCookies() {
-        if (aListLocalService.getAListStatus() != 2) {
-            return;
-        }
-        var cookie = aListLocalService.getSetting("quark_cookie");
-        log.debug("quark_cookie={}", cookie);
-        saveCookie(2, cookie);
-        cookie = aListLocalService.getSetting("uc_cookie");
-        log.debug("uc_cookie={}", cookie);
-        saveCookie(6, cookie);
-        cookie = aListLocalService.getSetting("115_cookie");
-        log.debug("115_cookie={}", cookie);
-        saveCookie(3, cookie);
-    }
-
-    private void saveCookie(int type, SettingResponse response) {
-        if (response.getCode() == 200) {
-            List<Share> shares = shareRepository.findByType(type);
-            if (!shares.isEmpty()) {
-                Share share = shares.get(shares.size() - 1);
-                share.setCookie(response.getData().getValue());
-                shareRepository.save(share);
-            }
-        }
-    }
 }
