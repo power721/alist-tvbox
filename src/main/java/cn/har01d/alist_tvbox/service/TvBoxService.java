@@ -325,13 +325,13 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        if (panAccountRepository.countByType(DriverType.QUARK) > 0) {
+        panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).ifPresent(account -> {
             Category category = new Category();
-            category.setType_id("1$/\uD83C\uDF1E我的夸克网盘$1");
+            category.setType_id("1$" + getMountPath(account) + "$1");
             category.setType_name("夸克网盘");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
-        }
+        });
 
         if (shareRepository.countByType(5) > 0) {
             Category category = new Category();
@@ -341,13 +341,13 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        if (panAccountRepository.countByType(DriverType.UC) > 0) {
+        panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).ifPresent(account -> {
             Category category = new Category();
-            category.setType_id("1$/\uD83C\uDF1E我的UC网盘$1");
+            category.setType_id("1$" + getMountPath(account) + "$1");
             category.setType_name("UC网盘");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
-        }
+        });
 
         if (shareRepository.countByType(7) > 0) {
             Category category = new Category();
@@ -357,13 +357,13 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        if (panAccountRepository.countByType(DriverType.PAN115) > 0) {
+        panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).ifPresent(account -> {
             Category category = new Category();
-            category.setType_id("1$/115网盘$1");
+            category.setType_id("1$" + getMountPath(account) + "$1");
             category.setType_name("115网盘");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
-        }
+        });
 
         if (shareRepository.countByType(8) > 0) {
             Category category = new Category();
@@ -380,6 +380,20 @@ public class TvBoxService {
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
+    }
+
+    private Object getMountPath(PanAccount account) {
+        if (account.getName().startsWith("/")) {
+            return account.getName();
+        }
+        if (account.getType() == DriverType.QUARK) {
+            return "/\uD83C\uDF1E我的夸克网盘";
+        } else if (account.getType() == DriverType.UC) {
+            return "/\uD83C\uDF1E我的UC网盘";
+        } else if (account.getType() == DriverType.PAN115) {
+            return "/115网盘";
+        }
+        return "/网盘";
     }
 
     public MovieList recommend(String ac, int pg) {
