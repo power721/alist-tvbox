@@ -1,18 +1,9 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.TokenDto;
-import cn.har01d.alist_tvbox.entity.Account;
-import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.EmbyRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.Share;
-import cn.har01d.alist_tvbox.entity.ShareRepository;
-import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.entity.SiteRepository;
-import cn.har01d.alist_tvbox.entity.Subscription;
-import cn.har01d.alist_tvbox.entity.SubscriptionRepository;
+import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
@@ -74,6 +65,7 @@ public class SubscriptionService {
     private final AccountRepository accountRepository;
     private final SiteRepository siteRepository;
     private final ShareRepository shareRepository;
+    private final PanAccountRepository panAccountRepository;
     private final EmbyRepository embyRepository;
     private final AListLocalService aListLocalService;
 
@@ -89,6 +81,7 @@ public class SubscriptionService {
                                AccountRepository accountRepository,
                                SiteRepository siteRepository,
                                ShareRepository shareRepository,
+                               PanAccountRepository panAccountRepository,
                                EmbyRepository embyRepository,
                                AListLocalService aListLocalService) {
         this.environment = environment;
@@ -104,6 +97,7 @@ public class SubscriptionService {
         this.accountRepository = accountRepository;
         this.siteRepository = siteRepository;
         this.shareRepository = shareRepository;
+        this.panAccountRepository = panAccountRepository;
         this.embyRepository = embyRepository;
         this.aListLocalService = aListLocalService;
     }
@@ -267,7 +261,7 @@ public class SubscriptionService {
             ali = accountRepository.getFirstByMasterTrue().map(Account::getOpenToken).orElse("");
             json = json.replace("ALI_OPEN_TOKEN", ali);
 
-            String quarkCookie = shareRepository.findByType(2).stream().findFirst().map(Share::getCookie).orElse("");
+            String quarkCookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(PanAccount::getCookie).orElse("");
             json = json.replace("QUARK_COOKIE", quarkCookie);
 
             if ("index.config.js".equals(file)) {
@@ -480,7 +474,7 @@ public class SubscriptionService {
         List<Map<String, Object>> list = (List<Map<String, Object>>) config.get("sites");
         String secret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         String tokenUrl = shareRepository.countByType(0) > 0 ? readHostAddress("/ali/token/" + secret) : null;
-        String cookieUrl = shareRepository.countByType(2) > 0 ? readHostAddress("/quark/cookie/" + secret) : null;
+        String cookieUrl = panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).isPresent() ? readHostAddress("/quark/cookie/" + secret) : null;
         for (Map<String, Object> site : list) {
             Object obj = site.get("ext");
             if (obj instanceof String) {
