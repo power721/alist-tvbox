@@ -146,10 +146,10 @@ public class PikPakService {
             aListLocalService.startAListServer();
         } else {
             if (pikPakAccountRepository.existsByNickname(dto.getNickname())) {
-                throw new BadRequestException("账号昵称已结存在");
+                throw new BadRequestException("账号昵称已经存在");
             }
             if (pikPakAccountRepository.existsByUsername(dto.getUsername())) {
-                throw new BadRequestException("用户名已结存在");
+                throw new BadRequestException("用户名已经存在");
             }
         }
 
@@ -165,11 +165,11 @@ public class PikPakService {
         PikPakAccount account = pikPakAccountRepository.findById(id).orElseThrow(NotFoundException::new);
         PikPakAccount other = pikPakAccountRepository.findByNickname(dto.getNickname());
         if (other != null && !id.equals(other.getId())) {
-            throw new BadRequestException("账号昵称已结存在");
+            throw new BadRequestException("账号昵称已经存在");
         }
         other = pikPakAccountRepository.findByUsername(dto.getUsername());
         if (other != null && !id.equals(other.getId())) {
-            throw new BadRequestException("用户名已结存在");
+            throw new BadRequestException("用户名已经存在");
         }
 
         boolean changed = account.isMaster() != dto.isMaster()

@@ -1,11 +1,7 @@
 package cn.har01d.alist_tvbox.entity;
 
 import cn.har01d.alist_tvbox.domain.DriverType;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.TableGenerator;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -23,7 +19,9 @@ public class PanAccount {
     private Integer id;
     private DriverType type;
     private String name;
+    @Column(columnDefinition = "TEXT")
     private String cookie = "";
     private String token = "";
     private String folder = "";
+    private boolean master;
 }
