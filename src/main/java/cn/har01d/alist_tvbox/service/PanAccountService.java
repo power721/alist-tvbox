@@ -81,11 +81,11 @@ public class PanAccountService {
     public void loadStorages() {
         List<PanAccount> accounts = panAccountRepository.findAll();
         for (PanAccount account : accounts) {
-            updateAList(account);
+            insertAList(account);
         }
     }
 
-    private void updateAList(PanAccount account) {
+    private void insertAList(PanAccount account) {
         int id = account.getId() + IDX;
         if (account.getType() == DriverType.QUARK) {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
@@ -105,7 +105,30 @@ public class PanAccountService {
         }
     }
 
+    private void updateAList(PanAccount account) {
+        int id = account.getId() + IDX;
+        if (account.getType() == DriverType.QUARK) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder()));
+            log.info("insert Quark account {} : {}, result: {}", id, getMountPath(account), count);
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('quark_cookie','" + account.getCookie() + "','','text','',1,0);");
+        } else if (account.getType() == DriverType.UC) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UC',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder()));
+            log.info("insert UC account {} : {}, result: {}", id, getMountPath(account), count);
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('uc_cookie','" + account.getCookie() + "','','text','',1,0);");
+        } else if (account.getType() == DriverType.PAN115) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder()));
+            log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_cookie','" + account.getCookie() + "','','text','',1,0);");
+        }
+    }
+
     private Object getMountPath(PanAccount account) {
+        if (account.getName().startsWith("/")) {
+            return account.getName();
+        }
         if (account.getType() == DriverType.QUARK) {
             return "/\uD83C\uDF1E我的夸克网盘/" + account.getName();
         } else if (account.getType() == DriverType.UC) {
@@ -192,6 +215,9 @@ public class PanAccountService {
         if (StringUtils.isBlank(dto.getName())) {
             throw new BadRequestException("名称不能为空");
         }
+//        if (dto.getName().contains("/")) {
+//            throw new BadRequestException("名称不能包含/");
+//        }
         if (dto.getType() == null) {
             throw new BadRequestException("类型不能为空");
         }

@@ -1,10 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.ShareRepository;
+import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -25,15 +22,20 @@ public class PgTokenController {
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
-    private final ShareRepository shareRepository;
+    private final PanAccountRepository panAccountRepository;
     private final PikPakAccountRepository pikPakAccountRepository;
     private final ObjectMapper objectMapper;
 
-    public PgTokenController(SubscriptionService subscriptionService, AccountRepository accountRepository, SettingRepository settingRepository, ShareRepository shareRepository, PikPakAccountRepository pikPakAccountRepository, ObjectMapper objectMapper) {
+    public PgTokenController(SubscriptionService subscriptionService,
+                             AccountRepository accountRepository,
+                             SettingRepository settingRepository,
+                             PanAccountRepository panAccountRepository,
+                             PikPakAccountRepository pikPakAccountRepository,
+                             ObjectMapper objectMapper) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
-        this.shareRepository = shareRepository;
+        this.panAccountRepository = panAccountRepository;
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.objectMapper = objectMapper;
     }
@@ -74,9 +76,9 @@ public class PgTokenController {
         map.put("quark_cookie", "");
         map.put("pan115_cookie", "");
         map.put("uc_cookie", "");
-        shareRepository.findByType(2).stream().findFirst().ifPresent(share -> map.put("quark_cookie", share.getCookie()));
-        shareRepository.findByType(3).stream().findFirst().ifPresent(share -> map.put("pan115_cookie", share.getCookie()));
-        shareRepository.findByType(6).stream().findFirst().ifPresent(share -> map.put("uc_cookie", share.getCookie()));
+        panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> map.put("quark_cookie", share.getCookie()));
+        panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> map.put("pan115_cookie", share.getCookie()));
+        panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> map.put("uc_cookie", share.getCookie()));
         map.put("pan115_thread_limit", 0);
         map.put("pan115_vip_thread_limit", 0);
         map.put("pan115_is_vip", false);
