@@ -41,9 +41,6 @@
     <el-table-column prop="type" label="类型" width="150" sortable>
       <template #default="scope">
         <span v-if="scope.row.type==1">PikPak分享</span>
-        <span v-else-if="scope.row.type==2">夸克网盘</span>
-        <span v-else-if="scope.row.type==6">UC网盘</span>
-        <span v-else-if="scope.row.type==3">115网盘</span>
         <span v-else-if="scope.row.type==4">本地存储</span>
         <span v-else-if="scope.row.type==5">夸克分享</span>
         <span v-else-if="scope.row.type==7">UC分享</span>
@@ -79,11 +76,8 @@
       <template #default="scope">
         <span v-if="scope.row.driver=='AliyundriveShare2Open'">阿里分享</span>
         <span v-else-if="scope.row.driver=='PikPakShare'">PikPak分享</span>
-        <span v-else-if="scope.row.driver=='Quark'">夸克网盘</span>
-        <span v-else-if="scope.row.driver=='UC'">UC网盘</span>
         <span v-else-if="scope.row.driver=='QuarkShare'">夸克分享</span>
         <span v-else-if="scope.row.driver=='UCShare'">UC分享</span>
-        <span v-else-if="scope.row.driver=='115 Cloud'">115网盘</span>
         <span v-else-if="scope.row.driver=='115 Share'">115分享</span>
         <span v-else-if="scope.row.driver=='Local'">本地存储</span>
         <span v-else-if="scope.row.driver=='Alias'">别名</span>
@@ -128,11 +122,8 @@
         <el-radio-group v-model="form.type" class="ml-4">
           <el-radio :label="0" size="large">阿里分享</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
-          <el-radio :label="2" size="large">夸克网盘</el-radio>
           <el-radio :label="5" size="large">夸克分享</el-radio>
-          <el-radio :label="6" size="large">UC网盘</el-radio>
           <el-radio :label="7" size="large">UC分享</el-radio>
-          <el-radio :label="3" size="large">115网盘</el-radio>
           <el-radio :label="8" size="large">115分享</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
         </el-radio-group>
@@ -373,18 +364,12 @@ const fullPath = (share: any) => {
   }
   if (share.type == 1) {
     return '/\uD83D\uDD78\uFE0F我的PikPak分享/' + path
-  } else if (share.type == 2) {
-    return '/\uD83C\uDF1E我的夸克网盘/' + path
-  } else if (share.type == 6) {
-    return '/\uD83C\uDF1E我的UC网盘/' + path
   } else if (share.type == 5) {
     return '/我的夸克分享/' + path
   } else if (share.type == 7) {
     return '/我的UC分享/' + path
   } else if (share.type == 8) {
     return '/我的115分享/' + path
-  } else if (share.type == 3) {
-    return '/115网盘/' + path
   } else if (share.type == 4) {
     return path
   } else {
