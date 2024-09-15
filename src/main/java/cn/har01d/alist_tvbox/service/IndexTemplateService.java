@@ -21,7 +21,7 @@ import java.time.Instant;
 @Service
 public class IndexTemplateService {
     public static final String AUTO_INDEX_VERSION = "auto_index_version";
-    private static final int indexVersion = 31;
+    private static final int indexVersion = 32;
     public static final String paths =
             "\">/🈴我的阿里分享/Tacit0924\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【剧a集】/【剧丨集】更新中和完结的/【更新中】电视剧::2\"," +
@@ -33,16 +33,7 @@ public class IndexTemplateService {
                     "\"/🈴我的阿里分享/Tacit0924/【综艺 纪录片 节目 晚会】/更新中的【综丨艺纪丨录片节丨目晚丨会 】和完结的/还在【更新中】的综艺 5 TB\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【综艺 纪录片 节目 晚会】/更新中的【综丨艺纪丨录片节丨目晚丨会 】和完结的/【近期的完结综艺】6TB(未整理国内外仅首字母)\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【综艺 纪录片 节目 晚会】/更新中的【综丨艺纪丨录片节丨目晚丨会 】和完结的/一些近期【更新的】和完结的和纪录片合集 15TB/【一些近期更新的纪录片】(未整理国内外仅首字母)\"," +
-                    "\"/🈴我的阿里分享/Tacit0924/【电a影】/近期热门【电影】和一些电影大合集/【近期一些热门的电影】22TB::2\"," +
-                    "\"/🈴我的阿里分享/近期更新/01.电视剧.更新中\"," +
-                    "\"/🈴我的阿里分享/近期更新/02.电视剧.完结::2\"," +
-                    "\"/🈴我的阿里分享/近期更新/03.电影/最新电影\"," +
-                    "\"/🈴我的阿里分享/近期更新/04.动漫剧集.更新中\"," +
-                    "\"/🈴我的阿里分享/近期更新/05.动漫剧集.完结\"," +
-                    "\"/🈴我的阿里分享/近期更新/06.综艺\"," +
-                    "\"/🈴我的阿里分享/近期更新/06.综艺.更新中\"," +
-                    "\"/🈴我的阿里分享/近期更新/07.纪录片\"," +
-                    "\"/🈴我的阿里分享/近期更新/07.纪录片.最新\"";
+                    "\"/🈴我的阿里分享/Tacit0924/【电a影】/近期热门【电影】和一些电影大合集/【近期一些热门的电影】22TB::2\"" ;
 
     private final IndexTemplateRepository indexTemplateRepository;
     private final SettingRepository settingRepository;

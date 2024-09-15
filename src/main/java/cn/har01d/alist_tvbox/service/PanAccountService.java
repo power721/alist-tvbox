@@ -190,6 +190,10 @@ public class PanAccountService {
         account.setToken(dto.getToken());
         account.setFolder(dto.getFolder());
 
+        if (panAccountRepository.countByType(account.getType()) == 0) {
+            account.setMaster(true);
+        }
+
         if (changed && account.isMaster()) {
             updateMaster(account);
         }

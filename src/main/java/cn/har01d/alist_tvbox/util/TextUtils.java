@@ -406,6 +406,7 @@ public class TextUtils {
                 .replace("_", " ")
                 .replace("⭐", " ")
                 .replace("|", " ")
+                .replace("丨", "")
                 .replace("+", " ")
                 .replace("Ⅰ", "第一季")
                 .replace("Ⅱ", "第二季")
