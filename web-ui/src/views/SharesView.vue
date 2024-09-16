@@ -51,6 +51,7 @@
     <el-table-column fixed="right" label="操作" width="200">
       <template #default="scope">
         <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
+        <el-button link type="primary" size="small" @click="reloadStorage(scope.row.id)">重新加载</el-button>
         <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
       </template>
     </el-table-column>

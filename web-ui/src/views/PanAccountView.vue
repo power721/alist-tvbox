@@ -39,6 +39,7 @@
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
+          <el-button link type="primary" size="small" @click="reloadStorage(scope.row.id + 9000)">重新加载</el-button>
           <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
@@ -332,9 +333,11 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
-  form.value.addition = app.value
   if (form.value.type == 'PAN115_SCAN') {
     form.value.type = 'PAN115'
+  }
+  if (form.value.type == 'PAN115') {
+    form.value.addition = app.value
   }
   const url = updateAction.value ? '/api/pan/accounts/' + form.value.id : '/api/pan/accounts'
   axios.post(url, form.value).then(() => {
@@ -345,6 +348,16 @@ const handleConfirm = () => {
       ElMessage.success('更新成功')
     }
     load()
+  })
+}
+
+const reloadStorage = (id: number) => {
+  axios.post('/api/storages/' + id).then(({data}) => {
+    if (data.code == 200) {
+      ElMessage.success('加载成功')
+    } else {
+      ElMessage.error(data.message)
+    }
   })
 }
 
