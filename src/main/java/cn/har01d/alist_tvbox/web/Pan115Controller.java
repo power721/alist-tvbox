@@ -39,7 +39,7 @@ public class Pan115Controller {
 
     @GetMapping("/status")
     public Object status(HttpServletRequest request) throws JsonProcessingException {
-        String url = "https://qrcodeapi.115.com/get/status?" + request.getQueryString();
+        String url = "https://qrcodeapi.115.com/get/status/?" + request.getQueryString();
         log.debug("url: {}", url);
         String json =  restTemplate.getForObject(url, String.class);
         log.debug("status: {}", json);

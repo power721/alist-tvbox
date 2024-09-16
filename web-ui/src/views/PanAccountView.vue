@@ -54,19 +54,20 @@
             <el-radio label="QUARK" size="large">夸克网盘</el-radio>
             <el-radio label="UC" size="large">UC网盘</el-radio>
             <el-radio label="PAN115" size="large">115网盘</el-radio>
+            <el-radio label="PAN115_SCAN" size="large">115扫码</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="APP类型" v-if="form.type=='PAN115'">
-          <el-select v-model="app" class="m-2" placeholder="Select">
+        <el-form-item label="APP类型" v-if="form.type=='PAN115'||form.type=='PAN115_SCAN'" label-width="120" required>
+          <el-select v-model="app">
             <el-option
               v-for="item in apps"
-              :key="item.label"
-              :label="item.label"
+              :key="item.value"
+              :label="item.value"
               :value="item.value"
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="二维码" v-if="form.type=='PAN115'">
+        <el-form-item label="二维码" v-if="form.type=='PAN115_SCAN'">
           <img id="qrcode" alt="qrcode" :src="qrcode"/>
           <span class="hint">{{ statusText}}</span>
         </el-form-item>
@@ -136,6 +137,7 @@ const form = ref({
   cookie: '',
   token: '',
   folder: '',
+  addition: '',
   master: false,
 })
 const apps = [
@@ -211,6 +213,7 @@ const handleAdd = () => {
     cookie: '',
     token: '',
     folder: '',
+    addition: '',
     master: false,
   }
   formVisible.value = true
@@ -246,7 +249,7 @@ const fullPath = (share: any) => {
 }
 
 const onTypeChange = (type: string) => {
-  if (type == 'PAN115') {
+  if (type == 'PAN115_SCAN') {
     axios.get('/api/pan115/token').then(async ({data}) => {
       console.log(data)
       qrcode.value = `https://qrcodeapi.115.com/api/1.0/mac/1.0/qrcode?uid=${data.data.uid}`
@@ -329,6 +332,10 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
+  form.value.addition = app.value
+  if (form.value.type == 'PAN115_SCAN') {
+    form.value.type = 'PAN115'
+  }
   const url = updateAction.value ? '/api/pan/accounts/' + form.value.id : '/api/pan/accounts'
   axios.post(url, form.value).then(() => {
     formVisible.value = false

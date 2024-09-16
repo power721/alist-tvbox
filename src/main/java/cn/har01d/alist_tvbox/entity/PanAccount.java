@@ -23,5 +23,7 @@ public class PanAccount {
     private String cookie = "";
     private String token = "";
     private String folder = "";
+    @Column(columnDefinition = "TEXT")
+    private String addition;
     private boolean master;
 }

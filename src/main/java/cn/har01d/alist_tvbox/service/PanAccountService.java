@@ -100,8 +100,8 @@ public class PanAccountService {
             log.info("insert UC account {} : {}, result: {}", id, getMountPath(account), count);
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('uc_cookie','" + account.getCookie() + "','','text','',1,0);");
         } else if (account.getType() == DriverType.PAN115) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder()));
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"qrcode_source\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getAddition(), account.getFolder()));
             log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_cookie','" + account.getCookie() + "','','text','',1,0);");
         }
@@ -189,6 +189,7 @@ public class PanAccountService {
         account.setCookie(dto.getCookie());
         account.setToken(dto.getToken());
         account.setFolder(dto.getFolder());
+        account.setAddition(dto.getAddition());
 
         if (panAccountRepository.countByType(account.getType()) == 0) {
             account.setMaster(true);
