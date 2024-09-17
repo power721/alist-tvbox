@@ -16,8 +16,9 @@ fi
 
 echo "download ${REMOTE}" && \
 wget https://github.com/power721/pg/raw/refs/heads/main/pg.zip -O /data/pg.zip && \
-echo "sync files" && \
+echo "unzip file" && \
 rm -rf /www/pg/* && unzip -q -o /data/pg.zip -d /www/pg && \
 echo "save version" && \
 echo -n ${REMOTE} > /data/pg_version.txt && \
+echo "sync files" && \
 cp -r /data/pg/* /www/pg/
