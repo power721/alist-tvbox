@@ -1,15 +1,27 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.Versions;
 import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.util.FileCopyUtils;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.ResponseExtractor;
+import org.springframework.web.client.RestTemplate;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -25,19 +37,33 @@ public class PgTokenController {
     private final PanAccountRepository panAccountRepository;
     private final PikPakAccountRepository pikPakAccountRepository;
     private final ObjectMapper objectMapper;
+    private final RestTemplate restTemplate;
 
     public PgTokenController(SubscriptionService subscriptionService,
                              AccountRepository accountRepository,
                              SettingRepository settingRepository,
                              PanAccountRepository panAccountRepository,
                              PikPakAccountRepository pikPakAccountRepository,
-                             ObjectMapper objectMapper) {
+                             ObjectMapper objectMapper,
+                             RestTemplateBuilder builder) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
         this.panAccountRepository = panAccountRepository;
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.objectMapper = objectMapper;
+        this.restTemplate = builder.build();
+    }
+
+    @GetMapping("/version")
+    public Object update() throws IOException {
+        String remote = restTemplate.getForObject("https://raw.githubusercontent.com/power721/pg/refs/heads/main/version.txt", String.class);
+        String local = "";
+        Path path = Path.of("/data/pg_version.txt");
+        if (Files.exists(path)) {
+            local = Files.readString(path);
+        }
+        return Map.of("local", local, "remote", remote);
     }
 
     @GetMapping("/lib/tokenm")
