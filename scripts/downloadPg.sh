@@ -15,7 +15,7 @@ if [ "$LOCAL" = "${REMOTE}" ]; then
 fi
 
 echo "download ${REMOTE}" && \
-wget https://github.com/power721/pg/raw/refs/heads/main/pg.zip -O /data/pg.zip && \
+wget https://github.com/power721/pg/raw/refs/heads/main/pg.zip -T 30 -O /data/pg.zip && \
 echo "unzip file" && \
 rm -rf /www/pg/* && unzip -q -o /data/pg.zip -d /www/pg && \
 echo "save version" && \
