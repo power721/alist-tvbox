@@ -18,6 +18,7 @@ COPY --from=BUILDER /app/atv-cli /
 
 COPY scripts/init.sh /
 COPY scripts/alist.sql /
+COPY scripts/downloadPg.sh /
 COPY movie.sh /
 COPY scripts/entrypoint.sh /
 

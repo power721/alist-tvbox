@@ -24,6 +24,7 @@ COPY index.sh /
 
 COPY init.sh /
 COPY movie.sh /
+COPY scripts/downloadPg.sh /
 COPY entrypoint-native.sh /entrypoint.sh
 
 COPY target/atv ./

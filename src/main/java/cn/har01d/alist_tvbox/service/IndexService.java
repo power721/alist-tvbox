@@ -193,6 +193,7 @@ public class IndexService {
         } catch (Exception e) {
             log.debug("", e);
         }
+        Utils.execute("bash /downloadPg.sh");
         return "";
     }
 

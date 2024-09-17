@@ -59,6 +59,10 @@
       </a>
     </el-row>
     <el-row>
+     PG包本地： {{ pgLocal }}
+     PG包远程： {{ pgRemote }}
+    </el-row>
+    <el-row>
       <el-button @click="syncCat">同步文件</el-button>
     </el-row>
 
@@ -126,6 +130,8 @@ import {ElMessage} from "element-plus";
 
 const currentUrl = window.location.origin
 const token = ref('')
+const pgLocal = ref('')
+const pgRemote = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
@@ -215,6 +221,10 @@ const syncCat = () => {
 const load = () => {
   axios.get('/api/subscriptions').then(({data}) => {
     subscriptions.value = data
+  })
+  axios.get("/pg/version").then(({data}) => {
+    pgLocal.value = data.local
+    pgRemote.value = data.remote
   })
 }
 
