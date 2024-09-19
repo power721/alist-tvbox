@@ -1,4 +1,4 @@
-BASE_DIR=./data
+BASE_DIR=$PWD/data
 PORT1=4567
 PORT2=5344
 YES=false
