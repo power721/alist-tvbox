@@ -341,6 +341,8 @@ public class AccountService {
             }
         }
 
+        Utils.execute("bash /downloadPg.sh");
+
         indexService.getRemoteVersion();
     }
 
