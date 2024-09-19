@@ -274,7 +274,7 @@ public class SubscriptionService {
     }
 
     public int syncCat() {
-        Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && cp -r /data/cat/* /www/cat/");
+        Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && [ -d /data/cat ] && cp -r /data/cat/* /www/cat/");
         Utils.execute("bash /downloadPg.sh");
         return 0;
     }
