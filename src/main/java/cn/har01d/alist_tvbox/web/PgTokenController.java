@@ -57,7 +57,7 @@ public class PgTokenController {
 
     @GetMapping("/version")
     public Object update() throws IOException {
-        String remote = restTemplate.getForObject("https://raw.githubusercontent.com/power721/pg/refs/heads/main/version.txt", String.class);
+        String remote = restTemplate.getForObject("https://gitlab.com/power0721/pg/-/raw/main/version.txt", String.class);
         String local = "";
         Path path = Path.of("/data/pg_version.txt");
         if (Files.exists(path)) {
