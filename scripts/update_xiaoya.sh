@@ -145,8 +145,6 @@ else
 fi
 echo ""
 
-echo -e "\e[33m默认端口变更为4567\e[0m"
-
 if [ "$LOGS" = "true" ]; then
   echo ""
   docker logs -f xiaoya-tvbox

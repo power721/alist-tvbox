@@ -1192,8 +1192,9 @@ public class TvBoxService {
             result.put("header", "{\"User-Agent\":\"Dalvik/2.1.0 (Linux; U; Android 12; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (url.contains("115.com")) {
             String ua = aliShare ? "Mozilla/5.0 115Browser/27.0.3.7" : USER_AGENT;
+            String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(PanAccount::getCookie).orElse("");
             // 115会把UA生成签名校验
-            result.put("header", "{\"User-Agent\":\"" + ua + "\",\"Referer\":\"https://115.com/\"}");
+            result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + ua + "\"}");
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
             result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://www.aliyundrive.com/\"}");

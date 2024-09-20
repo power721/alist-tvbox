@@ -59,9 +59,9 @@
         <el-form-item label="Cookie" label-width="140" required>
           <el-input v-model="form.cookie" type="textarea" :rows="5"/>
         </el-form-item>
-<!--        <el-form-item label="Token" label-width="140">-->
-<!--          <el-input v-model="form.token"/>-->
-<!--        </el-form-item>-->
+        <el-form-item label="Token" label-width="140" v-if="form.type=='PAN115'">
+          <el-input v-model="form.token"/>
+        </el-form-item>
         <el-form-item label="文件夹ID" label-width="140">
           <el-input v-model="form.folder"/>
         </el-form-item>
