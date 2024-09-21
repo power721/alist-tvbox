@@ -2,6 +2,8 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.entity.PikPakAccount;
 import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -22,16 +24,19 @@ public class PikPakService {
     private final PikPakAccountRepository pikPakAccountRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
+    private final SettingRepository settingRepository;
 
-    public PikPakService(PikPakAccountRepository pikPakAccountRepository, AccountService accountService, AListLocalService aListLocalService) {
+    public PikPakService(PikPakAccountRepository pikPakAccountRepository, AccountService accountService, AListLocalService aListLocalService, SettingRepository settingRepository) {
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
+        this.settingRepository = settingRepository;
     }
 
     @PostConstruct
     public void setup() {
         pikPakAccountRepository.getFirstByMasterTrue().ifPresent(this::updateAList);
+        fixAccounts();
     }
 
     public void readPikPak() {
@@ -60,6 +65,20 @@ public class PikPakService {
         }
 
         readPikPakAccounts();
+    }
+
+    private void fixAccounts() {
+        if (settingRepository.existsByName("fix_pikpak")) {
+            return;
+        }
+        log.info("fix PikPak");
+        List<PikPakAccount> accounts = pikPakAccountRepository.findAll();
+        for (PikPakAccount account : accounts) {
+            account.setPlatform("pc");
+            account.setRefreshTokenMethod("oauth2");
+        }
+        pikPakAccountRepository.saveAll(accounts);
+        settingRepository.save(new Setting("fix_pikpak", "true"));
     }
 
     private void readPikPakAccounts() {
@@ -93,8 +112,8 @@ public class PikPakService {
         try {
             List<PikPakAccount> list = pikPakAccountRepository.findAll();
             for (PikPakAccount account : list) {
-                String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'','','',0,'302_redirect','');";
-                Utils.executeUpdate(String.format(sql, 8000 + account.getId(), account.getNickname(), account.getUsername(), account.getPassword()));
+                String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"platform\":\"%s\",\"refresh_token_method\":\"%s\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'','','',0,'302_redirect','');";
+                Utils.executeUpdate(String.format(sql, 8000 + account.getId(), account.getNickname(), account.getPlatform(), account.getRefreshTokenMethod(), account.getUsername(), account.getPassword()));
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -173,6 +192,8 @@ public class PikPakService {
         }
 
         boolean changed = account.isMaster() != dto.isMaster()
+                || !account.getPlatform().equals(dto.getPlatform())
+                || !account.getRefreshTokenMethod().equals(dto.getRefreshTokenMethod())
                 || !account.getUsername().equals(dto.getUsername())
                 || !account.getPassword().equals(dto.getPassword());
         dto.setId(id);
@@ -196,8 +217,8 @@ public class PikPakService {
             if (status == 2) {
                 accountService.deleteStorage(id, token);
             }
-            String sql = "INSERT INTO x_storages (id,mount_path,driver,cache_expiration,status,addition,modified,disabled,webdav_policy) VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",'PikPak',30,'work','{\"root_folder_id\":\"\",\"username\":\"%s\",\"password\":\"%s\"}','2023-06-20 12:00:00+00:00',%d,'302_redirect');";
-            Utils.executeUpdate(String.format(sql, id, account.getNickname(), account.getUsername(), account.getPassword(), disabled));
+            String sql = "INSERT INTO x_storages (id,mount_path,driver,cache_expiration,status,addition,modified,disabled,webdav_policy) VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",'PikPak',30,'work','{\"root_folder_id\":\"\",\"platform\":\"%s\",\"refresh_token_method\":\"%s\",\"username\":\"%s\",\"password\":\"%s\"}','2023-06-20 12:00:00+00:00',%d,'302_redirect');";
+            Utils.executeUpdate(String.format(sql, id, account.getNickname(), account.getPlatform(), account.getRefreshTokenMethod(), account.getUsername(), account.getPassword(), disabled));
             log.info("add AList PikPak {} {}: {}", id, account.getNickname(), account.getUsername());
             if (status == 2) {
                 accountService.enableStorage(id, token);

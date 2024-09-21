@@ -22,6 +22,8 @@ public class PikPakAccount {
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
     private Integer id;
     private String nickname;
+    private String platform = "pc";
+    private String refreshTokenMethod = "oauth2";
     private String username = "";
     private String password = "";
     private boolean master;

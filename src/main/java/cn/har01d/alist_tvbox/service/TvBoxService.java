@@ -105,6 +105,7 @@ public class TvBoxService {
             new FilterValue("无分", "no"),
             new FilterValue("低分", "low")
     );
+    private final PikPakAccountRepository pikPakAccountRepository;
     private List<Site> sites = new ArrayList<>();
 
     public TvBoxService(AccountRepository accountRepository,
@@ -121,7 +122,7 @@ public class TvBoxService {
                         ConfigFileService configFileService,
                         ObjectMapper objectMapper,
                         Environment environment,
-                        PanAccountRepository panAccountRepository) {
+                        PanAccountRepository panAccountRepository, PikPakAccountRepository pikPakAccountRepository) {
         this.accountRepository = accountRepository;
         this.aliasRepository = aliasRepository;
         this.shareRepository = shareRepository;
@@ -137,6 +138,7 @@ public class TvBoxService {
         this.objectMapper = objectMapper;
         this.environment = environment;
         this.panAccountRepository = panAccountRepository;
+        this.pikPakAccountRepository = pikPakAccountRepository;
     }
 
     private Site getXiaoyaSite() {
@@ -316,8 +318,7 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        int pp = shareRepository.countByType(1);
-        if (shareRepository.count() > pp) {
+        if (shareRepository.countByType(0) > 0) {
             Category category = new Category();
             category.setType_id("1$/\uD83C\uDE34我的阿里分享$1");
             category.setType_name("阿里分享");
@@ -373,10 +374,18 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        if (pp > 0) {
+        if (pikPakAccountRepository.count() > 0) {
+            Category category = new Category();
+            category.setType_id("1$/\uD83C\uDD7F️我的PikPak$1");
+            category.setType_name("PikPak");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        }
+
+        if (shareRepository.countByType(1) > 0) {
             Category category = new Category();
             category.setType_id("1$/\uD83D\uDD78️我的PikPak分享$1");
-            category.setType_name("PikPak");
+            category.setType_name("PikPak分享");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
@@ -1167,14 +1176,12 @@ public class TvBoxService {
 //            }
 //        }
 
-        boolean aliShare = false;
         if (url == null) {
             FsDetail fsDetail = aListService.getFile(site, path);
             if (fsDetail == null) {
                 throw new BadRequestException("找不到文件 " + path);
             }
 
-            aliShare = "AliyundriveShare2Open".equals(fsDetail.getProvider());
             if ("com.fongmi.android.tv".equals(client)) {
                 url = fixHttp(fsDetail.getRawUrl());
             } else if ((fsDetail.getProvider().contains("Aliyundrive") && !fsDetail.getRawUrl().contains("115.com"))

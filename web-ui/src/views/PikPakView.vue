@@ -40,6 +40,26 @@
         <el-form-item label="密码" label-width="140" required>
           <el-input v-model="form.password" type="password" show-password/>
         </el-form-item>
+        <el-form-item label="认证平台" label-width="140" required>
+          <el-select v-model="form.platform">
+              <el-option
+                v-for="item in platforms"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="认证方式" label-width="140" required>
+          <el-select v-model="form.refreshTokenMethod">
+              <el-option
+                v-for="item in methods"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+          </el-select>
+        </el-form-item>
         <el-form-item label="主账号" label-width="140">
           <el-switch
             v-model="form.master"
@@ -85,7 +105,8 @@ interface Item {
   text: string
 }
 
-const iat = ref(0)
+const platforms = ['pc', 'web', 'android']
+const methods = ['oauth2', 'http']
 const exp = ref(0)
 const updateAction = ref(false)
 const dialogTitle = ref('')
@@ -95,6 +116,8 @@ const dialogVisible = ref(false)
 const form = ref({
   id: 0,
   nickname: '',
+  platform: 'pc',
+  refreshTokenMethod: 'oauth2',
   username: '',
   password: '',
   master: false,
@@ -106,6 +129,8 @@ const handleAdd = () => {
   form.value = {
     id: 0,
     nickname: '',
+    platform: 'pc',
+    refreshTokenMethod: 'oauth2',
     username: '',
     password: '',
     master: false,
