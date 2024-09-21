@@ -108,7 +108,7 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 #### 环境变量
 ![环境变量](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_docker4.png)
 
-### 自动更新
+### 定时更新
 使用root用户创建corntab定时任务
 ```bash
 wget https://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
@@ -116,6 +116,28 @@ chmod a+x /opt/update_xiaoya.sh
 crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh -u"; } | crontab -
 ```
 每天凌晨2点检查更新并重启应用。
+
+### 定时重启
+使用root用户创建corntab定时任务
+```bash
+wget https://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
+chmod a+x /opt/update_xiaoya.sh
+crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh"; } | crontab -
+```
+每天凌晨2点重启应用。
+
+### 自动更新
+```bash
+docker run -d \
+    --name watchtower \
+    --restart always \
+    -e TZ=Asia/Shanghai \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    containrrr/watchtower \
+    --cleanup \
+    -s "0 0 3 * * *" \
+   xiaoya-tvbox
+```
 
 ### 防火墙
 需要开放管理端口4567和Nginx端口5344（host网络模式是5678）。
