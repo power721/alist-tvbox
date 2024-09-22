@@ -10,7 +10,7 @@
     <el-table :data="accounts" border style="width: 100%">
       <el-table-column prop="id" label="ID" sortable width="70">
         <template #default="scope">
-          {{ scope.row.id + 9000 }}
+          {{ scope.row.id + 4000 }}
         </template>
       </el-table-column>
       <el-table-column prop="type" label="类型" sortable width="150">
@@ -85,7 +85,7 @@
     </el-dialog>
 
     <el-dialog v-model="dialogVisible" title="删除网盘账号" width="30%">
-      <p>是否删除网盘账号 - {{ form.id + 9000 }}</p>
+      <p>是否删除网盘账号 - {{ form.id + 4000 }}</p>
       <p> {{ getTypeName(form.type) }} ： {{ form.name }}</p>
       <template #footer>
       <span class="dialog-footer">

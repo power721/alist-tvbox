@@ -18,7 +18,7 @@ import java.util.List;
 @Slf4j
 @Service
 public class PanAccountService {
-    public static final int IDX = 9000;
+    public static final int IDX = 4000;
     private final PanAccountRepository panAccountRepository;
     private final SettingRepository settingRepository;
     private final ShareRepository shareRepository;
