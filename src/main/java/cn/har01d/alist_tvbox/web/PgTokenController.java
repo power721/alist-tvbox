@@ -112,7 +112,7 @@ public class PgTokenController {
         map.put("pan115_speed_limit", 0);
         map.put("pan115_speed_limit_mobile", 10485760);
         map.put("pan115_auto_delete", true);
-        map.put("pan115_delete_code", settingRepository.findByName("delete_code_115").map(Setting::getValue).orElse(""));
+        map.put("pan115_delete_code", settingRepository.findById("delete_code_115").map(Setting::getValue).orElse(""));
         map.put("thunder_username", "");
         map.put("thunder_password", "");
         map.put("thunder_captchatoken", "");
