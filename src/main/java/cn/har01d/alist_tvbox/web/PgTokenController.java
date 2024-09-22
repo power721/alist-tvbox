@@ -109,8 +109,10 @@ public class PgTokenController {
         map.put("pan115_vip_thread_limit", 0);
         map.put("pan115_is_vip", false);
         map.put("pan115_flags", "4kz");
+        map.put("pan115_speed_limit", 0);
+        map.put("pan115_speed_limit_mobile", 10485760);
         map.put("pan115_auto_delete", true);
-        map.put("pan115_delete_code", "");
+        map.put("pan115_delete_code", settingRepository.findByName("delete_code_115").map(Setting::getValue).orElse(""));
         map.put("thunder_username", "");
         map.put("thunder_password", "");
         map.put("thunder_captchatoken", "");
@@ -125,6 +127,7 @@ public class PgTokenController {
         map.put("pikpak_vip_thread_limit", 2);
         map.put("pikpak_proxy", "");
         map.put("pikpak_proxy_onlyapi", false);
+        map.put("pan_order", "ali|quark|uc|115|yd|thunder|pikpak");
 
         Path path = Path.of("/data/tokenm.json");
         if (Files.exists(path)) {
