@@ -69,6 +69,7 @@ public class TvBoxService {
     private final TmdbService tmdbService;
     private final SubscriptionService subscriptionService;
     private final ConfigFileService configFileService;
+    private final ProxyService proxyService;
     private final ObjectMapper objectMapper;
     private final Environment environment;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
@@ -120,9 +121,11 @@ public class TvBoxService {
                         TmdbService tmdbService,
                         SubscriptionService subscriptionService,
                         ConfigFileService configFileService,
+                        ProxyService proxyService,
                         ObjectMapper objectMapper,
                         Environment environment,
-                        PanAccountRepository panAccountRepository, PikPakAccountRepository pikPakAccountRepository) {
+                        PanAccountRepository panAccountRepository,
+                        PikPakAccountRepository pikPakAccountRepository) {
         this.accountRepository = accountRepository;
         this.aliasRepository = aliasRepository;
         this.shareRepository = shareRepository;
@@ -135,6 +138,7 @@ public class TvBoxService {
         this.tmdbService = tmdbService;
         this.subscriptionService = subscriptionService;
         this.configFileService = configFileService;
+        this.proxyService = proxyService;
         this.objectMapper = objectMapper;
         this.environment = environment;
         this.panAccountRepository = panAccountRepository;
@@ -1198,9 +1202,15 @@ public class TvBoxService {
         if (url.contains("xunlei.com")) {
             result.put("header", "{\"User-Agent\":\"Dalvik/2.1.0 (Linux; U; Android 12; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (url.contains("115.com")) {
-            String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(PanAccount::getCookie).orElse("");
-            // 115会把UA生成签名校验
-            result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
+            var account = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElseThrow();
+            if (account.isUseProxy()) {
+                url = proxyService.generateProxyUrl(url);
+                result.put("url", url);
+            } else {
+                String cookie = account.getCookie();
+                // 115会把UA生成签名校验
+                result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
+            }
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
             result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://www.aliyundrive.com/\"}");

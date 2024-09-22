@@ -100,7 +100,12 @@ public class PanAccountService {
             log.info("insert UC account {} : {}, result: {}", id, getMountPath(account), count);
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('uc_cookie','" + account.getCookie() + "','','text','',1,0);");
         } else if (account.getType() == DriverType.PAN115) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+            String sql;
+            if (account.isUseProxy()) {
+                sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',1,'native_proxy','');";
+            } else {
+                sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+            }
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder()));
             log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_cookie','" + account.getCookie() + "','','text','',1,0);");
@@ -120,7 +125,12 @@ public class PanAccountService {
             log.info("insert UC account {} : {}, result: {}", id, getMountPath(account), count);
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('uc_cookie','" + account.getCookie() + "','','text','',1,0);");
         } else if (account.getType() == DriverType.PAN115) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+            String sql;
+            if (account.isUseProxy()) {
+                sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',1,'native_proxy','',0);";
+            } else {
+                sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":56}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+            }
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder()));
             log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_cookie','" + account.getCookie() + "','','text','',1,0);");
@@ -177,6 +187,7 @@ public class PanAccountService {
         }
 
         boolean changed = account.isMaster() != dto.isMaster()
+                || account.isUseProxy() != dto.isUseProxy()
                 || !account.getType().equals(dto.getType())
                 || !account.getToken().equals(dto.getToken())
                 || !account.getCookie().equals(dto.getCookie())
@@ -184,6 +195,7 @@ public class PanAccountService {
                 || !account.getName().equals(dto.getName());
 
         account.setMaster(dto.isMaster());
+        account.setUseProxy(dto.isUseProxy());
         account.setName(dto.getName());
         account.setType(dto.getType());
         account.setCookie(dto.getCookie());
