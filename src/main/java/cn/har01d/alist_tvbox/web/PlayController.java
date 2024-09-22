@@ -1,10 +1,8 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.service.BiliBiliService;
-import cn.har01d.alist_tvbox.service.ParseService;
-import cn.har01d.alist_tvbox.service.SubscriptionService;
-import cn.har01d.alist_tvbox.service.TvBoxService;
+import cn.har01d.alist_tvbox.service.*;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,14 +20,22 @@ import java.util.Map;
 public class PlayController {
     private final TvBoxService tvBoxService;
     private final BiliBiliService biliBiliService;
-    private final ParseService parseService;
     private final SubscriptionService subscriptionService;
+    private final ProxyService proxyService;
 
-    public PlayController(TvBoxService tvBoxService, BiliBiliService biliBiliService, ParseService parseService, SubscriptionService subscriptionService) {
+    public PlayController(TvBoxService tvBoxService,
+                          BiliBiliService biliBiliService,
+                          SubscriptionService subscriptionService,
+                          ProxyService proxyService) {
         this.tvBoxService = tvBoxService;
         this.biliBiliService = biliBiliService;
-        this.parseService = parseService;
         this.subscriptionService = subscriptionService;
+        this.proxyService = proxyService;
+    }
+
+    @GetMapping("/proxy/{id}")
+    public void proxy(@PathVariable String id, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        proxyService.proxy(id, request, response);
     }
 
     @GetMapping("/play")

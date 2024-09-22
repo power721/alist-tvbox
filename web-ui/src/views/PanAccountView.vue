@@ -65,6 +65,14 @@
         <el-form-item label="文件夹ID" label-width="140">
           <el-input v-model="form.folder"/>
         </el-form-item>
+        <el-form-item v-if="form.type=='PAN115'" label="本地代理" label-width="140">
+          <el-switch
+            v-model="form.useProxy"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+          />
+        </el-form-item>
         <el-form-item label="主账号" label-width="140">
           <el-switch
             v-model="form.master"
@@ -117,6 +125,7 @@ const form = ref({
   cookie: '',
   token: '',
   folder: '',
+  useProxy: false,
   master: false,
 })
 
@@ -130,6 +139,7 @@ const handleAdd = () => {
     cookie: '',
     token: '',
     folder: '',
+    useProxy: false,
     master: false,
   }
   formVisible.value = true

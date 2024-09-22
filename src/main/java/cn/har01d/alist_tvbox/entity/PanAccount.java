@@ -23,5 +23,7 @@ public class PanAccount {
     private String cookie = "";
     private String token = "";
     private String folder = "";
+    @Column(columnDefinition = "BOOLEAN DEFAULT false")
+    private boolean useProxy;
     private boolean master;
 }
