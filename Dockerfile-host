@@ -1,4 +1,4 @@
-FROM golang:1.20 as BUILDER
+FROM golang:1.20 as builder
 
 WORKDIR /app/
 
@@ -14,7 +14,7 @@ ENV MEM_OPT="-Xmx512M" ALIST_PORT=5678 INSTALL=hostmode
 
 COPY config/config-host.json /opt/alist/data/config.json
 
-COPY --from=BUILDER /app/atv-cli /
+COPY --from=builder /app/atv-cli /
 
 COPY init.sh /
 COPY movie.sh /

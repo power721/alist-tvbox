@@ -1,4 +1,4 @@
-FROM golang:1.20 as BUILDER
+FROM golang:1.20 as builder
 
 WORKDIR /app/
 
@@ -10,7 +10,7 @@ FROM ubuntu:22.04
 
 WORKDIR /app/
 
-COPY --from=BUILDER /app/atv-cli /opt/atv/
+COPY --from=builder /app/atv-cli /opt/atv/
 
 COPY scripts/install.sh ./
 
