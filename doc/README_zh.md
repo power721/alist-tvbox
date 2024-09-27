@@ -127,6 +127,7 @@ crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh"; } | crontab -
 每天凌晨2点重启应用。
 
 ### 自动更新
+使用docker镜像watchtower实现自动更新。
 ```bash
 docker run -d \
     --name watchtower \

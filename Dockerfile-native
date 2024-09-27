@@ -1,4 +1,4 @@
-FROM golang:1.20 as BUILDER
+FROM golang:1.20 as builder
 
 WORKDIR /app/
 
@@ -18,7 +18,7 @@ WORKDIR /opt/atv/
 
 COPY config/config.json /opt/alist/data/config.json
 
-COPY --from=BUILDER /app/atv-cli /
+COPY --from=builder /app/atv-cli /
 
 COPY index.sh /
 

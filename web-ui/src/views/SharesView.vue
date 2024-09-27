@@ -129,6 +129,7 @@
         </el-radio-group>
       </el-form-item>
       <span v-if="form.path">完整路径： {{ fullPath(form) }}</span>
+      <div>网盘帐号在帐号页面添加。</div>
     </el-form>
     <template #footer>
       <span class="dialog-footer">
