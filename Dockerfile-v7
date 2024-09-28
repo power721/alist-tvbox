@@ -17,7 +17,7 @@ WORKDIR /opt/atv/
 
 RUN apk add --update-cache gcompat
 
-COPY index.sh /
+COPY scripts/index.sh /
 COPY init.sh /
 COPY entrypoint.sh /
 

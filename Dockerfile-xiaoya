@@ -17,8 +17,9 @@ COPY config/config.json /opt/alist/data/config.json
 COPY --from=builder /app/atv-cli /
 
 COPY init.sh /
-COPY movie.sh /
+COPY scripts/movie.sh /
 COPY scripts/downloadPg.sh /
+COPY scripts/downloadHeart.sh /
 COPY entrypoint.sh /
 
 COPY target/application/ ./

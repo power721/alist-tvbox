@@ -11,7 +11,7 @@ fi
 
 REMOTE=$(curl -s https://gitlab.com/power0721/pg/-/raw/main/version1.txt)
 
-echo "local PG: ${LOCAL}, remote PG: ${REMOTE}"
+echo "local heart: ${LOCAL}, remote heart: ${REMOTE}"
 if [ "$LOCAL" = "${REMOTE}" ]; then
   echo "sync files"
   rm -rf /www/heart/* && unzip -q -o /data/heart.zip -d /www/heart && [ -d /data/heart ] && cp -r /data/heart/* /www/heart/

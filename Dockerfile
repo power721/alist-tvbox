@@ -19,13 +19,15 @@ COPY --from=builder /app/atv-cli /
 COPY scripts/init.sh /
 COPY scripts/alist.sql /
 COPY scripts/downloadPg.sh /
-COPY movie.sh /
+COPY scripts/downloadHeart.sh /
+COPY scripts/movie.sh /
 COPY scripts/entrypoint.sh /
 
 COPY data/tvbox.zip /
 COPY data/base_version /
 COPY data/cat.zip /
 COPY data/pg.zip /
+COPY data/heart.zip /
 COPY target/application/ ./
 
 COPY data/version data/app_version

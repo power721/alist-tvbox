@@ -9,9 +9,11 @@ import cn.har01d.alist_tvbox.service.SubscriptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,18 +30,32 @@ public class HeartConfigController {
     private final SettingRepository settingRepository;
     private final PanAccountRepository panAccountRepository;
     private final ObjectMapper objectMapper;
+    private final RestTemplate restTemplate;
 
     public HeartConfigController(SubscriptionService subscriptionService,
                                  AccountRepository accountRepository,
                                  SettingRepository settingRepository,
                                  PanAccountRepository panAccountRepository,
-                                 ObjectMapper objectMapper
+                                 ObjectMapper objectMapper,
+                                 RestTemplateBuilder builder
     ) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
         this.panAccountRepository = panAccountRepository;
         this.objectMapper = objectMapper;
+        this.restTemplate = builder.build();
+    }
+
+    @GetMapping("/version")
+    public Object version() throws IOException {
+        String remote = restTemplate.getForObject("https://gitlab.com/power0721/pg/-/raw/main/version1.txt", String.class);
+        String local = "";
+        Path path = Path.of("/data/heart_version.txt");
+        if (Files.exists(path)) {
+            local = Files.readString(path);
+        }
+        return Map.of("local", local, "remote", remote);
     }
 
     @GetMapping("/config")

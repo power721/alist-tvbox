@@ -283,6 +283,7 @@ public class SubscriptionService {
     public int syncCat() {
         Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && [ -d /data/cat ] && cp -r /data/cat/* /www/cat/");
         Utils.execute("/downloadPg.sh");
+        Utils.execute("/downloadHeart.sh");
         return 0;
     }
 
