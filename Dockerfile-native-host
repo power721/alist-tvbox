@@ -25,7 +25,7 @@ COPY scripts/index.sh /
 COPY init.sh /
 COPY scripts/movie.sh /
 COPY scripts/downloadPg.sh /
-COPY scripts/downloadHeart.sh /
+COPY scripts/downloadZx.sh /
 COPY entrypoint-native.sh /entrypoint.sh
 
 COPY target/atv ./
@@ -36,7 +36,7 @@ COPY data/tvbox.zip /
 COPY data/index.share.zip /
 COPY data/cat.zip /
 COPY data/pg.zip /
-COPY data/heart.zip /
+COPY data/zx.zip /
 COPY data/data.zip /
 COPY data/base_version /
 

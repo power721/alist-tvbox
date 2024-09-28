@@ -99,9 +99,9 @@ if [ ! -d /www/pg ]; then
 fi
 [ -d /data/pg ] && cp -r /data/pg/* /www/pg/
 
-if [ ! -d /www/heart ]; then
-  mkdir /www/heart
-  unzip -q -o /heart.zip -d /www/heart
+if [ ! -d /www/zx ]; then
+  mkdir /www/zx
+  unzip -q -o /zx.zip -d /www/zx
 fi
 
 cd /tmp/

@@ -63,8 +63,8 @@
      PG包远程： {{ pgRemote }}
     </el-row>
     <el-row>
-      真心包本地： {{ heartLocal }}
-      真心包远程： {{ heartRemote }}
+      真心包本地： {{ zxLocal }}
+      真心包远程： {{ zxRemote }}
     </el-row>
     <el-row>
       <el-button @click="syncCat">同步文件</el-button>
@@ -136,8 +136,8 @@ const currentUrl = window.location.origin
 const token = ref('')
 const pgLocal = ref('')
 const pgRemote = ref('')
-const heartLocal = ref('')
-const heartRemote = ref('')
+const zxLocal = ref('')
+const zxRemote = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
@@ -237,9 +237,9 @@ const loadVersion = () => {
     pgLocal.value = data.local
     pgRemote.value = data.remote
   })
-  axios.get("/heart/version").then(({data}) => {
-    heartLocal.value = data.local
-    heartRemote.value = data.remote
+  axios.get("/zx/version").then(({data}) => {
+    zxLocal.value = data.local
+    zxRemote.value = data.remote
   })
 }
 

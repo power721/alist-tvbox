@@ -19,7 +19,7 @@ COPY --from=builder /app/atv-cli /
 COPY init.sh /
 COPY scripts/movie.sh /
 COPY scripts/downloadPg.sh /
-COPY scripts/downloadHeart.sh /
+COPY scripts/downloadZx.sh /
 COPY entrypoint.sh /
 
 COPY target/application/ ./
@@ -29,7 +29,7 @@ COPY data/base_version /
 COPY data/index.share.zip /
 COPY data/cat.zip /
 COPY data/pg.zip /
-COPY data/heart.zip /
+COPY data/zx.zip /
 COPY data/data.zip /
 
 COPY data/version data/app_version

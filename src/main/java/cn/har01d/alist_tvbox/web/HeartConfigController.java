@@ -18,12 +18,11 @@ import org.springframework.web.client.RestTemplate;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
 @RestController
-@RequestMapping("/heart")
+@RequestMapping("/zx")
 public class HeartConfigController {
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
@@ -51,7 +50,7 @@ public class HeartConfigController {
     public Object version() throws IOException {
         String remote = restTemplate.getForObject("https://gitlab.com/power0721/pg/-/raw/main/version1.txt", String.class);
         String local = "";
-        Path path = Path.of("/data/heart_version.txt");
+        Path path = Path.of("/data/zx_version.txt");
         if (Files.exists(path)) {
             local = Files.readString(path);
         }
@@ -62,7 +61,7 @@ public class HeartConfigController {
     public ObjectNode config(String token) throws IOException {
         subscriptionService.checkToken(token);
 
-        String json = Files.readString(Path.of("/www/heart/peizhi.json"));
+        String json = Files.readString(Path.of("/www/zx/peizhi.json"));
 
         ObjectNode objectNode = (ObjectNode) objectMapper.readTree(json);
 
@@ -74,7 +73,7 @@ public class HeartConfigController {
         panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("ucCookie", share.getCookie()));
         settingRepository.findById("delete_code_115").map(Setting::getValue).ifPresent(code -> objectNode.put("pwdRb115", code));
 
-        Path path = Path.of("/data/heart.json");
+        Path path = Path.of("/data/zx.json");
         if (Files.exists(path)) {
             json = Files.readString(path);
             ObjectNode override = (ObjectNode) objectMapper.readTree(json);
