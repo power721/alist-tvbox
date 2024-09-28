@@ -145,6 +145,13 @@ public class SubscriptionService {
             sub.setUrl("http://ok321.top/ok");
             subscriptionRepository.save(sub);
         }
+        if (subscriptionRepository.findBySid("heart").isEmpty()) {
+            Subscription sub = new Subscription();
+            sub.setSid("heart");
+            sub.setName("真心");
+            sub.setUrl("/heart/FongMi.json");
+            subscriptionRepository.save(sub);
+        }
     }
 
     private void fixUrl(List<Subscription> list) {
@@ -275,7 +282,7 @@ public class SubscriptionService {
 
     public int syncCat() {
         Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && [ -d /data/cat ] && cp -r /data/cat/* /www/cat/");
-        Utils.execute("bash /downloadPg.sh");
+        Utils.execute("/downloadPg.sh");
         return 0;
     }
 
@@ -962,6 +969,7 @@ public class SubscriptionService {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
                 String address = readHostAddress();
                 json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm?token=" + tokens.split(",")[0]);
+                json = json.replace("./peizhi.json", address + "/heart/config?token=" + tokens.split(",")[0]);
                 json = json.replace("./", address + folder);
                 //json = json.replace(address + folder + "lib/tokenm.json", "./lib/tokenm.json");
                 json = json.replace("DOCKER_ADDRESS", address);

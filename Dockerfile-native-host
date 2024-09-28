@@ -35,6 +35,7 @@ COPY data/tvbox.zip /
 COPY data/index.share.zip /
 COPY data/cat.zip /
 COPY data/pg.zip /
+COPY data/heart.zip /
 COPY data/data.zip /
 COPY data/base_version /
 
