@@ -23,7 +23,7 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/zx")
-public class HeartConfigController {
+public class ZxConfigController {
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
@@ -31,12 +31,12 @@ public class HeartConfigController {
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
 
-    public HeartConfigController(SubscriptionService subscriptionService,
-                                 AccountRepository accountRepository,
-                                 SettingRepository settingRepository,
-                                 PanAccountRepository panAccountRepository,
-                                 ObjectMapper objectMapper,
-                                 RestTemplateBuilder builder
+    public ZxConfigController(SubscriptionService subscriptionService,
+                              AccountRepository accountRepository,
+                              SettingRepository settingRepository,
+                              PanAccountRepository panAccountRepository,
+                              ObjectMapper objectMapper,
+                              RestTemplateBuilder builder
     ) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
