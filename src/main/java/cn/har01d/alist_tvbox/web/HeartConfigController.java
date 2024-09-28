@@ -59,30 +59,28 @@ public class HeartConfigController {
     }
 
     @GetMapping("/config")
-    public Map<String, Object> config(String token) throws IOException {
+    public ObjectNode config(String token) throws IOException {
         subscriptionService.checkToken(token);
 
-        Map<String, Object> map = new HashMap<>();
-        accountRepository.getFirstByMasterTrue().ifPresent(account -> {
-            map.put("aliToken", account.getRefreshToken());
-            //map.put("open_token", account.getOpenToken());
-        });
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> map.put("quarkCookie", share.getCookie()));
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> map.put("115Cookie", share.getCookie()));
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> map.put("ucCookie", share.getCookie()));
-        settingRepository.findById("delete_code_115").map(Setting::getValue).ifPresent(code -> map.put("pwdRb115", code));
+        String json = Files.readString(Path.of("/www/heart/peizhi.json"));
 
-        map.put("goServerUrl", "http://127.0.0.1:9966");
-        map.put("ydAuth", "");
-        map.put("proxy", "http://127.0.0.1:1072");
+        ObjectNode objectNode = (ObjectNode) objectMapper.readTree(json);
+
+        accountRepository.getFirstByMasterTrue().ifPresent(account -> {
+            objectNode.put("aliToken", account.getRefreshToken());
+        });
+        panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> objectNode.put("quarkCookie", share.getCookie()));
+        panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> objectNode.put("115Cookie", share.getCookie()));
+        panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("ucCookie", share.getCookie()));
+        settingRepository.findById("delete_code_115").map(Setting::getValue).ifPresent(code -> objectNode.put("pwdRb115", code));
 
         Path path = Path.of("/data/heart.json");
         if (Files.exists(path)) {
-            String json = Files.readString(path);
-            Map<String, Object> override = (Map<String, Object>) objectMapper.readValue(json, Map.class);
-            map.putAll(override);
+            json = Files.readString(path);
+            ObjectNode override = (ObjectNode) objectMapper.readTree(json);
+            objectNode.setAll(override);
         }
 
-        return map;
+        return objectNode;
     }
 }
