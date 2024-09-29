@@ -7,15 +7,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.util.FileCopyUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -49,7 +46,7 @@ public class PgTokenController {
     }
 
     @GetMapping("/version")
-    public Object update() throws IOException {
+    public Object version() throws IOException {
         String remote = restTemplate.getForObject("https://gitlab.com/power0721/pg/-/raw/main/version.txt", String.class);
         String local = "";
         Path path = Path.of("/data/pg_version.txt");
@@ -63,9 +60,7 @@ public class PgTokenController {
     public ObjectNode tokenm(String token) throws Exception {
         subscriptionService.checkToken(token);
 
-        ClassPathResource resource = new ClassPathResource("tokentemplate.json");
-        InputStream inputStream = resource.getInputStream();
-        String json = new String(FileCopyUtils.copyToByteArray(inputStream));
+        String json = Files.readString(Path.of("/www/pg/lib/tokentemplate.json"));
 
         ObjectNode objectNode = (ObjectNode) objectMapper.readTree(json);
 
