@@ -9,7 +9,7 @@ else
   cp /zx.zip /data/
 fi
 
-REMOTE=$(curl -s https://gitlab.com/power0721/pg/-/raw/main/version1.txt)
+REMOTE=$(curl -s https://gitlab.com/power0721/pg/-/raw/main/zx.version)
 
 echo "local zx: ${LOCAL}, remote zx: ${REMOTE}"
 if [ "$LOCAL" = "${REMOTE}" ]; then
