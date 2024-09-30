@@ -18,7 +18,7 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY index.sh /
+COPY scripts/index.sh /
 
 COPY target/dependencies/ ./
 COPY target/snapshot-dependencies/ ./

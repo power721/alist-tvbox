@@ -99,6 +99,11 @@ if [ ! -d /www/pg ]; then
 fi
 [ -d /data/pg ] && cp -r /data/pg/* /www/pg/
 
+if [ ! -d /www/zx ]; then
+  mkdir /www/zx
+  unzip -q -o /zx.zip -d /www/zx
+fi
+
 cd /tmp/
 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/version.txt -O version.txt || \

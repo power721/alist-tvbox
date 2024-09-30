@@ -65,3 +65,8 @@ if [ ! -d /www/pg ]; then
   unzip -q -o /pg.zip -d /www/pg
 fi
 [ -d /data/pg ] && cp -r /data/pg/* /www/pg/
+
+if [ ! -d /www/zx ]; then
+  mkdir /www/zx
+  unzip -q -o /zx.zip -d /www/zx
+fi

@@ -190,6 +190,12 @@ docker run -d \
 
 ![账号详情](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_detail.png)
 
+网盘帐号在帐号页面添加。
+
+网盘分享在资源页面添加。
+
+115网盘开启本地代理后才能使用webdav播放。
+
 ### 订阅
 tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
@@ -254,6 +260,24 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ![订阅预览](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_sub_data.png)
 
+#### PG订阅
+在订阅页面，查看当前PG包版本和远程版本。
+
+如果本地版本与远程版本不同，点击同步文件按钮。
+
+等待PG包下载完成，重新进入订阅页面查看版本是否更新。
+
+自定义PG包，下载最新的PG包放在/etc/xiaoya/目录，点击同步文件按钮。
+
+自定义PG配置，在文件页面新建文件/data/tokenm.json。
+填写自定义内容，比如：
+```json
+{
+  "pan115_delete_code" : "123456",
+  "tgsearch_api_session":"bot"
+}
+```
+
 #### 自定义多仓订阅
 在文件页面新建文件，目录：/www/tvbox/repo，名称：订阅id.json，比如：1.json。
 内容留空(返回全部订阅)或者自定义内容：
@@ -305,6 +329,10 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ![类别](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_category.png)
 
 ![filter](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_filter.jpg)
+
+### Emby
+在Emby页面添加Emby站点url和帐号。
+在TvBox选择第五个站源观看。
 
 ### BiliBili
 拖动行可以改变顺序，需要点击保存按钮才能生效。

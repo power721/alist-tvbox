@@ -10,6 +10,7 @@ import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
@@ -145,6 +146,13 @@ public class SubscriptionService {
             sub.setUrl("http://ok321.top/ok");
             subscriptionRepository.save(sub);
         }
+        if (subscriptionRepository.findBySid("zx").isEmpty()) {
+            Subscription sub = new Subscription();
+            sub.setSid("zx");
+            sub.setName("真心");
+            sub.setUrl("/zx/FongMi.json");
+            subscriptionRepository.save(sub);
+        }
     }
 
     private void fixUrl(List<Subscription> list) {
@@ -275,7 +283,8 @@ public class SubscriptionService {
 
     public int syncCat() {
         Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && [ -d /data/cat ] && cp -r /data/cat/* /www/cat/");
-        Utils.execute("bash /downloadPg.sh");
+        Utils.execute("/downloadZx.sh");
+        Utils.execute("/downloadPg.sh");
         return 0;
     }
 
@@ -962,8 +971,31 @@ public class SubscriptionService {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
                 String address = readHostAddress();
                 json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm?token=" + tokens.split(",")[0]);
+                json = json.replace("./peizhi.json", address + "/zx/config?token=" + tokens.split(",")[0]);
                 json = json.replace("./", address + folder);
                 //json = json.replace(address + folder + "lib/tokenm.json", "./lib/tokenm.json");
+                if (name.equals("/zx/FongMi.json")) {
+                    String url = ServletUriComponentsBuilder.fromCurrentRequest()
+                            .scheme("http")
+                            .port(9999)
+                            .replacePath("")
+                            .replaceQuery("")
+                            .build()
+                            .toUriString();
+                    Path path = Path.of("/data/zx.json");
+                    if (Files.exists(path)) {
+                        try {
+                            json = Files.readString(path);
+                            ObjectNode objectNode = (ObjectNode) objectMapper.readTree(json);
+                            if (objectNode.has("siteUrl")) {
+                                url = objectNode.get("siteUrl").asText();
+                            }
+                        } catch (Exception e) {
+                            log.warn("", e);
+                        }
+                    }
+                    json = json.replace("你的服务器地址端口", url);
+                }
                 json = json.replace("DOCKER_ADDRESS", address);
                 json = json.replace("ATV_ADDRESS", address);
                 return json;
