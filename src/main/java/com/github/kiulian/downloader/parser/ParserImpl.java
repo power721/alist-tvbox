@@ -113,9 +113,9 @@ public class ParserImpl implements Parser {
                         "    \"client\": {" +
                         "      \"hl\": \"en\"," +
                         "      \"gl\": \"US\"," +
-                        "      \"clientName\": \"ANDROID_TESTSUITE\"," +
-                        "      \"clientVersion\": \"1.9\"," +
-                        "      \"androidSdkVersion\": 31" +
+                        "      \"clientName\": \"ANDROID_CREATOR\"," +
+                        "      \"clientVersion\": \"22.36.102\"," +
+                        "      \"androidSdkVersion\": 30 " +
                         "    }" +
                         "  }" +
                         "}";
