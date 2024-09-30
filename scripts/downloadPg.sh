@@ -9,7 +9,7 @@ else
   cp /pg.zip /data/
 fi
 
-REMOTE=$(curl -s https://gitlab.com/power0721/pg/-/raw/main/version.txt)
+REMOTE=$(curl -s https://gitlab.com/power0721/pg/-/raw/main/pg.version)
 
 echo "local PG: ${LOCAL}, remote PG: ${REMOTE}"
 if [ "$LOCAL" = "${REMOTE}" ]; then
