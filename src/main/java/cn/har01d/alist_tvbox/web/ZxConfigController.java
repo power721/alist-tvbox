@@ -48,7 +48,7 @@ public class ZxConfigController {
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = restTemplate.getForObject("https://gitlab.com/power0721/pg/-/raw/main/version1.txt", String.class);
+        String remote = restTemplate.getForObject("https://gitlab.com/power0721/pg/-/raw/main/zx.version1", String.class);
         String local = "";
         Path path = Path.of("/data/zx_version.txt");
         if (Files.exists(path)) {
