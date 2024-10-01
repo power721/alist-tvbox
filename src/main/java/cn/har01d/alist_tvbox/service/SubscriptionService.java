@@ -986,8 +986,8 @@ public class SubscriptionService {
                     Path path = Path.of("/data/zx.json");
                     if (Files.exists(path)) {
                         try {
-                            json = Files.readString(path);
-                            ObjectNode objectNode = (ObjectNode) objectMapper.readTree(json);
+                            String json1 = Files.readString(path);
+                            ObjectNode objectNode = (ObjectNode) objectMapper.readTree(json1);
                             if (objectNode.has("siteUrl")) {
                                 url = objectNode.get("siteUrl").asText();
                             }
