@@ -265,9 +265,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 如果本地版本与远程版本不同，点击同步文件按钮。
 
-等待PG包下载完成，重新进入订阅页面查看版本是否更新。
-
-自定义PG包，下载最新的PG包放在/etc/xiaoya/目录，点击同步文件按钮。
+自定义PG包，下载最新的PG包放在/etc/xiaoya/pg.zip，点击同步文件按钮。
 
 自定义PG配置，在文件页面新建文件/data/tokenm.json。
 填写自定义内容，比如：
@@ -275,6 +273,40 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 {
   "pan115_delete_code" : "123456",
   "tgsearch_api_session":"bot"
+}
+```
+
+#### 真心订阅
+在订阅页面，查看当前真心包版本和远程版本。
+
+如果本地版本与远程版本不同，点击同步文件按钮。
+
+自定义真心包，下载最新的真心包放在/etc/xiaoya/zx.zip，点击同步文件按钮。
+
+默认的TG搜索url是"http://IP:9999"
+
+自定义真心配置，在文件页面新建文件/data/zx.json。
+填写自定义内容，比如：
+```json
+{
+  "siteUrl": "http://192.168.0.2:9999",
+   "proxy" : "http://192.168.0.2:1072"
+}
+```
+
+订阅定制：
+```json
+{
+    "sites": [
+        {
+            "key": "TgYunPan|服务器",
+            "ext": {
+                "siteUrl": "http://192.168.0.2:9999",
+                "channelUsername": "kuakeyun,Quark_Movies,Quark_Share_Channel",
+                "commonConfig": "ATV_ADDRESS/zx/config?token=TOKEN"
+            }
+        }
+    ]
 }
 ```
 
