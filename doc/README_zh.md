@@ -18,6 +18,7 @@ AList代理，支持xiaoya版AList界面管理。
 - 多个AList站点
 - 多个阿里云盘账号
 - 挂载我的云盘
+- 支持夸克、UC、115网盘
 - 自动签到
 - 自动刷新阿里Token
 - 自定义TvBox配置
@@ -180,6 +181,13 @@ docker run -d \
 
 ![站点数据](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_site_data.png)
 
+### Emby站点
+在Emby页面添加Emby站点url和帐号。
+
+在TvBox选择第五个站源观看。
+
+![Emby站源](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_emby.jpg)
+
 ### 账号
 ![账号列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account.png)
 
@@ -190,7 +198,14 @@ docker run -d \
 
 ![账号详情](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_detail.png)
 
+#### 网盘帐号
 网盘帐号在帐号页面添加。
+
+夸克网盘Cookie获取方式： https://alist.nn.ci/zh/guide/drivers/quark.html
+
+UC网盘Cookie获取方式： https://alist.nn.ci/zh/guide/drivers/uc.html
+
+115网盘Cookie获取方式： https://alist.nn.ci/zh/guide/drivers/115.html
 
 网盘分享在资源页面添加。
 
@@ -361,10 +376,6 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ![类别](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_category.png)
 
 ![filter](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_filter.jpg)
-
-### Emby
-在Emby页面添加Emby站点url和帐号。
-在TvBox选择第五个站源观看。
 
 ### BiliBili
 拖动行可以改变顺序，需要点击保存按钮才能生效。

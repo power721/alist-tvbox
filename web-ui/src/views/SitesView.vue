@@ -208,6 +208,11 @@
       </template>
     </el-dialog>
   </div>
+
+  <div class="divider"></div>
+
+  <EmbyView></EmbyView>
+
 </template>
 
 <script setup lang="ts">
@@ -218,6 +223,7 @@ import type {UploadInstance, UploadProps, UploadRawFile} from 'element-plus'
 import {ElMessage, genFileId} from "element-plus";
 import type {VodList} from "@/model/VodList";
 import type {Meta} from "@/model/Meta";
+import EmbyView from "@/views/EmbyView.vue";
 
 const upload = ref<UploadInstance>()
 const headers = {
@@ -466,6 +472,10 @@ onMounted(() => {
 <style scoped>
 .space {
   margin-bottom: 6px;
+}
+
+.divider {
+  margin: 30px 0;
 }
 
 .json pre {
