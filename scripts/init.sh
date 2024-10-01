@@ -34,7 +34,7 @@ init() {
   wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/tvbox.zip -O tvbox.zip ||
   wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" --header="Host:docker.xiaoya.pro" -T 30 -t 2 http://104.21.17.247/update/tvbox.zip -O tvbox.zip || \
   wget -T 30 -t 2 https://github.com/xiaoyaliu00/data/raw/main/tvbox.zip -O tvbox.zip || \
-  wget -T 30 -t 2 http://data.har01d.cn/tvbox.zip -O tvbox.zip || \
+  wget -T 30 -t 2 http://104.160.46.225/tvbox.zip -O tvbox.zip || \
   cp /tvbox.zip ./
 
   unzip -q -o tvbox.zip
