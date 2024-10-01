@@ -229,7 +229,6 @@ const load = () => {
   axios.get('/api/subscriptions').then(({data}) => {
     subscriptions.value = data
   })
-  loadVersion()
 }
 
 const loadVersion = () => {
@@ -247,6 +246,7 @@ onMounted(() => {
   axios.get('/api/token').then(({data}) => {
     token.value = data ? '/' + (data + '').split(',')[0] : ''
     load()
+    loadVersion()
   })
 })
 </script>

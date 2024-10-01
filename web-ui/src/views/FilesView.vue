@@ -23,6 +23,14 @@
     <el-dialog v-model="formVisible" :fullscreen="fullscreen" :title="dialogTitle">
       <el-form :model="form">
         <el-form-item label="目录" label-width="120" required>
+          <el-select v-model="form.dir">
+            <el-option
+              v-for="item in options"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
           <el-input v-model="form.dir" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="名称" label-width="120" required>
@@ -87,10 +95,11 @@ const fullscreen = ref(false)
 const form = ref({
   id: 0,
   name: '',
-  dir: '/www/tvbox',
+  dir: '/data',
   path: '',
   content: ''
 })
+const options = ['/data', '/www/tvbox', '/www/pg', '/www/zx']
 
 const handleAdd = () => {
   dialogTitle.value = '添加配置文件'
@@ -98,7 +107,7 @@ const handleAdd = () => {
   form.value = {
     id: 0,
     name: '',
-    dir: '/www/tvbox',
+    dir: '/data',
     path: '',
     content: ''
   }
