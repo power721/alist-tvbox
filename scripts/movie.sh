@@ -9,7 +9,7 @@ if [ "$LOCAL" = "$1" ]; then
 fi
 
 echo "download diff.zip" && \
-wget http://data.har01d.cn/diff.zip -O diff.zip && \
+wget http://104.160.46.225/diff.zip -O diff.zip && \
 unzip -q -o diff.zip -d /data/atv/ && \
 cat /data/atv/movie_version && \
 rm -f /tmp/diff.zip
