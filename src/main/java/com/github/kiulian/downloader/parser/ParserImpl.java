@@ -114,7 +114,10 @@ public class ParserImpl implements Parser {
                         "      \"hl\": \"en\"," +
                         "      \"gl\": \"US\"," +
                         "      \"clientName\": \"ANDROID_CREATOR\"," +
-                        "      \"clientVersion\": \"22.36.102\"," +
+                        "      \"clientVersion\": \"24.30.100\"," +
+                        "      \"userAgent\": \"com.google.android.apps.youtube.creator/24.30.100 (Linux; U; Android 11) gzip\"," +
+                        "      \"osName\": \"Android\"," +
+                        "      \"osVersion\": \"11\"," +
                         "      \"androidSdkVersion\": 30 " +
                         "    }" +
                         "  }" +

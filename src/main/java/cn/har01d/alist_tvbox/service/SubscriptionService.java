@@ -648,6 +648,7 @@ public class SubscriptionService {
             String address = readHostAddress();
             json = json.replace("DOCKER_ADDRESS", address);
             json = json.replace("ATV_ADDRESS", address);
+            json = json.replace("TOKEN", tokens.split(",")[0]);
             Map<String, Object> override = objectMapper.readValue(json, Map.class);
             overrideConfig(config, "", "", override);
             return replaceString(config, override);
