@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.entity.ConfigFile;
 import cn.har01d.alist_tvbox.entity.ConfigFileRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -25,10 +26,12 @@ import java.util.List;
 
 public class ConfigFileService {
     private final ConfigFileRepository repository;
+    private final ObjectMapper objectMapper;
     private List<FileItem> labels = new ArrayList<>();
 
-    public ConfigFileService(ConfigFileRepository repository) {
+    public ConfigFileService(ConfigFileRepository repository, ObjectMapper objectMapper) {
         this.repository = repository;
+        this.objectMapper = objectMapper;
     }
 
     @PostConstruct
@@ -115,7 +118,6 @@ public class ConfigFileService {
     public ConfigFile create(FileDto dto) throws IOException {
         validate(dto);
         dto.setId(null);
-        dto.setPath(new File(dto.getDir(), dto.getName()).getAbsolutePath());
         if (repository.existsByPath(dto.getPath())) {
             throw new BadRequestException("文件已经存在");
         }
@@ -132,6 +134,14 @@ public class ConfigFileService {
         }
         if (StringUtils.isBlank(dto.getName())) {
             throw new BadRequestException("文件名不能为空");
+        }
+        dto.setPath(new File(dto.getDir(), dto.getName()).getAbsolutePath());
+        if (dto.getName().endsWith(".json")) {
+            try {
+                objectMapper.readTree(dto.getContent());
+            } catch (IOException e) {
+                throw new BadRequestException("JSON格式错误", e);
+            }
         }
     }
 
@@ -156,7 +166,6 @@ public class ConfigFileService {
         }
 
         dto.setId(id);
-        dto.setPath(new File(dto.getDir(), dto.getName()).getAbsolutePath());
 
         ConfigFile other = repository.findByPath(dto.getPath());
         if (other != null && !id.equals(other.getId())) {
