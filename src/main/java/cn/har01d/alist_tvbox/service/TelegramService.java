@@ -6,7 +6,6 @@ import cn.har01d.alist_tvbox.util.IdUtils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
-import lombok.val;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import telegram4j.core.MTProtoTelegramClient;
@@ -16,24 +15,27 @@ import telegram4j.core.auth.TwoFactorHandler;
 import telegram4j.core.event.domain.message.SendMessageEvent;
 import telegram4j.core.spec.ReplyToMessageSpec;
 import telegram4j.core.spec.SendMessageSpec;
-import telegram4j.core.util.Id;
 import telegram4j.mtproto.store.FileStoreLayout;
 import telegram4j.mtproto.store.StoreLayout;
 import telegram4j.mtproto.store.StoreLayoutImpl;
+import telegram4j.tl.BaseChat;
+import telegram4j.tl.Channel;
 import telegram4j.tl.ImmutableInputPeerChannel;
 import telegram4j.tl.ImmutableInputPeerChat;
 import telegram4j.tl.InputMessagesFilterEmpty;
 import telegram4j.tl.InputPeer;
 import telegram4j.tl.InputUserSelf;
-import telegram4j.tl.PeerChannel;
-import telegram4j.tl.PeerChat;
-import telegram4j.tl.PeerUser;
+import telegram4j.tl.Message;
 import telegram4j.tl.User;
+import telegram4j.tl.messages.ChannelMessages;
 import telegram4j.tl.messages.Messages;
 import telegram4j.tl.request.messages.ImmutableSearch;
-import telegram4j.tl.request.messages.ImmutableSearchGlobal;
 
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -127,19 +129,21 @@ public class TelegramService {
         return null;
     }
 
-    public Messages search(String username, String query) {
+    public List<Message> search(String username, String keyword) {
         var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
-        var peer = resolvedPeer.peer();
-        InputPeer inputPeer = client.asResolvedInputPeer(Id.of(peer));
-        if (peer instanceof PeerChannel) {
-            log.info("channel: {} {}", username, ((PeerChannel) peer).channelId());
-        } else if (peer instanceof PeerChat) {
-            log.info("chat: {} {}", username, ((PeerChat) peer).chatId());
-        } else if (peer instanceof PeerUser) {
-            log.info("user: {} {}", username, ((PeerUser) peer).userId());
+        var chat = resolvedPeer.chats().get(0);
+        InputPeer inputPeer = null;
+        if (chat instanceof Channel) {
+            inputPeer = ImmutableInputPeerChannel.of(chat.id(), ((Channel) chat).accessHash());
+        } else if (chat instanceof BaseChat) {
+            inputPeer = ImmutableInputPeerChat.of(chat.id());
         }
-        return client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, query, InputMessagesFilterEmpty.instance(), -1, -1, 0, 0, 20, -1, -1, 0)).block();
-       // return client.getServiceHolder().getChatService().searchGlobal(ImmutableSearchGlobal.of(query, InputMessagesFilterEmpty.instance(), -1,-1,0, )).block();
+        Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), -1, -1, -1, 0, 100, -1, -1, 0)).block();
+        log.info("messages: {}", messages);
+        if (messages instanceof ChannelMessages) {
+            return ((ChannelMessages) messages).messages();
+        }
+        return List.of();
     }
 
     @PreDestroy
