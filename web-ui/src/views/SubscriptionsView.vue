@@ -4,6 +4,7 @@
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
+      <el-button @click="handleLogin">登陆电报</el-button>
     </el-row>
     <div class="space"></div>
 
@@ -47,7 +48,9 @@
       <a
         :href="currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')+'/open'+token"
         target="_blank">
-        {{ currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@') }}/open{{ token }}
+        {{
+          currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')
+        }}/open{{ token }}
       </a>
     </el-row>
     <el-row>
@@ -55,12 +58,14 @@
       <a
         :href="currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')+'/node'+(token ? token : '/-')+'/index.config.js'"
         target="_blank">
-        {{ currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@') }}/node{{ token ? token : '/-' }}/index.js.md5
+        {{
+          currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')
+        }}/node{{ token ? token : '/-' }}/index.js.md5
       </a>
     </el-row>
     <el-row>
-     PG包本地： {{ pgLocal }}
-     PG包远程： {{ pgRemote }}
+      PG包本地： {{ pgLocal }}
+      PG包远程： {{ pgRemote }}
     </el-row>
     <el-row>
       真心包本地： {{ zxLocal }}
@@ -104,7 +109,8 @@
       </div>
       <h2>JSON数据</h2>
       <el-scrollbar height="800px">
-        <json-viewer :value="jsonData" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=5></json-viewer>
+        <json-viewer :value="jsonData" expanded copyable show-double-quotes :show-array-index="false"
+                     :expand-depth=5></json-viewer>
       </el-scrollbar>
       <div class="json"></div>
       <template #footer>
@@ -124,6 +130,36 @@
       </span>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="tgVisible" title="登陆Telegram" width="60%">
+      <el-form>
+        <el-form-item label="电话号码" label-width="140" required v-if="tgPhase==1">
+          <el-input v-model="tgPhone" autocomplete="off"/>
+          <el-button @click="sendTgPhone">输入</el-button>
+        </el-form-item>
+        <el-form-item label="验证码" label-width="140" required v-if="tgPhase==3">
+          <el-input v-model="tgCode" autocomplete="off"/>
+          <el-button @click="sendTgCode">输入</el-button>
+        </el-form-item>
+        <el-form-item label="密码" label-width="140" required v-if="tgPhase==5">
+          <el-input v-model="tgPassword" autocomplete="off"/>
+          <el-button @click="sendTgPassword">输入</el-button>
+        </el-form-item>
+        <span v-if="tgPhase==9">登陆成功</span>
+        <div v-if="user.id">
+          <div>用户ID： {{user.id}}</div>
+          <div>用户名： {{user.username}}</div>
+          <div>姓名： {{user.first_name}} {{user.last_name}}</div>
+        </div>
+      </el-form>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button type="primary" @click="login">登陆</el-button>
+        <el-button @click="cancelLogin">取消</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -131,8 +167,13 @@
 import {onMounted, ref} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
+import {onUnmounted} from "@vue/runtime-core";
 
 const currentUrl = window.location.origin
+const tgPhase = ref(0)
+const tgPhone = ref('')
+const tgCode = ref('')
+const tgPassword = ref('')
 const token = ref('')
 const pgLocal = ref('')
 const pgRemote = ref('')
@@ -145,6 +186,7 @@ const subscriptions = ref([])
 const detailVisible = ref(false)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
+const tgVisible = ref(false)
 const form = ref({
   id: 0,
   sid: '',
@@ -153,6 +195,41 @@ const form = ref({
   sort: '',
   override: ''
 })
+const user = ref({
+  id: 0,
+  username: '',
+  first_name: '',
+  last_name: '',
+  phone: ''
+})
+let timer = 0
+
+const handleLogin = () => {
+  axios.get('/api/telegram/user').then(({data}) => {
+    user.value = data
+  })
+  tgVisible.value = true
+}
+
+const login = () => {
+  axios.post('/api/telegram/login')
+  timer = setInterval(() => {
+    axios.get('/api/settings/tg_phase').then(({data}) => {
+      tgPhase.value = +data.value
+      if (tgPhase.value > 8) {
+        clearInterval(timer)
+      }
+    })
+  }, 1000)
+  setTimeout(() => {
+    clearInterval(timer)
+  }, 120_000)
+}
+
+const cancelLogin = () => {
+  clearInterval(timer)
+  tgVisible.value = false
+}
 
 const handleAdd = () => {
   dialogTitle.value = '添加订阅'
@@ -207,6 +284,18 @@ const handleCancel = () => {
   formVisible.value = false
 }
 
+const sendTgPhone = () => {
+  axios.post('/api/settings', {name: 'tg_phone', value: tgPhone.value})
+}
+
+const sendTgCode = () => {
+  axios.post('/api/settings', {name: 'tg_code', value: tgCode.value})
+}
+
+const sendTgPassword = () => {
+  axios.post('/api/settings', {name: 'tg_password', value: tgPassword.value})
+}
+
 const handleConfirm = () => {
   axios.post('/api/subscriptions', form.value).then(() => {
     formVisible.value = false
@@ -247,7 +336,14 @@ onMounted(() => {
     token.value = data ? '/' + (data + '').split(',')[0] : ''
     load()
     loadVersion()
+    axios.get('/api/settings/tg_phase').then(({data}) => {
+      tgPhase.value = data.value
+    })
   })
+})
+
+onUnmounted(() => {
+  clearInterval(timer)
 })
 </script>
 
