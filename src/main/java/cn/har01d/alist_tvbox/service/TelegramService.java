@@ -27,9 +27,7 @@ import telegram4j.tl.InputPeer;
 import telegram4j.tl.InputPeerSelf;
 import telegram4j.tl.InputUserSelf;
 import telegram4j.tl.User;
-import telegram4j.tl.messages.BaseDialogs;
 import telegram4j.tl.messages.ChannelMessages;
-import telegram4j.tl.messages.Dialogs;
 import telegram4j.tl.messages.DialogsSlice;
 import telegram4j.tl.messages.Messages;
 import telegram4j.tl.request.messages.ImmutableGetDialogs;
@@ -83,6 +81,8 @@ public class TelegramService {
                     log.info("Input the phone number.");
                     settingRepository.save(new Setting("tg_phase", "1"));
                     String phone = waitSettingAvailable("tg_phone");
+                    settingRepository.deleteById("tg_code");
+                    settingRepository.deleteById("tg_password");
                     settingRepository.save(new Setting("tg_phase", "2"));
                     return phone != null ? Mono.just(CodeAuthorizationHandler.PhoneNumberAction.of(phone)) : Mono.just(CodeAuthorizationHandler.PhoneNumberAction.cancel());
                 }
@@ -116,15 +116,24 @@ public class TelegramService {
     }
 
     public User getUser() {
+        if (client == null) {
+            return null;
+        }
         return client.getServiceHolder().getUserService().getUser(InputUserSelf.instance()).block();
     }
 
     public List<Chat> getAllChats() {
+        if (client == null) {
+            return List.of();
+        }
         DialogsSlice dialogs = (DialogsSlice) client.getServiceHolder().getChatService().getDialogs(ImmutableGetDialogs.of(0, 0, 0, InputPeerSelf.instance(), 100, 0)).block();
         return dialogs.chats().stream().filter(e -> e instanceof Channel).map(Channel.class::cast).map(Chat::new).toList();
     }
 
     public List<Message> getHistory(String id) {
+        if (client == null) {
+            return List.of();
+        }
         String[] parts = id.split("\\$");
         InputPeer inputPeer = ImmutableInputPeerChannel.of(Long.parseLong(parts[0]), Long.parseLong(parts[1]));
 
