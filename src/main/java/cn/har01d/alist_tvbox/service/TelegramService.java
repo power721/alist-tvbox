@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.tg.Chat;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -23,10 +24,16 @@ import telegram4j.tl.ImmutableInputPeerChannel;
 import telegram4j.tl.ImmutableInputPeerChat;
 import telegram4j.tl.InputMessagesFilterEmpty;
 import telegram4j.tl.InputPeer;
+import telegram4j.tl.InputPeerSelf;
 import telegram4j.tl.InputUserSelf;
 import telegram4j.tl.User;
+import telegram4j.tl.messages.BaseDialogs;
 import telegram4j.tl.messages.ChannelMessages;
+import telegram4j.tl.messages.Dialogs;
+import telegram4j.tl.messages.DialogsSlice;
 import telegram4j.tl.messages.Messages;
+import telegram4j.tl.request.messages.ImmutableGetDialogs;
+import telegram4j.tl.request.messages.ImmutableGetHistory;
 import telegram4j.tl.request.messages.ImmutableSearch;
 
 import java.nio.file.Path;
@@ -110,6 +117,23 @@ public class TelegramService {
 
     public User getUser() {
         return client.getServiceHolder().getUserService().getUser(InputUserSelf.instance()).block();
+    }
+
+    public List<Chat> getAllChats() {
+        DialogsSlice dialogs = (DialogsSlice) client.getServiceHolder().getChatService().getDialogs(ImmutableGetDialogs.of(0, 0, 0, InputPeerSelf.instance(), 100, 0)).block();
+        return dialogs.chats().stream().filter(e -> e instanceof Channel).map(Channel.class::cast).map(Chat::new).toList();
+    }
+
+    public List<Message> getHistory(String id) {
+        String[] parts = id.split("\\$");
+        InputPeer inputPeer = ImmutableInputPeerChannel.of(Long.parseLong(parts[0]), Long.parseLong(parts[1]));
+
+        Messages messages = client.getServiceHolder().getChatService().getHistory(ImmutableGetHistory.of(inputPeer, 0, 0, 0, 100, 0, 0, 0)).block();
+        log.info("{}", messages);
+        if (messages instanceof ChannelMessages) {
+            return ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message("", e)).toList();
+        }
+        return List.of();
     }
 
     private String waitSettingAvailable(String key) {
