@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.util.IdUtils;
@@ -19,13 +20,13 @@ import telegram4j.mtproto.store.FileStoreLayout;
 import telegram4j.mtproto.store.StoreLayout;
 import telegram4j.mtproto.store.StoreLayoutImpl;
 import telegram4j.tl.BaseChat;
+import telegram4j.tl.BaseMessage;
 import telegram4j.tl.Channel;
 import telegram4j.tl.ImmutableInputPeerChannel;
 import telegram4j.tl.ImmutableInputPeerChat;
 import telegram4j.tl.InputMessagesFilterEmpty;
 import telegram4j.tl.InputPeer;
 import telegram4j.tl.InputUserSelf;
-import telegram4j.tl.Message;
 import telegram4j.tl.User;
 import telegram4j.tl.messages.ChannelMessages;
 import telegram4j.tl.messages.Messages;
@@ -33,14 +34,24 @@ import telegram4j.tl.request.messages.ImmutableSearch;
 
 import java.nio.file.Path;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class TelegramService {
     private final SettingRepository settingRepository;
+    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
     private MTProtoTelegramClient client;
 
     public TelegramService(SettingRepository settingRepository) {
@@ -94,15 +105,6 @@ public class TelegramService {
             StoreLayout storeLayout = new FileStoreLayout(new StoreLayoutImpl(c -> c.maximumSize(1000)), Path.of("/data/t4j.bin"));
             client = MTProtoTelegramClient.create(apiId, apiHash, authHandler).setStoreLayout(storeLayout).connect().block();
 
-            client.on(SendMessageEvent.class)
-                    .filter(e -> e.getMessage().getContent().equals("!ping"))
-                    .flatMap(e -> Mono.justOrEmpty(e.getChat())
-                            // telegram api may not deliver chat info and in this situation it's necessary to retrieve chat
-                            .switchIfEmpty(e.getMessage().getChat())
-                            .flatMap(c -> c.sendMessage(SendMessageSpec.of("pong!")
-                                    .withReplyTo(ReplyToMessageSpec.of(e.getMessage())))))
-                    .subscribe();
-
             settingRepository.save(new Setting("tg_phase", "9"));
             log.info("Telegram登陆成功");
             // wait until the client is stopped through `client.disconnect()`
@@ -129,6 +131,45 @@ public class TelegramService {
         return null;
     }
 
+    public String searchPg(String keyword, String username, String encode) {
+        String[] channels = username.split(",");
+        List<Message> list = new ArrayList<>();
+        List<Future<List<Message>>> futures = new ArrayList<>();
+        for (String channel : channels) {
+            String name = channel.split("\\|")[0];
+            Future<List<Message>> future = executorService.submit(() -> search(name, keyword));
+            futures.add(future);
+        }
+
+        for (int i = 0; i < futures.size(); i++) {
+            Future<List<Message>> future = futures.get(i);
+            String channel = channels[i];
+            String[] parts = channel.split("\\|");
+            int timeout = 5000;
+            if (parts.length == 2) {
+                timeout = Integer.parseInt(parts[1]);
+            }
+
+            try {
+                list.addAll(future.get(timeout, TimeUnit.MILLISECONDS));
+            } catch (InterruptedException e) {
+                break;
+            } catch (ExecutionException | TimeoutException e) {
+                log.warn("", e);
+            }
+        }
+
+        return list.stream()
+                .map(Message::toPgString)
+                .map(e -> {
+                    if ("1".equals(encode)) {
+                        return Base64.getEncoder().encodeToString(e.getBytes());
+                    }
+                    return e;
+                })
+                .collect(Collectors.joining("\n"));
+    }
+
     public List<Message> search(String username, String keyword) {
         var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
         var chat = resolvedPeer.chats().get(0);
@@ -138,10 +179,11 @@ public class TelegramService {
         } else if (chat instanceof BaseChat) {
             inputPeer = ImmutableInputPeerChat.of(chat.id());
         }
-        Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), -1, -1, -1, 0, 100, -1, -1, 0)).block();
-        log.info("messages: {}", messages);
+        int minDate = (int) (Instant.now().minus(60, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toEpochMilli() / 1000);
+        log.info("Search {} from {}", keyword, username);
+        Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, 100, 0, 0, 0)).block();
         if (messages instanceof ChannelMessages) {
-            return ((ChannelMessages) messages).messages();
+            return ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message(username, e)).toList();
         }
         return List.of();
     }
