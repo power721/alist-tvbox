@@ -218,6 +218,9 @@ const login = () => {
       tgPhase.value = +data.value
       if (tgPhase.value > 8) {
         clearInterval(timer)
+        axios.get('/api/telegram/user').then(({data}) => {
+          user.value = data
+        })
       }
     })
   }, 1000)

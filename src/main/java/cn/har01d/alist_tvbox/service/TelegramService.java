@@ -109,9 +109,9 @@ public class TelegramService {
             client = MTProtoTelegramClient.create(apiId, apiHash, authHandler).setStoreLayout(storeLayout).connect().block();
 
             settingRepository.save(new Setting("tg_phase", "9"));
-            log.info("Telegram登陆成功");
-            // wait until the client is stopped through `client.disconnect()`
+            log.info("Telegram连接成功");
             client.onDisconnect().block();
+            log.info("Telegram关闭连接");
         }).start();
     }
 
