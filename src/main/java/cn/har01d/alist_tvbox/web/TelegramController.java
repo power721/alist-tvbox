@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
 import cn.har01d.alist_tvbox.service.TelegramService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -41,9 +42,10 @@ public class TelegramController {
     }
 
     @PostMapping("/tgs")
-    public String searchPgPost(@RequestBody String body) throws JsonProcessingException {
+    public String searchPgPost(@RequestBody String body, HttpServletResponse response) throws JsonProcessingException {
         String json = new String(Base64.getDecoder().decode(body));
         SearchRequest request = objectMapper.readValue(json, SearchRequest.class);
+        response.setHeader("server", "hypercorn-h11");
         return telegramService.searchPg(request.getKeyword(), request.getChannelUsername(), request.getEncode());
     }
 

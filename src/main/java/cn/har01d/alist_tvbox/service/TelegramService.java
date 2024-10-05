@@ -188,6 +188,7 @@ public class TelegramService {
             }
         }
 
+        log.info("Search TG get {} results", list.size());
         return list.stream()
                 .map(Message::toPgString)
                 .map(e -> {
