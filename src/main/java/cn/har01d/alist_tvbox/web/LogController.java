@@ -22,8 +22,8 @@ public class LogController {
     }
 
     @GetMapping
-    public Page<String> logs(Pageable pageable, String type) throws IOException {
-        return logsService.getLogs(pageable, type);
+    public Page<String> logs(Pageable pageable, String type, String level) throws IOException {
+        return logsService.getLogs(pageable, type, level);
     }
 
     @GetMapping("/download")
