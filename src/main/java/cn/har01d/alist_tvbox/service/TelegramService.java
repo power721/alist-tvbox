@@ -210,12 +210,13 @@ public class TelegramService {
             inputPeer = ImmutableInputPeerChat.of(chat.id());
         }
         int minDate = (int) (Instant.now().minus(60, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toEpochMilli() / 1000);
-        log.info("Search {} from {}", keyword, username);
         Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, 100, 0, 0, 0)).block();
+        List<Message> result = List.of();
         if (messages instanceof ChannelMessages) {
-            return ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message(username, e)).toList();
+            result = ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message(username, e)).toList();
         }
-        return List.of();
+        log.info("Search {} from {}, get {} results.", keyword, username, result.size());
+        return result;
     }
 
     @PreDestroy
