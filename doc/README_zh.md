@@ -287,9 +287,13 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ```json
 {
   "pan115_delete_code" : "123456",
-  "tgsearch_api_session":"bot"
+   "tgsearch_api_url" : "ATV_ADDRESS/tgs"
 }
 ```
+
+订阅页面登陆电报后，配置PG电报搜索URL。
+
+电报搜索API： `http://IP:4567/tgs`, `ATV_ADDRESS/tgs`
 
 自定义115分享资源：
 在/etc/xiaoya/pg/lib目录新建文件115share.txt。
