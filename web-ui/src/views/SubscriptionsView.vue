@@ -145,8 +145,8 @@
           <el-input v-model="tgPassword" autocomplete="off"/>
           <el-button @click="sendTgPassword">输入</el-button>
         </el-form-item>
-        <span v-if="tgPhase==9">登陆成功</span>
         <div v-if="user.id">
+          <div>登陆成功</div>
           <div>用户ID： {{user.id}}</div>
           <div>用户名： {{user.username}}</div>
           <div>姓名： {{user.first_name}} {{user.last_name}}</div>
