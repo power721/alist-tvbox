@@ -7,4 +7,5 @@ public class SearchRequest {
     private String keyword;
     private String channelUsername;
     private String encode;
+    private String page;
 }
