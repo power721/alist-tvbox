@@ -311,7 +311,6 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 填写自定义内容，比如：
 ```json
 {
-  "siteUrl": "http://192.168.0.2:9999",
    "proxy" : "http://192.168.0.2:1072"
 }
 ```

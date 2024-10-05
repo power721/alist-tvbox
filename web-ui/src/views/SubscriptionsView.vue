@@ -220,7 +220,7 @@ const syncCat = () => {
       ElMessage.warning('同步失败')
     } else {
       ElMessage.success('同步成功')
-      setTimeout(loadVersion, 6000)
+      setTimeout(loadVersion, 1000)
     }
   })
 }
