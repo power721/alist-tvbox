@@ -975,28 +975,6 @@ public class SubscriptionService {
                 json = json.replace("./peizhi.json", address + "/zx/config?token=" + tokens.split(",")[0]);
                 json = json.replace("./", address + folder);
                 //json = json.replace(address + folder + "lib/tokenm.json", "./lib/tokenm.json");
-                if (name.equals("/zx/FongMi.json")) {
-                    String url = ServletUriComponentsBuilder.fromCurrentRequest()
-                            .scheme("http")
-                            .port(9999)
-                            .replacePath("")
-                            .replaceQuery("")
-                            .build()
-                            .toUriString();
-                    Path path = Path.of("/data/zx.json");
-                    if (Files.exists(path)) {
-                        try {
-                            String json1 = Files.readString(path);
-                            ObjectNode objectNode = (ObjectNode) objectMapper.readTree(json1);
-                            if (objectNode.has("siteUrl")) {
-                                url = objectNode.get("siteUrl").asText();
-                            }
-                        } catch (Exception e) {
-                            log.warn("", e);
-                        }
-                    }
-                    json = json.replace("你的服务器地址端口", url);
-                }
                 json = json.replace("DOCKER_ADDRESS", address);
                 json = json.replace("ATV_ADDRESS", address);
                 return json;
