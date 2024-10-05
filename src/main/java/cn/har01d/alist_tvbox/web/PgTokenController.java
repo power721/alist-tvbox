@@ -81,6 +81,9 @@ public class PgTokenController {
         Path path = Path.of("/data/tokenm.json");
         if (Files.exists(path)) {
             json = Files.readString(path);
+            String address = subscriptionService.readHostAddress();
+            json = json.replace("DOCKER_ADDRESS", address);
+            json = json.replace("ATV_ADDRESS", address);
             ObjectNode override = (ObjectNode) objectMapper.readTree(json);
             objectNode.setAll(override);
         }
