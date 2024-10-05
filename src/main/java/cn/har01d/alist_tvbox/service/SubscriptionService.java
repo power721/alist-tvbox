@@ -1002,6 +1002,7 @@ public class SubscriptionService {
         UriComponents uriComponents = ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(path)
+                .replaceQuery(null)
                 .build();
         return uriComponents.toUriString();
     }
