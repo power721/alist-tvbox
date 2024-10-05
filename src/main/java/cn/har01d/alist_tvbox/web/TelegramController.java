@@ -2,9 +2,11 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.tg.Chat;
 import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
 import cn.har01d.alist_tvbox.service.TelegramService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import telegram4j.tl.User;
 
@@ -31,6 +33,11 @@ public class TelegramController {
     @GetMapping("/tg-search/pg")
     public String searchPg(String keyword, String channelUsername, String encode) {
         return telegramService.searchPg(keyword, channelUsername, encode);
+    }
+
+    @PostMapping("/tg-search/pg")
+    public String searchPgPost(@RequestBody SearchRequest request) {
+        return telegramService.searchPg(request.getKeyword(), request.getChannelUsername(), request.getEncode());
     }
 
     @GetMapping("/api/telegram/user")
