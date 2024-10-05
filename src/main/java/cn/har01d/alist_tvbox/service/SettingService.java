@@ -31,14 +31,22 @@ public class SettingService {
     private final AppProperties appProperties;
     private final TmdbService tmdbService;
     private final AListLocalService aListLocalService;
+    private final TelegramSearchService telegramSearchService;
     private final SettingRepository settingRepository;
 
-    public SettingService(JdbcTemplate jdbcTemplate, Environment environment, AppProperties appProperties, TmdbService tmdbService, AListLocalService aListLocalService, SettingRepository settingRepository) {
+    public SettingService(JdbcTemplate jdbcTemplate,
+                          Environment environment,
+                          AppProperties appProperties,
+                          TmdbService tmdbService,
+                          AListLocalService aListLocalService,
+                          TelegramSearchService telegramSearchService,
+                          SettingRepository settingRepository) {
         this.jdbcTemplate = jdbcTemplate;
         this.environment = environment;
         this.appProperties = appProperties;
         this.tmdbService = tmdbService;
         this.aListLocalService = aListLocalService;
+        this.telegramSearchService = telegramSearchService;
         this.settingRepository = settingRepository;
     }
 
@@ -150,6 +158,10 @@ public class SettingService {
         if ("delete_code_115".equals(setting.getName())) {
             aListLocalService.updateSetting("delete_code_115", setting.getValue(), "string");
         }
+        if ("tg_session".equals(setting.getName())) {
+            telegramSearchService.start(setting.getValue());
+        }
+
         return settingRepository.save(setting);
     }
 

@@ -28,11 +28,14 @@ COPY data/base_version /
 COPY data/cat.zip /
 COPY data/pg.zip /
 COPY data/zx.zip /
+COPY scripts/tgsearch.x86_64 /
+COPY scripts/tgsearch.arm64v8 /
+
 COPY target/application/ ./
 
 COPY data/version data/app_version
 
-EXPOSE 4567 5244
+EXPOSE 4567 5244 10199
 
 ENTRYPOINT ["/entrypoint.sh"]
 
