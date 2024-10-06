@@ -40,6 +40,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -65,6 +66,13 @@ public class TelegramService {
         if ("9".equals(tgPhase)) {
             connect();
         }
+    }
+
+    public void reset() {
+        settingRepository.deleteById("tg_phone");
+        settingRepository.deleteById("tg_code");
+        settingRepository.deleteById("tg_password");
+        settingRepository.save(new Setting("tg_phase", "0"));
     }
 
     public void connect() {
@@ -160,6 +168,34 @@ public class TelegramService {
         return null;
     }
 
+    public Map<String, Object> searchZx(String keyword, String username) {
+        String[] channels = username.split(",");
+        List<Future<List<Message>>> futures = new ArrayList<>();
+        for (String channel : channels) {
+            Future<List<Message>> future = executorService.submit(() -> search(channel, keyword));
+            futures.add(future);
+        }
+
+        int total = 0;
+        List<String> result = new ArrayList<>();
+        for (int i = 0; i < futures.size(); i++) {
+            Future<List<Message>> future = futures.get(i);
+            String channel = channels[i];
+            try {
+                List<Message> list = future.get(2000, TimeUnit.MILLISECONDS);
+                total += list.size();
+                result.add(channel + "$$$" + list.stream().filter(e -> e.getContent().contains("http")).map(Message::toZxString).collect(Collectors.joining("##")));
+            } catch (InterruptedException e) {
+                break;
+            } catch (ExecutionException | TimeoutException e) {
+                log.warn("", e);
+            }
+        }
+
+        log.info("Search TG get {} results.", total);
+        return Map.of("results", result);
+    }
+
     public String searchPg(String keyword, String username, String encode) {
         String[] channels = username.split(",");
         List<Message> list = new ArrayList<>();
@@ -188,7 +224,7 @@ public class TelegramService {
             }
         }
 
-        log.info("Search TG get {} results", list.size());
+        log.info("Search TG get {} results.", list.size());
         return list.stream()
                 .map(Message::toPgString)
                 .map(e -> {

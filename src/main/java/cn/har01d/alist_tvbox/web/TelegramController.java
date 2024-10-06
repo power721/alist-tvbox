@@ -15,6 +15,7 @@ import telegram4j.tl.User;
 
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 public class TelegramController {
@@ -24,6 +25,11 @@ public class TelegramController {
     public TelegramController(TelegramService telegramService, ObjectMapper objectMapper) {
         this.telegramService = telegramService;
         this.objectMapper = objectMapper;
+    }
+
+    @PostMapping("/api/telegram/reset")
+    public void reset() {
+        telegramService.reset();
     }
 
     @PostMapping("/api/telegram/login")
@@ -36,8 +42,15 @@ public class TelegramController {
         return telegramService.search(channelUsername, keyword);
     }
 
+    @GetMapping("/tgsz")
+    public Map<String, Object> searchZx(String keyword, String channelUsername, HttpServletResponse response) {
+        response.setHeader("server", "hypercorn-h11");
+        return telegramService.searchZx(keyword, channelUsername);
+    }
+
     @GetMapping("/tgs")
-    public String searchPg(String keyword, String channelUsername, String encode) {
+    public String searchPg(String keyword, String channelUsername, String encode, HttpServletResponse response) {
+        response.setHeader("server", "hypercorn-h11");
         return telegramService.searchPg(keyword, channelUsername, encode);
     }
 
