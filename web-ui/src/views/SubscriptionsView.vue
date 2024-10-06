@@ -135,8 +135,8 @@
       <el-form>
         <el-form-item label="登陆方式" label-width="140">
           <el-radio-group v-model="tgAuthType" class="ml-4" @change="setAuthType">
-            <el-radio label="code" size="large">验证码</el-radio>
             <el-radio label="qr" size="large">二维码</el-radio>
+            <el-radio label="code" size="large">验证码</el-radio>
           </el-radio-group>
         </el-form-item>
         <div v-if="tgAuthType=='qr'&&tgPhase==1&&base64QrCode!=''">
@@ -189,7 +189,7 @@ const tgPhase = ref(0)
 const tgPhone = ref('')
 const tgCode = ref('')
 const tgPassword = ref('')
-const tgAuthType = ref('code')
+const tgAuthType = ref('qr')
 const base64QrCode = ref('')
 const token = ref('')
 const pgLocal = ref('')
