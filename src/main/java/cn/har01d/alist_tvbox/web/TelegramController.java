@@ -59,7 +59,27 @@ public class TelegramController {
         String json = new String(Base64.getDecoder().decode(body));
         SearchRequest request = objectMapper.readValue(json, SearchRequest.class);
         response.setHeader("server", "hypercorn-h11");
+        if ("2".equals(request.getPage())) {
+            return "";
+        }
         return telegramService.searchPg(request.getKeyword(), request.getChannelUsername(), request.getEncode());
+    }
+
+    @GetMapping("/tg/s/1")
+    public String searchWeb(String keyword, String channelUsername, String encode, HttpServletResponse response) {
+        response.setHeader("server", "hypercorn-h11");
+        return telegramService.searchWeb(keyword, channelUsername, encode);
+    }
+
+    @PostMapping("/tg/s/1")
+    public String searchWebPost(@RequestBody String body, HttpServletResponse response) throws JsonProcessingException {
+        String json = new String(Base64.getDecoder().decode(body));
+        SearchRequest request = objectMapper.readValue(json, SearchRequest.class);
+        response.setHeader("server", "hypercorn-h11");
+        if ("2".equals(request.getPage())) {
+            return "";
+        }
+        return telegramService.searchWeb(request.getKeyword(), request.getChannelUsername(), request.getEncode());
     }
 
     @GetMapping("/api/telegram/user")
