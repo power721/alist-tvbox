@@ -669,6 +669,10 @@ public class SubscriptionService {
                     if (entry.getKey() instanceof String && entry.getValue() instanceof String) {
                         String key = (String) entry.getKey();
                         String value = (String) entry.getValue();
+                        String address = readHostAddress();
+                        value = value.replace("DOCKER_ADDRESS", address);
+                        value = value.replace("ATV_ADDRESS", address);
+                        value = value.replace("TOKEN", tokens.split(",")[0]);
                         log.info("replace text '{}' by '{}'", key, value);
                         configJson = configJson.replace(key, value);
                     }

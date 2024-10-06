@@ -5,9 +5,12 @@ import lombok.Data;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Data
 public class Message {
+    private static final Pattern LINK = Pattern.compile("(https?:\\/\\/(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*))");
     private int id;
     private Integer views;
     private Instant time;
@@ -28,6 +31,22 @@ public class Message {
     }
 
     public String toPgString() {
-        return time.atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"))  + " "+ channel + " " + content.replace('\n', ' ');
+        return time.atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + " " + channel + " " + content.replace('\n', ' ');
+    }
+
+    public String toZxString() {
+        return getLink() + "$$" + getName();
+    }
+
+    private String getName() {
+        return content.split("\n")[0].replace("名称：", "");
+    }
+
+    private String getLink() {
+        Matcher m = LINK.matcher(content);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return content;
     }
 }

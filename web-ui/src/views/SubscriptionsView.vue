@@ -131,10 +131,10 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="tgVisible" title="登陆Telegram" width="60%">
+    <el-dialog v-model="tgVisible" title="登陆Telegram" width="60%" @close="cancelLogin">
       <el-form>
         <el-form-item label="电话号码" label-width="140" required v-if="tgPhase==1">
-          <el-input v-model="tgPhone" autocomplete="off"/>
+          <el-input v-model="tgPhone" autocomplete="off" placeholder="+8612345678901"/>
           <el-button @click="sendTgPhone">输入</el-button>
         </el-form-item>
         <el-form-item label="验证码" label-width="140" required v-if="tgPhase==3">
@@ -155,6 +155,7 @@
       <template #footer>
       <span class="dialog-footer">
         <el-button type="primary" @click="login">登陆</el-button>
+        <el-button @click="reset">重置</el-button>
         <el-button @click="cancelLogin">取消</el-button>
       </span>
       </template>
@@ -232,6 +233,12 @@ const login = () => {
 const cancelLogin = () => {
   clearInterval(timer)
   tgVisible.value = false
+}
+
+const reset = () => {
+  axios.post('/api/telegram/reset').then(() => {
+    ElMessage.success('重置成功')
+  })
 }
 
 const handleAdd = () => {
