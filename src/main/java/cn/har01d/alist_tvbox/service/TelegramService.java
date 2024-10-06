@@ -23,6 +23,7 @@ import reactor.core.publisher.Mono;
 import telegram4j.core.MTProtoTelegramClient;
 import telegram4j.core.auth.AuthorizationHandler;
 import telegram4j.core.auth.CodeAuthorizationHandler;
+import telegram4j.core.auth.QRAuthorizationHandler;
 import telegram4j.core.auth.TwoFactorHandler;
 import telegram4j.mtproto.store.FileStoreLayout;
 import telegram4j.mtproto.store.StoreLayout;
@@ -45,13 +46,16 @@ import telegram4j.tl.request.messages.ImmutableGetHistory;
 import telegram4j.tl.request.messages.ImmutableSearch;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -71,6 +75,7 @@ public class TelegramService {
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
     private final OkHttpClient httpClient = new OkHttpClient();
     private MTProtoTelegramClient client;
+    private long timeout = 3000;
 
     public TelegramService(SettingRepository settingRepository) {
         this.settingRepository = settingRepository;
@@ -88,7 +93,25 @@ public class TelegramService {
         settingRepository.deleteById("tg_phone");
         settingRepository.deleteById("tg_code");
         settingRepository.deleteById("tg_password");
+        settingRepository.deleteById("tg_qr_img");
+        settingRepository.deleteById("tg_scanned");
+    }
+
+    public void logout() {
+        if (client != null) {
+            client.getServiceHolder().getAuthService().logOut().block();
+            client.disconnect().block();
+            client = null;
+        }
+
+        reset();
         settingRepository.save(new Setting("tg_phase", "0"));
+
+        try {
+            Files.deleteIfExists(Path.of("/data/t4j.bin"));
+        } catch (IOException e) {
+            log.warn("删除session文件失败", e);
+        }
     }
 
     public void connect() {
@@ -99,44 +122,100 @@ public class TelegramService {
         new Thread(() -> {
             int apiId = IdUtils.getApiId();
             String apiHash = IdUtils.getApiHash();
-            AuthorizationHandler authHandler = new CodeAuthorizationHandler(new CodeAuthorizationHandler.Callback() {
-                @Override
-                public Mono<CodeAuthorizationHandler.PhoneNumberAction> onPhoneNumber(AuthorizationHandler.Resources res, CodeAuthorizationHandler.PhoneNumberContext ctx) {
-                    log.info("Input the phone number.");
-                    settingRepository.save(new Setting("tg_phase", "1"));
-                    String phone = waitSettingAvailable("tg_phone");
-                    settingRepository.deleteById("tg_code");
-                    settingRepository.deleteById("tg_password");
-                    settingRepository.save(new Setting("tg_phase", "2"));
-                    return phone != null ? Mono.just(CodeAuthorizationHandler.PhoneNumberAction.of(phone)) : Mono.just(CodeAuthorizationHandler.PhoneNumberAction.cancel());
-                }
+            boolean qr = settingRepository.findById("tg_auth_type").map(Setting::getValue).orElse("code").equals("qr");
+            AuthorizationHandler authHandler;
+            if (qr) {
+                settingRepository.deleteById("tg_scanned");
+                settingRepository.deleteById("tg_qr_img");
+                authHandler = new QRAuthorizationHandler(new QRAuthorizationHandler.Callback() {
+                    @Override
+                    public Mono<ActionType> onLoginToken(AuthorizationHandler.Resources res, QRAuthorizationHandler.Context ctx) {
+                        settingRepository.save(new Setting("tg_phase", "0"));
+                        log.info("Scan QR {}, expired: {}.", ctx.loginUrl(), ctx.expiresIn());
+                        try {
+                            String img = getQrCode(ctx.loginUrl());
+                            settingRepository.save(new Setting("tg_qr_img", img));
+                        } catch (IOException e) {
+                            return Mono.error(e);
+                        }
+                        settingRepository.save(new Setting("tg_phase", "1"));
+                        String scanned = waitSettingAvailable("tg_scanned");
+                        settingRepository.deleteById("tg_password");
+                        settingRepository.save(new Setting("tg_phase", "2"));
+                        return scanned != null ? Mono.just(ActionType.STOP) : Mono.just(ActionType.RETRY);
+                    }
 
-                @Override
-                public Mono<CodeAuthorizationHandler.CodeAction> onSentCode(AuthorizationHandler.Resources res, CodeAuthorizationHandler.PhoneCodeContext ctx) {
-                    log.info("Input the verification code.");
-                    settingRepository.save(new Setting("tg_phase", "3"));
-                    String code = waitSettingAvailable("tg_code");
-                    settingRepository.save(new Setting("tg_phase", "4"));
-                    return code != null ? Mono.just(CodeAuthorizationHandler.CodeAction.of(code)) : Mono.just(CodeAuthorizationHandler.CodeAction.cancel());
-                }
+                    @Override
+                    public Mono<String> on2FAPassword(AuthorizationHandler.Resources res, TwoFactorHandler.Context ctx) {
+                        log.info("Input the 2FA password.");
+                        settingRepository.save(new Setting("tg_phase", "5"));
+                        String password = waitSettingAvailable("tg_password");
+                        settingRepository.save(new Setting("tg_phase", "6"));
+                        return password != null ? Mono.just(password) : Mono.empty();
+                    }
+                });
+            } else {
+                authHandler = new CodeAuthorizationHandler(new CodeAuthorizationHandler.Callback() {
+                    @Override
+                    public Mono<CodeAuthorizationHandler.PhoneNumberAction> onPhoneNumber(AuthorizationHandler.Resources res, CodeAuthorizationHandler.PhoneNumberContext ctx) {
+                        log.info("Input the phone number.");
+                        settingRepository.save(new Setting("tg_phase", "1"));
+                        String phone = waitSettingAvailable("tg_phone");
+                        settingRepository.deleteById("tg_code");
+                        settingRepository.deleteById("tg_password");
+                        settingRepository.save(new Setting("tg_phase", "2"));
+                        return phone != null ? Mono.just(CodeAuthorizationHandler.PhoneNumberAction.of(phone)) : Mono.just(CodeAuthorizationHandler.PhoneNumberAction.cancel());
+                    }
 
-                @Override
-                public Mono<String> on2FAPassword(AuthorizationHandler.Resources res, TwoFactorHandler.Context ctx) {
-                    log.info("Input the 2FA password.");
-                    settingRepository.save(new Setting("tg_phase", "5"));
-                    String password = waitSettingAvailable("tg_password");
-                    settingRepository.save(new Setting("tg_phase", "6"));
-                    return password != null ? Mono.just(password) : Mono.empty();
-                }
-            });
+                    @Override
+                    public Mono<CodeAuthorizationHandler.CodeAction> onSentCode(AuthorizationHandler.Resources res, CodeAuthorizationHandler.PhoneCodeContext ctx) {
+                        log.info("Input the verification code.");
+                        settingRepository.save(new Setting("tg_phase", "3"));
+                        String code = waitSettingAvailable("tg_code");
+                        settingRepository.save(new Setting("tg_phase", "4"));
+                        return code != null ? Mono.just(CodeAuthorizationHandler.CodeAction.of(code)) : Mono.just(CodeAuthorizationHandler.CodeAction.cancel());
+                    }
+
+                    @Override
+                    public Mono<String> on2FAPassword(AuthorizationHandler.Resources res, TwoFactorHandler.Context ctx) {
+                        log.info("Input the 2FA password.");
+                        settingRepository.save(new Setting("tg_phase", "5"));
+                        String password = waitSettingAvailable("tg_password");
+                        settingRepository.save(new Setting("tg_phase", "6"));
+                        return password != null ? Mono.just(password) : Mono.empty();
+                    }
+                });
+            }
             StoreLayout storeLayout = new FileStoreLayout(new StoreLayoutImpl(c -> c.maximumSize(1000)), Path.of("/data/t4j.bin"));
             client = MTProtoTelegramClient.create(apiId, apiHash, authHandler).setStoreLayout(storeLayout).connect().block();
+
+            if (client == null) {
+                settingRepository.save(new Setting("tg_phase", "0"));
+                log.warn("Telegram连接失败");
+                return;
+            }
 
             settingRepository.save(new Setting("tg_phase", "9"));
             log.info("Telegram连接成功");
             client.onDisconnect().block();
+            client = null;
             log.info("Telegram关闭连接");
         }).start();
+    }
+
+    public static String getQrCode(String text) throws IOException {
+        log.info("get qr code for text: {}", text);
+        try {
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.command("/atv-cli", text);
+            builder.inheritIO();
+            Process process = builder.start();
+            process.waitFor();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        Path file = Paths.get("/www/tvbox/qr.png");
+        return Base64.getEncoder().encodeToString(Files.readAllBytes(file));
     }
 
     public User getUser() {
@@ -198,7 +277,7 @@ public class TelegramService {
             Future<List<Message>> future = futures.get(i);
             String channel = channels[i];
             try {
-                List<Message> list = future.get(2000, TimeUnit.MILLISECONDS);
+                List<Message> list = future.get(timeout, TimeUnit.MILLISECONDS);
                 total += list.size();
                 result.add(channel + "$$$" + list.stream().filter(e -> e.getContent().contains("http")).map(Message::toZxString).collect(Collectors.joining("##")));
             } catch (InterruptedException e) {
@@ -226,7 +305,7 @@ public class TelegramService {
             Future<List<Message>> future = futures.get(i);
             String channel = channels[i];
             String[] parts = channel.split("\\|");
-            int timeout = 2000;
+            long timeout = this.timeout;
             if (parts.length == 2) {
                 timeout = Integer.parseInt(parts[1]);
             }
@@ -283,7 +362,7 @@ public class TelegramService {
         List<String> result = new ArrayList<>();
         for (Future<List<String>> future : futures) {
             try {
-                List<String> list = future.get(2000, TimeUnit.MILLISECONDS);
+                List<String> list = future.get(timeout, TimeUnit.MILLISECONDS);
                 total += list.size();
                 for (String line : list) {
                     if ("1".equals(encode)) {
@@ -316,6 +395,7 @@ public class TelegramService {
             String time = elTime != null ? elTime.attr("datetime") : Instant.now().atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
             list.add(time + " " + username + " " + element.html());
         }
+        Collections.reverse(list);
         return list;
     }
 

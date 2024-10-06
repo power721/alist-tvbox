@@ -118,7 +118,7 @@
 
     <el-dialog v-model="loginVisible" title="扫码登录" width="550px" @close="cancel">
       <div v-if="base64QrCode">
-        <img :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
+        <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
         <span class="hint">打开BiliBili手机客户端扫码</span>
       </div>
       <template #footer>

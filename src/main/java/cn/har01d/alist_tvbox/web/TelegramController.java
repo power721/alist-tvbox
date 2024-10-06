@@ -37,6 +37,11 @@ public class TelegramController {
         telegramService.connect();
     }
 
+    @PostMapping("/api/telegram/logout")
+    public void logout() {
+        telegramService.logout();
+    }
+
     @GetMapping("/tg-search")
     public List<Message> search(String channelUsername, String keyword) {
         return telegramService.search(channelUsername, keyword);
