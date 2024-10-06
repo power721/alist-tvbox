@@ -133,11 +133,24 @@
 
     <el-dialog v-model="tgVisible" title="登陆Telegram" width="60%" @close="cancelLogin">
       <el-form>
-        <el-form-item label="电话号码" label-width="140" required v-if="tgPhase==1">
+        <el-form-item label="登陆方式" label-width="140">
+          <el-radio-group v-model="tgAuthType" class="ml-4" @change="setAuthType">
+            <el-radio label="code" size="large">验证码</el-radio>
+            <el-radio label="qr" size="large">二维码</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <div v-if="tgAuthType=='qr'&&tgPhase==1&&base64QrCode!=''">
+          <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
+          <p>二维码30秒内有效。</p>
+          <el-form-item>
+            <el-button type="primary" @click="setScanned">我已经扫码</el-button>
+          </el-form-item>
+        </div>
+        <el-form-item label="电话号码" label-width="140" required v-if="tgAuthType=='code'&&tgPhase==1">
           <el-input v-model="tgPhone" autocomplete="off" placeholder="+8612345678901"/>
           <el-button @click="sendTgPhone">输入</el-button>
         </el-form-item>
-        <el-form-item label="验证码" label-width="140" required v-if="tgPhase==3">
+        <el-form-item label="验证码" label-width="140" required v-if="tgAuthType=='code'&&tgPhase==3">
           <el-input v-model="tgCode" autocomplete="off"/>
           <el-button @click="sendTgCode">输入</el-button>
         </el-form-item>
@@ -147,15 +160,16 @@
         </el-form-item>
         <div v-if="user.id">
           <div>登陆成功</div>
-          <div>用户ID： {{user.id}}</div>
-          <div>用户名： {{user.username}}</div>
-          <div>姓名： {{user.first_name}} {{user.last_name}}</div>
+          <div>用户ID： {{ user.id }}</div>
+          <div>用户名： {{ user.username }}</div>
+          <div>姓名： {{ user.first_name }} {{ user.last_name }}</div>
         </div>
       </el-form>
       <template #footer>
       <span class="dialog-footer">
         <el-button type="primary" @click="login">登陆</el-button>
-        <el-button @click="reset">重置</el-button>
+        <el-button type="danger" @click="logout">退出登陆</el-button>
+<!--        <el-button @click="reset">重置</el-button>-->
         <el-button @click="cancelLogin">取消</el-button>
       </span>
       </template>
@@ -175,6 +189,8 @@ const tgPhase = ref(0)
 const tgPhone = ref('')
 const tgCode = ref('')
 const tgPassword = ref('')
+const tgAuthType = ref('code')
+const base64QrCode = ref('')
 const token = ref('')
 const pgLocal = ref('')
 const pgRemote = ref('')
@@ -209,6 +225,9 @@ const handleLogin = () => {
   axios.get('/api/telegram/user').then(({data}) => {
     user.value = data
   })
+  axios.get('/api/settings/tg_auth_type').then(({data}) => {
+    tgAuthType.value = data.value
+  })
   tgVisible.value = true
 }
 
@@ -222,12 +241,20 @@ const login = () => {
         axios.get('/api/telegram/user').then(({data}) => {
           user.value = data
         })
+      } else if (tgAuthType.value == 'qr' && tgPhase.value == 1 && base64QrCode.value == '') {
+        loadQrCode()
       }
     })
   }, 1000)
   setTimeout(() => {
     clearInterval(timer)
   }, 120_000)
+}
+
+const loadQrCode = () => {
+  axios.get('/api/settings/tg_qr_img').then(({data}) => {
+    base64QrCode.value = data.value
+  })
 }
 
 const cancelLogin = () => {
@@ -238,6 +265,21 @@ const cancelLogin = () => {
 const reset = () => {
   axios.post('/api/telegram/reset').then(() => {
     ElMessage.success('重置成功')
+    clearInterval(timer)
+  })
+}
+
+const logout = () => {
+  axios.post('/api/telegram/logout').then(() => {
+    ElMessage.success('退出登陆成功')
+    clearInterval(timer)
+    user.value = {
+      id: 0,
+      username: '',
+      first_name: '',
+      last_name: '',
+      phone: ''
+    }
   })
 }
 
@@ -292,6 +334,17 @@ const deleteSub = () => {
 
 const handleCancel = () => {
   formVisible.value = false
+}
+
+const setAuthType = () => {
+  base64QrCode.value = ''
+  axios.post('/api/settings', {name: 'tg_auth_type', value: tgAuthType.value})
+}
+
+const setScanned = () => {
+  axios.post('/api/settings', {name: 'tg_scanned', value: 'true'}).then(() => {
+    base64QrCode.value = ''
+  })
 }
 
 const sendTgPhone = () => {
