@@ -4,8 +4,6 @@ import cn.har01d.alist_tvbox.dto.tg.Chat;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.exception.BadRequestException;
-import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -74,8 +72,8 @@ public class TelegramService {
     private final SettingRepository settingRepository;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
     private final OkHttpClient httpClient = new OkHttpClient();
+    private final long timeout = 3000;
     private MTProtoTelegramClient client;
-    private long timeout = 3000;
 
     public TelegramService(SettingRepository settingRepository) {
         this.settingRepository = settingRepository;
@@ -122,9 +120,10 @@ public class TelegramService {
         new Thread(() -> {
             int apiId = IdUtils.getApiId();
             String apiHash = IdUtils.getApiHash();
-            boolean qr = settingRepository.findById("tg_auth_type").map(Setting::getValue).orElse("code").equals("qr");
+            boolean qr = settingRepository.findById("tg_auth_type").map(Setting::getValue).orElse("qr").equals("qr");
             AuthorizationHandler authHandler;
             if (qr) {
+                log.info("Telegram扫码登陆");
                 settingRepository.deleteById("tg_scanned");
                 settingRepository.deleteById("tg_qr_img");
                 authHandler = new QRAuthorizationHandler(new QRAuthorizationHandler.Callback() {
@@ -155,6 +154,7 @@ public class TelegramService {
                     }
                 });
             } else {
+                log.info("Telegram验证码登陆");
                 authHandler = new CodeAuthorizationHandler(new CodeAuthorizationHandler.Callback() {
                     @Override
                     public Mono<CodeAuthorizationHandler.PhoneNumberAction> onPhoneNumber(AuthorizationHandler.Resources res, CodeAuthorizationHandler.PhoneNumberContext ctx) {
