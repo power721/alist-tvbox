@@ -4,10 +4,20 @@ import cn.har01d.alist_tvbox.dto.tg.Chat;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.Call;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import telegram4j.core.MTProtoTelegramClient;
@@ -34,8 +44,11 @@ import telegram4j.tl.request.messages.ImmutableGetDialogs;
 import telegram4j.tl.request.messages.ImmutableGetHistory;
 import telegram4j.tl.request.messages.ImmutableSearch;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -49,11 +62,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
+
 @Slf4j
 @Service
 public class TelegramService {
     private final SettingRepository settingRepository;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
+    private final OkHttpClient httpClient = new OkHttpClient();
     private MTProtoTelegramClient client;
 
     public TelegramService(SettingRepository settingRepository) {
@@ -210,7 +226,7 @@ public class TelegramService {
             Future<List<Message>> future = futures.get(i);
             String channel = channels[i];
             String[] parts = channel.split("\\|");
-            int timeout = 5000;
+            int timeout = 2000;
             if (parts.length == 2) {
                 timeout = Integer.parseInt(parts[1]);
             }
@@ -253,6 +269,71 @@ public class TelegramService {
         }
         log.info("Search {} from {}, get {} results.", keyword, username, result.size());
         return result;
+    }
+
+    public String searchWeb(String keyword, String username, String encode) {
+        String[] channels = username.split(",");
+        List<Future<List<String>>> futures = new ArrayList<>();
+        for (String channel : channels) {
+            Future<List<String>> future = executorService.submit(() -> searchWeb(channel, keyword));
+            futures.add(future);
+        }
+
+        int total = 0;
+        List<String> result = new ArrayList<>();
+        for (Future<List<String>> future : futures) {
+            try {
+                List<String> list = future.get(2000, TimeUnit.MILLISECONDS);
+                total += list.size();
+                for (String line : list) {
+                    if ("1".equals(encode)) {
+                        result.add(Base64.getEncoder().encodeToString(line.getBytes()));
+                    } else {
+                        result.add(line);
+                    }
+                }
+            } catch (InterruptedException e) {
+                break;
+            } catch (ExecutionException | TimeoutException e) {
+                log.warn("", e);
+            }
+        }
+
+        log.info("Search TG web get {} results.", total);
+        return String.join("\n", result);
+    }
+
+    public List<String> searchWeb(String username, String keyword) throws IOException {
+        String url = "https://t.me/s/" + username + "?q=" + keyword;
+
+        String html = getHtml(url);
+
+        List<String> list = new ArrayList<>();
+        Document doc = Jsoup.parse(html);
+        Elements elements = doc.select("div.tgme_container div.tgme_widget_message_wrap");
+        for (Element element : elements) {
+            Element elTime = element.selectFirst("time");
+            String time = elTime != null ? elTime.attr("datetime") : Instant.now().atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
+            list.add(time + " " + username + " " + element.html());
+        }
+        return list;
+    }
+
+    private String getHtml(String url) throws IOException {
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+                .addHeader("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5")
+                .addHeader("User-Agent", USER_AGENT)
+                .addHeader("Referer", "https://t.me/")
+                .build();
+
+        Call call = httpClient.newCall(request);
+        Response response = call.execute();
+        String html = response.body().string();
+        response.close();
+
+        return html;
     }
 
     @PreDestroy
