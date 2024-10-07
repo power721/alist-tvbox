@@ -991,8 +991,9 @@ public class SubscriptionService {
                 log.info("load json from {}", file);
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
                 String address = readHostAddress();
-                json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm?token=" + tokens.split(",")[0]);
-                json = json.replace("./peizhi.json", address + "/zx/config?token=" + tokens.split(",")[0]);
+                String token = tokens.split(",")[0];
+                json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
+                json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
                 json = json.replace("./", address + folder);
                 //json = json.replace(address + folder + "lib/tokenm.json", "./lib/tokenm.json");
                 json = json.replace("DOCKER_ADDRESS", address);
