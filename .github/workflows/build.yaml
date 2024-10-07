@@ -41,7 +41,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v3
         with:
-          node-version: 18.16.x
+          node-version: 20
           cache: npm
           cache-dependency-path: ./web-ui
       - name: Install npm
@@ -53,7 +53,7 @@ jobs:
       - name: setup graalvm
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '17.0.7'
+          java-version: '17'
           distribution: 'graalvm' # See 'Options' for all available distributions
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
