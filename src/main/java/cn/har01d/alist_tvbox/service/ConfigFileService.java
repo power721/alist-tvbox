@@ -138,7 +138,8 @@ public class ConfigFileService {
         dto.setPath(new File(dto.getDir(), dto.getName()).getAbsolutePath());
         if (dto.getName().endsWith(".json")) {
             try {
-                objectMapper.readTree(dto.getContent());
+                var node = objectMapper.readTree(dto.getContent());
+                dto.setContent(objectMapper.writeValueAsString(node));
             } catch (IOException e) {
                 throw new BadRequestException("JSON格式错误", e);
             }
