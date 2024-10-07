@@ -210,6 +210,9 @@
           </a><span class="hint"></span>
           <a :href="currentUrl + '/115/cookie/' + aliSecret" target="_blank">
             115 Cookie
+          </a><span class="hint"></span>
+          <a :href="currentUrl + '/bili/cookie/' + aliSecret" target="_blank">
+             B站 Cookie
           </a>
         </el-form-item>
         <el-form-item label="订阅替换阿里token地址">

@@ -50,7 +50,8 @@ public class SubscriptionController {
         }
         if (StringUtils.isNotBlank(subscription.getOverride())) {
             try {
-                objectMapper.readTree(subscription.getOverride());
+                var node = objectMapper.readTree(subscription.getOverride());
+                subscription.setOverride(objectMapper.writeValueAsString(node));
             } catch (IOException e) {
                 throw new BadRequestException("JSON格式错误", e);
             }

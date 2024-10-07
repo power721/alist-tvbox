@@ -95,6 +95,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_CODE;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.BILI_BILI;
@@ -315,6 +316,14 @@ public class BiliBiliService {
     public Map<String, Object> updateCookie(CookieData cookieData) {
         settingRepository.save(new Setting(BILIBILI_COOKIE, cookieData.getCookie()));
         return getLoginStatus();
+    }
+
+    public String getBiliBiliCookie(String id) {
+        String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
+        if (aliSecret.equals(id)) {
+            return settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+        }
+        return "";
     }
 
     public Map<String, Object> getLoginStatus() {

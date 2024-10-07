@@ -29,6 +29,11 @@ public class BiliBiliController {
         this.subscriptionService = subscriptionService;
     }
 
+    @GetMapping("/bili/cookie/{id}")
+    public String getBiliBiliCookie(@PathVariable String id) {
+        return biliBiliService.getBiliBiliCookie(id);
+    }
+
     @GetMapping("/bilibili")
     public Object api(String t, String ids, String wd,
                       boolean quick,
