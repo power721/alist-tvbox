@@ -9,7 +9,7 @@ else
   cp /zx.zip /data/
 fi
 
-REMOTE=$(curl -s http://104.160.46.225/zx.version)
+REMOTE=$(curl -s http://har01d.org/zx.version)
 
 echo "local zx: ${LOCAL}, remote zx: ${REMOTE}"
 if [ "$LOCAL" = "${REMOTE}" ]; then
@@ -19,7 +19,7 @@ if [ "$LOCAL" = "${REMOTE}" ]; then
 fi
 
 echo "download ${REMOTE}" && \
-wget http://104.160.46.225/zx.zip -O /data/zx.zip && \
+wget http://har01d.org/zx.zip -O /data/zx.zip && \
 echo "unzip file" && \
 rm -rf /www/zx/* && unzip -q -o /data/zx.zip -d /www/zx && \
 echo "save version" && \

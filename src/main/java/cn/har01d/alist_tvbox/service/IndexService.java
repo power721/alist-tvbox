@@ -201,7 +201,7 @@ public class IndexService {
         try {
             remote = restTemplate.getForObject("http://docker.xiaoya.pro/version.txt", String.class);
         } catch (ResourceAccessException e) {
-            remote = restTemplate.getForObject("http://104.160.46.225/version.txt", String.class);
+            remote = restTemplate.getForObject("http://har01d.org/version.txt", String.class);
         }
         return Utils.trim(remote);
     }
