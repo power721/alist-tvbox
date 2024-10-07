@@ -47,7 +47,7 @@ public class PgTokenController {
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = restTemplate.getForObject("https://har01d.org/pg.version", String.class);
+        String remote = restTemplate.getForObject("http://har01d.org/pg.version", String.class);
         String local = "";
         Path path = Path.of("/data/pg_version.txt");
         if (Files.exists(path)) {
