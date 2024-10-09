@@ -31,7 +31,7 @@ public class Message {
     }
 
     public String toPgString() {
-        return time.atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + " " + channel + " " + content.replace('\n', ' ');
+        return time.atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + "\t" + channel + "\t" + content.replace('\n', ' ') + "\t" + id;
     }
 
     public String toZxString() {
