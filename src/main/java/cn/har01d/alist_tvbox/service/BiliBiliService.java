@@ -887,6 +887,8 @@ public class BiliBiliService {
 
         HttpEntity<Void> entity = buildHttpEntity(null);
         getKeys(entity);
+        String webId = getWebId(id);
+        map.put("w_webid", webId);
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpPlaylist: {}", url);
 
