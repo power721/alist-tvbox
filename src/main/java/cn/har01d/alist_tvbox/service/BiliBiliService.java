@@ -784,6 +784,19 @@ public class BiliBiliService {
         return result;
     }
 
+    private String getWebId(String mid) {
+        String url = "https://space.bilibili.com/" + mid + "/video";
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+        String html = response.getBody();
+        int start = html.indexOf("__RENDER_DATA__");
+        start = html.indexOf("access_id", start) + 18;
+        int end = html.indexOf("</script>", start) - 6;
+        String result = html.substring(start, end);
+        log.debug("{}", result);
+        return result;
+    }
+
     public MovieList getUpMedia(String mid, String sort, int page) throws IOException {
         if (StringUtils.isBlank(sort)) {
             sort = "pubdate";
@@ -805,6 +818,8 @@ public class BiliBiliService {
 
         HttpEntity<Void> entity = buildHttpEntity(null);
         getKeys(entity);
+        String webId = getWebId(mid);
+        map.put("w_webid", webId);
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpMedia: {}", url);
 
