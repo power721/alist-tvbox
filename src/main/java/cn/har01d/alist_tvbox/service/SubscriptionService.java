@@ -855,16 +855,16 @@ public class SubscriptionService {
                     }
                 }
 
-                Object ext1 = original.get("ext");
-                if (ext1 instanceof Map extMap1) {
-                    Object ext2 = site.get("ext");
-                    if (ext2 instanceof Map extMap2) {
-                        extMap1.putAll(extMap2);
-                        site.put("ext", extMap1);
-                    }
-                }
-
                 if (original != null) {
+                    Object ext1 = original.get("ext");
+                    if (ext1 instanceof Map extMap1) {
+                        Object ext2 = site.get("ext");
+                        if (ext2 instanceof Map extMap2) {
+                            extMap1.putAll(extMap2);
+                            site.put("ext", extMap1);
+                        }
+                    }
+
                     original.putAll(site);
                     log.debug("override {}: {}", name, key);
                 } else {
