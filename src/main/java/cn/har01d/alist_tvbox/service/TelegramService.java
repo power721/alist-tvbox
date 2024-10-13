@@ -393,7 +393,7 @@ public class TelegramService {
         for (Element element : elements) {
             Element elTime = element.selectFirst("time");
             String time = elTime != null ? elTime.attr("datetime") : Instant.now().atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-            list.add(time + " " + username + " " + element.html());
+            list.add(time + "\t" + username + "\t" + element.html().replace("\n+", " ") + "\t");
         }
         Collections.reverse(list);
         return list;
