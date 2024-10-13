@@ -66,10 +66,16 @@
     <el-row>
       PG包本地： {{ pgLocal }}
       PG包远程： {{ pgRemote }}
+      <span class="hint"></span>
+      <span v-if="pgLocal==pgRemote"><el-icon color="green"><Check /></el-icon></span>
+      <span v-else><el-icon color="orange"><Warning /></el-icon></span>
     </el-row>
     <el-row>
       真心包本地： {{ zxLocal }}
       真心包远程： {{ zxRemote }}
+      <span class="hint"></span>
+      <span v-if="zxLocal==zxRemote"><el-icon color="green"><Check /></el-icon></span>
+      <span v-else><el-icon color="orange"><Warning /></el-icon></span>
     </el-row>
     <el-row>
       <el-button @click="syncCat">同步文件</el-button>
@@ -413,6 +419,10 @@ onUnmounted(() => {
 <style scoped>
 .space {
   margin-bottom: 6px;
+}
+
+.hint {
+  margin-left: 16px;
 }
 
 .json pre {
