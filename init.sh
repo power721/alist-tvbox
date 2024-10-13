@@ -53,7 +53,7 @@ init() {
 
   wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/tvbox.zip -O tvbox.zip || \
   wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" --header="Host:docker.xiaoya.pro" -T 30 -t 2 http://104.21.17.247/update/tvbox.zip -O tvbox.zip || \
-  wget -T 30 -t 2 https://github.com/xiaoyaliu00/data/raw/main/tvbox.zip -O tvbox.zip || \
+  wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
   wget -T 30 -t 2 http://har01d.org/tvbox.zip -O tvbox.zip || \
   cp /tvbox.zip ./
 
@@ -113,11 +113,12 @@ cd /tmp/
 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 10 -t 2 -q http://docker.xiaoya.pro/version.txt -O version.txt || \
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" --header="Host:docker.xiaoya.pro" -T 10 -t 2 -q http://104.21.17.247/version.txt -O version.txt || \
+wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt -O version.txt || \
 wget -T 10 -t 2 http://har01d.org/version.txt -O version.txt
 
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/update.zip -O update.zip || \
 wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" --header="Host:docker.xiaoya.pro" -T 30 -t 2 http://104.21.17.247/update/update.zip -O update.zip || \
-wget -T 30 -t 2 https://github.com/xiaoyaliu00/data/raw/main/update.zip -O update.zip || \
+wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/update.zip -O update.zip || \
 wget -T 30 -t 2 http://har01d.org/update.zip -O update.zip
 
 if [ ! -f update.zip ]; then
@@ -165,6 +166,7 @@ else
   elif [ "$remote" = "$latest" ]; then
     wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" -T 30 -t 2 http://docker.xiaoya.pro/update/index.zip -O index.zip || \
     wget --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36" --header="Host:docker.xiaoya.pro" -T 40 -t 2 http://104.21.17.247/update/index.zip -O index.zip || \
+    wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip -O index.zip || \
     wget -T 40 -t 2 http://har01d.org/index.zip -O index.zip
 
     if [ ! -f index.zip ]; then
