@@ -10,10 +10,14 @@ import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.security.SignatureException;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
@@ -30,6 +34,19 @@ public class JwtTokenService implements TokenService {
 
     public JwtTokenService(AppProperties appProperties) {
         this.appProperties = appProperties;
+    }
+
+    @PostConstruct
+    public void init() throws IOException {
+        Path path = Path.of("/data/.jwt");
+        if (Files.exists(path)) {
+            String secret = Files.readString(path);
+            appProperties.setSecretKey(secret);
+        } else {
+            String secret = UUID.randomUUID().toString();
+            Files.writeString(path, secret);
+            appProperties.setSecretKey(secret);
+        }
     }
 
     @Override
