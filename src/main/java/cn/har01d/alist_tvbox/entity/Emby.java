@@ -21,6 +21,7 @@ public class Emby {
     private Integer order;
     private String name;
     private String url;
+    private String userAgent;
     private String username = "";
     private String password = "";
 }
