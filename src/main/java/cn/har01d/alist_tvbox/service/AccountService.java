@@ -341,8 +341,8 @@ public class AccountService {
             }
         }
 
-        Utils.execute("/downloadZx.sh");
-        Utils.execute("/downloadPg.sh");
+        //Utils.execute("/downloadZx.sh");
+        //Utils.execute("/downloadPg.sh");
 
         indexService.getRemoteVersion();
     }
