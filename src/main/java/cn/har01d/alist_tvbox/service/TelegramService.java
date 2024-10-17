@@ -301,15 +301,7 @@ public class TelegramService {
             futures.add(future);
         }
 
-        for (int i = 0; i < futures.size(); i++) {
-            Future<List<Message>> future = futures.get(i);
-            String channel = channels[i];
-            String[] parts = channel.split("\\|");
-            long timeout = this.timeout;
-            if (parts.length == 2) {
-                timeout = Integer.parseInt(parts[1]);
-            }
-
+        for (Future<List<Message>> future : futures) {
             try {
                 list.addAll(future.get(timeout, TimeUnit.MILLISECONDS));
             } catch (InterruptedException e) {
