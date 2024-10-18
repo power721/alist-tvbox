@@ -22,8 +22,6 @@ COPY scripts/downloadPg.sh /
 COPY scripts/downloadZx.sh /
 COPY entrypoint.sh /
 
-COPY target/application/ ./
-
 COPY data/tvbox.zip /
 COPY data/base_version /
 COPY data/index.share.zip /
@@ -31,10 +29,14 @@ COPY data/cat.zip /
 COPY data/pg.zip /
 COPY data/zx.zip /
 COPY data/data.zip /
+COPY scripts/tgsearch.x86_64 /
+COPY scripts/tgsearch.arm64v8 /
+
+COPY target/application/ ./
 
 COPY data/version data/app_version
 
-EXPOSE 4567 5678
+EXPOSE 4567 5678 10199
 
 ENTRYPOINT ["/entrypoint.sh"]
 
