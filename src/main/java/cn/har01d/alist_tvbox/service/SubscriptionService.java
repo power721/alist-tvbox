@@ -80,6 +80,7 @@ public class SubscriptionService {
     private final PanAccountRepository panAccountRepository;
     private final EmbyRepository embyRepository;
     private final AListLocalService aListLocalService;
+    private final ConfigFileService configFileService;
 
     private String tokens = "";
 
@@ -95,7 +96,8 @@ public class SubscriptionService {
                                ShareRepository shareRepository,
                                PanAccountRepository panAccountRepository,
                                EmbyRepository embyRepository,
-                               AListLocalService aListLocalService) {
+                               AListLocalService aListLocalService,
+                               ConfigFileService configFileService) {
         this.environment = environment;
         this.appProperties = appProperties;
         this.restTemplate = builder
@@ -112,6 +114,7 @@ public class SubscriptionService {
         this.panAccountRepository = panAccountRepository;
         this.embyRepository = embyRepository;
         this.aListLocalService = aListLocalService;
+        this.configFileService = configFileService;
     }
 
     @PostConstruct
@@ -296,6 +299,18 @@ public class SubscriptionService {
         Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && [ -d /data/cat ] && cp -r /data/cat/* /www/cat/");
         Utils.execute("/downloadZx.sh");
         Utils.execute("/downloadPg.sh");
+
+        var files = configFileService.list();
+        for (var file : files) {
+            if (file.getPath().startsWith("/www/")) {
+                try {
+                    configFileService.writeFileContent(file);
+                } catch (IOException e) {
+                    log.warn("Write file failed.", e);
+                }
+            }
+        }
+
         return 0;
     }
 

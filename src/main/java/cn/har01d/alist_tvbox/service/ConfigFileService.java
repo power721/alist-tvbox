@@ -115,6 +115,10 @@ public class ConfigFileService {
         }
     }
 
+    public List<ConfigFile> list() {
+        return repository.findAll();
+    }
+
     public ConfigFile create(FileDto dto) throws IOException {
         validate(dto);
         dto.setId(null);
@@ -146,7 +150,7 @@ public class ConfigFileService {
         }
     }
 
-    private void writeFileContent(ConfigFile configFile) throws IOException {
+    public void writeFileContent(ConfigFile configFile) throws IOException {
         log.info("write file: {}", configFile.getPath());
         Files.createDirectories(Paths.get(configFile.getDir()));
         Path path = Paths.get(configFile.getDir(), configFile.getName());
