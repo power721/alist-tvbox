@@ -7,7 +7,7 @@ if [ -f /data/proxy.txt ]; then
   export no_proxy="*.aliyundrive.com"
 fi
 
-chmod a+x /init.sh /index.sh /downloadPg.sh
+chmod a+x /init.sh /index.sh /downloadPg.sh /downloadZx.sh
 
 if [ ! -d /data/log ]; then
   mkdir -p /data/log

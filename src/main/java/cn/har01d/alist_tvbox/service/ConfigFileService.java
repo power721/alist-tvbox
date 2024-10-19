@@ -11,6 +11,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.GetMapping;
 
 import java.io.File;
 import java.io.IOException;
@@ -115,6 +116,10 @@ public class ConfigFileService {
         }
     }
 
+    public List<ConfigFile> list() {
+        return repository.findAll();
+    }
+
     public ConfigFile create(FileDto dto) throws IOException {
         validate(dto);
         dto.setId(null);
@@ -146,7 +151,7 @@ public class ConfigFileService {
         }
     }
 
-    private void writeFileContent(ConfigFile configFile) throws IOException {
+    public void writeFileContent(ConfigFile configFile) throws IOException {
         log.info("write file: {}", configFile.getPath());
         Files.createDirectories(Paths.get(configFile.getDir()));
         Path path = Paths.get(configFile.getDir(), configFile.getName());
