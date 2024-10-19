@@ -61,7 +61,7 @@ public class ZxConfigController {
     public ObjectNode config(String token) throws IOException {
         subscriptionService.checkToken(token);
 
-        String json = Files.readString(Path.of("/www/zx/peizhi.json"));
+        String json = Files.readString(Path.of("/www/zx/json/peizhi.json"));
 
         ObjectNode objectNode = (ObjectNode) objectMapper.readTree(json);
 
