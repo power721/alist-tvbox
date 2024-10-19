@@ -96,7 +96,8 @@ public class SubscriptionService {
                                ShareRepository shareRepository,
                                PanAccountRepository panAccountRepository,
                                EmbyRepository embyRepository,
-                               AListLocalService aListLocalService, ConfigFileService configFileService) {
+                               AListLocalService aListLocalService,
+                               ConfigFileService configFileService) {
         this.environment = environment;
         this.appProperties = appProperties;
         this.restTemplate = builder
