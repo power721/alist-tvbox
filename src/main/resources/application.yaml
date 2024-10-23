@@ -15,6 +15,8 @@ spring:
     serialization:
       INDENT_OUTPUT: true
       FAIL_ON_EMPTY_BEANS: false
+    parser:
+      allow-comments: true
   jpa:
     hibernate:
       # possible values: validate | update | create | create-drop
