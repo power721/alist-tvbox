@@ -6,14 +6,18 @@ import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
 import cn.har01d.alist_tvbox.service.TelegramService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.netty.buffer.ByteBuf;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
+import telegram4j.mtproto.file.FilePart;
 import telegram4j.tl.User;
 
+import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -101,5 +105,10 @@ public class TelegramController {
     @GetMapping("/api/telegram/history")
     public List<Message> getChatHistory(String id) {
         return telegramService.getHistory(id);
+    }
+
+    @PostMapping("/api/telegram/download")
+    public void download(String id) throws IOException {
+        telegramService.download(id);
     }
 }

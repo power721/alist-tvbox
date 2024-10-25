@@ -1,6 +1,11 @@
 package cn.har01d.alist_tvbox.dto.tg;
 
+import io.netty.buffer.ByteBufUtil;
 import lombok.Data;
+import telegram4j.mtproto.file.Context;
+import telegram4j.mtproto.file.FileReferenceId;
+import telegram4j.tl.BaseDocument;
+import telegram4j.tl.MessageMediaDocument;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -17,6 +22,7 @@ public class Message {
     private String content;
     private String author;
     private String channel;
+    private String fileRefId;
 
     public Message() {
     }
@@ -28,6 +34,17 @@ public class Message {
         this.views = message.views();
         this.author = message.postAuthor();
         this.channel = channel;
+    }
+
+    public Message(telegram4j.tl.BaseMessage message, Context context) {
+        this.id = message.id();
+        this.time = Instant.ofEpochSecond(message.date());
+        this.content = message.message();
+        this.views = message.views();
+        this.author = message.postAuthor();
+        MessageMediaDocument mediaDocument = (MessageMediaDocument) message.media();
+        BaseDocument baseDocument = (BaseDocument) mediaDocument.document();
+        this.fileRefId = FileReferenceId.ofDocument(baseDocument, context).serialize();
     }
 
     public String toPgString() {

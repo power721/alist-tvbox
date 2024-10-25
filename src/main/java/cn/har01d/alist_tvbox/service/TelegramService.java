@@ -5,6 +5,9 @@ import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.util.IdUtils;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.netty.buffer.ByteBuf;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -17,24 +20,30 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import telegram4j.core.MTProtoTelegramClient;
 import telegram4j.core.auth.AuthorizationHandler;
 import telegram4j.core.auth.CodeAuthorizationHandler;
 import telegram4j.core.auth.QRAuthorizationHandler;
 import telegram4j.core.auth.TwoFactorHandler;
+import telegram4j.mtproto.file.Context;
+import telegram4j.mtproto.file.FilePart;
 import telegram4j.mtproto.store.FileStoreLayout;
 import telegram4j.mtproto.store.StoreLayout;
 import telegram4j.mtproto.store.StoreLayoutImpl;
 import telegram4j.tl.BaseChat;
+import telegram4j.tl.BaseDocument;
 import telegram4j.tl.BaseMessage;
 import telegram4j.tl.Channel;
 import telegram4j.tl.ImmutableInputPeerChannel;
 import telegram4j.tl.ImmutableInputPeerChat;
+import telegram4j.tl.ImmutablePeerChat;
 import telegram4j.tl.InputMessagesFilterEmpty;
 import telegram4j.tl.InputPeer;
 import telegram4j.tl.InputPeerSelf;
 import telegram4j.tl.InputUserSelf;
+import telegram4j.tl.MessageMediaDocument;
 import telegram4j.tl.User;
 import telegram4j.tl.messages.ChannelMessages;
 import telegram4j.tl.messages.DialogsSlice;
@@ -44,9 +53,11 @@ import telegram4j.tl.request.messages.ImmutableGetHistory;
 import telegram4j.tl.request.messages.ImmutableSearch;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -56,6 +67,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -70,13 +82,15 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 @Service
 public class TelegramService {
     private final SettingRepository settingRepository;
+    private final ObjectMapper objectMapper;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
     private final OkHttpClient httpClient = new OkHttpClient();
     private final long timeout = 3000;
     private MTProtoTelegramClient client;
 
-    public TelegramService(SettingRepository settingRepository) {
+    public TelegramService(SettingRepository settingRepository, ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
+        this.objectMapper = objectMapper;
     }
 
     @PostConstruct
@@ -238,14 +252,51 @@ public class TelegramService {
             return List.of();
         }
         String[] parts = id.split("\\$");
-        InputPeer inputPeer = ImmutableInputPeerChannel.of(Long.parseLong(parts[0]), Long.parseLong(parts[1]));
+        long chatId = Long.parseLong(parts[0]);
+        InputPeer inputPeer = ImmutableInputPeerChannel.of(chatId, Long.parseLong(parts[1]));
 
-        Messages messages = client.getServiceHolder().getChatService().getHistory(ImmutableGetHistory.of(inputPeer, 0, 0, 0, 100, 0, 0, 0)).block();
-        log.info("{}", messages);
+        Messages messages = client.getServiceHolder().getChatService().getHistory(ImmutableGetHistory.of(inputPeer, 0, 0, 0, 10, 0, 0, 0)).block();
+        log.debug("{}", messages);
         if (messages instanceof ChannelMessages) {
-            return ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message("", e)).toList();
+            return ((ChannelMessages) messages).messages().stream()
+                    .filter(e -> e instanceof BaseMessage)
+                    .map(e -> (BaseMessage) e)
+                    .filter(e -> e.media() instanceof MessageMediaDocument)
+                    .filter(e -> ((MessageMediaDocument) e.media()).document() instanceof BaseDocument)
+                    .map(e -> new Message(e, Context.createMediaContext(ImmutablePeerChat.of(chatId), e.id())))
+                    .toList();
         }
         return List.of();
+    }
+
+    public void download(String fileRefId) throws IOException {
+        Path dir = Path.of("downloads");
+        Files.createDirectories(dir);
+        long t = System.currentTimeMillis();
+        Path filePath = dir.resolve(t + ".file");
+        log.info("| Downloading file {}", filePath);
+
+        Mono.usingWhen(Mono.fromCallable(() -> FileChannel.open(filePath, StandardOpenOption.WRITE, StandardOpenOption.CREATE)),
+                        fc -> client.downloadFile(fileRefId)
+                                .flatMap(fp -> Mono.fromCallable(() -> fc.write(fp.getBytes().nioBuffer())))
+                                .then(),
+                        fc -> Mono.fromCallable(() -> {
+                            fc.close();
+                            return null;
+                        }))
+                .then(Mono.fromRunnable(() -> log.info("| File downloaded {} ({}s)", filePath,
+                        (System.currentTimeMillis() - t) / 1000f)))
+                .block();
+
+       //return client.downloadFile(fileRefId).map(FilePart::getBytes);
+    }
+
+    private String toJson(Object object) {
+        try {
+            return objectMapper.writeValueAsString(object);
+        } catch (JsonProcessingException e) {
+            return Objects.toString(object);
+        }
     }
 
     private String waitSettingAvailable(String key) {
