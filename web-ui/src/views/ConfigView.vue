@@ -8,8 +8,8 @@
               <span>AList运行状态</span>
               <div>
                 <el-button type="primary" v-if="store.aListStatus===0" @click="handleAList('start')">启动</el-button>
-                <el-button type="warning" v-if="store.aListStatus===2" @click="handleAList('restart')">重启</el-button>
-                <el-button type="danger" v-if="store.aListStatus===2" @click="handleAList('stop')">停止</el-button>
+                <el-button type="warning" v-if="store.aListStatus!==0" @click="handleAList('restart')">重启</el-button>
+                <el-button type="danger" v-if="store.aListStatus!==0" @click="handleAList('stop')">停止</el-button>
               </div>
             </div>
           </template>
