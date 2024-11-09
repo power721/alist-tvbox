@@ -821,18 +821,6 @@ public class ShareService {
         try {
             Share share = new Share();
             share.setType(0);
-            share.setId(7001);
-            share.setShareId("dieULBdYP3D");
-            share.setFolderId("633c26e2666fd0e679a5455d92c66f9dd13c6d35");
-            share.setPath("/\uD83C\uDE34我的阿里分享/YYDSVIP电视剧");
-            shares.add(shareRepository.save(share));
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            Share share = new Share();
-            share.setType(0);
             share.setId(7002);
             share.setShareId("4ydLxf7VgH7");
             share.setFolderId("6411b6c459de9db58ea5439cb7f537bbed4f4f4b");
