@@ -132,7 +132,7 @@ public class SubscriptionService {
             sub = new Subscription();
             sub.setSid("1");
             sub.setName("饭太硬");
-            sub.setUrl("http://饭太硬.com/tv");
+            sub.setUrl("http://www.饭太硬.com/tv");
             subscriptionRepository.save(sub);
             sub = new Subscription();
             sub.setSid("2");
@@ -174,8 +174,8 @@ public class SubscriptionService {
             if ("https://tvbox.cainisi.cf".equals(sub.getUrl())) {
                 sub.setUrl("https://tv.菜妮丝.top");
                 subscriptionRepository.save(sub);
-            } else if ("http://饭太硬.top/tv".equals(sub.getUrl())) {
-                sub.setUrl("http://饭太硬.com/tv");
+            } else if ("http://饭太硬.com/tv".equals(sub.getUrl())) {
+                sub.setUrl("http://www.饭太硬.com/tv");
                 subscriptionRepository.save(sub);
             }
         }
