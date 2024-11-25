@@ -2,10 +2,9 @@
 
 import {onMounted, ref} from "vue";
 import axios from "axios";
-import {store} from "@/services/store";
 
 const type = ref('app')
-const level = ref('')
+const level = ref(localStorage.getItem('log_level') || '')
 const page = ref(1)
 const count = ref(0)
 const total = ref(0)
@@ -38,6 +37,7 @@ const reload = () => {
 }
 
 const onTypeChange = () => {
+  localStorage.setItem('log_level', level.value)
   load(1)
 }
 
