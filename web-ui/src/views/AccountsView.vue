@@ -76,9 +76,6 @@
           <div class="hint">
             webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
           </div>
-          <div class="hint">
-            TV Token:<a href="https://www.voicehub.top/oauth/alipan" title="需要选择TV Token的认证URL" target="_blank">获取开放token</a>
-          </div>
         </el-form-item>
         <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
           <el-switch
@@ -150,9 +147,6 @@
           AList:<a href="https://alist.nn.ci/tool/aliyundrive/request.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
           <div class="hint">
             webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
-          </div>
-          <div class="hint">
-            TV Token:<a href="https://www.voicehub.top/oauth/alipan" title="需要选择TV Token的认证URL" target="_blank">获取开放token</a>
           </div>
           <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
           <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>
