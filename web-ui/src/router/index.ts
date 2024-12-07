@@ -22,6 +22,7 @@ import SystemInfo from "@/views/SystemInfo.vue";
 import MetaView from "@/views/MetaView.vue";
 import TmdbView from "@/views/TmdbView.vue";
 import EmbyView from "@/views/EmbyView.vue";
+import LiveView from "@/views/LiveView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -139,6 +140,12 @@ const router = createRouter({
       path: '/sub/:id',
       name: 'sub',
       component: SubView,
+      meta: {auth: true}
+    },
+    {
+      path: '/live',
+      name: 'live',
+      component: LiveView,
       meta: {auth: true}
     },
     {
