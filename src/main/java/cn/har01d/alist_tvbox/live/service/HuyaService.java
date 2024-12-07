@@ -278,7 +278,9 @@ public class HuyaService implements LivePlatform {
                         url += "&ratio=" + bitRate;
                     }
                     String qualityName = bitRateInfo.getSDisplayName();
-                    urls.add(qualityName + "$" + url);
+                    if (!qualityName.contains("HDR")) {
+                        urls.add(qualityName + "$" + url);
+                    }
                 }
                 playUrl.add(String.join("#", urls));
             }
