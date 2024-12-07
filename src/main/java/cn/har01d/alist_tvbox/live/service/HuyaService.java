@@ -73,7 +73,7 @@ public class HuyaService implements LivePlatform {
         List<MovieDetail> list = new ArrayList<>();
         String url = "https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&tagAll=0";
         var json = restTemplate.getForObject(url, String.class);
-        log.debug("home json: {}", json);
+        log.trace("home json: {}", json);
         var response = objectMapper.readValue(json, HuyaLiveRoomInfoListResponse.class);
         for (var room : response.getData().getDatas()) {
             MovieDetail detail = new MovieDetail();
@@ -98,7 +98,7 @@ public class HuyaService implements LivePlatform {
         List<Category> list = new ArrayList<>();
 
         var json = restTemplate.getForObject("https://m.huya.com/cache.php?m=Game&do=ajaxGameList&bussType=", String.class);
-        //log.debug("category json: {}", json);
+        log.trace("category json: {}", json);
         var huyaCategoryList = objectMapper.readValue(json, HuyaCategoryList.class);
         for (var item : huyaCategoryList.getGameList()) {
             Category category = new Category();
@@ -127,7 +127,7 @@ public class HuyaService implements LivePlatform {
 
         String url = "https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&gameId=" + gid + "&tagAll=0&page=" + pg;
         var json = restTemplate.getForObject(url, String.class);
-        //log.debug("list json: {}", json);
+        log.trace("list json: {}", json);
         var response = objectMapper.readValue(json, HuyaLiveRoomInfoListResponse.class);
         for (var room : response.getData().getDatas()) {
             MovieDetail detail = new MovieDetail();
@@ -155,6 +155,7 @@ public class HuyaService implements LivePlatform {
 
         String url = "https://search.cdn.huya.com/?m=Search&do=getSearchContent&q=" + wd + "&uid=0&v=4&typ=-5&livestate=0&rows=30&start=0";
         ObjectNode json = restTemplate.getForObject(url, ObjectNode.class);
+        log.trace("search json: {}", json);
         ObjectNode response = (ObjectNode) json.get("response");
         response = (ObjectNode) response.get("1");
         ArrayNode arrayNode = (ArrayNode) response.get("docs");
@@ -255,31 +256,13 @@ public class HuyaService implements LivePlatform {
             start = json.indexOf("vBitRateInfo");
             start = json.indexOf("\"value\":", start);
             end = json.indexOf("],", start) + 1;
-            log.debug("vBitRateInfo: {}", "{" + json.substring(start, end) + "}");
+            log.trace("vBitRateInfo: {}", "{" + json.substring(start, end) + "}");
             HuyaLiveRoom.BitRateInfoList vBitRateInfo = objectMapper.readValue("{" + json.substring(start, end) + "}", HuyaLiveRoom.BitRateInfoList.class);
 
             List<String> sStreamNames = findAll(json, S_STREAM_NAME);
             List<String> sFlvUrl = findAll(json, S_FLV_URL);
             List<String> sFlvUrlSuffix = findAll(json, S_FLV_URL_SUFFIX);
             List<String> sFlvAntiCode = findAll(json, S_FLV_ANTI_CODE);
-
-//            for (var bitRateInfo : vBitRateInfo.getValue()) {
-//                String qualityName = bitRateInfo.getSDisplayName();
-//                int bitRate = bitRateInfo.getIBitRate();
-//                playFrom.add(qualityName);
-//                List<String> urls = new ArrayList<>();
-//                for (int i = 0; i < sStreamNames.size(); i++) {
-//                    String streamName = sStreamNames.get(i);
-//                    String streamUrl = sFlvUrl.get(i).replace("\\u002F", "/") + "/" + streamName + "." + sFlvUrlSuffix.get(i);
-//                    streamUrl = streamUrl.replace("http://", "https://");
-//                    streamUrl += "?" + processAnticode(sFlvAntiCode.get(i), uid, streamName);
-//                    if (bitRate > 0) {
-//                        streamUrl += "&ratio=" + bitRate;
-//                    }
-//                    urls.add("线路" + (i + 1) + "$" + streamUrl);
-//                }
-//                playUrl.add(String.join("#", urls));
-//            }
 
             for (int i = 0; i < sStreamNames.size(); i++) {
                 playFrom.add("线路" + (i + 1));
