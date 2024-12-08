@@ -4,10 +4,13 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -19,11 +22,16 @@ import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 @Service
 public class LiveService {
     private final List<LivePlatform> platforms = new ArrayList<>();
+    private final Cache<String, MovieList> cache = Caffeine.newBuilder()
+            .maximumSize(20)
+            .expireAfterWrite(Duration.ofMinutes(15))
+            .build();
     private final HuyaService huyaService;
 
-    public LiveService(HuyaService huyaService) {
+    public LiveService(HuyaService huyaService, DouyuService douyuService) {
         this.huyaService = huyaService;
         platforms.add(huyaService);
+        platforms.add(douyuService);
     }
 
     public MovieList home() throws IOException {
@@ -58,6 +66,11 @@ public class LiveService {
                 }
             }
         } else {
+            var temp = cache.getIfPresent(id);
+            if (temp != null) {
+                return temp;
+            }
+
             for (LivePlatform platform : platforms) {
                 if (platform.getType().equals(id)) {
                     var categoryList = platform.category();
@@ -74,6 +87,8 @@ public class LiveService {
                     result.setList(list);
                     result.setTotal(result.getList().size());
                     result.setLimit(result.getList().size());
+                    cache.put(id, result);
+                    return result;
                 }
             }
         }
@@ -82,11 +97,16 @@ public class LiveService {
 
     public MovieList search(String wd) throws IOException {
         MovieList result = new MovieList();
+        // TODO:
         return result;
     }
 
     public MovieList detail(String tid) throws IOException {
-        MovieList result = new MovieList();
+        MovieList result = cache.getIfPresent(tid);
+        if (result != null) {
+            return result;
+        }
+        result = new MovieList();
         String[] parts = tid.split("\\$");
         for (LivePlatform platform : platforms) {
             if (platform.getType().equals(parts[0])) {
@@ -94,6 +114,7 @@ public class LiveService {
                 if (!result.getList().isEmpty()) {
                     result.getList().get(0).setVod_director(platform.getName());
                 }
+                cache.put(tid, result);
                 return result;
             }
         }

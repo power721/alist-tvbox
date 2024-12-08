@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,7 +53,7 @@ public class HuyaService implements LivePlatform {
 
     public HuyaService(RestTemplateBuilder builder, ObjectMapper objectMapper) {
         this.restTemplate = builder
-                .defaultHeader("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1")
+                .defaultHeader("User-Agent", Constants.MOBILE_USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
     }
@@ -173,6 +174,7 @@ public class HuyaService implements LivePlatform {
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
 
+        log.debug("search result: {}", result);
         return result;
     }
 

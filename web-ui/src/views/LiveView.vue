@@ -136,6 +136,7 @@ const handleClick = (tab: TabsPaneContext) => {
 const handleCategoryClick = (tab: TabsPaneContext) => {
   const index = +(tab.index || "0");
   category.value = categories.value[index];
+  loadTypes();
 };
 
 const loadFlv = (url: string) => {
@@ -231,7 +232,7 @@ onUnmounted(() => {
     <el-tabs v-model="category.type_id" @tab-click="handleCategoryClick">
       <el-tab-pane :label="item.type_name" :name="item.type_id" v-for="item of categories">
         <el-breadcrumb separator="/">
-          <el-breadcrumb-item v-if="type.vod_id">
+          <el-breadcrumb-item>
             <a href="javascript:void(0);" @click="returnHome">首页</a>
           </el-breadcrumb-item>
           <el-breadcrumb-item v-if="type.vod_id">
@@ -243,14 +244,15 @@ onUnmounted(() => {
         </el-breadcrumb>
 
         <div v-show="!rooms.length">
-          <el-input
-            id="type-filter"
-            v-model="typeKeyword"
-            style="width: 240px"
-            placeholder="筛选"
-            @change="filterTypes"
-            :prefix-icon="Search"
-          />
+          <div id="type-filter">
+            <el-input
+              v-model="typeKeyword"
+              style="width: 240px"
+              placeholder="筛选"
+              @change="filterTypes"
+              :prefix-icon="Search"
+            />
+          </div>
           <el-row>
             <el-col :span="5" v-for="type of filteredTypes" class="type">
               <a href="javascript:void(0);" @click="loadRooms(type)">
@@ -348,8 +350,15 @@ onUnmounted(() => {
 }
 
 .type {
+  margin-top: 30px;
+  display: block;
   width: 300px;
   height: 300px;
+}
+
+.type img {
+  width: 100%;
+  height: 100%;
 }
 
 .room {
@@ -365,6 +374,7 @@ onUnmounted(() => {
 }
 
 #type-filter {
-  position: fixed;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>
