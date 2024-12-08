@@ -94,8 +94,8 @@ public class DouyuService implements LivePlatform {
             category();
         }
 
-        int start = (pg - 1) * 4 + 1;
-        int end = start + 4;
+        int start = (pg - 1) * 6 + 1;
+        int end = start + 6;
         for (int i = start; i < end; i++) {
             List<MovieDetail> temp = list(categoryMap.get(id), i);
             list.addAll(temp);
