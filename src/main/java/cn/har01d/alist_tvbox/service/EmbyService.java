@@ -39,6 +39,8 @@ import org.springframework.web.client.RestTemplate;
 import java.net.URL;
 import java.util.*;
 
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
+
 @Slf4j
 @Service
 public class EmbyService {
@@ -341,45 +343,66 @@ public class EmbyService {
     }
 
     public MovieList list(String id, String sort, Integer pg) {
-        String[] parts = id.split("-");
-        if (sort == null) {
-            sort = "DateCreated,SortName:Descending";
-        }
-        String[] sorts = sort.split(":");
-        Emby emby = embyRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
-        var info = getEmbyInfo(emby);
-        var view = info.getViews().get(Integer.parseInt(parts[1]));
-        String type = "";
-        if (view.getCollectionType().equals("movies")) {
-            type = "Movie";
-        } else if (view.getCollectionType().equals("tvshows")) {
-            type = "Series";
-        }
-
-        int start = 0;
-        int size = 60;
-        if (pg != null) {
-            start = (pg - 1) * size;
-        }
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", getAuthorizationHeader(info));
-        if (StringUtils.isNotBlank(emby.getUserAgent())) {
-            headers.add("User-Agent", emby.getUserAgent());
-        }
-        HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?SortBy=" + sorts[0] + "&SortOrder=" + sorts[1] + "&IncludeItemTypes=" + type + "&Recursive=true&Fields=BasicSyncInfo,PrimaryImageAspectRatio,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&StartIndex=" + start + "&Limit=" + size + "&ParentId=" + view.getId();
-        var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
-        for (var item : response.getItems()) {
-            var movie = getMovieDetail(item, emby);
-            list.add(movie);
+
+        if (id.contains("-")) {
+            String[] parts = id.split("-");
+            if (sort == null) {
+                sort = "DateCreated,SortName:Descending";
+            }
+            String[] sorts = sort.split(":");
+            Emby emby = embyRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
+            var info = getEmbyInfo(emby);
+            var view = info.getViews().get(Integer.parseInt(parts[1]));
+            String type = "";
+            if (view.getCollectionType().equals("movies")) {
+                type = "Movie";
+            } else if (view.getCollectionType().equals("tvshows")) {
+                type = "Series";
+            }
+
+            int start = 0;
+            int size = 60;
+            if (pg != null) {
+                start = (pg - 1) * size;
+            }
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("Authorization", getAuthorizationHeader(info));
+            if (StringUtils.isNotBlank(emby.getUserAgent())) {
+                headers.add("User-Agent", emby.getUserAgent());
+            }
+            HttpEntity<Object> entity = new HttpEntity<>(null, headers);
+            String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?SortBy=" + sorts[0] + "&SortOrder=" + sorts[1] + "&IncludeItemTypes=" + type + "&Recursive=true&Fields=BasicSyncInfo,PrimaryImageAspectRatio,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&StartIndex=" + start + "&Limit=" + size + "&ParentId=" + view.getId();
+            var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
+            for (var item : response.getItems()) {
+                var movie = getMovieDetail(item, emby);
+                list.add(movie);
+            }
+
+            result.setPagecount(response.getTotal() / size + 1);
+        } else {
+            Emby emby = embyRepository.findById(Integer.parseInt(id)).orElseThrow(() -> new NotFoundException("站点不存在"));
+            var info = getEmbyInfo(emby);
+            if (info == null) {
+                return result;
+            }
+            int i = 0;
+            for (EmbyItem item : info.getViews()) {
+                var movie = new MovieDetail();
+                movie.setVod_id(emby.getId() + "-" + i++);
+                movie.setVod_name(item.getName());
+                if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
+                    movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
+                }
+                movie.setVod_tag(FOLDER);
+                list.add(movie);
+            }
         }
 
         result.setList(list);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
-        result.setPagecount(response.getTotal() / size + 1);
 
         log.debug("list result: {}", result);
         return result;
@@ -389,20 +412,33 @@ public class EmbyService {
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
 
-        for (Emby emby : findAll()) {
-            var info = getEmbyInfo(emby);
-            if (info == null) {
-                continue;
-            }
-            int i = 0;
-            for (EmbyItem item : info.getViews()) {
+        List<Emby> sites = findAll();
+        if (sites.size() > 1) {
+            for (Emby emby : sites) {
                 var category = new Category();
-                category.setType_id(emby.getId() + "-" + i++);
-                category.setType_name(emby.getName() + ":" + item.getName());
+                category.setType_id(String.valueOf(emby.getId()));
+                category.setType_name(emby.getName());
                 category.setType_flag(0);
 
                 result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
                 list.add(category);
+            }
+        } else {
+            for (Emby emby : sites) {
+                var info = getEmbyInfo(emby);
+                if (info == null) {
+                    continue;
+                }
+                int i = 0;
+                for (EmbyItem item : info.getViews()) {
+                    var category = new Category();
+                    category.setType_id(emby.getId() + "-" + i++);
+                    category.setType_name(emby.getName() + ":" + item.getName());
+                    category.setType_flag(0);
+
+                    result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+                    list.add(category);
+                }
             }
         }
 
