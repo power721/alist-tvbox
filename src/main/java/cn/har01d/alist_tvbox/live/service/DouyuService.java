@@ -94,27 +94,29 @@ public class DouyuService implements LivePlatform {
             category();
         }
 
-        int start = (pg - 1) * 6 + 1;
-        int end = start + 6;
+        int size = 6;
+        int start = (pg - 1) * size + 1;
+        int end = start + size;
         for (int i = start; i < end; i++) {
-            List<MovieDetail> temp = list(categoryMap.get(id), i);
-            list.addAll(temp);
-            if (temp.size() < 8) {
+            MovieList temp = list(categoryMap.get(id), i);
+            list.addAll(temp.getList());
+            if (temp.getList().size() < 8) {
                 break;
             }
+            result.setPagecount((temp.getPagecount() + size - 1) / size);
         }
 
         result.setList(list);
         result.setPage(pg);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
-        result.setPagecount(100);
 
         log.debug("list result: {}", result);
         return result;
     }
 
-    private List<MovieDetail> list(String type, int pg) {
+    private MovieList list(String type, int pg) {
+        MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
         String url = "https://m.douyu.com/api/room/list?page=" + pg + "&type=" + type + "&type=" + type;
@@ -127,7 +129,9 @@ public class DouyuService implements LivePlatform {
             detail.setVod_remarks(room.getNickname());
             list.add(detail);
         }
-        return list;
+        result.setList(list);
+        result.setPagecount(response.getData().getPageCount());
+        return result;
     }
 
     @Override

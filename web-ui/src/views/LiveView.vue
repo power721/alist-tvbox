@@ -3,9 +3,11 @@ import { onMounted, ref, watch } from "vue";
 import axios from "axios";
 import mpegts from "mpegts.js";
 import { onUnmounted } from "@vue/runtime-core";
-import { Search } from '@element-plus/icons-vue'
+import { Search } from "@element-plus/icons-vue";
 import type { TabsPaneContext } from "element-plus";
 
+const page = ref(1);
+const total = ref(0);
 const loading = ref(false);
 const id = ref("");
 const token = ref("");
@@ -21,7 +23,7 @@ const category = ref<Category>({
 });
 const types = ref<Movie[]>([]);
 const filteredTypes = ref<Movie[]>([]);
-const typeKeyword = ref('');
+const typeKeyword = ref("");
 const rooms = ref<Movie[]>([]);
 const type = ref<Movie>({
   vod_id: "",
@@ -181,12 +183,12 @@ const returnHome = () => {
   type.value.vod_id = "";
   rooms.value = [];
   room.value.vod_id = "";
-}
+};
 
 const returnType = () => {
   destory();
   room.value.vod_id = "";
-}
+};
 
 const loadTypes = () => {
   destory();
@@ -197,21 +199,27 @@ const loadTypes = () => {
   room.value.vod_id = "";
   axios.get("/live" + token.value + "?t=" + id).then(({ data }) => {
     types.value = data.list;
-    filteredTypes.value = types.value
+    filteredTypes.value = types.value;
   });
 };
 
 const filterTypes = () => {
   filteredTypes.value = types.value.filter(e => e.vod_name.toLowerCase().includes(typeKeyword.value.toLowerCase()));
-}
+};
 
 const loadRooms = (cate: Movie) => {
   destory();
   rooms.value = [];
   room.value.vod_id = "";
   type.value = Object.assign({}, cate);
-  axios.get("/live" + token.value + "?t=" + cate.vod_id).then(({ data }) => {
+  reloadRooms(1);
+};
+
+const reloadRooms = (value: number) => {
+  page.value = value;
+  axios.get("/live" + token.value + "?t=" + type.value.vod_id + "&pg=" + value).then(({ data }) => {
     rooms.value = data.list;
+    total.value = data.pagecount
   });
 };
 
@@ -265,16 +273,21 @@ onUnmounted(() => {
           </el-row>
         </div>
 
-        <el-row v-show="!room.vod_id">
-          <el-col :span="10" v-for="room of rooms" class="room">
-            <a href="javascript:void(0);" @click="load(room.vod_id)">
-              <div class="card-header">
-                <span>{{ room.vod_remarks }}： {{ room.vod_name }}</span>
-              </div>
-              <img :src="room.vod_pic" :alt="room.vod_name">
-            </a>
-          </el-col>
-        </el-row>
+        <div v-show="!room.vod_id">
+          <div id="pagination">
+            <el-pagination layout="prev, pager, next" :page-count="total" :current-page="page" @current-change="reloadRooms" />
+          </div>
+          <el-row>
+            <el-col :span="10" v-for="room of rooms" class="room">
+              <a href="javascript:void(0);" @click="load(room.vod_id)">
+                <div class="card-header">
+                  <span>{{ room.vod_remarks }}： {{ room.vod_name }}</span>
+                </div>
+                <img :src="room.vod_pic" :alt="room.vod_name">
+              </a>
+            </el-col>
+          </el-row>
+        </div>
       </el-tab-pane>
     </el-tabs>
 
@@ -374,6 +387,11 @@ onUnmounted(() => {
 }
 
 #type-filter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+#pagination {
   display: flex;
   justify-content: flex-end;
 }
