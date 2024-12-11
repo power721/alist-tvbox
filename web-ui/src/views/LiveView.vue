@@ -9,6 +9,7 @@ import type { TabsPaneContext } from "element-plus";
 const page = ref(1);
 const total = ref(0);
 const loading = ref(false);
+const dialogVisible = ref(false);
 const id = ref("");
 const token = ref("");
 const playUrl = ref("");
@@ -151,6 +152,10 @@ const loadFlv = (url: string) => {
   });
 };
 
+const start = () => {
+  loadFlv(playUrls.value[0]);
+}
+
 const load = (id: any) => {
   loading.value = true;
   return axios.get("/live" + token.value + "?ids=" + id).then(({ data }) => {
@@ -159,7 +164,7 @@ const load = (id: any) => {
     playFrom.value = room.value.vod_play_from.split("$$$");
     playUrls.value = room.value.vod_play_url.split("$$$")[0].split("#");
     activeName.value = playFrom.value[0];
-    loadFlv(playUrls.value[0]);
+    dialogVisible.value = true;
     return room.value;
   });
 };
@@ -246,9 +251,6 @@ onUnmounted(() => {
           <el-breadcrumb-item v-if="type.vod_id">
             <a href="javascript:void(0);" @click="returnType">{{ type.vod_name }}</a>
           </el-breadcrumb-item>
-          <el-breadcrumb-item v-if="room.vod_id">
-            {{ room.vod_actor }}
-          </el-breadcrumb-item>
         </el-breadcrumb>
 
         <div v-show="!rooms.length">
@@ -273,7 +275,7 @@ onUnmounted(() => {
           </el-row>
         </div>
 
-        <div v-show="!room.vod_id">
+        <div>
           <div id="pagination">
             <el-pagination layout="prev, pager, next" :page-count="total" :current-page="page" @current-change="reloadRooms" />
           </div>
@@ -291,38 +293,46 @@ onUnmounted(() => {
       </el-tab-pane>
     </el-tabs>
 
-    <el-row v-show="room.vod_id">
-      <el-col :span="16">
-        <div class="video-container">
-          <div>
-            <video
-              class="video"
-              id="live"
-              autoplay="true"
-              controls>
-            </video>
+    <el-dialog v-model="dialogVisible" :fullscreen="true" @open="start" @close="destory">
+      <el-row>
+        <el-col :span="16">
+          <div class="video-container">
+            <div>
+              <video
+                class="video"
+                id="live"
+                autoplay="true"
+                controls>
+              </video>
+            </div>
           </div>
-        </div>
 
-        <div class="controls">
-          <el-tabs v-model="activeName" @tab-click="handleClick">
-            <el-tab-pane :label="item" :name="item" v-for="item of playFrom">
-              <el-button :type="playUrl==url?'primary':''" v-for="url of playUrls" @click="loadFlv(url)">
-                {{ url.split("$")[0] }}
-              </el-button>
-            </el-tab-pane>
-          </el-tabs>
-        </div>
-      </el-col>
-      <el-col :span="6">
-        <el-descriptions :title="room.vod_name">
-          <el-descriptions-item label="平台">{{ room.vod_director }}</el-descriptions-item>
-          <el-descriptions-item label="类型">{{ room.type_name }}</el-descriptions-item>
-          <el-descriptions-item label="主播">{{ room.vod_actor }}</el-descriptions-item>
-          <el-descriptions-item label="人气">{{ room.vod_remarks }}</el-descriptions-item>
-        </el-descriptions>
-      </el-col>
-    </el-row>
+          <div class="controls">
+            <el-tabs v-model="activeName" @tab-click="handleClick">
+              <el-tab-pane :label="item" :name="item" v-for="item of playFrom">
+                <el-button :type="playUrl==url?'primary':''" v-for="url of playUrls" @click="loadFlv(url)">
+                  {{ url.split("$")[0] }}
+                </el-button>
+              </el-tab-pane>
+            </el-tabs>
+          </div>
+        </el-col>
+        <el-col :span="6">
+          <el-descriptions :title="room.vod_name">
+            <el-descriptions-item label="平台">{{ room.vod_director }}</el-descriptions-item>
+            <el-descriptions-item label="类型">{{ room.type_name }}</el-descriptions-item>
+            <el-descriptions-item label="主播">{{ room.vod_actor }}</el-descriptions-item>
+            <el-descriptions-item label="人气">{{ room.vod_remarks }}</el-descriptions-item>
+          </el-descriptions>
+        </el-col>
+      </el-row>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button type="primary" @click="dialogVisible=false">关闭</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
