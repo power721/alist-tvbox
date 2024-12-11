@@ -27,6 +27,7 @@ export default defineConfig({
       "/profiles": API,
       "/parse": API,
       "/play": API,
+      "/live": API,
     }
   }
 })
