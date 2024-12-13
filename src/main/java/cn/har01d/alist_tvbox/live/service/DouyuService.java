@@ -119,7 +119,7 @@ public class DouyuService implements LivePlatform {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        String url = "https://m.douyu.com/api/room/list?page=" + pg + "&type=" + type + "&type=" + type;
+        String url = "https://m.douyu.com/api/room/list?page=" + pg + "&type=" + type;
         var response = restTemplate.getForObject(url, DouyuRoomsResponse.class);
         for (var room : response.getData().getList()) {
             MovieDetail detail = new MovieDetail();

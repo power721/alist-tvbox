@@ -3,7 +3,7 @@ import { onMounted, ref, watch } from "vue";
 import axios from "axios";
 import mpegts from "mpegts.js";
 import { onUnmounted } from "@vue/runtime-core";
-import { Search } from "@element-plus/icons-vue";
+import { Search, Refresh } from "@element-plus/icons-vue";
 import type { TabsPaneContext } from "element-plus";
 
 const page = ref(1);
@@ -33,6 +33,19 @@ const type = ref<Movie>({
   vod_director: "",
   vod_pic: "",
   vod_remarks: "",
+  vod_tag: "",
+  type_name: "",
+  vod_play_from: "",
+  vod_play_url: ""
+});
+const type0 = ref<Movie>({
+  vod_id: "",
+  vod_name: "",
+  vod_actor: "",
+  vod_director: "",
+  vod_pic: "",
+  vod_remarks: "",
+  vod_tag: "",
   type_name: "",
   vod_play_from: "",
   vod_play_url: ""
@@ -44,6 +57,7 @@ const room = ref<Movie>({
   vod_director: "",
   vod_pic: "",
   vod_remarks: "",
+  vod_tag: "",
   type_name: "",
   vod_play_from: "",
   vod_play_url: ""
@@ -63,6 +77,7 @@ interface Movie {
   vod_director: string;
   vod_pic: string;
   vod_remarks: string;
+  vod_tag: string;
   type_name: string;
   vod_play_from: string;
   vod_play_url: string;
@@ -154,18 +169,27 @@ const loadFlv = (url: string) => {
 
 const start = () => {
   loadFlv(playUrls.value[0]);
-}
+};
 
-const load = (id: any) => {
+const load = (movie: Movie) => {
+  if (movie.vod_tag == "folder") {
+    type0.value = Object.assign({}, type.value)
+    loadRooms(movie);
+  } else {
+    type0.value.vod_id = ""
+    loadRoom(movie.vod_id);
+  }
+};
+
+const loadRoom = (id: string) => {
   loading.value = true;
-  return axios.get("/live" + token.value + "?ids=" + id).then(({ data }) => {
+  axios.get("/live" + token.value + "?ids=" + id).then(({ data }) => {
     loading.value = false;
     room.value = data.list[0];
     playFrom.value = room.value.vod_play_from.split("$$$");
     playUrls.value = room.value.vod_play_url.split("$$$")[0].split("#");
     activeName.value = playFrom.value[0];
     dialogVisible.value = true;
-    return room.value;
   });
 };
 
@@ -186,6 +210,7 @@ const loadCategories = () => {
 const returnHome = () => {
   destory();
   type.value.vod_id = "";
+  type0.value.vod_id = "";
   rooms.value = [];
   room.value.vod_id = "";
 };
@@ -195,10 +220,16 @@ const returnType = () => {
   room.value.vod_id = "";
 };
 
+const returnType0 = () => {
+  destory();
+  room.value.vod_id = "";
+  loadRooms(type0.value)
+  type0.value.vod_id = "";
+};
+
 const loadTypes = () => {
   destory();
   const id = category.value.type_id;
-  types.value = [];
   type.value.vod_id = "";
   rooms.value = [];
   room.value.vod_id = "";
@@ -214,17 +245,20 @@ const filterTypes = () => {
 
 const loadRooms = (cate: Movie) => {
   destory();
-  rooms.value = [];
   room.value.vod_id = "";
   type.value = Object.assign({}, cate);
   reloadRooms(1);
 };
 
+const refresh = () => {
+  reloadRooms(page.value);
+}
+
 const reloadRooms = (value: number) => {
   page.value = value;
   axios.get("/live" + token.value + "?t=" + type.value.vod_id + "&pg=" + value).then(({ data }) => {
     rooms.value = data.list;
-    total.value = data.pagecount
+    total.value = data.pagecount;
   });
 };
 
@@ -247,6 +281,9 @@ onUnmounted(() => {
         <el-breadcrumb separator="/">
           <el-breadcrumb-item>
             <a href="javascript:void(0);" @click="returnHome">首页</a>
+          </el-breadcrumb-item>
+          <el-breadcrumb-item v-if="type0.vod_id">
+            <a href="javascript:void(0);" @click="returnType0">{{ type0.vod_name }}</a>
           </el-breadcrumb-item>
           <el-breadcrumb-item v-if="type.vod_id">
             <a href="javascript:void(0);" @click="returnType">{{ type.vod_name }}</a>
@@ -277,11 +314,13 @@ onUnmounted(() => {
 
         <div>
           <div id="pagination">
-            <el-pagination layout="prev, pager, next" :page-count="total" :current-page="page" @current-change="reloadRooms" />
+            <el-button :icon="Refresh" circle @click="refresh" />
+            <el-pagination layout="prev, pager, next" :page-count="total" :current-page="page"
+                           @current-change="reloadRooms" />
           </div>
           <el-row>
             <el-col :span="10" v-for="room of rooms" class="room">
-              <a href="javascript:void(0);" @click="load(room.vod_id)">
+              <a href="javascript:void(0);" @click="load(room)">
                 <div class="card-header">
                   <span>{{ room.vod_remarks }}： {{ room.vod_name }}</span>
                 </div>
