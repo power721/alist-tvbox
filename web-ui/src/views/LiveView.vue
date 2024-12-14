@@ -176,7 +176,6 @@ const load = (movie: Movie) => {
     type0.value = Object.assign({}, type.value)
     loadRooms(movie);
   } else {
-    type0.value.vod_id = ""
     loadRoom(movie.vod_id);
   }
 };
@@ -197,6 +196,7 @@ const loadCategories = () => {
   destory();
   types.value = [];
   type.value.vod_id = "";
+  type0.value.vod_id = "";
   rooms.value = [];
   room.value.vod_id = "";
   typeKeyword.value = "";
@@ -231,6 +231,7 @@ const loadTypes = () => {
   destory();
   const id = category.value.type_id;
   type.value.vod_id = "";
+  type0.value.vod_id = "";
   rooms.value = [];
   room.value.vod_id = "";
   axios.get("/live" + token.value + "?t=" + id).then(({ data }) => {

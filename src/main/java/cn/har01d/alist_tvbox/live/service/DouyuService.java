@@ -234,16 +234,6 @@ public class DouyuService implements LivePlatform {
         return rtmpUrl + "/" + rtmpLive;
     }
 
-    private String playCount(int view) {
-        if (view >= 10000) {
-            return (view / 10000) + "万";
-        } else if (view >= 1000) {
-            return (view / 1000) + "千";
-        } else {
-            return view + "";
-        }
-    }
-
     private final Pattern pattern = Pattern.compile("(vdwdae325w_64we[\\s\\S]*?function ub98484234[\\s\\S]*?)function");
 
     private String getPlayArgs(String crptext, String realRoomId) {
