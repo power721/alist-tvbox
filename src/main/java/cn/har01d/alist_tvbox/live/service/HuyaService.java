@@ -223,30 +223,6 @@ public class HuyaService implements LivePlatform {
         return result;
     }
 
-    private String playCount(String count) {
-        if (count == null || count.isBlank()) {
-            return null;
-        }
-        int view = Integer.parseInt(count);
-        if (view >= 10000) {
-            return (view / 10000) + "万";
-        } else if (view >= 1000) {
-            return (view / 1000) + "千";
-        } else {
-            return view + "";
-        }
-    }
-
-    private String playCount(int view) {
-        if (view >= 10000) {
-            return (view / 10000) + "万";
-        } else if (view >= 1000) {
-            return (view / 1000) + "千";
-        } else {
-            return view + "";
-        }
-    }
-
     private void parseUrls(MovieDetail movieDetail, String html) throws IOException {
         int start = html.indexOf("window.HNF_GLOBAL_INIT = ") + 25;
         int end = html.indexOf("</script>", start);

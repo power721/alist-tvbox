@@ -19,4 +19,22 @@ public interface LivePlatform {
     MovieList search(String wd) throws IOException;
 
     MovieList detail(String tid) throws IOException;
+
+    default String playCount(int view) {
+        if (view >= 10000) {
+            return (view / 10000) + "万";
+        } else if (view >= 1000) {
+            return (view / 1000) + "千";
+        } else {
+            return view + "";
+        }
+    }
+
+    default String playCount(String count) {
+        if (count == null || count.isBlank()) {
+            return null;
+        }
+        int view = Integer.parseInt(count);
+        return playCount(view);
+    }
 }

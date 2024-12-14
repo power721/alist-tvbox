@@ -225,14 +225,4 @@ public class BilibiliService implements LivePlatform {
                 .build()
                 .toUriString();
     }
-
-    private String playCount(int view) {
-        if (view >= 10000) {
-            return (view / 10000) + "万";
-        } else if (view >= 1000) {
-            return (view / 1000) + "千";
-        } else {
-            return view + "";
-        }
-    }
 }
