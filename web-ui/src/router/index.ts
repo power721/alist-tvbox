@@ -144,6 +144,12 @@ const router = createRouter({
     },
     {
       path: '/live',
+      name: 'liveHome',
+      component: LiveView,
+      meta: {auth: true}
+    },
+    {
+      path: '/live/:id',
       name: 'live',
       component: LiveView,
       meta: {auth: true}

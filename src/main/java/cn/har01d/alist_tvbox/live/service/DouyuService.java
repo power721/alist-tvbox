@@ -56,7 +56,23 @@ public class DouyuService implements LivePlatform {
 
     @Override
     public MovieList home() throws IOException {
-        return null;
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        for (int i = 0; i < 6; i++) {
+            MovieList temp = list("", i);
+            list.addAll(temp.getList());
+            if (temp.getList().size() < 8) {
+                break;
+            }
+        }
+
+        result.setList(list);
+        result.setTotal(result.getList().size());
+        result.setLimit(result.getList().size());
+
+        log.debug("home result: {}", result);
+        return result;
     }
 
     @Override
@@ -139,7 +155,15 @@ public class DouyuService implements LivePlatform {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        // TODO:
+        var response = restTemplate.postForObject("https://m.douyu.com/api/search/anchor?offset=0&limit=30&sk=" + wd, null, DouyuRoomsResponse.class);
+        for (var room : response.getData().getList()) {
+            MovieDetail detail = new MovieDetail();
+            detail.setVod_id(getType() + "$" + room.getRoomId());
+            detail.setVod_name(room.getRoomName());
+            detail.setVod_pic(room.getRoomSrc());
+            detail.setVod_remarks(room.getNickname());
+            list.add(detail);
+        }
 
         result.setList(list);
         result.setTotal(result.getList().size());

@@ -41,7 +41,7 @@ public class HuyaService implements LivePlatform {
     private static final Pattern RoomPic = Pattern.compile("\"sScreenshot\":\"([\\s\\S]*?)\",");
     private static final Pattern OwnerPic = Pattern.compile("\"sAvatar180\":\"([\\s\\S]*?)\",");
     private static final Pattern AREA = Pattern.compile("\"sGameFullName\":\"([\\s\\S]*?)\",");
-    private static final Pattern Num = Pattern.compile("\"lActivityCount\":([\\s\\S]*?),");
+    private static final Pattern Num = Pattern.compile("\"lTotalCount\":([\\s\\S]*?),");
     private static final Pattern ISLIVE = Pattern.compile("\"eLiveStatus\":([\\s\\S]*?),");
     private static final Pattern S_STREAM_NAME = Pattern.compile("\"sStreamName\":\"([\\s\\S]*?)\",");
     private static final Pattern S_FLV_URL = Pattern.compile("\"sFlvUrl\":\"([\\s\\S]*?)\",");
