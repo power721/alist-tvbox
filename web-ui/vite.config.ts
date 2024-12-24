@@ -28,6 +28,7 @@ export default defineConfig({
       "/parse": API,
       "/play": API,
       "/live": API,
+      "/images": API,
     }
   }
 })

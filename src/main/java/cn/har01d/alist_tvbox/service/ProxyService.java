@@ -73,7 +73,7 @@ public class ProxyService {
         }
     }
 
-    private void downloadStraight(String url, HttpServletResponse response, Map<String, String> headers) throws IOException {
+    public void downloadStraight(String url, HttpServletResponse response, Map<String, String> headers) throws IOException {
         HttpURLConnection urlConnection = openConnection(url, headers);
         int responseCode = urlConnection.getResponseCode();
         if (responseCode != 200 && responseCode != 206) {

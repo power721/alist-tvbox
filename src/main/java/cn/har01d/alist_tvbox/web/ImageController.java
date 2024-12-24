@@ -42,6 +42,8 @@ public class ImageController {
         HttpHeaders headers = new HttpHeaders();
         if (url.contains("ytimg.com")) {
             headers.set(HttpHeaders.REFERER, "https://www.youtube.com/");
+        } else if (url.contains("netease.com")) {
+            headers.set(HttpHeaders.REFERER, "https://cc.163.com/");
         }
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
         return restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);

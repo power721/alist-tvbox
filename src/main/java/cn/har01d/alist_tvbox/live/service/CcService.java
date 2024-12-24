@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.live.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.live.model.CcCategoryResponse;
 import cn.har01d.alist_tvbox.live.model.CcPlayInfo;
 import cn.har01d.alist_tvbox.live.model.CcRoomList;
@@ -9,6 +10,8 @@ import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -16,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -32,11 +36,13 @@ public class CcService implements LivePlatform {
             .expireAfterWrite(Duration.ofMinutes(15))
             .build();
     private final RestTemplate restTemplate;
+    private final AppProperties appProperties;
 
-    public CcService(RestTemplateBuilder builder) {
+    public CcService(RestTemplateBuilder builder, AppProperties appProperties) {
         this.restTemplate = builder
                 .defaultHeader("User-Agent", Constants.MOBILE_USER_AGENT)
                 .build();
+        this.appProperties = appProperties;
     }
 
     @Override
@@ -51,7 +57,28 @@ public class CcService implements LivePlatform {
 
     @Override
     public MovieList home() throws IOException {
-        return null;
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        String url = "https://cc.163.com/api/category/live/?format=json&start=0&size=30";
+        var response = restTemplate.getForObject(url, ObjectNode.class);
+        var array = (ArrayNode) response.get("lives");
+        for (int i = 0; i < array.size(); i++) {
+            var item = array.get(i);
+            MovieDetail detail = new MovieDetail();
+            detail.setVod_id(getType() + "$" + item.get("cuteid").asText());
+            detail.setVod_name(item.get("title").asText());
+            detail.setVod_pic(item.get("poster").asText());
+            detail.setVod_remarks(item.get("nickname").asText());
+            list.add(detail);
+        }
+
+        result.setList(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
+
+        log.debug("home result: {}", result);
+        return result;
     }
 
     @Override
@@ -109,7 +136,28 @@ public class CcService implements LivePlatform {
 
     @Override
     public MovieList search(String wd) throws IOException {
-        return null;
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        String url = "https://cc.163.com/search/anchor/?page=1&size=30&query=" + wd;
+        var response = restTemplate.getForObject(url, ObjectNode.class);
+        ArrayNode array = (ArrayNode) response.get("webcc_anchor").get("result");
+        for (int i = 0; i < array.size(); i++) {
+            var item = array.get(i);
+            MovieDetail detail = new MovieDetail();
+            detail.setVod_id(getType() + "$" + item.get("cuteid").asText());
+            detail.setVod_name(item.get("title").asText());
+            detail.setVod_pic(item.get("portrait").asText());
+            detail.setVod_remarks(item.get("nickname").asText());
+            list.add(detail);
+        }
+
+        result.setList(list);
+        result.setTotal(result.getList().size());
+        result.setLimit(result.getList().size());
+
+        log.debug("search result: {}", result);
+        return result;
     }
 
     @Override
@@ -171,5 +219,18 @@ public class CcService implements LivePlatform {
 
         detail.setVod_play_from(String.join("$$$", playFrom));
         detail.setVod_play_url(String.join("$$$", playUrl));
+    }
+
+    private String fixCover(String url) {
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        // nginx https
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/images")
+                .replaceQuery("url=" + url)
+                .build()
+                .toUriString();
     }
 }

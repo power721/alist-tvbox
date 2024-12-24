@@ -13,6 +13,7 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -56,7 +57,27 @@ public class BilibiliService implements LivePlatform {
 
     @Override
     public MovieList home() throws IOException {
-        return null;
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        String url = "https://api.live.bilibili.com/xlive/web-interface/v1/second/getListByArea?sort=online&platform=web&page=1&page_size=30";
+        var response = restTemplate.getForObject(url, BilibiliRoomsResponse.class);
+        for (var room : response.getData().getList()) {
+            MovieDetail detail = new MovieDetail();
+            detail.setVod_id(getType() + "$" + room.getRoomid());
+            detail.setVod_name(room.getTitle());
+            detail.setVod_pic(fixCover(room.getCover()));
+            detail.setVod_remarks(room.getUname());
+            userMap.put(String.valueOf(room.getRoomid()), room.getUname());
+            list.add(detail);
+        }
+
+        result.setList(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
+
+        log.debug("home result: {}", result);
+        return result;
     }
 
     @Override
@@ -140,7 +161,28 @@ public class BilibiliService implements LivePlatform {
 
     @Override
     public MovieList search(String wd) throws IOException {
-        return null;
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        String url = "https://api.bilibili.com/x/web-interface/search/type?search_type=live_user&keyword=" + wd;
+        var response = restTemplate.getForObject(url, ObjectNode.class);
+        ArrayNode array = (ArrayNode) response.get("data").get("result");
+        for (int i = 0; i < array.size(); i++) {
+            var item = array.get(i);
+            MovieDetail detail = new MovieDetail();
+            detail.setVod_id(getType() + "$" + item.get("roomid").asText());
+            detail.setVod_name(item.get("uname").asText());
+            detail.setVod_pic(item.get("uface").asText());
+            //detail.setVod_remarks(item.get("uname").asText());
+            list.add(detail);
+        }
+
+        result.setList(list);
+        result.setTotal(result.getList().size());
+        result.setLimit(result.getList().size());
+
+        log.debug("search result: {}", result);
+        return result;
     }
 
     @Override

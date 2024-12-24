@@ -5,7 +5,9 @@ import mpegts from "mpegts.js";
 import { onUnmounted } from "@vue/runtime-core";
 import { Search, Refresh } from "@element-plus/icons-vue";
 import type { TabsPaneContext } from "element-plus";
+import { useRouter } from "vue-router";
 
+const router = useRouter()
 const page = ref(1);
 const total = ref(0);
 const loading = ref(false);
@@ -25,7 +27,9 @@ const category = ref<Category>({
 const types = ref<Movie[]>([]);
 const filteredTypes = ref<Movie[]>([]);
 const typeKeyword = ref("");
+const roomKeyword = ref("");
 const rooms = ref<Movie[]>([]);
+const filteredRooms = ref<Movie[]>([]);
 const type = ref<Movie>({
   vod_id: "",
   vod_name: "",
@@ -154,6 +158,7 @@ const handleClick = (tab: TabsPaneContext) => {
 const handleCategoryClick = (tab: TabsPaneContext) => {
   const index = +(tab.index || "0");
   category.value = categories.value[index];
+  router.push('/live/' + category.value.type_id)
   loadTypes();
 };
 
@@ -182,7 +187,7 @@ const load = (movie: Movie) => {
 
 const loadRoom = (id: string) => {
   loading.value = true;
-  axios.get("/live" + token.value + "?ids=" + id).then(({ data }) => {
+  axios.get("/live" + token.value + "?platform=web&ids=" + id).then(({ data }) => {
     loading.value = false;
     room.value = data.list[0];
     playFrom.value = room.value.vod_play_from.split("$$$");
@@ -198,9 +203,10 @@ const loadCategories = () => {
   type.value.vod_id = "";
   type0.value.vod_id = "";
   rooms.value = [];
+  filteredRooms.value = [];
   room.value.vod_id = "";
   typeKeyword.value = "";
-  axios.get("/live" + token.value).then(({ data }) => {
+  axios.get("/live" + token.value + '?platform=web').then(({ data }) => {
     categories.value = data.class;
     category.value = categories.value[0];
     loadTypes();
@@ -212,6 +218,7 @@ const returnHome = () => {
   type.value.vod_id = "";
   type0.value.vod_id = "";
   rooms.value = [];
+  filteredRooms.value = [];
   room.value.vod_id = "";
 };
 
@@ -233,8 +240,10 @@ const loadTypes = () => {
   type.value.vod_id = "";
   type0.value.vod_id = "";
   rooms.value = [];
+  filteredRooms.value = [];
   room.value.vod_id = "";
-  axios.get("/live" + token.value + "?t=" + id).then(({ data }) => {
+  roomKeyword.value = "";
+  axios.get("/live" + token.value + "?platform=web&t=" + id).then(({ data }) => {
     types.value = data.list;
     filteredTypes.value = types.value;
   });
@@ -242,6 +251,10 @@ const loadTypes = () => {
 
 const filterTypes = () => {
   filteredTypes.value = types.value.filter(e => e.vod_name.toLowerCase().includes(typeKeyword.value.toLowerCase()));
+};
+
+const filterRooms = () => {
+  filteredRooms.value = rooms.value.filter(e => e.vod_name.toLowerCase().includes(roomKeyword.value.toLowerCase()));
 };
 
 const loadRooms = (cate: Movie) => {
@@ -257,8 +270,9 @@ const refresh = () => {
 
 const reloadRooms = (value: number) => {
   page.value = value;
-  axios.get("/live" + token.value + "?t=" + type.value.vod_id + "&pg=" + value).then(({ data }) => {
+  axios.get("/live" + token.value + "?platform=web&t=" + type.value.vod_id + "&pg=" + value).then(({ data }) => {
     rooms.value = data.list;
+    filteredRooms.value = data.list;
     total.value = data.pagecount;
   });
 };
@@ -281,10 +295,10 @@ onUnmounted(() => {
       <el-tab-pane :label="item.type_name" :name="item.type_id" v-for="item of categories">
         <el-breadcrumb separator="/">
           <el-breadcrumb-item>
-            <a href="javascript:void(0);" @click="returnHome">首页</a>
+            <RouterLink :to="'/live/'+category.type_id" @click="returnHome">首页</RouterLink>
           </el-breadcrumb-item>
           <el-breadcrumb-item v-if="type0.vod_id">
-            <a href="javascript:void(0);" @click="returnType0">{{ type0.vod_name }}</a>
+            <RouterLink :to="'/live/'+type0.vod_id" @click="returnType0">{{ type0.vod_name }}</RouterLink>
           </el-breadcrumb-item>
           <el-breadcrumb-item v-if="type.vod_id">
             <a href="javascript:void(0);" @click="returnType">{{ type.vod_name }}</a>
@@ -297,18 +311,18 @@ onUnmounted(() => {
               v-model="typeKeyword"
               style="width: 240px"
               placeholder="筛选"
-              @change="filterTypes"
+              @input="filterTypes"
               :prefix-icon="Search"
             />
           </div>
           <el-row>
             <el-col :span="5" v-for="type of filteredTypes" class="type">
-              <a href="javascript:void(0);" @click="loadRooms(type)">
+              <RouterLink :to="'/live/'+type.vod_id" @click="loadRooms(type)">
                 <div class="card-header">
                   <span>{{ type.vod_name }}</span>
                 </div>
                 <img :src="type.vod_pic" :alt="type.vod_name">
-              </a>
+              </RouterLink>
             </el-col>
           </el-row>
         </div>
@@ -318,10 +332,25 @@ onUnmounted(() => {
             <el-button :icon="Refresh" circle @click="refresh" />
             <el-pagination layout="prev, pager, next" :page-count="total" :current-page="page"
                            @current-change="reloadRooms" />
+            <div v-if="rooms.length&&rooms[0].vod_tag=='folder'">
+              <el-input
+                v-model="roomKeyword"
+                style="width: 240px"
+                placeholder="筛选"
+                @input="filterRooms"
+                :prefix-icon="Search"
+              />
+            </div>
           </div>
           <el-row>
-            <el-col :span="10" v-for="room of rooms" class="room">
-              <a href="javascript:void(0);" @click="load(room)">
+            <el-col :span="10" v-for="room of filteredRooms" class="room">
+              <RouterLink :to="'/live/'+room.vod_id" @click="load(room)" v-if="room.vod_tag=='folder'">
+                <div class="card-header">
+                  <span>{{ room.vod_remarks }}： {{ room.vod_name }}</span>
+                </div>
+                <img :src="room.vod_pic" :alt="room.vod_name">
+              </RouterLink>
+              <a href="javascript:void(0);" @click="load(room)" v-else>
                 <div class="card-header">
                   <span>{{ room.vod_remarks }}： {{ room.vod_name }}</span>
                 </div>
