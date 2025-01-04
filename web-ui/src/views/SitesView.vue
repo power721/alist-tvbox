@@ -213,6 +213,8 @@
 
   <EmbyView></EmbyView>
 
+  <JellyfinView></JellyfinView>
+
 </template>
 
 <script setup lang="ts">
@@ -224,6 +226,7 @@ import {ElMessage, genFileId} from "element-plus";
 import type {VodList} from "@/model/VodList";
 import type {Meta} from "@/model/Meta";
 import EmbyView from "@/views/EmbyView.vue";
+import JellyfinView from "@/views/JellyfinView.vue";
 
 const upload = ref<UploadInstance>()
 const headers = {

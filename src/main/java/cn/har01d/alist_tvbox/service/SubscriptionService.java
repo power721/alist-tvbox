@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.EmbyRepository;
+import cn.har01d.alist_tvbox.entity.JellyfinRepository;
 import cn.har01d.alist_tvbox.entity.PanAccount;
 import cn.har01d.alist_tvbox.entity.PanAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
@@ -79,6 +80,7 @@ public class SubscriptionService {
     private final ShareRepository shareRepository;
     private final PanAccountRepository panAccountRepository;
     private final EmbyRepository embyRepository;
+    private final JellyfinRepository jellyfinRepository;
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
 
@@ -96,6 +98,7 @@ public class SubscriptionService {
                                ShareRepository shareRepository,
                                PanAccountRepository panAccountRepository,
                                EmbyRepository embyRepository,
+                               JellyfinRepository jellyfinRepository,
                                AListLocalService aListLocalService,
                                ConfigFileService configFileService) {
         this.environment = environment;
@@ -113,6 +116,7 @@ public class SubscriptionService {
         this.shareRepository = shareRepository;
         this.panAccountRepository = panAccountRepository;
         this.embyRepository = embyRepository;
+        this.jellyfinRepository = jellyfinRepository;
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
     }
@@ -947,6 +951,16 @@ public class SubscriptionService {
                 Map<String, Object> site = buildSite(token, "csp_Emby", "Emby");
                 sites.add(id++, site);
                 log.debug("add Emby site: {}", site);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        try {
+            if (jellyfinRepository.count() > 0) {
+                Map<String, Object> site = buildSite(token, "csp_Jellyfin", "Jellyfin");
+                sites.add(id++, site);
+                log.debug("add Jellyfin site: {}", site);
             }
         } catch (Exception e) {
             log.warn("", e);

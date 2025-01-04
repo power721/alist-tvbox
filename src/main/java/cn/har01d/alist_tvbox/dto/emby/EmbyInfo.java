@@ -14,11 +14,29 @@ public class EmbyInfo {
     @JsonProperty("User")
     private User user;
 
+    @JsonProperty("SessionInfo")
+    private SessionInfo sessionInfo;
+
     private List<EmbyItem> views = new ArrayList<>();
 
     @Data
     public static class User {
         @JsonProperty("Id")
         private String id;
+    }
+
+    @Data
+    public static class SessionInfo {
+        @JsonProperty("Client")
+        private String client;
+
+        @JsonProperty("DeviceId")
+        private String deviceId;
+
+        @JsonProperty("DeviceName")
+        private String deviceName;
+
+        @JsonProperty("ApplicationVersion")
+        private String version;
     }
 }
