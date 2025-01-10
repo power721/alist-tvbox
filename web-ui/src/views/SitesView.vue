@@ -213,6 +213,8 @@
 
   <EmbyView></EmbyView>
 
+  <div class="divider"></div>
+
   <JellyfinView></JellyfinView>
 
 </template>
