@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import {onMounted, ref, watch} from "vue";
 import axios from "axios";
 import mpegts from "mpegts.js";
-import { onUnmounted } from "@vue/runtime-core";
-import { Search, Refresh } from "@element-plus/icons-vue";
-import type { TabsPaneContext } from "element-plus";
-import { useRouter } from "vue-router";
+import {onUnmounted} from "@vue/runtime-core";
+import {Search, Refresh} from "@element-plus/icons-vue";
+import {ElMessage, type TabsPaneContext} from "element-plus";
+import {useRoute, useRouter} from "vue-router";
 
+const route = useRoute()
 const router = useRouter()
 const page = ref(1);
 const total = ref(0);
 const loading = ref(false);
 const dialogVisible = ref(false);
+const enableLive = ref(false);
 const id = ref("");
 const token = ref("");
 const playUrl = ref("");
@@ -157,10 +159,26 @@ const handleClick = (tab: TabsPaneContext) => {
 
 const handleCategoryClick = (tab: TabsPaneContext) => {
   const index = +(tab.index || "0");
-  category.value = categories.value[index];
-  router.push('/live/' + category.value.type_id)
-  loadTypes();
+  if (index >= categories.value.length) {
+    router.push('/live/config')
+    loadConfig();
+  } else {
+    category.value = categories.value[index];
+    router.push('/live/' + category.value.type_id)
+    loadTypes();
+  }
 };
+
+const loadConfig = () => {
+  type.value.vod_id = "";
+  type0.value.vod_id = "";
+  rooms.value = [];
+  filteredRooms.value = [];
+  room.value.vod_id = "";
+  roomKeyword.value = "";
+  types.value = [];
+  filteredTypes.value = [];
+}
 
 const loadFlv = (url: string) => {
   console.log(url);
@@ -187,7 +205,7 @@ const load = (movie: Movie) => {
 
 const loadRoom = (id: string) => {
   loading.value = true;
-  axios.get("/live" + token.value + "?platform=web&ids=" + id).then(({ data }) => {
+  axios.get("/live" + token.value + "?platform=web&ids=" + id).then(({data}) => {
     loading.value = false;
     room.value = data.list[0];
     playFrom.value = room.value.vod_play_from.split("$$$");
@@ -197,7 +215,7 @@ const loadRoom = (id: string) => {
   });
 };
 
-const loadCategories = () => {
+const loadCategories = (id: string) => {
   destory();
   types.value = [];
   type.value.vod_id = "";
@@ -206,9 +224,13 @@ const loadCategories = () => {
   filteredRooms.value = [];
   room.value.vod_id = "";
   typeKeyword.value = "";
-  axios.get("/live" + token.value + '?platform=web').then(({ data }) => {
+  axios.get("/live" + token.value + '?platform=web').then(({data}) => {
     categories.value = data.class;
-    category.value = categories.value[0];
+    if (id) {
+      category.value = categories.value.find(e => e.type_id == id);
+    } else {
+      category.value = categories.value[0];
+    }
     loadTypes();
   });
 };
@@ -243,7 +265,7 @@ const loadTypes = () => {
   filteredRooms.value = [];
   room.value.vod_id = "";
   roomKeyword.value = "";
-  axios.get("/live" + token.value + "?platform=web&t=" + id).then(({ data }) => {
+  axios.get("/live" + token.value + "?platform=web&t=" + id).then(({data}) => {
     types.value = data.list;
     filteredTypes.value = types.value;
   });
@@ -270,18 +292,24 @@ const refresh = () => {
 
 const reloadRooms = (value: number) => {
   page.value = value;
-  axios.get("/live" + token.value + "?platform=web&t=" + type.value.vod_id + "&pg=" + value).then(({ data }) => {
+  axios.get("/live" + token.value + "?platform=web&t=" + type.value.vod_id + "&pg=" + value).then(({data}) => {
     rooms.value = data.list;
     filteredRooms.value = data.list;
     total.value = data.pagecount;
   });
 };
 
+const updateLive = () => {
+  axios.post('/api/settings', {name: 'enable_live', value: enableLive.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 onMounted(async () => {
-  token.value = await axios.get("/api/token").then(({ data }) => {
+  token.value = await axios.get("/api/token").then(({data}) => {
     return data ? "/" + (data + "").split(",")[0] : "";
   });
-  loadCategories();
+  loadCategories(route.params.id as string);
 });
 
 onUnmounted(() => {
@@ -329,9 +357,9 @@ onUnmounted(() => {
 
         <div>
           <div id="pagination">
-            <el-button :icon="Refresh" circle @click="refresh" />
+            <el-button :icon="Refresh" circle @click="refresh"/>
             <el-pagination layout="prev, pager, next" :page-count="total" :current-page="page"
-                           @current-change="reloadRooms" />
+                           @current-change="reloadRooms"/>
             <div v-if="rooms.length&&rooms[0].vod_tag=='folder'">
               <el-input
                 v-model="roomKeyword"
@@ -360,6 +388,19 @@ onUnmounted(() => {
           </el-row>
         </div>
       </el-tab-pane>
+<!--      <el-tab-pane label="配置" name="config">-->
+<!--        <el-form label-width="110px">-->
+<!--          <el-form-item label="订阅">-->
+<!--            <el-switch-->
+<!--              v-model="enableLive"-->
+<!--              inline-prompt-->
+<!--              active-text="开启"-->
+<!--              inactive-text="关闭"-->
+<!--              @change="updateLive"-->
+<!--            />-->
+<!--          </el-form-item>-->
+<!--        </el-form>-->
+<!--      </el-tab-pane>-->
     </el-tabs>
 
     <el-dialog v-model="dialogVisible" :fullscreen="true" @open="start" @close="destory">
