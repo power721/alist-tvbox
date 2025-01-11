@@ -7,6 +7,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,7 +29,7 @@ public class ImageController {
     }
 
     @GetMapping(value = "", produces = "image/webp")
-    public byte[] getImage(String url, HttpServletResponse response) {
+    public ResponseEntity<byte[]> getImage(String url, HttpServletResponse response) {
         if (url.contains(".webp")) {
             response.setContentType("image/webp");
         } else if (url.contains(".svg")) {
@@ -41,9 +42,11 @@ public class ImageController {
         HttpHeaders headers = new HttpHeaders();
         if (url.contains("ytimg.com")) {
             headers.set(HttpHeaders.REFERER, "https://www.youtube.com/");
+        } else if (url.contains("netease.com")) {
+            headers.set(HttpHeaders.REFERER, "https://cc.163.com/");
         }
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
-        return restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class).getBody();
+        return restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);
     }
 
 }

@@ -965,6 +965,17 @@ public class SubscriptionService {
         } catch (Exception e) {
             log.warn("", e);
         }
+
+        try {
+            boolean enabled = settingRepository.findById("enable_live").map(Setting::getValue).orElse("").equals("true");
+            if (enabled) {
+                Map<String, Object> site = buildSite(token, "csp_Live", "网络直播");
+                sites.add(id++, site);
+                log.debug("add Live site: {}", site);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
     }
 
     private Map<String, Object> buildSite(String token, String key, String name) throws IOException {
