@@ -99,7 +99,7 @@ const form = ref({
   path: '',
   content: ''
 })
-const options = ['/data', '/www/tvbox', '/www/pg', '/www/pg/lib', '/www/zx']
+const options = ['/data', '/www/tvbox', '/www/files', '/www/cat', '/www/pg', '/www/pg/lib', '/www/zx']
 
 const handleAdd = () => {
   dialogTitle.value = '添加配置文件'

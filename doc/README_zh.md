@@ -570,6 +570,19 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 2. 删除文件/etc/xiaoya/atv.mv.db和/etc/xiaoya/atv.trace.db
 3. 重启docker容器或者重新运行安装脚本
 
+### 静态文件
+将自己的文件test.json放在/www/tvbox/目录，可以通过 http://IP:4567/tvbox/test.json 访问。
+
+http://IP:4567/tvbox/ -> /www/tvbox/
+
+http://IP:4567/files/ -> /www/files/
+
+http://IP:4567/cat/ -> /www/cat/
+
+http://IP:4567/pg/ -> /www/pg/
+
+http://IP:4567/zx/ -> /www/zx/
+
 ### 其它
 不再生效的文件可以保留，以后删除数据库后可以恢复。
 
