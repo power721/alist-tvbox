@@ -227,7 +227,7 @@ const loadCategories = (id: string) => {
   axios.get("/live" + token.value + '?platform=web').then(({data}) => {
     categories.value = data.class;
     if (id) {
-      category.value = categories.value.find(e => e.type_id == id);
+      category.value = categories.value.find(e => e.type_id == id) || categories.value[0];
     } else {
       category.value = categories.value[0];
     }
