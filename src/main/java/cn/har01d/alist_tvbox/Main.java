@@ -26,6 +26,8 @@ public class Main {
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.tvbox"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.domain"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.model"));
+        classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.live.model"));
+        //classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.play.model"));
         List<Map<String, Object>> result = new ArrayList<>();
         for (Class clazz : classes) {
             Map<String, Object> info = new HashMap<>();
