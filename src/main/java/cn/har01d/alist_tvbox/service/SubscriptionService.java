@@ -290,6 +290,10 @@ public class SubscriptionService {
             String quarkCookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(PanAccount::getCookie).orElse("");
             json = json.replace("QUARK_COOKIE", quarkCookie);
 
+            String address = readHostAddress();
+            json = json.replace("DOCKER_ADDRESS", address);
+            json = json.replace("ATV_ADDRESS", address);
+
             if ("index.config.js".equals(file)) {
                 return json;
             } else if ("index.config.js.md5".equals(file)) {
@@ -411,6 +415,9 @@ public class SubscriptionService {
         json = json.replace("阿里token", ali);
         String token = siteRepository.findById(1).map(Site::getToken).orElse("");
         json = json.replace("ALIST_TOKEN", token);
+        String address = readHostAddress();
+        json = json.replace("DOCKER_ADDRESS", address);
+        json = json.replace("ATV_ADDRESS", address);
         return json;
     }
 
