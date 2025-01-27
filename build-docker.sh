@@ -1,8 +1,9 @@
 MOUNT=/opt/alist
 PORT1=4567
 PORT2=5344
+PORT3=10199
 
-while getopts ":d:p:P:" arg; do
+while getopts ":d:p:P:s:" arg; do
     case "${arg}" in
         d)
             MOUNT=${OPTARG}
@@ -12,6 +13,9 @@ while getopts ":d:p:P:" arg; do
             ;;
         P)
             PORT2=${OPTARG}
+            ;;
+        s)
+            PORT3=${OPTARG}
             ;;
         *)
             ;;
@@ -37,10 +41,10 @@ echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M)
 docker build --tag=haroldli/alist-tvbox:latest .
 
 echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
-echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:5244"
+echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:5244  $PORT3:10199"
 
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
-docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 -e INSTALL=new -v "$MOUNT":/data --name=alist-tvbox haroldli/alist-tvbox:latest
+docker run -d -p $PORT1:4567 -p $PORT2:5244 -p $PORT3:10199 -e ALIST_PORT=$PORT2 -e INSTALL=new -v "$MOUNT":/data --name=alist-tvbox haroldli/alist-tvbox:latest
 
 sleep 1
 
