@@ -55,6 +55,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -834,10 +835,10 @@ public class SubscriptionService {
                 if (name.equals("sites")) {
                     List<Map<String, Object>> sites = (List<Map<String, Object>>) override.get(name);
                     for (Map<String, Object> site : sites) {
-                        site.put("name", prefix + site.get("name").toString());
-                        if (StringUtils.isNotBlank(spider) && site.get("jar") == null && site.get("type").equals(3)) {
+                        site.put("name", prefix + site.get("name"));
+                        if (StringUtils.isNotBlank(spider) && site.get("jar") == null && Objects.equals(site.get("type"), 3)) {
                             String api = (String) site.get("api");
-                            if (!api.startsWith("http")) {
+                            if (api != null && !api.startsWith("http")) {
                                 site.put("jar", spider);
                             }
                         }
