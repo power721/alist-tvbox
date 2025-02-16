@@ -693,7 +693,7 @@ public class SubscriptionService {
             json = json.replace("BILI_COOKIE", settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(""));
             json = json.replace("TOKEN", tokens.split(",")[0]);
             Map<String, Object> override = objectMapper.readValue(json, Map.class);
-            overrideConfig(config, "", "", override);
+            overrideConfig(config, null, "", override);
             return replaceString(config, override);
         } catch (Exception e) {
             log.warn("", e);
@@ -728,7 +728,7 @@ public class SubscriptionService {
         return config;
     }
 
-    private static void overrideConfig(Map<String, Object> config, String url, String prefix, Map<String, Object> override) {
+    private static void overrideConfig(Map<String, Object> config, URL url, String prefix, Map<String, Object> override) {
         for (Map.Entry<String, Object> entry : override.entrySet()) {
             try {
                 String key = entry.getKey();
@@ -742,14 +742,8 @@ public class SubscriptionService {
                         if (StringUtils.isBlank(spider)) {
                             spider = (String) config.get("spider");
                         }
-                        if (StringUtils.isNotBlank(spider) && StringUtils.isNotBlank(url)) {
-                            if (spider.startsWith("./")) {
-                                spider = url + spider.substring(1);
-                            } else if (spider.startsWith("/")) {
-                                spider = getRoot(url) + spider;
-                            } else if (!spider.startsWith("http")) {
-                                spider = url + spider;
-                            }
+                        if (StringUtils.isNotBlank(spider) && url != null) {
+                            spider = resolveUrl(url, spider);
                         }
                     }
                     log.debug("overrideConfig: {} {}", key, value);
@@ -762,23 +756,32 @@ public class SubscriptionService {
             }
         }
 
-        if (StringUtils.isNotBlank(url)) {
+        if (url != null) {
             fixApiUrl(config, url);
             fixExtUrl(config, url);
         }
     }
 
-    private static void fixApiUrl(Map<String, Object> config, String url) {
+    public static String resolveUrl(URL url, String relativePath) {
+        try {
+            return new URL(url, relativePath).toString();
+        } catch (MalformedURLException e) {
+            log.warn("", e);
+            return null;
+        }
+    }
+
+    private static void fixApiUrl(Map<String, Object> config, URL url) {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         for (Map<String, Object> site : sites) {
             Object api = site.get("api");
             if (api instanceof String apiUrl) {
                 if (apiUrl.startsWith("./")) {
-                    api = url + apiUrl.substring(1);
+                    api = resolveUrl(url, apiUrl);
                     site.put("api", api);
                     log.debug("api {} -> {}", apiUrl, api);
                 } else if (apiUrl.startsWith("/")) {
-                    api = getRoot(url) + api;
+                    api = resolveUrl(url, apiUrl);
                     site.put("api", api);
                     log.debug("api {} -> {}", apiUrl, api);
                 }
@@ -786,17 +789,17 @@ public class SubscriptionService {
         }
     }
 
-    private static void fixExtUrl(Map<String, Object> config, String url) {
+    private static void fixExtUrl(Map<String, Object> config, URL url) {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         for (Map<String, Object> site : sites) {
             Object ext = site.get("ext");
             if (ext instanceof String extUrl) {
                 if (extUrl.startsWith("./")) {
-                    ext = url + extUrl.substring(1);
+                    ext = resolveUrl(url, extUrl);
                     site.put("ext", ext);
                     log.debug("ext {} -> {}", extUrl, ext);
                 } else if (extUrl.startsWith("/")) {
-                    ext = getRoot(url) + ext;
+                    ext = resolveUrl(url, extUrl);
                     site.put("ext", ext);
                     log.debug("ext {} -> {}", extUrl, ext);
                 }
@@ -804,17 +807,17 @@ public class SubscriptionService {
         }
     }
 
-    private static String fixUrl(String url) {
+    private static URL fixUrl(String url) {
         if (StringUtils.isBlank(url) || !url.startsWith("http")) {
-            return "";
+            return null;
         }
 
-        int index = url.lastIndexOf('/');
-        String file = url.substring(index + 1);
-        if (file.contains(".")) {
-            return url.substring(0, index);
+        try {
+            return new URL(url);
+        } catch (MalformedURLException e) {
+            log.warn("", e);
+            return null;
         }
-        return url;
     }
 
     private static String getRoot(String path) {
