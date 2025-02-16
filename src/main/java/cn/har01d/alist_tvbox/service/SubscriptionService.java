@@ -583,7 +583,10 @@ public class SubscriptionService {
 
         String json = loadConfigJson(configUrl);
         if (json != null) {
-            String url = fixUrl(apiUrl) + "/";
+            URL api = fixUrl(apiUrl);
+            String url = resolveUrl(api, "../");
+            json = json.replace("../", url);
+            url = resolveUrl(api, "./");
             json = json.replace("./", url);
         }
 
