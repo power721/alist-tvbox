@@ -820,16 +820,6 @@ public class SubscriptionService {
         }
     }
 
-    private static String getRoot(String path) {
-        try {
-            URL url = new URL(path);
-            return url.getProtocol() + "://" + url.getHost();
-        } catch (MalformedURLException e) {
-            log.warn("", e);
-        }
-        return "";
-    }
-
     private static void overrideList(Map<String, Object> config, Map<String, Object> override, String prefix, String spider, String name, String keyName) {
         try {
             List<Object> overrideList = (List<Object>) override.get(name);
