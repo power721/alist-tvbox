@@ -165,6 +165,9 @@ public class PanAccountService {
         if (panAccountRepository.existsByNameAndType(account.getName(), account.getType())) {
             throw new BadRequestException("账号名称已经存在");
         }
+        if (panAccountRepository.count() == 0) {
+            aListLocalService.startAListServer();
+        }
         account.setId(null);
         if (panAccountRepository.countByType(account.getType()) == 0) {
             account.setMaster(true);
