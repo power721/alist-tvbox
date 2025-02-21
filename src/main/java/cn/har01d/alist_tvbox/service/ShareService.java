@@ -135,7 +135,7 @@ public class ShareService {
         configFileService.writeFiles();
         readTvTxt();
 
-        if (accountRepository.count() > 0 || pikPakAccountRepository.count() > 0 || panAccountRepository.count() > 0) {
+        if ("new".equals(environment.getProperty("INSTALL")) || accountRepository.count() > 0 || pikPakAccountRepository.count() > 0 || panAccountRepository.count() > 0) {
             aListLocalService.startAListServer();
         }
     }
