@@ -29,28 +29,28 @@
     </p>
     <p>
       一键部署(纯净版|独立版)：
-      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"</code><br>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)"</code><br>
     </p>
     <p>
       一键部署(小雅版)：
-      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"</code><br>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"</code><br>
     </p>
     <p>
       一键部署(内存优化版)：
-      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_native.sh)"</code><br>
-      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_native_host.sh)"</code><br>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_native.sh)"</code><br>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_native_host.sh)"</code><br>
     </p>
     <p>
       一键部署(host网络模式)：
-      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"</code><br>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_hostmode.sh)"</code><br>
     </p>
     <p>
       一键部署(开发版)：
-      <code>wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t dev</code><br>
+      <code>wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t dev</code><br>
     </p>
     <p>
       一键部署(NAS)：
-      <code>sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)" -s /volume2/docker/xiaoya</code>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)" -s /volume2/docker/xiaoya</code>
     </p>
   </div>
 </template>

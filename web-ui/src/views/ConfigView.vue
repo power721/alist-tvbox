@@ -259,7 +259,7 @@
             inactive-text="关闭"
             @change="updateAliTo115"
           />
-          <span class="hint">资源页面添加115网盘</span>
+          <span class="hint">帐号页面添加115网盘</span>
           <el-form-item label="115删除码">
             <el-input v-model="deleteCode115" type="password" show-password/>
             <el-button type="primary" @click="updateDeleteCode115">更新</el-button>
