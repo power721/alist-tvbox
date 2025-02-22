@@ -1047,6 +1047,7 @@ public class SubscriptionService {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
                 String address = readHostAddress();
                 String token = tokens.split(",")[0];
+                json = appendMd5sum(name, json);
                 json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
                 json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
                 json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
@@ -1061,6 +1062,19 @@ public class SubscriptionService {
             return null;
         }
         return null;
+    }
+
+    private static String appendMd5sum(String name, String json) {
+        if ("/pg/jsm.json".equals(name)) {
+            try {
+                String md5 = FileUtils.readFileToString(new File("/www/pg/pg.jar.md5"), StandardCharsets.UTF_8).trim();
+                log.debug("pg.jar.md5: {}", md5);
+                json = json.replace("./pg.jar", "./pg.jar;md5;" + md5);
+            } catch (Exception e) {
+                log.warn("read md5 file failed", e);
+            }
+        }
+        return json;
     }
 
     private String getFolder(String path) {
