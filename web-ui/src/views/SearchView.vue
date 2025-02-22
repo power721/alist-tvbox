@@ -17,6 +17,7 @@
         <el-radio label="2" size="large">BiliBili</el-radio>
         <el-radio label="3" size="large">YouTube</el-radio>
         <el-radio label="4" size="large">Emby</el-radio>
+        <el-radio label="5" size="large">Jellyfin</el-radio>
       </el-radio-group>
     </el-form-item>
 
@@ -70,6 +71,8 @@ const getPath = (type: string) => {
     return '/youtube'
   } else if (type == '4') {
     return '/emby'
+  } else if (type == '5') {
+    return '/jellyfin'
   } else {
     return '/vod'
   }
