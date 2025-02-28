@@ -364,6 +364,8 @@ public class ShareService {
             fileName = "uc_share_list.txt";
         } else if (type == 8) {
             fileName = "115_share_list.txt";
+        } else if (type == 9) {
+            fileName = "189_share_list.txt";
         } else {
             fileName = "ali_share_list.txt";
         }
@@ -414,6 +416,10 @@ public class ShareService {
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     } else if (share.getType() == 7) {
                         String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
+                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
+                    } else if (share.getType() == 9) {
+                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     }
@@ -498,6 +504,8 @@ public class ShareService {
             return "/我的UC分享/" + path;
         } else if (share.getType() == 8) {
             return "/我的115分享/" + path;
+        } else if (share.getType() == 9) {
+            return "/我的天翼分享/" + path;
         }
         return path;
     }
@@ -633,6 +641,9 @@ public class ShareService {
             } else if (share.getType() == 7) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
+            } else if (share.getType() == 9) {
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
             }
             log.info("insert result: {}", result);
 
@@ -679,6 +690,9 @@ public class ShareService {
             } else if (share.getType() == 7) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
+            } else if (share.getType() == 9) {
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
             }
             log.info("insert result: {}", result);
 
@@ -715,7 +729,7 @@ public class ShareService {
         }
 
         if (StringUtils.isBlank(share.getFolderId())) {
-            if (share.getType() == 2 || share.getType() == 3 || share.getType() == 5 || share.getType() == 7) {
+            if (share.getType() == 2 || share.getType() == 3 || share.getType() == 5 || share.getType() == 7 || share.getType() == 9) {
                 share.setFolderId("0");
             } else if (share.getType() == 0) {
                 share.setFolderId("root");
@@ -767,17 +781,6 @@ public class ShareService {
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = restTemplate.exchange("/api/admin/storage/delete?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("delete storage response: {}", response.getBody());
-    }
-
-    private Integer getType(String driver) {
-        switch (driver) {
-            case "PikPakShare":
-                return 1;
-            case "Quark":
-                return 2;
-            default:
-                return 0;
-        }
     }
 
     public Object listStorages(Pageable pageable) {
