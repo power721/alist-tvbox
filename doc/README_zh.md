@@ -5,7 +5,7 @@ AList代理，支持xiaoya版AList界面管理。
 1. 准备工作：安装Docker
 2. 安装AList-TvBox：
     ```bash
-    sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
+    sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"
     ```
 3. 打开管理界面：http://your-ip:4567/#/accounts
    默认用户名：admin 密码：admin
@@ -42,15 +42,15 @@ AList代理，支持xiaoya版AList界面管理。
 如果找不到sudo，就用root账号登录，去掉sudo后运行。
 
 ```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
+sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"
 ```
 使用其它配置目录：
 ```bash
-wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/user/atv
+wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/user/atv
 ```
 挂载本地目录：
 ```bash
-wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -v /home/user/Videos:/video
+wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -v /home/user/Videos:/video
 ```
 使用其它端口：
 
@@ -58,29 +58,29 @@ wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_x
 - 第二个参数是管理界面端口，默认是4567。
 - 第三个参数是小雅AList端口，默认是5344。
 ```bash
-wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/alist 8080
-wget https://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/alist 8080 5544
+wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/alist 8080
+wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/alist 8080 5544
 ```
 OpenWrt去掉sudo，或者已经是root账号：
 ```bash
-bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"
+bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"
 ```
 
 如果没有安装curl:
 ```bash
-wget https://d.har01d.cn/update_xiaoya.sh; bash ./update_xiaoya.sh
+wget http://d.har01d.cn/update_xiaoya.sh; bash ./update_xiaoya.sh
 ```
 
 #### 内存优化版
 目前仅支持Linux x86_64平台。
 ```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_native.sh)"
+sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_native.sh)"
 ```
 
 #### host网络模式
 使用host网络模式运行：
 ```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
+sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_hostmode.sh)"
 ```
 使用的端口：
 
@@ -95,7 +95,7 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_hostmode.sh)"
 #### 纯净版
 没有内置分享数据。
 ```bash
-sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
+sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)"
 ```
 
 #### NAS
@@ -112,7 +112,7 @@ sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_new.sh)"
 ### 定时更新
 使用root用户创建corntab定时任务
 ```bash
-wget https://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
+wget http://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
 chmod a+x /opt/update_xiaoya.sh
 crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh -u"; } | crontab -
 ```
@@ -121,7 +121,7 @@ crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh -u"; } | crontab -
 ### 定时重启
 使用root用户创建corntab定时任务
 ```bash
-wget https://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
+wget http://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
 chmod a+x /opt/update_xiaoya.sh
 crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh"; } | crontab -
 ```
