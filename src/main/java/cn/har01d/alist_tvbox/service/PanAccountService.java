@@ -199,7 +199,7 @@ public class PanAccountService {
         } else if (account.getType() == DriverType.PAN115) {
             return "/115网盘/" + account.getName();
         } else if (account.getType() == DriverType.THUNDER) {
-            return "/我的迅雷网盘/" + account.getName();
+            return "/我的迅雷云盘/" + account.getName();
         } else if (account.getType() == DriverType.CLOUD189) {
             return "/我的天翼云盘/" + account.getName();
         }

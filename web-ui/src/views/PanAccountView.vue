@@ -18,7 +18,7 @@
           <span v-if="scope.row.type=='QUARK'">夸克网盘</span>
           <span v-else-if="scope.row.type=='UC'">UC网盘</span>
           <span v-else-if="scope.row.type=='PAN115'">115网盘</span>
-          <span v-else-if="scope.row.type=='THUNDER'">迅雷网盘</span>
+          <span v-else-if="scope.row.type=='THUNDER'">迅雷云盘</span>
           <span v-else-if="scope.row.type=='CLOUD189'">天翼云盘</span>
         </template>
       </el-table-column>
@@ -56,7 +56,7 @@
             <el-radio label="QUARK" size="large">夸克网盘</el-radio>
             <el-radio label="UC" size="large">UC网盘</el-radio>
             <el-radio label="PAN115" size="large">115网盘</el-radio>
-            <el-radio label="THUNDER" size="large">迅雷网盘</el-radio>
+            <el-radio label="THUNDER" size="large">迅雷云盘</el-radio>
             <el-radio label="CLOUD189" size="large">天翼云盘</el-radio>
           </el-radio-group>
         </el-form-item>
@@ -178,7 +178,7 @@ const getTypeName = (type: string) => {
     return '115网盘'
   }
   if (type == 'THUNDER') {
-    return '迅雷网盘'
+    return '迅雷云盘'
   }
   if (type == 'CLOUD189') {
     return '天翼云盘'
@@ -198,7 +198,7 @@ const fullPath = (share: any) => {
   } else if (share.type == 'PAN115') {
     return '/115网盘/' + path
   } else if (share.type == 'THUNDER') {
-    return '/我的迅雷网盘/' + path
+    return '/我的迅雷云盘/' + path
   } else if (share.type == 'CLOUD189') {
     return '/我的天翼云盘/' + path
   } else {
