@@ -18,6 +18,8 @@
           <span v-if="scope.row.type=='QUARK'">夸克网盘</span>
           <span v-else-if="scope.row.type=='UC'">UC网盘</span>
           <span v-else-if="scope.row.type=='PAN115'">115网盘</span>
+          <span v-else-if="scope.row.type=='THUNDER'">迅雷网盘</span>
+          <span v-else-if="scope.row.type=='CLOUD189'">天翼云盘</span>
         </template>
       </el-table-column>
       <el-table-column prop="name" label="名称" sortable width="200"/>
@@ -54,13 +56,27 @@
             <el-radio label="QUARK" size="large">夸克网盘</el-radio>
             <el-radio label="UC" size="large">UC网盘</el-radio>
             <el-radio label="PAN115" size="large">115网盘</el-radio>
+            <el-radio label="THUNDER" size="large">迅雷网盘</el-radio>
+            <el-radio label="CLOUD189" size="large">天翼云盘</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="Cookie" label-width="140" required>
+        <el-form-item label="Cookie" label-width="140" required v-if="form.type!='THUNDER'&&form.type!='CLOUD189'">
           <el-input v-model="form.cookie" type="textarea" :rows="5"/>
         </el-form-item>
         <el-form-item label="Token" label-width="140" v-if="form.type=='PAN115'">
           <el-input v-model="form.token"/>
+        </el-form-item>
+        <el-form-item label="用户名" label-width="140" v-if="form.type=='THUNDER'||form.type=='CLOUD189'">
+          <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'手机号要加 +86':''" />
+        </el-form-item>
+        <el-form-item label="密码" label-width="140" v-if="form.type=='THUNDER'||form.type=='CLOUD189'">
+          <el-input type="password" show-password v-model="form.password"/>
+        </el-form-item>
+        <el-form-item label="验证码" label-width="140" v-if="form.type=='CLOUD189'">
+          <el-input v-model="form.token"/>
+        </el-form-item>
+        <el-form-item label="保险箱密码" label-width="140" v-if="form.type=='THUNDER'">
+          <el-input type="password" show-password v-model="form.safePassword"/>
         </el-form-item>
         <el-form-item label="文件夹ID" label-width="140">
           <el-input v-model="form.folder"/>
@@ -124,6 +140,9 @@ const form = ref({
   name: '',
   cookie: '',
   token: '',
+  username: '',
+  password: '',
+  safePassword: '',
   folder: '',
   useProxy: false,
   master: false,
@@ -138,6 +157,9 @@ const handleAdd = () => {
     name: '',
     cookie: '',
     token: '',
+    username: '',
+    password: '',
+    safePassword: '',
     folder: '',
     useProxy: false,
     master: false,
@@ -155,6 +177,12 @@ const getTypeName = (type: string) => {
   if (type == 'PAN115') {
     return '115网盘'
   }
+  if (type == 'THUNDER') {
+    return '迅雷网盘'
+  }
+  if (type == 'CLOUD189') {
+    return '天翼云盘'
+  }
   return '未知'
 }
 
@@ -169,6 +197,10 @@ const fullPath = (share: any) => {
     return '/🌞我的UC网盘/' + path
   } else if (share.type == 'PAN115') {
     return '/115网盘/' + path
+  } else if (share.type == 'THUNDER') {
+    return '/我的迅雷网盘/' + path
+  } else if (share.type == 'CLOUD189') {
+    return '/我的天翼云盘/' + path
   } else {
     return '/网盘/' + path
   }

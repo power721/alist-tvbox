@@ -947,13 +947,13 @@ public class SubscriptionService {
             log.warn("", e);
         }
 
-        try {
-            Map<String, Object> site = buildSite(token, "csp_Youtube", "YouTube");
-            sites.add(id++, site);
-            log.debug("add Youtube site: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
+//        try {
+//            Map<String, Object> site = buildSite(token, "csp_Youtube", "YouTube");
+//            sites.add(id++, site);
+//            log.debug("add Youtube site: {}", site);
+//        } catch (Exception e) {
+//            log.warn("", e);
+//        }
 
         try {
             if (embyRepository.count() > 0) {

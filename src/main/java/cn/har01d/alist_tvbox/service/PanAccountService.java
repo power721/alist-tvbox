@@ -1,7 +1,13 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.domain.DriverType;
-import cn.har01d.alist_tvbox.entity.*;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.PanAccountRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.Share;
+import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.SettingResponse;
@@ -20,13 +26,20 @@ import java.util.List;
 public class PanAccountService {
     public static final int IDX = 4000;
     private final PanAccountRepository panAccountRepository;
+    private final DriverAccountRepository driverAccountRepository;
     private final SettingRepository settingRepository;
     private final ShareRepository shareRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
 
-    public PanAccountService(PanAccountRepository panAccountRepository, SettingRepository settingRepository, ShareRepository shareRepository, AccountService accountService, AListLocalService aListLocalService) {
+    public PanAccountService(PanAccountRepository panAccountRepository,
+                             DriverAccountRepository driverAccountRepository,
+                             SettingRepository settingRepository,
+                             ShareRepository shareRepository,
+                             AccountService accountService,
+                             AListLocalService aListLocalService) {
         this.panAccountRepository = panAccountRepository;
+        this.driverAccountRepository = driverAccountRepository;
         this.settingRepository = settingRepository;
         this.shareRepository = shareRepository;
         this.accountService = accountService;
@@ -38,10 +51,32 @@ public class PanAccountService {
         if (!settingRepository.existsByName("migrate_pan_account")) {
             migratePanAccounts();
         }
+        if (!settingRepository.existsByName("migrate_driver_account")) {
+            migrateDriverAccounts();
+        }
+    }
+
+    private void migrateDriverAccounts() {
+        List<DriverAccount> accounts = new ArrayList<>();
+        for (var item : panAccountRepository.findAll()) {
+            var account = new DriverAccount();
+            account.setId(item.getId());
+            account.setName(item.getName());
+            account.setType(item.getType());
+            account.setCookie(item.getCookie());
+            account.setToken(item.getToken());
+            account.setMaster(item.isMaster());
+            account.setUseProxy(item.isUseProxy());
+            account.setFolder(item.getFolder());
+            accounts.add(account);
+        }
+        driverAccountRepository.saveAll(accounts);
+        log.info("migrated {} accounts", accounts.size());
+        settingRepository.save(new Setting("migrate_driver_account", "true"));
     }
 
     private void migratePanAccounts() {
-        List<PanAccount> accounts = new ArrayList<>();
+        List<DriverAccount> accounts = new ArrayList<>();
         List<Share> shares = shareRepository.findAll();
         List<Share> deleted = new ArrayList<>();
         boolean master2 = true;
@@ -49,7 +84,7 @@ public class PanAccountService {
         boolean master6 = true;
         for (Share share : shares) {
             if (share.getType() == 2 || share.getType() == 3 || share.getType() == 6) {
-                PanAccount account = new PanAccount();
+                DriverAccount account = new DriverAccount();
                 if (share.getType() == 2) {
                     account.setType(DriverType.QUARK);
                     account.setMaster(master2);
@@ -70,7 +105,7 @@ public class PanAccountService {
                 deleted.add(share);
             }
         }
-        panAccountRepository.saveAll(accounts);
+        driverAccountRepository.saveAll(accounts);
         shareRepository.deleteAll(deleted);
         log.info("migrated {} accounts", accounts.size());
         settingRepository.save(new Setting("migrate_pan_account", "true"));
@@ -81,13 +116,13 @@ public class PanAccountService {
     }
 
     public void loadStorages() {
-        List<PanAccount> accounts = panAccountRepository.findAll();
-        for (PanAccount account : accounts) {
+        List<DriverAccount> accounts = driverAccountRepository.findAll();
+        for (DriverAccount account : accounts) {
             insertAList(account);
         }
     }
 
-    private void insertAList(PanAccount account) {
+    private void insertAList(DriverAccount account) {
         int id = account.getId() + IDX;
         if (account.getType() == DriverType.QUARK) {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
@@ -99,6 +134,14 @@ public class PanAccountService {
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder()));
             log.info("insert UC account {} : {}, result: {}", id, getMountPath(account), count);
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('uc_cookie','" + account.getCookie() + "','','text','',1,0);");
+        } else if (account.getType() == DriverType.THUNDER) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'ThunderBrowser',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"safe_password\":\"%s\",\"root_folder_id\":\"%s\",\"remove_way\":\"delete\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getSafePassword(), account.getFolder()));
+            log.info("insert ThunderBrowser account {} : {}, result: {}", id, getMountPath(account), count);
+        } else if (account.getType() == DriverType.CLOUD189) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189CloudPC',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"validate_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getToken(), account.getFolder()));
+            log.info("insert 189CloudPC account {} : {}, result: {}", id, getMountPath(account), count);
         } else if (account.getType() == DriverType.PAN115) {
             String sql;
             if (account.isUseProxy()) {
@@ -112,7 +155,7 @@ public class PanAccountService {
         }
     }
 
-    private void updateAList(PanAccount account) {
+    private void updateAList(DriverAccount account) {
         int id = account.getId() + IDX;
         if (account.getType() == DriverType.QUARK) {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
@@ -124,6 +167,14 @@ public class PanAccountService {
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder()));
             log.info("insert UC account {} : {}, result: {}", id, getMountPath(account), count);
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('uc_cookie','" + account.getCookie() + "','','text','',1,0);");
+        } else if (account.getType() == DriverType.THUNDER) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'ThunderBrowser',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"safe_password\":\"%s\",\"root_folder_id\":\"%s\",\"remove_way\":\"delete\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getSafePassword(), account.getFolder()));
+            log.info("insert ThunderBrowser account {} : {}, result: {}", id, getMountPath(account), count);
+        } else if (account.getType() == DriverType.CLOUD189) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189CloudPC',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"validate_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getToken(), account.getFolder()));
+            log.info("insert 189CloudPC account {} : {}, result: {}", id, getMountPath(account), count);
         } else if (account.getType() == DriverType.PAN115) {
             String sql;
             if (account.isUseProxy()) {
@@ -137,7 +188,7 @@ public class PanAccountService {
         }
     }
 
-    private Object getMountPath(PanAccount account) {
+    private Object getMountPath(DriverAccount account) {
         if (account.getName().startsWith("/")) {
             return account.getName();
         }
@@ -147,44 +198,48 @@ public class PanAccountService {
             return "/\uD83C\uDF1E我的UC网盘/" + account.getName();
         } else if (account.getType() == DriverType.PAN115) {
             return "/115网盘/" + account.getName();
+        } else if (account.getType() == DriverType.THUNDER) {
+            return "/我的迅雷网盘/" + account.getName();
+        } else if (account.getType() == DriverType.CLOUD189) {
+            return "/我的天翼云盘/" + account.getName();
         }
         return "/网盘" + account.getName();
         // cn.har01d.alist_tvbox.service.TvBoxService.addMyFavorite
     }
 
-    public List<PanAccount> list() {
-        return panAccountRepository.findAll();
+    public List<DriverAccount> list() {
+        return driverAccountRepository.findAll();
     }
 
-    public PanAccount get(int id) {
-        return panAccountRepository.findById(id).orElseThrow(NotFoundException::new);
+    public DriverAccount get(int id) {
+        return driverAccountRepository.findById(id).orElseThrow(NotFoundException::new);
     }
 
-    public PanAccount create(PanAccount account) {
+    public DriverAccount create(DriverAccount account) {
         validate(account);
-        if (panAccountRepository.existsByNameAndType(account.getName(), account.getType())) {
+        if (driverAccountRepository.existsByNameAndType(account.getName(), account.getType())) {
             throw new BadRequestException("账号名称已经存在");
         }
-        if (panAccountRepository.count() == 0) {
+        if (driverAccountRepository.count() == 0) {
             aListLocalService.startAListServer();
         }
         account.setId(null);
-        if (panAccountRepository.countByType(account.getType()) == 0) {
+        if (driverAccountRepository.countByType(account.getType()) == 0) {
             account.setMaster(true);
         } else {
             updateMaster(account);
         }
-        panAccountRepository.save(account);
+        driverAccountRepository.save(account);
 
         updateStorage(account);
 
         return account;
     }
 
-    public PanAccount update(Integer id, PanAccount dto) {
+    public DriverAccount update(Integer id, DriverAccount dto) {
         validate(dto);
         var account = get(id);
-        var other = panAccountRepository.findByNameAndType(dto.getName(), dto.getType());
+        var other = driverAccountRepository.findByNameAndType(dto.getName(), dto.getType());
         if (other != null && !other.getId().equals(id)) {
             throw new BadRequestException("账号名称已经存在");
         }
@@ -203,9 +258,12 @@ public class PanAccountService {
         account.setType(dto.getType());
         account.setCookie(dto.getCookie());
         account.setToken(dto.getToken());
+        account.setUsername(dto.getUsername());
+        account.setPassword(dto.getPassword());
+        account.setSafePassword(dto.getSafePassword());
         account.setFolder(dto.getFolder());
 
-        if (panAccountRepository.countByType(account.getType()) == 0) {
+        if (driverAccountRepository.countByType(account.getType()) == 0) {
             account.setMaster(true);
         }
 
@@ -213,7 +271,7 @@ public class PanAccountService {
             updateMaster(account);
         }
 
-        panAccountRepository.save(account);
+        driverAccountRepository.save(account);
 
         updateStorage(account);
 
@@ -221,18 +279,18 @@ public class PanAccountService {
     }
 
     public void delete(Integer id) {
-        PanAccount account = panAccountRepository.findById(id).orElse(null);
+        DriverAccount account = driverAccountRepository.findById(id).orElse(null);
         if (account != null) {
             if (account.isMaster()) {
                 throw new BadRequestException("不能删除主账号");
             }
-            panAccountRepository.deleteById(id);
+            driverAccountRepository.deleteById(id);
             String token = accountService.login();
             accountService.deleteStorage(IDX + account.getId(), token);
         }
     }
 
-    private void validate(PanAccount dto) {
+    private void validate(DriverAccount dto) {
         if (StringUtils.isBlank(dto.getName())) {
             throw new BadRequestException("名称不能为空");
         }
@@ -242,22 +300,31 @@ public class PanAccountService {
         if (dto.getType() == null) {
             throw new BadRequestException("类型不能为空");
         }
-        if (StringUtils.isBlank(dto.getCookie()) && StringUtils.isBlank(dto.getToken())) {
+        if (dto.getType() == DriverType.THUNDER || dto.getType() == DriverType.CLOUD189) {
+            if (StringUtils.isBlank(dto.getUsername())) {
+                throw new BadRequestException("用户名不能为空");
+            }
+            if (StringUtils.isBlank(dto.getPassword())) {
+                throw new BadRequestException("密码不能为空");
+            }
+        } else if (StringUtils.isBlank(dto.getCookie()) && StringUtils.isBlank(dto.getToken())) {
             throw new BadRequestException("Cookie和Token不能同时为空");
         }
         if (StringUtils.isBlank(dto.getFolder())) {
             if (dto.getType() == DriverType.QUARK || dto.getType() == DriverType.PAN115) {
                 dto.setFolder("0");
+            } else if (dto.getType() == DriverType.CLOUD189) {
+                dto.setFolder("-11");
             }
         }
     }
 
-    private void updateMaster(PanAccount account) {
+    private void updateMaster(DriverAccount account) {
         if (account.isMaster()) {
             log.info("reset account master");
-            List<PanAccount> list = panAccountRepository.findAll();
+            List<DriverAccount> list = driverAccountRepository.findAll();
             list = list.stream().filter(e -> e.getType() == account.getType()).toList();
-            for (PanAccount a : list) {
+            for (DriverAccount a : list) {
                 a.setMaster(false);
             }
             account.setMaster(true);
@@ -265,13 +332,17 @@ public class PanAccountService {
                 case QUARK -> "quark_cookie";
                 case PAN115 -> "115_cookie";
                 case UC -> "uc_cookie";
+                default -> "";
             };
+            if (key.isEmpty()) {
+                return;
+            }
             aListLocalService.updateSetting(key, account.getCookie(), "string");
-            panAccountRepository.saveAll(list);
+            driverAccountRepository.saveAll(list);
         }
     }
 
-    private void updateStorage(PanAccount account) {
+    private void updateStorage(DriverAccount account) {
         int status = aListLocalService.getAListStatus();
         try {
             int id = IDX + account.getId();
@@ -306,9 +377,9 @@ public class PanAccountService {
 
     private void saveCookie(DriverType type, SettingResponse response) {
         if (response.getCode() == 200) {
-            panAccountRepository.findByTypeAndMasterTrue(type).ifPresent(account -> {
+            driverAccountRepository.findByTypeAndMasterTrue(type).ifPresent(account -> {
                 account.setCookie(response.getData().getValue());
-                panAccountRepository.save(account);
+                driverAccountRepository.save(account);
             });
         }
     }
