@@ -35,6 +35,9 @@
         <a v-else-if="scope.row.type==8" :href="getShareLink(scope.row)" target="_blank">
           https://115.com/s/{{ scope.row.shareId }}
         </a>
+        <a v-else-if="scope.row.type==9" :href="getShareLink(scope.row)" target="_blank">
+          https://cloud.189.cn/t/{{ scope.row.shareId }}
+        </a>
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
@@ -45,6 +48,7 @@
         <span v-else-if="scope.row.type==5">夸克分享</span>
         <span v-else-if="scope.row.type==7">UC分享</span>
         <span v-else-if="scope.row.type==8">115分享</span>
+        <span v-else-if="scope.row.type==9">天翼分享</span>
         <span v-else>阿里分享</span>
       </template>
     </el-table-column>
@@ -79,6 +83,7 @@
         <span v-else-if="scope.row.driver=='QuarkShare'">夸克分享</span>
         <span v-else-if="scope.row.driver=='UCShare'">UC分享</span>
         <span v-else-if="scope.row.driver=='115 Share'">115分享</span>
+        <span v-else-if="scope.row.driver=='189Share'">天翼分享</span>
         <span v-else-if="scope.row.driver=='Local'">本地存储</span>
         <span v-else-if="scope.row.driver=='Alias'">别名</span>
         <span v-else>{{ scope.row.driver }}</span>
@@ -125,6 +130,7 @@
           <el-radio :label="5" size="large">夸克分享</el-radio>
           <el-radio :label="7" size="large">UC分享</el-radio>
           <el-radio :label="8" size="large">115分享</el-radio>
+          <el-radio :label="9" size="large">天翼分享</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
         </el-radio-group>
       </el-form-item>
@@ -180,6 +186,7 @@
           <el-radio :label="5" size="large">夸克分享</el-radio>
           <el-radio :label="7" size="large">UC分享</el-radio>
           <el-radio :label="8" size="large">115分享</el-radio>
+          <el-radio :label="9" size="large">天翼分享</el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="分享内容" label-width="120">
@@ -203,6 +210,7 @@
         <el-radio :label="5" size="large">夸克分享</el-radio>
         <el-radio :label="7" size="large">UC分享</el-radio>
         <el-radio :label="8" size="large">115分享</el-radio>
+        <el-radio :label="9" size="large">天翼分享</el-radio>
       </el-radio-group>
     </el-form-item>
     <template #footer>
@@ -371,6 +379,8 @@ const fullPath = (share: any) => {
     return '/我的UC分享/' + path
   } else if (share.type == 8) {
     return '/我的115分享/' + path
+  } else if (share.type == 9) {
+    return '/我的天翼分享/' + path
   } else if (share.type == 4) {
     return path
   } else {
@@ -395,6 +405,8 @@ const getShareLink = (shareInfo: ShareInfo) => {
     url = 'https://fast.uc.cn/s/' + shareInfo.shareId
   } else if (shareInfo.type == 8) {
     url = 'https://115.com/s/' + shareInfo.shareId
+  } else if (shareInfo.type == 9) {
+    url = 'https://cloud.189.cn/t/' + shareInfo.shareId
   } else {
     url = 'https://www.alipan.com/s/' + shareInfo.shareId
     if (shareInfo.folderId) {
