@@ -28,8 +28,6 @@ COPY scripts/downloadPg.sh /
 COPY scripts/downloadZx.sh /
 COPY entrypoint-native.sh /entrypoint.sh
 
-COPY target/atv ./
-
 COPY data/update.sql /
 COPY data/countries.json /
 COPY data/tvbox.zip /
@@ -39,10 +37,14 @@ COPY data/pg.zip /
 COPY data/zx.zip /
 COPY data/data.zip /
 COPY data/base_version /
+COPY scripts/tgsearch.x86_64 /
+COPY scripts/tgsearch.arm64v8 /
+
+COPY target/atv ./
 
 COPY data/version data/app_version
 
-EXPOSE 4567 80
+EXPOSE 4567 80 10199
 
 ENTRYPOINT ["/entrypoint.sh"]
 
