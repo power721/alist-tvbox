@@ -1,7 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.entity.PanAccount;
-import cn.har01d.alist_tvbox.entity.PikPakAccount;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.service.PanAccountService;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,17 +16,17 @@ public class PanAccountController {
     }
 
     @GetMapping
-    public List<PanAccount> list() {
+    public List<DriverAccount> list() {
         return panAccountService.list();
     }
 
     @PostMapping
-    public PanAccount create(@RequestBody PanAccount account) {
+    public DriverAccount create(@RequestBody DriverAccount account) {
         return panAccountService.create(account);
     }
 
     @PostMapping("/{id}")
-    public PanAccount update(@PathVariable Integer id, @RequestBody PanAccount account) {
+    public DriverAccount update(@PathVariable Integer id, @RequestBody DriverAccount account) {
         return panAccountService.update(id, account);
     }
 
