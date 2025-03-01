@@ -5,10 +5,10 @@ import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.EmbyRepository;
 import cn.har01d.alist_tvbox.entity.JellyfinRepository;
-import cn.har01d.alist_tvbox.entity.PanAccount;
-import cn.har01d.alist_tvbox.entity.PanAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
@@ -79,7 +79,7 @@ public class SubscriptionService {
     private final AccountRepository accountRepository;
     private final SiteRepository siteRepository;
     private final ShareRepository shareRepository;
-    private final PanAccountRepository panAccountRepository;
+    private final DriverAccountRepository panAccountRepository;
     private final EmbyRepository embyRepository;
     private final JellyfinRepository jellyfinRepository;
     private final AListLocalService aListLocalService;
@@ -97,7 +97,7 @@ public class SubscriptionService {
                                AccountRepository accountRepository,
                                SiteRepository siteRepository,
                                ShareRepository shareRepository,
-                               PanAccountRepository panAccountRepository,
+                               DriverAccountRepository panAccountRepository,
                                EmbyRepository embyRepository,
                                JellyfinRepository jellyfinRepository,
                                AListLocalService aListLocalService,
@@ -288,7 +288,7 @@ public class SubscriptionService {
             ali = accountRepository.getFirstByMasterTrue().map(Account::getOpenToken).orElse("");
             json = json.replace("ALI_OPEN_TOKEN", ali);
 
-            String quarkCookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(PanAccount::getCookie).orElse("");
+            String quarkCookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("");
             json = json.replace("QUARK_COOKIE", quarkCookie);
 
             String address = readHostAddress();

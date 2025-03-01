@@ -59,7 +59,7 @@ public class TvBoxService {
     private final AListAliasRepository aliasRepository;
     private final ShareRepository shareRepository;
     private final MetaRepository metaRepository;
-    private final PanAccountRepository panAccountRepository;
+    private final DriverAccountRepository panAccountRepository;
 
     private final AListService aListService;
     private final IndexService indexService;
@@ -124,7 +124,7 @@ public class TvBoxService {
                         ProxyService proxyService,
                         ObjectMapper objectMapper,
                         Environment environment,
-                        PanAccountRepository panAccountRepository,
+                        DriverAccountRepository panAccountRepository,
                         PikPakAccountRepository pikPakAccountRepository) {
         this.accountRepository = accountRepository;
         this.aliasRepository = aliasRepository;
@@ -395,7 +395,7 @@ public class TvBoxService {
         }
     }
 
-    private Object getMountPath(PanAccount account) {
+    private Object getMountPath(DriverAccount account) {
         if (account.getName().startsWith("/")) {
             return account.getName();
         }

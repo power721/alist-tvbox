@@ -24,7 +24,7 @@ public class PgTokenController {
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
-    private final PanAccountRepository panAccountRepository;
+    private final DriverAccountRepository driverAccountRepository;
     private final PikPakAccountRepository pikPakAccountRepository;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
@@ -32,14 +32,14 @@ public class PgTokenController {
     public PgTokenController(SubscriptionService subscriptionService,
                              AccountRepository accountRepository,
                              SettingRepository settingRepository,
-                             PanAccountRepository panAccountRepository,
+                             DriverAccountRepository driverAccountRepository,
                              PikPakAccountRepository pikPakAccountRepository,
                              ObjectMapper objectMapper,
                              RestTemplateBuilder builder) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
-        this.panAccountRepository = panAccountRepository;
+        this.driverAccountRepository = driverAccountRepository;
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.objectMapper = objectMapper;
         this.restTemplate = builder.build();
@@ -69,9 +69,14 @@ public class PgTokenController {
             objectNode.put("open_token", account.getOpenToken());
         });
         settingRepository.findById("open_token_url").map(Setting::getValue).ifPresent(url -> objectNode.put("open_api_url", url));
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> objectNode.put("quark_cookie", share.getCookie()));
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> objectNode.put("pan115_cookie", share.getCookie()));
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("uc_cookie", share.getCookie()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> objectNode.put("quark_cookie", share.getCookie()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> objectNode.put("pan115_cookie", share.getCookie()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("uc_cookie", share.getCookie()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.THUNDER).stream().findFirst().ifPresent(share -> {
+            objectNode.put("thunder_username", share.getUsername());
+            objectNode.put("thunder_password", share.getPassword());
+            objectNode.put("thunder_captchatoken", share.getToken());
+        });
         settingRepository.findById("delete_code_115").map(Setting::getValue).ifPresent(code -> objectNode.put("pan115_delete_code", code));
         pikPakAccountRepository.getFirstByMasterTrue().ifPresent(account -> {
             objectNode.put("pikpak_username", account.getUsername());

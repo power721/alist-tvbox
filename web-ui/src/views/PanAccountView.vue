@@ -72,7 +72,7 @@
         <el-form-item label="密码" label-width="140" v-if="form.type=='THUNDER'||form.type=='CLOUD189'">
           <el-input type="password" show-password v-model="form.password"/>
         </el-form-item>
-        <el-form-item label="验证码" label-width="140" v-if="form.type=='CLOUD189'">
+        <el-form-item label="验证码" label-width="140" v-if="form.type=='THUNDER'||form.type=='CLOUD189'">
           <el-input v-model="form.token"/>
         </el-form-item>
         <el-form-item label="保险箱密码" label-width="140" v-if="form.type=='THUNDER'">

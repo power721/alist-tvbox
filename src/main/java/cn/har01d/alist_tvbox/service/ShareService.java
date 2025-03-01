@@ -8,8 +8,8 @@ import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.PanAccount;
-import cn.har01d.alist_tvbox.entity.PanAccountRepository;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.PikPakAccount;
 import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
@@ -68,7 +68,7 @@ public class ShareService {
     private final SiteRepository siteRepository;
     private final AccountRepository accountRepository;
     private final PikPakAccountRepository pikPakAccountRepository;
-    private final PanAccountRepository panAccountRepository;
+    private final DriverAccountRepository panAccountRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
@@ -86,7 +86,7 @@ public class ShareService {
                         SiteRepository siteRepository,
                         AccountRepository accountRepository,
                         PikPakAccountRepository pikPakAccountRepository,
-                        PanAccountRepository panAccountRepository,
+                        DriverAccountRepository panAccountRepository,
                         PanAccountService panAccountService,
                         AppProperties appProperties,
                         AccountService accountService,
@@ -546,7 +546,7 @@ public class ShareService {
     public String getQuarkCookie(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
-            return panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(PanAccount::getCookie).orElse("").trim();
+            return panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("").trim();
         }
         return "";
     }
@@ -554,7 +554,7 @@ public class ShareService {
     public String getUcCookie(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
-            return panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).map(PanAccount::getCookie).orElse("").trim();
+            return panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).map(DriverAccount::getCookie).orElse("").trim();
         }
         return "";
     }
@@ -562,7 +562,7 @@ public class ShareService {
     public String get115Cookie(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
-            return panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(PanAccount::getCookie).orElse("").trim();
+            return panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("").trim();
         }
         return "";
     }
