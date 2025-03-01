@@ -2,8 +2,8 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
-import cn.har01d.alist_tvbox.entity.PanAccount;
-import cn.har01d.alist_tvbox.entity.PanAccountRepository;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -34,9 +34,9 @@ public class ProxyService {
             .maximumSize(10)
             .build();
     private final AppProperties appProperties;
-    private final PanAccountRepository panAccountRepository;
+    private final DriverAccountRepository panAccountRepository;
 
-    public ProxyService(AppProperties appProperties, PanAccountRepository panAccountRepository) {
+    public ProxyService(AppProperties appProperties, DriverAccountRepository panAccountRepository) {
         this.appProperties = appProperties;
         this.panAccountRepository = panAccountRepository;
     }
@@ -61,7 +61,7 @@ public class ProxyService {
         String url = cache.getIfPresent(id);
         if (url != null) {
             log.info("proxy url: {} {}", id, url);
-            String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(PanAccount::getCookie).orElse("");
+            String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
             Map<String, String> headers = new HashMap<>();
             headers.put("Range", request.getHeader("Range"));
             headers.put("User-Agent", Constants.USER_AGENT);
