@@ -366,6 +366,8 @@ public class ShareService {
             fileName = "115_share_list.txt";
         } else if (type == 9) {
             fileName = "189_share_list.txt";
+        } else if (type == 2) {
+            fileName = "thunder_share_list.txt";
         } else {
             fileName = "ali_share_list.txt";
         }
@@ -420,6 +422,10 @@ public class ShareService {
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     } else if (share.getType() == 9) {
                         String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
+                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
+                    } else if (share.getType() == 2) {
+                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'ThunderShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     }
@@ -492,12 +498,6 @@ public class ShareService {
             return "/\uD83C\uDE34我的阿里分享/" + path;
         } else if (share.getType() == 1) {
             return "/\uD83D\uDD78️我的PikPak分享/" + path;
-        } else if (share.getType() == 2) {
-            return "/\uD83C\uDF1E我的夸克网盘/" + path;
-        } else if (share.getType() == 6) {
-            return "/\uD83C\uDF1E我的UC网盘/" + path;
-        } else if (share.getType() == 3) {
-            return "/115网盘/" + path;
         } else if (share.getType() == 5) {
             return "/我的夸克分享/" + path;
         } else if (share.getType() == 7) {
@@ -506,6 +506,8 @@ public class ShareService {
             return "/我的115分享/" + path;
         } else if (share.getType() == 9) {
             return "/我的天翼分享/" + path;
+        } else if (share.getType() == 2) {
+            return "/我的迅雷分享/" + path;
         }
         return path;
     }
@@ -568,6 +570,9 @@ public class ShareService {
     }
 
     private static final Pattern SHARE_115_LINK = Pattern.compile("https://115.com/s/(\\w+)\\?password=(\\w+)#?");
+    private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/(.{26})\\?pwd=(\\w+)#?");
+    private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share?code=(.{12})");
+    private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/(.{12})");
 
     private void parseShare(Share share) {
         if (StringUtils.isBlank(share.getShareId())) {
@@ -577,12 +582,39 @@ public class ShareService {
         String url = share.getShareId();
         var m = SHARE_115_LINK.matcher(url);
         if (m.find()) {
+            share.setType(8);
             share.setShareId(m.group(1));
             share.setPassword(m.group(2));
             return;
         }
 
+        m = SHARE_XL_LINK.matcher(url);
+        if (m.find()) {
+            share.setType(2);
+            share.setShareId(m.group(1));
+            share.setPassword(m.group(2));
+            return;
+        }
+
+        m = SHARE_189_LINK1.matcher(url);
+        if (m.find()) {
+            share.setType(9);
+            share.setShareId(m.group(1));
+            return;
+        }
+
+        m = SHARE_189_LINK2.matcher(url);
+        if (m.find()) {
+            share.setType(9);
+            share.setShareId(m.group(1));
+            return;
+        }
+
         int index = url.indexOf("/s/");
+        if (index > 0) {
+            url = url.substring(index + 3);
+        }
+        index = url.indexOf("/t/");
         if (index > 0) {
             url = url.substring(index + 3);
         }
@@ -644,6 +676,9 @@ public class ShareService {
             } else if (share.getType() == 9) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
+            } else if (share.getType() == 2) {
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'ThunderShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
             }
             log.info("insert result: {}", result);
 
@@ -693,6 +728,9 @@ public class ShareService {
             } else if (share.getType() == 9) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
                 result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
+            } else if (share.getType() == 2) {
+                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'ThunderShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
             }
             log.info("insert result: {}", result);
 
@@ -714,22 +752,14 @@ public class ShareService {
             throw new BadRequestException("挂载路径不能包含空格");
         }
 
-        if (share.getType() == 2 || share.getType() == 6) {
-            if (StringUtils.isBlank(share.getCookie())) {
-                throw new BadRequestException("Cookie不能为空");
-            }
-        } else if (share.getType() == 3) {
-            if (StringUtils.isBlank(share.getCookie()) && StringUtils.isBlank(share.getPassword())) {
-                throw new BadRequestException("Cookie和Token至少填写一个");
-            }
-        } else if (share.getType() != 4) {
+        if (share.getType() != 4) {
             if (StringUtils.isBlank(share.getShareId())) {
                 throw new BadRequestException("分享ID不能为空");
             }
         }
 
         if (StringUtils.isBlank(share.getFolderId())) {
-            if (share.getType() == 2 || share.getType() == 3 || share.getType() == 5 || share.getType() == 7 || share.getType() == 9) {
+            if (share.getType() == 5 || share.getType() == 7) {
                 share.setFolderId("0");
             } else if (share.getType() == 0) {
                 share.setFolderId("root");
