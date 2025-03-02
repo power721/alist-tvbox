@@ -66,10 +66,10 @@
         <el-form-item label="Token" label-width="140" v-if="form.type=='PAN115'">
           <el-input v-model="form.token"/>
         </el-form-item>
-        <el-form-item label="用户名" label-width="140" v-if="form.type=='THUNDER'||form.type=='CLOUD189'">
+        <el-form-item label="用户名" label-width="140" v-if="form.type=='THUNDER'||form.type=='CLOUD189'" required>
           <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'手机号要加 +86':''" />
         </el-form-item>
-        <el-form-item label="密码" label-width="140" v-if="form.type=='THUNDER'||form.type=='CLOUD189'">
+        <el-form-item label="密码" label-width="140" v-if="form.type=='THUNDER'||form.type=='CLOUD189'" required>
           <el-input type="password" show-password v-model="form.password"/>
         </el-form-item>
         <el-form-item label="验证码" label-width="140" v-if="form.type=='THUNDER'||form.type=='CLOUD189'">

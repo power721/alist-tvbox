@@ -1200,7 +1200,7 @@ public class TvBoxService {
         }
 
         if (url.contains("xunlei.com")) {
-            result.put("header", "{\"User-Agent\":\"Dalvik/2.1.0 (Linux; U; Android 12; M2004J7AC Build/SP1A.210812.016)\"}");
+            result.put("header", "{\"User-Agent\":\"AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (url.contains("115cdn.net")) {
             var account = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElseThrow();
             if (account.isUseProxy()) {
@@ -1217,7 +1217,7 @@ public class TvBoxService {
         }
 
         if (!getSub) {
-            log.debug("result: {}", result);
+            log.debug("getPlayUrl result: {}", result);
             return result;
         }
 
@@ -1232,7 +1232,7 @@ public class TvBoxService {
 
         result.put("subs", subtitles);
 
-        log.debug("result: {}", result);
+        log.debug("getPlayUrl result: {}", result);
         return result;
     }
 

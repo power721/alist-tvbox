@@ -38,6 +38,9 @@
         <a v-else-if="scope.row.type==9" :href="getShareLink(scope.row)" target="_blank">
           https://cloud.189.cn/t/{{ scope.row.shareId }}
         </a>
+        <a v-else-if="scope.row.type==2" :href="getShareLink(scope.row)" target="_blank">
+          https://pan.xunlei.com/s/{{ scope.row.shareId }}
+        </a>
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
@@ -49,6 +52,7 @@
         <span v-else-if="scope.row.type==7">UC分享</span>
         <span v-else-if="scope.row.type==8">115分享</span>
         <span v-else-if="scope.row.type==9">天翼分享</span>
+        <span v-else-if="scope.row.type==2">迅雷分享</span>
         <span v-else>阿里分享</span>
       </template>
     </el-table-column>
@@ -84,6 +88,7 @@
         <span v-else-if="scope.row.driver=='UCShare'">UC分享</span>
         <span v-else-if="scope.row.driver=='115 Share'">115分享</span>
         <span v-else-if="scope.row.driver=='189Share'">天翼分享</span>
+        <span v-else-if="scope.row.driver=='ThunderShare'">迅雷分享</span>
         <span v-else-if="scope.row.driver=='Local'">本地存储</span>
         <span v-else-if="scope.row.driver=='Alias'">别名</span>
         <span v-else>{{ scope.row.driver }}</span>
@@ -107,17 +112,11 @@
       <el-form-item label="挂载路径" label-width="140" required>
         <el-input v-model="form.path" autocomplete="off"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2&&form.type!=6&&form.type!=3&&form.type!=4" label="分享ID" label-width="140"
-                    required>
+      <el-form-item v-if="form.type!=4" label="分享ID" label-width="140" required>
         <el-input v-model="form.shareId" autocomplete="off" placeholder="分享ID或者分享链接"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=2&&form.type!=6&&form.type!=4" :label="form.type==3?'Token':'密码'"
-                    label-width="140">
+      <el-form-item v-if="form.type!=4" :label="form.type==3?'Token':'密码'" label-width="140">
         <el-input v-model="form.password" autocomplete="off"/>
-      </el-form-item>
-      <el-form-item v-if="form.type==2||form.type==6||form.type==3" label="Cookie" label-width="140">
-        <el-input v-model="form.cookie" type="textarea" :rows="5" autocomplete="off"
-                  :placeholder="form.type==3?'Cookie或者Token必填一项':'Cookie必填'"/>
       </el-form-item>
       <el-form-item :label="form.type==4?'本地路径':'文件夹ID'" label-width="140">
         <el-input v-model="form.folderId" autocomplete="off"
@@ -131,6 +130,7 @@
           <el-radio :label="7" size="large">UC分享</el-radio>
           <el-radio :label="8" size="large">115分享</el-radio>
           <el-radio :label="9" size="large">天翼分享</el-radio>
+          <el-radio :label="2" size="large">迅雷分享</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
         </el-radio-group>
       </el-form-item>
@@ -187,6 +187,7 @@
           <el-radio :label="7" size="large">UC分享</el-radio>
           <el-radio :label="8" size="large">115分享</el-radio>
           <el-radio :label="9" size="large">天翼分享</el-radio>
+          <el-radio :label="2" size="large">迅雷分享</el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="分享内容" label-width="120">
@@ -211,6 +212,7 @@
         <el-radio :label="7" size="large">UC分享</el-radio>
         <el-radio :label="8" size="large">115分享</el-radio>
         <el-radio :label="9" size="large">天翼分享</el-radio>
+        <el-radio :label="2" size="large">迅雷分享</el-radio>
       </el-radio-group>
     </el-form-item>
     <template #footer>
@@ -381,6 +383,8 @@ const fullPath = (share: any) => {
     return '/我的115分享/' + path
   } else if (share.type == 9) {
     return '/我的天翼分享/' + path
+  } else if (share.type == 2) {
+    return '/我的迅雷分享/' + path
   } else if (share.type == 4) {
     return path
   } else {
@@ -407,6 +411,8 @@ const getShareLink = (shareInfo: ShareInfo) => {
     url = 'https://115.com/s/' + shareInfo.shareId
   } else if (shareInfo.type == 9) {
     url = 'https://cloud.189.cn/t/' + shareInfo.shareId
+  } else if (shareInfo.type == 2) {
+    url = 'https://pan.xunlei.com/s/' + shareInfo.shareId
   } else {
     url = 'https://www.alipan.com/s/' + shareInfo.shareId
     if (shareInfo.folderId) {
@@ -414,7 +420,11 @@ const getShareLink = (shareInfo: ShareInfo) => {
     }
   }
   if (shareInfo.password) {
-    url = url + '?password=' + shareInfo.password
+    if (shareInfo.type == 2) {
+      url = url + '?pwd=' + shareInfo.password
+    } else {
+      url = url + '?password=' + shareInfo.password
+    }
   }
   return url
 }
