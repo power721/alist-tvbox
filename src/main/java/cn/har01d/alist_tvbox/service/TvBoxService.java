@@ -59,7 +59,7 @@ public class TvBoxService {
     private final AListAliasRepository aliasRepository;
     private final ShareRepository shareRepository;
     private final MetaRepository metaRepository;
-    private final DriverAccountRepository panAccountRepository;
+    private final DriverAccountRepository driverAccountRepository;
 
     private final AListService aListService;
     private final IndexService indexService;
@@ -124,7 +124,7 @@ public class TvBoxService {
                         ProxyService proxyService,
                         ObjectMapper objectMapper,
                         Environment environment,
-                        DriverAccountRepository panAccountRepository,
+                        DriverAccountRepository driverAccountRepository,
                         PikPakAccountRepository pikPakAccountRepository) {
         this.accountRepository = accountRepository;
         this.aliasRepository = aliasRepository;
@@ -141,7 +141,7 @@ public class TvBoxService {
         this.proxyService = proxyService;
         this.objectMapper = objectMapper;
         this.environment = environment;
-        this.panAccountRepository = panAccountRepository;
+        this.driverAccountRepository = driverAccountRepository;
         this.pikPakAccountRepository = pikPakAccountRepository;
     }
 
@@ -330,7 +330,7 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).ifPresent(account -> {
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).ifPresent(account -> {
             Category category = new Category();
             category.setType_id("1$" + getMountPath(account) + "$1");
             category.setType_name("夸克网盘");
@@ -346,7 +346,7 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).ifPresent(account -> {
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).ifPresent(account -> {
             Category category = new Category();
             category.setType_id("1$" + getMountPath(account) + "$1");
             category.setType_name("UC网盘");
@@ -362,7 +362,7 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).ifPresent(account -> {
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).ifPresent(account -> {
             Category category = new Category();
             category.setType_id("1$" + getMountPath(account) + "$1");
             category.setType_name("115网盘");
@@ -374,6 +374,38 @@ public class TvBoxService {
             Category category = new Category();
             category.setType_id("1$/我的115分享$1");
             category.setType_name("115分享");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        }
+
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).ifPresent(account -> {
+            Category category = new Category();
+            category.setType_id("1$" + getMountPath(account) + "$1");
+            category.setType_name("天翼云盘");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        });
+
+        if (shareRepository.countByType(9) > 0) {
+            Category category = new Category();
+            category.setType_id("1$/我的天翼分享$1");
+            category.setType_name("天翼分享");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        }
+
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.THUNDER).ifPresent(account -> {
+            Category category = new Category();
+            category.setType_id("1$" + getMountPath(account) + "$1");
+            category.setType_name("迅雷云盘");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        });
+
+        if (shareRepository.countByType(2) > 0) {
+            Category category = new Category();
+            category.setType_id("1$/我的迅雷分享$1");
+            category.setType_name("迅雷分享");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
@@ -405,6 +437,10 @@ public class TvBoxService {
             return "/\uD83C\uDF1E我的UC网盘";
         } else if (account.getType() == DriverType.PAN115) {
             return "/115网盘";
+        } else if (account.getType() == DriverType.CLOUD189) {
+            return "/我的天翼云盘";
+        } else if (account.getType() == DriverType.THUNDER) {
+            return "/我的迅雷云盘";
         }
         return "/网盘";
     }
@@ -1202,7 +1238,7 @@ public class TvBoxService {
         if (url.contains("xunlei.com")) {
             result.put("header", "{\"User-Agent\":\"AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (url.contains("115cdn.net")) {
-            var account = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElseThrow();
+            var account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElseThrow();
             if (account.isUseProxy()) {
                 url = proxyService.generateProxyUrl(url);
                 result.put("url", url);
