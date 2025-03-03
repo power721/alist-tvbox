@@ -768,7 +768,7 @@ public class ShareService {
             }
         }
 
-        if ((share.getType() == 1 || share.getType() == 8) && "root".equals(share.getFolderId())) {
+        if ((share.getType() == 1 || share.getType() == 2 || share.getType() == 8) && "root".equals(share.getFolderId())) {
             share.setFolderId("");
         }
 
