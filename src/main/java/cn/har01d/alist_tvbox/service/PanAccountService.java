@@ -142,6 +142,10 @@ public class PanAccountService {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189CloudPC',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"validate_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getToken(), account.getFolder()));
             log.info("insert 189CloudPC account {} : {}, result: {}", id, getMountPath(account), count);
+        } else if (account.getType() == DriverType.PAN139) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'139Yun',30,'work','{\"authorization\":\"%s\",\"root_folder_id\":\"%s\",\"type\":\"personal_new\",\"cloud_id\":\"\",\"custom_upload_part_size\":0}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
+            log.info("insert 139Yun account {} : {}, result: {}", id, getMountPath(account), count);
         } else if (account.getType() == DriverType.PAN115) {
             String sql;
             if (account.isUseProxy()) {
@@ -175,6 +179,10 @@ public class PanAccountService {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189CloudPC',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"validate_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getToken(), account.getFolder()));
             log.info("insert 189CloudPC account {} : {}, result: {}", id, getMountPath(account), count);
+        } else if (account.getType() == DriverType.PAN139) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'139Yun',30,'work','{\"authorization\":\"%s\",\"root_folder_id\":\"%s\",\"type\":\"personal_new\",\"cloud_id\":\"\",\"custom_upload_part_size\":0}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
+            log.info("insert 139Yun account {} : {}, result: {}", id, getMountPath(account), count);
         } else if (account.getType() == DriverType.PAN115) {
             String sql;
             if (account.isUseProxy()) {
@@ -202,6 +210,8 @@ public class PanAccountService {
             return "/我的迅雷云盘/" + account.getName();
         } else if (account.getType() == DriverType.CLOUD189) {
             return "/我的天翼云盘/" + account.getName();
+        } else if (account.getType() == DriverType.PAN139) {
+            return "/我的移动云盘/" + account.getName();
         }
         return "/网盘" + account.getName();
         // cn.har01d.alist_tvbox.service.TvBoxService.addMyFavorite
@@ -306,6 +316,10 @@ public class PanAccountService {
             }
             if (StringUtils.isBlank(dto.getPassword())) {
                 throw new BadRequestException("密码不能为空");
+            }
+        } else if (dto.getType() == DriverType.PAN139) {
+            if (StringUtils.isBlank(dto.getToken())) {
+                throw new BadRequestException("Token不能同时为空");
             }
         } else if (StringUtils.isBlank(dto.getCookie()) && StringUtils.isBlank(dto.getToken())) {
             throw new BadRequestException("Cookie和Token不能同时为空");
