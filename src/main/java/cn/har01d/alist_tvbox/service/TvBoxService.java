@@ -378,6 +378,14 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).ifPresent(account -> {
+            Category category = new Category();
+            category.setType_id("1$" + getMountPath(account) + "$1");
+            category.setType_name("移动云盘");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        });
+
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).ifPresent(account -> {
             Category category = new Category();
             category.setType_id("1$" + getMountPath(account) + "$1");
@@ -439,6 +447,8 @@ public class TvBoxService {
             return "/115网盘";
         } else if (account.getType() == DriverType.CLOUD189) {
             return "/我的天翼云盘";
+        } else if (account.getType() == DriverType.PAN139) {
+            return "/我的移动云盘";
         } else if (account.getType() == DriverType.THUNDER) {
             return "/我的迅雷云盘";
         }
