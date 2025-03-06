@@ -319,7 +319,7 @@ public class PanAccountService {
             }
         } else if (dto.getType() == DriverType.PAN139) {
             if (StringUtils.isBlank(dto.getToken())) {
-                throw new BadRequestException("Token不能同时为空");
+                throw new BadRequestException("Token不能为空");
             }
         } else if (StringUtils.isBlank(dto.getCookie()) && StringUtils.isBlank(dto.getToken())) {
             throw new BadRequestException("Cookie和Token不能同时为空");
