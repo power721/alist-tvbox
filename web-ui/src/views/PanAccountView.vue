@@ -41,6 +41,7 @@
       </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
+          <el-button link type="primary" size="small" @click="verify(scope.row)">验证</el-button>
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
           <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
@@ -72,7 +73,7 @@
           <el-input v-model="form.token"/>
         </el-form-item>
         <el-form-item label="用户名" v-if="form.type=='THUNDER'||form.type=='CLOUD189'" required>
-          <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'手机号要加 +86':''" />
+          <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'手机号要加 +86':''"/>
         </el-form-item>
         <el-form-item label="密码" v-if="form.type=='THUNDER'||form.type=='CLOUD189'" required>
           <el-input type="password" show-password v-model="form.password"/>
@@ -221,6 +222,16 @@ const handleEdit = (data: any) => {
   updateAction.value = true
   form.value = Object.assign({}, data)
   formVisible.value = true
+}
+
+const verify = (data: any) => {
+  axios.post('/api/pan/accounts/' + data.id + '/verify').then(({data}) => {
+    if (data) {
+      ElMessage.success('Cookie有效')
+    } else {
+      ElMessage.error('Cookie失效')
+    }
+  })
 }
 
 const handleDelete = (data: any) => {

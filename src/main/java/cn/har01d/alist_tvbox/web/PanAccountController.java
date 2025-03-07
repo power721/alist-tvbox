@@ -30,6 +30,11 @@ public class PanAccountController {
         return panAccountService.update(id, account);
     }
 
+    @PostMapping("/{id}/verify")
+    public Object verify(@PathVariable int id) {
+        return panAccountService.verify(id);
+    }
+
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Integer id) {
         panAccountService.delete(id);

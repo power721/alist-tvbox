@@ -11,15 +11,23 @@ import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.SettingResponse;
+import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -31,19 +39,21 @@ public class PanAccountService {
     private final ShareRepository shareRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
+    private final RestTemplate restTemplate;
 
     public PanAccountService(PanAccountRepository panAccountRepository,
                              DriverAccountRepository driverAccountRepository,
                              SettingRepository settingRepository,
                              ShareRepository shareRepository,
                              AccountService accountService,
-                             AListLocalService aListLocalService) {
+                             AListLocalService aListLocalService, RestTemplateBuilder restTemplateBuilder) {
         this.panAccountRepository = panAccountRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.settingRepository = settingRepository;
         this.shareRepository = shareRepository;
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
+        this.restTemplate = restTemplateBuilder.defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT).build();
     }
 
     @PostConstruct
@@ -223,6 +233,36 @@ public class PanAccountService {
 
     public DriverAccount get(int id) {
         return driverAccountRepository.findById(id).orElseThrow(NotFoundException::new);
+    }
+
+    public Object verify(int id) {
+        DriverAccount account = get(id);
+        if (account.getType() == DriverType.QUARK || account.getType() == DriverType.UC || account.getType() == DriverType.PAN115) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Cookie", account.getCookie());
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            String url = "";
+            if (account.getType() == DriverType.QUARK) {
+                url = "https://drive-pc.quark.cn/1/clouddrive/member?pr=ucpro&fr=pc&uc_param_str=&fetch_subscribe=true&_ch=home&fetch_identity=true";
+            } else if (account.getType() == DriverType.UC) {
+                url = "https://pc-api.uc.cn/1/clouddrive/member?pr=UCBrowser&fr=pc&fetch_subscribe=true&_ch=home";
+            } else if (account.getType() == DriverType.PAN115) {
+                url = "https://webapi.115.com/files/index_info?count_space_nums=1";
+            }
+            return restTemplate.exchange(url, HttpMethod.GET, entity, Map.class).getBody();
+        } else if (account.getType() == DriverType.PAN139) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Basic " + account.getToken());
+            Map<String, Object> body = new HashMap<>();
+            body.put("pageInfo", Map.of("pageSize", 100));
+            body.put("orderBy", "updated_at");
+            body.put("orderDirection", "DESC");
+            body.put("parentFileId", "/");
+            body.put("imageThumbnailStyleList", List.of("Small","Large"));
+            HttpEntity<Object> entity = new HttpEntity<>(body, headers);
+            return restTemplate.exchange("https://personal-kd-njs.yun.139.com/hcy/file/list", HttpMethod.POST, entity, Map.class).getBody();
+        }
+        return Map.of();
     }
 
     public DriverAccount create(DriverAccount account) {
