@@ -3,12 +3,12 @@ set -e
 BASE_DIR=/etc/xiaoya
 PORT1=4567
 PORT2=5344
-PORT3=5345
+PORT3=10199
 MEM_OPT="-Xmx512M"
 PULL=true
 MOUNT=""
 
-while getopts ":d:p:m:P:e:t:v:n" arg; do
+while getopts ":d:p:m:P:s:t:v:n" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
@@ -19,7 +19,7 @@ while getopts ":d:p:m:P:e:t:v:n" arg; do
         P)
             PORT2=${OPTARG}
             ;;
-        e)
+        s)
             PORT3=${OPTARG}
             ;;
         m)
@@ -68,7 +68,7 @@ pwd
 export TZ=Asia/Shanghai
 
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
-echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
+echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80  $PORT3:10199"
 
 [ "$PULL" = "true" ] && docker pull haroldli/alist-base
 
@@ -76,7 +76,7 @@ docker image prune -f
 echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
 docker build -f Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest . || exit 1
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
-docker run -d -p $PORT1:4567 -p $PORT2:80 -p 5566:5244 -e ALIST_PORT=$PORT2 -e INSTALL=xiaoya -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+docker run -d -p $PORT1:4567 -p $PORT2:80 -p $PORT3:10199 -p 5566:5244 -e ALIST_PORT=$PORT2 -e INSTALL=xiaoya -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 
 sleep 1
 
