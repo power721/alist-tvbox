@@ -335,7 +335,7 @@ public class PanAccountService {
             throw new BadRequestException("Cookie和Token不能同时为空");
         }
         if (StringUtils.isBlank(dto.getFolder())) {
-            if (dto.getType() == DriverType.QUARK || dto.getType() == DriverType.PAN115) {
+            if (dto.getType() == DriverType.QUARK || dto.getType() == DriverType.PAN115 || dto.getType() == DriverType.PAN123) {
                 dto.setFolder("0");
             } else if (dto.getType() == DriverType.CLOUD189) {
                 dto.setFolder("-11");
