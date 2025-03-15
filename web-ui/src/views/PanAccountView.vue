@@ -217,7 +217,7 @@ const fullPath = (share: any) => {
   } else if (share.type == 'PAN139') {
     return '/我的移动云盘/' + path
   } else if (share.type == 'PAN123') {
-    return '/123网盘/' + path
+    return '/我的123网盘/' + path
   } else {
     return '/网盘/' + path
   }

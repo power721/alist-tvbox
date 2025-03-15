@@ -41,6 +41,9 @@
         <a v-else-if="scope.row.type==2" :href="getShareLink(scope.row)" target="_blank">
           https://pan.xunlei.com/s/{{ scope.row.shareId }}
         </a>
+        <a v-else-if="scope.row.type==3" :href="getShareLink(scope.row)" target="_blank">
+          https://www.123pan.com/s/{{ scope.row.shareId }}
+        </a>
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="180"/>
@@ -53,6 +56,7 @@
         <span v-else-if="scope.row.type==8">115分享</span>
         <span v-else-if="scope.row.type==9">天翼分享</span>
         <span v-else-if="scope.row.type==2">迅雷分享</span>
+        <span v-else-if="scope.row.type==3">123分享</span>
         <span v-else>阿里分享</span>
       </template>
     </el-table-column>
@@ -89,6 +93,7 @@
         <span v-else-if="scope.row.driver=='115 Share'">115分享</span>
         <span v-else-if="scope.row.driver=='189Share'">天翼分享</span>
         <span v-else-if="scope.row.driver=='ThunderShare'">迅雷分享</span>
+        <span v-else-if="scope.row.driver=='123PanShare'">123分享</span>
         <span v-else-if="scope.row.driver=='Local'">本地存储</span>
         <span v-else-if="scope.row.driver=='Alias'">别名</span>
         <span v-else>{{ scope.row.driver }}</span>
@@ -131,6 +136,7 @@
           <el-radio :label="8" size="large">115分享</el-radio>
           <el-radio :label="9" size="large">天翼分享</el-radio>
           <el-radio :label="2" size="large">迅雷分享</el-radio>
+          <el-radio :label="3" size="large">123分享</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
         </el-radio-group>
       </el-form-item>
@@ -188,6 +194,7 @@
           <el-radio :label="8" size="large">115分享</el-radio>
           <el-radio :label="9" size="large">天翼分享</el-radio>
           <el-radio :label="2" size="large">迅雷分享</el-radio>
+          <el-radio :label="3" size="large">123分享</el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="分享内容" label-width="120">
@@ -213,6 +220,7 @@
         <el-radio :label="8" size="large">115分享</el-radio>
         <el-radio :label="9" size="large">天翼分享</el-radio>
         <el-radio :label="2" size="large">迅雷分享</el-radio>
+        <el-radio :label="3" size="large">123分享</el-radio>
       </el-radio-group>
     </el-form-item>
     <template #footer>
@@ -385,6 +393,8 @@ const fullPath = (share: any) => {
     return '/我的天翼分享/' + path
   } else if (share.type == 2) {
     return '/我的迅雷分享/' + path
+  } else if (share.type == 3) {
+    return '/我的123分享/' + path
   } else if (share.type == 4) {
     return path
   } else {
@@ -413,6 +423,8 @@ const getShareLink = (shareInfo: ShareInfo) => {
     url = 'https://cloud.189.cn/t/' + shareInfo.shareId
   } else if (shareInfo.type == 2) {
     url = 'https://pan.xunlei.com/s/' + shareInfo.shareId
+  } else if (shareInfo.type == 3) {
+    url = 'https://www.123pan.com/s/' + shareInfo.shareId
   } else {
     url = 'https://www.alipan.com/s/' + shareInfo.shareId
     if (shareInfo.folderId) {
