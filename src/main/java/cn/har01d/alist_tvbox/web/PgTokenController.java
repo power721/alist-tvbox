@@ -72,6 +72,17 @@ public class PgTokenController {
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> objectNode.put("quark_cookie", share.getCookie()));
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> objectNode.put("pan115_cookie", share.getCookie()));
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("uc_cookie", share.getCookie()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).stream().findFirst().ifPresent(share -> {
+            objectNode.put("pan123_username", share.getUsername());
+            objectNode.put("pan123_password", share.getPassword());
+            objectNode.put("pan123_flags", "4kz");
+        });
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).stream().findFirst().ifPresent(share -> {
+            objectNode.put("yd_auth", "Basic " + share.getToken());
+            objectNode.put("yd_thread_limit", 4);
+            objectNode.put("yd_flags", "auto|4kz");
+            objectNode.put("yd_danmu", true);
+        });
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.THUNDER).stream().findFirst().ifPresent(share -> {
             objectNode.put("thunder_username", share.getUsername());
             objectNode.put("thunder_password", share.getPassword());
