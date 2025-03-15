@@ -27,21 +27,21 @@ public class ZxConfigController {
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
-    private final DriverAccountRepository panAccountRepository;
+    private final DriverAccountRepository driverAccountRepository;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
 
     public ZxConfigController(SubscriptionService subscriptionService,
                               AccountRepository accountRepository,
                               SettingRepository settingRepository,
-                              DriverAccountRepository panAccountRepository,
+                              DriverAccountRepository driverAccountRepository,
                               ObjectMapper objectMapper,
                               RestTemplateBuilder builder
     ) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
-        this.panAccountRepository = panAccountRepository;
+        this.driverAccountRepository = driverAccountRepository;
         this.objectMapper = objectMapper;
         this.restTemplate = builder.build();
     }
@@ -68,11 +68,12 @@ public class ZxConfigController {
         accountRepository.getFirstByMasterTrue().ifPresent(account -> {
             objectNode.put("aliToken", account.getRefreshToken());
         });
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> objectNode.put("quarkCookie", share.getCookie()));
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> objectNode.put("115Cookie", share.getCookie()));
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("ucCookie", share.getCookie()));
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).stream().findFirst().ifPresent(share -> objectNode.put("tyAuth", share.getUsername() + "|" + share.getPassword()));
-        panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).stream().findFirst().ifPresent(share -> objectNode.put("ydAuth", share.getToken()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> objectNode.put("quarkCookie", share.getCookie()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> objectNode.put("115Cookie", share.getCookie()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("ucCookie", share.getCookie()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).stream().findFirst().ifPresent(share -> objectNode.put("tyAuth", share.getUsername() + "|" + share.getPassword()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).stream().findFirst().ifPresent(share -> objectNode.put("p123Auth", share.getUsername() + "|" + share.getPassword()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).stream().findFirst().ifPresent(share -> objectNode.put("ydAuth", share.getToken()));
         settingRepository.findById("delete_code_115").map(Setting::getValue).ifPresent(code -> objectNode.put("pwdRb115", code));
 
         Path path = Path.of("/data/zx.json");

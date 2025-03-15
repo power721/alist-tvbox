@@ -21,6 +21,7 @@
           <span v-else-if="scope.row.type=='THUNDER'">迅雷云盘</span>
           <span v-else-if="scope.row.type=='CLOUD189'">天翼云盘</span>
           <span v-else-if="scope.row.type=='PAN139'">移动云盘</span>
+          <span v-else-if="scope.row.type=='PAN123'">123网盘</span>
         </template>
       </el-table-column>
       <el-table-column prop="name" label="名称" sortable width="200"/>
@@ -60,9 +61,10 @@
             <el-radio label="THUNDER" size="large">迅雷云盘</el-radio>
             <el-radio label="CLOUD189" size="large">天翼云盘</el-radio>
             <el-radio label="PAN139" size="large">移动云盘</el-radio>
+            <el-radio label="PAN123" size="large">123网盘</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="Cookie" required v-if="form.type!='THUNDER'&&form.type!='CLOUD189'&&form.type!='PAN139'">
+        <el-form-item label="Cookie" required v-if="form.type!='THUNDER'&&form.type!='CLOUD189'&&form.type!='PAN139'&&form.type!='PAN123'">
           <el-input v-model="form.cookie" type="textarea" :rows="5"/>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
@@ -71,10 +73,10 @@
         <el-form-item label="Token" v-if="form.type=='PAN115'">
           <el-input v-model="form.token"/>
         </el-form-item>
-        <el-form-item label="用户名" v-if="form.type=='THUNDER'||form.type=='CLOUD189'" required>
+        <el-form-item label="用户名" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
           <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'手机号要加 +86':''" />
         </el-form-item>
-        <el-form-item label="密码" v-if="form.type=='THUNDER'||form.type=='CLOUD189'" required>
+        <el-form-item label="密码" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
           <el-input type="password" show-password v-model="form.password"/>
         </el-form-item>
         <el-form-item label="验证码" v-if="form.type=='THUNDER'||form.type=='CLOUD189'">
@@ -191,6 +193,9 @@ const getTypeName = (type: string) => {
   if (type == 'PAN139') {
     return '移动云盘'
   }
+  if (type == 'PAN123') {
+    return '123网盘'
+  }
   return '未知'
 }
 
@@ -211,6 +216,8 @@ const fullPath = (share: any) => {
     return '/我的天翼云盘/' + path
   } else if (share.type == 'PAN139') {
     return '/我的移动云盘/' + path
+  } else if (share.type == 'PAN123') {
+    return '/我的123网盘/' + path
   } else {
     return '/网盘/' + path
   }
