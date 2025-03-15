@@ -581,6 +581,8 @@ public class ShareService {
     private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/(.{26})\\?pwd=(\\w+)#?");
     private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share?code=(.{12})");
     private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/(.{12})");
+    private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://www.123pan.com/s/(.{12})");
+    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://www.123684.com/s/(.{12})");
 
     private void parseShare(Share share) {
         if (StringUtils.isBlank(share.getShareId())) {
@@ -614,6 +616,20 @@ public class ShareService {
         m = SHARE_189_LINK2.matcher(url);
         if (m.find()) {
             share.setType(9);
+            share.setShareId(m.group(1));
+            return;
+        }
+
+        m = SHARE_123_LINK1.matcher(url);
+        if (m.find()) {
+            share.setType(3);
+            share.setShareId(m.group(1));
+            return;
+        }
+
+        m = SHARE_123_LINK2.matcher(url);
+        if (m.find()) {
+            share.setType(3);
             share.setShareId(m.group(1));
             return;
         }
