@@ -210,7 +210,7 @@
     </template>
   </el-dialog>
 
-  <el-dialog v-model="exportVisible" title="导出分享" width="30%">
+  <el-dialog v-model="exportVisible" title="导出分享" width="50%">
     <el-form-item label="类型" label-width="140">
       <el-radio-group v-model="form.type" class="ml-4">
         <el-radio :label="0" size="large">阿里分享</el-radio>
