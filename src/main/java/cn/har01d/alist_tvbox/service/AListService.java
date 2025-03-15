@@ -2,6 +2,8 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.FileItem;
+import cn.har01d.alist_tvbox.entity.Index;
+import cn.har01d.alist_tvbox.entity.IndexRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.model.FsDetail;
 import cn.har01d.alist_tvbox.model.FsDetailResponse;
@@ -34,8 +36,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -48,12 +53,13 @@ public class AListService {
     private final RestTemplate restTemplate;
     private final SiteService siteService;
     private final AppProperties appProperties;
+    private final IndexRepository indexRepository;
     private final Cache<String, VideoPreview> cache = Caffeine.newBuilder()
             .maximumSize(10)
             .expireAfterWrite(Duration.ofSeconds(895))
             .build();
 
-    public AListService(RestTemplateBuilder builder, SiteService siteService, AppProperties appProperties) {
+    public AListService(RestTemplateBuilder builder, SiteService siteService, AppProperties appProperties, IndexRepository indexRepository) {
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
@@ -62,6 +68,7 @@ public class AListService {
                 .build();
         this.siteService = siteService;
         this.appProperties = appProperties;
+        this.indexRepository = indexRepository;
     }
 
     public List<SearchResult> search(Site site, String keyword) {
@@ -110,7 +117,11 @@ public class AListService {
         FsListResponse response = post(site, url, request, FsListResponse.class);
         logError(response);
         log.debug("list files: {} {}", path, response.getData());
-        return getFiles(version, response.getData());
+        FsResponse result = getFiles(version, response.getData());
+        if (path.startsWith("/🈴我的阿里分享/")) {
+            index(path, result.getFiles());
+        }
+        return result;
     }
 
     private FsResponse getFiles(int version, FsResponse response) {
@@ -121,11 +132,33 @@ public class AListService {
             for (FsInfo fsInfo : response.getFiles()) {
                 fsInfo.setThumb(fsInfo.getThumbnail());
             }
-        } else if (response != null && response.getContent() != null) {
+        } else if (response.getContent() != null) {
             response.setFiles(response.getContent());
         }
         response.setFiles(filter(response.getFiles()));
         return response;
+    }
+
+    private void index(String path, List<FsInfo> files) {
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+        List<Index> existing = indexRepository.findByPathStartsWith(path);
+        Map<String, Index> map = existing.stream().collect(Collectors.toMap(Index::getPath, e -> e));
+        List<Index> list = new ArrayList<>();
+        for (FsInfo info : files) {
+            String newPath = path + "/" + info.getName();
+            Index index = map.get(newPath);
+            if (index == null) {
+                index = new Index();
+                index.setPath(newPath);
+                index.setTime(LocalDateTime.parse(info.getModified()).atZone(ZoneId.systemDefault()).toInstant());
+            } else {
+                index.setVersion(index.getVersion() + 1);
+            }
+            list.add(index);
+        }
+        indexRepository.saveAll(list);
     }
 
     private List<FsInfo> filter(List<FsInfo> files) {
