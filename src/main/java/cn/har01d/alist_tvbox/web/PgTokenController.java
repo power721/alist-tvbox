@@ -77,6 +77,11 @@ public class PgTokenController {
             objectNode.put("pan123_password", share.getPassword());
             objectNode.put("pan123_flags", "4kz");
         });
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).stream().findFirst().ifPresent(share -> {
+            objectNode.put("pan189_username", share.getUsername());
+            objectNode.put("pan189_password", share.getPassword());
+            objectNode.put("pan189_flags", "4kz");
+        });
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).stream().findFirst().ifPresent(share -> {
             objectNode.put("yd_auth", "Basic " + share.getToken());
             objectNode.put("yd_thread_limit", 4);
