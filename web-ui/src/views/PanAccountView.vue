@@ -17,6 +17,8 @@
         <template #default="scope">
           <span v-if="scope.row.type=='QUARK'">夸克网盘</span>
           <span v-else-if="scope.row.type=='UC'">UC网盘</span>
+          <span v-else-if="scope.row.type=='QUARK_TV'">夸克TV</span>
+          <span v-else-if="scope.row.type=='UC_TV'">UC TV</span>
           <span v-else-if="scope.row.type=='PAN115'">115网盘</span>
           <span v-else-if="scope.row.type=='THUNDER'">迅雷云盘</span>
           <span v-else-if="scope.row.type=='CLOUD189'">天翼云盘</span>
@@ -57,6 +59,8 @@
           <el-radio-group v-model="form.type" class="ml-4">
             <el-radio label="QUARK" size="large">夸克网盘</el-radio>
             <el-radio label="UC" size="large">UC网盘</el-radio>
+            <el-radio label="QUARK_TV" size="large">夸克TV</el-radio>
+            <el-radio label="UC_TV" size="large">UC TV</el-radio>
             <el-radio label="PAN115" size="large">115网盘</el-radio>
             <el-radio label="THUNDER" size="large">迅雷云盘</el-radio>
             <el-radio label="CLOUD189" size="large">天翼云盘</el-radio>
@@ -64,7 +68,7 @@
             <el-radio label="PAN123" size="large">123网盘</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="Cookie" required v-if="form.type!='THUNDER'&&form.type!='CLOUD189'&&form.type!='PAN139'&&form.type!='PAN123'">
+        <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'">
           <el-input v-model="form.cookie" type="textarea" :rows="5"/>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
@@ -72,6 +76,12 @@
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN115'">
           <el-input v-model="form.token"/>
+        </el-form-item>
+        <el-form-item label="Token" v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
+          <el-input v-model="form.token" type="textarea" :rows="3"/>
+        </el-form-item>
+        <el-form-item v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
+          <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
         <el-form-item label="用户名" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
           <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'手机号要加 +86':''" />
@@ -126,6 +136,17 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="qrModel" title="扫码登陆" width="40%">
+      <img alt="qr" :src="'data:image/jpeg;base64,' + qr.qr_data" />
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="qrModel=false">取消</el-button>
+        <el-button @click="showQrCode">刷新二维码</el-button>
+        <el-button type="primary" @click="getRefreshToken">我已扫码</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -135,12 +156,12 @@ import {Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
 
-const exp = ref(0)
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const accounts = ref([])
 const formVisible = ref(false)
 const dialogVisible = ref(false)
+const qrModel = ref(false)
 const form = ref({
   id: 0,
   type: 'QUARK',
@@ -153,6 +174,10 @@ const form = ref({
   folder: '',
   useProxy: false,
   master: false,
+})
+const qr = ref({
+  qr_data: '',
+  query_token: '',
 })
 
 const handleAdd = () => {
@@ -181,6 +206,12 @@ const getTypeName = (type: string) => {
   if (type == 'UC') {
     return 'UC网盘'
   }
+  if (type == 'QUARK_TV') {
+    return '夸克TV网盘'
+  }
+  if (type == 'UC_TV') {
+    return 'UC TV网盘'
+  }
   if (type == 'PAN115') {
     return '115网盘'
   }
@@ -208,6 +239,10 @@ const fullPath = (share: any) => {
     return '/🌞我的夸克网盘/' + path
   } else if (share.type == 'UC') {
     return '/🌞我的UC网盘/' + path
+  } else if (share.type == 'QUARK_TV') {
+    return '/我的夸克网盘/' + path
+  } else if (share.type == 'UC_TV') {
+    return '/我的UC网盘/' + path
   } else if (share.type == 'PAN115') {
     return '/115网盘/' + path
   } else if (share.type == 'THUNDER') {
@@ -256,6 +291,20 @@ const handleConfirm = () => {
       ElMessage.success('更新成功')
     }
     load()
+  })
+}
+
+const showQrCode = () => {
+  axios.post('/api/pan/accounts/-/qr?type=' + form.value.type).then(({data}) => {
+    qr.value = data
+    qrModel.value = true
+  })
+}
+
+const getRefreshToken = () => {
+  axios.post('/api/pan/accounts/-/token?type=' + form.value.type + '&queryToken=' + qr.value.query_token).then(({data}) => {
+    form.value.token = data
+    qrModel.value = false
   })
 }
 
