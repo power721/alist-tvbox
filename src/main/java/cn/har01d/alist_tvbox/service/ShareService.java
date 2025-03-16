@@ -577,10 +577,10 @@ public class ShareService {
         return "";
     }
 
-    private static final Pattern SHARE_115_LINK = Pattern.compile("https://115.com/s/(\\w+)\\?password=(\\w+)#?");
-    private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/(.{26})\\?pwd=(\\w+)#?");
-    private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share?code=(.{12})");
-    private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/(.{12})");
+    private static final Pattern SHARE_115_LINK = Pattern.compile("https://115.com/s/(\\w+)\\?password=([^/&#]+)#?");
+    private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([^/?]+)\\?pwd=([^/&#]+)#?");
+    private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share\\?code=([^/&#]+)");
+    private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/([^/?]+)");
     private static final Pattern SHARE_123_LINK = Pattern.compile("https://www.(?:123pan|123684|123912).com/s/([^/?]+)(?:\\?提取码:([A-Za-z0-9]+))?");
 
     private void parseShare(Share share) {
@@ -668,7 +668,6 @@ public class ShareService {
         validate(share);
         parseShare(share);
         fixFolderId(share);
-
 
         try {
             String token = accountService.login();
