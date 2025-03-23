@@ -62,7 +62,7 @@
       </el-col>
     </el-row>
 
-    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="start" @close="stop">
+    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="start" @close="pause">
       <div class="video-container">
         <el-row>
           <el-col :span="18">
@@ -362,13 +362,6 @@ const start = () => {
   }
 }
 
-const stop = () => {
-  if (videoPlayer.value) {
-    pause()
-    saveHistory()
-  }
-}
-
 const play = () => {
   if (videoPlayer.value) {
     const res = videoPlayer.value.play();
@@ -389,11 +382,11 @@ const pause = () => {
     if (res) {
       res.then(_ => {
         playing.value = false
-        saveHistory()
       }).catch(e => {
         console.error(e)
       })
     }
+    saveHistory()
   }
 }
 
