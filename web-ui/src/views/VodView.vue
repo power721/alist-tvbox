@@ -58,7 +58,7 @@
       </el-col>
     </el-row>
 
-    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @close="stop">
+    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="play" @close="pause">
       <div class="video-container">
         <el-row>
           <el-col :span="18">
@@ -67,33 +67,55 @@
               :src="playUrl"
               :autoplay="true"
               @ended="playNextVideo"
+              @play="updatePlayState"
+              @pause="updatePlayState"
+              @volumechange="updateMuteState"
               controls>
             </video>
           </el-col>
           <el-col :span="5">
-            <div class="playlist" v-if="playlist.length>1">
-              <ul>
-                <li v-for="(video, index) in playlist" :key="index" @click="playVideo(index)">
-                  <el-link :type="currentVideoIndex==index?'primary':''">{{ video.text }}</el-link>
-                </li>
-              </ul>
+            <div v-if="playlist.length>1">
+              <el-scrollbar height="720px">
+                <ul>
+                  <li v-for="(video, index) in playlist" :key="index" @click="playVideo(index)">
+                    <el-link :type="currentVideoIndex==index?'primary':''">{{ video.text }}</el-link>
+                  </li>
+                </ul>
+              </el-scrollbar>
+              <div style="margin-left: 30px; margin-top: 12px;">
+                第{{ currentVideoIndex + 1 }}集 / 总共{{ playlist.length }}集
+                <el-tooltip content="上一集" placement="top" effect="light">
+                  <el-button link @click="playPrevVideo">
+                    <el-icon>
+                      <ArrowLeftBold/>
+                    </el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="下一集" placement="top" effect="light">
+                  <el-button link @click="playNextVideo">
+                    <el-icon>
+                      <ArrowRightBold/>
+                    </el-icon>
+                  </el-button>
+                </el-tooltip>
+              </div>
             </div>
           </el-col>
         </el-row>
 
         <el-row>
           <el-col :span="18">
-            <div v-if="playlist.length>1">
-              <el-button @click="playPrevVideo">
-                <el-icon>
-                  <ArrowLeftBold/>
-                </el-icon>
-              </el-button>
-              <el-button @click="playNextVideo">
-                <el-icon>
-                  <ArrowRightBold/>
-                </el-icon>
-              </el-button>
+            <div>
+              <el-button-group>
+                <el-button @click="playPrevVideo" v-if="playlist.length>1">上一集</el-button>
+                <el-button @click="play" v-if="!playing">播放</el-button>
+                <el-button @click="pause" v-if="playing">暂停</el-button>
+                <el-button @click="toggleMute">{{ isMuted ? '取消静音' : '静音' }}</el-button>
+                <el-button @click="toggleFullscreen">全屏</el-button>
+                <el-button @click="skipBackward">-15</el-button>
+                <el-button @click="skipForward">+15</el-button>
+                <el-button @click="playNextVideo" v-if="playlist.length>1">下一集</el-button>
+              </el-button-group>
             </div>
           </el-col>
         </el-row>
@@ -123,12 +145,6 @@
           </el-col>
         </el-row>
       </div>
-
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button type="primary" @click="dialogVisible=false">关闭</el-button>
-        </span>
-      </template>
     </el-dialog>
 
   </div>
@@ -141,6 +157,7 @@ import {ElMessage} from "element-plus";
 import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
+import {onUnmounted} from "@vue/runtime-core";
 
 let {toClipboard} = clipBorad();
 
@@ -151,20 +168,24 @@ interface Item {
 
 const route = useRoute()
 const router = useRouter()
+const videoPlayer = ref(null)
 const token = ref('')
-const title = ref('');
-const playUrl = ref('');
+const title = ref('')
+const playUrl = ref('')
 const movies = ref<VodItem[]>([])
-const playFrom = ref<string[]>([]);
-const playlist = ref<Item[]>([]);
+const playFrom = ref<string[]>([])
+const playlist = ref<Item[]>([])
 const currentVideoIndex = ref(0)
-const loading = ref(false);
-const dialogVisible = ref(false);
+const loading = ref(false)
+const playing = ref(false)
+const isMuted = ref(false)
+const isFullscreen = ref(false)
+const dialogVisible = ref(false)
 const page = ref(1)
 const size = ref(40)
 const total = ref(0)
-const files = ref([])
-const paths = ref([] as Item[])
+const files = ref<VodItem[]>([])
+const paths = ref<Item[]>([])
 
 const load = (row: any) => {
   if (row.vod_tag === 'folder') {
@@ -177,9 +198,7 @@ const load = (row: any) => {
     } else {
       currentVideoIndex.value = 0
     }
-    {
-      loadDetail(row.vod_id)
-    }
+    loadDetail(row.vod_id)
   }
 }
 
@@ -274,30 +293,153 @@ const loadDetail = (id: string) => {
   })
 }
 
-const stop = () => {
-  playUrl.value = ""
+const handleKeyDown = (event) => {
+  if (!dialogVisible.value) {
+    if (event.code === 'Space' && files.value.length > 0 && files.value[0].vod_tag === 'file') {
+      event.preventDefault()
+      loadDetail(files.value[0].vod_id)
+    } else if (event.code === 'Escape' && paths.value.length > 1) {
+      loadFolder(paths.value[paths.value.length - 2].path)
+    }
+    return
+  }
+  if (event.code === 'Space') {
+    event.preventDefault()
+    togglePlay()
+  } else if (event.code === 'ArrowRight') {
+    event.preventDefault()
+    skipForward()
+  } else if (event.code === 'ArrowLeft') {
+    event.preventDefault()
+    skipBackward()
+  } else if (event.code === 'ArrowUp') {
+    event.preventDefault()
+    playPrevVideo()
+  } else if (event.code === 'ArrowDown') {
+    event.preventDefault()
+    playNextVideo()
+  } else if (event.code === 'Enter') {
+    event.preventDefault()
+    toggleFullscreen()
+  } else if (event.code === 'KeyM') {
+    event.preventDefault()
+    toggleMute()
+  }
+}
+
+const togglePlay = () => {
+  if (videoPlayer.value) {
+    if (playing.value) {
+      pause()
+    } else {
+      play()
+    }
+  }
+}
+
+const play = () => {
+  if (videoPlayer.value) {
+    videoPlayer.value.play();
+    playing.value = true
+  }
+}
+
+const pause = () => {
+  if (videoPlayer.value) {
+    videoPlayer.value.pause();
+    playing.value = false
+  }
+}
+
+const skipForward = () => {
+  if (videoPlayer.value) {
+    videoPlayer.value.currentTime += 15;
+    play()
+  }
+}
+
+const skipBackward = () => {
+  if (videoPlayer.value) {
+    videoPlayer.value.currentTime -= 15;
+    play()
+  }
+}
+
+const toggleMute = () => {
+  if (videoPlayer.value) {
+    videoPlayer.value.muted = !videoPlayer.value.muted;
+  }
+}
+
+const toggleFullscreen = () => {
+  if (videoPlayer.value) {
+    if (!isFullscreen.value) {
+      enterFullscreen(videoPlayer.value);
+    } else {
+      exitFullscreen();
+    }
+  }
+}
+
+const enterFullscreen = (element) => {
+  if (element.requestFullscreen) {
+    element.requestFullscreen();
+  } else if (element.mozRequestFullScreen) { // Firefox
+    element.mozRequestFullScreen();
+  } else if (element.webkitRequestFullscreen) { // Chrome, Safari
+    element.webkitRequestFullscreen();
+  } else if (element.msRequestFullscreen) { // IE/Edge
+    element.msRequestFullscreen();
+  }
+}
+
+const exitFullscreen = () => {
+  if (document.exitFullscreen) {
+    document.exitFullscreen();
+  } else if (document.mozCancelFullScreen) {
+    document.mozCancelFullScreen();
+  } else if (document.webkitExitFullscreen) {
+    document.webkitExitFullscreen();
+  } else if (document.msExitFullscreen) {
+    document.msExitFullscreen();
+  }
+};
+
+const handleFullscreenChange = () => {
+  isFullscreen.value = document.fullscreenElement === videoPlayer.value;
+};
+
+const updatePlayState = () => {
+  if (videoPlayer.value) {
+    playing.value = !videoPlayer.value.paused;
+  }
+}
+
+const updateMuteState = () => {
+  if (videoPlayer.value) {
+    isMuted.value = videoPlayer.value.muted;
+  }
 }
 
 const getPlayUrl = (index: number) => {
   let url = playlist.value[index].path
   title.value = playlist.value[index].text
-  console.log('play', index, title, url)
   return url
 }
 
 const playNextVideo = () => {
-  currentVideoIndex.value++;
-  if (currentVideoIndex.value >= playlist.value.length) {
+  if (currentVideoIndex.value + 1 == playlist.value.length) {
     return
   }
+  currentVideoIndex.value++;
   playUrl.value = getPlayUrl(currentVideoIndex.value);
 }
 
 const playPrevVideo = () => {
-  currentVideoIndex.value--;
-  if (currentVideoIndex.value < 0) {
+  if (currentVideoIndex.value < 1) {
     return
   }
+  currentVideoIndex.value--;
   playUrl.value = getPlayUrl(currentVideoIndex.value);
 }
 
@@ -316,6 +458,13 @@ onMounted(async () => {
       loadFiles('/')
     }
   })
+  window.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('fullscreenchange', handleFullscreenChange);
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown);
+  document.removeEventListener('fullscreenchange', handleFullscreenChange);
 })
 </script>
 
@@ -326,10 +475,5 @@ video {
 
 .divider {
   margin: 15px 0;
-}
-
-.playlist {
-  max-height: 720px;
-  overflow-y: auto;
 }
 </style>

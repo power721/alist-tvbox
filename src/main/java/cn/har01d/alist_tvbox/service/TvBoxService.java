@@ -977,6 +977,7 @@ public class TvBoxService {
         if (page == 1 && files.size() > 1) {
             MovieDetail playlist = generatePlaylist(site, path, total - folders.size(), files);
             if ("web".equals(ac)) {
+                playlist.setVod_remarks("");
                 playlist.setVod_play_url(buildM3u8Url(path));
             }
             result.getList().add(playlist);
