@@ -947,7 +947,7 @@ public class TvBoxService {
             movieDetail.setVod_id(site.getId() + "$" + encodeUrl(newPath) + "$1");
             movieDetail.setVod_name(fsInfo.getName());
             movieDetail.setVod_tag(fsInfo.getType() == 1 ? FOLDER : FILE);
-            movieDetail.setVod_pic(getCover(fsInfo.getThumb(), fsInfo.getType()));
+            movieDetail.setVod_pic(getCover(ac, fsInfo.getThumb(), fsInfo.getType()));
             if (fsInfo.getType() == 1) {
                 movieDetail.setVod_remarks(("web".equals(ac) ? "" : "文件夹"));
             } else {
@@ -1503,7 +1503,7 @@ public class TvBoxService {
             movieDetail.setVod_name(fsDetail.getName());
             movieDetail.setVod_tag(fsDetail.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_time(fsDetail.getModified());
-            movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
+            movieDetail.setVod_pic(getCover(ac, fsDetail.getThumb(), fsDetail.getType()));
             movieDetail.setVod_play_from(site.getName());
             if ("detail".equals(ac)) {
                 String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
@@ -1945,9 +1945,9 @@ public class TvBoxService {
         }
     }
 
-    private String getCover(String thumb, int type) {
+    private String getCover(String ac, String thumb, int type) {
         String pic = thumb;
-        if (pic.isEmpty() && type == 1) {
+        if (pic.isEmpty() && type == 1 && !"web".equals(ac)) {
             pic = ServletUriComponentsBuilder.fromCurrentRequest()
                     .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                     .replacePath("/folder.png")

@@ -14,20 +14,16 @@
         <el-table v-loading="loading" :data="files" style="width: 100%" @row-click="load">
           <el-table-column prop="vod_name" label="名称">
             <template #default="scope">
-              <el-popover :width="300" placement="left-start" v-if="scope.row.vod_tag!='file'&&scope.row.vod_pic">
+              <el-popover :width="300" placement="left-start" v-if="scope.row.vod_tag=='folder'&&scope.row.vod_pic">
                 <template #reference>
-                  <el-image
-                    style="width: 60px; height: 60px"
-                    :src="imageUrl(scope.row.vod_pic)"
-                    loading="lazy"
-                    show-progress
-                    fit="cover"
-                  />
+                  📺
                 </template>
                 <template #default>
                   <el-image :src="imageUrl(scope.row.vod_pic)" loading="lazy" show-progress fit="cover"/>
                 </template>
               </el-popover>
+              <span v-else-if="scope.row.vod_tag=='folder'">📂</span>
+              <span v-else-if="scope.row.vod_name=='播放列表'">▶️</span>
               <span v-else>🎬</span>
               {{ scope.row.vod_name }}
             </template>
@@ -58,7 +54,7 @@
       </el-col>
     </el-row>
 
-    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="play" @close="pause">
+    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="start" @close="pause">
       <div class="video-container">
         <el-row>
           <el-col :span="18">
@@ -78,7 +74,8 @@
               <el-scrollbar height="720px">
                 <ul>
                   <li v-for="(video, index) in playlist" :key="index" @click="playVideo(index)">
-                    <el-link :type="currentVideoIndex==index?'primary':''">{{ video.text }}</el-link>
+                    <el-link type="primary" v-if="currentVideoIndex==index">{{ video.text }}</el-link>
+                    <el-link v-else>{{ video.text }}</el-link>
                   </li>
                 </ul>
               </el-scrollbar>
@@ -115,6 +112,23 @@
                 <el-button @click="skipBackward">-15</el-button>
                 <el-button @click="skipForward">+15</el-button>
                 <el-button @click="playNextVideo" v-if="playlist.length>1">下一集</el-button>
+                <el-popover placement="right-start">
+                  <template #reference>
+                    <el-button :icon="QuestionFilled"/>
+                  </template>
+                  <template #default>
+                    <div>
+                      <div>播放： 空格键</div>
+                      <div>全屏： 回车键</div>
+                      <div>退出： Esc</div>
+                      <div>静音： m</div>
+                      <div>后退15秒： ←</div>
+                      <div>前进15秒： →</div>
+                      <div v-if="playlist.length>1">上一集： ↑</div>
+                      <div v-if="playlist.length>1">下一集： ↓</div>
+                    </div>
+                  </template>
+                </el-popover>
               </el-button-group>
             </div>
           </el-col>
@@ -151,6 +165,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import {onMounted, ref} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
@@ -158,6 +173,7 @@ import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
+import {QuestionFilled} from "@element-plus/icons-vue";
 
 let {toClipboard} = clipBorad();
 
@@ -176,6 +192,7 @@ const movies = ref<VodItem[]>([])
 const playFrom = ref<string[]>([])
 const playlist = ref<Item[]>([])
 const currentVideoIndex = ref(0)
+const currentTime = ref(0)
 const loading = ref(false)
 const playing = ref(false)
 const isMuted = ref(false)
@@ -195,8 +212,6 @@ const load = (row: any) => {
       toClipboard(row.vod_play_url).then(() => {
         ElMessage.success('播放地址复制成功')
       })
-    } else {
-      currentVideoIndex.value = 0
     }
     loadDetail(row.vod_id)
   }
@@ -229,7 +244,6 @@ const reload = (value: number) => {
 const loadFolder = (path: string) => {
   router.push(getPath(path))
   page.value = 1
-  currentVideoIndex.value = 0
   loadFiles(path)
 }
 
@@ -288,12 +302,13 @@ const loadDetail = (id: string) => {
         }
       }
     })
-    playUrl.value = getPlayUrl(currentVideoIndex.value)
+    getHistory(movies.value[0].vod_id)
+    getPlayUrl()
     dialogVisible.value = true
   })
 }
 
-const handleKeyDown = (event) => {
+const handleKeyDown = (event: KeyboardEvent) => {
   if (!dialogVisible.value) {
     if (event.code === 'Space' && files.value.length > 0 && files.value[0].vod_tag === 'file') {
       event.preventDefault()
@@ -337,10 +352,18 @@ const togglePlay = () => {
   }
 }
 
+const start = () => {
+  if (videoPlayer.value) {
+    videoPlayer.value.currentTime = currentTime.value
+    play()
+  }
+}
+
 const play = () => {
   if (videoPlayer.value) {
     videoPlayer.value.play();
     playing.value = true
+    saveHistory()
   }
 }
 
@@ -348,6 +371,7 @@ const pause = () => {
   if (videoPlayer.value) {
     videoPlayer.value.pause();
     playing.value = false
+    saveHistory()
   }
 }
 
@@ -421,10 +445,47 @@ const updateMuteState = () => {
   }
 }
 
-const getPlayUrl = (index: number) => {
-  let url = playlist.value[index].path
+const getPlayUrl = () => {
+  saveHistory()
+  const index = currentVideoIndex.value
+  playUrl.value = playlist.value[index].path
   title.value = playlist.value[index].text
-  return url
+}
+
+const saveHistory = () => {
+  if (!videoPlayer.value) {
+    return
+  }
+  const id = movies.value[0].vod_id
+  const index = currentVideoIndex.value
+  const data = localStorage.getItem('history')
+  const items = JSON.parse(data || '[]')
+  for (let item of items) {
+    if (item.id === id) {
+      item.i = index
+      item.c = videoPlayer.value.currentTime
+      item.t = new Date().getTime() - 1742716845285
+      localStorage.setItem('history', JSON.stringify(items))
+      return
+    }
+  }
+  items.push({id: id, i: index, c: videoPlayer.value.currentTime, t: new Date().getTime() - 1742716845285})
+  const sorted = items.sort((a, b) => b.t - a.t).slice(0, 30);
+  localStorage.setItem('history', JSON.stringify(sorted))
+}
+
+const getHistory = (id: string) => {
+  const data = localStorage.getItem('history')
+  const items = JSON.parse(data || '[]')
+  for (let item of items) {
+    if (item.id === id) {
+      currentVideoIndex.value = item.i
+      currentTime.value = item.c
+      return
+    }
+  }
+  currentTime.value = 0
+  currentVideoIndex.value = 0
 }
 
 const playNextVideo = () => {
@@ -432,7 +493,7 @@ const playNextVideo = () => {
     return
   }
   currentVideoIndex.value++;
-  playUrl.value = getPlayUrl(currentVideoIndex.value);
+  getPlayUrl();
 }
 
 const playPrevVideo = () => {
@@ -440,12 +501,12 @@ const playPrevVideo = () => {
     return
   }
   currentVideoIndex.value--;
-  playUrl.value = getPlayUrl(currentVideoIndex.value);
+  getPlayUrl();
 }
 
 const playVideo = (index: number) => {
   currentVideoIndex.value = index;
-  playUrl.value = getPlayUrl(currentVideoIndex.value);
+  getPlayUrl();
 }
 
 onMounted(async () => {
