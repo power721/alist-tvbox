@@ -34,6 +34,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -125,6 +127,13 @@ public class AListService {
             response.setFiles(response.getContent());
         }
         response.setFiles(filter(response.getFiles()));
+        for (var file : response.getFiles()) {
+            try {
+                file.setModified(OffsetDateTime.parse(file.getModified()).toLocalDateTime().truncatedTo(ChronoUnit.SECONDS).toString());
+            } catch (Exception e) {
+                log.debug("{}", e.getMessage());
+            }
+        }
         return response;
     }
 

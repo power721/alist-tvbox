@@ -4,6 +4,8 @@ import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,27 +33,31 @@ public class TvBoxController {
     @GetMapping("/vod1")
     public Object api1(String t, String f, String ids, String ac, String wd, String sort,
                        @RequestParam(required = false, defaultValue = "1") Integer pg,
+                       @RequestParam(required = false, defaultValue = "100") Integer size,
                        HttpServletRequest request) {
-        return api("", t, f, ids, ac, wd, sort, pg, 0, request);
+        return api("", t, f, ids, ac, wd, sort, pg, size, 0, request);
     }
 
     @GetMapping("/vod1/{token}")
     public Object api1(@PathVariable String token, String t, String f, String ids, String ac, String wd, String sort,
                        @RequestParam(required = false, defaultValue = "1") Integer pg,
+                       @RequestParam(required = false, defaultValue = "100") Integer size,
                        HttpServletRequest request) {
-        return api(token, t, f, ids, ac, wd, sort, pg, 0, request);
+        return api(token, t, f, ids, ac, wd, sort, pg, size, 0, request);
     }
 
     @GetMapping("/vod")
     public Object api(String t, String f, String ids, String ac, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
+                      @RequestParam(required = false, defaultValue = "100") Integer size,
                       HttpServletRequest request) {
-        return api("", t, f, ids, ac, wd, sort, pg, 1, request);
+        return api("", t, f, ids, ac, wd, sort, pg, size, 1, request);
     }
 
     @GetMapping("/vod/{token}")
     public Object api(@PathVariable String token, String t, String f, String ids, String ac, String wd, String sort,
                       @RequestParam(required = false, defaultValue = "1") Integer pg,
+                      @RequestParam(required = false, defaultValue = "100") Integer size,
                       @RequestParam(required = false, defaultValue = "1") Integer type,
                       HttpServletRequest request) {
         subscriptionService.checkToken(token);
@@ -69,12 +75,24 @@ public class TvBoxController {
             if (t.equals("0")) {
                 return tvBoxService.recommend(ac, pg);
             }
-            return tvBoxService.getMovieList(client, ac, t, f, sort, pg);
+            return tvBoxService.getMovieList(client, ac, t, f, sort, pg, size);
         } else if (wd != null && !wd.isEmpty()) {
             return tvBoxService.search(type, ac, wd, pg);
         } else {
             return tvBoxService.getCategoryList(type);
         }
+    }
+
+    @GetMapping("/m3u8")
+    public String m3u8(String path, HttpServletResponse response) {
+        return m3u8("", path, response);
+    }
+
+    @GetMapping("/m3u8/{token}")
+    public String m3u8(@PathVariable String token, String path, HttpServletResponse response) {
+        subscriptionService.checkToken(token);
+        response.setContentType("text/plain");
+        return tvBoxService.m3u8(path);
     }
 
     @GetMapping("/api/profiles")

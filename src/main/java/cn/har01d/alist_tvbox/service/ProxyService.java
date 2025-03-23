@@ -41,8 +41,8 @@ public class ProxyService {
         this.panAccountRepository = panAccountRepository;
     }
 
-    public String generateProxyUrl(String url) {
-        String id = "115-" + UUID.randomUUID().toString().replace("-", "");
+    public String generateProxyUrl(String type, String url) {
+        String id = type + "-" + UUID.randomUUID().toString().replace("-", "");
         cache.put(id, url);
         return buildProxyUrl(id);
     }
@@ -61,14 +61,20 @@ public class ProxyService {
         String url = cache.getIfPresent(id);
         if (url != null) {
             log.info("proxy url: {} {}", id, url);
-            String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
             Map<String, String> headers = new HashMap<>();
-            headers.put("Range", request.getHeader("Range"));
-            headers.put("User-Agent", Constants.USER_AGENT);
-            headers.put("Cookie", cookie);
-            headers.put("Referer", "https://115.com/");
-            log.debug("Range: {}", headers.get("Range"));
+            if (url.startsWith("115-")) {
+                String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
+                headers.put("Range", request.getHeader("Range"));
+                headers.put("User-Agent", Constants.USER_AGENT);
+                headers.put("Cookie", cookie);
+                headers.put("Referer", "https://115.com/");
+            } else if (url.startsWith("ali-")) {
+                headers.put("Range", request.getHeader("Range"));
+                headers.put("User-Agent", Constants.USER_AGENT);
+                headers.put("Referer", "https://www.aliyundrive.com/");
+            }
 
+            log.debug("Range: {}", headers.get("Range"));
             downloadStraight(url, response, headers);
         }
     }

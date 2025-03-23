@@ -323,7 +323,7 @@ const loadFiles = (id: string) => {
   if (!id.startsWith(form.value.id + '$')) {
     id = form.value.id + '$' + id
   }
-  axios.get('/vod' + token.value + '?pg=' + page.value + '&t=' + id).then(({data}) => {
+  axios.get('/vod' + token.value + '?ac=web&pg=' + page.value + '&t=' + id).then(({data}) => {
     jsonData.value = data
     total.value = data.total
     siteVisible.value = true

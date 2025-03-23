@@ -14,5 +14,6 @@ export interface VodItem {
   "vod_director": string,
   "vod_lang": string,
   "vod_year": string,
+  "dbid": number
   "size": number
 }

@@ -246,6 +246,10 @@ public class SubscriptionService {
         return tokens;
     }
 
+    public String getToken() {
+        return tokens.isEmpty() ? "-" : tokens.split(",")[0];
+    }
+
     public void deleteToken() {
         tokens = "";
         settingRepository.save(new Setting(TOKEN, tokens));
