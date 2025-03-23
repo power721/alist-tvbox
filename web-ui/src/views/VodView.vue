@@ -537,6 +537,7 @@ const loadHistory = () => {
       vod_time: formatDate(e.t)
     }
   })
+  total.value = files.value.length
   paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
 }
 
