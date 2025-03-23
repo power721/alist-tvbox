@@ -31,7 +31,7 @@
                 </template>
               </el-popover>
               <span v-else-if="scope.row.vod_tag=='folder'">📂</span>
-              <span v-else-if="scope.row.vod_name=='播放列表'">▶️</span>
+              <span v-else-if="scope.row.vod_id.endsWith('playlist$1')">▶️</span>
               <span v-else>🎬</span>
               {{ scope.row.vod_name }}
             </template>
@@ -62,7 +62,7 @@
       </el-col>
     </el-row>
 
-    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="start" @close="pause">
+    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="start" @close="stop">
       <div class="video-container">
         <el-row>
           <el-col :span="18">
@@ -176,6 +176,7 @@ interface Item {
   text: string
 }
 
+let timer = 0
 const route = useRoute()
 const router = useRouter()
 const videoPlayer = ref(null)
@@ -358,6 +359,13 @@ const start = () => {
   }
 }
 
+const stop = () => {
+  if (videoPlayer.value) {
+    pause()
+    saveHistory()
+  }
+}
+
 const play = () => {
   if (videoPlayer.value) {
     const res = videoPlayer.value.play();
@@ -464,7 +472,7 @@ const getPlayUrl = () => {
 }
 
 const saveHistory = () => {
-  if (!videoPlayer.value) {
+  if (!videoPlayer.value || !dialogVisible.value) {
     return
   }
   const movie = movies.value[0]
@@ -554,11 +562,13 @@ onMounted(async () => {
       loadFiles('/')
     }
   })
+  timer = setInterval(saveHistory, 5000)
   window.addEventListener('keydown', handleKeyDown);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
 })
 
 onUnmounted(() => {
+  clearInterval(timer)
   window.removeEventListener('keydown', handleKeyDown);
   document.removeEventListener('fullscreenchange', handleFullscreenChange);
 })
