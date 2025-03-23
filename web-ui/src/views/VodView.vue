@@ -1,11 +1,19 @@
 <template>
   <div class="vod">
 
-    <el-breadcrumb separator="/">
-      <el-breadcrumb-item v-for="item in paths">
-        <a @click="loadFolder(item.path)">{{ item.text }}</a>
-      </el-breadcrumb-item>
-    </el-breadcrumb>
+    <el-row justify="space-between">
+      <el-col :span="20">
+        <el-breadcrumb separator="/">
+          <el-breadcrumb-item v-for="item in paths">
+            <a @click="loadFolder(item.path)">{{ item.text }}</a>
+          </el-breadcrumb-item>
+        </el-breadcrumb>
+      </el-col>
+
+      <el-col :span="2">
+        <el-button :icon="Film" circle @click="loadHistory"></el-button>
+      </el-col>
+    </el-row>
 
     <div class="divider"></div>
 
@@ -71,6 +79,9 @@
           </el-col>
           <el-col :span="5">
             <div v-if="playlist.length>1">
+              <div style="margin-left: 30px; margin-bottom: 10px;">
+                第{{ currentVideoIndex + 1 }}集 / 总共{{ playlist.length }}集
+              </div>
               <el-scrollbar ref="scrollbarRef" height="720px">
                 <ul>
                   <li v-for="(video, index) in playlist" :key="index" @click="playVideo(index)">
@@ -79,23 +90,6 @@
                   </li>
                 </ul>
               </el-scrollbar>
-              <div style="margin-left: 30px; margin-top: 12px;">
-                第{{ currentVideoIndex + 1 }}集 / 总共{{ playlist.length }}集
-                <el-tooltip content="上一集" placement="top" effect="light">
-                  <el-button link @click="playPrevVideo">
-                    <el-icon>
-                      <ArrowLeftBold/>
-                    </el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-tooltip content="下一集" placement="top" effect="light">
-                  <el-button link @click="playNextVideo">
-                    <el-icon>
-                      <ArrowRightBold/>
-                    </el-icon>
-                  </el-button>
-                </el-tooltip>
-              </div>
             </div>
           </el-col>
         </el-row>
@@ -173,7 +167,7 @@ import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
-import {QuestionFilled} from "@element-plus/icons-vue";
+import {Film, List, QuestionFilled} from "@element-plus/icons-vue";
 
 let {toClipboard} = clipBorad();
 
@@ -243,6 +237,9 @@ const reload = (value: number) => {
 }
 
 const loadFolder = (path: string) => {
+  if (path == '/history') {
+    return
+  }
   router.push(getPath(path))
   page.value = 1
   loadFiles(path)
@@ -363,17 +360,29 @@ const start = () => {
 
 const play = () => {
   if (videoPlayer.value) {
-    videoPlayer.value.play();
-    playing.value = true
-    saveHistory()
+    const res = videoPlayer.value.play();
+    if (res) {
+      res.then(_ => {
+        playing.value = true
+        saveHistory()
+      }).catch(e => {
+        console.error(e)
+      })
+    }
   }
 }
 
 const pause = () => {
   if (videoPlayer.value) {
-    videoPlayer.value.pause();
-    playing.value = false
-    saveHistory()
+    const res = videoPlayer.value.pause();
+    if (res) {
+      res.then(_ => {
+        playing.value = false
+        saveHistory()
+      }).catch(e => {
+        console.error(e)
+      })
+    }
   }
 }
 
@@ -458,27 +467,27 @@ const saveHistory = () => {
   if (!videoPlayer.value) {
     return
   }
-  const id = movies.value[0].vod_id
+  const movie = movies.value[0]
+  const id = movie.vod_id
+  const name = movie.vod_name
   const index = currentVideoIndex.value
-  const data = localStorage.getItem('history')
-  const items = JSON.parse(data || '[]')
+  const items = JSON.parse(localStorage.getItem('history') || '[]')
   for (let item of items) {
     if (item.id === id) {
       item.i = index
       item.c = videoPlayer.value.currentTime
-      item.t = new Date().getTime() - 1742716845285
+      item.t = new Date().getTime()
       localStorage.setItem('history', JSON.stringify(items))
       return
     }
   }
-  items.push({id: id, i: index, c: videoPlayer.value.currentTime, t: new Date().getTime() - 1742716845285})
-  const sorted = items.sort((a, b) => b.t - a.t).slice(0, 30);
+  items.push({id: id, n: name, i: index, c: videoPlayer.value.currentTime, t: new Date().getTime()})
+  const sorted = items.sort((a, b) => b.t - a.t).slice(0, 40);
   localStorage.setItem('history', JSON.stringify(sorted))
 }
 
 const getHistory = (id: string) => {
-  const data = localStorage.getItem('history')
-  const items = JSON.parse(data || '[]')
+  const items = JSON.parse(localStorage.getItem('history') || '[]')
   for (let item of items) {
     if (item.id === id) {
       currentVideoIndex.value = item.i
@@ -488,6 +497,30 @@ const getHistory = (id: string) => {
   }
   currentTime.value = 0
   currentVideoIndex.value = 0
+}
+
+const formatDate = (timestamp: number): string => {
+  const date: Date = new Date(timestamp);
+  const year: number = date.getFullYear();
+  const month: string = String(date.getMonth() + 1).padStart(2, '0');
+  const day: string = String(date.getDate()).padStart(2, '0');
+  const hours: string = String(date.getHours()).padStart(2, '0');
+  const minutes: string = String(date.getMinutes()).padStart(2, '0');
+  const seconds: string = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+const loadHistory = () => {
+  const items = JSON.parse(localStorage.getItem('history') || '[]')
+  files.value = items.sort((a, b) => b.t - a.t).map(e => {
+    return {
+      vod_id: e.id,
+      vod_name: e.n,
+      vod_tag: 'file',
+      vod_time: formatDate(e.t)
+    }
+  })
+  paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/history'}]
 }
 
 const playNextVideo = () => {
