@@ -1462,7 +1462,7 @@ public class TvBoxService {
             List<Meta> list = metaRepository.findAllById(Arrays.stream(ids).map(Integer::parseInt).collect(Collectors.toList()));
             Meta meta = list.get(0);
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(tid + "$1");
+            movieDetail.setVod_id(encodeUrl(tid));
             movieDetail.setVod_name(meta.getName());
             movieDetail.setVod_tag(FILE);
             movieDetail.setVod_time(String.valueOf(meta.getYear()));
@@ -1500,7 +1500,7 @@ public class TvBoxService {
         } else {
             FsDetail fsDetail = aListService.getFile(site, path);
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(tid + "$1");
+            movieDetail.setVod_id(encodeUrl(tid));
             movieDetail.setVod_name(fsDetail.getName());
             movieDetail.setVod_tag(fsDetail.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_time(fsDetail.getModified());
@@ -2105,7 +2105,7 @@ public class TvBoxService {
     }
 
     private String encodeUrl(String url) {
-        return URLEncoder.encode(url, StandardCharsets.UTF_8);
+        return URLEncoder.encode(url, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
 }

@@ -167,7 +167,7 @@ import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
-import {Film, List, QuestionFilled} from "@element-plus/icons-vue";
+import {Film, QuestionFilled} from "@element-plus/icons-vue";
 
 let {toClipboard} = clipBorad();
 
@@ -241,7 +241,7 @@ const loadFolder = (path: string) => {
   if (path == '/~history') {
     return
   }
-  router.push(getPath(path))
+  router.push('/vod' + getPath(path).replace('\t', '%09'))
   page.value = 1
   loadFiles(path)
 }
@@ -260,11 +260,11 @@ const loadFiles = (path: string) => {
 }
 
 const getPath = (id: string) => {
-  return '/vod' + decodeURIComponent(id).replace('1$', '').split('$')[0]
+  return decodeURIComponent(id).replace('1$', '').replace('$1', '')
 }
 
 const extractPaths = (id: string) => {
-  const path = decodeURIComponent(id).replace('1$', '').split('$')[0]
+  const path = getPath(id)
   if (path == '/') {
     paths.value = [{text: '🏠首页', path: '/'}]
   } else {
@@ -280,12 +280,13 @@ const extractPaths = (id: string) => {
   if (id.startsWith('1$')) {
     return id
   }
-  return '1$' + path + '$1'
+  return '1$' + encodeURIComponent(path) + '$1'
 }
 
 const loadDetail = (id: string) => {
   axios.get('/vod' + token.value + '?ac=web&ids=' + id).then(({data}) => {
     movies.value = data.list
+    movies.value[0].vod_id = id
     playFrom.value = movies.value[0].vod_play_from.split("$$$");
     playlist.value = movies.value[0].vod_play_url.split("$$$")[0].split("#").map(e => {
       let u = e.split('$')
@@ -301,7 +302,7 @@ const loadDetail = (id: string) => {
         }
       }
     })
-    getHistory(movies.value[0].vod_id)
+    getHistory(id)
     getPlayUrl()
     dialogVisible.value = true
   })
@@ -354,7 +355,9 @@ const togglePlay = () => {
 const start = () => {
   if (videoPlayer.value) {
     videoPlayer.value.currentTime = currentTime.value
-    scrollbarRef.value!.setScrollTop(currentVideoIndex.value * 20)
+    if (scrollbarRef.value) {
+      scrollbarRef.value.setScrollTop(currentVideoIndex.value * 20)
+    }
     play()
   }
 }
@@ -471,6 +474,12 @@ const getPlayUrl = () => {
   title.value = playlist.value[index].text
 }
 
+const save = () => {
+  if (playing.value) {
+    saveHistory()
+  }
+}
+
 const saveHistory = () => {
   if (!videoPlayer.value || !dialogVisible.value) {
     return
@@ -562,7 +571,7 @@ onMounted(async () => {
       loadFiles('/')
     }
   })
-  timer = setInterval(saveHistory, 5000)
+  timer = setInterval(save, 5000)
   window.addEventListener('keydown', handleKeyDown);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
 })
