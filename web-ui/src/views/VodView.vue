@@ -14,7 +14,7 @@
         <el-table v-loading="loading" :data="files" style="width: 100%" @row-click="load">
           <el-table-column prop="vod_name" label="名称">
             <template #default="scope">
-              <el-popover placement="left-start" v-if="scope.row.vod_tag!='file'&&scope.row.vod_pic">
+              <el-popover :width="300" placement="left-start" v-if="scope.row.vod_tag!='file'&&scope.row.vod_pic">
                 <template #reference>
                   <el-image
                     style="width: 60px; height: 60px"
@@ -28,10 +28,11 @@
                   <el-image :src="imageUrl(scope.row.vod_pic)" loading="lazy" show-progress fit="cover"/>
                 </template>
               </el-popover>
+              <span v-else>🎬</span>
               {{ scope.row.vod_name }}
             </template>
           </el-table-column>
-          <el-table-column label="大小" width="150">
+          <el-table-column label="大小" width="120">
             <template #default="scope">
               {{ scope.row.vod_tag === 'file' ? scope.row.vod_remarks : '-' }}
             </template>
