@@ -238,7 +238,7 @@ const reload = (value: number) => {
 }
 
 const loadFolder = (path: string) => {
-  if (path == '/history') {
+  if (path == '/~history') {
     return
   }
   router.push(getPath(path))
@@ -528,7 +528,7 @@ const loadHistory = () => {
       vod_time: formatDate(e.t)
     }
   })
-  paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/history'}]
+  paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
 }
 
 const playNextVideo = () => {
