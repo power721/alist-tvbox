@@ -98,14 +98,14 @@
           <el-col :span="18">
             <div>
               <el-button-group>
-                <el-button @click="playPrevVideo" v-if="playlist.length>1">上一集</el-button>
+                <el-button @click="playPrevVideo" v-if="playlist.length>1">上集</el-button>
                 <el-button @click="play" v-if="!playing">播放</el-button>
                 <el-button @click="pause" v-if="playing">暂停</el-button>
                 <el-button @click="toggleMute">{{ isMuted ? '取消静音' : '静音' }}</el-button>
                 <el-button @click="toggleFullscreen">全屏</el-button>
                 <el-button @click="skipBackward">-15</el-button>
                 <el-button @click="skipForward">+15</el-button>
-                <el-button @click="playNextVideo" v-if="playlist.length>1">下一集</el-button>
+                <el-button @click="playNextVideo" v-if="playlist.length>1">下集</el-button>
                 <el-popover placement="right-start">
                   <template #reference>
                     <el-button :icon="QuestionFilled"/>
@@ -118,8 +118,8 @@
                       <div>静音： m</div>
                       <div>后退15秒： ←</div>
                       <div>前进15秒： →</div>
-                      <div v-if="playlist.length>1">上一集： ↑</div>
-                      <div v-if="playlist.length>1">下一集： ↓</div>
+                      <div v-if="playlist.length>1">上集： ↑</div>
+                      <div v-if="playlist.length>1">下集： ↓</div>
                     </div>
                   </template>
                 </el-popover>
