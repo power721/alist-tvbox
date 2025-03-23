@@ -356,8 +356,8 @@ const togglePlay = () => {
 const start = () => {
   if (videoPlayer.value) {
     videoPlayer.value.currentTime = currentTime.value
-    play()
     scrollbarRef.value!.setScrollTop(currentVideoIndex.value * 20)
+    play()
   }
 }
 
