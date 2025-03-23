@@ -71,7 +71,7 @@
           </el-col>
           <el-col :span="5">
             <div v-if="playlist.length>1">
-              <el-scrollbar height="720px">
+              <el-scrollbar ref="scrollbarRef" height="720px">
                 <ul>
                   <li v-for="(video, index) in playlist" :key="index" @click="playVideo(index)">
                     <el-link type="primary" v-if="currentVideoIndex==index">{{ video.text }}</el-link>
@@ -168,7 +168,7 @@
 // @ts-nocheck
 import {onMounted, ref} from 'vue'
 import axios from "axios"
-import {ElMessage} from "element-plus";
+import {ElMessage, type ScrollbarInstance} from "element-plus";
 import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
@@ -185,6 +185,7 @@ interface Item {
 const route = useRoute()
 const router = useRouter()
 const videoPlayer = ref(null)
+const scrollbarRef = ref<ScrollbarInstance>()
 const token = ref('')
 const title = ref('')
 const playUrl = ref('')
@@ -356,6 +357,7 @@ const start = () => {
   if (videoPlayer.value) {
     videoPlayer.value.currentTime = currentTime.value
     play()
+    scrollbarRef.value!.setScrollTop(currentVideoIndex.value * 20)
   }
 }
 
