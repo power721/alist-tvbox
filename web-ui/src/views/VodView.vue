@@ -18,7 +18,7 @@
     <div class="divider"></div>
 
     <el-row justify="center">
-      <el-col :span="14">
+      <el-col :xs="22" :sm="20" :md="18" :span="14">
         <el-table v-loading="loading" :data="files" style="width: 100%" @row-click="load">
           <el-table-column prop="vod_name" label="名称">
             <template #default="scope">
