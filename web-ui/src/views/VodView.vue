@@ -355,10 +355,14 @@ const togglePlay = () => {
 const start = () => {
   if (videoPlayer.value) {
     videoPlayer.value.currentTime = currentTime.value
-    if (scrollbarRef.value) {
-      scrollbarRef.value.setScrollTop(currentVideoIndex.value * 20)
-    }
+    scroll()
     play()
+  }
+}
+
+const scroll = () => {
+  if (scrollbarRef.value) {
+    scrollbarRef.value.setScrollTop(currentVideoIndex.value * 20)
   }
 }
 
@@ -461,10 +465,10 @@ const updateMuteState = () => {
 }
 
 const getPlayUrl = () => {
-  saveHistory()
   const index = currentVideoIndex.value
   playUrl.value = playlist.value[index].path
   title.value = playlist.value[index].text
+  saveHistory()
 }
 
 const save = () => {
@@ -484,8 +488,12 @@ const saveHistory = () => {
   const items = JSON.parse(localStorage.getItem('history') || '[]')
   for (let item of items) {
     if (item.id === id) {
+      if (item.i == index) {
+        item.c = videoPlayer.value.currentTime
+      } else {
+        item.c = 0
+      }
       item.i = index
-      item.c = videoPlayer.value.currentTime
       item.t = new Date().getTime()
       localStorage.setItem('history', JSON.stringify(items))
       return
@@ -539,6 +547,7 @@ const playNextVideo = () => {
     return
   }
   currentVideoIndex.value++;
+  scroll()
   getPlayUrl();
 }
 
@@ -547,6 +556,7 @@ const playPrevVideo = () => {
     return
   }
   currentVideoIndex.value--;
+  scroll()
   getPlayUrl();
 }
 
