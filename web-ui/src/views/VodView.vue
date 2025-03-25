@@ -62,7 +62,7 @@
       </el-col>
     </el-row>
 
-    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="start" @close="pause">
+    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="start" @close="stop">
       <div class="video-container">
         <el-row>
           <el-col :span="18">
@@ -360,6 +360,11 @@ const start = () => {
   }
 }
 
+const stop = () => {
+  document.title = 'AList - TvBox'
+  pause()
+}
+
 const scroll = () => {
   if (scrollbarRef.value) {
     scrollbarRef.value.setScrollTop(currentVideoIndex.value * 20)
@@ -468,6 +473,7 @@ const getPlayUrl = () => {
   const index = currentVideoIndex.value
   playUrl.value = playlist.value[index].path
   title.value = playlist.value[index].text
+  document.title = title.value
   saveHistory()
 }
 
