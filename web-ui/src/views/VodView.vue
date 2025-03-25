@@ -12,6 +12,7 @@
 
       <el-col :span="2">
         <el-button :icon="Film" circle @click="loadHistory"></el-button>
+        <el-button :icon="Delete" circle @click="clearHistory" v-if="paths.length>1&&paths[1].path=='/~history'"></el-button>
       </el-col>
     </el-row>
 
@@ -167,7 +168,7 @@ import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
-import {Film, QuestionFilled} from "@element-plus/icons-vue";
+import {Delete, Film, QuestionFilled} from "@element-plus/icons-vue";
 
 let {toClipboard} = clipBorad();
 
@@ -546,6 +547,12 @@ const loadHistory = () => {
   })
   total.value = files.value.length
   paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
+}
+
+const clearHistory = () => {
+  localStorage.removeItem('history')
+  files.value = []
+  total.value = 0
 }
 
 const playNextVideo = () => {
