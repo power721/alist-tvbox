@@ -82,7 +82,7 @@
               <div style="margin-left: 30px; margin-bottom: 10px;">
                 第{{ currentVideoIndex + 1 }}集 / 总共{{ playlist.length }}集
               </div>
-              <el-scrollbar ref="scrollbarRef" height="720px">
+              <el-scrollbar ref="scrollbarRef" height="800px">
                 <ul>
                   <li v-for="(video, index) in playlist" :key="index" @click="playVideo(index)">
                     <el-link type="primary" v-if="currentVideoIndex==index">{{ video.text }}</el-link>
@@ -590,6 +590,7 @@ onUnmounted(() => {
 <style scoped>
 video {
   width: 100%;
+  max-height: 1080px;
 }
 
 .divider {

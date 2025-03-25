@@ -89,11 +89,6 @@ public class TvBoxService {
     private static final Pattern NUMBER2 = Pattern.compile("^S(\\d{1,2}).*");
     private static final Pattern NUMBER3 = Pattern.compile("^第(.{1,2})季.*");
 
-    private static final Pattern SEASON = Pattern.compile("Season (\\d{1,2}).*");
-    private static final Pattern SEASON1 = Pattern.compile("SE(\\d{1,2}).*");
-    private static final Pattern SEASON2 = Pattern.compile("S(\\d{1,2}).*");
-    private static final Pattern SEASON3 = Pattern.compile("第(.{1,2})季.*");
-
     private final AccountRepository accountRepository;
     private final AListAliasRepository aliasRepository;
     private final ShareRepository shareRepository;
