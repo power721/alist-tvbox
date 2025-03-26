@@ -440,10 +440,10 @@ const togglePlay = () => {
 
 const start = () => {
   if (videoPlayer.value) {
-    videoPlayer.value.currentTime = currentTime.value
-    if (videoPlayer.value.currentTime < skipStart.value) {
-      videoPlayer.value.currentTime = skipStart.value
+    if (currentTime.value < skipStart.value) {
+      currentTime.value = skipStart.value
     }
+    videoPlayer.value.currentTime = currentTime.value
     videoPlayer.value.playbackRate = currentSpeed.value
     videoPlayer.value.volume = currentVolume.value / 100.
     videoPlayer.value.addEventListener('playbackratechange', handleSpeedChange)
