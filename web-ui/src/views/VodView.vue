@@ -114,6 +114,7 @@
                     <el-button>{{ currentSpeed == 1 ? '1.0' : currentSpeed == 2 ? '2.0' : currentSpeed }}</el-button>
                   </template>
                   <template #default>
+                    播放速度
                     <el-slider v-model="currentSpeed" @change="setSpeed" :min="0.25" :max="2" :step="0.25" show-stops/>
                   </template>
                 </el-popover>
