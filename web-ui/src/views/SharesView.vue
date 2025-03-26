@@ -15,7 +15,9 @@
     <el-table-column prop="path" label="路径" sortable/>
     <el-table-column label="完整路径" width="380" sortable>
       <template #default="scope">
-        {{ fullPath(scope.row) }}
+        <router-link :to="'/vod' + fullPath(scope.row)">
+          {{ fullPath(scope.row) }}
+        </router-link>
       </template>
     </el-table-column>
     <el-table-column prop="url" label="分享链接">

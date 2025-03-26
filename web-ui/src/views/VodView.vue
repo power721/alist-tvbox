@@ -497,7 +497,7 @@ const handleSecond2Change = (value: number) => {
 
 const scroll = () => {
   if (scrollbarRef.value) {
-    scrollbarRef.value.setScrollTop(currentVideoIndex.value * 20)
+    scrollbarRef.value.setScrollTop(currentVideoIndex.value * 21.5)
   }
 }
 
