@@ -118,6 +118,15 @@
                     <el-slider v-model="currentSpeed" @change="setSpeed" :min="0.25" :max="2" :step="0.25" show-stops/>
                   </template>
                 </el-popover>
+                <el-popover placement="bottom" width="300px">
+                  <template #reference>
+                    <el-button>{{ currentVolume }}</el-button>
+                  </template>
+                  <template #default>
+                    音量
+                    <el-slider v-model="currentVolume" @change="setVolume" :min="0" :max="100" :step="5"/>
+                  </template>
+                </el-popover>
                 <el-popover placement="right-start">
                   <template #reference>
                     <el-button :icon="QuestionFilled"/>
@@ -202,6 +211,7 @@ const playlist = ref<Item[]>([])
 const currentVideoIndex = ref(0)
 const currentTime = ref(0)
 const currentSpeed = ref(1)
+const currentVolume = ref(100)
 const loading = ref(false)
 const playing = ref(false)
 const isMuted = ref(false)
@@ -369,7 +379,9 @@ const start = () => {
   if (videoPlayer.value) {
     videoPlayer.value.currentTime = currentTime.value
     videoPlayer.value.playbackRate = currentSpeed.value
+    videoPlayer.value.volume = currentVolume.value / 100.
     videoPlayer.value.addEventListener('playbackratechange', handleSpeedChange)
+    videoPlayer.value.addEventListener('volumechange', handleVolumeChange)
     scroll()
     play()
   }
@@ -378,6 +390,7 @@ const start = () => {
 const close = () => {
   if (videoPlayer.value) {
     videoPlayer.value.removeEventListener('playbackratechange', handleSpeedChange)
+    videoPlayer.value.removeEventListener('volumechange', handleVolumeChange)
   }
   dialogVisible.value = false
 }
@@ -479,6 +492,21 @@ const handleFullscreenChange = () => {
   isFullscreen.value = document.fullscreenElement === videoPlayer.value;
 }
 
+const setVolume = (volume: number) => {
+  currentVolume.value = volume
+  localStorage.setItem('volume', volume)
+  if (videoPlayer.value) {
+    videoPlayer.value.volume = volume / 100.0
+  }
+}
+
+const handleVolumeChange = () => {
+  if (videoPlayer.value) {
+    currentVolume.value = Math.round(videoPlayer.value.volume * 100)
+    localStorage.setItem('volume', currentVolume.value)
+  }
+}
+
 const setSpeed = (speed: number) => {
   currentSpeed.value = speed
   if (videoPlayer.value) {
@@ -487,7 +515,9 @@ const setSpeed = (speed: number) => {
 }
 
 const handleSpeedChange = () => {
-  currentSpeed.value = videoPlayer.value.playbackRate
+  if (videoPlayer.value) {
+    currentSpeed.value = videoPlayer.value.playbackRate
+  }
 }
 
 const updatePlayState = () => {
@@ -629,6 +659,7 @@ onMounted(async () => {
       loadFiles('/')
     }
   })
+  currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
   timer = setInterval(save, 5000)
   window.addEventListener('keydown', handleKeyDown);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -643,7 +674,7 @@ onUnmounted(() => {
 
 <style scoped>
 video {
-  width: 1920px;
+  width: 100%;
   height: 1080px;
 }
 
