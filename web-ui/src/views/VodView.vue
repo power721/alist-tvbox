@@ -120,6 +120,7 @@
                       class="mx-4"
                       :min="0"
                       :max="4"
+                      value-on-clear="min"
                       controls-position="right"
                       @change="handleMinute1Change"
                     />
@@ -130,8 +131,37 @@
                       :min="0"
                       :max="59"
                       :step="5"
+                      value-on-clear="min"
                       controls-position="right"
                       @change="handleSecond1Change"
+                    />
+                  </template>
+                </el-popover>
+                <el-popover placement="bottom" width="400px" v-if="playlist.length>1">
+                  <template #reference>
+                    <el-button>片尾</el-button>
+                  </template>
+                  <template #default>
+                    跳过片尾
+                    <el-input-number
+                      v-model="minute2"
+                      class="mx-4"
+                      :min="0"
+                      :max="4"
+                      value-on-clear="min"
+                      controls-position="right"
+                      @change="handleMinute2Change"
+                    />
+                    :
+                    <el-input-number
+                      v-model="second2"
+                      class="mx-4"
+                      :min="0"
+                      :max="59"
+                      :step="5"
+                      value-on-clear="min"
+                      controls-position="right"
+                      @change="handleSecond2Change"
                     />
                   </template>
                 </el-popover>
@@ -235,6 +265,7 @@ const movies = ref<VodItem[]>([])
 const playFrom = ref<string[]>([])
 const playlist = ref<Item[]>([])
 const currentVideoIndex = ref(0)
+const duration = ref(0)
 const currentTime = ref(0)
 const currentSpeed = ref(1)
 const currentVolume = ref(100)
@@ -417,6 +448,9 @@ const start = () => {
     videoPlayer.value.volume = currentVolume.value / 100.
     videoPlayer.value.addEventListener('playbackratechange', handleSpeedChange)
     videoPlayer.value.addEventListener('volumechange', handleVolumeChange)
+    videoPlayer.value.addEventListener('timeupdate', handleTimeUpdate)
+    //videoPlayer.value.addEventListener('durationchange', handleDurationChange)
+    videoPlayer.value.addEventListener('loadedmetadata', handleDurationChange)
     scroll()
     play()
   }
@@ -426,6 +460,8 @@ const close = () => {
   if (videoPlayer.value) {
     videoPlayer.value.removeEventListener('playbackratechange', handleSpeedChange)
     videoPlayer.value.removeEventListener('volumechange', handleVolumeChange)
+    videoPlayer.value.removeEventListener('timeupdate', handleTimeUpdate)
+    //videoPlayer.value.removeEventListener('durationchange', handleDurationChange)
   }
   dialogVisible.value = false
 }
@@ -436,25 +472,25 @@ const stop = () => {
 }
 
 const handleMinute1Change = (value: number) => {
-  minute1.value = value
+  minute1.value = value || 0
   skipStart.value = minute1.value * 60 + second1.value
   saveHistory()
 }
 
 const handleSecond1Change = (value: number) => {
-  second1.value = value
+  second1.value = value || 0
   skipStart.value = minute1.value * 60 + second1.value
   saveHistory()
 }
 
 const handleMinute2Change = (value: number) => {
-  minute2.value = value
+  minute2.value = value || 0
   skipEnd.value = minute2.value * 60 + second2.value
   saveHistory()
 }
 
 const handleSecond2Change = (value: number) => {
-  second2.value = value
+  second2.value = value || 0
   skipEnd.value = minute2.value * 60 + second2.value
   saveHistory()
 }
@@ -578,6 +614,21 @@ const handleVolumeChange = () => {
   }
 }
 
+const handleTimeUpdate = () => {
+  if (videoPlayer.value) {
+    const time = videoPlayer.value.currentTime
+    if (duration.value > skipStart.value + skipEnd.value && time + skipEnd.value > duration.value) {
+      videoPlayer.value.currentTime = duration.value
+    }
+  }
+}
+
+const handleDurationChange = () => {
+  if (videoPlayer.value) {
+    duration.value = videoPlayer.value.duration
+  }
+}
+
 const setSpeed = (speed: number) => {
   currentSpeed.value = speed
   if (videoPlayer.value) {
@@ -665,10 +716,10 @@ const getHistory = (id: string) => {
       currentSpeed.value = item.s || 1
       skipStart.value = item.b || 0
       skipEnd.value = item.e || 0
+      minute1.value = Math.floor(skipStart.value / 60)
       second1.value = skipStart.value % 60
-      minute1.value = (skipStart.value - second1.value) / 60
+      minute2.value = Math.floor(skipEnd.value / 60)
       second2.value = skipEnd.value % 60
-      minute2.value = (skipEnd.value - second2.value) / 60
       return
     }
   }
