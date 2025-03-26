@@ -12,7 +12,8 @@
 
       <el-col :span="2">
         <el-button :icon="Film" circle @click="loadHistory"></el-button>
-        <el-button :icon="Delete" circle @click="clearHistory" v-if="paths.length>1&&paths[1].path=='/~history'"></el-button>
+        <el-button :icon="Delete" circle @click="clearHistory"
+                   v-if="paths.length>1&&paths[1].path=='/~history'"></el-button>
       </el-col>
     </el-row>
 
@@ -83,7 +84,7 @@
               <div style="margin-left: 30px; margin-bottom: 10px;">
                 第{{ currentVideoIndex + 1 }}集 / 总共{{ playlist.length }}集
               </div>
-              <el-scrollbar ref="scrollbarRef" height="800px">
+              <el-scrollbar ref="scrollbarRef" height="1050px">
                 <ul>
                   <li v-for="(video, index) in playlist" :key="index" @click="playVideo(index)">
                     <el-link type="primary" v-if="currentVideoIndex==index">{{ video.text }}</el-link>
@@ -101,12 +102,21 @@
               <el-button-group>
                 <el-button @click="play" v-if="!playing">播放</el-button>
                 <el-button @click="pause" v-if="playing">暂停</el-button>
+                <el-button @click="close">退出</el-button>
                 <el-button @click="toggleMute">{{ isMuted ? '取消静音' : '静音' }}</el-button>
                 <el-button @click="toggleFullscreen">全屏</el-button>
-                <el-button @click="skipBackward">-15</el-button>
-                <el-button @click="skipForward">+15</el-button>
+                <el-button @click="skipBackward">后退</el-button>
+                <el-button @click="skipForward">前进</el-button>
                 <el-button @click="playPrevVideo" v-if="playlist.length>1">上集</el-button>
                 <el-button @click="playNextVideo" v-if="playlist.length>1">下集</el-button>
+                <el-popover placement="bottom" width="300px">
+                  <template #reference>
+                    <el-button>{{ currentSpeed == 1 ? '1.0' : currentSpeed == 2 ? '2.0' : currentSpeed }}</el-button>
+                  </template>
+                  <template #default>
+                    <el-slider v-model="currentSpeed" @change="setSpeed" :min="0.25" :max="2" :step="0.25" show-stops/>
+                  </template>
+                </el-popover>
                 <el-popover placement="right-start">
                   <template #reference>
                     <el-button :icon="QuestionFilled"/>
@@ -190,6 +200,7 @@ const playFrom = ref<string[]>([])
 const playlist = ref<Item[]>([])
 const currentVideoIndex = ref(0)
 const currentTime = ref(0)
+const currentSpeed = ref(1)
 const loading = ref(false)
 const playing = ref(false)
 const isMuted = ref(false)
@@ -356,9 +367,18 @@ const togglePlay = () => {
 const start = () => {
   if (videoPlayer.value) {
     videoPlayer.value.currentTime = currentTime.value
+    videoPlayer.value.playbackRate = currentSpeed.value
+    videoPlayer.value.addEventListener('playbackratechange', handleSpeedChange)
     scroll()
     play()
   }
+}
+
+const close = () => {
+  if (videoPlayer.value) {
+    videoPlayer.value.removeEventListener('playbackratechange', handleSpeedChange)
+  }
+  dialogVisible.value = false
 }
 
 const stop = () => {
@@ -456,7 +476,18 @@ const exitFullscreen = () => {
 
 const handleFullscreenChange = () => {
   isFullscreen.value = document.fullscreenElement === videoPlayer.value;
-};
+}
+
+const setSpeed = (speed: number) => {
+  currentSpeed.value = speed
+  if (videoPlayer.value) {
+    videoPlayer.value.playbackRate = speed
+  }
+}
+
+const handleSpeedChange = () => {
+  currentSpeed.value = videoPlayer.value.playbackRate
+}
 
 const updatePlayState = () => {
   if (videoPlayer.value) {
@@ -501,12 +532,20 @@ const saveHistory = () => {
         item.c = 0
       }
       item.i = index
+      item.s = currentSpeed.value
       item.t = new Date().getTime()
       localStorage.setItem('history', JSON.stringify(items))
       return
     }
   }
-  items.push({id: id, n: name, i: index, c: videoPlayer.value.currentTime, t: new Date().getTime()})
+  items.push({
+    id: id,
+    n: name,
+    i: index,
+    c: videoPlayer.value.currentTime,
+    s: currentSpeed.value,
+    t: new Date().getTime()
+  })
   const sorted = items.sort((a, b) => b.t - a.t).slice(0, 40);
   localStorage.setItem('history', JSON.stringify(sorted))
 }
@@ -517,6 +556,7 @@ const getHistory = (id: string) => {
     if (item.id === id) {
       currentVideoIndex.value = item.i
       currentTime.value = item.c
+      currentSpeed.value = item.s || 1
       return
     }
   }
@@ -602,8 +642,8 @@ onUnmounted(() => {
 
 <style scoped>
 video {
-  width: 100%;
-  max-height: 1080px;
+  width: 1920px;
+  height: 1080px;
 }
 
 .divider {
