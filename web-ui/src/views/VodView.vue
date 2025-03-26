@@ -105,10 +105,36 @@
                 <el-button @click="close">退出</el-button>
                 <el-button @click="toggleMute">{{ isMuted ? '取消静音' : '静音' }}</el-button>
                 <el-button @click="toggleFullscreen">全屏</el-button>
-                <el-button @click="skipBackward">后退</el-button>
-                <el-button @click="skipForward">前进</el-button>
+                <el-button @click="backward">后退</el-button>
+                <el-button @click="forward">前进</el-button>
                 <el-button @click="playPrevVideo" v-if="playlist.length>1">上集</el-button>
                 <el-button @click="playNextVideo" v-if="playlist.length>1">下集</el-button>
+                <el-popover placement="bottom" width="400px" v-if="playlist.length>1">
+                  <template #reference>
+                    <el-button>片头</el-button>
+                  </template>
+                  <template #default>
+                    跳过片头
+                    <el-input-number
+                      v-model="minute1"
+                      class="mx-4"
+                      :min="0"
+                      :max="4"
+                      controls-position="right"
+                      @change="handleMinute1Change"
+                    />
+                    :
+                    <el-input-number
+                      v-model="second1"
+                      class="mx-4"
+                      :min="0"
+                      :max="59"
+                      :step="5"
+                      controls-position="right"
+                      @change="handleSecond1Change"
+                    />
+                  </template>
+                </el-popover>
                 <el-popover placement="bottom" width="300px">
                   <template #reference>
                     <el-button>{{ currentSpeed == 1 ? '1.0' : currentSpeed == 2 ? '2.0' : currentSpeed }}</el-button>
@@ -212,6 +238,12 @@ const currentVideoIndex = ref(0)
 const currentTime = ref(0)
 const currentSpeed = ref(1)
 const currentVolume = ref(100)
+const skipStart = ref(0)
+const skipEnd = ref(0)
+const minute1 = ref(0)
+const second1 = ref(0)
+const minute2 = ref(0)
+const second2 = ref(0)
 const loading = ref(false)
 const playing = ref(false)
 const isMuted = ref(false)
@@ -346,10 +378,10 @@ const handleKeyDown = (event: KeyboardEvent) => {
     togglePlay()
   } else if (event.code === 'ArrowRight') {
     event.preventDefault()
-    skipForward()
+    forward()
   } else if (event.code === 'ArrowLeft') {
     event.preventDefault()
-    skipBackward()
+    backward()
   } else if (event.code === 'ArrowUp') {
     event.preventDefault()
     playPrevVideo()
@@ -378,6 +410,9 @@ const togglePlay = () => {
 const start = () => {
   if (videoPlayer.value) {
     videoPlayer.value.currentTime = currentTime.value
+    if (videoPlayer.value.currentTime < skipStart.value) {
+      videoPlayer.value.currentTime = skipStart.value
+    }
     videoPlayer.value.playbackRate = currentSpeed.value
     videoPlayer.value.volume = currentVolume.value / 100.
     videoPlayer.value.addEventListener('playbackratechange', handleSpeedChange)
@@ -400,9 +435,45 @@ const stop = () => {
   pause()
 }
 
+const handleMinute1Change = (value: number) => {
+  minute1.value = value
+  skipStart.value = minute1.value * 60 + second1.value
+  saveHistory()
+}
+
+const handleSecond1Change = (value: number) => {
+  second1.value = value
+  skipStart.value = minute1.value * 60 + second1.value
+  saveHistory()
+}
+
+const handleMinute2Change = (value: number) => {
+  minute2.value = value
+  skipEnd.value = minute2.value * 60 + second2.value
+  saveHistory()
+}
+
+const handleSecond2Change = (value: number) => {
+  second2.value = value
+  skipEnd.value = minute2.value * 60 + second2.value
+  saveHistory()
+}
+
 const scroll = () => {
   if (scrollbarRef.value) {
     scrollbarRef.value.setScrollTop(currentVideoIndex.value * 20)
+  }
+}
+
+const startPlay = () => {
+  setTimeout(skip, 500)
+}
+
+const skip = () => {
+  if (videoPlayer.value) {
+    if (videoPlayer.value.currentTime < skipStart.value) {
+      videoPlayer.value.currentTime = skipStart.value
+    }
   }
 }
 
@@ -434,14 +505,14 @@ const pause = () => {
   }
 }
 
-const skipForward = () => {
+const forward = () => {
   if (videoPlayer.value) {
     videoPlayer.value.currentTime += 15;
     play()
   }
 }
 
-const skipBackward = () => {
+const backward = () => {
   if (videoPlayer.value) {
     videoPlayer.value.currentTime -= 15;
     play()
@@ -563,6 +634,8 @@ const saveHistory = () => {
         item.c = 0
       }
       item.i = index
+      item.b = skipStart.value
+      item.e = skipEnd.value
       item.s = currentSpeed.value
       item.t = new Date().getTime()
       localStorage.setItem('history', JSON.stringify(items))
@@ -574,6 +647,8 @@ const saveHistory = () => {
     n: name,
     i: index,
     c: videoPlayer.value.currentTime,
+    b: skipStart.value,
+    e: skipEnd.value,
     s: currentSpeed.value,
     t: new Date().getTime()
   })
@@ -588,6 +663,12 @@ const getHistory = (id: string) => {
       currentVideoIndex.value = item.i
       currentTime.value = item.c
       currentSpeed.value = item.s || 1
+      skipStart.value = item.b || 0
+      skipEnd.value = item.e || 0
+      second1.value = skipStart.value % 60
+      minute1.value = (skipStart.value - second1.value) / 60
+      second2.value = skipEnd.value % 60
+      minute2.value = (skipEnd.value - second2.value) / 60
       return
     }
   }
@@ -632,7 +713,8 @@ const playNextVideo = () => {
   }
   currentVideoIndex.value++;
   scroll()
-  getPlayUrl();
+  getPlayUrl()
+  startPlay()
 }
 
 const playPrevVideo = () => {
@@ -641,12 +723,14 @@ const playPrevVideo = () => {
   }
   currentVideoIndex.value--;
   scroll()
-  getPlayUrl();
+  getPlayUrl()
+  startPlay()
 }
 
 const playVideo = (index: number) => {
   currentVideoIndex.value = index;
-  getPlayUrl();
+  getPlayUrl()
+  startPlay()
 }
 
 onMounted(async () => {
