@@ -13,7 +13,8 @@
       <el-col :span="2">
         <el-button :icon="Film" circle @click="loadHistory"></el-button>
         <el-button :icon="Delete" circle @click="clearHistory"
-                   v-if="paths.length>1&&paths[1].path=='/~history'"></el-button>
+        v-if="paths.length>1&&paths[1].path=='/~history'"></el-button>
+        <el-button :icon="Plus" circle @click="handleAdd"></el-button>
       </el-col>
     </el-row>
 
@@ -232,6 +233,26 @@
       </div>
     </el-dialog>
 
+    <el-dialog v-model="formVisible" title="添加分享">
+      <el-form label-width="140" :model="form">
+        <el-form-item label="分享链接" required>
+          <el-input v-model="form.link" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="挂载路径">
+          <el-input v-model="form.path" autocomplete="off" placeholder="留空为临时挂载"/>
+        </el-form-item>
+        <el-form-item label="提取码">
+          <el-input v-model="form.code" autocomplete="off"/>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="formVisible=false">取消</el-button>
+        <el-button type="primary" @click="addShare">添加</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -244,7 +265,7 @@ import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
-import {Delete, Film, QuestionFilled} from "@element-plus/icons-vue";
+import {Delete, Film, Plus, QuestionFilled} from "@element-plus/icons-vue";
 
 let {toClipboard} = clipBorad();
 
@@ -280,11 +301,33 @@ const playing = ref(false)
 const isMuted = ref(false)
 const isFullscreen = ref(false)
 const dialogVisible = ref(false)
+const formVisible = ref(false)
 const page = ref(1)
 const size = ref(40)
 const total = ref(0)
 const files = ref<VodItem[]>([])
 const paths = ref<Item[]>([])
+const form = ref({
+  link: '',
+  path: '',
+  code: '',
+})
+
+const handleAdd = () => {
+  form.value = {
+    link: '',
+    path: '',
+    code: '',
+  }
+  formVisible.value = true
+}
+
+const addShare = () => {
+  axios.post('/api/share-link', form.value).then(({data}) => {
+    loadFolder(data.path)
+    formVisible.value = false
+  })
+}
 
 const load = (row: any) => {
   if (row.vod_tag === 'folder') {

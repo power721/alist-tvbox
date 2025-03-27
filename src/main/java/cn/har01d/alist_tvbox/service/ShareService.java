@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
+import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
@@ -123,9 +124,16 @@ public class ShareService {
         List<Share> list = shareRepository.findAll();
         if (list.isEmpty()) {
             list = loadSharesFromFile();
+        } else {
+            for (Share share : list) {
+                if (share.isTemp()) {
+                    log.info("Delete temp share: {} {}", share.getId(), share.getPath());
+                    shareRepository.delete(share);
+                }
+            }
         }
 
-        list = list.stream().filter(e -> e.getId() < 7000).collect(Collectors.toList());
+        list = list.stream().filter(e -> !e.isTemp()).filter(e -> e.getId() < 7000).collect(Collectors.toList());
         list.addAll(loadLatestShare());
 
         loadAListShares(list);
@@ -581,20 +589,17 @@ public class ShareService {
     private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([^/?]+)\\?pwd=([^/&#]+)#?");
     private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share\\?code=([^/&#]+)");
     private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/([^/?]+)");
-    private static final Pattern SHARE_123_LINK = Pattern.compile("https://www.(?:123pan|123684|123912).com/s/([^/?]+)(?:\\?提取码:([A-Za-z0-9]+))?");
+    private static final Pattern SHARE_123_LINK = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?]+)(?:\\??提取码[:：]([A-Za-z0-9]+))?");
+    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?]+)(?:\\??%E6%8F%90%E5%8F%96%E7%A0%81%EF%BC%9A([A-Za-z0-9]+))?");
 
-    private void parseShare(Share share) {
-        if (StringUtils.isBlank(share.getShareId())) {
-            return;
-        }
-
+    private boolean parseLink(Share share) {
         String url = share.getShareId();
         var m = SHARE_115_LINK.matcher(url);
         if (m.find()) {
             share.setType(8);
             share.setShareId(m.group(1));
             share.setPassword(m.group(2));
-            return;
+            return true;
         }
 
         m = SHARE_XL_LINK.matcher(url);
@@ -602,21 +607,21 @@ public class ShareService {
             share.setType(2);
             share.setShareId(m.group(1));
             share.setPassword(m.group(2));
-            return;
+            return true;
         }
 
         m = SHARE_189_LINK1.matcher(url);
         if (m.find()) {
             share.setType(9);
             share.setShareId(m.group(1));
-            return;
+            return true;
         }
 
         m = SHARE_189_LINK2.matcher(url);
         if (m.find()) {
             share.setType(9);
             share.setShareId(m.group(1));
-            return;
+            return true;
         }
 
         m = SHARE_123_LINK.matcher(url);
@@ -627,6 +632,29 @@ public class ShareService {
             if (code != null) {
                 share.setPassword(code);
             }
+            return true;
+        }
+
+        m = SHARE_123_LINK2.matcher(url);
+        if (m.find()) {
+            share.setType(3);
+            share.setShareId(m.group(1));
+            String code = m.group(2);
+            if (code != null) {
+                share.setPassword(code);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private void parseShare(Share share) {
+        String url = share.getShareId();
+        if (StringUtils.isBlank(url)) {
+            return;
+        }
+
+        if (parseLink(share)) {
             return;
         }
 
@@ -661,6 +689,25 @@ public class ShareService {
         } else {
             share.setShareId(parts[0]);
         }
+    }
+
+    public Share add(ShareLink dto) {
+        Share share = new Share();
+        share.setShareId(dto.getLink());
+        share.setPassword(dto.getCode());
+        if (!parseLink(share)) {
+            throw new BadRequestException("无法识别的分享链接");
+        }
+        if (StringUtils.isBlank(dto.getPath())) {
+            share.setTemp(true);
+            share.setPath("temp/" + share.getShareId());
+        }
+        share.setPath(getMountPath(share));
+        Share db = shareRepository.findByPath(share.getPath());
+        if (db != null) {
+            return db;
+        }
+        return create(share);
     }
 
     public Share create(Share share) {

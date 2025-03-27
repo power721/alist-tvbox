@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
+import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.model.Response;
@@ -34,6 +35,11 @@ public class ShareController {
     @PostMapping("/api/shares")
     public Share create(@RequestBody Share share) {
         return shareService.create(share);
+    }
+
+    @PostMapping("/api/share-link")
+    public Share add(@RequestBody ShareLink share) {
+        return shareService.add(share);
     }
 
     @PostMapping("/api/shares/{id}")
