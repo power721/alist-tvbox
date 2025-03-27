@@ -233,10 +233,10 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="formVisible" title="添加分享">
+    <el-dialog v-model="formVisible" title="添加分享" @opened="focus">
       <el-form label-width="140" :model="form">
         <el-form-item label="分享链接" required>
-          <el-input v-model="form.link" autocomplete="off"/>
+          <el-input id="link" v-model="form.link" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="挂载路径">
           <el-input v-model="form.path" autocomplete="off" placeholder="留空为临时挂载"/>
@@ -320,6 +320,10 @@ const handleAdd = () => {
     code: '',
   }
   formVisible.value = true
+}
+
+const focus = () => {
+  document.getElementById('link').focus()
 }
 
 const addShare = () => {
