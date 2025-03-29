@@ -601,10 +601,14 @@ public class ShareService {
     private static final Pattern SHARE_ALI_LINK1 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([^/]+)/folder/([^/?&#]+)(?:\\?password=([A-Za-z0-9]+))?");
     private static final Pattern SHARE_ALI_LINK2 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([^/?&#]+)(?:\\?password=([A-Za-z0-9]+))?");
     private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?]+)提取码[:：]([A-Za-z0-9]+)");
-    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?]+)(?:\\??提取码[:：]([A-Za-z0-9]+))?");
+    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?.]+)(?:\\.html)?(?:\\??提取码[:：]([A-Za-z0-9]+))?");
 
     public boolean parseLink(Share share) {
         String url = share.getShareId();
+        if (!url.startsWith("http")) {
+            return false;
+        }
+
         var m = SHARE_115_LINK.matcher(url);
         if (m.find()) {
             share.setType(8);
