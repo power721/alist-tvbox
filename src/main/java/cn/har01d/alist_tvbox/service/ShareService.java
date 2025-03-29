@@ -593,7 +593,7 @@ public class ShareService {
     private static final Pattern SHARE_115_LINK = Pattern.compile("https://(?:115|115cdn).com/s/(\\w+)\\?password=([^/&#]+)#?");
     private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([^/?]+)\\?pwd=([^/&#]+)");
     private static final Pattern SHARE_BD_LINK = Pattern.compile("https://pan.baidu.com/s/([^/?]+)\\?pwd=([^/&#]+)");
-    private static final Pattern SHARE_PK_LINK = Pattern.compile("https://mypikpak.com/s/([^/?]+)\\?pwd=([^/&#]+)");
+    private static final Pattern SHARE_PK_LINK = Pattern.compile("https://mypikpak.com/s/([^/?]+)(?:\\?pwd=([^/&#]+))?");
     private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share\\?code=([^/&#]+)");
     private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/([^/?&#]+)");
     private static final Pattern SHARE_QUARK_LINK = Pattern.compile("https://pan.quark.cn/s/([^/?&#]+)");
