@@ -38,7 +38,7 @@ public class ShareController {
     }
 
     @PostMapping("/api/share-link")
-    public Share add(@RequestBody ShareLink share) {
+    public String add(@RequestBody ShareLink share) {
         return shareService.add(share);
     }
 

@@ -9,7 +9,5 @@ public interface ShareRepository extends JpaRepository<Share, Integer> {
 
     int countByType(int type);
 
-    Share findByPath(String path);
-
     List<Share> findByType(int type);
 }

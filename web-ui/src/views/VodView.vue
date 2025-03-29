@@ -328,7 +328,7 @@ const focus = () => {
 
 const addShare = () => {
   axios.post('/api/share-link', form.value).then(({data}) => {
-    loadFolder(data.path)
+    loadFolder(data)
     formVisible.value = false
   })
 }

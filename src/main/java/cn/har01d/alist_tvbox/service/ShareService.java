@@ -20,6 +20,7 @@ import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.Response;
@@ -41,6 +42,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -72,6 +74,7 @@ public class ShareService {
     private final DriverAccountRepository panAccountRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
+    private final AListService aListService;
     private final ConfigFileService configFileService;
     private final PikPakService pikPakService;
     private final PanAccountService panAccountService;
@@ -88,6 +91,7 @@ public class ShareService {
                         AccountRepository accountRepository,
                         PikPakAccountRepository pikPakAccountRepository,
                         DriverAccountRepository panAccountRepository,
+                        AListService aListService,
                         PanAccountService panAccountService,
                         AppProperties appProperties,
                         AccountService accountService,
@@ -104,6 +108,7 @@ public class ShareService {
         this.accountRepository = accountRepository;
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.panAccountRepository = panAccountRepository;
+        this.aListService = aListService;
         this.panAccountService = panAccountService;
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
@@ -585,14 +590,20 @@ public class ShareService {
         return "";
     }
 
-    private static final Pattern SHARE_115_LINK = Pattern.compile("https://115.com/s/(\\w+)\\?password=([^/&#]+)#?");
-    private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([^/?]+)\\?pwd=([^/&#]+)#?");
+    private static final Pattern SHARE_115_LINK = Pattern.compile("https://(?:115|115cdn).com/s/(\\w+)\\?password=([^/&#]+)#?");
+    private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([^/?]+)\\?pwd=([^/&#]+)");
+    private static final Pattern SHARE_BD_LINK = Pattern.compile("https://pan.baidu.com/s/([^/?]+)\\?pwd=([^/&#]+)");
+    private static final Pattern SHARE_PK_LINK = Pattern.compile("https://mypikpak.com/s/([^/?]+)\\?pwd=([^/&#]+)");
     private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share\\?code=([^/&#]+)");
-    private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/([^/?]+)");
-    private static final Pattern SHARE_123_LINK = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?]+)(?:\\??提取码[:：]([A-Za-z0-9]+))?");
-    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?]+)(?:\\??%E6%8F%90%E5%8F%96%E7%A0%81%EF%BC%9A([A-Za-z0-9]+))?");
+    private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/([^/?&#]+)");
+    private static final Pattern SHARE_QUARK_LINK = Pattern.compile("https://pan.quark.cn/s/([^/?&#]+)");
+    private static final Pattern SHARE_UC_LINK = Pattern.compile("https://(?:drive|fast).uc.cn/s/([^/?&#]+)(?:\\?password=([A-Za-z0-9]+))?");
+    private static final Pattern SHARE_ALI_LINK1 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([^/]+)/folder/([^/?&#]+)(?:\\?password=([A-Za-z0-9]+))?");
+    private static final Pattern SHARE_ALI_LINK2 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([^/?&#]+)(?:\\?password=([A-Za-z0-9]+))?");
+    private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?]+)提取码[:：]([A-Za-z0-9]+)");
+    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?]+)(?:\\??提取码[:：]([A-Za-z0-9]+))?");
 
-    private boolean parseLink(Share share) {
+    public boolean parseLink(Share share) {
         String url = share.getShareId();
         var m = SHARE_115_LINK.matcher(url);
         if (m.find()) {
@@ -624,7 +635,7 @@ public class ShareService {
             return true;
         }
 
-        m = SHARE_123_LINK.matcher(url);
+        m = SHARE_123_LINK1.matcher(url);
         if (m.find()) {
             share.setType(3);
             share.setShareId(m.group(1));
@@ -638,6 +649,58 @@ public class ShareService {
         m = SHARE_123_LINK2.matcher(url);
         if (m.find()) {
             share.setType(3);
+            share.setShareId(m.group(1));
+            String code = m.group(2);
+            if (code != null) {
+                share.setPassword(code);
+            }
+            return true;
+        }
+
+        m = SHARE_QUARK_LINK.matcher(url);
+        if (m.find()) {
+            share.setType(5);
+            share.setShareId(m.group(1));
+            return true;
+        }
+
+        m = SHARE_UC_LINK.matcher(url);
+        if (m.find()) {
+            share.setType(7);
+            share.setShareId(m.group(1));
+            String code = m.group(2);
+            if (code != null) {
+                share.setPassword(code);
+            }
+            return true;
+        }
+
+        m = SHARE_ALI_LINK1.matcher(url);
+        if (m.find()) {
+            share.setType(0);
+            share.setShareId(m.group(1));
+            share.setFolderId(m.group(2));
+            String code = m.group(3);
+            if (code != null) {
+                share.setPassword(code);
+            }
+            return true;
+        }
+
+        m = SHARE_ALI_LINK2.matcher(url);
+        if (m.find()) {
+            share.setType(0);
+            share.setShareId(m.group(1));
+            String code = m.group(2);
+            if (code != null) {
+                share.setPassword(code);
+            }
+            return true;
+        }
+
+        m = SHARE_PK_LINK.matcher(url);
+        if (m.find()) {
+            share.setType(1);
             share.setShareId(m.group(1));
             String code = m.group(2);
             if (code != null) {
@@ -691,9 +754,9 @@ public class ShareService {
         }
     }
 
-    public Share add(ShareLink dto) {
+    public String add(ShareLink dto) {
         Share share = new Share();
-        share.setShareId(dto.getLink());
+        share.setShareId(URLDecoder.decode(dto.getLink(), StandardCharsets.UTF_8));
         share.setPassword(dto.getCode());
         if (!parseLink(share)) {
             throw new BadRequestException("无法识别的分享链接");
@@ -703,11 +766,16 @@ public class ShareService {
             share.setPath("temp/" + share.getShareId());
         }
         share.setPath(getMountPath(share));
-        Share db = shareRepository.findByPath(share.getPath());
-        if (db != null) {
-            return db;
+        String path = share.getPath();
+        if (!shareRepository.existsByPath(path)) {
+            create(share);
         }
-        return create(share);
+        Site site = siteRepository.findById(1).orElseThrow();
+        FsResponse response = aListService.listFiles(site, path, 1, 1);
+        if (response.getTotal() == 1 && response.getFiles().get(0).getType() == 1) {
+            return path + "/" + response.getFiles().get(0).getName();
+        }
+        return path;
     }
 
     public Share create(Share share) {
