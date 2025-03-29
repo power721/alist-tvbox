@@ -594,7 +594,7 @@ public class ShareService {
     private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([^/?]+)(?:\\?pwd=([^/&#]+))?");
     private static final Pattern SHARE_BD_LINK = Pattern.compile("https://pan.baidu.com/s/([^/?]+)(?:\\?pwd=([^/&#]+))?");
     private static final Pattern SHARE_PK_LINK = Pattern.compile("https://mypikpak.com/s/([^/?]+)(?:\\?pwd=([^/&#]+))?");
-    private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share(?:\\?code=([^/&#]+))?");
+    private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share\\?code=([^/&#]+)");
     private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/([^/?&#]+)");
     private static final Pattern SHARE_QUARK_LINK = Pattern.compile("https://pan.quark.cn/s/([^/?&#]+)");
     private static final Pattern SHARE_UC_LINK = Pattern.compile("https://(?:drive|fast).uc.cn/s/([^/?&#]+)(?:\\?password=([A-Za-z0-9]+))?");
@@ -768,6 +768,8 @@ public class ShareService {
         if (StringUtils.isBlank(dto.getPath())) {
             share.setTemp(true);
             share.setPath("temp/" + share.getShareId());
+        } else {
+            share.setPath(dto.getPath());
         }
         share.setPath(getMountPath(share));
         String path = share.getPath();
