@@ -1298,7 +1298,7 @@ public class TvBoxService {
             }
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
-            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://www.aliyundrive.com/\"}");
+            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"" + Constants.ALIPAN + "\"}");
         }
 
         if (!getSub) {
@@ -1508,8 +1508,8 @@ public class TvBoxService {
                 movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
             } else if ("web".equals(ac)) {
                 String url = fsDetail.getRawUrl();
-                if (url.contains("aliyundrive.cloud")) {
-                    movieDetail.setVod_play_url(proxyService.generateProxyUrl("ali", url));
+                if (fsDetail.getProvider().equals("AliyundriveShare2Open") || fsDetail.getProvider().equals("AliyundriveOpen")) {
+                    movieDetail.setVod_play_url(buildProxyUrl(tid));
                 } else if (url.contains("115cdn.net")) {
                     movieDetail.setVod_play_url(proxyService.generateProxyUrl("115", url));
                 } else {

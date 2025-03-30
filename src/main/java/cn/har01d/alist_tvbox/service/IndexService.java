@@ -569,7 +569,7 @@ public class IndexService {
             headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
             headers.put("X-Device-Id", List.of(deviceID));
             headers.put("X-Share-Token", List.of(shareInfo.getShareToken()));
-            headers.put("Referer", List.of("https://www.alipan.com/"));
+            headers.put("Referer", List.of(Constants.ALIPAN));
             headers.put("User-Agent", List.of(USER_AGENT));
             Map<String, Object> body = new HashMap<>();
             body.put("share_id", shareInfo.getShareId());

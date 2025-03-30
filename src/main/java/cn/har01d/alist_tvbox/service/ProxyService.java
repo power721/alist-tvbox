@@ -74,32 +74,24 @@ public class ProxyService {
     }
 
     public void proxy(String id, String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        Map<String, String> headers = new HashMap<>();
+        var it = request.getHeaderNames().asIterator();
+        while (it.hasNext()) {
+            String name = it.next();
+            headers.put(name, request.getHeader(name));
+        }
+        headers.put("User-Agent", Constants.USER_AGENT);
+        headers.put("Referer", Constants.ALIPAN);
+
         String url = cache.getIfPresent(id);
         if (url != null) {
             log.info("proxy url: {} {}", id, url);
-            Map<String, String> headers = new HashMap<>();
             if (url.startsWith("115-")) {
                 String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
-                headers.put("Range", request.getHeader("Range"));
-                headers.put("User-Agent", Constants.USER_AGENT);
                 headers.put("Cookie", cookie);
                 headers.put("Referer", "https://115.com/");
-            } else if (url.startsWith("ali-")) {
-                headers.put("Range", request.getHeader("Range"));
-                headers.put("User-Agent", Constants.USER_AGENT);
-                headers.put("Referer", "https://www.aliyundrive.com/");
             }
-
-            log.debug("Range: {}", headers.get("Range"));
-            downloadStraight(url, response, headers);
         } else {
-            Map<String, String> headers = new HashMap<>();
-            var it = request.getHeaderNames().asIterator();
-            while (it.hasNext()) {
-                String name = it.next();
-                headers.put(name, request.getHeader(name));
-            }
-
             String[] parts = path.split("\\$");
             Site site = siteService.getById(Integer.parseInt(parts[0]));
             path = parts[1];
@@ -108,9 +100,14 @@ public class ProxyService {
                 throw new BadRequestException("找不到文件 " + path);
             }
 
-            url = buildProxyUrl(site, path, fsDetail.getSign());
-            downloadStraight(url, response, headers);
+            if (fsDetail.getProvider().equals("AliyundriveShare2Open") || fsDetail.getProvider().equals("AliyundriveOpen")) {
+                url = fsDetail.getRawUrl();
+            } else {
+                url = buildProxyUrl(site, path, fsDetail.getSign());
+            }
         }
+
+        downloadStraight(url, response, headers);
     }
 
     private String buildProxyUrl(Site site, String path, String sign) {
