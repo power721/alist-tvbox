@@ -1506,7 +1506,7 @@ public class TvBoxService {
                 movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
             } else if ("web".equals(ac)) {
                 String url = fsDetail.getRawUrl();
-                if (url.contains("ali")) {
+                if (url.contains("aliyundrive.cloud")) {
                     movieDetail.setVod_play_url(proxyService.generateProxyUrl("ali", url));
                 } else if (url.contains("115cdn.net")) {
                     movieDetail.setVod_play_url(proxyService.generateProxyUrl("115", url));
@@ -1626,6 +1626,7 @@ public class TvBoxService {
                 for (String name : fileNames) {
                     String filepath = newPath + "/" + folder + "/" + name;
                     if ("detail".equals(ac) || "web".equals(ac)) {
+                        // TODO:
                         String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
                         String url = buildProxyUrl(site, filepath, sign);
                         urls.add(fixName(name, prefix, suffix) + "$" + url);

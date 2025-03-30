@@ -122,7 +122,7 @@
       <el-form-item v-if="form.type!=4" label="分享ID" label-width="140" required>
         <el-input v-model="form.shareId" autocomplete="off" placeholder="分享ID或者分享链接"/>
       </el-form-item>
-      <el-form-item v-if="form.type!=4" :label="form.type==3?'Token':'密码'" label-width="140">
+      <el-form-item v-if="form.type!=4" label="提取码" label-width="140">
         <el-input v-model="form.password" autocomplete="off"/>
       </el-form-item>
       <el-form-item :label="form.type==4?'本地路径':'文件夹ID'" label-width="140">

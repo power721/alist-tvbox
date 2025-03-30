@@ -127,18 +127,19 @@ public class ShareService {
         panAccountService.loadStorages();
 
         List<Share> list = shareRepository.findAll();
-        if (list.isEmpty()) {
-            list = loadSharesFromFile();
-        } else {
-            for (Share share : list) {
-                if (share.isTemp()) {
-                    log.info("Delete temp share: {} {}", share.getId(), share.getPath());
-                    shareRepository.delete(share);
-                }
+
+        for (Share share : list) {
+            if (share.isTemp()) {
+                log.info("Delete temp share: {} {}", share.getId(), share.getPath());
+                shareRepository.delete(share);
             }
         }
 
-        list = list.stream().filter(e -> !e.isTemp()).filter(e -> e.getId() < 7000).collect(Collectors.toList());
+        if (list.isEmpty()) {
+            list = loadSharesFromFile();
+        }
+
+        list = list.stream().filter(e -> !e.isTemp()).filter(e -> e.getId() < 9900).collect(Collectors.toList());
         list.addAll(loadLatestShare());
 
         loadAListShares(list);
@@ -844,6 +845,7 @@ public class ShareService {
         fixFolderId(share);
 
         share.setId(id);
+        share.setTemp(false);
         shareRepository.save(share);
 
         String token = accountService.login();
@@ -993,10 +995,18 @@ public class ShareService {
             return shares;
         }
 
+        if (!settingRepository.existsByName("fix_share_id")) {
+            shareRepository.deleteById(7000);
+            shareRepository.deleteById(7001);
+            shareRepository.deleteById(7002);
+            shareRepository.deleteById(7003);
+            settingRepository.save(new Setting("fix_share_id", ""));
+        }
+
         try {
             Share share = new Share();
             share.setType(0);
-            share.setId(7000);
+            share.setId(9900);
             share.setShareId("cdqCsAWD9wC");
             share.setPassword("6666");
             share.setFolderId("635151fc53641440ad95492c8174c57584c56f68");
@@ -1009,7 +1019,7 @@ public class ShareService {
         try {
             Share share = new Share();
             share.setType(0);
-            share.setId(7002);
+            share.setId(9901);
             share.setShareId("4ydLxf7VgH7");
             share.setFolderId("6411b6c459de9db58ea5439cb7f537bbed4f4f4b");
             share.setPath("/\uD83C\uDE34我的阿里分享/每日更新");
@@ -1021,7 +1031,7 @@ public class ShareService {
         try {
             Share share = new Share();
             share.setType(0);
-            share.setId(7003);
+            share.setId(9902);
             share.setShareId("UuHi9PeYSVz");
             share.setFolderId("633bfc72b2f11449546041cea0e90bdfe680a110");
             share.setPath("/\uD83C\uDE34我的阿里分享/YYDSVIP综艺");

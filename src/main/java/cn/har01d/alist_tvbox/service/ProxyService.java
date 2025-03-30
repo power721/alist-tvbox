@@ -29,9 +29,9 @@ import static com.github.kiulian.downloader.model.Utils.closeSilently;
 @Slf4j
 @Service
 public class ProxyService {
-    private static final int BUFFER_SIZE = 8 * 1024;
+    private static final int BUFFER_SIZE = 64 * 1024;
     private final Cache<String, String> cache = Caffeine.newBuilder()
-            .maximumSize(10)
+            .maximumSize(50)
             .build();
     private final AppProperties appProperties;
     private final DriverAccountRepository panAccountRepository;

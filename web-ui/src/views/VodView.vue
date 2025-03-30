@@ -13,7 +13,7 @@
       <el-col :span="2">
         <el-button :icon="Film" circle @click="loadHistory"></el-button>
         <el-button :icon="Delete" circle @click="clearHistory"
-        v-if="paths.length>1&&paths[1].path=='/~history'"></el-button>
+                   v-if="paths.length>1&&paths[1].path=='/~history'"></el-button>
         <el-button :icon="Plus" circle @click="handleAdd"></el-button>
       </el-col>
     </el-row>
@@ -39,12 +39,12 @@
               {{ scope.row.vod_name }}
             </template>
           </el-table-column>
-          <el-table-column label="大小" width="120">
+          <el-table-column label="大小" width="120" v-if="!isHistory">
             <template #default="scope">
               {{ scope.row.vod_tag === 'file' ? scope.row.vod_remarks : '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="dbid" label="豆瓣ID" width="120">
+          <el-table-column prop="dbid" label="豆瓣ID" width="120" v-if="!isHistory">
             <template #default="scope">
               <a @click.stop :href="'https://movie.douban.com/subject/'+scope.row.dbid" target="_blank"
                  v-if="scope.row.dbid">
@@ -52,12 +52,14 @@
               </a>
             </template>
           </el-table-column>
-          <el-table-column label="评分" width="90">
+          <el-table-column label="评分" width="90" v-if="!isHistory">
             <template #default="scope">
               {{ scope.row.vod_tag === 'folder' ? scope.row.vod_remarks : '' }}
             </template>
           </el-table-column>
-          <el-table-column prop="vod_time" label="修改时间" width="165"/>
+          <el-table-column prop="index" label="集数" width="90" v-if="isHistory"/>
+          <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
+          <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="165"/>
         </el-table>
         <el-pagination layout="total, prev, pager, next, jumper, sizes"
                        :current-page="page" :page-size="size" :total="total"
@@ -236,7 +238,7 @@
     <el-dialog v-model="formVisible" title="添加分享" @opened="focus">
       <el-form label-width="140" :model="form">
         <el-form-item label="分享链接" required>
-          <el-input id="link" v-model="form.link" autocomplete="off"/>
+          <el-input id="link" v-model="form.link" @keyup.enter="addShare" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="挂载路径">
           <el-input v-model="form.path" autocomplete="off" placeholder="留空为临时挂载"/>
@@ -302,6 +304,7 @@ const isMuted = ref(false)
 const isFullscreen = ref(false)
 const dialogVisible = ref(false)
 const formVisible = ref(false)
+const isHistory = ref(false)
 const page = ref(1)
 const size = ref(40)
 const total = ref(0)
@@ -334,16 +337,27 @@ const addShare = () => {
 }
 
 const load = (row: any) => {
+  if (isHistory.value) {
+    goParent(row.vod_id)
+  }
+
   if (row.vod_tag === 'folder') {
     loadFolder(row.vod_id)
   } else {
-    if (row.vod_name == '播放列表') {
+    if (row.vod_id.endsWith('playlist$1')) {
       toClipboard(row.vod_play_url).then(() => {
         ElMessage.success('播放地址复制成功')
       })
     }
     loadDetail(row.vod_id)
   }
+}
+
+const goParent = (path: string) => {
+  path = getPath(path)
+  const index = path.lastIndexOf('/')
+  const parent = path.substring(0, index)
+  loadFolder(parent)
 }
 
 const imageUrl = (url: string) => {
@@ -381,6 +395,7 @@ const loadFolder = (path: string) => {
 
 const loadFiles = (path: string) => {
   const id = extractPaths(path)
+  isHistory.value = false
   loading.value = true
   files.value = []
   axios.get('/vod' + token.value + '?ac=web&pg=' + page.value + '&size=' + size.value + '&t=' + id).then(({data}) => {
@@ -417,6 +432,7 @@ const extractPaths = (id: string) => {
 }
 
 const loadDetail = (id: string) => {
+  loading.value = true
   axios.get('/vod' + token.value + '?ac=web&ids=' + id).then(({data}) => {
     movies.value = data.list
     movies.value[0].vod_id = id
@@ -437,17 +453,30 @@ const loadDetail = (id: string) => {
     })
     getHistory(id)
     getPlayUrl()
+    loading.value = false
     dialogVisible.value = true
+  }, () => {
+    loading.value = false
   })
 }
 
 const handleKeyDown = (event: KeyboardEvent) => {
+  if (formVisible.value) {
+    return;
+  }
   if (!dialogVisible.value) {
     if (event.code === 'Space' && files.value.length > 0 && files.value[0].vod_tag === 'file') {
       event.preventDefault()
       loadDetail(files.value[0].vod_id)
     } else if (event.code === 'Escape' && paths.value.length > 1) {
+      event.preventDefault()
       loadFolder(paths.value[paths.value.length - 2].path)
+    } else if (event.code === 'KeyA') {
+      event.preventDefault()
+      handleAdd()
+    } else if (event.code === 'KeyH') {
+      event.preventDefault()
+      loadHistory()
     }
     return
   }
@@ -785,16 +814,37 @@ const formatDate = (timestamp: number): string => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
+const formatTime = (seconds: number): string => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor(seconds % 3600 / 60);
+  const s = Math.floor(seconds % 3600 % 60);
+
+  if (h > 0) {
+    return [
+      h.toString().padStart(2, '0'),
+      m.toString().padStart(2, '0'),
+      s.toString().padStart(2, '0')
+    ].join(':');
+  }
+  return [
+    m.toString().padStart(2, '0'),
+    s.toString().padStart(2, '0')
+  ].join(':');
+}
+
 const loadHistory = () => {
   const items = JSON.parse(localStorage.getItem('history') || '[]')
   files.value = items.sort((a, b) => b.t - a.t).map(e => {
     return {
       vod_id: e.id,
       vod_name: e.n,
+      index: e.i + 1,
+      progress: formatTime(e.c),
       vod_tag: 'file',
       vod_time: formatDate(e.t)
     }
   })
+  isHistory.value = true
   total.value = files.value.length
   paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
 }
