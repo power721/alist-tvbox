@@ -2,11 +2,29 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.dto.Subtitle;
-import cn.har01d.alist_tvbox.entity.*;
+import cn.har01d.alist_tvbox.entity.AListAlias;
+import cn.har01d.alist_tvbox.entity.AListAliasRepository;
+import cn.har01d.alist_tvbox.entity.Account;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.Meta;
+import cn.har01d.alist_tvbox.entity.MetaRepository;
+import cn.har01d.alist_tvbox.entity.Movie;
+import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
+import cn.har01d.alist_tvbox.entity.ShareRepository;
+import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.Tmdb;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
-import cn.har01d.alist_tvbox.model.*;
+import cn.har01d.alist_tvbox.model.FileNameInfo;
+import cn.har01d.alist_tvbox.model.Filter;
+import cn.har01d.alist_tvbox.model.FilterValue;
+import cn.har01d.alist_tvbox.model.FsDetail;
+import cn.har01d.alist_tvbox.model.FsInfo;
+import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -24,28 +42,44 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.core.env.Environment;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.*;
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_PIC;
+import static cn.har01d.alist_tvbox.util.Constants.FILE;
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
+import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
+import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
@@ -721,7 +755,7 @@ public class TvBoxService {
                 movieDetail.setVod_remarks(getLabel(path));
             }
             if (!isMediaFile) {
-                setMovieInfo(site, movieDetail, getParent(path), false);
+                setMovieInfo(site, movieDetail, "", getParent(path), false);
             }
             list.add(movieDetail);
         }
@@ -763,7 +797,7 @@ public class TvBoxService {
                         movieDetail.setVod_pic(Constants.ALIST_PIC);
                         movieDetail.setVod_tag(FILE);
                         if (!isMediaFile) {
-                            setMovieInfo(site, movieDetail, getParent(path), false);
+                            setMovieInfo(site, movieDetail, e.getName(), getParent(path), false);
                         }
                         return movieDetail;
                     })
@@ -813,7 +847,7 @@ public class TvBoxService {
             movieDetail.setVod_content(path.replace(PLAYLIST, ""));
             movieDetail.setVod_tag(FILE);
             if (!isMediaFile) {
-                setMovieInfo(site, movieDetail, getParent(path), false);
+                setMovieInfo(site, movieDetail, "", getParent(path), false);
             }
             list.add(movieDetail);
             if (list.size() > appProperties.getMaxSearchResult()) {
@@ -869,7 +903,7 @@ public class TvBoxService {
         return false;
     }
 
-    public MovieList getMovieList(String client, String ac, String tid, String filter, String sort, int page) {
+    public MovieList getMovieList(String client, String ac, String tid, String filter, String sort, int page, int size) {
         String[] parts = tid.split("\\$");
         String path = parts[1];
         int type = 1;
@@ -888,18 +922,17 @@ public class TvBoxService {
 
         List<MovieDetail> folders = new ArrayList<>();
         List<MovieDetail> files = new ArrayList<>();
-        List<MovieDetail> playlists = new ArrayList<>();
         MovieList result = new MovieList();
 
-        int size = appProperties.getPageSize();
         FsResponse fsResponse = aListService.listFiles(site, path, page, size);
         int total = fsResponse.getTotal();
 
         for (FsInfo fsInfo : fsResponse.getFiles()) {
             String filepath = path + fsInfo.getName();
             if ((fsInfo.getType() == 1 && exclude(fsInfo.getName()))
+                    || filepath.startsWith("/©\uFE0F")
                     || filepath.equals("/元数据")
-                    || filepath.equals("/\uD83D\uDEE0\uFE0F安装，配置，修复 xiaoya docker 指南")
+                    || filepath.equals("/\uD83D\uDEE0\uFE0F 安装，配置，修复 xiaoya_docker 指南")
                     || (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName()))) {
                 total--;
                 continue;
@@ -910,8 +943,12 @@ public class TvBoxService {
             movieDetail.setVod_id(site.getId() + "$" + encodeUrl(newPath) + "$1");
             movieDetail.setVod_name(fsInfo.getName());
             movieDetail.setVod_tag(fsInfo.getType() == 1 ? FOLDER : FILE);
-            movieDetail.setVod_pic(getCover(fsInfo.getThumb(), fsInfo.getType()));
-            movieDetail.setVod_remarks(fileSize(fsInfo.getSize()) + (fsInfo.getType() == 1 ? "文件夹" : ""));
+            movieDetail.setVod_pic(getCover(ac, fsInfo.getThumb(), fsInfo.getType()));
+            if (fsInfo.getType() == 1) {
+                movieDetail.setVod_remarks(("web".equals(ac) ? "" : "文件夹"));
+            } else {
+                movieDetail.setVod_remarks(fileSize(fsInfo.getSize()));
+            }
             movieDetail.setVod_time(fsInfo.getModified());
             movieDetail.setSize(fsInfo.getSize());
             if (fsInfo.getType() == 1) {
@@ -922,7 +959,7 @@ public class TvBoxService {
                     }
                     movieDetail.setCate(new CategoryList());
                 }
-                setMovieInfo(site, movieDetail, newPath, false);
+                setMovieInfo(site, movieDetail, fsInfo.getName(), newPath, false);
                 folders.add(movieDetail);
             } else {
                 files.add(movieDetail);
@@ -934,10 +971,14 @@ public class TvBoxService {
         result.getList().addAll(folders);
 
         if (page == 1 && files.size() > 1) {
-            playlists = generatePlaylist(site.getId() + "$" + fixPath(path + PLAYLIST), total - folders.size(), files);
+            MovieDetail playlist = generatePlaylist(site, path, total - folders.size(), files);
+            if ("web".equals(ac)) {
+                playlist.setVod_remarks("");
+                playlist.setVod_play_url(buildM3u8Url(path));
+            }
+            result.getList().add(playlist);
         }
 
-        result.getList().addAll(playlists);
         result.getList().addAll(files);
 
         result.setPage(page);
@@ -1140,20 +1181,16 @@ public class TvBoxService {
         files.sort(comparator);
     }
 
-    private List<MovieDetail> generatePlaylist(String path, int total, List<MovieDetail> files) {
+    private MovieDetail generatePlaylist(Site site, String path, int total, List<MovieDetail> files) {
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id(encodeUrl(path) + "$1");
+        movieDetail.setVod_id(encodeUrl(site.getId() + "$" + fixPath(path + PLAYLIST)) + "$1");
         movieDetail.setVod_name("播放列表");
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(getListPic());
         if (total < appProperties.getPageSize()) {
             movieDetail.setVod_remarks("共" + files.size() + "集");
         }
-
-        List<MovieDetail> list = new ArrayList<>();
-        list.add(movieDetail);
-
-        return list;
+        return movieDetail;
     }
 
     private String getListPic() {
@@ -1250,7 +1287,7 @@ public class TvBoxService {
         } else if (url.contains("115cdn.net")) {
             var account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElseThrow();
             if (account.isUseProxy()) {
-                url = proxyService.generateProxyUrl(url);
+                url = proxyService.generateProxyUrl("115", url);
                 result.put("url", url);
             } else {
                 String cookie = account.getCookie();
@@ -1420,7 +1457,7 @@ public class TvBoxService {
             List<Meta> list = metaRepository.findAllById(Arrays.stream(ids).map(Integer::parseInt).collect(Collectors.toList()));
             Meta meta = list.get(0);
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(tid + "$1");
+            movieDetail.setVod_id(encodeUrl(tid));
             movieDetail.setVod_name(meta.getName());
             movieDetail.setVod_tag(FILE);
             movieDetail.setVod_time(String.valueOf(meta.getYear()));
@@ -1450,26 +1487,40 @@ public class TvBoxService {
             movieDetail.setVod_play_from(String.join("$$$", from));
             movieDetail.setVod_play_url(playUrl);
 
-            movieDetail.setVod_content(getParent(path));
+            if (!"web".equals(ac)) {
+                movieDetail.setVod_content(getParent(path));
+            }
             setMovieInfo(movieDetail, meta, true);
             result.getList().add(movieDetail);
         } else {
             FsDetail fsDetail = aListService.getFile(site, path);
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(tid + "$1");
+            movieDetail.setVod_id(encodeUrl(tid));
             movieDetail.setVod_name(fsDetail.getName());
             movieDetail.setVod_tag(fsDetail.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_time(fsDetail.getModified());
-            movieDetail.setVod_pic(getCover(fsDetail.getThumb(), fsDetail.getType()));
+            movieDetail.setVod_pic(getCover(ac, fsDetail.getThumb(), fsDetail.getType()));
             movieDetail.setVod_play_from(site.getName());
             if ("detail".equals(ac)) {
-                String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, path).getSign();
+                String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
                 movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
+            } else if ("web".equals(ac)) {
+                String url = fsDetail.getRawUrl();
+                if (url.contains("aliyundrive.cloud")) {
+                    movieDetail.setVod_play_url(proxyService.generateProxyUrl("ali", url));
+                } else if (url.contains("115cdn.net")) {
+                    movieDetail.setVod_play_url(proxyService.generateProxyUrl("115", url));
+                } else {
+                    String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
+                    movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
+                }
             } else {
                 movieDetail.setVod_play_url(fsDetail.getName() + "$" + buildPlayUrl(site, path));
             }
-            movieDetail.setVod_content(getParent(path));
-            setMovieInfo(site, movieDetail, getParent(path), true);
+            if (!"web".equals(ac)) {
+                movieDetail.setVod_content(getParent(path));
+            }
+            setMovieInfo(site, movieDetail, fsDetail.getName(), getParent(path), true);
             if ("PikPakShare".equals(fsDetail.getProvider())) {
                 movieDetail.setVod_remarks("P" + movieDetail.getVod_remarks());
             }
@@ -1498,6 +1549,35 @@ public class TvBoxService {
         return encodeUrl(site.getId() + "~~~" + path);
     }
 
+    public List<FileItem> browse(String path) {
+        List<FileItem> files = aListService.browse(1, path);
+        for (FileItem item : files) {
+            if (isMediaFormat(item.getName())) {
+                files.add(0, new FileItem("m3u8", path + "/~m3u8", 2));
+                break;
+            }
+        }
+        return files;
+    }
+
+    public String m3u8(String path) {
+        Site site = siteService.getById(1);
+        List<String> list = new ArrayList<>();
+        list.add("#EXTM3U");
+        MovieList movieList = getPlaylist("detail", site, path + PLAYLIST);
+        MovieDetail detail = movieList.getList().get(0);
+        String[] folders = detail.getVod_play_from().split("\\$\\$\\$");
+        for (String folder : folders) {
+            String[] urls = detail.getVod_play_url().split("#");
+            for (String url : urls) {
+                String[] parts = url.split("\\$");
+                list.add("#EXTINF:-1," + detail.getVod_name() + " " + (folders.length > 1 ? folder + " " : "") + parts[0]);
+                list.add(parts[1]);
+            }
+        }
+        return String.join("\n", list);
+    }
+
     public MovieList getPlaylist(String ac, Site site, String path) {
         log.info("load playlist {}:{} {}", site.getId(), site.getName(), path);
         String newPath = getParent(path);
@@ -1511,11 +1591,13 @@ public class TvBoxService {
         movieDetail.setVod_name(getMovieName(fsDetail.getName(), newPath));
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(site.getName());
-        movieDetail.setVod_content(site.getName() + ":" + newPath);
+        if (!"web".equals(ac)) {
+            movieDetail.setVod_content(site.getName() + ":" + newPath);
+        }
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(getListPic());
 
-        setMovieInfo(site, movieDetail, newPath, true);
+        setMovieInfo(site, movieDetail, fsDetail.getName(), newPath, true);
 
         FsResponse fsResponse = aListService.listFiles(site, newPath, 1, 0);
         List<FsInfo> files = fsResponse.getFiles().stream()
@@ -1543,7 +1625,8 @@ public class TvBoxService {
                 List<String> urls = new ArrayList<>();
                 for (String name : fileNames) {
                     String filepath = newPath + "/" + folder + "/" + name;
-                    if ("detail".equals(ac)) {
+                    if ("detail".equals(ac) || "web".equals(ac)) {
+                        // TODO:
                         String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
                         String url = buildProxyUrl(site, filepath, sign);
                         urls.add(fixName(name, prefix, suffix) + "$" + url);
@@ -1572,7 +1655,7 @@ public class TvBoxService {
 
             for (String name : fileNames) {
                 String filepath = newPath + "/" + name;
-                if ("detail".equals(ac)) {
+                if ("detail".equals(ac) || "web".equals(ac)) {
                     String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
                     String url = buildProxyUrl(site, filepath, sign);
                     list.add(fixName(name, prefix, suffix) + "$" + url);
@@ -1730,7 +1813,7 @@ public class TvBoxService {
         return text;
     }
 
-    private void setMovieInfo(Site site, MovieDetail movieDetail, String path, boolean details) {
+    private void setMovieInfo(Site site, MovieDetail movieDetail, String name, String path, boolean details) {
         if (setTmdbInfo(site, movieDetail, path, details)) {
             return;
         }
@@ -1746,6 +1829,16 @@ public class TvBoxService {
 
             if (movie == null) {
                 movie = doubanService.getByName(movieDetail.getVod_name());
+            }
+
+            if (movie == null) {
+                for (var pattern : List.of(NUMBER, NUMBER1, NUMBER2, NUMBER3)) {
+                    var m = pattern.matcher(name);
+                    if (m.matches()) {
+                        movie = doubanService.getByName(getNameFromPath(getParent(path)));
+                        break;
+                    }
+                }
             }
 
             setMovieInfo(movieDetail, movie, null, details);
@@ -1770,6 +1863,7 @@ public class TvBoxService {
         movieDetail.setVod_pic(movie.getCover());
         movieDetail.setVod_year(String.valueOf(movie.getYear()));
         movieDetail.setVod_remarks(Utils.trim(movieDetail.getVod_remarks() + Objects.toString(movie.getDbScore(), "")));
+        movieDetail.setDbid(movie.getId());
         if (!details) {
             return;
         }
@@ -1779,7 +1873,11 @@ public class TvBoxService {
         movieDetail.setType_name(movie.getGenre());
         movieDetail.setVod_lang(movie.getLanguage());
         if (StringUtils.isNotEmpty(movie.getDescription())) {
-            movieDetail.setVod_content(movieDetail.getVod_content() + ";\n" + movie.getDescription());
+            if (StringUtils.isBlank(movieDetail.getVod_content())) {
+                movieDetail.setVod_content(movie.getDescription());
+            } else {
+                movieDetail.setVod_content(movieDetail.getVod_content() + ";\n" + movie.getDescription());
+            }
         }
     }
 
@@ -1844,9 +1942,9 @@ public class TvBoxService {
         }
     }
 
-    private String getCover(String thumb, int type) {
+    private String getCover(String ac, String thumb, int type) {
         String pic = thumb;
-        if (pic.isEmpty() && type == 1) {
+        if (pic.isEmpty() && type == 1 && !"web".equals(ac)) {
             pic = ServletUriComponentsBuilder.fromCurrentRequest()
                     .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                     .replacePath("/folder.png")
@@ -1957,7 +2055,7 @@ public class TvBoxService {
             return ServletUriComponentsBuilder.fromCurrentRequest()
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
                     .replacePath("/d" + path)
-                    .replaceQuery("sign=" + sign)
+                    .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()
                     .toUri()
                     .toASCIIString();
@@ -1967,7 +2065,7 @@ public class TvBoxService {
             }
             return UriComponentsBuilder.fromHttpUrl(site.getUrl())
                     .replacePath("/d" + path)
-                    .replaceQuery("sign=" + sign)
+                    .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()
                     .toUri()
                     .toASCIIString();
@@ -1993,12 +2091,17 @@ public class TvBoxService {
         }
     }
 
+    private String buildM3u8Url(String path) {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/m3u8/" + subscriptionService.getToken())
+                .replaceQuery("path=" + encodeUrl(path))
+                .build()
+                .toUriString();
+    }
+
     private String encodeUrl(String url) {
-        try {
-            return URLEncoder.encode(url, "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            return url;
-        }
+        return URLEncoder.encode(url, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
 }

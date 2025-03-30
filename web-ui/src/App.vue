@@ -62,8 +62,8 @@ onMounted(() => {
           <el-menu-item index="/logs" v-if="account.authenticated">日志</el-menu-item>
           <el-menu-item index="/files" v-if="account.authenticated&&show&&full">文件</el-menu-item>
           <el-menu-item index="/alias" v-if="account.authenticated&&show&&full">别名</el-menu-item>
-          <el-menu-item index="/vod" v-if="account.authenticated&&full">vod</el-menu-item>
           <el-menu-item index="/search" v-if="account.authenticated&&full">搜索</el-menu-item>
+          <el-menu-item index="/vod" v-if="account.authenticated&&show&&full">vod</el-menu-item>
           <el-menu-item index="/live" v-if="account.authenticated&&full">直播</el-menu-item>
           <el-menu-item index="/about" v-if="account.authenticated">关于</el-menu-item>
           <el-menu-item id="mode" v-if="account.authenticated">

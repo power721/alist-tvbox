@@ -18,6 +18,7 @@
     "mpegts.js": "^1.7.3",
     "sortablejs": "^1.15.0",
     "vue": "^3.2.45",
+    "vue-clipboard3": "^2.0.0",
     "vue-json-viewer": "^3.0.4",
     "vue-router": "^4.1.6"
   },

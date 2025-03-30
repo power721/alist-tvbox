@@ -21,6 +21,7 @@ import java.util.List;
 @Service
 
 public class PikPakService {
+    private final int base = 4500;
     private final PikPakAccountRepository pikPakAccountRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
@@ -113,7 +114,7 @@ public class PikPakService {
             List<PikPakAccount> list = pikPakAccountRepository.findAll();
             for (PikPakAccount account : list) {
                 String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"platform\":\"%s\",\"refresh_token_method\":\"%s\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'','','',0,'302_redirect','');";
-                Utils.executeUpdate(String.format(sql, 8000 + account.getId(), account.getNickname(), account.getPlatform(), account.getRefreshTokenMethod(), account.getUsername(), account.getPassword()));
+                Utils.executeUpdate(String.format(sql, base + account.getId(), account.getNickname(), account.getPlatform(), account.getRefreshTokenMethod(), account.getUsername(), account.getPassword()));
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -211,7 +212,7 @@ public class PikPakService {
     public void updatePikPak(PikPakAccount account) {
         int status = aListLocalService.getAListStatus();
         try {
-            int id = 8000 + account.getId();
+            int id = base + account.getId();
             int disabled = status == 0 ? 0 : 1;
             String token = status == 2 ? accountService.login() : "";
             if (status == 2) {
@@ -262,7 +263,7 @@ public class PikPakService {
             }
             pikPakAccountRepository.deleteById(id);
             String token = accountService.login();
-            accountService.deleteStorage(8000 + account.getId(), token);
+            accountService.deleteStorage(base + account.getId(), token);
         }
     }
 }

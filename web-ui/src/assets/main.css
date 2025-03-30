@@ -15,3 +15,7 @@ span.error {
 .el-table .warning-row {
     --el-table-tr-bg-color: var(--el-color-warning-light-9);
 }
+
+.vod tr.el-table__row {
+    cursor: pointer;
+}

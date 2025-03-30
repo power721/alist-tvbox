@@ -23,6 +23,7 @@ import MetaView from "@/views/MetaView.vue";
 import TmdbView from "@/views/TmdbView.vue";
 import EmbyView from "@/views/EmbyView.vue";
 import LiveView from "@/views/LiveView.vue";
+import VodApiView from "@/views/VodApiView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -155,9 +156,15 @@ const router = createRouter({
       meta: {auth: true}
     },
     {
-      path: '/vod',
-      name: 'vod',
+      path: '/vod/:path*',
+      name: 'vod-path',
       component: VodView,
+      meta: {auth: true}
+    },
+    {
+      path: '/vod-api',
+      name: 'vod-api',
+      component: VodApiView,
       meta: {auth: true}
     },
     {

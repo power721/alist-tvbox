@@ -84,6 +84,7 @@ import static cn.har01d.alist_tvbox.util.Constants.ZONE_ID;
 
 public class AccountService {
     public static final ZoneOffset ZONE_OFFSET = ZoneOffset.of("+08:00");
+    private final int base = 4600;
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
     private final UserRepository userRepository;
@@ -479,7 +480,7 @@ public class AccountService {
         try {
             for (Account account : list) {
                 try {
-                    int id = 10000 + (account.getId() - 1) * 2;
+                    int id = base + (account.getId() - 1) * 2;
                     String name = account.getNickname();
                     if (StringUtils.isBlank(name)) {
                         name = String.valueOf(account.getId());
@@ -905,7 +906,7 @@ public class AccountService {
     }
 
     public void showMyAli(Account account) {
-        int storageId = 10000 + (account.getId() - 1) * 2;
+        int storageId = base + (account.getId() - 1) * 2;
         try {
             String name = account.getNickname();
             if (StringUtils.isBlank(name)) {
@@ -931,7 +932,7 @@ public class AccountService {
         }
 
         String token = status == 2 ? login() : "";
-        int storageId = 10000 + (account.getId() - 1) * 2;
+        int storageId = base + (account.getId() - 1) * 2;
         if (status == 2) {
             deleteStorage(storageId, token);
             deleteStorage(storageId + 1, token);

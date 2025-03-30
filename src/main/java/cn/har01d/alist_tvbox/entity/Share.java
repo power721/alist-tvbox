@@ -27,6 +27,8 @@ public class Share {
     @Column(columnDefinition = "TEXT")
     private String cookie;
     private Integer type;
+    @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean temp;
 
     @Override
     public boolean equals(Object o) {
