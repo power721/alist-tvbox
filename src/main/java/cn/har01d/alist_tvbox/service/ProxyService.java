@@ -149,11 +149,7 @@ public class ProxyService {
 
     public void downloadStraight(String url, HttpServletResponse response, Map<String, String> headers) throws IOException {
         HttpURLConnection urlConnection = openConnection(url, headers);
-        int responseCode = urlConnection.getResponseCode();
-        if (responseCode >= 400) {
-            throw new RuntimeException("Failed to download: HTTP " + responseCode);
-        }
-        response.setStatus(responseCode);
+        response.setStatus(urlConnection.getResponseCode());
         urlConnection.getHeaderFields().forEach((key, value) -> response.setHeader(key, value.get(0)));
         copyAndCloseInput(urlConnection.getInputStream(), response.getOutputStream());
     }
