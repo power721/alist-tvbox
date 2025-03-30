@@ -10,7 +10,7 @@ public enum DriverType {
     THUNDER,
     QUARK_TV,
     UC_TV,
-    OTHER2,
+    OPEN115,
     OTHER3,
     OTHER4,
     OTHER5,

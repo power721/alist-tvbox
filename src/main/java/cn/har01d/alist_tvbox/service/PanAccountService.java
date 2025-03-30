@@ -185,6 +185,10 @@ public class PanAccountService {
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder()));
             log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_cookie','" + account.getCookie() + "','','text','',1,0);");
+        } else if (account.getType() == DriverType.OPEN115) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
+            log.info("insert 115 Open account {} : {}, result: {}", id, getMountPath(account), count);
         }
     }
 
@@ -236,6 +240,10 @@ public class PanAccountService {
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder()));
             log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_cookie','" + account.getCookie() + "','','text','',1,0);");
+        } else if (account.getType() == DriverType.OPEN115) {
+            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
+            int count = Utils.executeUpdate(String.format(sql, id, account.getCookie(), account.getToken(), account.getFolder()));
+            log.info("insert 115 Open account {} : {}, result: {}", id, getMountPath(account), count);
         }
     }
 
@@ -252,6 +260,8 @@ public class PanAccountService {
         } else if (account.getType() == DriverType.UC_TV) {
             return "/我的UC网盘/" + account.getName();
         } else if (account.getType() == DriverType.PAN115) {
+            return "/115云盘/" + account.getName();
+        } else if (account.getType() == DriverType.OPEN115) {
             return "/115网盘/" + account.getName();
         } else if (account.getType() == DriverType.THUNDER) {
             return "/我的迅雷云盘/" + account.getName();
@@ -374,7 +384,7 @@ public class PanAccountService {
             throw new BadRequestException("Cookie和Token不能同时为空");
         }
         if (StringUtils.isBlank(dto.getFolder())) {
-            if (dto.getType() == DriverType.QUARK || dto.getType() == DriverType.UC || dto.getType() == DriverType.QUARK_TV || dto.getType() == DriverType.UC_TV || dto.getType() == DriverType.PAN115 || dto.getType() == DriverType.PAN123) {
+            if (dto.getType() == DriverType.QUARK || dto.getType() == DriverType.UC || dto.getType() == DriverType.QUARK_TV || dto.getType() == DriverType.UC_TV || dto.getType() == DriverType.PAN115 || dto.getType() == DriverType.OPEN115 || dto.getType() == DriverType.PAN123) {
                 dto.setFolder("0");
             } else if (dto.getType() == DriverType.CLOUD189) {
                 dto.setFolder("-11");

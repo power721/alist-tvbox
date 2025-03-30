@@ -478,6 +478,8 @@ public class TvBoxService {
         } else if (account.getType() == DriverType.UC) {
             return "/\uD83C\uDF1E我的UC网盘";
         } else if (account.getType() == DriverType.PAN115) {
+            return "/115云盘";
+        } else if (account.getType() == DriverType.OPEN115) {
             return "/115网盘";
         } else if (account.getType() == DriverType.CLOUD189) {
             return "/我的天翼云盘";
