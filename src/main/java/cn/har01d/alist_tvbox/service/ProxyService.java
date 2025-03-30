@@ -80,16 +80,16 @@ public class ProxyService {
             String name = it.next();
             headers.put(name, request.getHeader(name));
         }
-        headers.put("User-Agent", Constants.USER_AGENT);
-        headers.put("Referer", Constants.ALIPAN);
+        headers.put("user-agent", Constants.USER_AGENT);
+        headers.put("referer", Constants.ALIPAN);
 
         String url = cache.getIfPresent(id);
         if (url != null) {
             log.info("proxy url: {} {}", id, url);
-            if (url.startsWith("115-")) {
+            if (id.startsWith("115-")) {
                 String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
-                headers.put("Cookie", cookie);
-                headers.put("Referer", "https://115.com/");
+                headers.put("cookie", cookie);
+                headers.put("referer", "https://115.com/");
             }
         } else {
             String[] parts = path.split("\\$");
@@ -100,8 +100,17 @@ public class ProxyService {
                 throw new BadRequestException("找不到文件 " + path);
             }
 
-            if (fsDetail.getProvider().equals("AliyundriveShare2Open") || fsDetail.getProvider().equals("AliyundriveOpen")) {
+            if (fsDetail.getProvider().contains("Aliyundrive")) {
                 url = fsDetail.getRawUrl();
+            } else if (fsDetail.getProvider().contains("Thunder")) {
+                url = fsDetail.getRawUrl();
+                headers.put("user-agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)");
+                headers.put("referer", "https://pan.xunlei.com/");
+            } else if (fsDetail.getProvider().equals("115 Cloud") || fsDetail.getProvider().equals("115 Share")) {
+                url = fsDetail.getRawUrl();
+                String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
+                headers.put("cookie", cookie);
+                headers.put("referer", "https://115.com/");
             } else {
                 url = buildProxyUrl(site, path, fsDetail.getSign());
             }
