@@ -478,6 +478,8 @@ public class TvBoxService {
         } else if (account.getType() == DriverType.UC) {
             return "/\uD83C\uDF1E我的UC网盘";
         } else if (account.getType() == DriverType.PAN115) {
+            return "/115云盘";
+        } else if (account.getType() == DriverType.OPEN115) {
             return "/115网盘";
         } else if (account.getType() == DriverType.CLOUD189) {
             return "/我的天翼云盘";
@@ -1296,7 +1298,7 @@ public class TvBoxService {
             }
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
-            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://www.aliyundrive.com/\"}");
+            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"" + Constants.ALIPAN + "\"}");
         }
 
         if (!getSub) {
@@ -1506,9 +1508,11 @@ public class TvBoxService {
                 movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
             } else if ("web".equals(ac)) {
                 String url = fsDetail.getRawUrl();
-                if (url.contains("aliyundrive.cloud")) {
+                if (fsDetail.getProvider().contains("Aliyundrive")) {
                     movieDetail.setVod_play_url(proxyService.generateProxyUrl("ali", url));
-                } else if (url.contains("115cdn.net")) {
+                } /*else if (fsDetail.getProvider().contains("Thunder")) {
+                    movieDetail.setVod_play_url(proxyService.generateProxyUrl("xl", url));
+                }*/ else if (fsDetail.getProvider().equals("115 Cloud") || fsDetail.getProvider().equals("115 Share")) {
                     movieDetail.setVod_play_url(proxyService.generateProxyUrl("115", url));
                 } else {
                     String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
@@ -1626,9 +1630,7 @@ public class TvBoxService {
                 for (String name : fileNames) {
                     String filepath = newPath + "/" + folder + "/" + name;
                     if ("detail".equals(ac) || "web".equals(ac)) {
-                        // TODO:
-                        String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
-                        String url = buildProxyUrl(site, filepath, sign);
+                        String url = buildProxyUrl(site.getId() + "$" + filepath);
                         urls.add(fixName(name, prefix, suffix) + "$" + url);
                     } else {
                         String url = buildPlayUrl(site, filepath);
@@ -1656,8 +1658,7 @@ public class TvBoxService {
             for (String name : fileNames) {
                 String filepath = newPath + "/" + name;
                 if ("detail".equals(ac) || "web".equals(ac)) {
-                    String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
-                    String url = buildProxyUrl(site, filepath, sign);
+                    String url = buildProxyUrl(site.getId() + "$" + filepath);
                     list.add(fixName(name, prefix, suffix) + "$" + url);
                 } else {
                     String url = buildPlayUrl(site, filepath);
@@ -2048,6 +2049,15 @@ public class TvBoxService {
         }
 
         return url;
+    }
+
+    private String buildProxyUrl(String path) {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/p/" + subscriptionService.getToken())
+                .replaceQuery("path=" + encodeUrl(path))
+                .build()
+                .toUriString();
     }
 
     private String buildProxyUrl(Site site, String path, String sign) {

@@ -35,7 +35,14 @@ public class PlayController {
 
     @GetMapping("/proxy/{id}")
     public void proxy(@PathVariable String id, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        proxyService.proxy(id, request, response);
+        proxyService.proxy(id, "", request, response);
+    }
+
+    @GetMapping("/p/{token}")
+    public void proxy(@PathVariable String token, String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        subscriptionService.checkToken(token);
+
+        proxyService.proxy("", path, request, response);
     }
 
     @GetMapping("/play")
