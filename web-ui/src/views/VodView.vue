@@ -501,6 +501,9 @@ const handleKeyDown = (event: KeyboardEvent) => {
   } else if (event.code === 'KeyM') {
     event.preventDefault()
     toggleMute()
+  } else if (event.code === 'KeyC') {
+    event.preventDefault()
+    copyPlayUrl()
   }
 }
 
@@ -736,6 +739,12 @@ const getPlayUrl = () => {
   title.value = playlist.value[index].text
   document.title = title.value
   saveHistory()
+}
+
+const copyPlayUrl = () => {
+  toClipboard(playUrl.value).then(() => {
+    ElMessage.success('播放地址复制成功')
+  })
 }
 
 const save = () => {
