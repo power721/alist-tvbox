@@ -504,6 +504,9 @@ const handleKeyDown = (event: KeyboardEvent) => {
   } else if (event.code === 'KeyC') {
     event.preventDefault()
     copyPlayUrl()
+  } else if (event.code === 'KeyV') {
+    event.preventDefault()
+    openInVLC()
   }
 }
 
@@ -745,6 +748,34 @@ const copyPlayUrl = () => {
   toClipboard(playUrl.value).then(() => {
     ElMessage.success('播放地址复制成功')
   })
+}
+
+const buildVlcUrl = () => {
+  const id = movies.value[0].vod_id
+  let url = playUrl.value + '#1'
+  if (id.endsWith('playlist$1')) {
+    const path = getPath(id)
+    const index = path.lastIndexOf('/')
+    const parent = path.substring(0, index)
+    url = window.location.origin + '/m3u8' + token.value + '?path=' + parent + '#' + (currentVideoIndex.value + 1)
+  }
+  return url
+}
+
+const openInVLC = () => {
+  const url = playUrl.value
+  const vlcAttempt = window.open(`vlc://${url}`, '_blank')
+
+  setTimeout(() => {
+    if (!vlcAttempt || vlcAttempt.closed) {
+      try {
+        window.open(`xdg-open vlc://${url}`, '_blank')
+      } catch (e) {
+        copyPlayUrl()
+      }
+    }
+    pause()
+  }, 500)
 }
 
 const save = () => {
