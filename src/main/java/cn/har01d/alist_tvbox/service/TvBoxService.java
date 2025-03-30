@@ -1508,9 +1508,11 @@ public class TvBoxService {
                 movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
             } else if ("web".equals(ac)) {
                 String url = fsDetail.getRawUrl();
-                if (fsDetail.getProvider().equals("AliyundriveShare2Open") || fsDetail.getProvider().equals("AliyundriveOpen")) {
-                    movieDetail.setVod_play_url(buildProxyUrl(tid));
-                } else if (url.contains("115cdn.net")) {
+                if (fsDetail.getProvider().contains("Aliyundrive")) {
+                    movieDetail.setVod_play_url(proxyService.generateProxyUrl("ali", url));
+                } /*else if (fsDetail.getProvider().contains("Thunder")) {
+                    movieDetail.setVod_play_url(proxyService.generateProxyUrl("xl", url));
+                }*/ else if (fsDetail.getProvider().equals("115 Cloud") || fsDetail.getProvider().equals("115 Share")) {
                     movieDetail.setVod_play_url(proxyService.generateProxyUrl("115", url));
                 } else {
                     String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
