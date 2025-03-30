@@ -1628,9 +1628,7 @@ public class TvBoxService {
                 for (String name : fileNames) {
                     String filepath = newPath + "/" + folder + "/" + name;
                     if ("detail".equals(ac) || "web".equals(ac)) {
-                        // TODO:
-                        String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
-                        String url = buildProxyUrl(site, filepath, sign);
+                        String url = buildProxyUrl(site.getId() + "$" + filepath);
                         urls.add(fixName(name, prefix, suffix) + "$" + url);
                     } else {
                         String url = buildPlayUrl(site, filepath);
@@ -1658,8 +1656,7 @@ public class TvBoxService {
             for (String name : fileNames) {
                 String filepath = newPath + "/" + name;
                 if ("detail".equals(ac) || "web".equals(ac)) {
-                    String sign = subscriptionService.getTokens().isEmpty() ? "" : aListService.getFile(site, filepath).getSign();
-                    String url = buildProxyUrl(site, filepath, sign);
+                    String url = buildProxyUrl(site.getId() + "$" + filepath);
                     list.add(fixName(name, prefix, suffix) + "$" + url);
                 } else {
                     String url = buildPlayUrl(site, filepath);
@@ -2050,6 +2047,15 @@ public class TvBoxService {
         }
 
         return url;
+    }
+
+    private String buildProxyUrl(String path) {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/p/" + subscriptionService.getToken())
+                .replaceQuery("path=" + encodeUrl(path))
+                .build()
+                .toUriString();
     }
 
     private String buildProxyUrl(Site site, String path, String sign) {

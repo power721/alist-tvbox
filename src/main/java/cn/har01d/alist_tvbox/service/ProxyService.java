@@ -4,6 +4,9 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.FsDetail;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -11,8 +14,11 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,11 +40,21 @@ public class ProxyService {
             .maximumSize(50)
             .build();
     private final AppProperties appProperties;
+    private final Environment environment;
     private final DriverAccountRepository panAccountRepository;
+    private final SiteService siteService;
+    private final AListService aListService;
 
-    public ProxyService(AppProperties appProperties, DriverAccountRepository panAccountRepository) {
+    public ProxyService(AppProperties appProperties,
+                        Environment environment,
+                        DriverAccountRepository panAccountRepository,
+                        SiteService siteService,
+                        AListService aListService) {
         this.appProperties = appProperties;
+        this.environment = environment;
         this.panAccountRepository = panAccountRepository;
+        this.siteService = siteService;
+        this.aListService = aListService;
     }
 
     public String generateProxyUrl(String type, String url) {
@@ -57,7 +73,7 @@ public class ProxyService {
                 .toUriString();
     }
 
-    public void proxy(String id, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public void proxy(String id, String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
         String url = cache.getIfPresent(id);
         if (url != null) {
             log.info("proxy url: {} {}", id, url);
@@ -76,13 +92,57 @@ public class ProxyService {
 
             log.debug("Range: {}", headers.get("Range"));
             downloadStraight(url, response, headers);
+        } else {
+            Map<String, String> headers = new HashMap<>();
+            var it = request.getHeaderNames().asIterator();
+            while (it.hasNext()) {
+                String name = it.next();
+                headers.put(name, request.getHeader(name));
+            }
+
+            String[] parts = path.split("\\$");
+            Site site = siteService.getById(Integer.parseInt(parts[0]));
+            path = parts[1];
+            FsDetail fsDetail = aListService.getFile(site, path);
+            if (fsDetail == null) {
+                throw new BadRequestException("找不到文件 " + path);
+            }
+
+            url = buildProxyUrl(site, path, fsDetail.getSign());
+            downloadStraight(url, response, headers);
         }
+    }
+
+    private String buildProxyUrl(Site site, String path, String sign) {
+        if (site.getUrl().startsWith("http://localhost")) {
+            return ServletUriComponentsBuilder.fromCurrentRequest()
+                    .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
+                    .replacePath("/d" + path)
+                    .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
+                    .build()
+                    .toUri()
+                    .toASCIIString();
+        } else {
+            if (StringUtils.isNotBlank(site.getFolder())) {
+                path = fixPath(site.getFolder() + "/" + path);
+            }
+            return UriComponentsBuilder.fromHttpUrl(site.getUrl())
+                    .replacePath("/d" + path)
+                    .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
+                    .build()
+                    .toUri()
+                    .toASCIIString();
+        }
+    }
+
+    private String fixPath(String path) {
+        return path.replaceAll("/+", "/");
     }
 
     public void downloadStraight(String url, HttpServletResponse response, Map<String, String> headers) throws IOException {
         HttpURLConnection urlConnection = openConnection(url, headers);
         int responseCode = urlConnection.getResponseCode();
-        if (responseCode != 200 && responseCode != 206) {
+        if (responseCode >= 400) {
             throw new RuntimeException("Failed to download: HTTP " + responseCode);
         }
         response.setStatus(responseCode);
