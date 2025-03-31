@@ -1832,17 +1832,17 @@ public class TvBoxService {
 
             String name = movieDetail.getVod_name();
 
-            if (name.startsWith("Season ")) {
-                Matcher m = NUMBER.matcher(name);
-                if (m.matches()) {
-                    String text = m.group(1);
-                    String newNum = TextUtils.number2text(text);
-                    String newName = getNameFromPath(getParent(path));
-                    name = TextUtils.fixName(newName) + " 第" + newNum + "季";
-                }
-            }
-
             if (movie == null) {
+                if (name.startsWith("Season ")) {
+                    Matcher m = NUMBER.matcher(name);
+                    if (m.matches()) {
+                        String text = m.group(1);
+                        String newNum = TextUtils.number2text(text);
+                        String newName = getNameFromPath(getParent(path));
+                        name = TextUtils.fixName(newName) + " 第" + newNum + "季";
+                    }
+                }
+
                 movie = doubanService.getByName(name);
             }
 
