@@ -472,9 +472,15 @@ const handleKeyDown = (event: KeyboardEvent) => {
       event.preventDefault()
       loadFolder(paths.value[paths.value.length - 2].path)
     } else if (event.code === 'KeyA') {
+      if (event.ctrlKey || event.metaKey) {
+        return;
+      }
       event.preventDefault()
       handleAdd()
     } else if (event.code === 'KeyH') {
+      if (event.ctrlKey || event.metaKey) {
+        return;
+      }
       event.preventDefault()
       loadHistory()
     }
@@ -499,12 +505,21 @@ const handleKeyDown = (event: KeyboardEvent) => {
     event.preventDefault()
     toggleFullscreen()
   } else if (event.code === 'KeyM') {
+    if (event.ctrlKey || event.metaKey) {
+      return;
+    }
     event.preventDefault()
     toggleMute()
   } else if (event.code === 'KeyC') {
+    if (event.ctrlKey || event.metaKey) {
+      return;
+    }
     event.preventDefault()
     copyPlayUrl()
   } else if (event.code === 'KeyV') {
+    if (event.ctrlKey || event.metaKey) {
+      return;
+    }
     event.preventDefault()
     openInVLC()
   }
