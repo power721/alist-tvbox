@@ -944,7 +944,7 @@ public class TvBoxService {
             String newPath = fixPath(path + "/" + fsInfo.getName());
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site.getId() + "$" + encodeUrl(newPath) + "$1");
-            movieDetail.setVod_name(fsInfo.getName().replace("@", ""));
+            movieDetail.setVod_name(fsInfo.getName());
             movieDetail.setVod_tag(fsInfo.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_pic(getCover(ac, fsInfo.getThumb(), fsInfo.getType()));
             if (fsInfo.getType() == 1) {
@@ -1522,10 +1522,15 @@ public class TvBoxService {
             } else {
                 movieDetail.setVod_play_url(fsDetail.getName() + "$" + buildPlayUrl(site, path));
             }
+            String parent = getParent(path);
             if (!"web".equals(ac)) {
-                movieDetail.setVod_content(getParent(path));
+                movieDetail.setVod_content(parent);
             }
-            setMovieInfo(site, movieDetail, fsDetail.getName(), getParent(path), true);
+            if (!setMovieInfo(site, movieDetail, fsDetail.getName(), parent, true)) {
+                movieDetail.setVod_name(getNameFromPath(parent));
+                setMovieInfo(site, movieDetail, "", parent, true);
+                movieDetail.setVod_name(fsDetail.getName());
+            }
             if ("PikPakShare".equals(fsDetail.getProvider())) {
                 movieDetail.setVod_remarks("P" + movieDetail.getVod_remarks());
             }
@@ -1594,7 +1599,7 @@ public class TvBoxService {
 
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id(site.getId() + "$" + encodeUrl(path) + "$1");
-        movieDetail.setVod_name(getMovieName(fsDetail.getName(), newPath));
+        movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(site.getName());
         if (!"web".equals(ac)) {
@@ -1816,9 +1821,9 @@ public class TvBoxService {
         return text;
     }
 
-    private void setMovieInfo(Site site, MovieDetail movieDetail, String filename, String path, boolean details) {
+    private boolean setMovieInfo(Site site, MovieDetail movieDetail, String filename, String path, boolean details) {
         if (setTmdbInfo(site, movieDetail, path, details)) {
-            return;
+            return true;
         }
 
         try {
@@ -1847,7 +1852,7 @@ public class TvBoxService {
             }
 
             if (movie == null) {
-                String newName = name.replace("！", "");
+                String newName = name.replace("@", "").replace("！", "");
                 if (!newName.equals(name)) {
                     movie = doubanService.getByName(newName);
                 }
@@ -1871,9 +1876,11 @@ public class TvBoxService {
             }
 
             setMovieInfo(movieDetail, movie, null, details);
+            return movie != null;
         } catch (Exception e) {
             log.warn("", e);
         }
+        return false;
     }
 
     private void setMovieInfo(MovieDetail movieDetail, Meta meta, boolean details) {
