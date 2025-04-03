@@ -20,7 +20,7 @@
           <span v-else-if="scope.row.type=='QUARK_TV'">夸克TV</span>
           <span v-else-if="scope.row.type=='UC_TV'">UC TV</span>
           <span v-else-if="scope.row.type=='PAN115'">115云盘</span>
-          <span v-else-if="scope.row.type=='OPEN115'">115网盘</span>
+          <span v-else-if="scope.row.type=='OPEN115'">115 Open</span>
           <span v-else-if="scope.row.type=='THUNDER'">迅雷云盘</span>
           <span v-else-if="scope.row.type=='CLOUD189'">天翼云盘</span>
           <span v-else-if="scope.row.type=='PAN139'">移动云盘</span>
@@ -63,7 +63,7 @@
             <el-radio label="QUARK_TV" size="large">夸克TV</el-radio>
             <el-radio label="UC_TV" size="large">UC TV</el-radio>
             <el-radio label="PAN115" size="large">115云盘</el-radio>
-            <el-radio label="OPEN115" size="large">115网盘</el-radio>
+            <el-radio label="OPEN115" size="large">115 Open</el-radio>
             <el-radio label="THUNDER" size="large">迅雷云盘</el-radio>
             <el-radio label="CLOUD189" size="large">天翼云盘</el-radio>
             <el-radio label="PAN139" size="large">移动云盘</el-radio>
@@ -222,7 +222,7 @@ const getTypeName = (type: string) => {
     return '115云盘'
   }
   if (type == 'OPEN115') {
-    return '115云盘'
+    return '115 Open'
   }
   if (type == 'THUNDER') {
     return '迅雷云盘'
