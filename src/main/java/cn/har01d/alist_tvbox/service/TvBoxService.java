@@ -1858,6 +1858,13 @@ public class TvBoxService {
                 }
             }
 
+            if (movie == null) {
+                int index = name.indexOf(' ');
+                if (index > 0) {
+                    movie = doubanService.getByName(name.substring(0, index));
+                }
+            }
+
             if (movie == null && !name.contains("第一季")) {
                 movie = doubanService.getByName(name + " 第一季");
             }
@@ -1902,6 +1909,9 @@ public class TvBoxService {
         movieDetail.setDbid(movie.getId());
         if (!details) {
             return;
+        }
+        if (movieDetail.getVod_id().endsWith("playlist$1")) {
+            movieDetail.setVod_name(movie.getName());
         }
         movieDetail.setVod_actor(movie.getActors());
         movieDetail.setVod_director(movie.getDirectors());
