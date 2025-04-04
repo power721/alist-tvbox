@@ -121,7 +121,7 @@ public class ProxyService {
             } else {
                 url = buildProxyUrl(site, path, fsDetail.getSign());
             }
-            updateShareTime(path);
+            //updateShareTime(path);
         }
 
         log.trace("headers: {}", headers);

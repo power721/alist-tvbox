@@ -197,7 +197,7 @@
                   </template>
                   <template #default>
                     播放速度
-                    <el-slider v-model="currentSpeed" @change="setSpeed" :min="0.25" :max="2" :step="0.25" show-stops/>
+                    <el-slider v-model="currentSpeed" @change="setSpeed" :min="0.5" :max="2" :step="0.1" show-stops/>
                   </template>
                 </el-popover>
                 <el-popover placement="bottom" width="300px">
@@ -219,6 +219,9 @@
                       <div>全屏： 回车键</div>
                       <div>退出： Esc</div>
                       <div>静音： m</div>
+                      <div>减速： -</div>
+                      <div>加速： +</div>
+                      <div>普速： =</div>
                       <div>后退15秒： ←</div>
                       <div>前进15秒： →</div>
                       <div v-if="playlist.length>1">上集： ↑</div>
@@ -567,6 +570,15 @@ const handleKeyDown = (event: KeyboardEvent) => {
   } else if (event.code === 'Enter') {
     event.preventDefault()
     toggleFullscreen()
+  } else if (event.key === '+') {
+    event.preventDefault()
+    incSpeed()
+  } else if (event.key === '-') {
+    event.preventDefault()
+    decSpeed()
+  } else if (event.key === '=') {
+    event.preventDefault()
+    setSpeed(1.0)
   } else if (event.code === 'KeyM') {
     if (event.ctrlKey || event.metaKey) {
       return;
@@ -796,6 +808,22 @@ const setSpeed = (speed: number) => {
   }
 }
 
+const incSpeed = () => {
+  let speed = parseFloat((currentSpeed.value + 0.1).toFixed(1))
+  if (speed > 2.0) {
+    speed = 2.0
+  }
+  setSpeed(speed)
+}
+
+const decSpeed = () => {
+  let speed = parseFloat((currentSpeed.value - 0.1).toFixed(1))
+  if (speed < 0.5) {
+    speed = 0.5
+  }
+  setSpeed(speed)
+}
+
 const handleSpeedChange = () => {
   if (videoPlayer.value) {
     currentSpeed.value = videoPlayer.value.playbackRate
@@ -1010,7 +1038,7 @@ onMounted(async () => {
     }
   })
   axios.get('/api/settings/tg_phase').then(({data}) => {
-    tgLogin.value = data.value == '9'
+    tgLogin.value = !!data.value
   })
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
   timer = setInterval(save, 5000)

@@ -330,6 +330,10 @@ public class TelegramService {
     }
 
     public List<Message> search(String keyword) {
+        if (client == null) {
+            return List.of();
+        }
+
         Set<Message> results = new HashSet<>();
         List<Future<List<Message>>> futures = new ArrayList<>();
         for (String channel : appProperties.getChannels()) {
@@ -356,6 +360,7 @@ public class TelegramService {
                 .filter(e -> !e.getContent().toLowerCase().contains("ppt"))
                 .filter(e -> !e.getContent().contains("软件"))
                 .filter(e -> !e.getContent().contains("图书"))
+                .filter(e -> !e.getContent().contains("电子书"))
                 .sorted(Comparator.comparing(Message::getTime).reversed())
                 .toList();
         log.info("Search {} get {} results.", keyword, list.size());
@@ -363,6 +368,10 @@ public class TelegramService {
     }
 
     public List<Message> search(String username, String keyword) {
+        if (client == null) {
+            return List.of();
+        }
+
         var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
         var chat = resolvedPeer.chats().get(0);
         InputPeer inputPeer = null;
