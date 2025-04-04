@@ -1038,7 +1038,7 @@ onMounted(async () => {
     }
   })
   axios.get('/api/settings/tg_phase').then(({data}) => {
-    tgLogin.value = data.value != '0'
+    tgLogin.value = !!data.value
   })
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
   timer = setInterval(save, 5000)
