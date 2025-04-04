@@ -197,7 +197,7 @@
                   </template>
                   <template #default>
                     播放速度
-                    <el-slider v-model="currentSpeed" @change="setSpeed" :min="0.25" :max="2" :step="0.25" show-stops/>
+                    <el-slider v-model="currentSpeed" @change="setSpeed" :min="0.5" :max="2" :step="0.1" show-stops/>
                   </template>
                 </el-popover>
                 <el-popover placement="bottom" width="300px">
@@ -1010,7 +1010,7 @@ onMounted(async () => {
     }
   })
   axios.get('/api/settings/tg_phase').then(({data}) => {
-    tgLogin.value = data.value == '9'
+    tgLogin.value = data.value != '0'
   })
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
   timer = setInterval(save, 5000)
