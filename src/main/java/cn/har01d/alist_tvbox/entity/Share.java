@@ -9,6 +9,7 @@ import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.Hibernate;
 
+import java.time.Instant;
 import java.util.Objects;
 
 @Getter
@@ -29,6 +30,7 @@ public class Share {
     private Integer type;
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean temp;
+    private Instant time = Instant.now();
 
     @Override
     public boolean equals(Object o) {

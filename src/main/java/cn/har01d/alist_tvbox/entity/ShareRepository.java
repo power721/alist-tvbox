@@ -7,6 +7,8 @@ import java.util.List;
 public interface ShareRepository extends JpaRepository<Share, Integer> {
     boolean existsByPath(String path);
 
+    Share findByPath(String path);
+
     int countByType(int type);
 
     List<Share> findByType(int type);

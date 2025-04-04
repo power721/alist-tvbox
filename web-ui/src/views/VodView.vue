@@ -2,12 +2,20 @@
   <div class="vod">
 
     <el-row justify="space-between">
-      <el-col :span="20">
+      <el-col :span="18">
         <el-breadcrumb separator="/">
           <el-breadcrumb-item v-for="item in paths">
             <a @click="loadFolder(item.path)">{{ item.text }}</a>
           </el-breadcrumb-item>
         </el-breadcrumb>
+      </el-col>
+
+      <el-col :span="2">
+        <el-input v-model="keyword" @keyup.enter="search" placeholder="搜索电报资源" v-if="tgLogin">
+          <template #append>
+            <el-button :icon="Search" @click="search"/>
+          </template>
+        </el-input>
       </el-col>
 
       <el-col :span="2">
@@ -21,6 +29,21 @@
     <div class="divider"></div>
 
     <el-row justify="center">
+      <el-col :xs="3" :sm="3" :md="5" :span="9" v-if="results.length">
+        {{results.length}}条搜索结果&nbsp;&nbsp;
+        <el-button :icon="Delete" circle @click="clearSearch"></el-button>
+        <el-table :data="results" style="width: 100%;max-height: 1080px;overflow: auto;" @row-click="loadResult">
+          <el-table-column prop="vod_name" label="内容">
+            <template #default="scope">
+              <el-tooltip :content="scope.row.vod_play_url">
+                {{ scope.row.vod_name }}
+              </el-tooltip>
+            </template>
+          </el-table-column>
+<!--          <el-table-column prop="vod_play_from" label="频道" width="120"/>-->
+        </el-table>
+      </el-col>
+
       <el-col :xs="22" :sm="20" :md="18" :span="14">
         <el-table v-loading="loading" :data="files" style="width: 100%" @row-click="load">
           <el-table-column prop="vod_name" label="名称">
@@ -267,7 +290,7 @@ import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
-import {Delete, Film, Plus, QuestionFilled} from "@element-plus/icons-vue";
+import {Delete, Film, Plus, QuestionFilled, Search} from "@element-plus/icons-vue";
 
 let {toClipboard} = clipBorad();
 
@@ -282,6 +305,7 @@ const router = useRouter()
 const videoPlayer = ref(null)
 const scrollbarRef = ref<ScrollbarInstance>()
 const token = ref('')
+const keyword = ref('')
 const title = ref('')
 const playUrl = ref('')
 const movies = ref<VodItem[]>([])
@@ -305,10 +329,12 @@ const isFullscreen = ref(false)
 const dialogVisible = ref(false)
 const formVisible = ref(false)
 const isHistory = ref(false)
+const tgLogin = ref(false)
 const page = ref(1)
 const size = ref(40)
 const total = ref(0)
 const files = ref<VodItem[]>([])
+const results = ref<VodItem[]>([])
 const paths = ref<Item[]>([])
 const form = ref({
   link: '',
@@ -325,6 +351,26 @@ const handleAdd = () => {
   formVisible.value = true
 }
 
+const search = () => {
+  axios.get('/api/telegram/search?wd=' + keyword.value).then(({data}) => {
+    results.value = data.map(e => {
+      return {
+        vod_id: e.id + '',
+        vod_name: e.name,
+        vod_tag: 'folder',
+        vod_time: formatDate(e.time),
+        vod_play_from: e.channel,
+        vod_play_url: e.link,
+      }
+    })
+  })
+}
+
+const clearSearch = () => {
+  keyword.value = ''
+  results.value = []
+}
+
 const focus = () => {
   document.getElementById('link').focus()
 }
@@ -333,6 +379,17 @@ const addShare = () => {
   axios.post('/api/share-link', form.value).then(({data}) => {
     loadFolder(data)
     formVisible.value = false
+  })
+}
+
+const loadResult = (row: any) => {
+  form.value = {
+    link: row.vod_play_url,
+    path: '',
+    code: '',
+  }
+  axios.post('/api/share-link', form.value).then(({data}) => {
+    loadFolder(data)
   })
 }
 
@@ -483,6 +540,12 @@ const handleKeyDown = (event: KeyboardEvent) => {
       }
       event.preventDefault()
       loadHistory()
+    } else if (event.code === 'KeyS') {
+      if (event.ctrlKey || event.metaKey) {
+        return;
+      }
+      event.preventDefault()
+      search()
     }
     return
   }
@@ -945,6 +1008,9 @@ onMounted(async () => {
     } else {
       loadFiles('/')
     }
+  })
+  axios.get('/api/settings/tg_phase').then(({data}) => {
+    tgLogin.value = data.value == '9'
   })
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
   timer = setInterval(save, 5000)

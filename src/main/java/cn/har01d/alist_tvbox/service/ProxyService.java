@@ -4,6 +4,8 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.Share;
+import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.FsDetail;
@@ -25,6 +27,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -42,17 +45,20 @@ public class ProxyService {
     private final AppProperties appProperties;
     private final Environment environment;
     private final DriverAccountRepository panAccountRepository;
+    private final ShareRepository shareRepository;
     private final SiteService siteService;
     private final AListService aListService;
 
     public ProxyService(AppProperties appProperties,
                         Environment environment,
                         DriverAccountRepository panAccountRepository,
+                        ShareRepository shareRepository,
                         SiteService siteService,
                         AListService aListService) {
         this.appProperties = appProperties;
         this.environment = environment;
         this.panAccountRepository = panAccountRepository;
+        this.shareRepository = shareRepository;
         this.siteService = siteService;
         this.aListService = aListService;
     }
@@ -115,10 +121,24 @@ public class ProxyService {
             } else {
                 url = buildProxyUrl(site, path, fsDetail.getSign());
             }
+            updateShareTime(path);
         }
 
         log.trace("headers: {}", headers);
         downloadStraight(url, response, headers);
+    }
+
+    private void updateShareTime(String path) {
+        String[] parts = path.split("/");
+        if (parts.length > 3 && parts[2].equals("temp")) {
+            path = "/" + parts[1] + "/" + parts[2] + "/" + parts[3];
+            Share share = shareRepository.findByPath(path);
+            if (share != null && share.isTemp()) {
+                share.setTime(Instant.now());
+                log.debug("update share time: {} {}", share.getId(), path);
+                shareRepository.save(share);
+            }
+        }
     }
 
     private String buildProxyUrl(Site site, String path, String sign) {

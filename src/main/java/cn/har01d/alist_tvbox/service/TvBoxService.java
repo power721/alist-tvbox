@@ -14,6 +14,7 @@ import cn.har01d.alist_tvbox.entity.Meta;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
 import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
+import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.Tmdb;
@@ -59,6 +60,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1450,6 +1452,7 @@ public class TvBoxService {
         Site site = getSite(tid);
         String[] parts = tid.split("\\$");
         String path = parts[1];
+        updateShareTime(path);
         if (path.contains(PLAYLIST)) {
             return getPlaylist(ac, site, path);
         }
@@ -1540,6 +1543,19 @@ public class TvBoxService {
         result.setLimit(result.getList().size());
         log.debug("detail: {}", result);
         return result;
+    }
+
+    private void updateShareTime(String path) {
+        String[] parts = path.split("/");
+        if (parts.length > 3 && parts[2].equals("temp")) {
+            path = "/" + parts[1] + "/" + parts[2] + "/" + parts[3];
+            Share share = shareRepository.findByPath(path);
+            if (share != null && share.isTemp()) {
+                share.setTime(Instant.now());
+                log.debug("update share time: {} {}", share.getId(), path);
+                shareRepository.save(share);
+            }
+        }
     }
 
     private String getMovieName(String filename, String path) {

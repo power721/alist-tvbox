@@ -247,7 +247,7 @@ const login = () => {
         axios.get('/api/telegram/user').then(({data}) => {
           user.value = data
         })
-      } else if (tgAuthType.value == 'qr' && tgPhase.value == 1 && base64QrCode.value == '') {
+      } else if (tgAuthType.value == 'qr' && tgPhase.value == 1 && !base64QrCode.value) {
         loadQrCode()
       }
     })

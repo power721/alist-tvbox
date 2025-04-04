@@ -43,6 +43,11 @@ public class TelegramController {
         telegramService.logout();
     }
 
+    @GetMapping("/api/telegram/search")
+    public List<Message> searchByKeyword(String wd) {
+        return telegramService.search(wd);
+    }
+
     @GetMapping("/tg-search")
     public List<Message> search(String channelUsername, String keyword) {
         return telegramService.search(channelUsername, keyword);

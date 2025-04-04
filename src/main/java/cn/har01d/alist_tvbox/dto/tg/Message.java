@@ -5,18 +5,19 @@ import lombok.Data;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Data
 public class Message {
-    private static final Pattern LINK = Pattern.compile("(https?:\\/\\/(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*))");
+    private static final Pattern LINK = Pattern.compile("(https?:\\/\\/\\S+)");
     private int id;
-    private Integer views;
     private Instant time;
     private String content;
-    private String author;
     private String channel;
+    private String name;
+    private String link;
 
     public Message() {
     }
@@ -25,8 +26,8 @@ public class Message {
         this.id = message.id();
         this.time = Instant.ofEpochSecond(message.date());
         this.content = message.message();
-        this.views = message.views();
-        this.author = message.postAuthor();
+        this.link = parseLink();
+        this.name = parseName();
         this.channel = channel;
     }
 
@@ -35,18 +36,31 @@ public class Message {
     }
 
     public String toZxString() {
-        return getLink() + "$$" + getName();
+        return link + "$$" + name;
     }
 
-    private String getName() {
+    private String parseName() {
         return content.split("\n")[0].replace("名称：", "");
     }
 
-    private String getLink() {
+    private String parseLink() {
         Matcher m = LINK.matcher(content);
         if (m.find()) {
             return m.group(1);
         }
-        return content;
+        return null;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Message message = (Message) o;
+        return Objects.equals(link, message.link);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(link);
     }
 }
