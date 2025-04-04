@@ -522,31 +522,31 @@ const handleKeyDown = (event: KeyboardEvent) => {
     return;
   }
   if (!dialogVisible.value) {
-    if (event.code === 'Space' && files.value.length > 0 && files.value[0].vod_tag === 'file') {
-      event.preventDefault()
-      loadDetail(files.value[0].vod_id)
-    } else if (event.code === 'Escape' && paths.value.length > 1) {
-      event.preventDefault()
-      loadFolder(paths.value[paths.value.length - 2].path)
-    } else if (event.code === 'KeyA') {
-      if (event.ctrlKey || event.metaKey) {
-        return;
-      }
-      event.preventDefault()
-      handleAdd()
-    } else if (event.code === 'KeyH') {
-      if (event.ctrlKey || event.metaKey) {
-        return;
-      }
-      event.preventDefault()
-      loadHistory()
-    } else if (event.code === 'KeyS') {
-      if (event.ctrlKey || event.metaKey) {
-        return;
-      }
-      event.preventDefault()
-      search()
-    }
+    // if (event.code === 'Space' && files.value.length > 0 && files.value[0].vod_tag === 'file') {
+    //   event.preventDefault()
+    //   loadDetail(files.value[0].vod_id)
+    // } else if (event.code === 'Escape' && paths.value.length > 1) {
+    //   event.preventDefault()
+    //   loadFolder(paths.value[paths.value.length - 2].path)
+    // } else if (event.code === 'KeyA') {
+    //   if (event.ctrlKey || event.metaKey) {
+    //     return;
+    //   }
+    //   event.preventDefault()
+    //   handleAdd()
+    // } else if (event.code === 'KeyH') {
+    //   if (event.ctrlKey || event.metaKey) {
+    //     return;
+    //   }
+    //   event.preventDefault()
+    //   loadHistory()
+    // } else if (event.code === 'KeyS') {
+    //   if (event.ctrlKey || event.metaKey) {
+    //     return;
+    //   }
+    //   event.preventDefault()
+    //   search()
+    // }
     return
   }
   if (event.code === 'Space') {
