@@ -219,6 +219,9 @@
                       <div>全屏： 回车键</div>
                       <div>退出： Esc</div>
                       <div>静音： m</div>
+                      <div>减速： -</div>
+                      <div>加速： +</div>
+                      <div>普速： =</div>
                       <div>后退15秒： ←</div>
                       <div>前进15秒： →</div>
                       <div v-if="playlist.length>1">上集： ↑</div>
@@ -567,6 +570,15 @@ const handleKeyDown = (event: KeyboardEvent) => {
   } else if (event.code === 'Enter') {
     event.preventDefault()
     toggleFullscreen()
+  } else if (event.key === '+') {
+    event.preventDefault()
+    incSpeed()
+  } else if (event.key === '-') {
+    event.preventDefault()
+    decSpeed()
+  } else if (event.key === '=') {
+    event.preventDefault()
+    setSpeed(1.0)
   } else if (event.code === 'KeyM') {
     if (event.ctrlKey || event.metaKey) {
       return;
@@ -794,6 +806,22 @@ const setSpeed = (speed: number) => {
   if (videoPlayer.value) {
     videoPlayer.value.playbackRate = speed
   }
+}
+
+const incSpeed = () => {
+  let speed = parseFloat((currentSpeed.value + 0.1).toFixed(1))
+  if (speed > 2.0) {
+    speed = 2.0
+  }
+  setSpeed(speed)
+}
+
+const decSpeed = () => {
+  let speed = parseFloat((currentSpeed.value - 0.1).toFixed(1))
+  if (speed < 0.5) {
+    speed = 0.5
+  }
+  setSpeed(speed)
 }
 
 const handleSpeedChange = () => {
