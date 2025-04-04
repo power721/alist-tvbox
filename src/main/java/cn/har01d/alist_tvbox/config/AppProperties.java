@@ -22,6 +22,7 @@ public class AppProperties {
     private int pageSize = 100;
     private int maxSearchResult = 60;
     private String secretKey;
+    private List<String> channels = List.of("tianyirigeng", "Quark_Movies", "xx123pan1", "xunleiyunpan", "yunpanshare", "XiangxiuNB", "Aliyun_4K_Movies");
     private Set<String> formats;
     private Set<String> subtitles;
     private List<Site> sites;

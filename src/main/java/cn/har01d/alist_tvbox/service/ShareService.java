@@ -38,6 +38,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -47,6 +48,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -126,20 +129,15 @@ public class ShareService {
         pikPakService.readPikPak();
         panAccountService.loadStorages();
 
-        List<Share> list = shareRepository.findAll();
+        cleanShares();
 
-        for (Share share : list) {
-            if (share.isTemp()) {
-                log.info("Delete temp share: {} {}", share.getId(), share.getPath());
-                shareRepository.delete(share);
-            }
-        }
+        List<Share> list = shareRepository.findAll();
 
         if (list.isEmpty()) {
             list = loadSharesFromFile();
         }
 
-        list = list.stream().filter(e -> !e.isTemp()).filter(e -> e.getId() < 9900).collect(Collectors.toList());
+        list = list.stream().filter(e -> e.getId() < 9900).collect(Collectors.toList());
         list.addAll(loadLatestShare());
 
         loadAListShares(list);
@@ -151,6 +149,19 @@ public class ShareService {
 
         if ("new".equals(environment.getProperty("INSTALL")) || accountRepository.count() > 0 || pikPakAccountRepository.count() > 0 || panAccountRepository.count() > 0) {
             aListLocalService.startAListServer();
+        }
+    }
+
+    @Scheduled(cron = "0 0 4 * * *")
+    private void cleanShares() {
+        List<Share> list = shareRepository.findAll();
+
+        Instant time = Instant.now().minus(24, ChronoUnit.HOURS);
+        for (Share share : list) {
+            if (share.isTemp() && share.getTime() != null && share.getTime().isBefore(time)) {
+                log.info("Delete temp share: {} {}", share.getId(), share.getPath());
+                shareRepository.delete(share);
+            }
         }
     }
 
@@ -764,6 +775,7 @@ public class ShareService {
         share.setShareId(URLDecoder.decode(dto.getLink(), StandardCharsets.UTF_8));
         share.setPassword(dto.getCode());
         if (!parseLink(share)) {
+            log.warn("无法识别的分享链接: {}", share.getShareId());
             throw new BadRequestException("无法识别的分享链接");
         }
         if (StringUtils.isBlank(dto.getPath())) {
@@ -778,10 +790,16 @@ public class ShareService {
             create(share);
         }
         Site site = siteRepository.findById(1).orElseThrow();
-        FsResponse response = aListService.listFiles(site, path, 1, 1);
-        if (response.getTotal() == 1 && response.getFiles().get(0).getType() == 1) {
-            return path + "/" + response.getFiles().get(0).getName();
+
+        for (int i = 0; i < 2; i++) {
+            FsResponse response = aListService.listFiles(site, path, 1, 1);
+            if (response.getTotal() == 1 && response.getFiles().get(0).getType() == 1) {
+                path = path + "/" + response.getFiles().get(0).getName();
+            } else {
+                break;
+            }
         }
+
         return path;
     }
 

@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.tg.Chat;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.Setting;
@@ -54,8 +55,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -69,13 +73,15 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 @Slf4j
 @Service
 public class TelegramService {
+    private final AppProperties appProperties;
     private final SettingRepository settingRepository;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
     private final OkHttpClient httpClient = new OkHttpClient();
     private final long timeout = 3000;
     private MTProtoTelegramClient client;
 
-    public TelegramService(SettingRepository settingRepository) {
+    public TelegramService(AppProperties appProperties, SettingRepository settingRepository) {
+        this.appProperties = appProperties;
         this.settingRepository = settingRepository;
     }
 
@@ -323,6 +329,39 @@ public class TelegramService {
                 .collect(Collectors.joining("\n"));
     }
 
+    public List<Message> search(String keyword) {
+        Set<Message> results = new HashSet<>();
+        List<Future<List<Message>>> futures = new ArrayList<>();
+        for (String channel : appProperties.getChannels()) {
+            String name = channel.split("\\|")[0];
+            Future<List<Message>> future = executorService.submit(() -> search(name, keyword));
+            futures.add(future);
+        }
+
+        for (Future<List<Message>> future : futures) {
+            try {
+                results.addAll(future.get(timeout, TimeUnit.MILLISECONDS));
+            } catch (InterruptedException e) {
+                break;
+            } catch (ExecutionException | TimeoutException e) {
+                log.warn("", e);
+            }
+        }
+
+        List<Message> list = results.stream()
+                .filter(e -> !e.getContent().toLowerCase().contains("pdf"))
+                .filter(e -> !e.getContent().toLowerCase().contains("epub"))
+                .filter(e -> !e.getContent().toLowerCase().contains("azw3"))
+                .filter(e -> !e.getContent().toLowerCase().contains("mobi"))
+                .filter(e -> !e.getContent().toLowerCase().contains("ppt"))
+                .filter(e -> !e.getContent().contains("软件"))
+                .filter(e -> !e.getContent().contains("图书"))
+                .sorted(Comparator.comparing(Message::getTime).reversed())
+                .toList();
+        log.info("Search {} get {} results.", keyword, list.size());
+        return list;
+    }
+
     public List<Message> search(String username, String keyword) {
         var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
         var chat = resolvedPeer.chats().get(0);
@@ -336,9 +375,9 @@ public class TelegramService {
         Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, 100, 0, 0, 0)).block();
         List<Message> result = List.of();
         if (messages instanceof ChannelMessages) {
-            result = ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message(username, e)).toList();
+            result = ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message(username, e)).filter(e -> e.getLink() != null).toList();
         }
-        log.info("Search {} from {}, get {} results.", keyword, username, result.size());
+        log.info("Search {} from {} get {} results.", keyword, username, result.size());
         return result;
     }
 
