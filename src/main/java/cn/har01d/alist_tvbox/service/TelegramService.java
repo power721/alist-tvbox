@@ -248,7 +248,7 @@ public class TelegramService {
         Messages messages = client.getServiceHolder().getChatService().getHistory(ImmutableGetHistory.of(inputPeer, 0, 0, 0, 100, 0, 0, 0)).block();
         log.info("{}", messages);
         if (messages instanceof ChannelMessages) {
-            return ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message("", e)).toList();
+            return ((ChannelMessages) messages).messages().stream().filter(e -> e instanceof BaseMessage).map(BaseMessage.class::cast).map(e -> new Message("", e)).toList();
         }
         return List.of();
     }
@@ -377,22 +377,26 @@ public class TelegramService {
             log.info("Search {} from web {} get {} results.", keyword, username, result.size());
             return result;
         }
-
-        var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
-        var chat = resolvedPeer.chats().get(0);
-        InputPeer inputPeer = null;
-        if (chat instanceof Channel) {
-            inputPeer = ImmutableInputPeerChannel.of(chat.id(), ((Channel) chat).accessHash());
-        } else if (chat instanceof BaseChat) {
-            inputPeer = ImmutableInputPeerChat.of(chat.id());
-        }
-        int minDate = (int) (Instant.now().minus(60, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toEpochMilli() / 1000);
-        Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, 100, 0, 0, 0)).block();
         List<Message> result = List.of();
-        if (messages instanceof ChannelMessages) {
-            result = ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message(username, e)).filter(e -> e.getType() != null).toList();
+
+        try {
+            var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
+            var chat = resolvedPeer.chats().get(0);
+            InputPeer inputPeer = null;
+            if (chat instanceof Channel) {
+                inputPeer = ImmutableInputPeerChannel.of(chat.id(), ((Channel) chat).accessHash());
+            } else if (chat instanceof BaseChat) {
+                inputPeer = ImmutableInputPeerChat.of(chat.id());
+            }
+            int minDate = (int) (Instant.now().minus(60, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toEpochMilli() / 1000);
+            Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, 100, 0, 0, 0)).block();
+            if (messages instanceof ChannelMessages) {
+                result = ((ChannelMessages) messages).messages().stream().filter(e -> e instanceof BaseMessage).map(BaseMessage.class::cast).map(e -> new Message(username, e)).filter(e -> e.getType() != null).toList();
+            }
+            log.info("Search {} from {} get {} results.", keyword, username, result.size());
+        } catch (Exception e) {
+            log.warn("search from channel {} failed", username, e);
         }
-        log.info("Search {} from {} get {} results.", keyword, username, result.size());
         return result;
     }
 
