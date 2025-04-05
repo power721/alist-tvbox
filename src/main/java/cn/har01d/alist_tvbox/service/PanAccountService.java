@@ -242,7 +242,7 @@ public class PanAccountService {
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_cookie','" + account.getCookie() + "','','text','',1,0);");
         } else if (account.getType() == DriverType.OPEN115) {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
-            int count = Utils.executeUpdate(String.format(sql, id, account.getCookie(), account.getToken(), account.getFolder()));
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
             log.info("insert 115 Open account {} : {}, result: {}", id, getMountPath(account), count);
         }
     }

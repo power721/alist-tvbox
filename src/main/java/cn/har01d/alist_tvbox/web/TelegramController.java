@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import telegram4j.tl.User;
 
+import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -49,8 +50,8 @@ public class TelegramController {
     }
 
     @GetMapping("/tg-search")
-    public List<Message> search(String channelUsername, String keyword) {
-        return telegramService.search(channelUsername, keyword);
+    public List<Message> search(String channelUsername, String keyword) throws IOException {
+        return telegramService.searchFromChannel(channelUsername, keyword);
     }
 
     @GetMapping("/tgsz")
