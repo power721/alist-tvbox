@@ -22,7 +22,7 @@
         <el-button :icon="Film" circle @click="loadHistory"/>
         <el-button :icon="Delete" circle @click="clearHistory"
                    v-if="paths.length>1&&paths[1].path=='/~history'"/>
-        <el-button :icon="Setting" circle @click="settingVisible=true" />
+        <el-button :icon="Setting" circle @click="settingVisible=true"/>
         <el-button :icon="Plus" circle @click="handleAdd"/>
       </el-col>
     </el-row>
@@ -42,8 +42,7 @@
         </el-select>
         &nbsp;&nbsp;
         <el-button :icon="Delete" circle @click="clearSearch"></el-button>
-        <el-table :data="filteredResults" style="width: 100%;max-height: 1080px;overflow: auto;"
-                  @row-click="loadResult">
+        <el-table :data="filteredResults" v-loading="searching" class="results" @row-click="loadResult">
           <el-table-column prop="vod_name" label="内容">
             <template #default="scope">
               <el-tooltip :content="scope.row.vod_play_url">
@@ -293,20 +292,22 @@
 
     <el-dialog v-model="settingVisible" title="搜索配置">
       <el-form label-width="140">
-        <el-form-item label="电报频道">
+        <el-form-item label="电报频道群组">
           <el-input v-model="tgChannels" :rows="3" type="textarea" placeholder="逗号分割，留空使用默认值"/>
+          <span>登陆后使用此频道列表搜索。</span>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgChannels">更新</el-button>
         </el-form-item>
-        <el-form-item label="电报网页">
+        <el-form-item label="电报频道列表">
           <el-input v-model="tgWebChannels" :rows="3" type="textarea" placeholder="逗号分割，留空使用默认值"/>
+          <span>未登陆使用此频道列表搜索。</span>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgWebChannels">更新</el-button>
         </el-form-item>
-        <el-form-item label="超时时间">
-          <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>毫秒
+        <el-form-item label="搜索超时时间">
+          <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgTimeout">更新</el-button>
@@ -1152,5 +1153,11 @@ video {
 
 .divider {
   margin: 15px 0;
+}
+
+.results {
+  width: 100%;
+  max-height: 1080px;
+  overflow: auto;
 }
 </style>
