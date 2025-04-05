@@ -11,9 +11,9 @@
       </el-col>
 
       <el-col :span="2">
-        <el-input v-model="keyword" @keyup.enter="search" placeholder="搜索电报资源" v-if="tgLogin">
+        <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" placeholder="搜索电报资源">
           <template #append>
-            <el-button :icon="Search" @click="search"/>
+            <el-button :icon="Search" :disabled="searching" @click="search"/>
           </template>
         </el-input>
       </el-col>
@@ -30,9 +30,19 @@
 
     <el-row justify="center">
       <el-col :xs="3" :sm="3" :md="5" :span="9" v-if="results.length">
-        {{results.length}}条搜索结果&nbsp;&nbsp;
+        {{ filteredResults.length }}/{{ results.length }}条搜索结果&nbsp;&nbsp;
+        <el-select style="width: 90px" v-model="shareType" @change="filterSearchResults">
+          <el-option
+            v-for="item in options"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
+        &nbsp;&nbsp;
         <el-button :icon="Delete" circle @click="clearSearch"></el-button>
-        <el-table :data="results" style="width: 100%;max-height: 1080px;overflow: auto;" @row-click="loadResult">
+        <el-table :data="filteredResults" style="width: 100%;max-height: 1080px;overflow: auto;"
+                  @row-click="loadResult">
           <el-table-column prop="vod_name" label="内容">
             <template #default="scope">
               <el-tooltip :content="scope.row.vod_play_url">
@@ -40,7 +50,6 @@
               </el-tooltip>
             </template>
           </el-table-column>
-<!--          <el-table-column prop="vod_play_from" label="频道" width="120"/>-->
         </el-table>
       </el-col>
 
@@ -309,6 +318,7 @@ const videoPlayer = ref(null)
 const scrollbarRef = ref<ScrollbarInstance>()
 const token = ref('')
 const keyword = ref('')
+const shareType = ref('')
 const title = ref('')
 const playUrl = ref('')
 const movies = ref<VodItem[]>([])
@@ -332,18 +342,30 @@ const isFullscreen = ref(false)
 const dialogVisible = ref(false)
 const formVisible = ref(false)
 const isHistory = ref(false)
-const tgLogin = ref(false)
+const searching = ref(false)
 const page = ref(1)
 const size = ref(40)
 const total = ref(0)
 const files = ref<VodItem[]>([])
 const results = ref<VodItem[]>([])
+const filteredResults = ref<VodItem[]>([])
 const paths = ref<Item[]>([])
 const form = ref({
   link: '',
   path: '',
   code: '',
 })
+const options = [
+  {label: '全部', value: ''},
+  {label: '夸克', value: '5'},
+  {label: '阿里', value: '0'},
+  {label: '123', value: '3'},
+  {label: '天翼', value: '9'},
+  {label: '迅雷', value: '2'},
+  {label: 'UC', value: '7'},
+  {label: '115', value: '8'},
+  {label: 'PikPak', value: '1'},
+]
 
 const handleAdd = () => {
   form.value = {
@@ -355,23 +377,37 @@ const handleAdd = () => {
 }
 
 const search = () => {
+  searching.value = true
   axios.get('/api/telegram/search?wd=' + keyword.value).then(({data}) => {
+    searching.value = false
     results.value = data.map(e => {
       return {
         vod_id: e.id + '',
         vod_name: e.name,
         vod_tag: 'folder',
         vod_time: formatDate(e.time),
+        type_name: e.type,
         vod_play_from: e.channel,
         vod_play_url: e.link,
       }
     })
+    if (results.value.length == 0) {
+      ElMessage.info('无搜索结果')
+    }
+    filterSearchResults()
+  }, () => {
+    searching.value = false
   })
+}
+
+const filterSearchResults = () => {
+  filteredResults.value = shareType.value ? results.value.filter(e => e.type_name == shareType.value) : results.value
 }
 
 const clearSearch = () => {
   keyword.value = ''
   results.value = []
+  filteredResults.value = []
 }
 
 const focus = () => {
@@ -1036,9 +1072,6 @@ onMounted(async () => {
     } else {
       loadFiles('/')
     }
-  })
-  axios.get('/api/settings/tg_phase').then(({data}) => {
-    tgLogin.value = !!data.value
   })
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
   timer = setInterval(save, 5000)

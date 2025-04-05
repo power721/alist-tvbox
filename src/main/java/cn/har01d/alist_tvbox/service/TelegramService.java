@@ -77,7 +77,6 @@ public class TelegramService {
     private final SettingRepository settingRepository;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
     private final OkHttpClient httpClient = new OkHttpClient();
-    private final long timeout = 3000;
     private MTProtoTelegramClient client;
 
     public TelegramService(AppProperties appProperties, SettingRepository settingRepository) {
@@ -273,7 +272,7 @@ public class TelegramService {
         String[] channels = username.split(",");
         List<Future<List<Message>>> futures = new ArrayList<>();
         for (String channel : channels) {
-            Future<List<Message>> future = executorService.submit(() -> search(channel, keyword));
+            Future<List<Message>> future = executorService.submit(() -> searchFromChannel(channel, keyword));
             futures.add(future);
         }
 
@@ -283,7 +282,7 @@ public class TelegramService {
             Future<List<Message>> future = futures.get(i);
             String channel = channels[i];
             try {
-                List<Message> list = future.get(timeout, TimeUnit.MILLISECONDS);
+                List<Message> list = future.get(appProperties.getTgTimeout(), TimeUnit.MILLISECONDS);
                 total += list.size();
                 result.add(channel + "$$$" + list.stream().filter(e -> e.getContent().contains("http")).map(Message::toZxString).collect(Collectors.joining("##")));
             } catch (InterruptedException e) {
@@ -298,18 +297,19 @@ public class TelegramService {
     }
 
     public String searchPg(String keyword, String username, String encode) {
+        log.info("search {} from channels {}", keyword, username);
         String[] channels = username.split(",");
         List<Message> list = new ArrayList<>();
         List<Future<List<Message>>> futures = new ArrayList<>();
         for (String channel : channels) {
             String name = channel.split("\\|")[0];
-            Future<List<Message>> future = executorService.submit(() -> search(name, keyword));
+            Future<List<Message>> future = executorService.submit(() -> searchFromChannel(name, keyword));
             futures.add(future);
         }
 
         for (Future<List<Message>> future : futures) {
             try {
-                list.addAll(future.get(timeout, TimeUnit.MILLISECONDS));
+                list.addAll(future.get(appProperties.getTgTimeout(), TimeUnit.MILLISECONDS));
             } catch (InterruptedException e) {
                 break;
             } catch (ExecutionException | TimeoutException e) {
@@ -330,21 +330,24 @@ public class TelegramService {
     }
 
     public List<Message> search(String keyword) {
+        String[] channels;
         if (client == null) {
-            return List.of();
+            channels = appProperties.getTgWebChannels().split(",");
+        } else {
+            channels = appProperties.getTgChannels().split(",");
         }
 
         Set<Message> results = new HashSet<>();
         List<Future<List<Message>>> futures = new ArrayList<>();
-        for (String channel : appProperties.getChannels()) {
+        for (String channel : channels) {
             String name = channel.split("\\|")[0];
-            Future<List<Message>> future = executorService.submit(() -> search(name, keyword));
+            Future<List<Message>> future = executorService.submit(() -> searchFromChannel(name, keyword));
             futures.add(future);
         }
 
         for (Future<List<Message>> future : futures) {
             try {
-                results.addAll(future.get(timeout, TimeUnit.MILLISECONDS));
+                results.addAll(future.get(appProperties.getTgTimeout(), TimeUnit.MILLISECONDS));
             } catch (InterruptedException e) {
                 break;
             } catch (ExecutionException | TimeoutException e) {
@@ -367,9 +370,12 @@ public class TelegramService {
         return list;
     }
 
-    public List<Message> search(String username, String keyword) {
+    public List<Message> searchFromChannel(String username, String keyword) throws IOException {
         if (client == null) {
-            return List.of();
+            List<Message> list = searchFromWeb(username, keyword);
+            List<Message> result = list.stream().filter(e -> e.getType() != null).toList();
+            log.info("Search {} from web {} get {} results.", keyword, username, result.size());
+            return result;
         }
 
         var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
@@ -384,13 +390,42 @@ public class TelegramService {
         Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, 100, 0, 0, 0)).block();
         List<Message> result = List.of();
         if (messages instanceof ChannelMessages) {
-            result = ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message(username, e)).filter(e -> e.getLink() != null).toList();
+            result = ((ChannelMessages) messages).messages().stream().map(e -> (BaseMessage) e).map(e -> new Message(username, e)).filter(e -> e.getType() != null).toList();
         }
         log.info("Search {} from {} get {} results.", keyword, username, result.size());
         return result;
     }
 
+    public List<Message> searchFromWeb(String username, String keyword) throws IOException {
+        String url = "https://t.me/s/" + username + "?q=" + keyword;
+
+        String html = getHtml(url);
+
+        List<Message> list = new ArrayList<>();
+        Document doc = Jsoup.parse(html);
+        Elements elements = doc.select("div.tgme_container div.tgme_widget_message_wrap");
+        for (Element element : elements) {
+            Element elTime = element.selectFirst("time");
+            String time = elTime != null ? elTime.attr("datetime") : null;
+            list.add(new Message(username, getTextWithNewlines(element.select(".tgme_widget_message_text").first()), time));
+        }
+        return list;
+    }
+
+    public static String getTextWithNewlines(Element element) {
+        if (element == null) {
+            return "";
+        }
+        Element clone = element.clone();
+        clone.select("br").before("\\n");
+        clone.select("br").remove();
+        clone.select("p, div, li").before("\\n");
+        String text = clone.text().replace("\\n", "\n");
+        return text.trim();
+    }
+
     public String searchWeb(String keyword, String username, String encode) {
+        log.info("search {} from web channels {}", keyword, username);
         String[] channels = username.split(",");
         List<Future<List<String>>> futures = new ArrayList<>();
         for (String channel : channels) {
@@ -402,7 +437,7 @@ public class TelegramService {
         List<String> result = new ArrayList<>();
         for (Future<List<String>> future : futures) {
             try {
-                List<String> list = future.get(timeout, TimeUnit.MILLISECONDS);
+                List<String> list = future.get(appProperties.getTgTimeout(), TimeUnit.MILLISECONDS);
                 total += list.size();
                 for (String line : list) {
                     if ("1".equals(encode)) {
@@ -436,6 +471,7 @@ public class TelegramService {
             list.add(time + "\t" + username + "\t" + element.html().replace("\n", " ") + "\t");
         }
         Collections.reverse(list);
+        log.info("Search TG web {} get {} results.", username, list.size());
         return list;
     }
 
