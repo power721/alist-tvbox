@@ -22,8 +22,8 @@ public class AppProperties {
     private int pageSize = 100;
     private int maxSearchResult = 60;
     private String secretKey;
-    private String tgChannels = "tianyirigeng,Quark_Movies,xx123pan1,xunleiyunpan,yunpanshare,XiangxiuNB,Aliyun_4K_Movies";
-    private String tgWebChannels = "tianyirigeng,Quark_Movies";
+    private String tgChannels = "xx123pan1,xunleiyunpan,tgsearchers,leoziyuan,ucpanpan,pan123pan,zyfb123,zyzhpd123,xx123pan,tianyi_pd2,tianyirigeng,tyypzhpd,cloudtianyi,kuakeclound,ydypzyfx,clouddriveresources,NewQuark,New_Sharing,oneonefivewpfx,hao115,guaguale115,Channel_Shares_115,dianyingshare,XiangxiuNB,yunpanpan,kuakeyun,zaihuayun,Quark_Movies,vip115hot,yunpanshare,shareAliyun,ikiviyyp,alyp_1,quanziyuanshe";
+    private String tgWebChannels = "tgsearchers,leoziyuan,ucpanpan,pan123pan,zyfb123,zyzhpd123,xx123pan,tianyi_pd2,tianyirigeng,tyypzhpd,cloudtianyi,kuakeclound,ydypzyfx,clouddriveresources,NewQuark,New_Sharing,oneonefivewpfx,hao115,guaguale115,Channel_Shares_115,dianyingshare,XiangxiuNB,yunpanpan,kuakeyun,zaihuayun,Quark_Movies,vip115hot,yunpanshare,shareAliyun,ikiviyyp,alyp_1,quanziyuanshe";
     private int tgTimeout = 5000;
     private Set<String> formats;
     private Set<String> subtitles;
