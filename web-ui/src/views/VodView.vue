@@ -19,10 +19,11 @@
       </el-col>
 
       <el-col :span="2">
-        <el-button :icon="Film" circle @click="loadHistory"></el-button>
+        <el-button :icon="Film" circle @click="loadHistory"/>
         <el-button :icon="Delete" circle @click="clearHistory"
-                   v-if="paths.length>1&&paths[1].path=='/~history'"></el-button>
-        <el-button :icon="Plus" circle @click="handleAdd"></el-button>
+                   v-if="paths.length>1&&paths[1].path=='/~history'"/>
+        <el-button :icon="Setting" circle @click="settingVisible=true" />
+        <el-button :icon="Plus" circle @click="handleAdd"/>
       </el-col>
     </el-row>
 
@@ -290,6 +291,34 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="settingVisible" title="搜索配置">
+      <el-form label-width="140">
+        <el-form-item label="电报频道">
+          <el-input v-model="tgChannels" :rows="3" type="textarea" placeholder="逗号分割，留空使用默认值"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateTgChannels">更新</el-button>
+        </el-form-item>
+        <el-form-item label="电报网页">
+          <el-input v-model="tgWebChannels" :rows="3" type="textarea" placeholder="逗号分割，留空使用默认值"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateTgWebChannels">更新</el-button>
+        </el-form-item>
+        <el-form-item label="超时时间">
+          <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>毫秒
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateTgTimeout">更新</el-button>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="settingVisible=false">取消</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -302,7 +331,7 @@ import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
-import {Delete, Film, Plus, QuestionFilled, Search} from "@element-plus/icons-vue";
+import {Delete, Film, Plus, QuestionFilled, Search, Setting} from "@element-plus/icons-vue";
 
 let {toClipboard} = clipBorad();
 
@@ -318,6 +347,9 @@ const videoPlayer = ref(null)
 const scrollbarRef = ref<ScrollbarInstance>()
 const token = ref('')
 const keyword = ref('')
+const tgChannels = ref('')
+const tgWebChannels = ref('')
+const tgTimeout = ref(3000)
 const shareType = ref('')
 const title = ref('')
 const playUrl = ref('')
@@ -341,6 +373,7 @@ const isMuted = ref(false)
 const isFullscreen = ref(false)
 const dialogVisible = ref(false)
 const formVisible = ref(false)
+const settingVisible = ref(false)
 const isHistory = ref(false)
 const searching = ref(false)
 const page = ref(1)
@@ -408,6 +441,26 @@ const clearSearch = () => {
   keyword.value = ''
   results.value = []
   filteredResults.value = []
+}
+
+const updateTgChannels = () => {
+  axios.post('/api/settings', {name: 'tg_channels', value: tgChannels.value}).then(({data}) => {
+    tgChannels.value = data.value
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateTgWebChannels = () => {
+  axios.post('/api/settings', {name: 'tg_web_channels', value: tgWebChannels.value}).then(({data}) => {
+    tgWebChannels.value = data.value
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateTgTimeout = () => {
+  axios.post('/api/settings', {name: 'tg_timeout', value: tgTimeout.value + ''}).then(() => {
+    ElMessage.success('更新成功')
+  })
 }
 
 const focus = () => {
@@ -1072,6 +1125,11 @@ onMounted(async () => {
     } else {
       loadFiles('/')
     }
+  })
+  axios.get('/api/settings').then(({data}) => {
+    tgChannels.value = data.tg_channels
+    tgWebChannels.value = data.tg_web_channels
+    tgTimeout.value = +data.tg_timeout
   })
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
   timer = setInterval(save, 5000)

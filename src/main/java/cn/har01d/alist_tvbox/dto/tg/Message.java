@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -54,6 +56,16 @@ public class Message {
         this.channel = channel;
     }
 
+    public Message(String channel, telegram4j.tl.BaseMessage message, String link) {
+        this.id = message.id();
+        this.time = Instant.ofEpochSecond(message.date());
+        this.content = message.message();
+        this.link = link;
+        this.type = parseType(link);
+        this.name = parseName();
+        this.channel = channel;
+    }
+
     public String toPgString() {
         return time.atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + "\t" + channel + "\t" + content.replace('\n', ' ') + "\t" + id;
     }
@@ -87,7 +99,20 @@ public class Message {
         return null;
     }
 
-    private String parseType(String link) {
+    public static List<String> parseLinks(String content) {
+        List<String> links = new ArrayList<>();
+        Matcher m = LINK.matcher(content);
+        while (m.find()) {
+            String link = m.group(1);
+            String type = parseType(link);
+            if (type != null) {
+                links.add(link);
+            }
+        }
+        return links;
+    }
+
+    public static String parseType(String link) {
         if (link.contains("alipan.com") || link.contains("aliyundrive.com")) {
             return "0";
         }
