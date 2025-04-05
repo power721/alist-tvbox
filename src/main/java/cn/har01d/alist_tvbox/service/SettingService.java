@@ -5,9 +5,11 @@ import ch.qos.logback.classic.LoggerContext;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.FileSystemResource;
@@ -53,6 +55,15 @@ public class SettingService {
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
+        if (!settingRepository.existsByName("tg_channels")) {
+            settingRepository.save(new Setting("tg_channels", appProperties.getTgChannels()));
+        }
+        if (!settingRepository.existsByName("tg_web_channels")) {
+            settingRepository.save(new Setting("tg_web_channels", appProperties.getTgWebChannels()));
+        }
+        if (!settingRepository.existsByName("tg_timeout")) {
+            settingRepository.save(new Setting("tg_timeout", String.valueOf(appProperties.getTgTimeout())));
+        }
     }
 
     public FileSystemResource exportDatabase() throws IOException {
@@ -134,6 +145,19 @@ public class SettingService {
         }
         if ("enable_https".equals(setting.getName())) {
             appProperties.setEnableHttps("true".equals(setting.getValue()));
+        }
+        if ("tg_channels".equals(setting.getName())) {
+            String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_CHANNELS : setting.getValue();
+            setting.setValue(value);
+            appProperties.setTgChannels(value);
+        }
+        if ("tg_web_channels".equals(setting.getName())) {
+            String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_WEB_CHANNELS : setting.getValue();
+            setting.setValue(value);
+            appProperties.setTgWebChannels(value);
+        }
+        if ("tg_timeout".equals(setting.getName())) {
+            appProperties.setTgTimeout(Integer.parseInt(setting.getValue()));
         }
         if ("tmdb_api_key".equals(setting.getName())) {
             tmdbService.setApiKey(setting.getValue());

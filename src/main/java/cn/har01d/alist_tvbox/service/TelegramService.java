@@ -67,6 +67,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
@@ -391,13 +392,21 @@ public class TelegramService {
             int minDate = (int) (Instant.now().minus(60, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toEpochMilli() / 1000);
             Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, 100, 0, 0, 0)).block();
             if (messages instanceof ChannelMessages) {
-                result = ((ChannelMessages) messages).messages().stream().filter(e -> e instanceof BaseMessage).map(BaseMessage.class::cast).map(e -> new Message(username, e)).filter(e -> e.getType() != null).toList();
+                result = ((ChannelMessages) messages).messages().stream().filter(e -> e instanceof BaseMessage).map(BaseMessage.class::cast).flatMap(e -> parseMessage(username, e)).toList();
             }
             log.info("Search {} from {} get {} results.", keyword, username, result.size());
         } catch (Exception e) {
             log.warn("search from channel {} failed", username, e);
         }
         return result;
+    }
+
+    private Stream<Message> parseMessage(String channel, telegram4j.tl.BaseMessage message) {
+        List<Message> list = new ArrayList<>();
+        for (String link : Message.parseLinks(message.message())) {
+            list.add(new Message(channel, message, link));
+        }
+        return list.stream();
     }
 
     public List<Message> searchFromWeb(String username, String keyword) throws IOException {
