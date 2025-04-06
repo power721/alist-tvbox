@@ -442,22 +442,22 @@ const filterSearchResults = () => {
 
 const getShareType = (type: string) => {
   if (type == '0') {
-    return '🅰'
+    return '📀'
   }
   if (type == '5') {
     return '🚀'
   }
   if (type == '7') {
-    return '🐦'
+    return '🌞'
   }
   if (type == '3') {
-    return '3⃣'
+    return '💾'
   }
   if (type == '8') {
-    return '5⃣'
+    return '📡'
   }
   if (type == '9') {
-    return '9⃣'
+    return '☁'
   }
   if (type == '1') {
     return '🅿'
