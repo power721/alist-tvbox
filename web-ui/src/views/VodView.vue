@@ -46,6 +46,7 @@
           <el-table-column prop="vod_name" label="内容">
             <template #default="scope">
               <el-tooltip :content="scope.row.vod_play_url">
+                {{ getShareType(scope.row.type_name) }}
                 {{ scope.row.vod_name }}
               </el-tooltip>
             </template>
@@ -437,6 +438,34 @@ const search = () => {
 
 const filterSearchResults = () => {
   filteredResults.value = shareType.value ? results.value.filter(e => e.type_name == shareType.value) : results.value
+}
+
+const getShareType = (type: string) => {
+  if (type == '0') {
+    return '🅰'
+  }
+  if (type == '5') {
+    return '🚀'
+  }
+  if (type == '7') {
+    return '🐦'
+  }
+  if (type == '3') {
+    return '3⃣'
+  }
+  if (type == '8') {
+    return '5⃣'
+  }
+  if (type == '9') {
+    return '9⃣'
+  }
+  if (type == '1') {
+    return '🅿'
+  }
+  if (type == '2') {
+    return '⚡'
+  }
+  return ''
 }
 
 const clearSearch = () => {
