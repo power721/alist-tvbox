@@ -75,7 +75,12 @@ public class Message {
     }
 
     private String parseName() {
-        String name = content.split("\n")[0].replace("名称：", "");
+        String[] lines = content.split("\n");
+        String line = lines[0];
+        if (line.startsWith("#") && lines.length > 1) {
+            line = lines[1];
+        }
+        String name = line.replace("名称：", "").replace("名称:", "").replace("资源标题：", "");
         int index = name.indexOf("描述：");
         if (index > 0) {
             return name.substring(0, index);
