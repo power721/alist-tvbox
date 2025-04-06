@@ -1587,19 +1587,28 @@ public class TvBoxService {
         return files;
     }
 
-    public String m3u8(String path) {
+    public String m3u8(String tid) {
+        String[] parts = tid.split("\\$");
+        String path = parts[0];
+        int start = 0;
+        if (parts.length > 1) {
+            start = Integer.parseInt(parts[1]);
+        }
         Site site = siteService.getById(1);
         List<String> list = new ArrayList<>();
         list.add("#EXTM3U");
         MovieList movieList = getPlaylist("detail", site, path + PLAYLIST);
         MovieDetail detail = movieList.getList().get(0);
         String[] folders = detail.getVod_play_from().split("\\$\\$\\$");
+        int i = 0;
         for (String folder : folders) {
             String[] urls = detail.getVod_play_url().split("#");
             for (String url : urls) {
-                String[] parts = url.split("\\$");
-                list.add("#EXTINF:-1," + detail.getVod_name() + " " + (folders.length > 1 ? folder + " " : "") + parts[0]);
-                list.add(parts[1]);
+                if (i++ >= start) {
+                    parts = url.split("\\$");
+                    list.add("#EXTINF:3600000," + detail.getVod_name() + " " + (folders.length > 1 ? folder + " " : "") + parts[0]);
+                    list.add(parts[1]);
+                }
             }
         }
         return String.join("\n", list);

@@ -117,7 +117,8 @@
           <el-col :span="5">
             <div v-if="playlist.length>1">
               <div style="margin-left: 30px; margin-bottom: 10px;">
-                第{{ currentVideoIndex + 1 }}集 / 总共{{ playlist.length }}集
+                <el-link :href="buildVlcUrl(currentVideoIndex)" target="_blank">第{{ currentVideoIndex + 1 }}集</el-link> /
+                <el-link :href="buildVlcUrl(0)" target="_blank">总共{{ playlist.length }}集</el-link>
               </div>
               <el-scrollbar ref="scrollbarRef" height="1050px">
                 <ul>
@@ -946,16 +947,16 @@ const copyPlayUrl = () => {
   })
 }
 
-const buildVlcUrl = () => {
+const buildVlcUrl = (start: number) => {
   const id = movies.value[0].vod_id
-  let url = playUrl.value + '#1'
+  let url = playUrl.value
   if (id.endsWith('playlist$1')) {
     const path = getPath(id)
     const index = path.lastIndexOf('/')
     const parent = path.substring(0, index)
-    url = window.location.origin + '/m3u8' + token.value + '?path=' + parent + '#' + (currentVideoIndex.value + 1)
+    url = window.location.origin + '/m3u8' + token.value + '?path=' + parent + '$' + start
   }
-  return url
+  return `vlc://${url}`
 }
 
 const openInVLC = () => {
