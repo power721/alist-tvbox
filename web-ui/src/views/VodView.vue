@@ -46,6 +46,7 @@
           <el-table-column prop="vod_name" label="内容">
             <template #default="scope">
               <el-tooltip :content="scope.row.vod_play_url">
+                {{ getShareType(scope.row.type_name) }}
                 {{ scope.row.vod_name }}
               </el-tooltip>
             </template>
@@ -117,7 +118,8 @@
           <el-col :span="5">
             <div v-if="playlist.length>1">
               <div style="margin-left: 30px; margin-bottom: 10px;">
-                第{{ currentVideoIndex + 1 }}集 / 总共{{ playlist.length }}集
+                <el-link :href="buildVlcUrl(currentVideoIndex)" target="_blank">第{{ currentVideoIndex + 1 }}集</el-link> /
+                <el-link :href="buildVlcUrl(0)" target="_blank">总共{{ playlist.length }}集</el-link>
               </div>
               <el-scrollbar ref="scrollbarRef" height="1050px">
                 <ul>
@@ -436,6 +438,34 @@ const search = () => {
 
 const filterSearchResults = () => {
   filteredResults.value = shareType.value ? results.value.filter(e => e.type_name == shareType.value) : results.value
+}
+
+const getShareType = (type: string) => {
+  if (type == '0') {
+    return '📀'
+  }
+  if (type == '5') {
+    return '🚀'
+  }
+  if (type == '7') {
+    return '🌞'
+  }
+  if (type == '3') {
+    return '💾'
+  }
+  if (type == '8') {
+    return '📡'
+  }
+  if (type == '9') {
+    return '☁'
+  }
+  if (type == '1') {
+    return '🅿'
+  }
+  if (type == '2') {
+    return '⚡'
+  }
+  return ''
 }
 
 const clearSearch = () => {
@@ -946,16 +976,16 @@ const copyPlayUrl = () => {
   })
 }
 
-const buildVlcUrl = () => {
+const buildVlcUrl = (start: number) => {
   const id = movies.value[0].vod_id
-  let url = playUrl.value + '#1'
+  let url = playUrl.value
   if (id.endsWith('playlist$1')) {
     const path = getPath(id)
     const index = path.lastIndexOf('/')
     const parent = path.substring(0, index)
-    url = window.location.origin + '/m3u8' + token.value + '?path=' + parent + '#' + (currentVideoIndex.value + 1)
+    url = window.location.origin + '/m3u8' + token.value + '?path=' + parent + '$' + start
   }
-  return url
+  return `vlc://${url}`
 }
 
 const openInVLC = () => {

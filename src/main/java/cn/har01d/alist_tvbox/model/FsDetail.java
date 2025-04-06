@@ -14,7 +14,6 @@ public class FsDetail {
     private String sign;
     private String thumb;
     private String provider;
-    private String readme;
     @JsonProperty("raw_url")
     private String rawUrl;
 }
