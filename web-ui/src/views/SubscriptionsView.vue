@@ -71,8 +71,15 @@
       <span v-else><el-icon color="orange"><Warning /></el-icon></span>
     </el-row>
     <el-row>
-      真心包本地： {{ zxLocal }}
-      真心包远程： {{ zxRemote }}
+      真心全量包本地： {{ zxLocal2 }}
+      真心全量包远程： {{ zxRemote2 }}
+      <span class="hint"></span>
+      <span v-if="zxLocal2==zxRemote2"><el-icon color="green"><Check /></el-icon></span>
+      <span v-else><el-icon color="orange"><Warning /></el-icon></span>
+    </el-row>
+    <el-row>
+      真心增量包本地： {{ zxLocal }}
+      真心增量包远程： {{ zxRemote }}
       <span class="hint"></span>
       <span v-if="zxLocal==zxRemote"><el-icon color="green"><Check /></el-icon></span>
       <span v-else><el-icon color="orange"><Warning /></el-icon></span>
@@ -202,6 +209,8 @@ const pgLocal = ref('')
 const pgRemote = ref('')
 const zxLocal = ref('')
 const zxRemote = ref('')
+const zxLocal2 = ref('')
+const zxRemote2 = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
@@ -397,6 +406,8 @@ const loadVersion = () => {
   axios.get("/zx/version").then(({data}) => {
     zxLocal.value = data.local
     zxRemote.value = data.remote
+    zxLocal2.value = data.local2
+    zxRemote2.value = data.remote2
   })
 }
 

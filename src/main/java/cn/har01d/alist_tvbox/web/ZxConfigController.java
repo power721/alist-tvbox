@@ -54,7 +54,14 @@ public class ZxConfigController {
         if (Files.exists(path)) {
             local = Files.readString(path);
         }
-        return Map.of("local", local, "remote", remote);
+
+        String remote2 = restTemplate.getForObject("http://har01d.org/zx.base.version", String.class);
+        String local2 = "";
+        path = Path.of("/data/zx_base_version.txt");
+        if (Files.exists(path)) {
+            local2 = Files.readString(path);
+        }
+        return Map.of("local", local, "remote", remote, "local2", local2, "remote2", remote2);
     }
 
     @GetMapping("/config")
@@ -76,6 +83,8 @@ public class ZxConfigController {
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).stream().findFirst().ifPresent(share -> objectNode.put("p123Auth", share.getUsername() + "|" + share.getPassword()));
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).stream().findFirst().ifPresent(share -> objectNode.put("ydAuth", share.getToken()));
         settingRepository.findById("delete_code_115").map(Setting::getValue).ifPresent(code -> objectNode.put("pwdRb115", code));
+
+        objectNode.put("exeAddr", subscriptionService.readHostAddress("/zx/lib/"));
 
         Path path = Path.of("/data/zx.json");
         if (Files.exists(path)) {
