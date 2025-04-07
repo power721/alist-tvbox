@@ -57,6 +57,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -276,14 +277,16 @@ public class TelegramService {
             Future<List<Message>> future = executorService.submit(() -> searchFromChannel(channel, keyword));
             futures.add(future);
         }
+        long startTime = System.currentTimeMillis();
 
         int total = 0;
         List<String> result = new ArrayList<>();
         for (int i = 0; i < futures.size(); i++) {
+            long remaining = Math.max(1, appProperties.getTgTimeout() - (System.currentTimeMillis() - startTime));
             Future<List<Message>> future = futures.get(i);
             String channel = channels[i];
             try {
-                List<Message> list = future.get(appProperties.getTgTimeout(), TimeUnit.MILLISECONDS);
+                List<Message> list = future.get(remaining, TimeUnit.MILLISECONDS);
                 total += list.size();
                 result.add(channel + "$$$" + list.stream().filter(e -> e.getContent().contains("http")).map(Message::toZxString).collect(Collectors.joining("##")));
             } catch (InterruptedException e) {
@@ -293,14 +296,13 @@ public class TelegramService {
             }
         }
 
-        log.info("Search TG get {} results.", total);
+        log.info("Search TG zx get {} results.", total);
         return Map.of("results", result);
     }
 
     public String searchPg(String keyword, String username, String encode) {
         log.info("search {} from channels {}", keyword, username);
         String[] channels = username.split(",");
-        List<Message> list = new ArrayList<>();
         List<Future<List<Message>>> futures = new ArrayList<>();
         for (String channel : channels) {
             String name = channel.split("\\|")[0];
@@ -308,17 +310,9 @@ public class TelegramService {
             futures.add(future);
         }
 
-        for (Future<List<Message>> future : futures) {
-            try {
-                list.addAll(future.get(appProperties.getTgTimeout(), TimeUnit.MILLISECONDS));
-            } catch (InterruptedException e) {
-                break;
-            } catch (ExecutionException | TimeoutException e) {
-                log.warn("", e);
-            }
-        }
+        List<Message> list = getResult(futures);
 
-        log.info("Search TG get {} results.", list.size());
+        log.info("Search TG pg get {} results.", list.size());
         return list.stream()
                 .map(Message::toPgString)
                 .map(e -> {
@@ -338,7 +332,6 @@ public class TelegramService {
             channels = appProperties.getTgChannels().split(",");
         }
 
-        Set<Message> results = new HashSet<>();
         List<Future<List<Message>>> futures = new ArrayList<>();
         for (String channel : channels) {
             String name = channel.split("\\|")[0];
@@ -346,15 +339,7 @@ public class TelegramService {
             futures.add(future);
         }
 
-        for (Future<List<Message>> future : futures) {
-            try {
-                results.addAll(future.get(appProperties.getTgTimeout(), TimeUnit.MILLISECONDS));
-            } catch (InterruptedException e) {
-                break;
-            } catch (ExecutionException | TimeoutException e) {
-                log.warn("", e);
-            }
-        }
+        List<Message> results = getResult(futures);
 
         List<Message> list = results.stream()
                 .filter(e -> !e.getContent().toLowerCase().contains("pdf"))
@@ -366,9 +351,46 @@ public class TelegramService {
                 .filter(e -> !e.getContent().contains("图书"))
                 .filter(e -> !e.getContent().contains("电子书"))
                 .sorted(Comparator.comparing(Message::getTime).reversed())
+                .distinct()
                 .toList();
         log.info("Search {} get {} results.", keyword, list.size());
         return list;
+    }
+
+    private List<Message> getResult(List<Future<List<Message>>> futures) {
+        long startTime = System.currentTimeMillis();
+        List<Message> results = new ArrayList<>();
+        List<Future<List<Message>>> incompleteFutures = new ArrayList<>();
+
+        for (Future<List<Message>> future : futures) {
+            long remaining = Math.max(1, appProperties.getTgTimeout() - (System.currentTimeMillis() - startTime));
+
+            try {
+                List<Message> result = future.get(remaining, TimeUnit.MILLISECONDS);
+                results.addAll(result);
+            } catch (TimeoutException e) {
+                incompleteFutures.add(future);
+            } catch (InterruptedException | ExecutionException e) {
+                log.warn("", e);
+            }
+        }
+
+        Iterator<Future<List<Message>>> iterator = incompleteFutures.iterator();
+        while (iterator.hasNext()) {
+            Future<List<Message>> future = iterator.next();
+            if (future.isDone()) {
+                try {
+                    results.addAll(future.get());
+                    iterator.remove();
+                } catch (InterruptedException | ExecutionException e) {
+                    log.warn("", e);
+                }
+            }
+        }
+
+        incompleteFutures.forEach(f -> f.cancel(true));
+
+        return results;
     }
 
     public List<Message> searchFromChannel(String username, String keyword) throws IOException {

@@ -1,19 +1,24 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -24,6 +29,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/zx")
 public class ZxConfigController {
+    private final AppProperties appProperties;
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
@@ -31,13 +37,15 @@ public class ZxConfigController {
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
 
-    public ZxConfigController(SubscriptionService subscriptionService,
+    public ZxConfigController(AppProperties appProperties,
+                              SubscriptionService subscriptionService,
                               AccountRepository accountRepository,
                               SettingRepository settingRepository,
                               DriverAccountRepository driverAccountRepository,
                               ObjectMapper objectMapper,
                               RestTemplateBuilder builder
     ) {
+        this.appProperties = appProperties;
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
@@ -54,7 +62,14 @@ public class ZxConfigController {
         if (Files.exists(path)) {
             local = Files.readString(path);
         }
-        return Map.of("local", local, "remote", remote);
+
+        String remote2 = restTemplate.getForObject("http://har01d.org/zx.base.version", String.class);
+        String local2 = "";
+        path = Path.of("/data/zx_base_version.txt");
+        if (Files.exists(path)) {
+            local2 = Files.readString(path);
+        }
+        return Map.of("local", local, "remote", remote, "local2", local2, "remote2", remote2);
     }
 
     @GetMapping("/config")
@@ -77,6 +92,8 @@ public class ZxConfigController {
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).stream().findFirst().ifPresent(share -> objectNode.put("ydAuth", share.getToken()));
         settingRepository.findById("delete_code_115").map(Setting::getValue).ifPresent(code -> objectNode.put("pwdRb115", code));
 
+        objectNode.put("exeAddr", buildUrl());
+
         Path path = Path.of("/data/zx.json");
         if (Files.exists(path)) {
             json = Files.readString(path);
@@ -88,5 +105,14 @@ public class ZxConfigController {
         }
 
         return objectNode;
+    }
+
+    private String buildUrl() {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/zx/lib/")
+                .replaceQuery("")
+                .build()
+                .toUriString();
     }
 }
