@@ -983,7 +983,7 @@ const buildVlcUrl = (start: number) => {
     const path = getPath(id)
     const index = path.lastIndexOf('/')
     const parent = path.substring(0, index)
-    url = window.location.origin + '/m3u8' + token.value + '?path=' + parent + '$' + start
+    url = window.location.origin + '/m3u8' + token.value + '?path=' + encodeURIComponent(parent + '$' + start)
   }
   return `vlc://${url}`
 }
