@@ -77,7 +77,7 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 public class TelegramService {
     private final AppProperties appProperties;
     private final SettingRepository settingRepository;
-    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
+    private final ExecutorService executorService = Executors.newFixedThreadPool(Math.min(10, Runtime.getRuntime().availableProcessors() * 2));
     private final OkHttpClient httpClient = new OkHttpClient();
     private MTProtoTelegramClient client;
 
