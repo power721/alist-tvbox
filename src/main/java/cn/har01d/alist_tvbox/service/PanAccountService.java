@@ -482,7 +482,7 @@ public class PanAccountService {
 
     public void syncTokens() {
         try {
-            Thread.sleep(5000L);
+            Thread.sleep(2000L);
         } catch (InterruptedException e) {
             return;
         }
