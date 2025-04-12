@@ -12,4 +12,6 @@ public interface ShareRepository extends JpaRepository<Share, Integer> {
     int countByType(int type);
 
     List<Share> findByType(int type);
+
+    List<Share> findByTempTrue();
 }
