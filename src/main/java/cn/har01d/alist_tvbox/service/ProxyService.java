@@ -95,7 +95,7 @@ public class ProxyService {
             if (id.startsWith("115-")) {
                 String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
                 headers.put("cookie", cookie);
-                headers.put("referer", "https://115.com/");
+                headers.put("referer", "https://anxia.com/");
             } else if (id.startsWith("xl-")) {
                 headers.put("user-agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)");
             }
@@ -117,7 +117,13 @@ public class ProxyService {
                 url = fsDetail.getRawUrl();
                 String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
                 headers.put("cookie", cookie);
-                headers.put("referer", "https://115.com/");
+                //headers.put("p115uid", "");
+                headers.put("Content-Type", "application/x-www-form-urlencoded");
+                headers.put("referer", "https://anxia.com/");
+            } else if (fsDetail.getProvider().equals("115 Open")) {
+                url = fsDetail.getRawUrl();
+                //headers.put("p115uid", "");
+                headers.put("referer", "https://anxia.com/");
             } else {
                 url = buildProxyUrl(site, path, fsDetail.getSign());
             }

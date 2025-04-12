@@ -70,6 +70,7 @@ public class PanAccountService {
         }
         drivers.put("QUARK_TV", new QuarkUCTV(restTemplate, new QuarkUCTV.Conf("https://open-api-drive.quark.cn", "d3194e61504e493eb6222857bccfed94", "kw2dvtd7p4t3pjl2d9ed9yc8yej8kw2d", "1.5.6", "CP", "http://api.extscreen.com/quarkdrive", deviceId)));
         drivers.put("UC_TV", new QuarkUCTV(restTemplate, new QuarkUCTV.Conf("https://open-api-drive.uc.cn", "5acf882d27b74502b7040b0c65519aa7", "l3srvtd7p42l0d0x1u8d7yc8ye9kki4d", "1.6.5", "UCTVOFFICIALWEB", "http://api.extscreen.com/ucdrive", deviceId)));
+        syncTokens();
     }
 
     private void migrateDriverAccounts() {
@@ -189,6 +190,7 @@ public class PanAccountService {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
             log.info("insert 115 Open account {} : {}, result: {}", id, getMountPath(account), count);
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_token','" + account.getToken() + "','','text','',1,0);");
         }
     }
 
@@ -244,6 +246,7 @@ public class PanAccountService {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
             log.info("insert 115 Open account {} : {}, result: {}", id, getMountPath(account), count);
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_token','" + account.getToken() + "','','text','',1,0);");
         }
     }
 
@@ -407,13 +410,18 @@ public class PanAccountService {
             String key = switch (account.getType()) {
                 case QUARK -> "quark_cookie";
                 case PAN115 -> "115_cookie";
+                case OPEN115 -> "115_token";
                 case UC -> "uc_cookie";
                 default -> "";
             };
             if (key.isEmpty()) {
                 return;
             }
-            aListLocalService.updateSetting(key, account.getCookie(), "string");
+            if (account.getType() == DriverType.OPEN115) {
+                aListLocalService.updateSetting(key, account.getToken(), "string");
+            } else {
+                aListLocalService.updateSetting(key, account.getCookie(), "string");
+            }
             driverAccountRepository.saveAll(list);
         }
     }
@@ -429,6 +437,9 @@ public class PanAccountService {
             updateAList(account);
             if (status == 2) {
                 accountService.enableStorage(id, token);
+                if (account.getType() == DriverType.OPEN115) {
+                    sync115Token();
+                }
             }
         } catch (Exception e) {
             throw new BadRequestException(e);
@@ -468,10 +479,42 @@ public class PanAccountService {
         saveCookie(DriverType.PAN115, cookie);
     }
 
+    public void syncTokens() {
+        new Thread(() -> {
+            while (true) {
+                if (aListLocalService.getAListStatus() != 2) {
+                    try {
+                        Thread.sleep(1000L);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    continue;
+                }
+                sync115Token();
+                break;
+            }
+        }).start();
+    }
+
+    private void sync115Token() {
+        var token = aListLocalService.getSetting("115_token");
+        log.debug("115_token={}", token);
+        saveToken(DriverType.OPEN115, token);
+    }
+
     private void saveCookie(DriverType type, SettingResponse response) {
         if (response.getCode() == 200) {
             driverAccountRepository.findByTypeAndMasterTrue(type).ifPresent(account -> {
                 account.setCookie(response.getData().getValue());
+                driverAccountRepository.save(account);
+            });
+        }
+    }
+
+    private void saveToken(DriverType type, SettingResponse response) {
+        if (response.getCode() == 200) {
+            driverAccountRepository.findByTypeAndMasterTrue(type).ifPresent(account -> {
+                account.setToken(response.getData().getValue());
                 driverAccountRepository.save(account);
             });
         }

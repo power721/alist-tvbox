@@ -3,6 +3,8 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.tg.Chat;
 import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.dto.tg.SearchResponse;
+import cn.har01d.alist_tvbox.dto.tg.SearchResult;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.util.IdUtils;
@@ -13,11 +15,14 @@ import okhttp3.Call;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 import reactor.core.publisher.Mono;
 import telegram4j.core.MTProtoTelegramClient;
 import telegram4j.core.auth.AuthorizationHandler;
@@ -77,13 +82,15 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 public class TelegramService {
     private final AppProperties appProperties;
     private final SettingRepository settingRepository;
+    private final RestTemplate restTemplate;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Math.min(10, Runtime.getRuntime().availableProcessors() * 2));
     private final OkHttpClient httpClient = new OkHttpClient();
     private MTProtoTelegramClient client;
 
-    public TelegramService(AppProperties appProperties, SettingRepository settingRepository) {
+    public TelegramService(AppProperties appProperties, SettingRepository settingRepository, RestTemplateBuilder restTemplateBuilder) {
         this.appProperties = appProperties;
         this.settingRepository = settingRepository;
+        this.restTemplate = restTemplateBuilder.build();
     }
 
     @PostConstruct
@@ -325,21 +332,28 @@ public class TelegramService {
     }
 
     public List<Message> search(String keyword) {
-        String[] channels;
-        if (client == null) {
-            channels = appProperties.getTgWebChannels().split(",");
-        } else {
-            channels = appProperties.getTgChannels().split(",");
+        List<Message> results = List.of();
+        if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+            results = searchRemote(keyword);
         }
 
-        List<Future<List<Message>>> futures = new ArrayList<>();
-        for (String channel : channels) {
-            String name = channel.split("\\|")[0];
-            Future<List<Message>> future = executorService.submit(() -> searchFromChannel(name, keyword));
-            futures.add(future);
-        }
+        if (results.isEmpty()) {
+            String[] channels;
+            if (client == null) {
+                channels = appProperties.getTgWebChannels().split(",");
+            } else {
+                channels = appProperties.getTgChannels().split(",");
+            }
 
-        List<Message> results = getResult(futures);
+            List<Future<List<Message>>> futures = new ArrayList<>();
+            for (String channel : channels) {
+                String name = channel.split("\\|")[0];
+                Future<List<Message>> future = executorService.submit(() -> searchFromChannel(name, keyword));
+                futures.add(future);
+            }
+
+            results = getResult(futures);
+        }
 
         List<Message> list = results.stream()
                 .filter(e -> !e.getContent().toLowerCase().contains("pdf"))
@@ -355,6 +369,22 @@ public class TelegramService {
                 .toList();
         log.info("Search {} get {} results.", keyword, list.size());
         return list;
+    }
+
+    private List<Message> searchRemote(String keyword) {
+        String channels = appProperties.getTgChannels();
+        String api = appProperties.getTgSearch();
+        if (!api.endsWith("/search")) {
+            api = api + "/search";
+        }
+        String url = api + "?channels=" + channels + "&query=" + keyword + "&timeout=" + appProperties.getTgTimeout();
+        try {
+            var response = restTemplate.getForObject(url, SearchResponse.class);
+            return response.getMessages().stream().flatMap(this::parseMessage).toList();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return List.of();
     }
 
     private List<Message> getResult(List<Future<List<Message>>> futures) {
@@ -427,6 +457,14 @@ public class TelegramService {
         List<Message> list = new ArrayList<>();
         for (String link : Message.parseLinks(message.message())) {
             list.add(new Message(channel, message, link));
+        }
+        return list.stream();
+    }
+
+    private Stream<Message> parseMessage(SearchResult result) {
+        List<Message> list = new ArrayList<>();
+        for (String link : Message.parseLinks(result.getContent())) {
+            list.add(new Message(result, link));
         }
         return list.stream();
     }
@@ -517,6 +555,19 @@ public class TelegramService {
                 .addHeader("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5")
                 .addHeader("User-Agent", USER_AGENT)
                 .addHeader("Referer", "https://t.me/")
+                .build();
+
+        Call call = httpClient.newCall(request);
+        Response response = call.execute();
+        String html = response.body().string();
+        response.close();
+
+        return html;
+    }
+
+    private String getJson(String url) throws IOException {
+        Request request = new Request.Builder()
+                .url(url)
                 .build();
 
         Call call = httpClient.newCall(request);
