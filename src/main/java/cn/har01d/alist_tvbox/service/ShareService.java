@@ -354,7 +354,7 @@ public class ShareService {
                     share.setId(shareId);
                     share.setType(dto.getType());
                     share.setPath(parts[0]);
-                    String[] id = parts[1].split(":");
+                    String[] id = parts[1].split(":", 2);
                     if (id.length > 1) {
                         share.setType(Integer.parseInt(id[0]));
                         share.setShareId(id[1]);
