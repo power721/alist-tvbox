@@ -1290,8 +1290,8 @@ public class TvBoxService {
         if (url.contains("xunlei.com")) {
             result.put("header", "{\"User-Agent\":\"AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (url.contains("115cdn.net")) {
-            var account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElseThrow();
-            if (account.isUseProxy()) {
+            var account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElse(null);
+            if (account == null || account.isUseProxy()) {
                 url = proxyService.generateProxyUrl("115", url);
                 result.put("url", url);
             } else {

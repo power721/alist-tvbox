@@ -309,18 +309,25 @@ public class TelegramService {
 
     public String searchPg(String keyword, String username, String encode) {
         log.info("search {} from channels {}", keyword, username);
-        String[] channels = username.split(",");
-        List<Future<List<Message>>> futures = new ArrayList<>();
-        for (String channel : channels) {
-            String name = channel.split("\\|")[0];
-            Future<List<Message>> future = executorService.submit(() -> searchFromChannel(name, keyword));
-            futures.add(future);
+        List<Message> results = List.of();
+        if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+            results = searchRemote(username, keyword);
         }
 
-        List<Message> list = getResult(futures);
+        if (results.isEmpty()) {
+            String[] channels = username.split(",");
+            List<Future<List<Message>>> futures = new ArrayList<>();
+            for (String channel : channels) {
+                String name = channel.split("\\|")[0];
+                Future<List<Message>> future = executorService.submit(() -> searchFromChannel(name, keyword));
+                futures.add(future);
+            }
 
-        log.info("Search TG pg get {} results.", list.size());
-        return list.stream()
+            results = getResult(futures);
+        }
+
+        log.info("Search TG pg get {} results.", results.size());
+        return results.stream()
                 .map(Message::toPgString)
                 .map(e -> {
                     if ("1".equals(encode)) {
@@ -334,7 +341,7 @@ public class TelegramService {
     public List<Message> search(String keyword) {
         List<Message> results = List.of();
         if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
-            results = searchRemote(keyword);
+            results = searchRemote(appProperties.getTgChannels(), keyword);
         }
 
         if (results.isEmpty()) {
@@ -371,8 +378,7 @@ public class TelegramService {
         return list;
     }
 
-    private List<Message> searchRemote(String keyword) {
-        String channels = appProperties.getTgChannels();
+    private List<Message> searchRemote(String channels, String keyword) {
         String api = appProperties.getTgSearch();
         if (!api.endsWith("/search")) {
             api = api + "/search";

@@ -69,7 +69,12 @@
               <span v-else-if="scope.row.vod_tag=='folder'">📂</span>
               <span v-else-if="scope.row.vod_id.endsWith('playlist$1')">▶️</span>
               <span v-else>🎬</span>
-              {{ scope.row.vod_name }}
+              <el-tooltip :content="getParent(scope.row.vod_id)" v-if="isHistory">
+                {{ scope.row.vod_name }}
+              </el-tooltip>
+              <span v-else>
+                {{ scope.row.vod_name }}
+              </span>
             </template>
           </el-table-column>
           <el-table-column label="大小" width="120" v-if="!isHistory">
@@ -118,7 +123,11 @@
           <el-col :span="5">
             <div v-if="playlist.length>1">
               <div style="margin-left: 30px; margin-bottom: 10px;">
-                <el-link :href="buildVlcUrl(currentVideoIndex)" target="_blank">第{{ currentVideoIndex + 1 }}集</el-link> /
+                <el-link :href="buildVlcUrl(currentVideoIndex)" target="_blank">第{{
+                    currentVideoIndex + 1
+                  }}集
+                </el-link>
+                /
                 <el-link :href="buildVlcUrl(0)" target="_blank">总共{{ playlist.length }}集</el-link>
               </div>
               <el-scrollbar ref="scrollbarRef" height="1050px">
@@ -525,6 +534,7 @@ const loadResult = (row: any) => {
     path: '',
     code: '',
   }
+  toClipboard(row.vod_play_url).then()
   axios.post('/api/share-link', form.value).then(({data}) => {
     loadFolder(data)
   })
@@ -599,6 +609,12 @@ const loadFiles = (path: string) => {
   }, () => {
     loading.value = false
   })
+}
+
+const getParent = (path: string) => {
+  path = getPath(path)
+  const index = path.lastIndexOf('/')
+  return path.substring(0, index)
 }
 
 const getPath = (id: string) => {
