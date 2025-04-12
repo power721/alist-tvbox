@@ -438,7 +438,7 @@ public class PanAccountService {
             if (status == 2) {
                 accountService.enableStorage(id, token);
                 if (account.getType() == DriverType.OPEN115) {
-                    sync115Token();
+                    syncTokens();
                 }
             }
         } catch (Exception e) {
@@ -477,21 +477,27 @@ public class PanAccountService {
         cookie = aListLocalService.getSetting("115_cookie");
         log.debug("115_cookie={}", cookie);
         saveCookie(DriverType.PAN115, cookie);
+        sync115Token();
     }
 
     public void syncTokens() {
+        try {
+            Thread.sleep(2000L);
+        } catch (InterruptedException e) {
+            return;
+        }
+
         new Thread(() -> {
             while (true) {
-                if (aListLocalService.getAListStatus() != 2) {
-                    try {
-                        Thread.sleep(1000L);
-                    } catch (InterruptedException e) {
-                        return;
-                    }
-                    continue;
+                try {
+                    Thread.sleep(1000L);
+                } catch (InterruptedException e) {
+                    return;
                 }
-                sync115Token();
-                break;
+                if (aListLocalService.getAListStatus() == 2) {
+                    sync115Token();
+                    break;
+                }
             }
         }).start();
     }
