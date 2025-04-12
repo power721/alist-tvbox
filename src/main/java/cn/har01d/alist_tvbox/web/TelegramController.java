@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.service.TelegramService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +20,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 public class TelegramController {
     private final TelegramService telegramService;
@@ -69,6 +71,7 @@ public class TelegramController {
     @PostMapping("/tgs")
     public String searchPgPost(@RequestBody String body, HttpServletResponse response) throws JsonProcessingException {
         String json = new String(Base64.getDecoder().decode(body));
+        log.debug("searchPgPost: {} {}", body, json);
         SearchRequest request = objectMapper.readValue(json, SearchRequest.class);
         response.setHeader("server", "hypercorn-h11");
         if ("2".equals(request.getPage())) {
