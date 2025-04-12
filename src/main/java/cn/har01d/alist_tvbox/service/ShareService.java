@@ -153,10 +153,10 @@ public class ShareService {
     }
 
     @Scheduled(cron = "0 0 4 * * *")
-    private void cleanShares() {
-        List<Share> list = shareRepository.findAll();
+    public void cleanShares() {
+        List<Share> list = shareRepository.findByTempTrue();
 
-        Instant time = Instant.now().minus(24, ChronoUnit.HOURS);
+        Instant time = Instant.now().minus(30, ChronoUnit.HOURS);
         for (Share share : list) {
             if (share.isTemp() && share.getTime() != null && share.getTime().isBefore(time)) {
                 log.info("Delete temp share: {} {}", share.getId(), share.getPath());
