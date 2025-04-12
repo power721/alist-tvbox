@@ -189,6 +189,7 @@
     <el-form>
       <el-form-item label="类型" label-width="140">
         <el-radio-group v-model="sharesDto.type" class="ml-4">
+          <el-radio :label="-1" size="large">自动</el-radio>
           <el-radio :label="0" size="large">阿里分享</el-radio>
           <el-radio :label="1" size="large">PikPak分享</el-radio>
           <el-radio :label="5" size="large">夸克分享</el-radio>
@@ -200,7 +201,8 @@
         </el-radio-group>
       </el-form-item>
       <el-form-item label="分享内容" label-width="120">
-        <el-input v-model="sharesDto.content" type="textarea" :rows="15" placeholder="多行分享，挂载路径+分享链接"/>
+        <el-input v-model="sharesDto.content" type="textarea" :rows="15"
+                  :placeholder="'多行分享\n格式1：挂载路径 分享ID 目录ID 提取码\n格式2：挂载路径 分享链接\n格式3：挂载路径 分享链接 root 提取码'"/>
       </el-form-item>
       <el-progress v-if="uploading" :percentage="100" status="success" :indeterminate="true" :duration="5"/>
     </el-form>
@@ -215,6 +217,7 @@
   <el-dialog v-model="exportVisible" title="导出分享" width="50%">
     <el-form-item label="类型" label-width="140">
       <el-radio-group v-model="form.type" class="ml-4">
+        <el-radio :label="-1" size="large">全部</el-radio>
         <el-radio :label="0" size="large">阿里分享</el-radio>
         <el-radio :label="1" size="large">PikPak分享</el-radio>
         <el-radio :label="5" size="large">夸克分享</el-radio>
@@ -299,7 +302,7 @@ const form = ref({
 })
 const sharesDto = ref({
   content: '',
-  type: 0
+  type: -1
 })
 
 const handleAdd = () => {
