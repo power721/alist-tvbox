@@ -118,7 +118,7 @@ public class ProxyService {
                 String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
                 headers.put("cookie", cookie);
                 //headers.put("p115uid", "");
-                headers.put("Content-Type", "application/x-www-form-urlencoded");
+                //headers.put("Content-Type", "application/x-www-form-urlencoded");
                 headers.put("referer", "https://anxia.com/");
             } else if (fsDetail.getProvider().equals("115 Open")) {
                 url = fsDetail.getRawUrl();
