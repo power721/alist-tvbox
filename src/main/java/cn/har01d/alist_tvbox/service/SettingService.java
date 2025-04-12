@@ -54,6 +54,10 @@ public class SettingService {
         appProperties.setEnableHttps(settingRepository.findById("enable_https").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
+        appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
+        appProperties.setTgChannels(settingRepository.findById("tg_channels").map(Setting::getValue).orElse(""));
+        appProperties.setTgWebChannels(settingRepository.findById("tg_web_channels").map(Setting::getValue).orElse(""));
+        appProperties.setTgTimeout(settingRepository.findById("tg_timeout").map(Setting::getValue).map(Integer::parseInt).orElse(5000));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         if (!settingRepository.existsByName("tg_channels")) {
             settingRepository.save(new Setting("tg_channels", appProperties.getTgChannels()));
@@ -158,6 +162,9 @@ public class SettingService {
         }
         if ("tg_timeout".equals(setting.getName())) {
             appProperties.setTgTimeout(Integer.parseInt(setting.getValue()));
+        }
+        if ("tg_search".equals(setting.getName())) {
+            appProperties.setTgSearch(setting.getValue());
         }
         if ("tmdb_api_key".equals(setting.getName())) {
             tmdbService.setApiKey(setting.getValue());

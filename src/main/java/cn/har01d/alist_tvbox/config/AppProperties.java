@@ -25,6 +25,7 @@ public class AppProperties {
     private String secretKey;
     private String tgChannels = Constants.TG_CHANNELS;
     private String tgWebChannels = Constants.TG_WEB_CHANNELS;
+    private String tgSearch;
     private int tgTimeout = 5000;
     private Set<String> formats;
     private Set<String> subtitles;

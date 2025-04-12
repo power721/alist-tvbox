@@ -1,11 +1,11 @@
 package cn.har01d.alist_tvbox.dto.tg;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -17,6 +17,7 @@ public class Message {
     private static final Pattern LINK = Pattern.compile("(https?:\\/\\/\\S+)");
     private int id;
     private Instant time;
+    @JsonIgnore
     private String content;
     private String channel;
     private String name;
@@ -64,6 +65,16 @@ public class Message {
         this.type = parseType(link);
         this.name = parseName();
         this.channel = channel;
+    }
+
+    public Message(SearchResult message, String link) {
+        this.id = message.getId();
+        this.time = Instant.ofEpochSecond(message.getTime());
+        this.content = message.getContent();
+        this.link = link;
+        this.type = parseType(link);
+        this.name = parseName();
+        this.channel = message.getChannel();
     }
 
     public String toPgString() {

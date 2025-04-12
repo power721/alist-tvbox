@@ -308,6 +308,12 @@
         <el-form-item>
           <el-button type="primary" @click="updateTgWebChannels">更新</el-button>
         </el-form-item>
+        <el-form-item label="远程搜索地址">
+          <el-input v-model="tgSearch"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateTgSearch">更新</el-button>
+        </el-form-item>
         <el-form-item label="搜索超时时间">
           <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒
         </el-form-item>
@@ -352,6 +358,7 @@ const token = ref('')
 const keyword = ref('')
 const tgChannels = ref('')
 const tgWebChannels = ref('')
+const tgSearch = ref('')
 const tgTimeout = ref(3000)
 const shareType = ref('')
 const title = ref('')
@@ -484,6 +491,13 @@ const updateTgChannels = () => {
 const updateTgWebChannels = () => {
   axios.post('/api/settings', {name: 'tg_web_channels', value: tgWebChannels.value}).then(({data}) => {
     tgWebChannels.value = data.value
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateTgSearch = () => {
+  axios.post('/api/settings', {name: 'tg_search', value: tgSearch.value}).then(({data}) => {
+    tgSearch.value = data.value
     ElMessage.success('更新成功')
   })
 }
@@ -1160,6 +1174,7 @@ onMounted(async () => {
   axios.get('/api/settings').then(({data}) => {
     tgChannels.value = data.tg_channels
     tgWebChannels.value = data.tg_web_channels
+    tgSearch.value = data.tg_search
     tgTimeout.value = +data.tg_timeout
   })
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
