@@ -352,9 +352,15 @@ public class ShareService {
                 try {
                     Share share = new Share();
                     share.setId(shareId);
-                    share.setPath(parts[0]);
-                    share.setShareId(parts[1]);
                     share.setType(dto.getType());
+                    share.setPath(parts[0]);
+                    String[] id = parts[1].split(":");
+                    if (id.length > 1) {
+                        share.setType(Integer.parseInt(id[0]));
+                        share.setShareId(id[1]);
+                    } else {
+                        share.setShareId(id[0]);
+                    }
                     if (parts.length > 2) {
                         share.setFolderId(parts[2]);
                     }
@@ -378,30 +384,37 @@ public class ShareService {
     }
 
     public String exportShare(HttpServletResponse response, int type) {
-        List<Share> list = shareRepository.findByType(type);
+        List<Share> list = type < 0 ? shareRepository.findAll() : shareRepository.findByType(type);
         StringBuilder sb = new StringBuilder();
-        String fileName;
+        String fileName = "shares.txt";
         if (type == 1) {
-            fileName = "pikpak_share_list.txt";
+            fileName = "pikpak_shares.txt";
         } else if (type == 5) {
-            fileName = "quark_share_list.txt";
+            fileName = "quark_shares.txt";
         } else if (type == 7) {
-            fileName = "uc_share_list.txt";
+            fileName = "uc_shares.txt";
         } else if (type == 8) {
-            fileName = "115_share_list.txt";
+            fileName = "115_shares.txt";
         } else if (type == 9) {
-            fileName = "189_share_list.txt";
+            fileName = "189_shares.txt";
         } else if (type == 2) {
-            fileName = "thunder_share_list.txt";
+            fileName = "thunder_shares.txt";
         } else if (type == 3) {
-            fileName = "123_share_list.txt";
-        } else {
-            fileName = "ali_share_list.txt";
+            fileName = "123_shares.txt";
+        } else if (type == 0) {
+            fileName = "ali_shares.txt";
         }
 
         for (Share share : list) {
-            sb.append(getMountPath(share).replace(" ", "")).append("  ").append(share.getShareId())
-                    .append("  ").append(StringUtils.isBlank(share.getFolderId()) ? "root" : share.getFolderId()).append("  ").append(share.getPassword()).append("\n");
+            if (share.isTemp()) {
+                continue;
+            }
+            sb.append(getMountPath(share).replace(" ", "")).append("  ")
+                    .append(share.getType()).append(":")
+                    .append(share.getShareId()).append("  ")
+                    .append(StringUtils.isBlank(share.getFolderId()) ? "root" : share.getFolderId()).append("  ")
+                    .append(share.getPassword())
+                    .append("\n");
         }
 
         log.info("export {} shares to file: {}", list.size(), fileName);
