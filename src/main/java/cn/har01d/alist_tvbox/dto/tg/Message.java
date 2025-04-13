@@ -106,7 +106,7 @@ public class Message {
     private String parseLink() {
         Matcher m = LINK.matcher(content);
         while (m.find()) {
-            String link = m.group(1);
+            String link = fixLink(m.group(1));
             type = parseType(link);
             if (type != null) {
                 return link;
@@ -119,7 +119,7 @@ public class Message {
         List<String> links = new ArrayList<>();
         Matcher m = LINK.matcher(content);
         while (m.find()) {
-            String link = m.group(1);
+            String link = fixLink(m.group(1));
             String type = parseType(link);
             if (type != null) {
                 links.add(link);
@@ -128,7 +128,14 @@ public class Message {
         return links;
     }
 
-    public static String parseType(String link) {
+    private static String fixLink(String link) {
+        if (link.endsWith("**")) {
+            return link.substring(0, link.length() - 2);
+        }
+        return link;
+    }
+
+    private static String parseType(String link) {
         if (link.contains("alipan.com") || link.contains("aliyundrive.com")) {
             return "0";
         }
