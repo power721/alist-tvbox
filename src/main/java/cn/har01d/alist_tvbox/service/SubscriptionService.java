@@ -980,11 +980,9 @@ public class SubscriptionService {
         }
 
         try {
-            if (jellyfinRepository.count() > 0) {
-                Map<String, Object> site = buildSite(token, "csp_TgSearch", "电报搜索");
-                sites.add(id++, site);
-                log.debug("add TG search: {}", site);
-            }
+            Map<String, Object> site = buildSite(token, "csp_TgSearch", "电报搜索");
+            sites.add(id++, site);
+            log.debug("add TG search: {}", site);
         } catch (Exception e) {
             log.warn("", e);
         }
