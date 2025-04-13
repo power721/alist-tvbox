@@ -318,7 +318,7 @@
           <el-button type="primary" @click="updateTgWebChannels">更新</el-button>
         </el-form-item>
         <el-form-item label="远程搜索地址">
-          <el-input v-model="tgSearch"/>
+          <el-input v-model="tgSearch" placeholder="http://IP:7856"/>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgSearch">更新</el-button>
