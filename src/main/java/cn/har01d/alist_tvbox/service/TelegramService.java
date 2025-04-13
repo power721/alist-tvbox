@@ -357,16 +357,16 @@ public class TelegramService {
         return URLEncoder.encode(url, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
-    public MovieList searchMovies(String keyword) {
+    public MovieList searchMovies(String keyword, int size) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        List<Message> messages = search(keyword, 20);
+        List<Message> messages = search(keyword, size);
         for (Message message : messages) {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(encodeUrl(message.getLink()));
             movieDetail.setVod_name(message.getName());
-            movieDetail.setVod_director(message.getChannel());
+            movieDetail.setVod_remarks(getTypeName(message.getType()));
             list.add(movieDetail);
         }
 
@@ -376,6 +376,23 @@ public class TelegramService {
 
         log.info("search {} got {} results.", keyword, list.size());
         return result;
+    }
+
+    private String getTypeName(String type) {
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case "0" -> "阿里";
+            case "1" -> "PikPak";
+            case "2" -> "迅雷";
+            case "3" -> "123";
+            case "5" -> "夸克";
+            case "7" -> "UC";
+            case "8" -> "115";
+            case "9" -> "天翼";
+            default -> null;
+        };
     }
 
     public List<Message> search(String keyword, int size) {
