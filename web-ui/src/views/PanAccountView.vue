@@ -112,7 +112,7 @@
             inactive-text="关闭"
           />
         </el-form-item>
-        <el-form-item label="主账号">
+        <el-form-item label="主账号" v-if="form.type!='OPEN115'">
           <el-switch
             v-model="form.master"
             inline-prompt

@@ -980,6 +980,14 @@ public class SubscriptionService {
         }
 
         try {
+            Map<String, Object> site = buildSite(token, "csp_TgSearch", "电报搜索");
+            sites.add(id++, site);
+            log.debug("add TG search: {}", site);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        try {
             Map<String, Object> site = buildSite(token, "csp_Live", "网络直播");
             sites.add(id++, site);
             log.debug("add Live site: {}", site);

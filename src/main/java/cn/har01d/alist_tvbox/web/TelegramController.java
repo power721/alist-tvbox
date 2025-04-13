@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.tg.Chat;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
+import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TelegramService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import telegram4j.tl.User;
 
@@ -24,10 +26,12 @@ import java.util.Map;
 @RestController
 public class TelegramController {
     private final TelegramService telegramService;
+    private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
 
-    public TelegramController(TelegramService telegramService, ObjectMapper objectMapper) {
+    public TelegramController(TelegramService telegramService, SubscriptionService subscriptionService, ObjectMapper objectMapper) {
         this.telegramService = telegramService;
+        this.subscriptionService = subscriptionService;
         this.objectMapper = objectMapper;
     }
 
@@ -48,12 +52,23 @@ public class TelegramController {
 
     @GetMapping("/api/telegram/search")
     public List<Message> searchByKeyword(String wd) {
-        return telegramService.search(wd);
+        return telegramService.search(wd, 100);
     }
 
     @GetMapping("/tg-search")
-    public List<Message> search(String channelUsername, String keyword) throws IOException {
-        return telegramService.searchFromChannel(channelUsername, keyword);
+    public Object browse(String ids, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+        return browse("", ids, wd, pg);
+    }
+
+    @GetMapping("/tg-search/{token}")
+    public Object browse(@PathVariable String token, String ids, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+        subscriptionService.checkToken(token);
+        if (ids != null && !ids.isEmpty()) {
+            return telegramService.detail(ids);
+        } else if (wd != null && !wd.isEmpty() && pg == 1) {
+            return telegramService.searchMovies(wd);
+        }
+        return null;
     }
 
     @GetMapping("/tgsz")

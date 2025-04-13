@@ -318,7 +318,7 @@
           <el-button type="primary" @click="updateTgWebChannels">更新</el-button>
         </el-form-item>
         <el-form-item label="远程搜索地址">
-          <el-input v-model="tgSearch"/>
+          <el-input v-model="tgSearch" placeholder="http://IP:7856"/>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgSearch">更新</el-button>
@@ -1095,8 +1095,15 @@ const getHistory = (id: string) => {
       return
     }
   }
-  currentTime.value = 0
   currentVideoIndex.value = 0
+  currentTime.value = 0
+  currentSpeed.value = 1
+  skipStart.value = 0
+  skipEnd.value = 0
+  minute1.value = 0
+  second1.value = 0
+  minute2.value = 0
+  second2.value = 0
 }
 
 const formatDate = (timestamp: number): string => {
