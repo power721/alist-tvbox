@@ -503,6 +503,24 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ![WebDAV](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/webdav.jpg)
 
+### 电报搜索
+不登陆默认使用网页搜索公开频道资源。
+
+在订阅页面登陆电报后可以搜索更多频道。
+在播放页面配置频道列表。
+
+如果在订阅页面不能登陆电报，在播放页面配置远程搜索地址 http://IP:7856 。
+
+#### 部署电报搜索服务
+1. 下载对应平台的文件解压
+-  https://har01d.org/tgs-amd64.zip
+-  https://har01d.org/tgs-arm64.zip
+-  https://har01d.org/tgs-armv7.zip
+2. 第一次直接启动： `./tgs-amd64`
+3. 输入手机号和验证码，需要加国际区号86
+4. 然后使用nohup后台运行： `nohup ./tgs-amd64 &`
+5. 环境变量`TGS_PORT`，设置端口，默认为`7856`
+
 ### 猫影视
 #### 自定义猫影视配置
 
