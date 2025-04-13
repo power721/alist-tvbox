@@ -56,19 +56,19 @@ public class TelegramController {
     }
 
     @GetMapping("/tg-search")
-    public Object browse(String ids, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
-        return browse("", ids, wd, pg);
+    public Object browse(String id, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+        return browse("", id, wd, pg);
     }
 
     @GetMapping("/tg-search/{token}")
-    public Object browse(@PathVariable String token, String ids, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+    public Object browse(@PathVariable String token, String id, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         subscriptionService.checkToken(token);
-        if (ids != null && !ids.isEmpty()) {
-            return telegramService.detail(ids);
+        if (id != null && !id.isEmpty()) {
+            return telegramService.detail(id);
         } else if (wd != null && !wd.isEmpty() && pg == 1) {
-            return telegramService.searchMovies(wd);
+            return telegramService.searchMovies(wd, 20);
         }
-        return null;
+        return telegramService.searchMovies("", 5);
     }
 
     @GetMapping("/tgsz")

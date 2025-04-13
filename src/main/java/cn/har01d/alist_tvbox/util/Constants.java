@@ -23,8 +23,8 @@ public final class Constants {
 
     public static final String DB_URL = "jdbc:sqlite:/opt/alist/data/data.db";
 
-    public static String TG_CHANNELS = "xx123pan1,xunleiyunpan,tgsearchers,leoziyuan,ucpanpan,pan123pan,zyfb123,zyzhpd123,xx123pan,tianyirigeng,tyypzhpd,cloudtianyi,kuakeclound,clouddriveresources,NewQuark,guaguale115,Channel_Shares_115,dianyingshare,XiangxiuNB,yunpanpan,kuakeyun,zaihuayun,Quark_Movies,vip115hot,yunpanshare,shareAliyun,alyp_1";
-    public static String TG_WEB_CHANNELS = "tgsearchers,leoziyuan,ucpanpan,pan123pan,zyfb123,zyzhpd123,xx123pan,tianyirigeng,tyypzhpd,cloudtianyi,kuakeclound,clouddriveresources,NewQuark,guaguale115,Channel_Shares_115,dianyingshare,XiangxiuNB,yunpanpan,kuakeyun,zaihuayun,Quark_Movies,vip115hot,yunpanshare,shareAliyun,alyp_1";
+    public static String TG_CHANNELS = "xx123pan1,xunleiyunpan,tgsearchers,leoziyuan,ucpanpan,zyfb123,zyzhpd123,xx123pan,tianyirigeng,tyypzhpd,cloudtianyi,kuakeclound,clouddriveresources,NewQuark,guaguale115,Channel_Shares_115,dianyingshare,XiangxiuNB,yunpanpan,kuakeyun,zaihuayun,Quark_Movies,vip115hot,yunpanshare,shareAliyun,alyp_1";
+    public static String TG_WEB_CHANNELS = "tgsearchers,leoziyuan,ucpanpan,zyfb123,zyzhpd123,xx123pan,tianyirigeng,tyypzhpd,cloudtianyi,kuakeclound,clouddriveresources,NewQuark,guaguale115,Channel_Shares_115,dianyingshare,XiangxiuNB,yunpanpan,kuakeyun,zaihuayun,Quark_Movies,vip115hot,yunpanshare,shareAliyun,alyp_1";
 
     public static final String ACCESS_TOKEN = "access_token";
     public static final String REFRESH_TOKEN = "refresh_token";
