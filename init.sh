@@ -51,6 +51,7 @@ init() {
 
   sqlite3 /opt/alist/data/data.db ".read /update.sql"
 
+  wget -T 30 -t 2 https://gh-proxy.net/https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
   wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
   wget -T 30 -t 2 http://har01d.org/tvbox.zip -O tvbox.zip || \
   cp /tvbox.zip ./
@@ -109,9 +110,11 @@ fi
 
 cd /tmp/
 
+wget -T 30 -t 2 https://gh-proxy.net/https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt -O version.txt || \
 wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt -O version.txt || \
 wget -T 10 -t 2 http://har01d.org/version.txt -O version.txt
 
+wget -T 30 -t 2 https://gh-proxy.net/https://raw.githubusercontent.com/xiaoyaliu00/data/main/update.zip -O update.zip || \
 wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/update.zip -O update.zip || \
 wget -T 30 -t 2 http://har01d.org/update.zip -O update.zip
 
@@ -158,6 +161,7 @@ else
   if [ "$remote" = "$local" ]; then
     echo "$(date) current index file version is updated, no need to upgrade"
   elif [ "$remote" = "$latest" ]; then
+    wget -T 30 -t 2 https://gh-proxy.net/https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip -O index.zip || \
     wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip -O index.zip || \
     wget -T 40 -t 2 http://har01d.org/index.zip -O index.zip
 
