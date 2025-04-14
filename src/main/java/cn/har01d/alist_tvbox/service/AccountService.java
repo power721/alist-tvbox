@@ -784,7 +784,7 @@ public class AccountService {
         if (count == 0) {
             showMyAli(account);
         } else {
-            showMyAliWithAPI(account);
+            showMyAliWithAPI(account, dto.isForce());
         }
         return account;
     }
@@ -854,7 +854,7 @@ public class AccountService {
         }
 
         if (aliChanged) {
-            showMyAliWithAPI(account);
+            showMyAliWithAPI(account, dto.isForce());
         }
 
         if (tokenChanged && account.isMaster()) {
@@ -925,9 +925,9 @@ public class AccountService {
         }
     }
 
-    public void showMyAliWithAPI(Account account) {
+    public void showMyAliWithAPI(Account account, boolean force) {
         int status = aListLocalService.getAListStatus();
-        if (status == 1) {
+        if (!force && status == 1) {
             throw new BadRequestException("AList服务启动中");
         }
 
@@ -936,6 +936,11 @@ public class AccountService {
         if (status == 2) {
             deleteStorage(storageId, token);
             deleteStorage(storageId + 1, token);
+        } else {
+            String sql = "DELETE FROM x_storages WHERE id = " + storageId;
+            Utils.executeUpdate(sql);
+            sql = "DELETE FROM x_storages WHERE id = " + storageId + 1;
+            Utils.executeUpdate(sql);
         }
 
         try {
@@ -987,7 +992,7 @@ public class AccountService {
             }
             accountRepository.deleteById(id);
             account.setShowMyAli(false);
-            showMyAliWithAPI(account);
+            showMyAliWithAPI(account, true);
         }
     }
 
