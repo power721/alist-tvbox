@@ -91,6 +91,9 @@ public class Message {
         if (line.startsWith("#") && lines.length > 1) {
             line = lines[1];
         }
+        if (line.startsWith("https://") && lines.length > 1) {
+            line = lines[1];
+        }
         String name = line.replace("名称：", "").replace("名称:", "").replace("资源标题：", "");
         int index = name.indexOf("描述：");
         if (index > 0) {
