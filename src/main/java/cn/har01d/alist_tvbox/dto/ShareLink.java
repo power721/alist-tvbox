@@ -6,5 +6,5 @@ import lombok.Data;
 public class ShareLink {
     private String link;
     private String path;
-    private String code;
+    private String code = "";
 }
