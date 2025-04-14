@@ -33,7 +33,7 @@ init() {
 
   wget -T 30 -t 2 https://gh-proxy.net/https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
   wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
-  wget -T 30 -t 2 http://har01d.org/tvbox.zip -O tvbox.zip || \
+  wget -t 3 http://har01d.org/tvbox.zip -O tvbox.zip || \
   cp /tvbox.zip ./
 
   unzip -q -o tvbox.zip

@@ -53,7 +53,7 @@ init() {
 
   wget -T 30 -t 2 https://gh-proxy.net/https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
   wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
-  wget -T 30 -t 2 http://har01d.org/tvbox.zip -O tvbox.zip || \
+  wget -t 3 http://har01d.org/tvbox.zip -O tvbox.zip || \
   cp /tvbox.zip ./
 
   unzip -q -o tvbox.zip
@@ -112,11 +112,11 @@ cd /tmp/
 
 wget -T 30 -t 2 https://gh-proxy.net/https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt -O version.txt || \
 wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt -O version.txt || \
-wget -T 10 -t 2 http://har01d.org/version.txt -O version.txt
+wget -t 3 http://har01d.org/version.txt -O version.txt
 
 wget -T 30 -t 2 https://gh-proxy.net/https://raw.githubusercontent.com/xiaoyaliu00/data/main/update.zip -O update.zip || \
 wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/update.zip -O update.zip || \
-wget -T 30 -t 2 http://har01d.org/update.zip -O update.zip
+wget -t 3 http://har01d.org/update.zip -O update.zip
 
 if [ ! -f update.zip ]; then
   echo "Failed to download update database file, the database upgrade process has aborted"
@@ -163,7 +163,7 @@ else
   elif [ "$remote" = "$latest" ]; then
     wget -T 30 -t 2 https://gh-proxy.net/https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip -O index.zip || \
     wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip -O index.zip || \
-    wget -T 40 -t 2 http://har01d.org/index.zip -O index.zip
+    wget -t 3 http://har01d.org/index.zip -O index.zip
 
     if [ ! -f index.zip ]; then
       echo "Failed to download index compressed file, the index file upgrade process has aborted"
