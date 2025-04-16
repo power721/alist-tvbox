@@ -18,13 +18,15 @@ import java.util.stream.Collectors;
 public class TenantService {
     private final ThreadLocal<String> threadLocal = new ThreadLocal<>();
     private final TenantRepository tenantRepository;
+    private List<Tenant> tenants;
 
     public TenantService(TenantRepository tenantRepository) {
         this.tenantRepository = tenantRepository;
     }
 
     public List<Tenant> list() {
-        return tenantRepository.findAll();
+        tenants = tenantRepository.findAll();
+        return tenants;
     }
 
     public Tenant create(Tenant tenant) {
@@ -32,6 +34,7 @@ public class TenantService {
             throw new BadRequestException("名称已经存在");
         }
         fixRules(tenant);
+        tenants = null;
         return tenantRepository.save(tenant);
     }
 
@@ -42,11 +45,13 @@ public class TenantService {
         }
         tenant.setId(id);
         fixRules(tenant);
+        tenants = null;
         return tenantRepository.save(tenant);
     }
 
     public void delete(Integer id) {
         tenantRepository.deleteById(id);
+        tenants = null;
     }
 
     private void fixRules(Tenant tenant) {
@@ -59,11 +64,7 @@ public class TenantService {
     }
 
     public boolean valid(String path) {
-        String name = threadLocal.get();
-        if (name == null) {
-            return true;
-        }
-        Tenant tenant = tenantRepository.findByName(name).orElse(null);
+        Tenant tenant = getTenant();
         if (tenant == null) {
             return true;
         }
@@ -71,6 +72,22 @@ public class TenantService {
             return false;
         }
         return include(tenant.getInclude(), path);
+    }
+
+    private Tenant getTenant() {
+        String name = threadLocal.get();
+        if (name == null) {
+            return null;
+        }
+        if (tenants == null) {
+            list();
+        }
+        for (Tenant tenant : tenants) {
+            if (tenant.getName().equals(name)) {
+                return tenant;
+            }
+        }
+        return null;
     }
 
     private boolean exclude(String exclude, String path) {

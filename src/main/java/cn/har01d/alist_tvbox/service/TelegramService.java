@@ -11,6 +11,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.IdUtils;
+import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ import org.jsoup.select.Elements;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import telegram4j.core.MTProtoTelegramClient;
 import telegram4j.core.auth.AuthorizationHandler;
@@ -366,6 +368,7 @@ public class TelegramService {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(encodeUrl(message.getLink()));
             movieDetail.setVod_name(message.getName());
+            movieDetail.setVod_pic(getPic(message.getType()));
             movieDetail.setVod_remarks(getTypeName(message.getType()));
             list.add(movieDetail);
         }
@@ -393,6 +396,32 @@ public class TelegramService {
             case "9" -> "天翼";
             default -> null;
         };
+    }
+
+    private String getPic(String type) {
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case "0" -> getUrl("/ali.jpg");
+            case "1" -> getUrl("/pikpak.jpg");
+            case "2" -> getUrl("/thunder.png");
+            case "3" -> getUrl("/123.png");
+            case "5" -> getUrl("/quark.png");
+            case "7" -> getUrl("/uc.png");
+            case "8" -> getUrl("/115.jpg");
+            case "9" -> getUrl("/189.png");
+            default -> null;
+        };
+    }
+
+    private String getUrl(String path) {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath(path)
+                .replaceQuery(null)
+                .build()
+                .toUriString();
     }
 
     public List<Message> search(String keyword, int size) {
