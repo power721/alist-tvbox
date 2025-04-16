@@ -117,8 +117,8 @@ const handleEdit = (file: Rule) => {
   dialogTitle.value = '更新规则 - ' + file.id
   updateAction.value = true
   const rule = Object.assign({}, file)
-  rule.include = rule.include.replace(',', '\n')
-  rule.exclude = rule.exclude.replace(',', '\n')
+  rule.include = rule.include.replace(/,/g, '\n')
+  rule.exclude = rule.exclude.replace(/,/g, '\n')
   form.value = rule
   formVisible.value = true
 }
@@ -142,8 +142,8 @@ const handleCancel = () => {
 const handleConfirm = () => {
   const url = updateAction.value ? '/api/tenants/' + form.value.id : '/api/tenants'
   const rule = Object.assign({}, form.value)
-  rule.include = rule.include.replace('\n', ',')
-  rule.exclude = rule.exclude.replace('\n', ',')
+  rule.include = rule.include.replace(/\n/g, ',')
+  rule.exclude = rule.exclude.replace(/\n/g, ',')
   axios.post(url, rule).then(() => {
     formVisible.value = false
     load()
