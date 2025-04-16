@@ -30,6 +30,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -84,6 +85,7 @@ public class SubscriptionService {
     private final JellyfinRepository jellyfinRepository;
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
+    private final TenantService tenantService;
 
     private String tokens = "";
 
@@ -101,7 +103,8 @@ public class SubscriptionService {
                                EmbyRepository embyRepository,
                                JellyfinRepository jellyfinRepository,
                                AListLocalService aListLocalService,
-                               ConfigFileService configFileService) {
+                               ConfigFileService configFileService,
+                               TenantService tenantService) {
         this.environment = environment;
         this.appProperties = appProperties;
         this.restTemplate = builder
@@ -120,6 +123,7 @@ public class SubscriptionService {
         this.jellyfinRepository = jellyfinRepository;
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
+        this.tenantService = tenantService;
     }
 
     @PostConstruct
@@ -229,6 +233,7 @@ public class SubscriptionService {
     }
 
     public void checkToken(String rawToken) {
+        tenantService.setTenant(rawToken);
         if (tokens.isBlank()) {
             return;
         }
