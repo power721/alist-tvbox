@@ -56,6 +56,7 @@ onMounted(() => {
           <el-menu-item index="/subscriptions" v-if="account.authenticated">订阅</el-menu-item>
           <el-menu-item index="/shares" v-if="account.authenticated&&show&&full">资源</el-menu-item>
           <el-menu-item index="/config" v-if="account.authenticated">配置</el-menu-item>
+          <el-menu-item index="/acl" v-if="account.authenticated&&full">ACL</el-menu-item>
           <el-menu-item index="/index" v-if="account.authenticated&&show&&full">索引</el-menu-item>
           <el-menu-item index="/logs" v-if="account.authenticated">日志</el-menu-item>
           <el-menu-item index="/files" v-if="account.authenticated&&show&&full">文件</el-menu-item>

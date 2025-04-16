@@ -24,6 +24,7 @@ import TmdbView from "@/views/TmdbView.vue";
 import EmbyView from "@/views/EmbyView.vue";
 import LiveView from "@/views/LiveView.vue";
 import VodApiView from "@/views/VodApiView.vue";
+import AclView from "@/views/AclView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -135,6 +136,12 @@ const router = createRouter({
       path: '/config',
       name: 'config',
       component: ConfigView,
+      meta: {auth: true}
+    },
+    {
+      path: '/acl',
+      name: 'acl',
+      component: AclView,
       meta: {auth: true}
     },
     {

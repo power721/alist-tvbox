@@ -106,6 +106,7 @@ public class TvBoxService {
     private final TmdbService tmdbService;
     private final SubscriptionService subscriptionService;
     private final ConfigFileService configFileService;
+    private final TenantService tenantService;
     private final ProxyService proxyService;
     private final ObjectMapper objectMapper;
     private final Environment environment;
@@ -158,6 +159,7 @@ public class TvBoxService {
                         TmdbService tmdbService,
                         SubscriptionService subscriptionService,
                         ConfigFileService configFileService,
+                        TenantService tenantService,
                         ProxyService proxyService,
                         ObjectMapper objectMapper,
                         Environment environment,
@@ -175,6 +177,7 @@ public class TvBoxService {
         this.tmdbService = tmdbService;
         this.subscriptionService = subscriptionService;
         this.configFileService = configFileService;
+        this.tenantService = tenantService;
         this.proxyService = proxyService;
         this.objectMapper = objectMapper;
         this.environment = environment;
@@ -351,7 +354,7 @@ public class TvBoxService {
     }
 
     private void addMyFavorite(CategoryList result) {
-        if (accountRepository.findAll().stream().anyMatch(Account::isShowMyAli)) {
+        if (accountRepository.findAll().stream().anyMatch(Account::isShowMyAli) && tenantService.valid("/\uD83D\uDCC0我的阿里云盘")) {
             Category category = new Category();
             category.setType_id("1$/\uD83D\uDCC0我的阿里云盘$1");
             category.setType_name("我的云盘");
@@ -359,7 +362,7 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        if (shareRepository.countByType(0) > 0) {
+        if (shareRepository.countByType(0) > 0 && tenantService.valid("/\uD83C\uDE34我的阿里分享")) {
             Category category = new Category();
             category.setType_id("1$/\uD83C\uDE34我的阿里分享$1");
             category.setType_name("阿里分享");
@@ -368,14 +371,16 @@ public class TvBoxService {
         }
 
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).ifPresent(account -> {
-            Category category = new Category();
-            category.setType_id("1$" + getMountPath(account) + "$1");
-            category.setType_name("夸克网盘");
-            result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            if (tenantService.valid(getMountPath(account))) {
+                Category category = new Category();
+                category.setType_id("1$" + getMountPath(account) + "$1");
+                category.setType_name("夸克网盘");
+                result.getCategories().add(category);
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            }
         });
 
-        if (shareRepository.countByType(5) > 0) {
+        if (shareRepository.countByType(5) > 0 && tenantService.valid("/我的夸克分享")) {
             Category category = new Category();
             category.setType_id("1$/我的夸克分享$1");
             category.setType_name("夸克分享");
@@ -384,14 +389,16 @@ public class TvBoxService {
         }
 
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).ifPresent(account -> {
-            Category category = new Category();
-            category.setType_id("1$" + getMountPath(account) + "$1");
-            category.setType_name("UC网盘");
-            result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            if (tenantService.valid(getMountPath(account))) {
+                Category category = new Category();
+                category.setType_id("1$" + getMountPath(account) + "$1");
+                category.setType_name("UC网盘");
+                result.getCategories().add(category);
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            }
         });
 
-        if (shareRepository.countByType(7) > 0) {
+        if (shareRepository.countByType(7) > 0 && tenantService.valid("/我的UC分享")) {
             Category category = new Category();
             category.setType_id("1$/我的UC分享$1");
             category.setType_name("UC分享");
@@ -400,14 +407,16 @@ public class TvBoxService {
         }
 
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).ifPresent(account -> {
-            Category category = new Category();
-            category.setType_id("1$" + getMountPath(account) + "$1");
-            category.setType_name("115网盘");
-            result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            if (tenantService.valid(getMountPath(account))) {
+                Category category = new Category();
+                category.setType_id("1$" + getMountPath(account) + "$1");
+                category.setType_name("115网盘");
+                result.getCategories().add(category);
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            }
         });
 
-        if (shareRepository.countByType(8) > 0) {
+        if (shareRepository.countByType(8) > 0 && tenantService.valid("/我的115分享")) {
             Category category = new Category();
             category.setType_id("1$/我的115分享$1");
             category.setType_name("115分享");
@@ -415,23 +424,45 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).ifPresent(account -> {
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).ifPresent(account -> {
+            if (tenantService.valid(getMountPath(account))) {
+                Category category = new Category();
+                category.setType_id("1$" + getMountPath(account) + "$1");
+                category.setType_name("123网盘");
+                result.getCategories().add(category);
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            }
+        });
+
+        if (shareRepository.countByType(3) > 0 && tenantService.valid("/我的123分享")) {
             Category category = new Category();
-            category.setType_id("1$" + getMountPath(account) + "$1");
-            category.setType_name("移动云盘");
+            category.setType_id("1$/我的123分享$1");
+            category.setType_name("123分享");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        }
+
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).ifPresent(account -> {
+            if (tenantService.valid(getMountPath(account))) {
+                Category category = new Category();
+                category.setType_id("1$" + getMountPath(account) + "$1");
+                category.setType_name("移动云盘");
+                result.getCategories().add(category);
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            }
         });
 
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).ifPresent(account -> {
-            Category category = new Category();
-            category.setType_id("1$" + getMountPath(account) + "$1");
-            category.setType_name("天翼云盘");
-            result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            if (tenantService.valid(getMountPath(account))) {
+                Category category = new Category();
+                category.setType_id("1$" + getMountPath(account) + "$1");
+                category.setType_name("天翼云盘");
+                result.getCategories().add(category);
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            }
         });
 
-        if (shareRepository.countByType(9) > 0) {
+        if (shareRepository.countByType(9) > 0 && tenantService.valid("/我的天翼分享")) {
             Category category = new Category();
             category.setType_id("1$/我的天翼分享$1");
             category.setType_name("天翼分享");
@@ -440,14 +471,16 @@ public class TvBoxService {
         }
 
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.THUNDER).ifPresent(account -> {
-            Category category = new Category();
-            category.setType_id("1$" + getMountPath(account) + "$1");
-            category.setType_name("迅雷云盘");
-            result.getCategories().add(category);
-            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            if (tenantService.valid(getMountPath(account))) {
+                Category category = new Category();
+                category.setType_id("1$" + getMountPath(account) + "$1");
+                category.setType_name("迅雷云盘");
+                result.getCategories().add(category);
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            }
         });
 
-        if (shareRepository.countByType(2) > 0) {
+        if (shareRepository.countByType(2) > 0 && tenantService.valid("/我的迅雷分享")) {
             Category category = new Category();
             category.setType_id("1$/我的迅雷分享$1");
             category.setType_name("迅雷分享");
@@ -455,7 +488,7 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        if (pikPakAccountRepository.count() > 0) {
+        if (pikPakAccountRepository.count() > 0 && tenantService.valid("/\uD83C\uDD7F️我的PikPak")) {
             Category category = new Category();
             category.setType_id("1$/\uD83C\uDD7F️我的PikPak$1");
             category.setType_name("PikPak");
@@ -463,7 +496,7 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
-        if (shareRepository.countByType(1) > 0) {
+        if (shareRepository.countByType(1) > 0 && tenantService.valid("/\uD83D\uDD78️我的PikPak分享")) {
             Category category = new Category();
             category.setType_id("1$/\uD83D\uDD78️我的PikPak分享$1");
             category.setType_name("PikPak分享");
@@ -472,7 +505,7 @@ public class TvBoxService {
         }
     }
 
-    private Object getMountPath(DriverAccount account) {
+    private String getMountPath(DriverAccount account) {
         if (account.getName().startsWith("/")) {
             return account.getName();
         }
@@ -501,6 +534,9 @@ public class TvBoxService {
         Map<String, List<Meta>> map = new HashMap<>();
         Set<String> added = new HashSet<>();
         for (Meta meta : page.getContent()) {
+            if (!tenantService.valid(meta.getPath())) {
+                continue;
+            }
             String name = getName(meta);
             List<Meta> metas = map.computeIfAbsent(name, id -> new ArrayList<>());
             metas.add(meta);
@@ -925,6 +961,10 @@ public class TvBoxService {
             return getPlaylist("", site, path);
         }
 
+        if (!tenantService.valid(path)) {
+            return null;
+        }
+
         List<MovieDetail> folders = new ArrayList<>();
         List<MovieDetail> files = new ArrayList<>();
         MovieList result = new MovieList();
@@ -944,6 +984,9 @@ public class TvBoxService {
             }
 
             String newPath = fixPath(path + "/" + fsInfo.getName());
+            if (!tenantService.valid(newPath)) {
+                continue;
+            }
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site.getId() + "$" + encodeUrl(newPath) + "$1");
             movieDetail.setVod_name(fsInfo.getName());
@@ -1054,6 +1097,9 @@ public class TvBoxService {
         Page<Meta> list = new PageImpl<>(List.of());
         for (String line : paths) {
             path = line;
+            if (!tenantService.valid(path)) {
+                continue;
+            }
             log.debug("get movies from {} {}", path, pages);
             pageable = PageRequest.of(page - pages - 1, size, pageable.getSort());
             if (year.isEmpty()) {
@@ -1421,6 +1467,9 @@ public class TvBoxService {
     public MovieList getDetail(String ac, Integer id) {
         MovieList result = new MovieList();
         Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
+        if (!tenantService.valid(meta.getPath())) {
+            return null;
+        }
         Site site = siteService.getById(meta.getSiteId() == null ? 1 : meta.getSiteId());
         MovieDetail movieDetail = new MovieDetail();
         if (isMediaFile(meta.getPath())) {
@@ -1462,6 +1511,9 @@ public class TvBoxService {
             String[] ids = path.split("\\-");
             List<Meta> list = metaRepository.findAllById(Arrays.stream(ids).map(Integer::parseInt).collect(Collectors.toList()));
             Meta meta = list.get(0);
+            if (!tenantService.valid(meta.getPath())) {
+                return null;
+            }
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(encodeUrl(tid));
             movieDetail.setVod_name(meta.getName());
@@ -1478,6 +1530,9 @@ public class TvBoxService {
                 playUrl = list.stream().map(m -> String.valueOf(m.getId())).collect(Collectors.joining("$$$"));
             } else {
                 for (int i = 0; i < list.size(); ++i) {
+                    if (!tenantService.valid(list.get(i).getPath())) {
+                        continue;
+                    }
                     var m = getMovieDetail(site, list.get(i));
                     if (m.getVod_play_from().contains("$$$")) {
                         for (String folder : m.getVod_play_from().split("\\$\\$\\$")) {
@@ -1499,6 +1554,9 @@ public class TvBoxService {
             setMovieInfo(movieDetail, meta, true);
             result.getList().add(movieDetail);
         } else {
+            if (!tenantService.valid(path)) {
+                return null;
+            }
             FsDetail fsDetail = aListService.getFile(site, path);
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(encodeUrl(tid));
@@ -1617,6 +1675,9 @@ public class TvBoxService {
     public MovieList getPlaylist(String ac, Site site, String path) {
         log.info("load playlist {}:{} {}", site.getId(), site.getName(), path);
         String newPath = getParent(path);
+        if (!tenantService.valid(newPath)) {
+            return null;
+        }
         FsDetail fsDetail = aListService.getFile(site, newPath);
         if (fsDetail == null) {
             throw new BadRequestException("加载文件失败: " + newPath);
