@@ -56,10 +56,10 @@ public class TenantService {
 
     private void fixRules(Tenant tenant) {
         if (StringUtils.isNotBlank(tenant.getInclude())) {
-            tenant.setInclude(Arrays.stream(tenant.getInclude().split(",")).filter(StringUtils::isNotBlank).map(this::decode).collect(Collectors.joining(",")));
+            tenant.setInclude(Arrays.stream(tenant.getInclude().split("[,\n]")).filter(StringUtils::isNotBlank).map(this::decode).collect(Collectors.joining(",")));
         }
         if (StringUtils.isNotBlank(tenant.getExclude())) {
-            tenant.setExclude(Arrays.stream(tenant.getExclude().split(",")).filter(StringUtils::isNotBlank).map(this::decode).collect(Collectors.joining(",")));
+            tenant.setExclude(Arrays.stream(tenant.getExclude().split("[,\n]")).filter(StringUtils::isNotBlank).map(this::decode).collect(Collectors.joining(",")));
         }
     }
 
