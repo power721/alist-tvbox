@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.PanAccount;
 import cn.har01d.alist_tvbox.entity.PanAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -10,7 +11,7 @@ import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
-import cn.har01d.alist_tvbox.model.SettingResponse;
+import cn.har01d.alist_tvbox.model.AliToken;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -135,6 +137,9 @@ public class PanAccountService {
     public void loadStorages() {
         List<DriverAccount> accounts = driverAccountRepository.findAll();
         for (DriverAccount account : accounts) {
+            if (account.isMaster()) {
+                updateMasterToken(account);
+            }
             insertAList(account);
         }
     }
@@ -146,7 +151,6 @@ public class PanAccountService {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder()));
             log.info("insert Quark account {} : {}, result: {}", id, getMountPath(account), count);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('quark_cookie','" + account.getCookie() + "','','text','',1,0);");
         } else if (account.getType() == DriverType.QUARK_TV) {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'QuarkTV',30,'work','{\"refresh_token\":\"%s\",\"device_id\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), deviceId, account.getFolder()));
@@ -155,7 +159,6 @@ public class PanAccountService {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UC',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder()));
             log.info("insert UC account {} : {}, result: {}", id, getMountPath(account), count);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('uc_cookie','" + account.getCookie() + "','','text','',1,0);");
         } else if (account.getType() == DriverType.UC_TV) {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCTV',30,'work','{\"refresh_token\":\"%s\",\"device_id\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), deviceId, account.getFolder()));
@@ -185,12 +188,10 @@ public class PanAccountService {
             }
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder()));
             log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_cookie','" + account.getCookie() + "','','text','',1,0);");
         } else if (account.getType() == DriverType.OPEN115) {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
             log.info("insert 115 Open account {} : {}, result: {}", id, getMountPath(account), count);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_token','" + account.getToken() + "','','text','',1,0);");
         }
     }
 
@@ -200,7 +201,6 @@ public class PanAccountService {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder()));
             log.info("insert Quark account {} : {}, result: {}", id, getMountPath(account), count);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('quark_cookie','" + account.getCookie() + "','','text','',1,0);");
         } else if (account.getType() == DriverType.QUARK_TV) {
             String deviceId = settingRepository.findById("quark_device_id").map(Setting::getValue).orElse("");
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'QuarkTV',30,'work','{\"refresh_token\":\"%s\",\"device_id\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
@@ -210,7 +210,6 @@ public class PanAccountService {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UC',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0);";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder()));
             log.info("insert UC account {} : {}, result: {}", id, getMountPath(account), count);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('uc_cookie','" + account.getCookie() + "','','text','',1,0);");
         } else if (account.getType() == DriverType.UC_TV) {
             String deviceId = settingRepository.findById("quark_device_id").map(Setting::getValue).orElse("");
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCTV',30,'work','{\"refresh_token\":\"%s\",\"device_id\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
@@ -241,12 +240,10 @@ public class PanAccountService {
             }
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder()));
             log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_cookie','" + account.getCookie() + "','','text','',1,0);");
         } else if (account.getType() == DriverType.OPEN115) {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0);";
             int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
             log.info("insert 115 Open account {} : {}, result: {}", id, getMountPath(account), count);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('115_token','" + account.getToken() + "','','text','',1,0);");
         }
     }
 
@@ -407,23 +404,29 @@ public class PanAccountService {
                 a.setMaster(false);
             }
             account.setMaster(true);
-            String key = switch (account.getType()) {
-                case QUARK -> "quark_cookie";
-                case PAN115 -> "115_cookie";
-                case OPEN115 -> "115_token";
-                case UC -> "uc_cookie";
-                default -> "";
-            };
-            if (key.isEmpty()) {
-                return;
-            }
-            if (account.getType() == DriverType.OPEN115) {
-                aListLocalService.updateSetting(key, account.getToken(), "string");
-            } else {
-                aListLocalService.updateSetting(key, account.getCookie(), "string");
-            }
             driverAccountRepository.saveAll(list);
+            updateMasterToken(account);
         }
+    }
+
+    private void updateMasterToken(DriverAccount account) {
+        String key = switch (account.getType()) {
+            case QUARK -> "quark_cookie";
+            case PAN115 -> "115_cookie";
+            case OPEN115 -> "115_token";
+            case PAN139 -> "139_token";
+            case UC -> "uc_cookie";
+            default -> "";
+        };
+        if (key.isEmpty()) {
+            return;
+        }
+        aListLocalService.updateSetting(key + "_id", String.valueOf(account.getId()), "number");
+        String value = account.getCookie();
+        if (account.getType() == DriverType.OPEN115 || account.getType() == DriverType.PAN139) {
+            value = account.getToken();
+        }
+        aListLocalService.updateToken(account.getId(), key + "_" + account.getId(), value);
     }
 
     private void updateStorage(DriverAccount account) {
@@ -437,7 +440,7 @@ public class PanAccountService {
             updateAList(account);
             if (status == 2) {
                 accountService.enableStorage(id, token);
-                if (account.getType() == DriverType.OPEN115) {
+                if (account.getType() == DriverType.OPEN115 || account.getType() == DriverType.PAN139) {
                     syncTokens();
                 }
             }
@@ -468,19 +471,10 @@ public class PanAccountService {
         if (aListLocalService.getAListStatus() != 2) {
             return;
         }
-        var cookie = aListLocalService.getSetting("quark_cookie");
-        log.debug("quark_cookie={}", cookie);
-        saveCookie(DriverType.QUARK, cookie);
-        cookie = aListLocalService.getSetting("uc_cookie");
-        log.debug("uc_cookie={}", cookie);
-        saveCookie(DriverType.UC, cookie);
-        cookie = aListLocalService.getSetting("115_cookie");
-        log.debug("115_cookie={}", cookie);
-        saveCookie(DriverType.PAN115, cookie);
-        sync115Token();
+        syncMasterToken();
     }
 
-    public void syncTokens() {
+    private void syncTokens() {
         try {
             Thread.sleep(2000L);
         } catch (InterruptedException e) {
@@ -495,34 +489,40 @@ public class PanAccountService {
                     return;
                 }
                 if (aListLocalService.getAListStatus() == 2) {
-                    sync115Token();
+                    syncMasterToken();
                     break;
                 }
             }
         }).start();
     }
 
-    private void sync115Token() {
-        var token = aListLocalService.getSetting("115_token");
-        log.debug("115_token={}", token);
-        saveToken(DriverType.OPEN115, token);
-    }
-
-    private void saveCookie(DriverType type, SettingResponse response) {
-        if (response.getCode() == 200) {
-            driverAccountRepository.findByTypeAndMasterTrue(type).ifPresent(account -> {
-                account.setCookie(response.getData().getValue());
-                driverAccountRepository.save(account);
-            });
+    private void syncMasterToken() {
+        List<AliToken> tokens = aListLocalService.getTokens().getData();
+        if (tokens == null || tokens.isEmpty()) {
+            return;
         }
-    }
 
-    private void saveToken(DriverType type, SettingResponse response) {
-        if (response.getCode() == 200) {
-            driverAccountRepository.findByTypeAndMasterTrue(type).ifPresent(account -> {
-                account.setToken(response.getData().getValue());
-                driverAccountRepository.save(account);
-            });
+        Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
+        List<PanAccount> accounts = panAccountRepository.findByMasterTrue();
+        for (var account : accounts) {
+            String key = switch (account.getType()) {
+                case OPEN115 -> "115_token_" + account.getId();
+                case PAN139 -> "139_token_" + account.getId();
+                case QUARK -> "quark_cookie_" + account.getId();
+                case UC -> "uc_cookie_" + account.getId();
+                case PAN115 -> "115_cookie_" + account.getId();
+                default -> "";
+            };
+            AliToken token = map.get(key);
+            if (token != null) {
+                log.debug("update {} {}", key, token);
+                if (account.getType() == DriverType.OPEN115 || account.getType() == DriverType.PAN139) {
+                    account.setToken(token.getValue());
+                } else {
+                    account.setCookie(token.getValue());
+                }
+                panAccountRepository.save(account);
+            }
         }
     }
 }
