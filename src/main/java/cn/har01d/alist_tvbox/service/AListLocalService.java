@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.AliTokensResponse;
 import cn.har01d.alist_tvbox.model.SettingResponse;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
@@ -22,7 +23,9 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -90,7 +93,8 @@ public class AListLocalService {
             SettingResponse response = restTemplate.postForObject("/api/admin/setting/update", entity, SettingResponse.class);
             log.info("update setting by API: {}", response);
         } else {
-            int code = Utils.executeUpdate(String.format("UPDATE x_setting_items SET value = '%s' WHERE key = '%s'", key, value));
+            Utils.executeUpdate(String.format("INSERT INTO x_setting_items VALUES('%s','%s','','%s','',1,0)", key, value, type));
+            int code = Utils.executeUpdate(String.format("UPDATE x_setting_items SET value = '%s' WHERE key = '%s'", value, key));
             log.info("update setting by SQL: {}", code);
         }
     }
@@ -103,6 +107,45 @@ public class AListLocalService {
         String url = "/api/admin/setting/get?key=" + key;
         ResponseEntity<SettingResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, SettingResponse.class);
         return response.getBody();
+    }
+
+    public void updateToken(Integer accountId, String key, String value) {
+        if (StringUtils.isEmpty(value)) {
+            log.warn("Token is empty: {} {} ", accountId, key);
+            return;
+        }
+        if (getAListStatus() == 2) {
+            String token = siteRepository.findById(1).orElseThrow().getToken();
+            HttpHeaders headers = new HttpHeaders();
+            headers.put("Authorization", List.of(token));
+            Map<String, Object> body = new HashMap<>();
+            body.put("key", key);
+            body.put("value", value);
+            body.put("accountId", accountId);
+            body.put("modified",OffsetDateTime.now().toString());
+            log.debug("updateTokenToAList: {}", body);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            ResponseEntity<String> response = restTemplate.exchange("/api/admin/token/update", HttpMethod.POST, entity, String.class);
+            log.info("updateTokenToAList {} response: {}", key, response.getBody());
+        } else {
+            String sql = "INSERT INTO x_tokens VALUES('%s','%s',%d,'%s')";
+            Utils.executeUpdate(String.format(sql, key, value, accountId, OffsetDateTime.now()));
+        }
+    }
+
+    public AliTokensResponse getTokens() {
+        try {
+            String token = siteRepository.findById(1).orElseThrow().getToken();
+            HttpHeaders headers = new HttpHeaders();
+            headers.put("Authorization", List.of(token));
+            HttpEntity<String> entity = new HttpEntity<>(null, headers);
+            ResponseEntity<AliTokensResponse> response = restTemplate.exchange("/api/admin/token/list", HttpMethod.GET, entity, AliTokensResponse.class);
+            log.debug("getTokens response: {}", response.getBody().getData());
+            return response.getBody();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return new AliTokensResponse();
     }
 
     public void startAListServer() {
