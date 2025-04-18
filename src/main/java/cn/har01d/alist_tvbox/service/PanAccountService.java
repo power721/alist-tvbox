@@ -15,6 +15,7 @@ import cn.har01d.alist_tvbox.model.AliToken;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,12 +26,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class PanAccountService {
     public static final int IDX = 4000;
+    private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139);
     private final PanAccountRepository panAccountRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final SettingRepository settingRepository;
@@ -423,7 +426,7 @@ public class PanAccountService {
         }
         aListLocalService.updateSetting(key + "_id", String.valueOf(account.getId()), "number");
         String value = account.getCookie();
-        if (account.getType() == DriverType.OPEN115 || account.getType() == DriverType.PAN139) {
+        if (TOKEN_TYPES.contains(account.getType())) {
             value = account.getToken();
         }
         aListLocalService.updateToken(account.getId(), key + "_" + (IDX + account.getId()), value);
@@ -440,7 +443,7 @@ public class PanAccountService {
             updateAList(account);
             if (status == 2) {
                 accountService.enableStorage(id, token);
-                if (account.getType() == DriverType.OPEN115 || account.getType() == DriverType.PAN139) {
+                if (TOKEN_TYPES.contains(account.getType())) {
                     syncTokens();
                 }
             }
@@ -517,7 +520,7 @@ public class PanAccountService {
             AliToken token = map.get(key);
             if (token != null) {
                 log.debug("update {} {}", key, token);
-                if (account.getType() == DriverType.OPEN115 || account.getType() == DriverType.PAN139) {
+                if (TOKEN_TYPES.contains(account.getType())) {
                     account.setToken(token.getValue());
                 } else {
                     account.setCookie(token.getValue());
