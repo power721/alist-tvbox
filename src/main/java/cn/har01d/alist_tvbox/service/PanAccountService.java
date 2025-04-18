@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 public class PanAccountService {
     public static final int IDX = 4000;
     private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139);
+    private static final Set<DriverType> COOKIE_TYPES = Set.of(DriverType.PAN115, DriverType.QUARK, DriverType.UC);
     private final PanAccountRepository panAccountRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final SettingRepository settingRepository;
@@ -413,23 +414,17 @@ public class PanAccountService {
     }
 
     private void updateMasterToken(DriverAccount account) {
-        String key = switch (account.getType()) {
-            case QUARK -> "quark_cookie";
-            case PAN115 -> "115_cookie";
-            case OPEN115 -> "115_token";
-            case PAN139 -> "139_token";
-            case UC -> "uc_cookie";
-            default -> "";
-        };
-        if (key.isEmpty()) {
-            return;
-        }
-        aListLocalService.updateSetting(key + "_id", String.valueOf(account.getId()), "number");
-        String value = account.getCookie();
+        int id = IDX + account.getId();
+        aListLocalService.updateSetting(account.getType() + "_id", String.valueOf(id), "number");
+        String value;
         if (TOKEN_TYPES.contains(account.getType())) {
             value = account.getToken();
+        } else if (COOKIE_TYPES.contains(account.getType())) {
+            value = account.getCookie();
+        } else {
+            return;
         }
-        aListLocalService.updateToken(account.getId(), key + "_" + (IDX + account.getId()), value);
+        aListLocalService.updateToken(account.getId(), account.getType() + "_" + id, value);
     }
 
     private void updateStorage(DriverAccount account) {
@@ -509,14 +504,7 @@ public class PanAccountService {
         List<PanAccount> accounts = panAccountRepository.findByMasterTrue();
         for (var account : accounts) {
             int id = IDX + account.getId();
-            String key = switch (account.getType()) {
-                case OPEN115 -> "115_token_" + id;
-                case PAN139 -> "139_token_" + id;
-                case QUARK -> "quark_cookie_" + id;
-                case UC -> "uc_cookie_" + id;
-                case PAN115 -> "115_cookie_" + id;
-                default -> "";
-            };
+            String key = account.getType() + "_" + id;
             AliToken token = map.get(key);
             if (token != null) {
                 log.debug("update {} {}", key, token);
