@@ -15,6 +15,7 @@ import cn.har01d.alist_tvbox.model.AliToken;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,12 +26,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class PanAccountService {
     public static final int IDX = 4000;
+    private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139);
+    private static final Set<DriverType> COOKIE_TYPES = Set.of(DriverType.PAN115, DriverType.QUARK, DriverType.UC);
     private final PanAccountRepository panAccountRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final SettingRepository settingRepository;
@@ -410,23 +414,17 @@ public class PanAccountService {
     }
 
     private void updateMasterToken(DriverAccount account) {
-        String key = switch (account.getType()) {
-            case QUARK -> "quark_cookie";
-            case PAN115 -> "115_cookie";
-            case OPEN115 -> "115_token";
-            case PAN139 -> "139_token";
-            case UC -> "uc_cookie";
-            default -> "";
-        };
-        if (key.isEmpty()) {
+        int id = IDX + account.getId();
+        aListLocalService.updateSetting(account.getType() + "_id", String.valueOf(id), "number");
+        String value;
+        if (TOKEN_TYPES.contains(account.getType())) {
+            value = account.getToken();
+        } else if (COOKIE_TYPES.contains(account.getType())) {
+            value = account.getCookie();
+        } else {
             return;
         }
-        aListLocalService.updateSetting(key + "_id", String.valueOf(account.getId()), "number");
-        String value = account.getCookie();
-        if (account.getType() == DriverType.OPEN115 || account.getType() == DriverType.PAN139) {
-            value = account.getToken();
-        }
-        aListLocalService.updateToken(account.getId(), key + "_" + account.getId(), value);
+        aListLocalService.updateToken(account.getId(), account.getType() + "_" + id, value);
     }
 
     private void updateStorage(DriverAccount account) {
@@ -440,7 +438,7 @@ public class PanAccountService {
             updateAList(account);
             if (status == 2) {
                 accountService.enableStorage(id, token);
-                if (account.getType() == DriverType.OPEN115 || account.getType() == DriverType.PAN139) {
+                if (TOKEN_TYPES.contains(account.getType())) {
                     syncTokens();
                 }
             }
@@ -505,18 +503,12 @@ public class PanAccountService {
         Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
         List<PanAccount> accounts = panAccountRepository.findByMasterTrue();
         for (var account : accounts) {
-            String key = switch (account.getType()) {
-                case OPEN115 -> "115_token_" + account.getId();
-                case PAN139 -> "139_token_" + account.getId();
-                case QUARK -> "quark_cookie_" + account.getId();
-                case UC -> "uc_cookie_" + account.getId();
-                case PAN115 -> "115_cookie_" + account.getId();
-                default -> "";
-            };
+            int id = IDX + account.getId();
+            String key = account.getType() + "_" + id;
             AliToken token = map.get(key);
             if (token != null) {
                 log.debug("update {} {}", key, token);
-                if (account.getType() == DriverType.OPEN115 || account.getType() == DriverType.PAN139) {
+                if (TOKEN_TYPES.contains(account.getType())) {
                     account.setToken(token.getValue());
                 } else {
                     account.setCookie(token.getValue());

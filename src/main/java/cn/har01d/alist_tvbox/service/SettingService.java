@@ -55,18 +55,24 @@ public class SettingService {
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
-        appProperties.setTgChannels(settingRepository.findById("tg_channels").map(Setting::getValue).orElse(""));
-        appProperties.setTgWebChannels(settingRepository.findById("tg_web_channels").map(Setting::getValue).orElse(""));
-        appProperties.setTgTimeout(settingRepository.findById("tg_timeout").map(Setting::getValue).map(Integer::parseInt).orElse(5000));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
-        if (!settingRepository.existsByName("tg_channels")) {
+        String value = settingRepository.findById("tg_channels").map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(value)) {
             settingRepository.save(new Setting("tg_channels", appProperties.getTgChannels()));
+        } else {
+            appProperties.setTgChannels(value);
         }
-        if (!settingRepository.existsByName("tg_web_channels")) {
+        value = settingRepository.findById("tg_web_channels").map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(value)) {
             settingRepository.save(new Setting("tg_web_channels", appProperties.getTgWebChannels()));
+        } else {
+            appProperties.setTgWebChannels(value);
         }
-        if (!settingRepository.existsByName("tg_timeout")) {
+        value = settingRepository.findById("tg_timeout").map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(value)) {
             settingRepository.save(new Setting("tg_timeout", String.valueOf(appProperties.getTgTimeout())));
+        } else {
+            appProperties.setTgTimeout(Integer.parseInt(value));
         }
     }
 
