@@ -426,7 +426,7 @@ public class PanAccountService {
         if (account.getType() == DriverType.OPEN115 || account.getType() == DriverType.PAN139) {
             value = account.getToken();
         }
-        aListLocalService.updateToken(account.getId(), key + "_" + account.getId(), value);
+        aListLocalService.updateToken(account.getId(), key + "_" + (IDX + account.getId()), value);
     }
 
     private void updateStorage(DriverAccount account) {
@@ -505,12 +505,13 @@ public class PanAccountService {
         Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
         List<PanAccount> accounts = panAccountRepository.findByMasterTrue();
         for (var account : accounts) {
+            int id = IDX + account.getId();
             String key = switch (account.getType()) {
-                case OPEN115 -> "115_token_" + account.getId();
-                case PAN139 -> "139_token_" + account.getId();
-                case QUARK -> "quark_cookie_" + account.getId();
-                case UC -> "uc_cookie_" + account.getId();
-                case PAN115 -> "115_cookie_" + account.getId();
+                case OPEN115 -> "115_token_" + id;
+                case PAN139 -> "139_token_" + id;
+                case QUARK -> "quark_cookie_" + id;
+                case UC -> "uc_cookie_" + id;
+                case PAN115 -> "115_cookie_" + id;
                 default -> "";
             };
             AliToken token = map.get(key);
