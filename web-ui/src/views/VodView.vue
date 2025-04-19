@@ -1104,7 +1104,7 @@ const saveHistory = () => {
     s: currentSpeed.value,
     t: new Date().getTime()
   })
-  const sorted = items.sort((a, b) => b.t - a.t).slice(0, 40);
+  const sorted = items.sort((a, b) => b.t - a.t).slice(0, 80);
   localStorage.setItem('history', JSON.stringify(sorted))
 }
 
