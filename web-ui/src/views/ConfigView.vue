@@ -212,7 +212,7 @@
             115 Cookie
           </a><span class="hint"></span>
           <a :href="currentUrl + '/bili/cookie/' + aliSecret" target="_blank">
-             B站 Cookie
+            B站 Cookie
           </a>
         </el-form-item>
         <el-form-item label="订阅替换阿里token地址">
@@ -336,9 +336,10 @@ const options = [
     ]
   },
   {
-    label: '会员',
+    label: '会员TV Token',
     options: [
-      {label: 'TV Token', value: window.location.origin + '/ali/access_token'},
+      {label: '本地', value: window.location.origin + '/ali/access_token'},
+      {label: '三方', value: 'https://alipan-tv-token.pages.dev/refresh'},
     ]
   },
   {
