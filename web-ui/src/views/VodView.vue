@@ -968,7 +968,7 @@ const decVolume = () => {
 const handleTimeUpdate = () => {
   if (videoPlayer.value) {
     const time = videoPlayer.value.currentTime
-    if (duration.value > skipStart.value + skipEnd.value && time + skipEnd.value > duration.value) {
+    if (currentVideoIndex.value + 1 < playlist.value.length && duration.value > skipStart.value + skipEnd.value && time + skipEnd.value > duration.value) {
       videoPlayer.value.currentTime = duration.value
     }
   }

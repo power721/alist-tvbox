@@ -473,13 +473,13 @@ public class PanAccountService {
     }
 
     private void syncTokens(long sleep) {
-        try {
-            Thread.sleep(sleep);
-        } catch (InterruptedException e) {
-            return;
-        }
-
         new Thread(() -> {
+            try {
+                Thread.sleep(sleep);
+            } catch (InterruptedException e) {
+                return;
+            }
+
             while (true) {
                 if (aListLocalService.getAListStatus() == 2) {
                     syncMasterToken();
