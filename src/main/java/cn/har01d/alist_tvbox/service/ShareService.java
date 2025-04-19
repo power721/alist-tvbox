@@ -809,10 +809,13 @@ public class ShareService {
         String path = share.getPath();
         if (!shareRepository.existsByPath(path)) {
             create(share);
+            if (StringUtils.isNotBlank(share.getError())) {
+                throw new BadRequestException(share.getError());
+            }
         }
         Site site = siteRepository.findById(1).orElseThrow();
 
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 3; i++) {
             FsResponse response = aListService.listFiles(site, path, 1, 1);
             if (response.getTotal() == 1 && response.getFiles().get(0).getType() == 1) {
                 path = path + "/" + response.getFiles().get(0).getName();
@@ -869,7 +872,8 @@ public class ShareService {
 
             shareRepository.save(share);
 
-            enableStorage(share.getId(), token);
+            String error = enableStorage(share.getId(), token);
+            share.setError(error);
         } catch (Exception e) {
             log.warn("", e);
             throw new BadRequestException(e);
@@ -973,12 +977,18 @@ public class ShareService {
         }
     }
 
-    public void enableStorage(Integer id, String token) {
+    public String enableStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.put("Authorization", Collections.singletonList(token));
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<String> response = restTemplate.exchange("/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, String.class);
+        ResponseEntity<Map> response = restTemplate.exchange("/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, Map.class);
         log.info("enable storage response: {}", response.getBody());
+        int code = (int) response.getBody().get("code");
+        if (code >= 400) {
+            return (String) response.getBody().get("message");
+        } else {
+            return null;
+        }
     }
 
     public void deleteShares(List<Integer> ids) {

@@ -76,7 +76,7 @@ public class PanAccountService {
         }
         drivers.put("QUARK_TV", new QuarkUCTV(restTemplate, new QuarkUCTV.Conf("https://open-api-drive.quark.cn", "d3194e61504e493eb6222857bccfed94", "kw2dvtd7p4t3pjl2d9ed9yc8yej8kw2d", "1.5.6", "CP", "http://api.extscreen.com/quarkdrive", deviceId)));
         drivers.put("UC_TV", new QuarkUCTV(restTemplate, new QuarkUCTV.Conf("https://open-api-drive.uc.cn", "5acf882d27b74502b7040b0c65519aa7", "l3srvtd7p42l0d0x1u8d7yc8ye9kki4d", "1.6.5", "UCTVOFFICIALWEB", "http://api.extscreen.com/ucdrive", deviceId)));
-        syncTokens();
+        syncTokens(30_000);
     }
 
     private void migrateDriverAccounts() {
@@ -439,7 +439,7 @@ public class PanAccountService {
             if (status == 2) {
                 accountService.enableStorage(id, token);
                 if (TOKEN_TYPES.contains(account.getType())) {
-                    syncTokens();
+                    syncTokens(5000);
                 }
             }
         } catch (Exception e) {
@@ -472,23 +472,23 @@ public class PanAccountService {
         syncMasterToken();
     }
 
-    private void syncTokens() {
+    private void syncTokens(long sleep) {
         try {
-            Thread.sleep(2000L);
+            Thread.sleep(sleep);
         } catch (InterruptedException e) {
             return;
         }
 
         new Thread(() -> {
             while (true) {
+                if (aListLocalService.getAListStatus() == 2) {
+                    syncMasterToken();
+                    break;
+                }
                 try {
                     Thread.sleep(1000L);
                 } catch (InterruptedException e) {
                     return;
-                }
-                if (aListLocalService.getAListStatus() == 2) {
-                    syncMasterToken();
-                    break;
                 }
             }
         }).start();
