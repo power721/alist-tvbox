@@ -140,7 +140,7 @@ public class AListLocalService {
             headers.put("Authorization", List.of(token));
             HttpEntity<String> entity = new HttpEntity<>(null, headers);
             ResponseEntity<AliTokensResponse> response = restTemplate.exchange("/api/admin/token/list", HttpMethod.GET, entity, AliTokensResponse.class);
-            log.debug("getTokens response: {}", response.getBody().getData());
+            log.trace("getTokens response: {}", response.getBody().getData());
             return response.getBody();
         } catch (Exception e) {
             log.warn("", e);
