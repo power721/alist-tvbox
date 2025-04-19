@@ -72,9 +72,13 @@
         </el-form-item>
         <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'">
           <el-input v-model="form.cookie" type="textarea" :rows="5"/>
+          <a href="https://pan.quark.cn/" target="_blank" v-if="form.type=='QUARK'">夸克网盘</a>
+          <a href="https://drive.uc.cn/" target="_blank" v-if="form.type=='UC'">UC网盘</a>
+          <a href="https://115.com/" target="_blank" v-if="form.type=='PAN115'">115云盘</a>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
           <el-input v-model="form.token" type="textarea" :rows="5"/>
+          <a href="https://yun.139.com/" target="_blank">移动云盘</a>
         </el-form-item>
         <el-form-item label="Refresh Token" required v-if="form.type=='OPEN115'">
           <el-input v-model="form.token"/>
@@ -112,7 +116,7 @@
             inactive-text="关闭"
           />
         </el-form-item>
-        <el-form-item label="主账号" v-if="form.type!='OPEN115'">
+        <el-form-item label="主账号" v-if="form.type!='OPEN115'&&form.type!='QUARK_TV'&&form.type!='UC_TV'">
           <el-switch
             v-model="form.master"
             inline-prompt

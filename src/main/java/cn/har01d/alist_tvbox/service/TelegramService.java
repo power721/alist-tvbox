@@ -12,6 +12,8 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -92,6 +94,7 @@ public class TelegramService {
     private final RestTemplate restTemplate;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Math.min(10, Runtime.getRuntime().availableProcessors() * 2));
     private final OkHttpClient httpClient = new OkHttpClient();
+    private final LoadingCache<String, InputPeer> cache = Caffeine.newBuilder().build(this::resolveUsername);
     private MTProtoTelegramClient client;
 
     public TelegramService(AppProperties appProperties, SettingRepository settingRepository, ShareService shareService, TvBoxService tvBoxService, RestTemplateBuilder restTemplateBuilder) {
@@ -426,16 +429,14 @@ public class TelegramService {
 
     public List<Message> search(String keyword, int size) {
         List<Message> results = List.of();
+        String[] channels = appProperties.getTgChannels().split(",");
         if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
             results = searchRemote(appProperties.getTgChannels(), keyword, size);
         }
 
         if (results.isEmpty()) {
-            String[] channels;
             if (client == null) {
                 channels = appProperties.getTgWebChannels().split(",");
-            } else {
-                channels = appProperties.getTgChannels().split(",");
             }
 
             List<Future<List<Message>>> futures = new ArrayList<>();
@@ -460,7 +461,7 @@ public class TelegramService {
                 .sorted(Comparator.comparing(Message::getTime).reversed())
                 .distinct()
                 .toList();
-        log.info("Search {} get {} results.", keyword, list.size());
+        log.info("Search {} get {} results from {} channels.", keyword, list.size(), channels.length);
         return list;
     }
 
@@ -525,14 +526,7 @@ public class TelegramService {
         List<Message> result = List.of();
 
         try {
-            var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
-            var chat = resolvedPeer.chats().get(0);
-            InputPeer inputPeer = null;
-            if (chat instanceof Channel) {
-                inputPeer = ImmutableInputPeerChannel.of(chat.id(), ((Channel) chat).accessHash());
-            } else if (chat instanceof BaseChat) {
-                inputPeer = ImmutableInputPeerChat.of(chat.id());
-            }
+            InputPeer inputPeer = cache.get(username);
             int minDate = (int) (Instant.now().minus(90, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toEpochMilli() / 1000);
             Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, size, 0, 0, 0)).block();
             if (messages instanceof ChannelMessages) {
@@ -543,6 +537,18 @@ public class TelegramService {
             log.warn("search from channel {} failed", username, e);
         }
         return result;
+    }
+
+    private InputPeer resolveUsername(String username) {
+        var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
+        var chat = resolvedPeer.chats().get(0);
+        InputPeer inputPeer = null;
+        if (chat instanceof Channel) {
+            inputPeer = ImmutableInputPeerChannel.of(chat.id(), ((Channel) chat).accessHash());
+        } else if (chat instanceof BaseChat) {
+            inputPeer = ImmutableInputPeerChat.of(chat.id());
+        }
+        return inputPeer;
     }
 
     private Stream<Message> parseMessage(String channel, telegram4j.tl.BaseMessage message) {

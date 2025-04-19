@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.dto.CheckinResult;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.service.AccountService;
+import cn.har01d.alist_tvbox.service.AliyunTvTokenService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,15 +18,18 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 public class AccountController {
     private final AccountRepository accountRepository;
     private final AccountService accountService;
+    private final AliyunTvTokenService tvTokenService;
 
-    public AccountController(AccountRepository accountRepository, AccountService accountService) {
+    public AccountController(AccountRepository accountRepository, AccountService accountService, AliyunTvTokenService tvTokenService) {
         this.accountRepository = accountRepository;
         this.accountService = accountService;
+        this.tvTokenService = tvTokenService;
     }
 
     @GetMapping("/api/ali/accounts")
@@ -81,5 +85,25 @@ public class AccountController {
     @PostMapping("/api/schedule")
     public Instant updateScheduleTime(@RequestBody Instant time) {
         return accountService.updateScheduleTime(time);
+    }
+
+    @PostMapping("/ali/auth/qr")
+    public Map<String, String> getQrcodeUrl() {
+        return tvTokenService.getQrcodeUrl();
+    }
+
+    @GetMapping("/ali/auth/qr")
+    public String checkQrcodeStatus(String sid) {
+        return tvTokenService.checkQrcodeStatus(sid);
+    }
+
+    @PostMapping("/ali/auth/token")
+    public String getToken(String code) {
+        return tvTokenService.getToken(code);
+    }
+
+    @PostMapping("/ali/access_token")
+    public Map refreshToken(@RequestBody Map<String, Object> data) {
+        return tvTokenService.refreshToken(data);
     }
 }
