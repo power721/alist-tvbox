@@ -22,6 +22,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,6 +38,9 @@ public class BilibiliService implements LivePlatform {
     private final Map<String, List<BilibiliCategory>> categoryMap = new HashMap<>();
     private final RestTemplate restTemplate;
     private final AppProperties appProperties;
+    private String imgKey;
+    private String subKey;
+    private LocalDate keyTime;
 
     public BilibiliService(RestTemplateBuilder builder, AppProperties appProperties) {
         this.restTemplate = builder
@@ -131,7 +135,16 @@ public class BilibiliService implements LivePlatform {
         } else {
             String pid = parts[1];
             String id = parts[2];
-            String url = "https://api.live.bilibili.com/xlive/web-interface/v1/second/getList?platform=web&parent_area_id=" + pid + "&area_id=" + id + "&sort_type=&page=" + pg;
+
+            Map<String, Object> map = new HashMap<>();
+            map.put("platform", "web");
+            map.put("sort_type", "");
+            map.put("parent_area_id", pid);
+            map.put("area_id", id);
+            map.put("page", pg);
+
+            getKeys();
+            String url = "https://api.live.bilibili.com/xlive/web-interface/v1/second/getList?" + Utils.encryptWbi(map, imgKey, subKey);
             log.debug("url: {}", url);
             var response = restTemplate.getForObject(url, BilibiliRoomsResponse.class);
             for (var room : response.getData().getList()) {
@@ -157,6 +170,25 @@ public class BilibiliService implements LivePlatform {
 
         log.debug("list result: {}", result);
         return result;
+    }
+
+    private void getKeys() {
+        LocalDate now = LocalDate.now();
+        if (keyTime == null || now.getDayOfYear() != keyTime.getDayOfYear()) {
+            Map<String, Object> json = restTemplate.getForObject("https://api.bilibili.com/x/web-interface/nav", Map.class);
+            Map<String, Object> data = (Map<String, Object>) json.get("data");
+            Map<String, Object> wbi = (Map<String, Object>) data.get("wbi_img");
+            imgKey = getKey((String) wbi.get("img_url"));
+            subKey = getKey((String) wbi.get("sub_url"));
+            keyTime = LocalDate.now();
+            log.info("get WBI key: {} {}", imgKey, subKey);
+        }
+    }
+
+    private String getKey(String url) {
+        int start = url.lastIndexOf('/') + 1;
+        int end = url.lastIndexOf('.');
+        return url.substring(start, end);
     }
 
     @Override

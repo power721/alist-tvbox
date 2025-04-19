@@ -21,7 +21,7 @@ import java.time.Instant;
 @Service
 public class IndexTemplateService {
     public static final String AUTO_INDEX_VERSION = "auto_index_version";
-    private static final int indexVersion = 32;
+    private static final int indexVersion = 33;
     public static final String paths =
             "\">/🈴我的阿里分享/Tacit0924\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【剧a集】/【剧丨集】更新中和完结的/【更新中】电视剧::2\"," +
@@ -59,7 +59,7 @@ public class IndexTemplateService {
 
         IndexTemplateDto dto = new IndexTemplateDto();
         dto.setSiteId(1);
-        dto.setScheduled(true);
+        dto.setScheduled(false);
         dto.setScrape(true);
         dto.setScheduleTime("10|14|18|22");
         dto.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":5000,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
@@ -78,6 +78,7 @@ public class IndexTemplateService {
         IndexTemplate template = indexTemplateRepository.findById(id).orElse(null);
         if (template != null) {
             log.info("update auto index template ");
+            template.setScheduled(false);
             template.setData("{\"siteId\":1,\"indexName\":\"custom_index\",\"excludeExternal\":false,\"includeFiles\":false,\"incremental\":true,\"compress\":false,\"maxDepth\":1,\"sleep\":5000,\"paths\":[" + paths + "],\"stopWords\":[\"获取更多分享内容\"],\"excludes\":[]}");
             indexTemplateRepository.save(template);
         }

@@ -31,6 +31,7 @@ public class Share {
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean temp;
     private Instant time = Instant.now();
+    private transient String error;
 
     @Override
     public boolean equals(Object o) {

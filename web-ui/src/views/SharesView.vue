@@ -85,7 +85,11 @@
     <el-table-column type="selection" width="55"/>
     <el-table-column prop="id" label="ID" width="70"/>
     <el-table-column prop="mount_path" label="路径"/>
-    <el-table-column prop="status" label="状态" width="260"/>
+    <el-table-column prop="status" label="状态" width="260">
+      <template #default="scope">
+        <div v-html="scope.row.status"></div>
+      </template>
+    </el-table-column>
     <el-table-column prop="driver" label="类型" width="120">
       <template #default="scope">
         <span v-if="scope.row.driver=='AliyundriveShare2Open'">阿里分享</span>
