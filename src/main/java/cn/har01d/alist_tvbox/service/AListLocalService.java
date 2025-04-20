@@ -75,6 +75,13 @@ public class AListLocalService {
         Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_lazy_load','" + lazy + "','','bool','',1,0)");
     }
 
+    public void setSetting(String key, String value, String type) {
+        log.info("update setting {}={}", key, value);
+        Utils.executeUpdate(String.format("INSERT INTO x_setting_items VALUES('%s','%s','','%s','',1,0)", key, value, type));
+        int code = Utils.executeUpdate(String.format("UPDATE x_setting_items SET value = '%s' WHERE key = '%s'", value, key));
+        log.info("update setting by SQL: {}", code);
+    }
+
     public void updateSetting(String key, String value, String type) {
         log.info("update setting {}={}", key, value);
         if (getAListStatus() == 2) {
@@ -91,7 +98,7 @@ public class AListLocalService {
             headers.add("Authorization", site.getToken());
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
             SettingResponse response = restTemplate.postForObject("/api/admin/setting/update", entity, SettingResponse.class);
-            log.info("update setting by API: {}", response);
+            log.debug("update setting by API: {}", response);
         } else {
             Utils.executeUpdate(String.format("INSERT INTO x_setting_items VALUES('%s','%s','','%s','',1,0)", key, value, type));
             int code = Utils.executeUpdate(String.format("UPDATE x_setting_items SET value = '%s' WHERE key = '%s'", value, key));
@@ -107,6 +114,15 @@ public class AListLocalService {
         String url = "/api/admin/setting/get?key=" + key;
         ResponseEntity<SettingResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, SettingResponse.class);
         return response.getBody();
+    }
+
+    public void setToken(Integer accountId, String key, String value) {
+        if (StringUtils.isEmpty(value)) {
+            log.warn("Token is empty: {} {} ", accountId, key);
+            return;
+        }
+        String sql = "INSERT INTO x_tokens VALUES('%s','%s',%d,'%s')";
+        Utils.executeUpdate(String.format(sql, key, value, accountId, OffsetDateTime.now()));
     }
 
     public void updateToken(Integer accountId, String key, String value) {
@@ -126,7 +142,7 @@ public class AListLocalService {
             log.debug("updateTokenToAList: {}", body);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
             ResponseEntity<String> response = restTemplate.exchange("/api/admin/token/update", HttpMethod.POST, entity, String.class);
-            log.info("updateTokenToAList {} response: {}", key, response.getBody());
+            log.debug("updateTokenToAList {} response: {}", key, response.getBody());
         } else {
             String sql = "INSERT INTO x_tokens VALUES('%s','%s',%d,'%s')";
             Utils.executeUpdate(String.format(sql, key, value, accountId, OffsetDateTime.now()));

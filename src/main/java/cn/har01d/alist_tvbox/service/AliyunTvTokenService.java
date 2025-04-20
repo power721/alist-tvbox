@@ -14,6 +14,7 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.*;
 import java.util.Base64;
 
@@ -24,6 +25,7 @@ public class AliyunTvTokenService {
     private final String wifimac;
     private final RestTemplate restTemplate;
     private final String timestamp;
+    private Instant lastTime = Instant.MIN;
 
     public AliyunTvTokenService(RestTemplateBuilder restTemplateBuilder) {
         this.restTemplate = restTemplateBuilder
@@ -110,6 +112,10 @@ public class AliyunTvTokenService {
     }
 
     public Map refreshToken(Map<String, Object> data) {
+        Instant now = Instant.now();
+        if (now.isBefore(lastTime.plusSeconds(60))) {
+            throw new BadRequestException("Too many requests.");
+        }
         try {
             HttpHeaders httpHeaders = new HttpHeaders();
             getParams().forEach(httpHeaders::add);

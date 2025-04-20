@@ -80,7 +80,7 @@ public class ShareService {
     private final AListService aListService;
     private final ConfigFileService configFileService;
     private final PikPakService pikPakService;
-    private final PanAccountService panAccountService;
+    private final DriverAccountService driverAccountService;
     private final RestTemplate restTemplate;
     private final Environment environment;
 
@@ -95,7 +95,7 @@ public class ShareService {
                         PikPakAccountRepository pikPakAccountRepository,
                         DriverAccountRepository panAccountRepository,
                         AListService aListService,
-                        PanAccountService panAccountService,
+                        DriverAccountService driverAccountService,
                         AppProperties appProperties,
                         AccountService accountService,
                         AListLocalService aListLocalService,
@@ -112,7 +112,7 @@ public class ShareService {
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.panAccountRepository = panAccountRepository;
         this.aListService = aListService;
-        this.panAccountService = panAccountService;
+        this.driverAccountService = driverAccountService;
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
@@ -127,7 +127,7 @@ public class ShareService {
         loadOpenTokenUrl();
 
         pikPakService.readPikPak();
-        panAccountService.loadStorages();
+        driverAccountService.loadStorages();
 
         cleanShares();
 
