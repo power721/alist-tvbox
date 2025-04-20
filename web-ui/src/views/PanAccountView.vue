@@ -94,7 +94,7 @@
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
         <el-form-item label="用户名" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
-          <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'手机号要加 +86':''" />
+          <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'+86 12345678900':''" />
         </el-form-item>
         <el-form-item label="密码" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
           <el-input type="password" show-password v-model="form.password"/>
