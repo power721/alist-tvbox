@@ -93,12 +93,12 @@ public class AccountController {
     }
 
     @GetMapping("/ali/auth/qr")
-    public String checkQrcodeStatus(String sid) {
+    public Map checkQrcodeStatus(String sid) {
         return tvTokenService.checkQrcodeStatus(sid);
     }
 
     @PostMapping("/ali/auth/token")
-    public String getToken(String code) {
+    public Map getToken(String code) {
         return tvTokenService.getToken(code);
     }
 
