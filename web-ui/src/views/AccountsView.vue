@@ -76,9 +76,9 @@
           <div class="hint">
             webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
           </div>
-<!--          <div class="hint">-->
-<!--            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>-->
-<!--          </div>-->
+          <div class="hint">
+            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>
+          </div>
         </el-form-item>
         <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
           <el-switch
@@ -151,9 +151,9 @@
           <div class="hint">
             webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
           </div>
-<!--          <div class="hint">-->
-<!--            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>-->
-<!--          </div>-->
+          <div class="hint">
+            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>
+          </div>
           <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
           <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>
           <span class="hint">过期时间： {{ formatTime(exp[2]) }}</span>
@@ -341,13 +341,8 @@ const getQr = () => {
 const checkQr = () => {
   axios.get('/ali/auth/qr?sid=' + sid.value).then(({data}) => {
     code.value = data
-    getToken()
-  })
-}
-
-const getToken = () => {
-  axios.post('/ali/auth/token?code=' + code.value).then(({data}) => {
-    form.value.accessTokenOpen = data
+    form.value.accessTokenOpen = data.access_token
+    form.value.openToken = data.refresh_token
     qrVisible.value = false
   })
 }

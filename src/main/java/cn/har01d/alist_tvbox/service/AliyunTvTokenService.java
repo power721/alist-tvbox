@@ -5,7 +5,10 @@ import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -14,9 +17,15 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -24,8 +33,7 @@ public class AliyunTvTokenService {
     private final String uniqueId;
     private final String wifimac;
     private final RestTemplate restTemplate;
-    private final String timestamp;
-    private Instant lastTime = Instant.MIN;
+    private String timestamp;
 
     public AliyunTvTokenService(RestTemplateBuilder restTemplateBuilder) {
         this.restTemplate = restTemplateBuilder
@@ -33,12 +41,12 @@ public class AliyunTvTokenService {
                 .defaultHeader("User-Agent", "Mozilla/5.0 (Linux; U; Android 9; zh-cn; SM-S908E Build/TP1A.220624.014) AppleWebKit/533.1 (KHTML, like Gecko) Mobile Safari/533.1")
                 .defaultHeader("Host", "api.extscreen.com")
                 .build();
-        this.timestamp = fetchTimestamp();
         this.uniqueId = UUID.randomUUID().toString().replace("-", "");
         this.wifimac = String.valueOf((long) (Math.random() * 9e11) + (long) 1e11);
     }
 
     public Map<String, String> getQrcodeUrl() {
+        timestamp = getTimestamp();
         try {
             HttpHeaders httpHeaders = new HttpHeaders();
             getParams().forEach(httpHeaders::add);
@@ -70,7 +78,7 @@ public class AliyunTvTokenService {
         }
     }
 
-    public String checkQrcodeStatus(String sid) {
+    public Map checkQrcodeStatus(String sid) {
         RestTemplate restTemplate = new RestTemplate();
         String status;
         String url = "https://openapi.alipan.com/oauth/qrcode/" + sid + "/status";
@@ -78,13 +86,14 @@ public class AliyunTvTokenService {
         Map<String, Object> body = response.getBody();
         status = (String) body.get("status");
         if ("LoginSuccess".equals(status)) {
-            return (String) body.get("authCode");
+            return getToken((String) body.get("authCode"));
         } else {
-            throw new BadRequestException("获取扫码结果失败");
+            throw new BadRequestException("获取扫码结果失败: " + status);
         }
     }
 
-    public String getToken(String code) {
+    public Map getToken(String code) {
+        timestamp = getTimestamp();
         try {
             HttpHeaders httpHeaders = new HttpHeaders();
             getParams().forEach(httpHeaders::add);
@@ -104,19 +113,16 @@ public class AliyunTvTokenService {
 
             String json = decrypt(ciphertext, iv);
             Map map = new ObjectMapper().readValue(json, Map.class);
-            return (String) map.get("refresh_token");
+            log.debug("get token: {}", map);
+            return map;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     public Map refreshToken(Map<String, Object> data) {
-        Instant now = Instant.now();
-        if (now.isBefore(lastTime.plusSeconds(60))) {
-            throw new BadRequestException("Too many requests.");
-        }
-        lastTime = now;
-        log.debug("refreshToken: {}", data);
+        log.debug("refreshToken request: {}", data);
+        timestamp = getTimestamp();
         try {
             HttpHeaders httpHeaders = new HttpHeaders();
             getParams().forEach(httpHeaders::add);
@@ -128,23 +134,21 @@ public class AliyunTvTokenService {
                     request,
                     Map.class
             );
-            log.debug("{} {}", response.getStatusCode(), response.getBody());
             Map resultData = (Map) response.getBody().get("data");
             String ciphertext = (String) resultData.get("ciphertext");
             String iv = (String) resultData.get("iv");
 
             String json = decrypt(ciphertext, iv);
-            return new ObjectMapper().readValue(json, Map.class);
+            Map map = new ObjectMapper().readValue(json, Map.class);
+            log.debug("refreshToken response: {}", map);
+            return map;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    private String fetchTimestamp() {
-        String url = "http://api.extscreen.com/timestamp";
-        ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-        Map data = (Map) response.getBody().get("data");
-        return String.valueOf(data.get("timestamp"));
+    private String getTimestamp() {
+        return String.valueOf(System.currentTimeMillis() / 1000);
     }
 
     private String h(List<Character> chars, String modifier) {
