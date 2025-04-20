@@ -162,7 +162,7 @@
                 <el-button @click="playNextVideo" v-if="playlist.length>1">下集</el-button>
                 <el-popover placement="bottom" width="400px" v-if="playlist.length>1">
                   <template #reference>
-                    <el-button>片头</el-button>
+                    <el-button>片头<span v-if="skipStart">★</span></el-button>
                   </template>
                   <template #default>
                     跳过片头
@@ -190,7 +190,7 @@
                 </el-popover>
                 <el-popover placement="bottom" width="400px" v-if="playlist.length>1">
                   <template #reference>
-                    <el-button>片尾</el-button>
+                    <el-button>片尾<span v-if="skipEnd">★</span></el-button>
                   </template>
                   <template #default>
                     跳过片尾
@@ -578,13 +578,6 @@ const imageUrl = (url: string) => {
   return '/images?url=' + encodeURIComponent(url)
 }
 
-const newImageUrl = (url: string) => {
-  if (url.endsWith("/folder.png")) {
-    return url;
-  }
-  return '/images?url=' + encodeURIComponent(url.replace('/s_ratio_poster/', '/m/'))
-}
-
 const handleSizeChange = (value: number) => {
   size.value = value
   reload(1)
@@ -605,6 +598,9 @@ const loadFolder = (path: string) => {
 }
 
 const loadFiles = (path: string) => {
+  if (path == '/~history') {
+    return
+  }
   const id = extractPaths(path)
   isHistory.value = false
   loading.value = true
@@ -968,7 +964,7 @@ const decVolume = () => {
 const handleTimeUpdate = () => {
   if (videoPlayer.value) {
     const time = videoPlayer.value.currentTime
-    if (currentVideoIndex.value + 1 < playlist.value.length && duration.value > skipStart.value + skipEnd.value && time + skipEnd.value > duration.value) {
+    if (currentVideoIndex.value + 1 < playlist.value.length && duration.value > skipStart.value + skipEnd.value && time + skipEnd.value > duration.value && time < duration.value) {
       videoPlayer.value.currentTime = duration.value
     }
   }
