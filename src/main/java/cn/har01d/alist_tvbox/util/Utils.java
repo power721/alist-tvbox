@@ -251,6 +251,9 @@ public final class Utils {
     }
 
     public static long durationToSeconds(String duration) {
+        if (StringUtils.isBlank(duration)) {
+            return 0;
+        }
         try {
             String[] parts = duration.split(":");
             if (parts.length == 1) {

@@ -9,6 +9,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -56,19 +57,24 @@ public class TelegramController {
     }
 
     @GetMapping("/tg-search")
-    public Object browse(String id, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
-        return browse("", id, wd, pg);
+    public Object browse(String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+        return browse("", id, t, wd, pg);
     }
 
     @GetMapping("/tg-search/{token}")
-    public Object browse(@PathVariable String token, String id, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+    public Object browse(@PathVariable String token, String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         subscriptionService.checkToken(token);
-        if (id != null && !id.isEmpty()) {
+        if (StringUtils.isNotBlank(id)) {
             return telegramService.detail(id);
-        } else if (wd != null && !wd.isEmpty() && pg == 1) {
+        } else if (StringUtils.isNotBlank(t)) {
+            if (t.equals("0")) {
+                return telegramService.searchMovies("", 5);
+            }
+            return telegramService.list(t);
+        } else if (StringUtils.isNotBlank(wd)) {
             return telegramService.searchMovies(wd, 20);
         }
-        return telegramService.searchMovies("", 5);
+        return telegramService.category();
     }
 
     @GetMapping("/tgsz")

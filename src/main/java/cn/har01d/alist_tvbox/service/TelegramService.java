@@ -8,6 +8,8 @@ import cn.har01d.alist_tvbox.dto.tg.SearchResponse;
 import cn.har01d.alist_tvbox.dto.tg.SearchResult;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.tvbox.Category;
+import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
@@ -347,6 +349,55 @@ public class TelegramService {
         return URLEncoder.encode(url, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
+    public CategoryList category() {
+        CategoryList result = new CategoryList();
+        List<Category> list = new ArrayList<>();
+
+        String[] channels;
+        if (client == null) {
+            channels = appProperties.getTgWebChannels().split(",");
+        } else {
+            channels = appProperties.getTgChannels().split(",");
+        }
+
+        for (String channel : channels) {
+            var category = new Category();
+            category.setType_id(channel);
+            category.setType_name(channel);
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        result.setCategories(list);
+        result.setTotal(result.getCategories().size());
+        result.setLimit(result.getCategories().size());
+
+        log.debug("category result: {}", result);
+        return result;
+    }
+
+    public MovieList list(String channel) throws IOException {
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        List<Message> messages = searchFromChannel(channel, "", 100);
+        for (Message message : messages) {
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id(encodeUrl(message.getLink()));
+            movieDetail.setVod_name(message.getName());
+            movieDetail.setVod_pic(getPic(message.getType()));
+            movieDetail.setVod_remarks(getTypeName(message.getType()));
+            list.add(movieDetail);
+        }
+
+        result.setList(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
+
+        log.debug("list result: {}", result);
+        return result;
+    }
+
     public MovieList searchMovies(String keyword, int size) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
@@ -365,7 +416,6 @@ public class TelegramService {
         result.setTotal(list.size());
         result.setLimit(list.size());
 
-        log.info("search {} got {} results.", keyword, list.size());
         return result;
     }
 
@@ -443,6 +493,7 @@ public class TelegramService {
                 .filter(e -> !e.getContent().contains("软件"))
                 .filter(e -> !e.getContent().contains("图书"))
                 .filter(e -> !e.getContent().contains("电子书"))
+                .filter(e -> !e.getContent().contains("分享文件："))
                 .sorted(Comparator.comparing(Message::getTime).reversed())
                 .distinct()
                 .toList();
