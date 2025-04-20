@@ -89,6 +89,7 @@ public class TextUtils {
         }
 
         newName = newName
+                .replaceAll("第\\d+-\\d+集", " ")
                 .replaceAll("1~\\d{1,2}", " ")
                 .replaceAll("1-\\d+集", " ")
                 .replaceAll("共\\d+集\\+\\d+部剧场版", " ")
@@ -193,6 +194,7 @@ public class TextUtils {
                 .replace("全系列电影", " ")
                 .replace("系列合集", " ")
                 .replace("大合集", " ")
+                .replace("(合集）", " ")
                 .replace("合集", " ")
                 .replace("-系列", " ")
                 .replace("系列", " ")

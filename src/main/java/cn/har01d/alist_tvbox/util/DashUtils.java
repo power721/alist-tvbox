@@ -29,6 +29,8 @@ public final class DashUtils {
         clients.add("com.yek.android.c");
         clients.add("com.mygithub0.tvbox0.osdX");
 
+        audioIds.put("30251", 192000);
+        audioIds.put("30250", 192000);
         audioIds.put("30280", 192000);
         audioIds.put("30232", 132000);
         audioIds.put("30216", 64000);
@@ -66,20 +68,18 @@ public final class DashUtils {
         }
 
         for (Media video : dash.getVideo()) {
-            if (video.getId().equals(String.valueOf(qn))) {
-                videoList.append(getMedia(video));
-            }
-            urls.add(quality.get(video.getId()) + " " + (video.getCodecid().equals("7") ? "AVC" : "HEVC"));
+            videoList.append(getMedia(video));
+            urls.add(quality.get(video.getId()) + " " + getCodec(video.getCodecid()));
             urls.add(video.getBaseUrl());
         }
 
         StringBuilder audioList = new StringBuilder();
         for (Media audio : dash.getAudio()) {
+            audioList.append(getMedia(audio));
             if (audioIds.containsKey(audio.getId())) {
-                audioList.append(getMedia(audio));
                 CatAudio catAudio = new CatAudio();
                 catAudio.setBit(audioIds.get(audio.getId()));
-                catAudio.setTitle((audioIds.get(audio.getId()) / 1024) + "Kbps");
+                catAudio.setTitle(getAudioTitle(audio.getId()));
                 catAudio.setUrl(audio.getBaseUrl());
                 audios.add(catAudio);
             }
@@ -105,6 +105,26 @@ public final class DashUtils {
         map.put("parse", "0");
         map.put("key", "BiliBili");
         return map;
+    }
+
+    private static String getCodec(String id) {
+        if (id.equals("7")) {
+            return "AVC";
+        }
+        if (id.equals("12")) {
+            return "HEVC";
+        }
+        return "AV1";
+    }
+
+    private static String getAudioTitle(String id) {
+        if (id.equals("30250")) {
+            return "杜比全景声";
+        }
+        if (id.equals("30251")) {
+            return "Hi-Res无损";
+        }
+        return (audioIds.get(id) / 1024) + "Kbps";
     }
 
     private static String getMedia(Media media) {
