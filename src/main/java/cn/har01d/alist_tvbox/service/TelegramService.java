@@ -10,8 +10,11 @@ import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -59,7 +62,6 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -92,6 +94,7 @@ public class TelegramService {
     private final RestTemplate restTemplate;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Math.min(10, Runtime.getRuntime().availableProcessors() * 2));
     private final OkHttpClient httpClient = new OkHttpClient();
+    private final LoadingCache<String, InputPeer> cache = Caffeine.newBuilder().build(this::resolveUsername);
     private MTProtoTelegramClient client;
 
     public TelegramService(AppProperties appProperties, SettingRepository settingRepository, ShareService shareService, TvBoxService tvBoxService, RestTemplateBuilder restTemplateBuilder) {
@@ -155,7 +158,7 @@ public class TelegramService {
                         settingRepository.save(new Setting("tg_phase", "0"));
                         log.info("Scan QR {}, expired: {}.", ctx.loginUrl(), ctx.expiresIn());
                         try {
-                            String img = getQrCode(ctx.loginUrl());
+                            String img = BiliBiliUtils.getQrCode(ctx.loginUrl());
                             settingRepository.save(new Setting("tg_qr_img", img));
                         } catch (IOException e) {
                             return Mono.error(e);
@@ -224,21 +227,6 @@ public class TelegramService {
             client = null;
             log.info("Telegram关闭连接");
         }).start();
-    }
-
-    public static String getQrCode(String text) throws IOException {
-        log.info("get qr code for text: {}", text);
-        try {
-            ProcessBuilder builder = new ProcessBuilder();
-            builder.command("/atv-cli", text);
-            builder.inheritIO();
-            Process process = builder.start();
-            process.waitFor();
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-        Path file = Paths.get("/www/tvbox/qr.png");
-        return Base64.getEncoder().encodeToString(Files.readAllBytes(file));
     }
 
     public User getUser() {
@@ -426,16 +414,14 @@ public class TelegramService {
 
     public List<Message> search(String keyword, int size) {
         List<Message> results = List.of();
+        String[] channels = appProperties.getTgChannels().split(",");
         if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
             results = searchRemote(appProperties.getTgChannels(), keyword, size);
         }
 
         if (results.isEmpty()) {
-            String[] channels;
             if (client == null) {
                 channels = appProperties.getTgWebChannels().split(",");
-            } else {
-                channels = appProperties.getTgChannels().split(",");
             }
 
             List<Future<List<Message>>> futures = new ArrayList<>();
@@ -460,7 +446,7 @@ public class TelegramService {
                 .sorted(Comparator.comparing(Message::getTime).reversed())
                 .distinct()
                 .toList();
-        log.info("Search {} get {} results.", keyword, list.size());
+        log.info("Search {} get {} results from {} channels.", keyword, list.size(), channels.length);
         return list;
     }
 
@@ -525,14 +511,7 @@ public class TelegramService {
         List<Message> result = List.of();
 
         try {
-            var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
-            var chat = resolvedPeer.chats().get(0);
-            InputPeer inputPeer = null;
-            if (chat instanceof Channel) {
-                inputPeer = ImmutableInputPeerChannel.of(chat.id(), ((Channel) chat).accessHash());
-            } else if (chat instanceof BaseChat) {
-                inputPeer = ImmutableInputPeerChat.of(chat.id());
-            }
+            InputPeer inputPeer = cache.get(username);
             int minDate = (int) (Instant.now().minus(90, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toEpochMilli() / 1000);
             Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, size, 0, 0, 0)).block();
             if (messages instanceof ChannelMessages) {
@@ -543,6 +522,18 @@ public class TelegramService {
             log.warn("search from channel {} failed", username, e);
         }
         return result;
+    }
+
+    private InputPeer resolveUsername(String username) {
+        var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
+        var chat = resolvedPeer.chats().get(0);
+        InputPeer inputPeer = null;
+        if (chat instanceof Channel) {
+            inputPeer = ImmutableInputPeerChannel.of(chat.id(), ((Channel) chat).accessHash());
+        } else if (chat instanceof BaseChat) {
+            inputPeer = ImmutableInputPeerChat.of(chat.id());
+        }
+        return inputPeer;
     }
 
     private Stream<Message> parseMessage(String channel, telegram4j.tl.BaseMessage message) {
@@ -647,19 +638,6 @@ public class TelegramService {
                 .addHeader("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5")
                 .addHeader("User-Agent", USER_AGENT)
                 .addHeader("Referer", "https://t.me/")
-                .build();
-
-        Call call = httpClient.newCall(request);
-        Response response = call.execute();
-        String html = response.body().string();
-        response.close();
-
-        return html;
-    }
-
-    private String getJson(String url) throws IOException {
-        Request request = new Request.Builder()
-                .url(url)
                 .build();
 
         Call call = httpClient.newCall(request);

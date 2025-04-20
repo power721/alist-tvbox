@@ -1032,21 +1032,6 @@ public class AccountService {
         return null;
     }
 
-    public AliTokensResponse getTokens() {
-        try {
-            String token = login();
-            HttpHeaders headers = new HttpHeaders();
-            headers.put("Authorization", List.of(token));
-            HttpEntity<String> entity = new HttpEntity<>(null, headers);
-            ResponseEntity<AliTokensResponse> response = aListClient.exchange("/api/admin/token/list", HttpMethod.GET, entity, AliTokensResponse.class);
-            log.debug("getTokens response: {}", response.getBody().getData());
-            return response.getBody();
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-        return new AliTokensResponse();
-    }
-
     private int syncs = 0;
 
     @Scheduled(initialDelay = 200_000, fixedDelay = 300_000)
@@ -1058,7 +1043,7 @@ public class AccountService {
         if (aListLocalService.getAListStatus() != 2) {
             return;
         }
-        List<AliToken> tokens = getTokens().getData();
+        List<AliToken> tokens = aListLocalService.getTokens().getData();
         if (tokens == null || tokens.isEmpty()) {
             return;
         }

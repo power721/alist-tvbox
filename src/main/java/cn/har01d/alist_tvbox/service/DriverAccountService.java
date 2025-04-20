@@ -3,7 +3,6 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
-import cn.har01d.alist_tvbox.entity.PanAccount;
 import cn.har01d.alist_tvbox.entity.PanAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -15,7 +14,6 @@ import cn.har01d.alist_tvbox.model.AliToken;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -31,7 +29,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-public class PanAccountService {
+public class DriverAccountService {
     public static final int IDX = 4000;
     private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139);
     private static final Set<DriverType> COOKIE_TYPES = Set.of(DriverType.PAN115, DriverType.QUARK, DriverType.UC);
@@ -44,13 +42,13 @@ public class PanAccountService {
     private final RestTemplate restTemplate;
     private final Map<String, QuarkUCTV> drivers = new HashMap<>();
 
-    public PanAccountService(PanAccountRepository panAccountRepository,
-                             DriverAccountRepository driverAccountRepository,
-                             SettingRepository settingRepository,
-                             ShareRepository shareRepository,
-                             AccountService accountService,
-                             AListLocalService aListLocalService,
-                             RestTemplateBuilder builder) {
+    public DriverAccountService(PanAccountRepository panAccountRepository,
+                                DriverAccountRepository driverAccountRepository,
+                                SettingRepository settingRepository,
+                                ShareRepository shareRepository,
+                                AccountService accountService,
+                                AListLocalService aListLocalService,
+                                RestTemplateBuilder builder) {
         this.panAccountRepository = panAccountRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.settingRepository = settingRepository;
@@ -76,7 +74,7 @@ public class PanAccountService {
         }
         drivers.put("QUARK_TV", new QuarkUCTV(restTemplate, new QuarkUCTV.Conf("https://open-api-drive.quark.cn", "d3194e61504e493eb6222857bccfed94", "kw2dvtd7p4t3pjl2d9ed9yc8yej8kw2d", "1.5.6", "CP", "http://api.extscreen.com/quarkdrive", deviceId)));
         drivers.put("UC_TV", new QuarkUCTV(restTemplate, new QuarkUCTV.Conf("https://open-api-drive.uc.cn", "5acf882d27b74502b7040b0c65519aa7", "l3srvtd7p42l0d0x1u8d7yc8ye9kki4d", "1.6.5", "UCTVOFFICIALWEB", "http://api.extscreen.com/ucdrive", deviceId)));
-        syncTokens();
+        syncTokens(30_000);
     }
 
     private void migrateDriverAccounts() {
@@ -142,7 +140,7 @@ public class PanAccountService {
         List<DriverAccount> accounts = driverAccountRepository.findAll();
         for (DriverAccount account : accounts) {
             if (account.isMaster()) {
-                updateMasterToken(account);
+                updateMasterToken(account, false);
             }
             insertAList(account);
         }
@@ -409,13 +407,17 @@ public class PanAccountService {
             }
             account.setMaster(true);
             driverAccountRepository.saveAll(list);
-            updateMasterToken(account);
+            updateMasterToken(account, true);
         }
     }
 
-    private void updateMasterToken(DriverAccount account) {
+    private void updateMasterToken(DriverAccount account, boolean useApi) {
         int id = IDX + account.getId();
-        aListLocalService.updateSetting(account.getType() + "_id", String.valueOf(id), "number");
+        if (useApi) {
+            aListLocalService.updateSetting(account.getType() + "_id", String.valueOf(id), "number");
+        } else {
+            aListLocalService.setSetting(account.getType() + "_id", String.valueOf(id), "number");
+        }
         String value;
         if (TOKEN_TYPES.contains(account.getType())) {
             value = account.getToken();
@@ -424,7 +426,11 @@ public class PanAccountService {
         } else {
             return;
         }
-        aListLocalService.updateToken(account.getId(), account.getType() + "_" + id, value);
+        if (useApi) {
+            aListLocalService.updateToken(id, account.getType() + "_" + id, value);
+        } else {
+            aListLocalService.setToken(id, account.getType() + "_" + id, value);
+        }
     }
 
     private void updateStorage(DriverAccount account) {
@@ -438,8 +444,8 @@ public class PanAccountService {
             updateAList(account);
             if (status == 2) {
                 accountService.enableStorage(id, token);
-                if (TOKEN_TYPES.contains(account.getType())) {
-                    syncTokens();
+                if (TOKEN_TYPES.contains(account.getType()) || COOKIE_TYPES.contains(account.getType())) {
+                    syncTokens(5000);
                 }
             }
         } catch (Exception e) {
@@ -464,57 +470,64 @@ public class PanAccountService {
         return driver.getRefreshToken(code);
     }
 
-    @Scheduled(initialDelay = 1800_000, fixedDelay = 1800_000)
+    @Scheduled(initialDelay = 300_000, fixedDelay = 900_000)
     public void syncCookies() {
         if (aListLocalService.getAListStatus() != 2) {
             return;
         }
-        syncMasterToken();
+        syncToken();
     }
 
-    private void syncTokens() {
-        try {
-            Thread.sleep(2000L);
-        } catch (InterruptedException e) {
-            return;
-        }
-
+    private void syncTokens(long sleep) {
         new Thread(() -> {
+            try {
+                Thread.sleep(sleep);
+            } catch (InterruptedException e) {
+                return;
+            }
+
             while (true) {
+                if (aListLocalService.getAListStatus() == 2) {
+                    syncToken();
+                    break;
+                }
                 try {
                     Thread.sleep(1000L);
                 } catch (InterruptedException e) {
                     return;
                 }
-                if (aListLocalService.getAListStatus() == 2) {
-                    syncMasterToken();
-                    break;
-                }
             }
         }).start();
     }
 
-    private void syncMasterToken() {
+    private void syncToken() {
         List<AliToken> tokens = aListLocalService.getTokens().getData();
         if (tokens == null || tokens.isEmpty()) {
             return;
         }
 
         Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
-        List<PanAccount> accounts = panAccountRepository.findByMasterTrue();
+        List<DriverAccount> list = new ArrayList<>();
+        List<DriverAccount> accounts = driverAccountRepository.findAll();
         for (var account : accounts) {
             int id = IDX + account.getId();
             String key = account.getType() + "_" + id;
             AliToken token = map.get(key);
             if (token != null) {
-                log.debug("update {} {}", key, token);
+                boolean changed;
                 if (TOKEN_TYPES.contains(account.getType())) {
+                    changed = !token.getValue().equals(account.getToken());
                     account.setToken(token.getValue());
                 } else {
+                    changed = !token.getValue().equals(account.getCookie());
                     account.setCookie(token.getValue());
                 }
-                panAccountRepository.save(account);
+                if (changed) {
+                    log.debug("update {} {}", key, token);
+                    list.add(account);
+                }
             }
         }
+        driverAccountRepository.saveAll(list);
     }
 }

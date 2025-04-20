@@ -29,6 +29,7 @@ public class WebSecurityConfiguration {
                 .authorizeRequests(requests -> requests.requestMatchers(
                                 new AntPathRequestMatcher("/tg/**"),
                                 new AntPathRequestMatcher("/tgs/**"),
+                                new AntPathRequestMatcher("/ali/access_token"),
                                 new AntPathRequestMatcher("/api/profiles"),
                                 new AntPathRequestMatcher("/api/accounts/login"),
                                 new AntPathRequestMatcher("/api/accounts/logout"),

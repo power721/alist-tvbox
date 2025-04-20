@@ -76,6 +76,9 @@
           <div class="hint">
             webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
           </div>
+<!--          <div class="hint">-->
+<!--            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>-->
+<!--          </div>-->
         </el-form-item>
         <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
           <el-switch
@@ -148,6 +151,9 @@
           <div class="hint">
             webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
           </div>
+<!--          <div class="hint">-->
+<!--            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>-->
+<!--          </div>-->
           <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
           <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>
           <span class="hint">过期时间： {{ formatTime(exp[2]) }}</span>
@@ -222,6 +228,18 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="qrVisible" title="会员TV Token扫码" width="50%">
+      <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
+      <el-form-item>
+        <el-button type="primary" @click="checkQr">我已经授权</el-button>
+      </el-form-item>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="qrVisible = false">取消</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
     <div class="divider"></div>
 
     <PikPakView></PikPakView>
@@ -248,9 +266,13 @@ const activities = ref<any[]>([])
 const forceCheckin = ref(false)
 const updateAction = ref(false)
 const dialogTitle = ref('')
+const sid = ref('')
+const code = ref('')
+const base64QrCode = ref('')
 const accounts = ref([])
 const formVisible = ref(false)
 const dialogVisible = ref(false)
+const qrVisible = ref(false)
 const detailVisible = ref(false)
 const alistVisible = ref(false)
 const timelineVisible = ref(false)
@@ -305,6 +327,28 @@ const checkin = () => {
     forceCheckin.value = false
     ElMessage.success('签到成功, 本月累计' + data.signInCount + '天')
     load()
+  })
+}
+
+const getQr = () => {
+  axios.post('/ali/auth/qr').then(({data}) => {
+    base64QrCode.value = data.img
+    sid.value = data.sid
+    qrVisible.value = true
+  })
+}
+
+const checkQr = () => {
+  axios.get('/ali/auth/qr?sid=' + sid.value).then(({data}) => {
+    code.value = data
+    getToken()
+  })
+}
+
+const getToken = () => {
+  axios.post('/ali/auth/token?code=' + code.value).then(({data}) => {
+    form.value.accessTokenOpen = data
+    qrVisible.value = false
   })
 }
 
