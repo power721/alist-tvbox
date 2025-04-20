@@ -30,7 +30,7 @@ public class AliyunTvTokenService {
     public AliyunTvTokenService(RestTemplateBuilder restTemplateBuilder) {
         this.restTemplate = restTemplateBuilder
                 .defaultHeader("token", "6733b42e28cdba32")
-                .defaultHeader("User-Agent", "Mozilla/5.0 (Linux; U; Android 9; zh-cn; SM-S908E) AppleWebKit/533.1 (KHTML, like Gecko)")
+                .defaultHeader("User-Agent", "Mozilla/5.0 (Linux; U; Android 9; zh-cn; SM-S908E Build/TP1A.220624.014) AppleWebKit/533.1 (KHTML, like Gecko) Mobile Safari/533.1")
                 .defaultHeader("Host", "api.extscreen.com")
                 .build();
         this.timestamp = fetchTimestamp();
@@ -40,7 +40,6 @@ public class AliyunTvTokenService {
 
     public Map<String, String> getQrcodeUrl() {
         try {
-
             HttpHeaders httpHeaders = new HttpHeaders();
             getParams().forEach(httpHeaders::add);
             Map<String, Object> body = new HashMap<>();
@@ -116,6 +115,8 @@ public class AliyunTvTokenService {
         if (now.isBefore(lastTime.plusSeconds(60))) {
             throw new BadRequestException("Too many requests.");
         }
+        lastTime = now;
+        log.debug("refreshToken: {}", data);
         try {
             HttpHeaders httpHeaders = new HttpHeaders();
             getParams().forEach(httpHeaders::add);

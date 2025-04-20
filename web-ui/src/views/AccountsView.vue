@@ -76,9 +76,9 @@
           <div class="hint">
             webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
           </div>
-          <div class="hint">
-            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>
-          </div>
+<!--          <div class="hint">-->
+<!--            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>-->
+<!--          </div>-->
         </el-form-item>
         <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
           <el-switch
@@ -151,9 +151,9 @@
           <div class="hint">
             webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
           </div>
-          <div class="hint">
-            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>
-          </div>
+<!--          <div class="hint">-->
+<!--            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>-->
+<!--          </div>-->
           <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
           <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>
           <span class="hint">过期时间： {{ formatTime(exp[2]) }}</span>
@@ -231,7 +231,7 @@
     <el-dialog v-model="qrVisible" title="会员TV Token扫码" width="50%">
       <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
       <el-form-item>
-        <el-button type="primary" @click="checkQr">我已经扫码</el-button>
+        <el-button type="primary" @click="checkQr">我已经授权</el-button>
       </el-form-item>
       <template #footer>
       <span class="dialog-footer">
