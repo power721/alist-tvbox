@@ -6,9 +6,10 @@ PORT2=5344
 PORT3=5345
 MEM_OPT="-Xmx512M"
 PULL=true
+BUILD_BASE=false
 MOUNT=""
 
-while getopts ":d:p:m:P:e:t:v:n" arg; do
+while getopts ":d:p:m:P:e:t:v:n:b" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
@@ -30,6 +31,10 @@ while getopts ":d:p:m:P:e:t:v:n" arg; do
             ;;
         n)
             PULL=false
+            ;;
+        b)
+            PULL=false
+            BUILD_BASE=true
             ;;
         *)
             ;;
@@ -54,6 +59,8 @@ if [ $# -gt 3 ]; then
 	MEM_OPT="-Xmx${4}M"
 	echo "Java Memory: ${MEM_OPT}"
 fi
+
+[ "$BUILD_BASE" = "true" ] && echo "build base image" && docker pull haroldli/alist && docker build -f Dockerfile-base --tag=haroldli/alist-base:latest .
 
 rm -rf src/main/resources/static/assets && \
 cd web-ui && \
