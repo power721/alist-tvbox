@@ -470,7 +470,7 @@ public class DriverAccountService {
         return driver.getRefreshToken(code);
     }
 
-    @Scheduled(initialDelay = 300_000, fixedDelay = 900_000)
+    @Scheduled(initialDelay = 300_000, fixedDelay = 300_000)
     public void syncCookies() {
         if (aListLocalService.getAListStatus() != 2) {
             return;
