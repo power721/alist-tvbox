@@ -60,7 +60,7 @@ if [ $# -gt 3 ]; then
 	echo "Java Memory: ${MEM_OPT}"
 fi
 
-[ "$BUILD_BASE" = "true" ] && echo "build base image" && docker pull haroldli/alist && docker build -f Dockerfile-base --tag=haroldli/alist-base:latest .
+[ "$BUILD_BASE" = "true" ] && echo "build base image" && docker build -f Dockerfile-base --tag=haroldli/alist-base:latest .
 
 rm -rf src/main/resources/static/assets && \
 cd web-ui && \

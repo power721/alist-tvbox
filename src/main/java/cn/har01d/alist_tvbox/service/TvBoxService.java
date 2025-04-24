@@ -935,7 +935,7 @@ public class TvBoxService {
     }
 
     private boolean exclude(String name) {
-        for (String text : Set.of("订阅", "福利", "会员", "微信", "QQ群", "招募", "代找")) {
+        for (String text : Set.of("订阅", "会员", "微信", "QQ群", "招募", "代找")) {
             if (name.contains(text)) {
                 log.warn("exclude {}", name);
                 return true;
