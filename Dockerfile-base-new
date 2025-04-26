@@ -1,6 +1,6 @@
 ARG TAG=latest
 
-FROM haroldli/java:17 as corretto-jdk
+FROM haroldli/java:17 AS corretto-jdk
 
 FROM haroldli/alist:${TAG}
 

@@ -118,12 +118,10 @@ public class ProxyService {
                 url = fsDetail.getRawUrl();
                 String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
                 headers.put("cookie", cookie);
-                //headers.put("p115uid", "");
                 headers.put("referer", "https://115.com/");
             } else {
                 url = buildProxyUrl(site, path, fsDetail.getSign());
             }
-            //updateShareTime(path);
         }
 
         log.trace("headers: {}", headers);
