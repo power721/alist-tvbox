@@ -1,3 +1,5 @@
+set -e
+
 MOUNT=/opt/alist
 PORT1=4567
 PORT2=5344
@@ -34,6 +36,7 @@ cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 
 export TZ=Asia/Shanghai
 echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
+echo "build haroldli/alist-tvbox:latest"
 docker build --tag=haroldli/alist-tvbox:latest .
 
 echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
