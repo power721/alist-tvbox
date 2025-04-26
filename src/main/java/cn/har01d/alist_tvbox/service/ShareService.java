@@ -966,9 +966,9 @@ public class ShareService {
                 share.setFolderId("/");
             }
         } else if ("root".equals(share.getFolderId())) {
-            if ((share.getType() == 1 || share.getType() == 2 || share.getType() == 8 || share.getType() == 9)) {
+            if ((share.getType() == 1 || share.getType() == 2 || share.getType() == 9)) {
                 share.setFolderId("");
-            } else if (share.getType() == 3 || share.getType() == 5 || share.getType() == 7) {
+            } else if (share.getType() == 3 || share.getType() == 5 || share.getType() == 7 || share.getType() == 8) {
                 share.setFolderId("0");
             } else if (share.getType() == 4) {
                 share.setFolderId("/");
