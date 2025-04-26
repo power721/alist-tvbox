@@ -9,7 +9,7 @@ if [ $# -gt 0 ]; then
   else
     unzip -o -q -P abcd index.zip
     cat /index/index.share.txt >> index.video.txt
-    cat index.video.txt index.115.txt index.comics.txt index.docu.txt index.book.txt index.music.txt index.non.video.txt >/index/index.txt
+    cat index.video.txt index.comics.txt index.docu.txt index.book.txt index.music.txt index.non.video.txt >/index/index.txt
     mv index*.txt /index/
     echo $(date) "update index successfully, your new version.txt is $remote"
     echo "$remote" >/index/version.txt
