@@ -60,16 +60,18 @@ if [ $# -gt 3 ]; then
 	echo "Java Memory: ${MEM_OPT}"
 fi
 
-[ "$BUILD_BASE" = "true" ] && echo "build base image" && docker build -f Dockerfile-base --tag=haroldli/alist-base:latest .
-
 rm -rf src/main/resources/static/assets && \
 cd web-ui && \
-npm run build || exit 1
+echo "build web ui" && \
+npm run build
 cd .. && \
-mvn clean package || exit 1
+echo "build maven" && \
+mvn clean package
 
 cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 pwd
+
+[ "$BUILD_BASE" = "true" ] && echo "build haroldli/alist-base:latest" && docker build -f Dockerfile-base --tag=haroldli/alist-base:latest .
 
 [ -d data ] || mkdir data
 export TZ=Asia/Shanghai
@@ -81,7 +83,8 @@ echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
 
 docker image prune -f
 echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
-docker build -f Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest . || exit 1
+echo "build haroldli/xiaoya-tvbox:latest"
+docker build -f Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest .
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
 docker run -d -p $PORT1:4567 -p $PORT2:80 -p 5566:5244 -e ALIST_PORT=$PORT2 -e INSTALL=xiaoya -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 

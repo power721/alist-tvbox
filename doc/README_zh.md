@@ -489,6 +489,13 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 使用内置的API Key会限速，建议申请自己的API key。
 
+### GitHub代理
+需要通过GitHub下载分享数据和索引数据。
+
+创建文件/etc/xiaoya/github_proxy.txt， 内容为GitHub代理地址，注意以/结尾。
+
+比如`https://gh-proxy.net/`
+
 ### 别名
 把一些路径合并成一个路径。
 

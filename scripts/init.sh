@@ -31,8 +31,8 @@ init() {
 
   sqlite3 /opt/alist/data/data.db ".read /alist.sql"
 
-  wget -T 30 -t 2 https://gh-proxy.net/https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
-  wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
+  gh_proxy=$(head -n 1 "/data/github_proxy.txt" 2>/dev/null || echo "")
+  wget -T 30 -t 2 ${gh_proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
   wget -t 3 http://har01d.org/tvbox.zip -O tvbox.zip || \
   cp /tvbox.zip ./
 
