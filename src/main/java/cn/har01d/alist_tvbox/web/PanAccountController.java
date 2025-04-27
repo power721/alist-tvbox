@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.service.DriverAccountService;
 import cn.har01d.alist_tvbox.service.QuarkUCTV;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -37,7 +38,7 @@ public class PanAccountController {
     }
 
     @PostMapping("/-/qr")
-    public QuarkUCTV.LoginResponse getQrCode(String type) {
+    public QuarkUCTV.LoginResponse getQrCode(String type) throws IOException {
         return driverAccountService.getQrCode(type);
     }
 

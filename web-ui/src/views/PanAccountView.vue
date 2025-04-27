@@ -72,15 +72,29 @@
         </el-form-item>
         <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'">
           <el-input v-model="form.cookie" type="textarea" :rows="5"/>
-          <a href="https://pan.quark.cn/" target="_blank" v-if="form.type=='QUARK'">夸克网盘</a>
-          <a href="https://drive.uc.cn/" target="_blank" v-if="form.type=='UC'">UC网盘</a>
-          <a href="https://115.com/" target="_blank" v-if="form.type=='PAN115'">115云盘</a>
+          <span v-if="form.type=='QUARK'">
+            <a href="https://pan.quark.cn/" target="_blank">夸克网盘</a>
+            <span class="hint"></span>
+            <el-button type="primary" @click="showQrCode">扫码获取</el-button>
+          </span>
+
+          <span v-if="form.type=='UC'">
+            <a href="https://drive.uc.cn/" target="_blank">UC网盘</a>
+            <span class="hint"></span>
+            <el-button type="primary" @click="showQrCode">扫码获取</el-button>
+          </span>
+
+          <span v-if="form.type=='PAN115'">
+            <a href="https://115.com/" target="_blank">115云盘</a>
+            <span class="hint"></span>
+            <el-button type="primary" @click="show115QrCode">扫码获取</el-button>
+          </span>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
           <el-input v-model="form.token" type="textarea" :rows="5"/>
           <a href="https://yun.139.com/" target="_blank">移动云盘</a>
           <div class="hint"></div>
-          <a href="https://alist.nn.ci/zh/guide/drivers/139.html" target="_blank">帮助</a>
+          <a href="https://alist.nn.ci/zh/guide/drivers/139.html" target="_blank">使用说明</a>
         </el-form-item>
         <el-form-item label="Refresh Token" required v-if="form.type=='OPEN115'">
           <el-input v-model="form.token"/>
@@ -96,7 +110,7 @@
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
         <el-form-item label="用户名" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
-          <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'+86 12345678900':''" />
+          <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'+86 12345678900':''"/>
         </el-form-item>
         <el-form-item label="密码" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
           <el-input type="password" show-password v-model="form.password"/>
@@ -149,12 +163,33 @@
     </el-dialog>
 
     <el-dialog v-model="qrModel" title="扫码登陆" width="40%">
-      <img alt="qr" :src="'data:image/jpeg;base64,' + qr.qr_data" />
+      <img alt="qr" :src="'data:image/jpeg;base64,' + qr.qr_data"/>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="qrModel=false">取消</el-button>
         <el-button @click="showQrCode">刷新二维码</el-button>
         <el-button type="primary" @click="getRefreshToken">我已扫码</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="qr115Model" title="扫码登陆" width="40%">
+      <el-form-item label="APP类型" label-width="120" required>
+        <el-select v-model="app" @change="refreshQrCode">
+          <el-option
+            v-for="item in apps"
+            :key="item.value"
+            :label="item.value"
+            :value="item.value"
+          />
+        </el-select>
+      </el-form-item>
+      <img id="qrcode" alt="qrcode" :src="qrcode"/>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="qr115Model=false">取消</el-button>
+        <el-button @click="refreshQrCode">刷新二维码</el-button>
+        <el-button type="primary" @click="loadResult">我已扫码</el-button>
       </span>
       </template>
     </el-dialog>
@@ -174,6 +209,7 @@ const accounts = ref([])
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const qrModel = ref(false)
+const qr115Model = ref(false)
 const form = ref({
   id: 0,
   type: 'QUARK',
@@ -191,6 +227,44 @@ const qr = ref({
   qr_data: '',
   query_token: '',
 })
+
+const app = ref('alipaymini')
+const uid = ref('')
+const qrcode = ref('')
+const apps = [
+  {
+    "value": "wechatmini",
+    "label": "115生活(微信小程序)"
+  },
+  {
+    "value": "alipaymini",
+    "label": "115生活(支付宝小程序)"
+  },
+  {
+    "value": "115ios",
+    "label": "115(iOS端)"
+  },
+  {
+    "value": "115ipad",
+    "label": "115(iPad端)"
+  },
+  {
+    "value": "115android",
+    "label": "115(Android端)"
+  },
+  {
+    "value": "ipad",
+    "label": "ipad"
+  },
+  {
+    "value": "tv",
+    "label": "115网盘(Android电视端) "
+  },
+  {
+    "value": "web",
+    "label": "网页版"
+  },
+]
 
 const handleAdd = () => {
   dialogTitle.value = '添加网盘账号'
@@ -260,7 +334,7 @@ const fullPath = (share: any) => {
     return '/我的UC网盘/' + path
   } else if (share.type == 'PAN115') {
     return '/115云盘/' + path
-  }  else if (share.type == 'OPEN115') {
+  } else if (share.type == 'OPEN115') {
     return '/115网盘/' + path
   } else if (share.type == 'THUNDER') {
     return '/我的迅雷云盘/' + path
@@ -320,8 +394,35 @@ const showQrCode = () => {
 
 const getRefreshToken = () => {
   axios.post('/api/pan/accounts/-/token?type=' + form.value.type + '&queryToken=' + qr.value.query_token).then(({data}) => {
-    form.value.token = data
+    if (form.value.type == 'QUARK' || form.value.type == 'UC') {
+      form.value.cookie = data
+    } else {
+      form.value.token = data
+    }
+
     qrModel.value = false
+  })
+}
+
+const show115QrCode = () => {
+  axios.get('/api/pan115/token').then(({data}) => {
+    uid.value = data.data.uid
+    qrcode.value = `https://qrcodeapi.115.com/api/1.0/${app.value}/1.0/qrcode?uid=${uid.value}`
+    qr115Model.value = true
+  })
+}
+
+const refreshQrCode = () => {
+  qrcode.value = `https://qrcodeapi.115.com/api/1.0/${app.value}/1.0/qrcode?uid=${uid.value}`
+}
+
+const loadResult = async () => {
+  return axios.get(`/api/pan115/result?app=${app.value}&uid=${uid.value}`).then(({data}) => {
+    qr115Model.value = false
+    form.value.cookie = Object.entries(data.data.cookie).map(([k, v]) => `${k}=${v}`).join("; ")
+    if (!form.value.name) {
+      form.value.name = data.data.user_name
+    }
   })
 }
 
