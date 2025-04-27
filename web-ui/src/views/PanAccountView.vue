@@ -418,6 +418,11 @@ const refreshQrCode = () => {
 
 const loadResult = async () => {
   return axios.get(`/api/pan115/result?app=${app.value}&uid=${uid.value}`).then(({data}) => {
+    if (data.error) {
+      ElMessage.warning(data.error)
+      return
+    }
+
     qr115Model.value = false
     form.value.cookie = Object.entries(data.data.cookie).map(([k, v]) => `${k}=${v}`).join("; ")
     if (!form.value.name) {
