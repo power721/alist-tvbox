@@ -183,6 +183,7 @@
             :value="item.value"
           />
         </el-select>
+        <div class="hint">注意：这会把已经登录的相同 app 踢下线</div>
       </el-form-item>
       <img id="qrcode" alt="qrcode" :src="qrcode"/>
       <template #footer>
