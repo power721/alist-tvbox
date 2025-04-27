@@ -6,8 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,6 +30,7 @@ public class Pan115Controller {
 
     @GetMapping("/token")
     public Object token() throws JsonProcessingException {
+        // content type [text/html;charset=UTF-8]]
         String json = restTemplate.getForObject("https://qrcodeapi.115.com/api/1.0/web/1.0/token", String.class);
         log.debug("token: {}", json);
         return objectMapper.readValue(json, Map.class);
@@ -41,16 +40,15 @@ public class Pan115Controller {
     public Object status(HttpServletRequest request) throws JsonProcessingException {
         String url = "https://qrcodeapi.115.com/get/status/?" + request.getQueryString();
         log.debug("url: {}", url);
-        String json =  restTemplate.getForObject(url, String.class);
+        String json = restTemplate.getForObject(url, String.class);
         log.debug("status: {}", json);
         return objectMapper.readValue(json, Map.class);
     }
 
     @GetMapping("/result")
     public Object result(String app, String uid) throws JsonProcessingException {
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("account", uid);
-        String json =  restTemplate.postForObject("https://passportapi.115.com/app/1.0/" + app + "/1.0/login/qrcode", body, String.class);
+        Map<String, String> body = Map.of("account", uid);
+        String json = restTemplate.postForObject("https://passportapi.115.com/app/1.0/" + app + "/1.0/login/qrcode", body, String.class);
         log.debug("result: {}", json);
         return objectMapper.readValue(json, Map.class);
     }
