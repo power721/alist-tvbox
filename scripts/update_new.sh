@@ -72,14 +72,14 @@ elif [ "$ARCH" = "aarch64" ]; then
     platform="linux/arm64"
 fi
 
-IMAGE_ID=$(docker images -q haroldli/xiaoya-tvbox:${TAG})
+IMAGE_ID=$(docker images -q haroldli/alist-tvbox:${TAG})
 echo -e "\e[32m下载最新Docker镜像，平台：${platform}\e[0m"
 for i in 1 2 3 4 5
 do
    docker pull --platform ${platform} haroldli/alist-tvbox:${TAG} && break
 done
 
-NEW_IMAGE=$(docker images -q haroldli/xiaoya-tvbox:${TAG})
+NEW_IMAGE=$(docker images -q haroldli/alist-tvbox:${TAG})
 if [ "$UPDATE" = "true" ] && [ "$IMAGE_ID" = "$NEW_IMAGE" ]; then
   echo -e "\e[33m镜像没有更新\e[0m"
   exit
