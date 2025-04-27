@@ -11,20 +11,29 @@ import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.AliToken;
+import cn.har01d.alist_tvbox.util.BiliBiliUtils;
+import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -453,7 +462,13 @@ public class DriverAccountService {
         }
     }
 
-    public QuarkUCTV.LoginResponse getQrCode(String type) {
+    public QuarkUCTV.LoginResponse getQrCode(String type) throws IOException {
+        if (DriverType.QUARK.name().equals(type)) {
+            return getQuarkQr();
+        }
+        if (DriverType.UC.name().equals(type)) {
+            return getUcQr();
+        }
         QuarkUCTV driver = drivers.get(type);
         if (driver == null) {
             throw new BadRequestException("不支持的类型");
@@ -461,13 +476,120 @@ public class DriverAccountService {
         return driver.getLoginCode();
     }
 
+    private QuarkUCTV.LoginResponse getQuarkQr() throws IOException {
+        long t = System.currentTimeMillis();
+        var json = restTemplate.getForObject("https://uop.quark.cn/cas/ajax/getTokenForQrcodeLogin?client_id=532&v=1.2&request_id={t}", ObjectNode.class, t);
+        String token = json.get("data").get("members").get("token").asText();
+        String qr = BiliBiliUtils.getQrCode("https://su.quark.cn/4_eMHBJ?token=" + token + "&client_id=532&ssb=weblogin&uc_param_str=&uc_biz_str=S%3Acustom%7COPT%3ASAREA%400%7COPT%3AIMMERSIVE%401%7COPT%3ABACK_BTN_STYLE%400");
+        var res = new QuarkUCTV.LoginResponse();
+        res.setQueryToken(token);
+        res.setQrData(qr);
+        return res;
+    }
+
+    private QuarkUCTV.LoginResponse getUcQr() throws IOException {
+        long t = System.currentTimeMillis();
+        var json = restTemplate.getForObject("https://api.open.uc.cn/cas/ajax/getTokenForQrcodeLogin?client_id=381&v=1.2&request_id={t}", ObjectNode.class, t);
+        String token = json.get("data").get("members").get("token").asText();
+        String qr = BiliBiliUtils.getQrCode("https://su.uc.cn/1_n0ZCv?uc_param_str=dsdnfrpfbivesscpgimibtbmnijblauputogpintnwktprchmt&token=" + token + "&client_id=381&uc_biz_str=S%3Acustom%7CC%3Atitlebar_fix");
+        var res = new QuarkUCTV.LoginResponse();
+        res.setQueryToken(token);
+        res.setQrData(qr);
+        return res;
+    }
+
     public String getRefreshToken(String type, String queryToken) {
+        if (DriverType.QUARK.name().equals(type)) {
+            return getQuarkCookie(queryToken);
+
+        }
+        if (DriverType.UC.name().equals(type)) {
+            return getUcCookie(queryToken);
+        }
         QuarkUCTV driver = drivers.get(type);
         if (driver == null) {
             throw new BadRequestException("不支持的类型");
         }
         String code = driver.getCode(queryToken);
         return driver.getRefreshToken(code);
+    }
+
+    private String getQuarkCookie(String token) {
+        long t = System.currentTimeMillis();
+        var json = restTemplate.getForObject("https://uop.quark.cn/cas/ajax/getServiceTicketByQrcodeToken?client_id=532&v=1.2&token={token}&request_id={reqId}", ObjectNode.class, token, t);
+        log.debug("getServiceTicketByQrcodeToken: {}", json);
+        int status = json.get("status").asInt();
+        String message = json.get("message").asText();
+        if (status == 2000000) {
+            String ticket = json.get("data").get("members").get("service_ticket").asText();
+            var res = restTemplate.getForEntity("https://pan.quark.cn/account/info?st={st}&lw=scan", ObjectNode.class, ticket);
+            log.debug("account info: {}", res.getBody());
+            List<String> cookies = new ArrayList<>(res.getHeaders().get(HttpHeaders.SET_COOKIE));
+            String cookie = cookiesToString(cookies);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.COOKIE, cookie);
+            headers.set(HttpHeaders.REFERER, "https://pan.quark.cn");
+            headers.set(HttpHeaders.USER_AGENT, Constants.QUARK_USER_AGENT);
+            HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+            res = restTemplate.exchange("https://drive-pc.quark.cn/1/clouddrive/config?pr=ucpro&fr=pc&uc_param_str=", HttpMethod.GET, entity, ObjectNode.class);
+            log.debug("config: {}", res.getBody());
+            cookies.addAll(res.getHeaders().get(HttpHeaders.SET_COOKIE));
+            cookie = cookiesToString(cookies);
+            log.debug("cookie: {}", cookie);
+            return cookie;
+        } else if (status == 50004002) {
+            log.warn("{} {}", status, message);
+            throw new BadRequestException("二维码无效或已过期！");
+        } else if (status == 50004001) {
+            log.warn("{} {}", status, message);
+            throw new BadRequestException("等待用户扫码...");
+        }
+        throw new BadRequestException("未知错误： " + message);
+    }
+
+    private String getUcCookie(String token) {
+        long t = System.currentTimeMillis();
+        var json = restTemplate.getForObject("https://api.open.uc.cn/cas/ajax/getServiceTicketByQrcodeToken?token={token}&__t={t}&client_id=381&v=1.2&request_id={t}", ObjectNode.class, token, t, t);
+        log.debug("getServiceTicketByQrcodeToken: {}", json);
+        int status = json.get("status").asInt();
+        String message = json.get("message").asText();
+        if (status == 2000000) {
+            String ticket = json.get("data").get("members").get("service_ticket").asText();
+            var res = restTemplate.getForEntity("https://drive.uc.cn/account/info?st={st}", ObjectNode.class, ticket);
+            log.debug("account info: {}", res.getBody());
+            List<String> cookies = new ArrayList<>(res.getHeaders().get(HttpHeaders.SET_COOKIE));
+            String cookie = cookiesToString(cookies);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.COOKIE, cookie);
+            headers.set(HttpHeaders.REFERER, "https://drive.uc.cn");
+            headers.set(HttpHeaders.USER_AGENT, Constants.UC_USER_AGENT);
+            HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+            res = restTemplate.exchange("https://pc-api.uc.cn/1/clouddrive/config?pr=UCBrowser&fr=pc&uc_param_str=", HttpMethod.GET, entity, ObjectNode.class);
+            log.debug("config: {}", res.getBody());
+            cookies.addAll(res.getHeaders().get(HttpHeaders.SET_COOKIE));
+            cookie = cookiesToString(cookies);
+            log.debug("cookie: {}", cookie);
+            return cookie;
+        } else if (status == 50004002) {
+            log.warn("{} {}", status, message);
+            throw new BadRequestException("二维码无效或已过期！");
+        } else if (status == 50004001) {
+            log.warn("{} {}", status, message);
+            throw new BadRequestException("等待用户扫码...");
+        }
+        throw new BadRequestException("未知错误： " + message);
+    }
+
+    private String cookiesToString(List<String> cookies) {
+        List<String> cookieValues = new ArrayList<>();
+        if (cookies != null) {
+            for (String setCookie : cookies) {
+                String cookie = setCookie.split(";")[0];
+                cookieValues.add(cookie.trim());
+            }
+        }
+
+        return String.join("; ", cookieValues);
     }
 
     @Scheduled(initialDelay = 300_000, fixedDelay = 1800_000)

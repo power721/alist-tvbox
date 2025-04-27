@@ -23,4 +23,5 @@ public class SystemInfo {
     public String timezone;
     public String workDir;
     public String pid;
+    public String alistPort;
 }

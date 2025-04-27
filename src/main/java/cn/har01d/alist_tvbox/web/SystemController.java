@@ -33,7 +33,8 @@ public class SystemController {
                 props.getProperty("user.home"),
                 props.getProperty("user.timezone"),
                 props.getProperty("user.dir"),
-                props.getProperty("PID")
+                props.getProperty("PID"),
+                System.getenv("ALIST_PORT")
         );
     }
 

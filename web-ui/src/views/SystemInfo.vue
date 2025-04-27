@@ -55,6 +55,7 @@
       </template>
       <div>工作目录： {{ info.workDir }}</div>
       <div>时区： {{ info.timezone }}</div>
+      <div>AList端口： {{ info.alistPort }}</div>
       <div>PID： {{ info.pid }}</div>
     </el-card>
 

@@ -9,7 +9,7 @@ PULL=true
 BUILD_BASE=false
 MOUNT=""
 
-while getopts ":d:p:m:P:e:t:v:n:b" arg; do
+while getopts ":d:p:m:P:e:t:v:nb" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
@@ -71,7 +71,7 @@ mvn clean package
 cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 pwd
 
-[ "$BUILD_BASE" = "true" ] && echo "build haroldli/alist-base:latest" && docker build -f Dockerfile-base --tag=haroldli/alist-base:latest .
+[ "$BUILD_BASE" = "true" ] && echo "build haroldli/alist-base" && docker build -f Dockerfile-base --tag=haroldli/alist-base:latest .
 
 [ -d data ] || mkdir data
 export TZ=Asia/Shanghai
@@ -79,7 +79,7 @@ export TZ=Asia/Shanghai
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
 echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
 
-[ "$PULL" = "true" ] && docker pull haroldli/alist-base
+[ "$PULL" = "true" ] && echo "pull haroldli/alist-base" && docker pull haroldli/alist-base
 
 docker image prune -f
 echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
