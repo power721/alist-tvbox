@@ -24,5 +24,8 @@ public class Data {
     private List<Integer> acceptQuality = new ArrayList<>();
     private List<Page> pages;
     private Dash dash;
+    @JsonProperty("video_info")
+    private Data videoInfo;
     private List<BiliBiliPlay.DUrl> durl = new ArrayList<>();
+    private List<BiliBiliPlay.DUrls> durls = new ArrayList<>();
 }

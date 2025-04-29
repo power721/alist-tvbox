@@ -46,9 +46,9 @@ public final class DashUtils {
 
     public static Map<String, Object> convert(Resp resp, List<String> qns, String client) {
         Data data = resp.getData() == null ? resp.getResult() : resp.getData();
-        Dash dash = resp.getData() == null ? resp.getResult().getDash() : resp.getData().getDash();
+        Dash dash = data.getDash() == null ? data.getVideoInfo().getDash() : data.getDash();
         if (dash == null) {
-            String url = data.getDurl().get(0).getUrl();
+            String url = data.getDurls().isEmpty() ? data.getVideoInfo().getDurls().get(0).getDurl().get(0).getUrl() : data.getDurls().get(0).getDurl().get(0).getUrl();
             Map<String, Object> map = new HashMap<>();
             map.put("url", url);
             return map;

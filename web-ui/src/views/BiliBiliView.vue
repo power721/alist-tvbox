@@ -549,7 +549,6 @@ const getQn = () => {
     if (data.value) {
       qns.value = data.value.split(',')
     }
-    console.log(qns.value)
   })
 }
 

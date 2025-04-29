@@ -21,6 +21,12 @@ public class BiliBiliPlay {
     }
 
     @Data
+    public static class DUrls {
+        private List<DUrl> durl = new ArrayList<>();
+        private int quality;
+    }
+
+    @Data
     public static class Dash {
         private List<Audio> audio = new ArrayList<>();
         private List<Video> video = new ArrayList<>();
