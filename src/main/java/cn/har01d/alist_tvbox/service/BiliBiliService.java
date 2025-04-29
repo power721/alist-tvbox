@@ -113,7 +113,7 @@ public class BiliBiliService {
     private static final int DOLBY_VIDEO = 512;
     private static final int VIDEO_8K = 1024;
     private static final int VIDEO_AV1 = 2048;
-    private static final int FN_VAL = VIDEO_DASH + VIDEO_HDR + VIDEO_4K + DOLBY_AUDIO + VIDEO_AV1;
+    private static final int FN_VAL = VIDEO_DASH + VIDEO_HDR + VIDEO_4K + DOLBY_AUDIO + DOLBY_VIDEO + VIDEO_8K + VIDEO_AV1;
     private static final String INFO_API = "https://api.bilibili.com/x/web-interface/view?bvid=";
     private static final String HOT_API = "https://api.bilibili.com/x/web-interface/ranking/v2?type=%s&rid=%d";
     private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
@@ -1360,12 +1360,9 @@ public class BiliBiliService {
         String aid;
         String cid;
         String[] parts = bvid.split("-");
-        int fnval = 16;
         Map<String, Object> result = new HashMap<>();
+        List<String> qns = appProperties.getQns();
         dash = appProperties.isSupportDash() || DashUtils.isClientSupport(client);
-        if (dash) {
-            fnval = settingRepository.findById("bilibili_fnval").map(Setting::getValue).map(Integer::parseInt).orElse(FN_VAL);
-        }
         if (parts.length >= 2) {
             aid = parts[0];
             cid = parts[1];
@@ -1375,7 +1372,7 @@ public class BiliBiliService {
             cid = String.valueOf(info.getCid());
         }
         if (dash) {
-            url = String.format(PLAY_API, aid, cid, fnval);
+            url = String.format(PLAY_API, aid, cid, FN_VAL);
         } else {
             url = String.format(PLAY_API_NOT_DASH, aid, cid);
         }
@@ -1389,7 +1386,7 @@ public class BiliBiliService {
                 log.warn("获取失败: {} {}", response.getBody().getCode(), response.getBody().getMessage());
             }
 
-            result = DashUtils.convert(response.getBody(), client);
+            result = DashUtils.convert(response.getBody(), qns, client);
         } else {
             ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
             BiliBiliPlayResponse res = response.getBody();

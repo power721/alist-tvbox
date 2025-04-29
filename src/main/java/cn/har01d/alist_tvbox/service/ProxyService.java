@@ -16,6 +16,8 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
@@ -32,8 +34,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
-
-import static com.github.kiulian.downloader.model.Utils.closeSilently;
 
 @Slf4j
 @Service
@@ -185,7 +185,7 @@ public class ProxyService {
                 os.write(buffer, 0, count);
             }
         } finally {
-            closeSilently(is);
+            IOUtils.closeQuietly(is);
         }
     }
 
