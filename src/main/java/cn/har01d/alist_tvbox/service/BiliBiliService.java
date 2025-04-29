@@ -113,7 +113,7 @@ public class BiliBiliService {
     private static final int DOLBY_VIDEO = 512;
     private static final int VIDEO_8K = 1024;
     private static final int VIDEO_AV1 = 2048;
-    private static final int FN_VAL = VIDEO_DASH + VIDEO_HDR + VIDEO_4K + DOLBY_AUDIO + VIDEO_AV1;
+    private static final int FN_VAL = VIDEO_DASH + VIDEO_HDR + VIDEO_4K + DOLBY_AUDIO + DOLBY_VIDEO + VIDEO_8K + VIDEO_AV1;
     private static final String INFO_API = "https://api.bilibili.com/x/web-interface/view?bvid=";
     private static final String HOT_API = "https://api.bilibili.com/x/web-interface/ranking/v2?type=%s&rid=%d";
     private static final String LIST_API = "https://api.bilibili.com/x/web-interface/newlist_rank?main_ver=v3&search_type=video&view_type=hot_rank&copy_right=-1&new_web_tag=1&order=click&cate_id=%s&page=%d&pagesize=30&time_from=%s&time_to=%s";
@@ -121,9 +121,9 @@ public class BiliBiliService {
     private static final String SEASON_API = "https://api.bilibili.com/pgc/season/index/result?st=1&style_id=%s&season_version=-1&spoken_language_type=-1&area=-1&is_finish=%s&copyright=-1&season_status=-1&season_month=-1&year=%s&order=0&sort=0&page=%d&season_type=%s&pagesize=30&type=1";
     private static final String HISTORY_API = "https://api.bilibili.com/x/web-interface/history/cursor?ps=30&type=archive&business=archive&max=%s&view_at=%s";
     private static final String PLAY_API1 = "https://api.bilibili.com/pgc/player/web/playurl?avid=%s&cid=%s&ep_id=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
-    private static final String PLAY_API = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&type=&otype=json&fourk=1&fnver=0&fnval=%d"; //dash
-    private static final String PLAY_API_NOT_DASH = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&type=&otype=json&fourk=1&fnver=0"; //not dash
-    private static final String PLAY_API2 = "https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=127&platform=html5&high_quality=1"; // mp4
+    private static final String PLAY_API = "https://api.bilibili.com/x/player/wbi/playurl";
+    private static final String PLAY_API_NOT_DASH = "https://api.bilibili.com/x/player/wbi/playurl";
+    private static final String PLAY_API2 = "https://api.bilibili.com/pgc/player/web/v2/playurl?avid=%s&cid=%s&qn=127&fnver=0&fnval=4048&fourk=1";
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
     private static final String POPULAR_API = "https://api.bilibili.com/x/web-interface/popular?ps=30&pn=";
     private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?search_type=%s&page_size=50&keyword=%s&order=%s&duration=%s&page=%d";
@@ -1356,16 +1356,12 @@ public class BiliBiliService {
     }
 
     public Map<String, Object> getPlayUrl(String bvid, boolean dash, String client) throws IOException {
-        String url;
         String aid;
         String cid;
         String[] parts = bvid.split("-");
-        int fnval = 16;
         Map<String, Object> result = new HashMap<>();
+        List<String> qns = appProperties.getQns();
         dash = appProperties.isSupportDash() || DashUtils.isClientSupport(client);
-        if (dash) {
-            fnval = settingRepository.findById("bilibili_fnval").map(Setting::getValue).map(Integer::parseInt).orElse(FN_VAL);
-        }
         if (parts.length >= 2) {
             aid = parts[0];
             cid = parts[1];
@@ -1374,22 +1370,33 @@ public class BiliBiliService {
             aid = String.valueOf(info.getAid());
             cid = String.valueOf(info.getCid());
         }
-        if (dash) {
-            url = String.format(PLAY_API, aid, cid, fnval);
-        } else {
-            url = String.format(PLAY_API_NOT_DASH, aid, cid);
-        }
-        log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("avid", aid);
+        map.put("cid", cid);
+        map.put("qn", 127);
+        map.put("fourk", 1);
+        map.put("fnval", dash ? FN_VAL : 0);
 
         HttpEntity<Void> entity = buildHttpEntity(null);
+        getKeys(entity);
+        String url = PLAY_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
+
+        log.debug("bvid: {} dash: {}  url: {}", bvid, dash, url);
+
         if (dash) {
             ResponseEntity<Resp> response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
             log.debug("url: {}  response: {}", url, response.getBody());
             if (response.getBody().getCode() != 0) {
                 log.warn("获取失败: {} {}", response.getBody().getCode(), response.getBody().getMessage());
+
+                entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
+                url = String.format(PLAY_API2, aid, cid);
+                response = restTemplate.exchange(url, HttpMethod.GET, entity, Resp.class);
+                log.debug("url: {}  response: {}", url, response.getBody());
             }
 
-            result = DashUtils.convert(response.getBody(), client);
+            result = DashUtils.convert(response.getBody(), qns, client);
         } else {
             ResponseEntity<BiliBiliPlayResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliPlayResponse.class);
             BiliBiliPlayResponse res = response.getBody();

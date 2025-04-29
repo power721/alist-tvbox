@@ -129,7 +129,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="settingVisible" title="B站设置" width="40%">
+    <el-dialog v-model="settingVisible" title="B站设置" width="60%">
       <el-form label-width="150px">
         <el-form-item label="登录Cookie" label-width="120">
           <el-input v-model="bilibiliCookie" type="textarea" :rows="5"/>
@@ -164,16 +164,34 @@
             @change="updateDash"
           />
         </el-form-item>
-        <el-form-item label="视频格式">
-          <el-checkbox v-model="checks[0]" label="HDR" size="large"/>
-          <el-checkbox v-model="checks[1]" label="4K" size="large"/>
-          <el-checkbox v-model="checks[2]" label="杜比音频" size="large"/>
-          <el-checkbox v-model="checks[3]" label="杜比视界" size="large"/>
-          <el-checkbox v-model="checks[4]" label="8K" size="large"/>
-          <el-checkbox v-model="checks[5]" label="AV1编码" size="large"/>
+<!--        <el-form-item label="视频格式">-->
+<!--          <el-checkbox v-model="checks[0]" label="HDR" size="large"/>-->
+<!--          <el-checkbox v-model="checks[1]" label="4K" size="large"/>-->
+<!--          <el-checkbox v-model="checks[2]" label="杜比音频" size="large"/>-->
+<!--          <el-checkbox v-model="checks[3]" label="杜比视界" size="large"/>-->
+<!--          <el-checkbox v-model="checks[4]" label="8K" size="large"/>-->
+<!--          <el-checkbox v-model="checks[5]" label="AV1编码" size="large"/>-->
+<!--        </el-form-item>-->
+<!--        <el-form-item>-->
+<!--          <el-button type="primary" @click="updateFnval">更新</el-button>-->
+<!--        </el-form-item>-->
+        <el-form-item label="视频画质">
+          <el-checkbox-group v-model="qns">
+            <el-checkbox label="360P 流畅" value="16" />
+            <el-checkbox label="480P 清晰" value="32" />
+            <el-checkbox label="720P 高清" value="64" />
+            <el-checkbox label="720P60 高帧率" value="74" />
+            <el-checkbox label="1080P 高清" value="80" />
+            <el-checkbox label="1080P+ 高码率" value="112" />
+            <el-checkbox label="1080P60 高帧率" value="116" />
+            <el-checkbox label="4K 超清" value="120" />
+            <el-checkbox label="HDR 真彩色" value="125" />
+            <el-checkbox label="杜比视界" value="126" />
+            <el-checkbox label="8K 超高清" value="127" />
+          </el-checkbox-group>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="updateFnval">更新</el-button>
+          <el-button type="primary" @click="updateQn">更新</el-button>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -229,6 +247,7 @@ const tableRowClassName = ({row}: {
 }
 const base64QrCode = ref('')
 const qrcodeKey = ref('')
+const qns = ref(['16', '32', '64', '74', '80', '112', '116', '120', '125', '126', '127'])
 const bilibiliCookie = ref('')
 const checks = ref<boolean[]>([true, true, true, false, true, true])
 const userInfo = ref<any>({})
@@ -432,6 +451,12 @@ const updateFnval = () => {
   })
 }
 
+const updateQn = () => {
+  axios.post('/api/settings', {name: 'bilibili_qn', value: qns.value.join(',')}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const scanLogin = () => {
   base64QrCode.value = ''
   qrcodeKey.value = ''
@@ -519,6 +544,14 @@ const getBilibiliCookie = () => {
   })
 }
 
+const getQn = () => {
+  axios.get('/api/settings/bilibili_qn').then(({data}) => {
+    if (data.value) {
+      qns.value = data.value.split(',')
+    }
+  })
+}
+
 const getFnval = () => {
   axios.get('/api/settings/bilibili_fnval').then(({data}) => {
     let val = +data.value
@@ -554,7 +587,7 @@ onMounted(() => {
   getSearchable()
   getBilibiliCookie()
   getDash()
-  getFnval()
+  getQn()
   load().then(() => {
     rowDrop()
   })

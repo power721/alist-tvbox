@@ -44,11 +44,11 @@ public final class DashUtils {
         return clients.contains(client);
     }
 
-    public static Map<String, Object> convert(Resp resp, String client) {
+    public static Map<String, Object> convert(Resp resp, List<String> qns, String client) {
         Data data = resp.getData() == null ? resp.getResult() : resp.getData();
-        Dash dash = resp.getData() == null ? resp.getResult().getDash() : resp.getData().getDash();
+        Dash dash = data.getDash() == null ? data.getVideoInfo().getDash() : data.getDash();
         if (dash == null) {
-            String url = data.getDurl().get(0).getUrl();
+            String url = data.getDurls().isEmpty() ? data.getVideoInfo().getDurls().get(0).getDurl().get(0).getUrl() : data.getDurls().get(0).getDurl().get(0).getUrl();
             Map<String, Object> map = new HashMap<>();
             map.put("url", url);
             return map;
@@ -56,10 +56,13 @@ public final class DashUtils {
 
         List<String> urls = new ArrayList<>();
         List<CatAudio> audios = new ArrayList<>();
-        int qn = 16;
+        boolean hasAny = false;
         StringBuilder videoList = new StringBuilder();
         for (Media video : dash.getVideo()) {
-            qn = Math.max(qn, Integer.parseInt(video.getId()));
+            if (qns.contains(video.getId())) {
+                hasAny = true;
+                break;
+            }
         }
 
         Map<String, String> quality = new HashMap<>();
@@ -68,9 +71,11 @@ public final class DashUtils {
         }
 
         for (Media video : dash.getVideo()) {
-            videoList.append(getMedia(video));
-            urls.add(quality.get(video.getId()) + " " + getCodec(video.getCodecid()));
-            urls.add(video.getBaseUrl());
+            if (!hasAny || qns.contains(video.getId())) {
+                videoList.append(getMedia(video));
+                urls.add(quality.get(video.getId()) + " " + getCodec(video.getCodecid()));
+                urls.add(video.getBaseUrl());
+            }
         }
 
         StringBuilder audioList = new StringBuilder();

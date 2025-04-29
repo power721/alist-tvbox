@@ -21,6 +21,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.zip.ZipOutputStream;
@@ -55,6 +57,7 @@ public class SettingService {
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
+        appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         String value = settingRepository.findById("tg_channels").map(Setting::getValue).orElse("");
         if (StringUtils.isBlank(value)) {
@@ -146,6 +149,9 @@ public class SettingService {
         }
         if ("bilibili_dash".equals(setting.getName())) {
             appProperties.setSupportDash("true".equals(setting.getValue()));
+        }
+        if ("bilibili_qn".equals(setting.getName())) {
+            appProperties.setQns(Arrays.asList(setting.getValue().split(",")));
         }
         if ("mix_site_source".equals(setting.getName())) {
             appProperties.setMix("true".equals(setting.getValue()));

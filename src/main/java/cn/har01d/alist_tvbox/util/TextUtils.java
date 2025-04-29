@@ -212,6 +212,7 @@ public class TextUtils {
                 .replace(".1080p", " ")
                 .replace(".1080P", " ")
                 .replace("HD1080P", " ")
+                .replace("1080P高码", " ")
                 .replace("1080p", " ")
                 .replace("1080P", " ")
                 .replace(".2160p", " ")
