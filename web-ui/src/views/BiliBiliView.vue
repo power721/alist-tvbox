@@ -164,17 +164,17 @@
             @change="updateDash"
           />
         </el-form-item>
-<!--        <el-form-item label="视频格式">-->
-<!--          <el-checkbox v-model="checks[0]" label="HDR" size="large"/>-->
-<!--          <el-checkbox v-model="checks[1]" label="4K" size="large"/>-->
-<!--          <el-checkbox v-model="checks[2]" label="杜比音频" size="large"/>-->
-<!--          <el-checkbox v-model="checks[3]" label="杜比视界" size="large"/>-->
-<!--          <el-checkbox v-model="checks[4]" label="8K" size="large"/>-->
-<!--          <el-checkbox v-model="checks[5]" label="AV1编码" size="large"/>-->
-<!--        </el-form-item>-->
-<!--        <el-form-item>-->
-<!--          <el-button type="primary" @click="updateFnval">更新</el-button>-->
-<!--        </el-form-item>-->
+        <el-form-item label="视频格式">
+          <el-checkbox v-model="checks[0]" label="HDR" size="large"/>
+          <el-checkbox v-model="checks[1]" label="4K" size="large"/>
+          <el-checkbox v-model="checks[2]" label="杜比音频" size="large"/>
+          <el-checkbox v-model="checks[3]" label="杜比视界" size="large"/>
+          <el-checkbox v-model="checks[4]" label="8K" size="large"/>
+          <el-checkbox v-model="checks[5]" label="AV1编码" size="large"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateFnval">更新</el-button>
+        </el-form-item>
         <el-form-item label="视频画质">
           <el-checkbox-group v-model="qns">
             <el-checkbox label="360P 流畅" value="16" />
