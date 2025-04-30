@@ -33,10 +33,13 @@ import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+
 import lombok.extern.slf4j.Slf4j;
+
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -951,7 +954,6 @@ public class TvBoxService {
         if (parts.length > 2) {
             type = Integer.parseInt(parts[2]);
         }
-
         if (type == 0) {
             return getMetaList(ac, tid, filter, sort, page);
         }
@@ -967,6 +969,7 @@ public class TvBoxService {
 
         List<MovieDetail> folders = new ArrayList<>();
         List<MovieDetail> files = new ArrayList<>();
+        List<MovieDetail> images = new ArrayList<>();
         MovieList result = new MovieList();
 
         FsResponse fsResponse = aListService.listFiles(site, path, page, size);
@@ -978,7 +981,7 @@ public class TvBoxService {
                     || filepath.startsWith("/©\uFE0F")
                     || filepath.equals("/元数据")
                     || filepath.equals("/\uD83D\uDEE0\uFE0F 安装，配置，修复 xiaoya_docker 指南")
-                    || (fsInfo.getType() != 1 && !isMediaFormat(fsInfo.getName()))) {
+                    || !isAcceptType(fsInfo, ac)) {
                 total--;
                 continue;
             }
@@ -999,6 +1002,9 @@ public class TvBoxService {
             }
             movieDetail.setVod_time(fsInfo.getModified());
             movieDetail.setSize(fsInfo.getSize());
+            if ("web".equals(ac)) {
+                movieDetail.setType(fsInfo.getType());
+            }
             if (fsInfo.getType() == 1) {
                 if ("open".equals(client) || "node".equals(client)) {
                     movieDetail.setVod_pic("");
@@ -1009,18 +1015,21 @@ public class TvBoxService {
                 }
                 setMovieInfo(site, movieDetail, fsInfo.getName(), newPath, false);
                 folders.add(movieDetail);
+            } else if (fsInfo.getType() == 5) {
+                images.add(movieDetail);
             } else {
                 files.add(movieDetail);
             }
         }
 
-        sortFiles(sort, folders, files);
+        sortFiles(sort, folders, files, images);
 
         result.getList().addAll(folders);
 
         if (page == 1 && files.size() > 1) {
             MovieDetail playlist = generatePlaylist(site, path, total - folders.size(), files);
             if ("web".equals(ac)) {
+                playlist.setType(9);
                 playlist.setVod_remarks("");
                 playlist.setVod_play_url(buildM3u8Url(path));
             }
@@ -1028,6 +1037,7 @@ public class TvBoxService {
         }
 
         result.getList().addAll(files);
+        result.getList().addAll(images);
 
         result.setPage(page);
         result.setTotal(total);
@@ -1035,6 +1045,16 @@ public class TvBoxService {
         result.setPagecount((total + size - 1) / size);
         log.debug("list: {}", result);
         return result;
+    }
+
+    private boolean isAcceptType(FsInfo fsInfo, String ac) {
+        if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3) {
+            return true;
+        }
+        if (ac.equals("web")) {
+            return fsInfo.getType() == 5;
+        }
+        return false;
     }
 
     public MovieList getMetaList(String ac, String tid, String filter, String sort, int page) {
@@ -1203,7 +1223,7 @@ public class TvBoxService {
         return name;
     }
 
-    private void sortFiles(String sort, List<MovieDetail> folders, List<MovieDetail> files) {
+    private void sortFiles(String sort, List<MovieDetail> folders, List<MovieDetail> files, List<MovieDetail> images) {
         if (sort == null) {
             sort = "name,asc";
         }
@@ -1230,6 +1250,7 @@ public class TvBoxService {
         }
         folders.sort(comparator);
         files.sort(comparator);
+        images.sort(comparator);
     }
 
     private MovieDetail generatePlaylist(Site site, String path, int total, List<MovieDetail> files) {
@@ -1580,6 +1601,7 @@ public class TvBoxService {
                     String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
                     movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
                 }
+                movieDetail.setType(fsDetail.getType());
             } else {
                 movieDetail.setVod_play_url(fsDetail.getName() + "$" + buildPlayUrl(site, path));
             }
@@ -1587,7 +1609,7 @@ public class TvBoxService {
             if (!"web".equals(ac)) {
                 movieDetail.setVod_content(parent);
             }
-            if (!setMovieInfo(site, movieDetail, fsDetail.getName(), parent, true)) {
+            if (fsDetail.getType() != 5 && !setMovieInfo(site, movieDetail, fsDetail.getName(), parent, true)) {
                 movieDetail.setVod_name(getNameFromPath(parent));
                 setMovieInfo(site, movieDetail, "", parent, true);
                 movieDetail.setVod_name(fsDetail.getName());
@@ -1690,6 +1712,8 @@ public class TvBoxService {
         movieDetail.setVod_play_from(site.getName());
         if (!"web".equals(ac)) {
             movieDetail.setVod_content(site.getName() + ":" + newPath);
+        } else {
+            movieDetail.setType(9);
         }
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(getListPic());

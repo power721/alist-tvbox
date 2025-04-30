@@ -16,6 +16,7 @@ export interface VodItem {
   "vod_year": string,
   "dbid": number
   "index": number
+  "type": number
   "progress": string
   "size": number
 }
