@@ -1609,7 +1609,7 @@ public class TvBoxService {
             if (!"web".equals(ac)) {
                 movieDetail.setVod_content(parent);
             }
-            if (!setMovieInfo(site, movieDetail, fsDetail.getName(), parent, true)) {
+            if (fsDetail.getType() != 5 && !setMovieInfo(site, movieDetail, fsDetail.getName(), parent, true)) {
                 movieDetail.setVod_name(getNameFromPath(parent));
                 setMovieInfo(site, movieDetail, "", parent, true);
                 movieDetail.setVod_name(fsDetail.getName());

@@ -116,7 +116,8 @@
     <el-dialog v-model="imageVisible" :title="title" :fullscreen="true">
       <el-row>
         <el-col :span="18">
-          <el-image style="height: 800px;" :src="playUrl" fit="contain"/>
+          <el-image style="height:1080px;width:100%" fit="contain" :src="playUrl"
+                    :preview-src-list="[playUrl]" :hide-on-click-modal="true"/>
         </el-col>
         <el-col :span="5">
           <el-scrollbar ref="scrollbarRef" height="1050px">
