@@ -1112,6 +1112,7 @@ const saveHistory = () => {
   const movie = movies.value[0]
   const id = movie.vod_id
   const name = movie.vod_name
+  const type = movie.type
   const index = currentVideoIndex.value
   const items = JSON.parse(localStorage.getItem('history') || '[]')
   for (let item of items) {
@@ -1125,6 +1126,7 @@ const saveHistory = () => {
       item.b = skipStart.value
       item.e = skipEnd.value
       item.s = currentSpeed.value
+      item.type = type
       item.t = new Date().getTime()
       localStorage.setItem('history', JSON.stringify(items))
       return
@@ -1138,6 +1140,7 @@ const saveHistory = () => {
     b: skipStart.value,
     e: skipEnd.value,
     s: currentSpeed.value,
+    type: type,
     t: new Date().getTime()
   })
   const sorted = items.sort((a, b) => b.t - a.t).slice(0, 80);
@@ -1209,6 +1212,7 @@ const loadHistory = () => {
       index: e.i + 1,
       progress: formatTime(e.c),
       vod_tag: 'file',
+      type: e.type,
       vod_time: formatDate(e.t)
     }
   })

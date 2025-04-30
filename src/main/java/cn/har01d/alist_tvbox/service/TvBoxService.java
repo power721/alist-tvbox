@@ -1712,6 +1712,8 @@ public class TvBoxService {
         movieDetail.setVod_play_from(site.getName());
         if (!"web".equals(ac)) {
             movieDetail.setVod_content(site.getName() + ":" + newPath);
+        } else {
+            movieDetail.setType(9);
         }
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(getListPic());
