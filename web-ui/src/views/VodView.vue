@@ -66,9 +66,12 @@
                   <el-image :src="imageUrl(scope.row.vod_pic)" loading="lazy" show-progress fit="cover"/>
                 </template>
               </el-popover>
-              <span v-else-if="scope.row.vod_tag=='folder'">📂</span>
-              <span v-else-if="scope.row.vod_id.endsWith('playlist$1')">▶️</span>
-              <span v-else>🎬</span>
+              <span v-else-if="scope.row.type==1">📂</span>
+              <span v-else-if="scope.row.type==2">🎬</span>
+              <span v-else-if="scope.row.type==3">🎧</span>
+              <span v-else-if="scope.row.type==4">🖹</span>
+              <span v-else-if="scope.row.type==5">📷</span>
+              <span v-else-if="scope.row.type==9">▶️</span>
               <el-tooltip :content="getParent(scope.row.vod_id)" v-if="isHistory">
                 {{ scope.row.vod_name }}
               </el-tooltip>
@@ -109,6 +112,24 @@
                        @current-change="reload" @size-change="handleSizeChange"/>
       </el-col>
     </el-row>
+
+    <el-dialog v-model="imageVisible" :title="title" :fullscreen="true">
+      <el-row>
+        <el-col :span="18">
+          <el-image style="height: 800px;" :src="playUrl" fit="contain"/>
+        </el-col>
+        <el-col :span="5">
+          <el-scrollbar ref="scrollbarRef" height="1050px">
+            <ul>
+              <li v-for="(image, index) in images" :key="index" @click="loadDetail(image.vod_id)">
+                <el-link type="primary" v-if="currentImageIndex==index">{{ image.vod_name }}</el-link>
+                <el-link v-else>{{ image.vod_name }}</el-link>
+              </li>
+            </ul>
+          </el-scrollbar>
+        </el-col>
+      </el-row>
+    </el-dialog>
 
     <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="start" @close="stop">
       <div class="video-container">
@@ -383,6 +404,7 @@ const movies = ref<VodItem[]>([])
 const playFrom = ref<string[]>([])
 const playlist = ref<Item[]>([])
 const currentVideoIndex = ref(0)
+const currentImageIndex = ref(0)
 const duration = ref(0)
 const currentTime = ref(0)
 const currentSpeed = ref(1)
@@ -398,6 +420,7 @@ const playing = ref(false)
 const isMuted = ref(false)
 const isFullscreen = ref(false)
 const dialogVisible = ref(false)
+const imageVisible = ref(false)
 const formVisible = ref(false)
 const settingVisible = ref(false)
 const isHistory = ref(false)
@@ -406,6 +429,7 @@ const page = ref(1)
 const size = ref(40)
 const total = ref(0)
 const files = ref<VodItem[]>([])
+const images = ref<VodItem[]>([])
 const results = ref<VodItem[]>([])
 const filteredResults = ref<VodItem[]>([])
 const paths = ref<Item[]>([])
@@ -552,14 +576,9 @@ const load = (row: any) => {
     goParent(row.vod_id)
   }
 
-  if (row.vod_tag === 'folder') {
+  if (row.type == 1) {
     loadFolder(row.vod_id)
   } else {
-    if (row.vod_id.endsWith('playlist$1')) {
-      toClipboard(row.vod_play_url).then(() => {
-        ElMessage.success('播放地址复制成功')
-      })
-    }
     loadDetail(row.vod_id)
   }
 }
@@ -607,6 +626,7 @@ const loadFiles = (path: string) => {
   files.value = []
   axios.get('/vod' + token.value + '?ac=web&pg=' + page.value + '&size=' + size.value + '&t=' + id).then(({data}) => {
     files.value = data.list
+    images.value = data.list.filter(e => e.type == 5)
     total.value = data.total
     loading.value = false
   }, () => {
@@ -647,6 +667,16 @@ const extractPaths = (id: string) => {
 const loadDetail = (id: string) => {
   loading.value = true
   axios.get('/vod' + token.value + '?ac=web&ids=' + id).then(({data}) => {
+    if (data.list[0].type == 5) {
+      let img = data.list[0]
+      currentImageIndex.value = images.value.findIndex(e => e.vod_id == id)
+      playUrl.value = img.vod_play_url
+      title.value = img.vod_name
+      loading.value = false
+      imageVisible.value = true
+      return
+    }
+
     movies.value = data.list
     movies.value[0].vod_id = id
     playFrom.value = movies.value[0].vod_play_from.split("$$$");
@@ -675,6 +705,16 @@ const loadDetail = (id: string) => {
 
 const handleKeyDown = (event: KeyboardEvent) => {
   if (formVisible.value) {
+    return;
+  }
+  if (imageVisible.value) {
+    if (event.code === 'ArrowRight') {
+      event.preventDefault()
+      showNextImage()
+    } else if (event.code === 'ArrowLeft') {
+      event.preventDefault()
+      showPrevImage()
+    }
     return;
   }
   if (!dialogVisible.value) {
@@ -1213,6 +1253,20 @@ const playVideo = (index: number) => {
   currentVideoIndex.value = index;
   getPlayUrl()
   startPlay()
+}
+
+const showNextImage = () => {
+  if (currentImageIndex.value + 1 == images.value.length) {
+    return
+  }
+  loadDetail(images.value[currentImageIndex.value + 1].vod_id)
+}
+
+const showPrevImage = () => {
+  if (currentImageIndex.value < 1) {
+    return
+  }
+  loadDetail(images.value[currentImageIndex.value - 1].vod_id)
 }
 
 onMounted(async () => {
