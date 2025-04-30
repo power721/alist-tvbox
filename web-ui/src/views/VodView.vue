@@ -120,6 +120,9 @@
         </el-col>
         <el-col :span="5">
           <el-scrollbar ref="scrollbarRef" height="1050px">
+            <div style="margin-left: 30px; margin-bottom: 10px;">
+              {{ currentImageIndex + 1 }} / {{ images.length }}
+            </div>
             <ul>
               <li v-for="(image, index) in images" :key="index" @click="loadDetail(image.vod_id)">
                 <el-link type="primary" v-if="currentImageIndex==index">{{ image.vod_name }}</el-link>
