@@ -30,14 +30,21 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URL;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 
@@ -165,11 +172,7 @@ public class EmbyService {
                 continue;
             }
             List<MovieDetail> list = new ArrayList<>();
-            HttpHeaders headers = new HttpHeaders();
-            headers.add("Authorization", getAuthorizationHeader(info));
-            if (StringUtils.isNotBlank(emby.getUserAgent())) {
-                headers.add("User-Agent", emby.getUserAgent());
-            }
+            HttpHeaders headers = setHeaders(emby, info);
             HttpEntity<Object> entity = new HttpEntity<>(null, headers);
             String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items/Resume?Limit=12&Recursive=true&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&EnableTotalRecordCount=false&MediaTypes=Video";
             var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
@@ -217,19 +220,11 @@ public class EmbyService {
         return movie;
     }
 
-    private static String getAuthorizationHeader(EmbyInfo info) {
-        return "Emby UserId=\"" + info.getUser().getId() + "\", Client=\"Emby Web\", Device=\"Chrome\", DeviceId=\"4310d84d-66a2-4f91-8d11-6627110be71c\", Version=\"4.7.5.0\", Token=\"" + info.getAccessToken() + "\"";
-    }
-
     public MovieList detail(String tid) throws JsonProcessingException {
         String[] parts = tid.split("-");
         Emby emby = embyRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
         var info = getEmbyInfo(emby);
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", getAuthorizationHeader(info));
-        if (StringUtils.isNotBlank(emby.getUserAgent())) {
-            headers.add("User-Agent", emby.getUserAgent());
-        }
+        HttpHeaders headers = setHeaders(emby, info);
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
         String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items/" + parts[1];
         var item = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItem.class).getBody();
@@ -277,11 +272,7 @@ public class EmbyService {
     }
 
     private List<EmbyItem> getAll(Emby emby, EmbyInfo info, String sid) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", getAuthorizationHeader(info));
-        if (StringUtils.isNotBlank(emby.getUserAgent())) {
-            headers.add("User-Agent", emby.getUserAgent());
-        }
+        HttpHeaders headers = setHeaders(emby, info);
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
         String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?ParentId=" + sid + "&Filters=IsNotFolder&Recursive=true&Limit=2000&Fields=Chapters,ProductionYear,PremiereDate&ExcludeLocationTypes=Virtual&EnableTotalRecordCount=false&CollapseBoxSetItems=false";
         var items = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
@@ -310,11 +301,7 @@ public class EmbyService {
 
     private List<MovieDetail> search(Emby emby, EmbyInfo info, String wd, String type) {
         List<MovieDetail> list = new ArrayList<>();
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", getAuthorizationHeader(info));
-        if (StringUtils.isNotBlank(emby.getUserAgent())) {
-            headers.add("User-Agent", emby.getUserAgent());
-        }
+        HttpHeaders headers = setHeaders(emby, info);
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
         String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?IncludePeople=false&IncludeMedia=true&IncludeGenres=false&IncludeStudios=false&IncludeArtists=false&IncludeItemTypes=" + type + "&Limit=30&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating&Recursive=true&EnableTotalRecordCount=false&ImageTypeLimit=1&searchTerm=" + wd;
         var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
@@ -367,11 +354,7 @@ public class EmbyService {
             if (pg != null) {
                 start = (pg - 1) * size;
             }
-            HttpHeaders headers = new HttpHeaders();
-            headers.add("Authorization", getAuthorizationHeader(info));
-            if (StringUtils.isNotBlank(emby.getUserAgent())) {
-                headers.add("User-Agent", emby.getUserAgent());
-            }
+            HttpHeaders headers = setHeaders(emby, info);
             HttpEntity<Object> entity = new HttpEntity<>(null, headers);
             String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?SortBy=" + sorts[0] + "&SortOrder=" + sorts[1] + "&IncludeItemTypes=" + type + "&Recursive=true&Fields=BasicSyncInfo,PrimaryImageAspectRatio,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&StartIndex=" + start + "&Limit=" + size + "&ParentId=" + view.getId();
             var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
@@ -454,25 +437,35 @@ public class EmbyService {
         String[] parts = id.split("-");
         Emby emby = embyRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
         var info = getEmbyInfo(emby);
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", getAuthorizationHeader(info));
-        if (StringUtils.isNotBlank(emby.getUserAgent())) {
-            headers.add("User-Agent", emby.getUserAgent());
-        }
+        HttpHeaders headers = setHeaders(emby, info);
         String body = "{\"DeviceProfile\":{\"SubtitleProfiles\":[{\"Method\":\"Embed\",\"Format\":\"ass\"},{\"Format\":\"ssa\",\"Method\":\"Embed\"},{\"Format\":\"subrip\",\"Method\":\"Embed\"},{\"Format\":\"sub\",\"Method\":\"Embed\"},{\"Method\":\"Embed\",\"Format\":\"pgssub\"},{\"Format\":\"subrip\",\"Method\":\"External\"},{\"Method\":\"External\",\"Format\":\"sub\"},{\"Method\":\"External\",\"Format\":\"ass\"},{\"Format\":\"ssa\",\"Method\":\"External\"},{\"Method\":\"External\",\"Format\":\"vtt\"},{\"Method\":\"External\",\"Format\":\"ass\"},{\"Format\":\"ssa\",\"Method\":\"External\"}],\"CodecProfiles\":[{\"Codec\":\"h264\",\"Type\":\"Video\",\"ApplyConditions\":[{\"Property\":\"IsAnamorphic\",\"Value\":\"true\",\"Condition\":\"NotEquals\",\"IsRequired\":false},{\"IsRequired\":false,\"Value\":\"high|main|baseline|constrained baseline\",\"Condition\":\"EqualsAny\",\"Property\":\"VideoProfile\"},{\"IsRequired\":false,\"Value\":\"80\",\"Condition\":\"LessThanEqual\",\"Property\":\"VideoLevel\"},{\"IsRequired\":false,\"Value\":\"true\",\"Condition\":\"NotEquals\",\"Property\":\"IsInterlaced\"}]},{\"Codec\":\"hevc\",\"ApplyConditions\":[{\"Property\":\"IsAnamorphic\",\"Value\":\"true\",\"Condition\":\"NotEquals\",\"IsRequired\":false},{\"IsRequired\":false,\"Value\":\"high|main|main 10\",\"Condition\":\"EqualsAny\",\"Property\":\"VideoProfile\"},{\"Property\":\"VideoLevel\",\"Value\":\"175\",\"Condition\":\"LessThanEqual\",\"IsRequired\":false},{\"IsRequired\":false,\"Value\":\"true\",\"Condition\":\"NotEquals\",\"Property\":\"IsInterlaced\"}],\"Type\":\"Video\"}],\"MaxStreamingBitrate\":40000000,\"TranscodingProfiles\":[{\"Container\":\"ts\",\"AudioCodec\":\"aac,mp3,wav,ac3,eac3,flac,opus\",\"VideoCodec\":\"hevc,h264,mpeg4\",\"BreakOnNonKeyFrames\":true,\"Type\":\"Video\",\"MaxAudioChannels\":\"6\",\"Protocol\":\"hls\",\"Context\":\"Streaming\",\"MinSegments\":2}],\"DirectPlayProfiles\":[{\"Container\":\"mov,mp4,mkv,hls,webm\",\"Type\":\"Video\",\"VideoCodec\":\"h264,hevc,dvhe,dvh1,h264,hevc,hev1,mpeg4,vp9\",\"AudioCodec\":\"aac,mp3,wav,ac3,eac3,flac,truehd,dts,dca,opus,pcm,pcm_s24le\"}],\"ResponseProfiles\":[{\"MimeType\":\"video/mp4\",\"Type\":\"Video\",\"Container\":\"m4v\"}],\"ContainerProfiles\":[],\"MusicStreamingTranscodingBitrate\":40000000,\"MaxStaticBitrate\":40000000}}";
         HttpEntity<Object> entity = new HttpEntity<>(objectMapper.readTree(body), headers);
         String url = emby.getUrl() + "/emby/Items/" + parts[1] + "/PlaybackInfo?IsPlayback=false&AutoOpenLiveStream=false&StartTimeTicks=0&MaxStreamingBitrate=2147483647&UserId=" + info.getUser().getId();
         var media = restTemplate.exchange(url, HttpMethod.POST, entity, EmbyMediaSources.class).getBody();
+
+        url = emby.getUrl() + "/emby/Sessions/Playing";
+        Map<String, Object> data = new HashMap<>();
+        data.put("ItemId", parts[1]);
+        data.put("PlaySessionId", media.getSessionId());
+        data.put("MediaSourceId", media.getItems().get(0).getId());
+        data.put("PlayMethod", "DirectStream");
+        entity = new HttpEntity<>(data, headers);
+        var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        log.debug("start playing: {} {}", data, response.getStatusCode());
 
         List<String> urls = new ArrayList<>();
         for (var source : media.getItems()) {
             urls.add(source.getName());
             urls.add(emby.getUrl() + source.getUrl());
         }
+        String ua = Constants.USER_AGENT;
+        if (StringUtils.isNotBlank(emby.getUserAgent())) {
+            ua = emby.getUserAgent();
+        }
         Map<String, Object> result = new HashMap<>();
         result.put("url", urls);
         result.put("subs", getSubtitles(emby, media.getItems().get(0)));
-        result.put("header", "{\"User-Agent\": \"" + Constants.USER_AGENT + "\"}");
+        result.put("header", "{\"User-Agent\": \"" + ua + "\"}");
         result.put("parse", 0);
         log.debug("{}", result);
         return result;
@@ -507,16 +500,12 @@ public class EmbyService {
             body.add("Username", emby.getUsername());
             body.add("Pw", emby.getPassword());
             log.debug("get Emby info: {} {} {} {}", emby.getId(), emby.getName(), emby.getUrl(), emby.getUsername());
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-            if (StringUtils.isNotBlank(emby.getUserAgent())) {
-                headers.add("User-Agent", emby.getUserAgent());
-            }
+            HttpHeaders headers = setHeaders(emby, null);
             HttpEntity<Object> entity = new HttpEntity<>(body, headers);
-            EmbyInfo info = restTemplate.exchange(emby.getUrl() + "/emby/Users/AuthenticateByName?X-Emby-Client=Emby%20Web&X-Emby-Device-Name=Google%20Chrome%20Linux&X-Emby-Device-Id=4310d84d-66a2-4f91-8d11-6627110be71c&X-Emby-Client-Version=4.7.5.0", HttpMethod.POST, entity, EmbyInfo.class).getBody();
+            EmbyInfo info = restTemplate.exchange(emby.getUrl() + "/emby/Users/AuthenticateByName", HttpMethod.POST, entity, EmbyInfo.class).getBody();
             cache.put(emby.getId(), info);
 
-            headers.add("Authorization", getAuthorizationHeader(info));
+            headers = setHeaders(emby, info);
             entity = new HttpEntity<>(null, headers);
             String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Views";
             var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
@@ -527,5 +516,21 @@ public class EmbyService {
             log.error("Get Emby info failed.", e);
         }
         return null;
+    }
+
+    private HttpHeaders setHeaders(Emby emby, EmbyInfo info) {
+        HttpHeaders headers = new HttpHeaders();
+        if (StringUtils.isNotBlank(emby.getUserAgent())) {
+            headers.add("User-Agent", emby.getUserAgent());
+        }
+        if (info != null) {
+            headers.add("X-Emby-Token", info.getAccessToken());
+            headers.add("Authorization", "Emby UserId=\"" + info.getUser().getId() + "\", Client=\"AList TvBox\", Device=\"Android\", DeviceId=\"4310d84d-66a2-4f91-8d11-6627110be71c\", Version=\"4.7.5.0\", Token=\"" + info.getAccessToken() + "\"");
+        }
+        headers.add("X-Emby-Device-Id", "4310d84d-66a2-4f91-8d11-6627110be71c");
+        headers.add("X-Emby-Device-Name", "Android");
+        headers.add("X-Emby-Client", "AList TvBox");
+        headers.add("X-Emby-Client-Version", "4.7.5.0");
+        return headers;
     }
 }

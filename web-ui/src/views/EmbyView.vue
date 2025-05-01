@@ -26,23 +26,23 @@
     </el-table>
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
-      <el-form :model="form">
-        <el-form-item label="名称" label-width="140" required>
+      <el-form label-width="140" :model="form">
+        <el-form-item label="名称" required>
           <el-input v-model="form.name" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="URL地址" label-width="140" required>
+        <el-form-item label="URL地址" required>
           <el-input v-model="form.url" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="User Agent" label-width="140">
+        <el-form-item label="User Agent">
           <el-input v-model="form.userAgent" type="textarea" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="用户名" label-width="140" required>
+        <el-form-item label="用户名" required>
           <el-input v-model="form.username" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="密码" label-width="140">
+        <el-form-item label="密码">
           <el-input v-model="form.password" type="password" show-password autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="顺序" label-width="140">
+        <el-form-item label="顺序">
           <el-input-number v-model="form.order" :min="0"/>
         </el-form-item>
       </el-form>

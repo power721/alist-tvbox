@@ -817,6 +817,16 @@ public class JellyfinService {
         String url = jellyfin.getUrl() + "/Items/" + parts[1] + "/PlaybackInfo";
         var media = restTemplate.exchange(url, HttpMethod.POST, entity, EmbyMediaSources.class).getBody();
 
+        url = jellyfin.getUrl() + "/Sessions/Playing";
+        Map<String, Object> data = new HashMap<>();
+        data.put("ItemId", parts[1]);
+        data.put("PlaySessionId", media.getSessionId());
+        data.put("MediaSourceId", media.getItems().get(0).getId());
+        data.put("PlayMethod", "DirectPlay");
+        entity = new HttpEntity<>(data, headers);
+        var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        log.debug("start playing: {} {}", data, response.getStatusCode());
+
         List<String> urls = new ArrayList<>();
         for (var source : media.getItems()) {
             urls.add(source.getName());
@@ -870,7 +880,7 @@ public class JellyfinService {
             } else {
                 headers.set("User-Agent", Constants.USER_AGENT);
             }
-            headers.set("Authorization", "MediaBrowser Client=\"Jellyfin Web\", Device=\"Chrome\", DeviceId=\"1\", Version=\"10.10.3\"");
+            headers.set("Authorization", "MediaBrowser Client=\"AList TvBox\", Device=\"Android\", DeviceId=\"4310d84d-66a2-4f91-8d11-6627110be71c\", Version=\"1.0.0\"");
             HttpEntity<Object> entity = new HttpEntity<>(body, headers);
             EmbyInfo info = restTemplate.exchange(jellyfin.getUrl() + "/Users/authenticatebyname", HttpMethod.POST, entity, EmbyInfo.class).getBody();
             cache.put(jellyfin.getId(), info);
