@@ -24,6 +24,9 @@ public class EmbyMediaSources {
         @JsonProperty("ETag")
         private String etag;
 
+        @JsonProperty("RunTimeTicks")
+        private long runTimeTicks;
+
         @JsonProperty("DirectStreamUrl")
         private String url;
 
