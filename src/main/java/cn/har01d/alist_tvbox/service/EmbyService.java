@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 
@@ -449,6 +450,7 @@ public class EmbyService {
         data.put("PlaySessionId", media.getSessionId());
         data.put("MediaSourceId", media.getItems().get(0).getId());
         data.put("PlayMethod", "DirectStream");
+        data.put("PositionTicks", media.getItems().get(0).getRunTimeTicks() * 2 / 3);
         entity = new HttpEntity<>(data, headers);
         var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
         log.debug("start playing: {} {}", data, response.getStatusCode());
