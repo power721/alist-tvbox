@@ -823,7 +823,7 @@ public class JellyfinService {
         data.put("ItemId", parts[1]);
         data.put("PlaySessionId", media.getSessionId());
         data.put("MediaSourceId", media.getItems().get(0).getId());
-        data.put("PlayMethod", "DirectStream");
+        data.put("PlayMethod", "DirectPlay");
         data.put("PositionTicks", 6000000000L + ThreadLocalRandom.current().nextInt(10000000));
         entity = new HttpEntity<>(data, headers);
         var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
@@ -882,7 +882,7 @@ public class JellyfinService {
             } else {
                 headers.set("User-Agent", Constants.USER_AGENT);
             }
-            headers.set("Authorization", "MediaBrowser Client=\"Jellyfin Web\", Device=\"Chrome\", DeviceId=\"1\", Version=\"10.10.3\"");
+            headers.set("Authorization", "MediaBrowser Client=\"AList TvBox\", Device=\"Android\", DeviceId=\"4310d84d-66a2-4f91-8d11-6627110be71c\", Version=\"1.0.0\"");
             HttpEntity<Object> entity = new HttpEntity<>(body, headers);
             EmbyInfo info = restTemplate.exchange(jellyfin.getUrl() + "/Users/authenticatebyname", HttpMethod.POST, entity, EmbyInfo.class).getBody();
             cache.put(jellyfin.getId(), info);

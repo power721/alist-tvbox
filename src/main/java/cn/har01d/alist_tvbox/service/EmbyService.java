@@ -527,10 +527,10 @@ public class EmbyService {
         }
         if (info != null) {
             headers.add("X-Emby-Token", info.getAccessToken());
-            headers.add("Authorization", "Emby UserId=\"" + info.getUser().getId() + "\", Client=\"AList TvBox\", Device=\"Chrome\", DeviceId=\"4310d84d-66a2-4f91-8d11-6627110be71c\", Version=\"4.7.5.0\", Token=\"" + info.getAccessToken() + "\"");
+            headers.add("Authorization", "Emby UserId=\"" + info.getUser().getId() + "\", Client=\"AList TvBox\", Device=\"Android\", DeviceId=\"4310d84d-66a2-4f91-8d11-6627110be71c\", Version=\"4.7.5.0\", Token=\"" + info.getAccessToken() + "\"");
         }
         headers.add("X-Emby-Device-Id", "4310d84d-66a2-4f91-8d11-6627110be71c");
-        headers.add("X-Emby-Device-Name", "Chrome");
+        headers.add("X-Emby-Device-Name", "Android");
         headers.add("X-Emby-Client", "AList TvBox");
         headers.add("X-Emby-Client-Version", "4.7.5.0");
         return headers;
