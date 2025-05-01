@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 
@@ -816,6 +817,17 @@ public class JellyfinService {
         HttpEntity<Object> entity = new HttpEntity<>(objectMapper.readTree(body), headers);
         String url = jellyfin.getUrl() + "/Items/" + parts[1] + "/PlaybackInfo";
         var media = restTemplate.exchange(url, HttpMethod.POST, entity, EmbyMediaSources.class).getBody();
+
+        url = jellyfin.getUrl() + "/Sessions/Playing";
+        Map<String, Object> data = new HashMap<>();
+        data.put("ItemId", parts[1]);
+        data.put("PlaySessionId", media.getSessionId());
+        data.put("MediaSourceId", media.getItems().get(0).getId());
+        data.put("PlayMethod", "DirectStream");
+        data.put("PositionTicks", 6000000000L + ThreadLocalRandom.current().nextInt(10000000));
+        entity = new HttpEntity<>(data, headers);
+        var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        log.debug("start playing: {} {}", data, response.getStatusCode());
 
         List<String> urls = new ArrayList<>();
         for (var source : media.getItems()) {
