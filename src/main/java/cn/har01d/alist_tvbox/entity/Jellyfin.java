@@ -29,4 +29,8 @@ public class Jellyfin {
     private String userAgent;
     private String username = "";
     private String password = "";
+    private String clientName;
+    private String clientVersion;
+    private String deviceId;
+    private String deviceName;
 }

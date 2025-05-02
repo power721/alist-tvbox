@@ -33,14 +33,26 @@
         <el-form-item label="URL地址" required>
           <el-input v-model="form.url" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="User Agent">
-          <el-input v-model="form.userAgent" type="textarea" autocomplete="off"/>
-        </el-form-item>
         <el-form-item label="用户名" required>
           <el-input v-model="form.username" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="密码">
+        <el-form-item label="密码" required>
           <el-input v-model="form.password" type="password" show-password autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="User Agent">
+          <el-input v-model="form.userAgent" type="textarea" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="客户端名称">
+          <el-input v-model="form.clientName" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="客户端版本">
+          <el-input v-model="form.clientVersion" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="设备ID">
+          <el-input v-model="form.deviceId" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="设备名称">
+          <el-input v-model="form.deviceName" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="顺序">
           <el-input-number v-model="form.order" :min="0"/>
@@ -84,6 +96,10 @@ const form = ref({
   userAgent: '',
   username: '',
   password: '',
+  clientName: '',
+  clientVersion: '',
+  deviceId: '',
+  deviceName: '',
   order: 0,
 })
 
@@ -97,6 +113,10 @@ const handleAdd = () => {
     userAgent: '',
     username: '',
     password: '',
+    clientName: '',
+    clientVersion: '',
+    deviceId: '',
+    deviceName: '',
     order: 0,
   }
   formVisible.value = true
