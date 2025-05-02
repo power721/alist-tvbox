@@ -190,12 +190,8 @@ public class DriverAccountService {
             log.info("insert 139Yun account {} : {}, result: {}", id, getMountPath(account), count);
         } else if (account.getType() == DriverType.PAN115) {
             String sql;
-            if (account.isUseProxy()) {
-                sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1000}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',1,'native_proxy','');";
-            } else {
-                sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1000}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-            }
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder()));
+            sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1000}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',1,'%s','');";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder(), account.isUseProxy() ? "native_proxy" : "302_redirect"));
             log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
         } else if (account.getType() == DriverType.OPEN115) {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
@@ -242,12 +238,8 @@ public class DriverAccountService {
             log.info("insert 139Yun account {} : {}, result: {}", id, getMountPath(account), count);
         } else if (account.getType() == DriverType.PAN115) {
             String sql;
-            if (account.isUseProxy()) {
-                sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1000}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',1,'native_proxy','',0,0,0);";
-            } else {
-                sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1000}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-            }
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder()));
+            sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1000}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',1,'%s','',0,0,0);";
+            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder(), account.isUseProxy() ? "native_proxy" : "302_redirect"));
             log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
         } else if (account.getType() == DriverType.OPEN115) {
             String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";

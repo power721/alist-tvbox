@@ -21,6 +21,7 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +31,6 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -1240,16 +1240,15 @@ public class SubscriptionService {
     public String repository(String token, String id) {
         try {
             String baseUrl = readHostAddress("/sub" + (StringUtils.isNotBlank(token) ? "/" + token : "") + "/");
+            if ("0".equals(id)) {
+                return getRepo(baseUrl);
+            }
+
             File file = new File("/www/tvbox/repo/" + id + ".json");
             if (file.exists()) {
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
                 if (StringUtils.isBlank(json)) {
-                    List<Map<String, String>> urls = new ArrayList<>();
-                    for (var sub : subscriptionRepository.findAll()) {
-                        urls.add(Map.of("name", sub.getName(), "url", baseUrl + sub.getSid()));
-                    }
-                    Map<String, Object> map = Map.of("urls", urls);
-                    return objectMapper.writeValueAsString(map);
+                    return getRepo(baseUrl);
                 }
                 json = json.replace("DOCKER_ADDRESS/tvbox/my.json", baseUrl + id);
                 json = json.replace("ATV_ADDRESS", readHostAddress());
@@ -1268,5 +1267,14 @@ public class SubscriptionService {
             return null;
         }
         return null;
+    }
+
+    private String getRepo(String baseUrl) throws JsonProcessingException {
+        List<Map<String, String>> urls = new ArrayList<>();
+        for (var sub : subscriptionRepository.findAll()) {
+            urls.add(Map.of("name", sub.getName(), "url", baseUrl + sub.getSid()));
+        }
+        Map<String, Object> map = Map.of("urls", urls);
+        return objectMapper.writeValueAsString(map);
     }
 }

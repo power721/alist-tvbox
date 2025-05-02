@@ -1368,7 +1368,7 @@ public class TvBoxService {
             }
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
-            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"" + Constants.ALIPAN + "\"}");
+            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"" + Constants.ALIPAN + "\",\"origin\":\"" + Constants.ALIPAN + "\"}");
         }
 
         if (!getSub) {
