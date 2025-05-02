@@ -1051,7 +1051,7 @@ public class TvBoxService {
         if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3) {
             return true;
         }
-        if (ac.equals("web")) {
+        if ("web".equals(ac)) {
             return fsInfo.getType() == 5;
         }
         return false;

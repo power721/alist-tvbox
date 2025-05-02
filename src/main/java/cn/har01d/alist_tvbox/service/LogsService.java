@@ -34,6 +34,7 @@ public class LogsService {
                 .replace(" INFO ", " <span class=\"info\">INFO</span> ")
                 .replace("\u001b[31m", "<span class=\"error\">")
                 .replace("\u001b[36m", "<span class=\"success\">")
+                .replace("\u001b[37m", "<span class=\"debug\">")
                 .replace("\u001b[0m", " </span>");
     }
 

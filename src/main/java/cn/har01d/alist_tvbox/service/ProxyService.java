@@ -44,20 +44,20 @@ public class ProxyService {
             .build();
     private final AppProperties appProperties;
     private final Environment environment;
-    private final DriverAccountRepository panAccountRepository;
+    private final DriverAccountRepository driverAccountRepository;
     private final ShareRepository shareRepository;
     private final SiteService siteService;
     private final AListService aListService;
 
     public ProxyService(AppProperties appProperties,
                         Environment environment,
-                        DriverAccountRepository panAccountRepository,
+                        DriverAccountRepository driverAccountRepository,
                         ShareRepository shareRepository,
                         SiteService siteService,
                         AListService aListService) {
         this.appProperties = appProperties;
         this.environment = environment;
-        this.panAccountRepository = panAccountRepository;
+        this.driverAccountRepository = driverAccountRepository;
         this.shareRepository = shareRepository;
         this.siteService = siteService;
         this.aListService = aListService;
@@ -93,7 +93,7 @@ public class ProxyService {
         if (url != null) {
             log.info("proxy url: {} {}", id, url);
             if (id.startsWith("115-")) {
-                String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
+                String cookie = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
                 headers.put("cookie", cookie);
                 headers.put("referer", "https://115.com/");
             } else if (id.startsWith("xl-")) {
@@ -116,7 +116,7 @@ public class ProxyService {
                 headers.put("user-agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)");
             }*/ else if (fsDetail.getProvider().contains("115")) {
                 url = fsDetail.getRawUrl();
-                String cookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
+                String cookie = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
                 headers.put("cookie", cookie);
                 headers.put("referer", "https://115.com/");
             } else {
