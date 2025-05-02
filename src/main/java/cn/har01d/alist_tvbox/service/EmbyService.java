@@ -82,6 +82,11 @@ public class EmbyService {
 
     @PostConstruct
     public void init() {
+        fixOrder();
+        fixMetadata();
+    }
+
+    private void fixOrder() {
         if (settingRepository.existsByName("fix_emby_order")) {
             return;
         }
@@ -93,6 +98,19 @@ public class EmbyService {
         }
         embyRepository.saveAll(list);
         settingRepository.save(new Setting("fix_emby_order", "true"));
+    }
+
+    private void fixMetadata() {
+        if (settingRepository.existsByName("fix_emby_metadata")) {
+            return;
+        }
+        log.info("Fix Emby metadata.");
+        List<Emby> list = embyRepository.findAll();
+        for (Emby emby : list) {
+            validate(emby);
+        }
+        embyRepository.saveAll(list);
+        settingRepository.save(new Setting("fix_emby_metadata", "true"));
     }
 
     public List<Emby> findAll() {

@@ -5,8 +5,11 @@ import cn.har01d.alist_tvbox.dto.emby.EmbyInfo;
 import cn.har01d.alist_tvbox.dto.emby.EmbyItem;
 import cn.har01d.alist_tvbox.dto.emby.EmbyItems;
 import cn.har01d.alist_tvbox.dto.emby.EmbyMediaSources;
+import cn.har01d.alist_tvbox.entity.Emby;
 import cn.har01d.alist_tvbox.entity.Jellyfin;
 import cn.har01d.alist_tvbox.entity.JellyfinRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.Filter;
@@ -20,6 +23,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -412,6 +416,7 @@ public class JellyfinService {
             """;
 
     private final JellyfinRepository jellyfinRepository;
+    private final SettingRepository settingRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final Cache<Integer, EmbyInfo> cache = Caffeine.newBuilder().build();
@@ -430,12 +435,31 @@ public class JellyfinService {
     );
     private Map<String, Object> last;
 
-    public JellyfinService(JellyfinRepository jellyfinRepository, RestTemplateBuilder builder, ObjectMapper objectMapper) {
+    public JellyfinService(JellyfinRepository jellyfinRepository, SettingRepository settingRepository, RestTemplateBuilder builder, ObjectMapper objectMapper) {
         this.jellyfinRepository = jellyfinRepository;
+        this.settingRepository = settingRepository;
         restTemplate = builder
                 .defaultHeader("User-Agent", Constants.JELLYFIN_USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
+    }
+
+    @PostConstruct
+    public void init() {
+        fixMetadata();
+    }
+
+    private void fixMetadata() {
+        if (settingRepository.existsByName("fix_jellyfin_metadata")) {
+            return;
+        }
+        log.info("Fix Jellyfin metadata.");
+        List<Jellyfin> list = jellyfinRepository.findAll();
+        for (Jellyfin jellyfin : list) {
+            validate(jellyfin);
+        }
+        jellyfinRepository.saveAll(list);
+        settingRepository.save(new Setting("fix_jellyfin_metadata", "true"));
     }
 
     public List<Jellyfin> findAll() {
