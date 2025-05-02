@@ -45,7 +45,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 
@@ -70,11 +69,12 @@ public class EmbyService {
             new FilterValue("时长⬆️", "Runtime,SortName:Ascending"),
             new FilterValue("时长⬇️", "Runtime,SortName:Descending")
     );
+    private Map<String, Object> last;
 
     public EmbyService(EmbyRepository embyRepository, RestTemplateBuilder builder, ObjectMapper objectMapper, SettingRepository settingRepository) {
         this.embyRepository = embyRepository;
         restTemplate = builder
-                .defaultHeader("User-Agent", Constants.USER_AGENT)
+                .defaultHeader("User-Agent", Constants.EMBY_USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
         this.settingRepository = settingRepository;
@@ -117,20 +117,14 @@ public class EmbyService {
 
     public Emby update(int id, Emby dto) {
         validate(dto);
-        Emby emby = embyRepository.findById(id).orElseThrow(() -> new NotFoundException("站点不存在"));
         Optional<Emby> other = embyRepository.findByName(dto.getName());
         if (other.isPresent() && other.get().getId() != id) {
             throw new BadRequestException("站点名字重复");
         }
 
-        emby.setName(dto.getName());
-        emby.setUrl(dto.getUrl());
-        emby.setUserAgent(dto.getUserAgent());
-        emby.setUsername(dto.getUsername());
-        emby.setPassword(dto.getPassword());
-        emby.setOrder(dto.getOrder());
+        dto.setId(id);
 
-        return embyRepository.save(emby);
+        return embyRepository.save(dto);
     }
 
     public void delete(int id) {
@@ -162,6 +156,19 @@ public class EmbyService {
 
         if (dto.getUrl().endsWith("/")) {
             dto.setUrl(dto.getUrl().substring(0, dto.getUrl().length() - 1));
+        }
+
+        if (StringUtils.isBlank(dto.getClientName())) {
+            dto.setClientName("Emby for Android");
+        }
+        if (StringUtils.isBlank(dto.getClientVersion())) {
+            dto.setClientVersion("3.4.66");
+        }
+        if (StringUtils.isBlank(dto.getDeviceId())) {
+            dto.setDeviceId("b098f2002a65f589");
+        }
+        if (StringUtils.isBlank(dto.getDeviceName())) {
+            dto.setDeviceName("AList TvBox");
         }
     }
 
@@ -214,6 +221,10 @@ public class EmbyService {
 
         if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
             movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
+        }
+        if ("BoxSet".equals(item.getType())) {
+            movie.setVod_id(emby.getId() + "-" + item.getId() + "-0");
+            movie.setVod_tag(FOLDER);
         }
         movie.setVod_director(emby.getName());
         movie.setVod_remarks(Objects.toString(item.getRating(), null));
@@ -342,12 +353,19 @@ public class EmbyService {
             String[] sorts = sort.split(":");
             Emby emby = embyRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
             var info = getEmbyInfo(emby);
-            var view = info.getViews().get(Integer.parseInt(parts[1]));
             String type = "";
-            if (view.getCollectionType().equals("movies")) {
-                type = "Movie";
-            } else if (view.getCollectionType().equals("tvshows")) {
-                type = "Series";
+            String parentId = parts[1];
+
+            if (parts.length == 2) {
+                var view = info.getViews().get(Integer.parseInt(parts[1]));
+                parentId = view.getId();
+                if (view.getCollectionType().equals("movies")) {
+                    type = "Movie";
+                } else if (view.getCollectionType().equals("tvshows")) {
+                    type = "Series";
+                } else if (view.getCollectionType().equals("boxsets")) {
+                    type = "BoxSet";
+                }
             }
 
             int start = 0;
@@ -357,7 +375,7 @@ public class EmbyService {
             }
             HttpHeaders headers = setHeaders(emby, info);
             HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-            String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?SortBy=" + sorts[0] + "&SortOrder=" + sorts[1] + "&IncludeItemTypes=" + type + "&Recursive=true&Fields=BasicSyncInfo,PrimaryImageAspectRatio,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&StartIndex=" + start + "&Limit=" + size + "&ParentId=" + view.getId();
+            String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?SortBy=" + sorts[0] + "&SortOrder=" + sorts[1] + "&IncludeItemTypes=" + type + "&Recursive=true&Fields=BasicSyncInfo,PrimaryImageAspectRatio,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&StartIndex=" + start + "&Limit=" + size + "&ParentId=" + parentId;
             var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
             for (var item : response.getItems()) {
                 var movie = getMovieDetail(item, emby);
@@ -444,6 +462,13 @@ public class EmbyService {
         String url = emby.getUrl() + "/emby/Items/" + parts[1] + "/PlaybackInfo?IsPlayback=false&AutoOpenLiveStream=false&StartTimeTicks=0&MaxStreamingBitrate=2147483647&UserId=" + info.getUser().getId();
         var media = restTemplate.exchange(url, HttpMethod.POST, entity, EmbyMediaSources.class).getBody();
 
+        if (last != null) {
+            url = emby.getUrl() + "/emby/Sessions/Playing/Stopped";
+            entity = new HttpEntity<>(last, headers);
+            var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            log.debug("stop playing: {} {}", last, response.getStatusCode());
+        }
+
         url = emby.getUrl() + "/emby/Sessions/Playing";
         Map<String, Object> data = new HashMap<>();
         data.put("ItemId", parts[1]);
@@ -454,13 +479,14 @@ public class EmbyService {
         entity = new HttpEntity<>(data, headers);
         var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
         log.debug("start playing: {} {}", data, response.getStatusCode());
+        last = data;
 
         List<String> urls = new ArrayList<>();
         for (var source : media.getItems()) {
             urls.add(source.getName());
             urls.add(emby.getUrl() + source.getUrl());
         }
-        String ua = Constants.USER_AGENT;
+        String ua = Constants.EMBY_USER_AGENT;
         if (StringUtils.isNotBlank(emby.getUserAgent())) {
             ua = emby.getUserAgent();
         }
@@ -523,16 +549,18 @@ public class EmbyService {
     private HttpHeaders setHeaders(Emby emby, EmbyInfo info) {
         HttpHeaders headers = new HttpHeaders();
         if (StringUtils.isNotBlank(emby.getUserAgent())) {
-            headers.add("User-Agent", emby.getUserAgent());
+            headers.set("User-Agent", emby.getUserAgent());
         }
         if (info != null) {
-            headers.add("X-Emby-Token", info.getAccessToken());
-            headers.add("Authorization", "Emby UserId=\"" + info.getUser().getId() + "\", Client=\"AList TvBox\", Device=\"Android\", DeviceId=\"4310d84d-66a2-4f91-8d11-6627110be71c\", Version=\"4.7.5.0\", Token=\"" + info.getAccessToken() + "\"");
+            headers.set("X-Emby-Token", info.getAccessToken());
+            String header = String.format("Emby UserId=\"%s\",Client=\"%s\",Version=\"%s\",Device=\"%s\",DeviceId=\"%s\",Token=\"%s\"", info.getUser().getId(), emby.getClientName(), emby.getClientVersion(), emby.getDeviceName(), emby.getDeviceId(), info.getAccessToken());
+            headers.set("Authorization", header);
         }
-        headers.add("X-Emby-Device-Id", "4310d84d-66a2-4f91-8d11-6627110be71c");
-        headers.add("X-Emby-Device-Name", "Android");
-        headers.add("X-Emby-Client", "AList TvBox");
-        headers.add("X-Emby-Client-Version", "4.7.5.0");
+        headers.set("X-Emby-Client", emby.getClientName());
+        headers.set("X-Emby-Client-Version", emby.getClientVersion());
+        headers.set("X-Emby-Device-Name", emby.getDeviceName());
+        headers.set("X-Emby-Device-Id", emby.getDeviceId());
+        headers.set("X-Emby-Language", "zh-cn");
         return headers;
     }
 }

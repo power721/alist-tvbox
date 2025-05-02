@@ -7,7 +7,6 @@ import cn.har01d.alist_tvbox.dto.emby.EmbyItems;
 import cn.har01d.alist_tvbox.dto.emby.EmbyMediaSources;
 import cn.har01d.alist_tvbox.entity.Jellyfin;
 import cn.har01d.alist_tvbox.entity.JellyfinRepository;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.Filter;
@@ -41,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 
@@ -416,7 +414,6 @@ public class JellyfinService {
     private final JellyfinRepository jellyfinRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final SettingRepository settingRepository;
     private final Cache<Integer, EmbyInfo> cache = Caffeine.newBuilder().build();
 
     private final List<FilterValue> filters = Arrays.asList(
@@ -431,14 +428,14 @@ public class JellyfinService {
             new FilterValue("时长⬆️", "Runtime,SortName:Ascending"),
             new FilterValue("时长⬇️", "Runtime,SortName:Descending")
     );
+    private Map<String, Object> last;
 
-    public JellyfinService(JellyfinRepository jellyfinRepository, RestTemplateBuilder builder, ObjectMapper objectMapper, SettingRepository settingRepository) {
+    public JellyfinService(JellyfinRepository jellyfinRepository, RestTemplateBuilder builder, ObjectMapper objectMapper) {
         this.jellyfinRepository = jellyfinRepository;
         restTemplate = builder
-                .defaultHeader("User-Agent", Constants.USER_AGENT)
+                .defaultHeader("User-Agent", Constants.JELLYFIN_USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
-        this.settingRepository = settingRepository;
     }
 
     public List<Jellyfin> findAll() {
@@ -463,20 +460,14 @@ public class JellyfinService {
 
     public Jellyfin update(int id, Jellyfin dto) {
         validate(dto);
-        Jellyfin jellyfin = jellyfinRepository.findById(id).orElseThrow(() -> new NotFoundException("站点不存在"));
         Optional<Jellyfin> other = jellyfinRepository.findByName(dto.getName());
         if (other.isPresent() && other.get().getId() != id) {
             throw new BadRequestException("站点名字重复");
         }
 
-        jellyfin.setName(dto.getName());
-        jellyfin.setUrl(dto.getUrl());
-        jellyfin.setUserAgent(dto.getUserAgent());
-        jellyfin.setUsername(dto.getUsername());
-        jellyfin.setPassword(dto.getPassword());
-        jellyfin.setOrder(dto.getOrder());
+        dto.setId(id);
 
-        return jellyfinRepository.save(jellyfin);
+        return jellyfinRepository.save(dto);
     }
 
     public void delete(int id) {
@@ -509,6 +500,19 @@ public class JellyfinService {
         if (dto.getUrl().endsWith("/")) {
             dto.setUrl(dto.getUrl().substring(0, dto.getUrl().length() - 1));
         }
+
+        if (StringUtils.isBlank(dto.getClientName())) {
+            dto.setClientName("Jellyfin Android");
+        }
+        if (StringUtils.isBlank(dto.getClientVersion())) {
+            dto.setClientVersion("2.6.2");
+        }
+        if (StringUtils.isBlank(dto.getDeviceId())) {
+            dto.setDeviceId("f37abe7199c5c17e");
+        }
+        if (StringUtils.isBlank(dto.getDeviceName())) {
+            dto.setDeviceName("AList TvBox");
+        }
     }
 
     public MovieList home() {
@@ -519,11 +523,7 @@ public class JellyfinService {
                 continue;
             }
             List<MovieDetail> list = new ArrayList<>();
-            HttpHeaders headers = new HttpHeaders();
-            headers.add("Authorization", getAuthorizationHeader(info));
-            if (StringUtils.isNotBlank(jellyfin.getUserAgent())) {
-                headers.add("User-Agent", jellyfin.getUserAgent());
-            }
+            HttpHeaders headers = setHeaders(jellyfin, info);
             HttpEntity<Object> entity = new HttpEntity<>(null, headers);
             String url = jellyfin.getUrl() + "/Users/" + info.getUser().getId() + "/Items/Resume?Limit=12&Recursive=true&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&EnableTotalRecordCount=false&MediaTypes=Video";
             var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
@@ -571,19 +571,11 @@ public class JellyfinService {
         return movie;
     }
 
-    private static String getAuthorizationHeader(EmbyInfo info) {
-        return "MediaBrowser Client=\"" + info.getSessionInfo().getClient() + "\", Device=\"" + info.getSessionInfo().getDeviceName() + "\", DeviceId=\"" + info.getSessionInfo().getDeviceId() + "\", Version=\"" + info.getSessionInfo().getVersion() + "\", Token=\"" + info.getAccessToken() + "\"";
-    }
-
     public MovieList detail(String tid) throws JsonProcessingException {
         String[] parts = tid.split("-");
         Jellyfin jellyfin = jellyfinRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
         var info = getJellyfinInfo(jellyfin);
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", getAuthorizationHeader(info));
-        if (StringUtils.isNotBlank(jellyfin.getUserAgent())) {
-            headers.add("User-Agent", jellyfin.getUserAgent());
-        }
+        HttpHeaders headers = setHeaders(jellyfin, info);
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
         String url = jellyfin.getUrl() + "/Users/" + info.getUser().getId() + "/Items/" + parts[1];
         var item = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItem.class).getBody();
@@ -631,11 +623,7 @@ public class JellyfinService {
     }
 
     private List<EmbyItem> getAll(Jellyfin jellyfin, EmbyInfo info, String sid) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", getAuthorizationHeader(info));
-        if (StringUtils.isNotBlank(jellyfin.getUserAgent())) {
-            headers.add("User-Agent", jellyfin.getUserAgent());
-        }
+        HttpHeaders headers = setHeaders(jellyfin, info);
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
         String url = jellyfin.getUrl() + "/Users/" + info.getUser().getId() + "/Items?ParentId=" + sid + "&Filters=IsNotFolder&Recursive=true&Limit=2000&Fields=Chapters,ProductionYear,PremiereDate&ExcludeLocationTypes=Virtual&EnableTotalRecordCount=false&CollapseBoxSetItems=false";
         var items = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
@@ -664,11 +652,7 @@ public class JellyfinService {
 
     private List<MovieDetail> search(Jellyfin jellyfin, EmbyInfo info, String wd, String type) {
         List<MovieDetail> list = new ArrayList<>();
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", getAuthorizationHeader(info));
-        if (StringUtils.isNotBlank(jellyfin.getUserAgent())) {
-            headers.add("User-Agent", jellyfin.getUserAgent());
-        }
+        HttpHeaders headers = setHeaders(jellyfin, info);
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
         String url = jellyfin.getUrl() + "/Users/" + info.getUser().getId() + "/Items?IncludePeople=false&IncludeMedia=true&IncludeGenres=false&IncludeStudios=false&IncludeArtists=false&IncludeItemTypes=" + type + "&Limit=30&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating&Recursive=true&EnableTotalRecordCount=false&ImageTypeLimit=1&searchTerm=" + wd;
         var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
@@ -721,11 +705,7 @@ public class JellyfinService {
             if (pg != null) {
                 start = (pg - 1) * size;
             }
-            HttpHeaders headers = new HttpHeaders();
-            headers.add("Authorization", getAuthorizationHeader(info));
-            if (StringUtils.isNotBlank(jellyfin.getUserAgent())) {
-                headers.add("User-Agent", jellyfin.getUserAgent());
-            }
+            HttpHeaders headers = setHeaders(jellyfin, info);
             HttpEntity<Object> entity = new HttpEntity<>(null, headers);
             String url = jellyfin.getUrl() + "/Users/" + info.getUser().getId() + "/Items?SortBy=" + sorts[0] + "&SortOrder=" + sorts[1] + "&IncludeItemTypes=" + type + "&Recursive=true&Fields=BasicSyncInfo,PrimaryImageAspectRatio,ProductionYear,CommunityRating&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb&StartIndex=" + start + "&Limit=" + size + "&ParentId=" + view.getId();
             var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
@@ -808,15 +788,18 @@ public class JellyfinService {
         String[] parts = id.split("-");
         Jellyfin jellyfin = jellyfinRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
         var info = getJellyfinInfo(jellyfin);
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", getAuthorizationHeader(info));
-        if (StringUtils.isNotBlank(jellyfin.getUserAgent())) {
-            headers.add("User-Agent", jellyfin.getUserAgent());
-        }
+        HttpHeaders headers = setHeaders(jellyfin, info);
         String body = PLAY.replace("USER_ID", info.getUser().getId()).replace("MEDIA_ID", parts[1]);
         HttpEntity<Object> entity = new HttpEntity<>(objectMapper.readTree(body), headers);
         String url = jellyfin.getUrl() + "/Items/" + parts[1] + "/PlaybackInfo";
         var media = restTemplate.exchange(url, HttpMethod.POST, entity, EmbyMediaSources.class).getBody();
+
+        if (last != null) {
+            url = jellyfin.getUrl() + "/Sessions/Playing/Stopped";
+            entity = new HttpEntity<>(last, headers);
+            var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            log.debug("stop playing: {} {}", last, response.getStatusCode());
+        }
 
         url = jellyfin.getUrl() + "/Sessions/Playing";
         Map<String, Object> data = new HashMap<>();
@@ -828,13 +811,14 @@ public class JellyfinService {
         entity = new HttpEntity<>(data, headers);
         var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
         log.debug("start playing: {} {}", data, response.getStatusCode());
+        last = data;
 
         List<String> urls = new ArrayList<>();
         for (var source : media.getItems()) {
             urls.add(source.getName());
             urls.add(jellyfin.getUrl() + "/Videos/" + parts[1] + "/stream.mp4?Static=true&mediaSourceId=" + parts[1] + "&deviceId=" + info.getSessionInfo().getDeviceId() + "&api_key=" + info.getAccessToken() + "&Tag=" + source.getEtag());
         }
-        String ua = Constants.USER_AGENT;
+        String ua = Constants.JELLYFIN_USER_AGENT;
         if (StringUtils.isNotBlank(jellyfin.getUserAgent())) {
             ua = jellyfin.getUserAgent();
         }
@@ -876,18 +860,12 @@ public class JellyfinService {
             body.put("Username", jellyfin.getUsername());
             body.put("Pw", jellyfin.getPassword());
             log.debug("get Jellyfin info: {} {} {} {}", jellyfin.getId(), jellyfin.getName(), jellyfin.getUrl(), jellyfin.getUsername());
-            HttpHeaders headers = new HttpHeaders();
-            if (StringUtils.isNotBlank(jellyfin.getUserAgent())) {
-                headers.set("User-Agent", jellyfin.getUserAgent());
-            } else {
-                headers.set("User-Agent", Constants.USER_AGENT);
-            }
-            headers.set("Authorization", "MediaBrowser Client=\"AList TvBox\", Device=\"Android\", DeviceId=\"4310d84d-66a2-4f91-8d11-6627110be71c\", Version=\"1.0.0\"");
+            HttpHeaders headers = setHeaders(jellyfin, null);
             HttpEntity<Object> entity = new HttpEntity<>(body, headers);
             EmbyInfo info = restTemplate.exchange(jellyfin.getUrl() + "/Users/authenticatebyname", HttpMethod.POST, entity, EmbyInfo.class).getBody();
             cache.put(jellyfin.getId(), info);
 
-            headers.set("Authorization", getAuthorizationHeader(info));
+            headers = setHeaders(jellyfin, info);
             entity = new HttpEntity<>(null, headers);
             String url = jellyfin.getUrl() + "/UserViews?userId=" + info.getUser().getId();
             var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
@@ -898,5 +876,18 @@ public class JellyfinService {
             log.error("Get Jellyfin info failed.", e);
         }
         return null;
+    }
+
+    private HttpHeaders setHeaders(Jellyfin emby, EmbyInfo info) {
+        HttpHeaders headers = new HttpHeaders();
+        if (StringUtils.isNotBlank(emby.getUserAgent())) {
+            headers.set("User-Agent", emby.getUserAgent());
+        }
+        String header = String.format("MediaBrowser Client=\"%s\",Version=\"%s\",Device=\"%s\",DeviceId=\"%s\"", emby.getClientName(), emby.getClientVersion(), emby.getDeviceName(), emby.getDeviceId());
+        if (info != null) {
+            header += String.format(",Token=\"%s\"", info.getAccessToken());
+        }
+        headers.set("Authorization", header);
+        return headers;
     }
 }

@@ -63,6 +63,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
@@ -274,6 +276,9 @@ public class BiliBiliService {
     private final RestTemplate restTemplate1;
     private final ObjectMapper objectMapper;
     private final OkHttpClient client = new OkHttpClient();
+    private final LoadingCache<String, BiliBiliInfo> cache = Caffeine.newBuilder()
+            .maximumSize(10)
+            .build(this::getInfo);
     private MovieDetail searchPlaylist;
     private String keyword = "";
     private int searchPage;
@@ -1145,7 +1150,7 @@ public class BiliBiliService {
             return getBangumi(bvid);
         }
 
-        BiliBiliInfo info = getInfo(bvid);
+        BiliBiliInfo info = cache.get(bvid);
         MovieDetail movieDetail = getMovieDetail(info, true);
 
         try {
@@ -1163,16 +1168,16 @@ public class BiliBiliService {
             log.warn("get related videos failed", e);
         }
 
-        if (info.getOwner() != null) {
-            try {
-                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
-                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
-                String others = movieList.getList().get(0).getVod_play_url();
-                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
-            } catch (Exception e) {
-                log.warn("get UP playlist failed", e);
-            }
-        }
+//        if (info.getOwner() != null) {
+//            try {
+//                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
+//                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
+//                String others = movieList.getList().get(0).getVod_play_url();
+//                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
+//            } catch (Exception e) {
+//                log.warn("get UP playlist failed", e);
+//            }
+//        }
 
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
@@ -1366,7 +1371,7 @@ public class BiliBiliService {
             aid = parts[0];
             cid = parts[1];
         } else {
-            BiliBiliInfo info = getInfo(bvid);
+            BiliBiliInfo info = cache.get(bvid);
             aid = String.valueOf(info.getAid());
             cid = String.valueOf(info.getCid());
         }
