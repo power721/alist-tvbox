@@ -811,20 +811,20 @@ public class BiliBiliService {
         map.put("pn", page);
         map.put("ps", 30);
         map.put("tid", 0);
+        map.put("index", 0);
         map.put("keyword", "");
+        map.put("special_type", "");
         map.put("order", sort);
         map.put("platform", "web");
-        map.put("web_location", "1550101");
-        map.put("order_avoided", "true");
+        map.put("web_location", "333.1387");
+        map.put("order_avoided", true);
         map.put("dm_img_list", "[]");
-        map.put("dm_img_inter", "{\"ds\":[{\"t\":4,\"c\":\"bW9yZQ\",\"p\":[36,12,12],\"s\":[218,218,436]}],\"wh\":[5622,4674,22],\"of\":[431,862,431]}");
+        map.put("dm_img_inter", "{\"ds\":[{\"t\":1,\"c\":\"\",\"p\":[330,110,110],\"s\":[61,61,122]}],\"wh\":[6025,5600,11],\"of\":[316,632,316]}");
         map.put("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ");
         map.put("dm_cover_img_str", "QU5HTEUgKE5WSURJQSBDb3Jwb3JhdGlvbiwgTlZJRElBIEdlRm9yY2UgUlRYIDQwNjAgVGkvUENJZS9TU0UyLCBPcGVuR0wgNC41LjApR29vZ2xlIEluYy4gKE5WSURJQSBDb3Jwb3JhdGlvbi");
 
-        HttpEntity<Void> entity = buildHttpEntity(null);
+        HttpEntity<Void> entity = buildHttpEntity(null, Map.of("Referer", "https://space.bilibili.com"));
         getKeys(entity);
-        String webId = getWebId(mid);
-        map.put("w_webid", webId);
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpMedia: {}", url);
 
@@ -877,26 +877,25 @@ public class BiliBiliService {
         }
         Map<String, Object> map = new HashMap<>();
         map.put("mid", id);
-        map.put("ps", 30);
         map.put("pn", page);
+        map.put("ps", 30);
         map.put("tid", 0);
+        map.put("index", 0);
         map.put("keyword", "");
+        map.put("special_type", "");
         map.put("order", sort);
         map.put("platform", "web");
-        map.put("web_location", "1550101");
-        map.put("order_avoided", "true");
+        map.put("web_location", "333.1387");
+        map.put("order_avoided", true);
         map.put("dm_img_list", "[]");
-        map.put("dm_img_inter", "{\"ds\":[{\"t\":4,\"c\":\"bW9yZQ\",\"p\":[36,12,12],\"s\":[218,218,436]}],\"wh\":[5622,4674,22],\"of\":[431,862,431]}");
+        map.put("dm_img_inter", "{\"ds\":[{\"t\":1,\"c\":\"\",\"p\":[330,110,110],\"s\":[61,61,122]}],\"wh\":[6025,5600,11],\"of\":[316,632,316]}");
         map.put("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ");
         map.put("dm_cover_img_str", "QU5HTEUgKE5WSURJQSBDb3Jwb3JhdGlvbiwgTlZJRElBIEdlRm9yY2UgUlRYIDQwNjAgVGkvUENJZS9TU0UyLCBPcGVuR0wgNC41LjApR29vZ2xlIEluYy4gKE5WSURJQSBDb3Jwb3JhdGlvbi");
 
-        HttpEntity<Void> entity = buildHttpEntity(null);
+        HttpEntity<Void> entity = buildHttpEntity(null, Map.of("Referer", "https://space.bilibili.com"));
         getKeys(entity);
-        String webId = getWebId(id);
-        map.put("w_webid", webId);
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpPlaylist: {}", url);
-
 
         BiliBiliSearchInfoResponse response = getJson(url, BiliBiliSearchInfoResponse.class);
         log.debug("{}", response);
@@ -1168,16 +1167,16 @@ public class BiliBiliService {
             log.warn("get related videos failed", e);
         }
 
-//        if (info.getOwner() != null) {
-//            try {
-//                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
-//                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
-//                String others = movieList.getList().get(0).getVod_play_url();
-//                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
-//            } catch (Exception e) {
-//                log.warn("get UP playlist failed", e);
-//            }
-//        }
+        if (info.getOwner() != null) {
+            try {
+                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
+                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
+                String others = movieList.getList().get(0).getVod_play_url();
+                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
+            } catch (Exception e) {
+                log.warn("get UP playlist failed", e);
+            }
+        }
 
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
