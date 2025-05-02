@@ -71,8 +71,8 @@ onMounted(() => {
     </el-form-item>
 
     <el-form-item label="级别" v-if="type=='app'">
-      <el-select v-model="level" @change="onTypeChange">
-        <el-option :label="option.label" :value="option.value" v-for="option of options"/>
+      <el-select style="width: 90px" v-model="level" @change="onTypeChange">
+        <el-option :label="option.label" :key="option.value" :value="option.value" v-for="option in options"/>
       </el-select>
     </el-form-item>
   </el-form>

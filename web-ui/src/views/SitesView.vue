@@ -141,7 +141,7 @@
       <div>
         <div class="flex">
           <el-form-item label="索引名称">
-            <el-select v-model="indexName" @change="onIndexChange">
+            <el-select style="width: 150px" v-model="indexName" @change="onIndexChange">
               <el-option v-for="item in index" :key="item.name" :label="item.name" :value="item.name"/>
             </el-select>
           </el-form-item>

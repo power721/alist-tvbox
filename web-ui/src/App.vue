@@ -70,7 +70,7 @@ onMounted(() => {
                        inline-prompt
                        active-text="高级模式"
                        inactive-text="简单模式"
-                       style="--el-switch-on-color: #13ce66; --el-switch-off-color: #409eff"
+                       style="--el-switch-on-color: #13ce66; --el-switch-off-color: #409eff; margin-top: -24px"
                        @change="onModeChange" />
           </el-menu-item>
           <div class="flex-grow"/>

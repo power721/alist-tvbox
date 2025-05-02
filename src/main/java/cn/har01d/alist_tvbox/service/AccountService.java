@@ -786,6 +786,7 @@ public class AccountService {
         } else {
             showMyAliWithAPI(account);
         }
+        checkin(account, false);
         return account;
     }
 
