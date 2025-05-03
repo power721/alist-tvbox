@@ -106,6 +106,8 @@ public final class DashUtils {
             map.put("url", url);
             map.put("format", "application/dash+xml");
         }
+        map.put("jx", "0");
+        map.put("parse", "0");
         return map;
     }
 
