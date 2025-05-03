@@ -142,6 +142,7 @@
             <video
               ref="videoPlayer"
               :src="playUrl"
+              :poster="poster"
               :autoplay="true"
               @ended="playNextVideo"
               @play="updatePlayState"
@@ -273,7 +274,7 @@
                       <a :href="'figplayer://weblink?url='+playUrl"><img alt="figplayer" src="/figplayer.webp"></a>
                       <a :href="'infuse://x-callback-url/play?url='+playUrl"><img alt="infuse" src="/infuse.webp"></a>
                       <a :href="'filebox://play?url='+playUrl"><img alt="fileball" src="/fileball.webp"></a>
-<!--                      <a :href="'iplay://play/any?type=url&url='+playUrl"><img alt="iPlay" src="/iPlay.webp"></a>-->
+                      <!--                      <a :href="'iplay://play/any?type=url&url='+playUrl"><img alt="iPlay" src="/iPlay.webp"></a>-->
                     </div>
                   </template>
                 </el-popover>
@@ -351,7 +352,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="settingVisible" title="搜索配置">
+    <el-dialog v-model="settingVisible" title="播放配置">
       <el-form label-width="140">
         <el-form-item label="电报频道群组">
           <el-input v-model="tgChannels" :rows="3" type="textarea" placeholder="逗号分割，留空使用默认值"/>
@@ -378,6 +379,12 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgTimeout">更新</el-button>
+        </el-form-item>
+        <el-form-item label="默认视频壁纸">
+          <el-input v-model="cover"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateCover">更新</el-button>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -422,6 +429,8 @@ const tgTimeout = ref(3000)
 const shareType = ref('')
 const title = ref('')
 const playUrl = ref('')
+const poster = ref('')
+const cover = ref('')
 const movies = ref<VodItem[]>([])
 const playFrom = ref<string[]>([])
 const playlist = ref<Item[]>([])
@@ -564,6 +573,13 @@ const updateTgSearch = () => {
   })
 }
 
+const updateCover = () => {
+  axios.post('/api/settings', {name: 'video_cover', value: cover.value}).then(({data}) => {
+    cover.value = data.value
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateTgTimeout = () => {
   axios.post('/api/settings', {name: 'tg_timeout', value: tgTimeout.value + ''}).then(() => {
     ElMessage.success('更新成功')
@@ -701,6 +717,12 @@ const loadDetail = (id: string) => {
 
     movies.value = data.list
     movies.value[0].vod_id = id
+    const pic = movies.value[0].vod_pic
+    if (pic && pic.includes('doubanio.com')) {
+      poster.value = '/images?url=' + pic.replace('s_ratio_poster', 'm')
+    } else {
+      poster.value = cover.value ? '/images?url=' + cover.value : ''
+    }
     playFrom.value = movies.value[0].vod_play_from.split("$$$");
     playlist.value = movies.value[0].vod_play_url.split("$$$")[0].split("#").map(e => {
       let u = e.split('$')
@@ -1309,6 +1331,7 @@ onMounted(async () => {
     tgChannels.value = data.tg_channels
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
+    cover.value = data.video_cover
     tgTimeout.value = +data.tg_timeout
   })
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
