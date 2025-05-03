@@ -62,28 +62,24 @@ public class TvBoxController {
                       HttpServletRequest request) {
         subscriptionService.checkToken(token);
 
-        try {
-            String client = request.getHeader("X-CLIENT");
-            log.info("type: {}  path: {}  folder: {}  ac: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, ac, wd, f, sort, pg);
-            if (ids != null && !ids.isEmpty()) {
-                if (ids.startsWith("msearch:")) {
-                    return tvBoxService.msearch(type, ids.substring(8));
-                } else if (ids.equals("recommend")) {
-                    return tvBoxService.recommend(ac, pg);
-                }
-                return tvBoxService.getDetail(ac, ids);
-            } else if (t != null && !t.isEmpty()) {
-                if (t.equals("0")) {
-                    return tvBoxService.recommend(ac, pg);
-                }
-                return tvBoxService.getMovieList(client, ac, t, f, sort, pg, size);
-            } else if (wd != null && !wd.isEmpty()) {
-                return tvBoxService.search(type, ac, wd, pg);
-            } else {
-                return tvBoxService.getCategoryList(type);
+        String client = request.getHeader("X-CLIENT");
+        log.info("type: {}  path: {}  folder: {}  ac: {}  keyword: {}  filter: {}  sort: {}  page: {}", type, ids, t, ac, wd, f, sort, pg);
+        if (ids != null && !ids.isEmpty()) {
+            if (ids.startsWith("msearch:")) {
+                return tvBoxService.msearch(type, ids.substring(8));
+            } else if (ids.equals("recommend")) {
+                return tvBoxService.recommend(ac, pg);
             }
-        } catch (Exception e) {
-            return Map.of("msg", e.getMessage());
+            return tvBoxService.getDetail(ac, ids);
+        } else if (t != null && !t.isEmpty()) {
+            if (t.equals("0")) {
+                return tvBoxService.recommend(ac, pg);
+            }
+            return tvBoxService.getMovieList(client, ac, t, f, sort, pg, size);
+        } else if (wd != null && !wd.isEmpty()) {
+            return tvBoxService.search(type, ac, wd, pg);
+        } else {
+            return tvBoxService.getCategoryList(type);
         }
     }
 
