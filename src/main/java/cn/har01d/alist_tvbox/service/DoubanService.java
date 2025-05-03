@@ -381,6 +381,9 @@ public class DoubanService {
             }
 
             name = TextUtils.fixName(name);
+            if (name.isEmpty()) {
+                return null;
+            }
 
             alias = aliasRepository.findById(name).orElse(null);
             if (alias != null) {

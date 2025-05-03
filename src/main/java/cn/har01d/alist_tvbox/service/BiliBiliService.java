@@ -388,6 +388,14 @@ public class BiliBiliService {
                     log.info("扫码登录成功");
                     String cookie = response.getHeaders().get("set-cookie").stream().map(e -> e.split(";")[0]).collect(Collectors.joining(";"));
                     settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
+//                    try {
+//                        HttpEntity<Void> entity = buildHttpEntity(null);
+//                        var body = restTemplate.exchange("https://api.bilibili.com/x/frontend/finger/spi", HttpMethod.GET, entity, JsonNode.class).getBody();
+//                        cookie += ";buvid3=" + body.get("data").get("b_3").asText() + ";buvid4=" + body.get("data").get("b_4").asText();
+//                        settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
+//                    } catch (Exception e) {
+//                        log.warn("get buvid3 failed", e);
+//                    }
                     return code;
                 }
             } else if (code == 86038) {
@@ -1103,7 +1111,7 @@ public class BiliBiliService {
         return result;
     }
 
-    public MovieList getDetail(String bvid) throws IOException {
+    public MovieList getDetail(String bvid, String client) throws IOException {
         log.debug("--- getDetail --- {}", bvid);
         if (bvid.startsWith("channel$")) {
             return getChannelPlaylist(bvid);
@@ -1168,14 +1176,21 @@ public class BiliBiliService {
         }
 
         if (info.getOwner() != null) {
-            try {
-                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
-                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
-                String others = movieList.getList().get(0).getVod_play_url();
-                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
-            } catch (Exception e) {
-                log.warn("get UP playlist failed", e);
+            if ("com.fongmi.android.tv".equals(client)) {
+                long id = info.getOwner().getMid();
+                String name = info.getOwner().getName();
+                String owner = String.format("[a=cr:{\"id\":\"up:%d\",\"name\":\"%s\"}/]%s[/a]", id, name, name);
+                movieDetail.setVod_director(owner);
             }
+
+//            try {
+//                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
+//                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
+//                String others = movieList.getList().get(0).getVod_play_url();
+//                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
+//            } catch (Exception e) {
+//                log.warn("get UP playlist failed", e);
+//            }
         }
 
         MovieList result = new MovieList();
@@ -1415,14 +1430,14 @@ public class BiliBiliService {
         String cookie = entity.getHeaders().getFirst("Cookie");
         Map<String, String> headers = new HashMap<>();
         headers.put("Referer", "https://www.bilibili.com");
-        headers.put("cookie", cookie);
+        headers.put("Cookie", cookie);
         headers.put("User-Agent", USER_AGENT);
         result.put("header", headers);
 
         result.put("subs", getSubtitles(aid, cid));
 
         if ("com.fongmi.android.tv".equals(client)) {
-            result.put("danmaku", "https://comment.bilibili.com/" + cid + ".xml");
+            result.put("danmaku", List.of(Map.of("name", cid, "url", "https://comment.bilibili.com/" + cid + ".xml")));
         }
 
         if (appProperties.isHeartbeat()) {
@@ -1441,7 +1456,7 @@ public class BiliBiliService {
             HttpEntity<Void> entity = buildHttpEntity(null);
             ResponseEntity<BiliBiliV2InfoResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliV2InfoResponse.class);
             for (BiliBiliV2Info.Subtitle subtitle : response.getBody().getData().getSubtitle().getSubtitles()) {
-                if (subtitle.getLan_doc().contains("中文") && subtitle.getLan_doc().contains("自动生成")) {
+                if (subtitle.getLan_doc().contains("中文") && (subtitle.getLan_doc().contains("自动生成") || subtitle.getLan_doc().contains("自动翻译"))) {
                     continue;
                 }
                 Sub sub = new Sub();

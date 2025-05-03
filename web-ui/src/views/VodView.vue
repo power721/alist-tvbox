@@ -259,6 +259,24 @@
                     <el-slider v-model="currentVolume" @change="setVolume" :min="0" :max="100" :step="5"/>
                   </template>
                 </el-popover>
+                <el-popover placement="bottom" width="350px">
+                  <template #reference>
+                    <el-button :icon="Menu"></el-button>
+                  </template>
+                  <template #default>
+                    <div class="players">
+                      <a :href="'iina://weblink?url='+playUrl"><img alt="iina" src="/iina.webp"></a>
+                      <a :href="'potplayer://'+playUrl"><img alt="potplayer" src="/potplayer.webp"></a>
+                      <a :href="'vlc://'+playUrl"><img alt="vlc" src="/vlc.webp"></a>
+                      <a :href="'nplayer-'+playUrl"><img alt="nplayer" src="/nplayer.webp"></a>
+                      <a :href="'omniplayer://weblink?url='+playUrl"><img alt="omniplayer" src="/omniplayer.webp"></a>
+                      <a :href="'figplayer://weblink?url='+playUrl"><img alt="figplayer" src="/figplayer.webp"></a>
+                      <a :href="'infuse://x-callback-url/play?url='+playUrl"><img alt="infuse" src="/infuse.webp"></a>
+                      <a :href="'filebox://play?url='+playUrl"><img alt="fileball" src="/fileball.webp"></a>
+<!--                      <a :href="'iplay://play/any?type=url&url='+playUrl"><img alt="iPlay" src="/iPlay.webp"></a>-->
+                    </div>
+                  </template>
+                </el-popover>
                 <el-popover placement="right-start">
                   <template #reference>
                     <el-button :icon="QuestionFilled"/>
@@ -381,7 +399,7 @@ import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
-import {Delete, Film, Plus, QuestionFilled, Search, Setting} from "@element-plus/icons-vue";
+import {Delete, Film, Menu, Plus, QuestionFilled, Search, Setting} from "@element-plus/icons-vue";
 
 let {toClipboard} = clipBorad();
 
@@ -1320,5 +1338,14 @@ video {
   width: 100%;
   max-height: 1080px;
   overflow: auto;
+}
+
+.players img {
+  width: 26px;
+  height: 26px;
+}
+
+.players a {
+  margin: 0 6px;
 }
 </style>
