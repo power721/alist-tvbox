@@ -117,6 +117,7 @@ public class TvBoxService {
     private final Cache<Integer, List<String>> cache = Caffeine.newBuilder()
             .maximumSize(10)
             .build();
+    private final Set<String> excludeNames = Set.of("国产剧", "欧美剧", "电视剧", "美剧", "短剧", "动漫", "国漫", "纪录片", "综艺", "电子书", "有声书", "有声小说", "电影", "电影合集", "动画电影", "欧美电影", "演唱会", "日韩剧", "每日更新", "temp", "合集1", "合集2", "合集3");
 
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -1013,7 +1014,9 @@ public class TvBoxService {
                     }
                     movieDetail.setCate(new CategoryList());
                 }
-                setMovieInfo(site, movieDetail, fsInfo.getName(), newPath, false);
+                if (!"/".equals(path)) {
+                    setMovieInfo(site, movieDetail, fsInfo.getName(), newPath, false);
+                }
                 folders.add(movieDetail);
             } else if (fsInfo.getType() == 5) {
                 images.add(movieDetail);
@@ -1932,6 +1935,10 @@ public class TvBoxService {
     }
 
     private boolean setMovieInfo(Site site, MovieDetail movieDetail, String filename, String path, boolean details) {
+        if (excludeNames.contains(movieDetail.getVod_name())) {
+            return true;
+        }
+
         if (setTmdbInfo(site, movieDetail, path, details)) {
             return true;
         }

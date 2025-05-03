@@ -28,7 +28,6 @@ public class RestErrorHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler({BadRequestException.class})
     public ResponseEntity<Object> handleBadRequestException(Exception ex, WebRequest request) {
-        log.warn("", ex);
         HttpHeaders headers = new HttpHeaders();
         HttpStatusCode status = HttpStatusCode.valueOf(400);
         ProblemDetail body = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
@@ -37,7 +36,6 @@ public class RestErrorHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler({UserUnauthorizedException.class})
     public ResponseEntity<Object> handleUserUnauthorizedException(Exception ex, WebRequest request) {
-        log.warn("", ex);
         HttpHeaders headers = new HttpHeaders();
         HttpStatusCode status = HttpStatusCode.valueOf(401);
         ProblemDetail body = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
@@ -46,7 +44,6 @@ public class RestErrorHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler({NotFoundException.class})
     public ResponseEntity<Object> handleNotFoundException(Exception ex, WebRequest request) {
-        log.warn("", ex);
         HttpHeaders headers = new HttpHeaders();
         HttpStatusCode status = HttpStatusCode.valueOf(404);
         ProblemDetail body = ProblemDetail.forStatusAndDetail(status, ex.getMessage());

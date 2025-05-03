@@ -54,13 +54,14 @@ public class BiliBiliController {
         subscriptionService.checkToken(token);
         response.setContentType("application/json");
 
+        String client = request.getHeader("X-CLIENT");
         log.info("path: {}  folder: {}  keyword: {}  filter: {}  quick: {} page: {}", ids, t, wd, filter, quick, pg);
         Object result;
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
                 result = biliBiliService.recommend();
             } else {
-                result = biliBiliService.getDetail(ids);
+                result = biliBiliService.getDetail(ids, client);
             }
         } else if (t != null && !t.isEmpty()) {
             result = biliBiliService.getMovieList(t, filter, pg);

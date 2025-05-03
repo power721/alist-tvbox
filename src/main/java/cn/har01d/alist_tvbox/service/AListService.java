@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.FsDetail;
 import cn.har01d.alist_tvbox.model.FsDetailResponse;
 import cn.har01d.alist_tvbox.model.FsInfo;
@@ -298,8 +299,10 @@ public class AListService {
     }
 
     private void logError(Response<?> response) {
-        if (response != null && response.getCode() != 200) {
-            log.warn("error {} {}", response.getCode(), response.getMessage());
+        if (response != null && response.getCode() >= 400) {
+            log.error("error {} {}", response.getCode(), response.getMessage());
+            String message = response.getMessage().replace("failed get objs: ", "").replace("failed to list objs: ", "").trim();
+            throw new BadRequestException(message);
         }
     }
 }
