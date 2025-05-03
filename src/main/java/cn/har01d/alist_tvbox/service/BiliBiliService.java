@@ -1437,7 +1437,7 @@ public class BiliBiliService {
         result.put("subs", getSubtitles(aid, cid));
 
         if ("com.fongmi.android.tv".equals(client)) {
-            result.put("danmaku", List.of(Map.of("name", cid, "url", "https://comment.bilibili.com/" + cid + ".xml")));
+            result.put("danmaku", "https://comment.bilibili.com/" + cid + ".xml");
         }
 
         if (appProperties.isHeartbeat()) {
