@@ -281,8 +281,9 @@
         </el-form-item>
         <el-form-item label="网盘文件删除延时">
           <el-input-number v-model="deleteDelayTime" min="0"></el-input-number>
-          秒
-          <span class="hint">0表示不删除</span>&nbsp;&nbsp;
+          &nbsp;&nbsp;秒
+          <span class="hint">0表示不删除</span>
+          <span class="hint"></span>
           <el-button type="primary" @click="updateDeleteDelayTime">更新</el-button>
         </el-form-item>
         <el-form-item>

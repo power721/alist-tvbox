@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.dto.bili;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -17,14 +18,17 @@ public class BiliBiliInfo {
     private String desc;
     private int tid;
     private String tname;
+    private String tname_v2;
     private int videos;
     private String title;
     private boolean is_chargeable_season;
     private boolean is_season_display;
     private boolean is_story;
     private Stats stat;
-    private Owner owner;
-    private List<PageInfo> pages = new ArrayList<>();
+    private User owner;
+    private List<User> staff;
+    //private SubtitleList subtitle;
+    private List<PageInfo> pages;
 
     @Data
     public static class Stats {
@@ -38,10 +42,9 @@ public class BiliBiliInfo {
     }
 
     @Data
-    public static class Owner {
+    public static class User {
         private long mid;
         private String name;
-        private String face;
     }
 
     @Data
@@ -52,4 +55,9 @@ public class BiliBiliInfo {
         private String part;
     }
 
+    @Data
+    public static class SubtitleList {
+        @JsonProperty("list")
+        private List<BiliBiliV2Info.Subtitle> subtitles = new ArrayList<>();
+    }
 }
