@@ -42,6 +42,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -126,7 +127,7 @@ public class YoutubeService {
 
     public YoutubeService(AppProperties appProperties) {
         this.appProperties = appProperties;
-        Config config = new Config.Builder().header("User-Agent", Constants.USER_AGENT).build();
+        Config config = new Config.Builder().header(HttpHeaders.USER_AGENT, appProperties.getUserAgent()).build();
 
         try {
             Path path = Path.of("/data/proxy.txt");

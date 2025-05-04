@@ -281,7 +281,7 @@ public class AListService {
     private <T> T get(Site site, String url, Class<T> responseType) {
         HttpHeaders headers = new HttpHeaders();
         if (StringUtils.isNotBlank(site.getToken())) {
-            headers.add("Authorization", site.getToken());
+            headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
         }
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
         ResponseEntity<T> response = restTemplate.exchange(url, HttpMethod.GET, entity, responseType);
@@ -291,7 +291,7 @@ public class AListService {
     private <T, R> T post(Site site, String url, R request, Class<T> responseType) {
         HttpHeaders headers = new HttpHeaders();
         if (StringUtils.isNotBlank(site.getToken())) {
-            headers.add("Authorization", site.getToken());
+            headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
         }
         HttpEntity<R> entity = new HttpEntity<>(request, headers);
         ResponseEntity<T> response = restTemplate.exchange(url, HttpMethod.POST, entity, responseType);

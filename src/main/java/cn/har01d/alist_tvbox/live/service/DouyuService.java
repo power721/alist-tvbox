@@ -199,7 +199,7 @@ public class DouyuService implements LivePlatform {
 
     private void parseUrl(MovieDetail movieDetail, String id) throws IOException {
         HttpHeaders headers = new HttpHeaders();
-        headers.set("Referer", "https://www.douyu.com/" + id);
+        headers.set(HttpHeaders.REFERER, "https://www.douyu.com/" + id);
         String url = "https://www.douyu.com/swf_api/homeH5Enc?rids=" + id;
         String html = restTemplate.getForObject(url, String.class);
         ObjectNode node = objectMapper.readValue(html, ObjectNode.class);
@@ -242,7 +242,7 @@ public class DouyuService implements LivePlatform {
         String url = "https://www.douyu.com/lapi/live/getH5Play/" + id;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        headers.set("Referer", "https://www.douyu.com/" + id);
+        headers.set(HttpHeaders.REFERER, "https://www.douyu.com/" + id);
         HttpEntity<String> request = new HttpEntity<>(args, headers);
         ResponseEntity<ObjectNode> response = restTemplate.exchange(
                 url,

@@ -11,14 +11,17 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -34,12 +37,41 @@ public final class Utils {
     private static final Pattern EPISODE = Pattern.compile("^(.+)[sS]\\d{1,2}[eE]?\\d?$");
     private static final Pattern EPISODE2 = Pattern.compile("^(.+EP)\\d?$");
     private static final Pattern NUMBERS = Pattern.compile("\\d+");
+    private static List<String> userAgents = new ArrayList<>();
     private static final int[] mixinKeyEncTab = new int[]{
             46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
             33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40,
             61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11,
             36, 20, 34, 44, 52
     };
+
+    private Utils() {
+        readUserAgents();
+    }
+
+    private static void readUserAgents() {
+        try (InputStream is = Utils.class.getResourceAsStream("/ua.txt")) {
+            if (is == null) {
+                return;
+            }
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    userAgents.add(line);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("read user agents failed: {}", e.getMessage());
+        }
+    }
+
+    public static String getUserAgent() {
+        if (userAgents.isEmpty()) {
+            return Constants.USER_AGENT;
+        }
+        return userAgents.get(ThreadLocalRandom.current().nextInt(userAgents.size()));
+    }
 
     public static String getCommonPrefix(List<String> names) {
         return getCommonPrefix(names, true);

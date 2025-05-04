@@ -738,9 +738,9 @@ public class BiliBiliService {
     private <T> T getJson(String url, Class<T> clazz) throws IOException {
         Request request = new Request.Builder()
                 .url(url)
-                .addHeader("Accept", "*/*")
-                .addHeader("User-Agent", USER_AGENT)
-                .addHeader("referer", "https://space.bilibili.com")
+                .addHeader(HttpHeaders.ACCEPT, "*/*")
+                .addHeader(HttpHeaders.USER_AGENT, appProperties.getUserAgent())
+                .addHeader(HttpHeaders.REFERER, "https://space.bilibili.com")
                 .build();
 
         Call call = client.newCall(request);
@@ -828,10 +828,10 @@ public class BiliBiliService {
         map.put("order_avoided", true);
         map.put("dm_img_list", "[]");
         map.put("dm_img_inter", "{\"ds\":[{\"t\":1,\"c\":\"\",\"p\":[330,110,110],\"s\":[61,61,122]}],\"wh\":[6025,5600,11],\"of\":[316,632,316]}");
-        map.put("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ");
-        map.put("dm_cover_img_str", "QU5HTEUgKE5WSURJQSBDb3Jwb3JhdGlvbiwgTlZJRElBIEdlRm9yY2UgUlRYIDQwNjAgVGkvUENJZS9TU0UyLCBPcGVuR0wgNC41LjApR29vZ2xlIEluYy4gKE5WSURJQSBDb3Jwb3JhdGlvbi");
+        map.put("dm_img_str", BiliBiliUtils.getDmString(35));
+        map.put("dm_cover_img_str", BiliBiliUtils.getDmString(110));
 
-        HttpEntity<Void> entity = buildHttpEntity(null, Map.of("Referer", "https://space.bilibili.com"));
+        HttpEntity<Void> entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://space.bilibili.com"));
         getKeys(entity);
         String url = NEW_SEARCH_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
         log.debug("getUpMedia: {}", url);
@@ -897,8 +897,8 @@ public class BiliBiliService {
         map.put("order_avoided", true);
         map.put("dm_img_list", "[]");
         map.put("dm_img_inter", "{\"ds\":[{\"t\":1,\"c\":\"\",\"p\":[330,110,110],\"s\":[61,61,122]}],\"wh\":[6025,5600,11],\"of\":[316,632,316]}");
-        map.put("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ");
-        map.put("dm_cover_img_str", "QU5HTEUgKE5WSURJQSBDb3Jwb3JhdGlvbiwgTlZJRElBIEdlRm9yY2UgUlRYIDQwNjAgVGkvUENJZS9TU0UyLCBPcGVuR0wgNC41LjApR29vZ2xlIEluYy4gKE5WSURJQSBDb3Jwb3JhdGlvbi");
+        map.put("dm_img_str", BiliBiliUtils.getDmString(35));
+        map.put("dm_cover_img_str", BiliBiliUtils.getDmString(110));
 
         HttpEntity<Void> entity = buildHttpEntity(null, Map.of("Referer", "https://space.bilibili.com"));
         getKeys(entity);
@@ -1176,21 +1176,21 @@ public class BiliBiliService {
         }
 
         if (info.getOwner() != null) {
-            if ("com.fongmi.android.tv".equals(client)) {
-                long id = info.getOwner().getMid();
-                String name = info.getOwner().getName();
-                String owner = String.format("[a=cr:{\"id\":\"up:%d\",\"name\":\"%s\"}/]%s[/a]", id, name, name);
-                movieDetail.setVod_director(owner);
-            }
-
-//            try {
-//                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
-//                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
-//                String others = movieList.getList().get(0).getVod_play_url();
-//                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
-//            } catch (Exception e) {
-//                log.warn("get UP playlist failed", e);
+//            if ("com.fongmi.android.tv".equals(client)) {
+//                long id = info.getOwner().getMid();
+//                String name = info.getOwner().getName();
+//                String owner = String.format("[a=cr:{\"id\":\"up:%d\",\"name\":\"%s\"}/]%s[/a]", id, name, name);
+//                movieDetail.setVod_director(owner);
 //            }
+
+            try {
+                MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
+                movieDetail.setVod_play_from(movieDetail.getVod_play_from() + "$$$UP主视频");
+                String others = movieList.getList().get(0).getVod_play_url();
+                movieDetail.setVod_play_url(movieDetail.getVod_play_url() + "$$$" + others);
+            } catch (Exception e) {
+                log.warn("get UP playlist failed", e);
+            }
         }
 
         MovieList result = new MovieList();
@@ -1327,6 +1327,7 @@ public class BiliBiliService {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
         headers.set(HttpHeaders.ACCEPT, "*/*");
+        headers.set(HttpHeaders.USER_AGENT, Utils.getUserAgent());
         if (urlencoded) {
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         }
@@ -1361,11 +1362,11 @@ public class BiliBiliService {
 
     private String getToken(long aid, long cid, String cookie) {
         HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.REFERER, "https://api.bilibili.com/");
-        headers.add(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
-        headers.add(HttpHeaders.ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
-        headers.add(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
-        headers.add(HttpHeaders.COOKIE, cookie);
+        headers.set(HttpHeaders.REFERER, "https://api.bilibili.com/");
+        headers.set(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
+        headers.set(HttpHeaders.ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
+        headers.set(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
+        headers.set(HttpHeaders.COOKIE, cookie);
 
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
         String url = String.format(TOKEN_API, aid, cid);
@@ -1429,9 +1430,9 @@ public class BiliBiliService {
         }
         String cookie = entity.getHeaders().getFirst("Cookie");
         Map<String, String> headers = new HashMap<>();
-        headers.put("Referer", "https://www.bilibili.com");
-        headers.put("Cookie", cookie);
-        headers.put("User-Agent", USER_AGENT);
+        headers.put(HttpHeaders.REFERER, "https://www.bilibili.com");
+        headers.put(HttpHeaders.COOKIE, cookie);
+        headers.put(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
         result.put("header", headers);
 
         result.put("subs", getSubtitles(aid, cid));

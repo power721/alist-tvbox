@@ -195,6 +195,12 @@
         <el-form-item>
           <el-button type="primary" @click="updateTmdbApiKey">更新</el-button>
         </el-form-item>
+        <el-form-item label="User Agent">
+          <el-input v-model="userAgent" placeholder="留空使用当前浏览器UA"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateUserAgent">更新</el-button>
+        </el-form-item>
         <el-form-item label="Cookie地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
             阿里 Token
@@ -377,6 +383,7 @@ const openTokenUrl = ref('')
 const dockerAddress = ref('')
 const aliSecret = ref('')
 const tmdbApiKey = ref('')
+const userAgent = ref('')
 const atvPass = ref('')
 const apiClientId = ref('')
 const apiClientSecret = ref('')
@@ -429,6 +436,13 @@ const updateOpenTokenUrl = () => {
 
 const updateTmdbApiKey = () => {
   axios.post('/api/settings', {name: 'tmdb_api_key', value: tmdbApiKey.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateUserAgent = () => {
+  axios.post('/api/settings', {name: 'user_agent', value: userAgent.value}).then(({data}) => {
+    userAgent.value = data.value
     ElMessage.success('更新成功')
   })
 }
@@ -541,6 +555,7 @@ onMounted(() => {
     dockerAddress.value = data.docker_address
     aliSecret.value = data.ali_secret
     tmdbApiKey.value = data.tmdb_api_key
+    userAgent.value = data.user_agent
     autoCheckin.value = data.auto_checkin === 'true'
     aListRestart.value = data.alist_restart_required === 'true'
     replaceAliToken.value = data.replace_ali_token === 'true'

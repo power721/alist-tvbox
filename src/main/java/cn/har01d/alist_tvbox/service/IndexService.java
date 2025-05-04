@@ -566,11 +566,11 @@ public class IndexService {
         for (int i = 0; i < 20; i++) {
             String deviceID = UUID.randomUUID().toString().replace("-", "");
             HttpHeaders headers = new HttpHeaders();
-            headers.put("X-Canary", List.of("client=web,app=share,version=v2.3.1"));
-            headers.put("X-Device-Id", List.of(deviceID));
-            headers.put("X-Share-Token", List.of(shareInfo.getShareToken()));
-            headers.put("Referer", List.of(Constants.ALIPAN));
-            headers.put("User-Agent", List.of(USER_AGENT));
+            headers.set("X-Canary", "client=web,app=share,version=v2.3.1");
+            headers.set("X-Device-Id", deviceID);
+            headers.set("X-Share-Token", shareInfo.getShareToken());
+            headers.set(HttpHeaders.REFERER, Constants.ALIPAN);
+            headers.set(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
             Map<String, Object> body = new HashMap<>();
             body.put("share_id", shareInfo.getShareId());
             body.put("limit", 200);

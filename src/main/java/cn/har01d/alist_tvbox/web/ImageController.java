@@ -23,8 +23,8 @@ public class ImageController {
 
     public ImageController(RestTemplateBuilder builder) {
         this.restTemplate = builder
-                .defaultHeader("Referer", "https://movie.douban.com/")
-                .defaultHeader("User-Agent", Constants.USER_AGENT)
+                .defaultHeader(HttpHeaders.REFERER, "https://movie.douban.com/")
+                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
                 .build();
     }
 

@@ -93,4 +93,10 @@ public final class BiliBiliUtils {
     public static long getMid() {
         return (MID ^ (123456789L << 3 + 1)) - 3;
     }
+
+    public static String getDmString(int len) {
+        String text = IdUtils.generate(len);
+        String encoded = Base64.getEncoder().encodeToString(text.getBytes());
+        return encoded.substring(0, encoded.length() - 2);
+    }
 }

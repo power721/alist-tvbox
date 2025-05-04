@@ -567,12 +567,12 @@ public class EmbyService {
     private HttpHeaders setHeaders(Emby emby, EmbyInfo info) {
         HttpHeaders headers = new HttpHeaders();
         if (StringUtils.isNotBlank(emby.getUserAgent())) {
-            headers.set("User-Agent", emby.getUserAgent());
+            headers.set(HttpHeaders.USER_AGENT, emby.getUserAgent());
         }
         if (info != null) {
             headers.set("X-Emby-Token", info.getAccessToken());
             String header = String.format("Emby UserId=\"%s\",Client=\"%s\",Version=\"%s\",Device=\"%s\",DeviceId=\"%s\",Token=\"%s\"", info.getUser().getId(), emby.getClientName(), emby.getClientVersion(), emby.getDeviceName(), emby.getDeviceId(), info.getAccessToken());
-            headers.set("Authorization", header);
+            headers.set(HttpHeaders.AUTHORIZATION, header);
         }
         headers.set("X-Emby-Client", emby.getClientName());
         headers.set("X-Emby-Client-Version", emby.getClientVersion());

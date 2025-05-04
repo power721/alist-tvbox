@@ -687,7 +687,7 @@ public class TelegramService {
                 .url(url)
                 .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
                 .addHeader("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5")
-                .addHeader("User-Agent", USER_AGENT)
+                .addHeader("User-Agent", appProperties.getUserAgent())
                 .addHeader("Referer", "https://t.me/")
                 .build();
 

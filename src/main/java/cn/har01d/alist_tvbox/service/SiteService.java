@@ -56,7 +56,7 @@ public class SiteService {
         this.jdbcTemplate = jdbcTemplate;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
-                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
+                .defaultHeader(HttpHeaders.USER_AGENT, appProperties.getUserAgent())
                 .build();
     }
 
@@ -191,7 +191,8 @@ public class SiteService {
             return null;
         }
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Authorization", aListToken);
+        headers.set(HttpHeaders.AUTHORIZATION, aListToken);
+        headers.set(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
         HttpEntity<Void> entity = new HttpEntity<>(null, headers);
         ResponseEntity<Response<String>> response = restTemplate.exchange(url, HttpMethod.POST, entity, new ParameterizedTypeReference<Response<String>>() {
         });

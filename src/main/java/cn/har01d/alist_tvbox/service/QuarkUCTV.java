@@ -59,8 +59,8 @@ public class QuarkUCTV {
         log.debug("get qr data: {}", url);
 
         HttpHeaders headers = new HttpHeaders();
-        headers.set("Accept", "application/json, text/plain, */*");
-        headers.set("User-Agent", USER_AGENT);
+        headers.set(HttpHeaders.ACCEPT, "application/json, text/plain, */*");
+        headers.set(HttpHeaders.USER_AGENT, USER_AGENT);
         headers.set("x-pan-tm", reqSign[0]);
         headers.set("x-pan-token", reqSign[1]);
         headers.set("x-pan-client-id", conf.clientID);
@@ -111,8 +111,8 @@ public class QuarkUCTV {
         log.debug("get code: {}", url);
 
         HttpHeaders headers = new HttpHeaders();
-        headers.set("Accept", "application/json, text/plain, */*");
-        headers.set("User-Agent", USER_AGENT);
+        headers.set(HttpHeaders.ACCEPT, "application/json, text/plain, */*");
+        headers.set(HttpHeaders.USER_AGENT, USER_AGENT);
         headers.set("x-pan-tm", reqSign[0]);
         headers.set("x-pan-token", reqSign[1]);
         headers.set("x-pan-client-id", conf.clientID);
@@ -169,7 +169,7 @@ public class QuarkUCTV {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("User-Agent", USER_AGENT);
+        headers.set(HttpHeaders.USER_AGENT, USER_AGENT);
         headers.set("x-pan-tm", reqSign[0]);
         headers.set("x-pan-token", reqSign[1]);
         headers.set("x-pan-client-id", conf.clientID);

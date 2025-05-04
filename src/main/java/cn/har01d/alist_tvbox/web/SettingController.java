@@ -2,8 +2,11 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.service.SettingService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,7 +39,10 @@ public class SettingController {
     }
 
     @PostMapping
-    public Setting update(@RequestBody Setting setting) {
+    public Setting update(@RequestBody Setting setting, HttpServletRequest request) {
+        if ("user_agent".equals(setting.getName()) && StringUtils.isBlank(setting.getValue())) {
+            setting.setValue(request.getHeader(HttpHeaders.USER_AGENT));
+        }
         return service.update(setting);
     }
 

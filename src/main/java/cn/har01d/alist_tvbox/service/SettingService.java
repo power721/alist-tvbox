@@ -59,6 +59,7 @@ public class SettingService {
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
+        settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));
         String value = settingRepository.findById("tg_channels").map(Setting::getValue).orElse("");
         if (StringUtils.isBlank(value)) {
             settingRepository.save(new Setting("tg_channels", appProperties.getTgChannels()));
@@ -177,6 +178,9 @@ public class SettingService {
         }
         if ("tg_search".equals(setting.getName())) {
             appProperties.setTgSearch(setting.getValue());
+        }
+        if ("user_agent".equals(setting.getName())) {
+            appProperties.setUserAgent(setting.getValue());
         }
         if ("tmdb_api_key".equals(setting.getName())) {
             tmdbService.setApiKey(setting.getValue());

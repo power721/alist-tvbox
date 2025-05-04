@@ -86,7 +86,7 @@ public class ProxyService {
             String name = it.next();
             headers.put(name, request.getHeader(name));
         }
-        headers.put("user-agent", Constants.USER_AGENT);
+        headers.put("user-agent", appProperties.getUserAgent());
         headers.put("referer", Constants.ALIPAN);
 
         String url = cache.getIfPresent(id);
