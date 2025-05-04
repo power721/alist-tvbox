@@ -5,6 +5,8 @@ import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.BufferedReader;
@@ -16,7 +18,9 @@ import java.io.InputStreamReader;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +41,8 @@ public final class Utils {
     private static final Pattern EPISODE = Pattern.compile("^(.+)[sS]\\d{1,2}[eE]?\\d?$");
     private static final Pattern EPISODE2 = Pattern.compile("^(.+EP)\\d?$");
     private static final Pattern NUMBERS = Pattern.compile("\\d+");
-    private static List<String> userAgents = new ArrayList<>();
+    private static final List<String> userAgents = new ArrayList<>();
+    private static final SecureRandom secureRandom = new SecureRandom();
     private static final int[] mixinKeyEncTab = new int[]{
             46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
             33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40,
@@ -45,24 +50,18 @@ public final class Utils {
             36, 20, 34, 44, 52
     };
 
-    private Utils() {
+    static {
         readUserAgents();
     }
 
     private static void readUserAgents() {
-        try (InputStream is = Utils.class.getResourceAsStream("/ua.txt")) {
-            if (is == null) {
-                return;
-            }
-
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    userAgents.add(line);
-                }
-            }
+        try {
+            var resource = new ClassPathResource("/ua.txt");
+            String lines = resource.getContentAsString(StandardCharsets.UTF_8);
+            userAgents.addAll(Arrays.asList(lines.split("\n")));
+            log.info("Read {} user agents", userAgents.size());
         } catch (IOException e) {
-            log.warn("read user agents failed: {}", e.getMessage());
+            log.warn("read user agents failed: ", e);
         }
     }
 
@@ -70,7 +69,7 @@ public final class Utils {
         if (userAgents.isEmpty()) {
             return Constants.USER_AGENT;
         }
-        return userAgents.get(ThreadLocalRandom.current().nextInt(userAgents.size()));
+        return userAgents.get(secureRandom.nextInt(userAgents.size()));
     }
 
     public static String getCommonPrefix(List<String> names) {

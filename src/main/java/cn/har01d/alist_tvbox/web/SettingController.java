@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.service.SettingService;
+import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.lang3.StringUtils;
@@ -40,8 +41,12 @@ public class SettingController {
 
     @PostMapping
     public Setting update(@RequestBody Setting setting, HttpServletRequest request) {
-        if ("user_agent".equals(setting.getName()) && StringUtils.isBlank(setting.getValue())) {
-            setting.setValue(request.getHeader(HttpHeaders.USER_AGENT));
+        if ("user_agent".equals(setting.getName())) {
+            if (StringUtils.isBlank(setting.getValue())) {
+                setting.setValue(Utils.getUserAgent());
+            } else if ("current".equals(setting.getValue())) {
+                setting.setValue(request.getHeader(HttpHeaders.USER_AGENT));
+            }
         }
         return service.update(setting);
     }
