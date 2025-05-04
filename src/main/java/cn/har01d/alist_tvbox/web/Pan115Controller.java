@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpHeaders;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,8 +25,8 @@ public class Pan115Controller {
 
     public Pan115Controller(RestTemplateBuilder builder, ObjectMapper objectMapper) {
         this.restTemplate = builder
-                .defaultHeader("User-Agent", Constants.USER_AGENT)
-                .defaultHeader("referer", "https://115.com")
+                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
+                .defaultHeader(HttpHeaders.REFERER, "https://115.com")
                 .build();
         this.objectMapper = objectMapper;
     }

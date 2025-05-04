@@ -95,7 +95,7 @@ public class AListLocalService {
             body.put("options", "");
             HttpHeaders headers = new HttpHeaders();
             Site site = siteRepository.findById(1).orElseThrow();
-            headers.add("Authorization", site.getToken());
+            headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
             SettingResponse response = restTemplate.postForObject("/api/admin/setting/update", entity, SettingResponse.class);
             log.debug("update setting by API: {}", response);
@@ -109,7 +109,7 @@ public class AListLocalService {
     public SettingResponse getSetting(String key) {
         HttpHeaders headers = new HttpHeaders();
         Site site = siteRepository.findById(1).orElseThrow();
-        headers.add("Authorization", site.getToken());
+        headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
         String url = "/api/admin/setting/get?key=" + key;
         ResponseEntity<SettingResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, SettingResponse.class);
@@ -133,7 +133,7 @@ public class AListLocalService {
         if (getAListStatus() == 2) {
             String token = siteRepository.findById(1).orElseThrow().getToken();
             HttpHeaders headers = new HttpHeaders();
-            headers.put("Authorization", List.of(token));
+            headers.set(HttpHeaders.AUTHORIZATION, token);
             Map<String, Object> body = new HashMap<>();
             body.put("key", key);
             body.put("value", value);
@@ -153,7 +153,7 @@ public class AListLocalService {
         try {
             String token = siteRepository.findById(1).orElseThrow().getToken();
             HttpHeaders headers = new HttpHeaders();
-            headers.put("Authorization", List.of(token));
+            headers.set(HttpHeaders.AUTHORIZATION, token);
             HttpEntity<String> entity = new HttpEntity<>(null, headers);
             ResponseEntity<AliTokensResponse> response = restTemplate.exchange("/api/admin/token/list", HttpMethod.GET, entity, AliTokensResponse.class);
             log.trace("getTokens response: {}", response.getBody().getData());

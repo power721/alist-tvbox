@@ -510,7 +510,7 @@ public class ShareService {
 
         String token = status == 2 ? login() : "";
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", List.of(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         Map<String, Object> body = new HashMap<>();
         body.put("key", key);
         body.put("type", "text");
@@ -978,7 +978,7 @@ public class ShareService {
 
     public String enableStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
         ResponseEntity<Map> response = restTemplate.exchange("/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, Map.class);
         log.info("enable storage response: {}", response.getBody());
@@ -1012,7 +1012,7 @@ public class ShareService {
 
     public void deleteStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = restTemplate.exchange("/api/admin/storage/delete?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("delete storage response: {}", response.getBody());
@@ -1021,7 +1021,7 @@ public class ShareService {
     public Object listStorages(Pageable pageable) {
         aListLocalService.validateAListStatus();
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(accountService.login()));
+        headers.set(HttpHeaders.AUTHORIZATION, accountService.login());
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
         ResponseEntity<Object> response = restTemplate.exchange("/api/admin/storage/failed?page=" + pageable.getPageNumber() + "&per_page=" + pageable.getPageSize(), HttpMethod.GET, entity, Object.class);
         return response.getBody();
@@ -1030,7 +1030,7 @@ public class ShareService {
     public Response reloadStorage(Integer id) {
         aListLocalService.validateAListStatus();
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", Collections.singletonList(accountService.login()));
+        headers.set(HttpHeaders.AUTHORIZATION, accountService.login());
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
         ResponseEntity<Response> response = restTemplate.exchange("/api/admin/storage/reload?id=" + id, HttpMethod.POST, entity, Response.class);
         log.debug("reload storage {}: {}", id, response.getBody());

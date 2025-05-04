@@ -1367,11 +1367,11 @@ public class TvBoxService {
             } else {
                 String cookie = account.getCookie();
                 // 115会把UA生成签名校验
-                result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
+                result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + appProperties.getUserAgent() + "\",\"Referer\":\"https://115.com/\"}");
             }
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
-            result.put("header", "{\"User-Agent\":\"" + USER_AGENT + "\",\"Referer\":\"" + Constants.ALIPAN + "\",\"origin\":\"" + Constants.ALIPAN + "\"}");
+            result.put("header", "{\"User-Agent\":\"" + appProperties.getUserAgent() + "\",\"Referer\":\"" + Constants.ALIPAN + "\",\"origin\":\"" + Constants.ALIPAN + "\"}");
         }
 
         if (!getSub) {

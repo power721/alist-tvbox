@@ -185,15 +185,17 @@
         </el-form-item>
         <el-form-item label="Client Secret">
           <el-input v-model="apiClientSecret" type="password" show-password placeholder="默认不要填写"/>
-        </el-form-item>
-        <el-form-item>
           <el-button type="primary" @click="updateOpenTokenUrl">更新</el-button>
         </el-form-item>
         <el-form-item label="TMDB API Key">
           <el-input v-model="tmdbApiKey" type="password" show-password/>
-        </el-form-item>
-        <el-form-item>
           <el-button type="primary" @click="updateTmdbApiKey">更新</el-button>
+        </el-form-item>
+        <el-form-item label="User Agent">
+          <el-input v-model="userAgent"/>
+          <el-button type="primary" @click="setUserAgent">更新</el-button>
+          <el-button type="primary" @click="currentUserAgent">当前UA</el-button>
+          <el-button type="primary" @click="randomUserAgent">随机UA</el-button>
         </el-form-item>
         <el-form-item label="Cookie地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
@@ -280,21 +282,17 @@
         <el-form-item label="网盘文件删除延时">
           <el-input-number v-model="deleteDelayTime" min="0"></el-input-number>
           秒
-          <span class="hint">0表示不删除</span>
-        </el-form-item>
-        <el-form-item>
+          <span class="hint">0表示不删除</span>&nbsp;&nbsp;
           <el-button type="primary" @click="updateDeleteDelayTime">更新</el-button>
         </el-form-item>
         <el-form-item>
           <el-button @click="resetAListToken">重置AList认证Token</el-button>
-        </el-form-item>
-        <el-form-item>
           <el-button @click="exportDatabase">导出数据库</el-button>
         </el-form-item>
       </el-form>
       <template #footer>
       <span class="dialog-footer">
-        <el-button @click="dialogVisible=false">取消</el-button>
+        <el-button @click="dialogVisible=false">关闭</el-button>
       </span>
       </template>
     </el-dialog>
@@ -377,6 +375,7 @@ const openTokenUrl = ref('')
 const dockerAddress = ref('')
 const aliSecret = ref('')
 const tmdbApiKey = ref('')
+const userAgent = ref('')
 const atvPass = ref('')
 const apiClientId = ref('')
 const apiClientSecret = ref('')
@@ -429,6 +428,25 @@ const updateOpenTokenUrl = () => {
 
 const updateTmdbApiKey = () => {
   axios.post('/api/settings', {name: 'tmdb_api_key', value: tmdbApiKey.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const currentUserAgent = () => {
+  updateUserAgent('current')
+}
+
+const randomUserAgent = () => {
+  updateUserAgent('')
+}
+
+const setUserAgent = () => {
+  updateUserAgent(userAgent.value)
+}
+
+const updateUserAgent = (value: string) => {
+  axios.post('/api/settings', {name: 'user_agent', value: value}).then(({data}) => {
+    userAgent.value = data.value
     ElMessage.success('更新成功')
   })
 }
@@ -541,6 +559,7 @@ onMounted(() => {
     dockerAddress.value = data.docker_address
     aliSecret.value = data.ali_secret
     tmdbApiKey.value = data.tmdb_api_key
+    userAgent.value = data.user_agent
     autoCheckin.value = data.auto_checkin === 'true'
     aListRestart.value = data.alist_restart_required === 'true'
     replaceAliToken.value = data.replace_ali_token === 'true'

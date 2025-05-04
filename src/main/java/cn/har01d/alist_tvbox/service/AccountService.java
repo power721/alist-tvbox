@@ -6,7 +6,6 @@ import cn.har01d.alist_tvbox.dto.AccountDto;
 import cn.har01d.alist_tvbox.dto.CheckinLog;
 import cn.har01d.alist_tvbox.dto.CheckinResponse;
 import cn.har01d.alist_tvbox.dto.CheckinResult;
-import cn.har01d.alist_tvbox.dto.RewardResponse;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
@@ -16,10 +15,10 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.AListUser;
 import cn.har01d.alist_tvbox.model.AliToken;
-import cn.har01d.alist_tvbox.model.AliTokensResponse;
 import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.UserResponse;
+import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -76,7 +75,6 @@ import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN_TIME;
 import static cn.har01d.alist_tvbox.util.Constants.SCHEDULE_TIME;
 import static cn.har01d.alist_tvbox.util.Constants.SHOW_MY_ALI;
-import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 import static cn.har01d.alist_tvbox.util.Constants.ZONE_ID;
 
 @Slf4j
@@ -96,6 +94,7 @@ public class AccountService {
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final Environment environment;
+    private final AppProperties appProperties;
     private ScheduledFuture scheduledFuture;
 
     public AccountService(AccountRepository accountRepository,
@@ -114,6 +113,7 @@ public class AccountService {
         this.userRepository = userRepository;
         this.aListLocalService = aListLocalService;
         this.indexService = indexService;
+        this.appProperties = appProperties;
         this.scheduler = scheduler;
         this.objectMapper = objectMapper;
         this.jdbcTemplate = jdbcTemplate;
@@ -409,8 +409,8 @@ public class AccountService {
 
     public Map<Object, Object> getAliToken(String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put(HttpHeaders.USER_AGENT, List.of(USER_AGENT));
-        headers.put(HttpHeaders.REFERER, List.of("https://www.aliyundrive.com/"));
+        headers.set(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
+        headers.set(HttpHeaders.REFERER, Constants.ALIPAN);
         Map<String, String> body = new HashMap<>();
         body.put(REFRESH_TOKEN, token);
         body.put("grant_type", REFRESH_TOKEN);
@@ -423,8 +423,8 @@ public class AccountService {
 
     public Map<Object, Object> getAliOpenToken(String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put(HttpHeaders.USER_AGENT, List.of(USER_AGENT));
-        headers.put(HttpHeaders.REFERER, List.of("https://xhofe.top/"));
+        headers.set(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
+        headers.set(HttpHeaders.REFERER, "https://xhofe.top/");
         Map<String, String> body = new HashMap<>();
         body.put(REFRESH_TOKEN, token);
         body.put("client_id", settingRepository.findById("open_api_client_id").map(Setting::getValue).orElse(""));
@@ -583,7 +583,7 @@ public class AccountService {
 
     private AListUser getUser(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", List.of(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
         ResponseEntity<UserResponse> response = aListClient.exchange("/api/admin/user/get?id=" + id, HttpMethod.GET, entity, UserResponse.class);
         log.info("get AList user {} response: {}", id, response.getBody());
@@ -592,7 +592,7 @@ public class AccountService {
 
     private void deleteUser(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", List.of(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = aListClient.exchange("/api/admin/user/delete?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("delete AList user {} response: {}", id, response.getBody());
@@ -600,7 +600,7 @@ public class AccountService {
 
     private void updateUser(AListUser user, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", List.of(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         HttpEntity<AListUser> entity = new HttpEntity<>(user, headers);
         ResponseEntity<String> response = aListClient.exchange("/api/admin/user/update", HttpMethod.POST, entity, String.class);
         log.info("update AList user {} response: {}", user.getId(), response.getBody());
@@ -608,7 +608,7 @@ public class AccountService {
 
     private void createUser(AListUser user, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", List.of(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         HttpEntity<AListUser> entity = new HttpEntity<>(user, headers);
         ResponseEntity<String> response = aListClient.exchange("/api/admin/user/create", HttpMethod.POST, entity, String.class);
         log.info("create AList user response: {}", response.getBody());
@@ -633,11 +633,11 @@ public class AccountService {
         Map<String, Object> body = new HashMap<>();
 
         HttpHeaders headers = new HttpHeaders();
-        headers.put(HttpHeaders.USER_AGENT, List.of(USER_AGENT));
-        headers.put(HttpHeaders.REFERER, List.of("https://www.aliyundrive.com/"));
-        headers.put("X-Canary", List.of("client=web,app=adrive,version=v2.4.0"));
-        headers.put("X-Device-Id", List.of("MpXKHKnbmzECAavdPTFxqhwD"));
-        headers.put(HttpHeaders.AUTHORIZATION, List.of("Bearer " + accessToken));
+        headers.set(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
+        headers.set(HttpHeaders.REFERER, Constants.ALIPAN);
+        headers.set("X-Canary", "client=web,app=adrive,version=v2.4.0");
+        headers.set("X-Device-Id", "MpXKHKnbmzECAavdPTFxqhwD");
+        headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<CheckinResponse> response = restTemplate.exchange("https://member.aliyundrive.com/v2/activity/sign_in_list", HttpMethod.POST, entity, CheckinResponse.class);
 
@@ -699,9 +699,9 @@ public class AccountService {
         log.debug("body: {}", body);
 
         HttpHeaders headers = new HttpHeaders();
-        headers.put(HttpHeaders.USER_AGENT, List.of(USER_AGENT));
-        headers.put(HttpHeaders.REFERER, List.of("https://www.aliyundrive.com/"));
-        headers.put(HttpHeaders.AUTHORIZATION, List.of("Bearer " + accessToken));
+        headers.set(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
+        headers.set(HttpHeaders.REFERER, Constants.ALIPAN);
+        headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<CheckinResponse> response = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_list", HttpMethod.POST, entity, CheckinResponse.class);
 
@@ -718,9 +718,9 @@ public class AccountService {
 //                    log.debug("body: {}", body);
 //
 //                    headers = new HttpHeaders();
-//                    headers.put(HttpHeaders.USER_AGENT, List.of(USER_AGENT));
-//                    headers.put(HttpHeaders.REFERER, List.of("https://www.aliyundrive.com/"));
-//                    headers.put(HttpHeaders.AUTHORIZATION, List.of("Bearer " + accessToken));
+//                    headers.set(HttpHeaders.USER_AGENT, List.of(USER_AGENT));
+//                    headers.set(HttpHeaders.REFERER, List.of("https://www.aliyundrive.com/"));
+//                    headers.set(HttpHeaders.AUTHORIZATION, List.of("Bearer " + accessToken));
 //                    entity = new HttpEntity<>(body, headers);
 //                    ResponseEntity<RewardResponse> res = restTemplate.exchange("https://member.aliyundrive.com/v1/activity/sign_in_reward?_rx-s=mobile", HttpMethod.POST, entity, RewardResponse.class);
 //                    log.debug("RewardResponse: {}", res.getBody());
@@ -876,7 +876,7 @@ public class AccountService {
 
         String token = status == 2 ? login() : "";
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", List.of(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         Map<String, Object> body = new HashMap<>();
         body.put("key", "ali_account_id");
         body.put("type", "number");
@@ -966,7 +966,7 @@ public class AccountService {
 
     public void enableStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", List.of(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = aListClient.exchange("/api/admin/storage/enable?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("enable AList storage {} response: {}", id, response.getBody());
@@ -974,7 +974,7 @@ public class AccountService {
 
     public void deleteStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", List.of(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = aListClient.exchange("/api/admin/storage/delete?id=" + id, HttpMethod.POST, entity, String.class);
         log.info("delete AList storage {} response: {}", id, response.getBody());
@@ -1001,7 +1001,7 @@ public class AccountService {
             time = Instant.now();
         }
         HttpHeaders headers = new HttpHeaders();
-        headers.put("Authorization", List.of(token));
+        headers.set(HttpHeaders.AUTHORIZATION, token);
         Map<String, Object> body = new HashMap<>();
         body.put("key", key);
         body.put("value", value);

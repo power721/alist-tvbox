@@ -905,13 +905,13 @@ public class JellyfinService {
     private HttpHeaders setHeaders(Jellyfin emby, EmbyInfo info) {
         HttpHeaders headers = new HttpHeaders();
         if (StringUtils.isNotBlank(emby.getUserAgent())) {
-            headers.set("User-Agent", emby.getUserAgent());
+            headers.set(HttpHeaders.USER_AGENT, emby.getUserAgent());
         }
         String header = String.format("MediaBrowser Client=\"%s\",Version=\"%s\",Device=\"%s\",DeviceId=\"%s\"", emby.getClientName(), emby.getClientVersion(), emby.getDeviceName(), emby.getDeviceId());
         if (info != null) {
             header += String.format(",Token=\"%s\"", info.getAccessToken());
         }
-        headers.set("Authorization", header);
+        headers.set(HttpHeaders.AUTHORIZATION, header);
         return headers;
     }
 }
