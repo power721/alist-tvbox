@@ -71,29 +71,32 @@
     </el-table>
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
-      <el-form :model="form">
-        <el-form-item label="名称" label-width="140" required>
+      <el-form label-width="140" :model="form">
+        <el-form-item label="名称" required>
           <el-input v-model="form.name" placeholder="显示的名称" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="值" label-width="140" required>
-          <el-input v-model="form.value" placeholder="UP主ID或者搜索关键词" autocomplete="off"/>
+        <el-form-item label="值" required>
+          <el-input v-model="form.value" placeholder="分类ID或者UP主ID或者搜索关键词" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="显示？" label-width="140">
+        <el-form-item label="父ID" required v-if="form.type==2">
+          <el-input v-model="form.parentId" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="显示？">
           <el-switch v-model="form.show"/>
         </el-form-item>
-        <!--        <el-form-item label="保留的？" label-width="140">-->
+        <!--        <el-form-item label="保留的？">-->
         <!--          <el-switch v-model="form.reserved"/>-->
         <!--        </el-form-item>-->
-        <el-form-item label="类型" label-width="140">
+        <el-form-item label="类型">
           <el-radio-group v-model="form.type" class="ml-4">
             <!--            <el-radio :label="1" size="large">一级分类</el-radio>-->
-            <!--            <el-radio :label="2" size="large">二级分类</el-radio>-->
+<!--                        <el-radio :label="2" size="large">二级分类</el-radio>-->
 <!--                        <el-radio :label="3" size="large">频道</el-radio>-->
             <el-radio :label="4" size="large">搜索</el-radio>
             <el-radio :label="5" size="large">UP主</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="顺序" label-width="140">
+        <el-form-item label="顺序">
           <el-input-number v-model="form.order" :min="0"/>
         </el-form-item>
       </el-form>

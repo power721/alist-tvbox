@@ -103,7 +103,6 @@ import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.BILI_BILI;
 import static cn.har01d.alist_tvbox.util.Constants.FILE;
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
-import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
@@ -126,6 +125,7 @@ public class BiliBiliService {
     private static final String PLAY_API = "https://api.bilibili.com/x/player/wbi/playurl";
     private static final String PLAY_API_NOT_DASH = "https://api.bilibili.com/x/player/wbi/playurl";
     private static final String PLAY_API2 = "https://api.bilibili.com/pgc/player/web/v2/playurl?avid=%s&cid=%s&qn=127&fnver=0&fnval=4048&fourk=1";
+    private static final String PLAYER2 = "https://api.bilibili.com/x/player/wbi/v2";
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
     private static final String POPULAR_API = "https://api.bilibili.com/x/web-interface/popular?ps=30&pn=";
     private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?search_type=%s&page_size=50&keyword=%s&order=%s&duration=%s&page=%d";
@@ -603,13 +603,13 @@ public class BiliBiliService {
         movieDetail.setVod_id(id);
         movieDetail.setVod_name(info.getTitle());
         movieDetail.setVod_tag(FILE);
-        movieDetail.setType_name(info.getTname());
+        movieDetail.setType_name(info.getTname() + " / " + info.getTname_v2());
         movieDetail.setVod_remarks(seconds2String(info.getDuration()));
         movieDetail.setVod_pic(fixCover(info.getPic()));
         if (full) {
             movieDetail.setVod_time(Instant.ofEpochSecond(info.getPubdate()).toString());
             movieDetail.setVod_play_from(BILI_BILI);
-            if (info.getPages().size() <= 1) {
+            if (info.getPages() == null || info.getPages().size() <= 1) {
                 movieDetail.setVod_play_url("视频$" + buildPlayUrl(id));
             } else {
                 movieDetail.setVod_play_url(info.getPages().stream().map(e -> fixTitle(e.getPart()) + "$" + info.getAid() + "-" + e.getCid()).collect(Collectors.joining("#")));
@@ -617,10 +617,16 @@ public class BiliBiliService {
             if (info.getOwner() != null) {
                 movieDetail.setVod_director(info.getOwner().getName());
             }
+            if (info.getStaff() != null) {
+                movieDetail.setVod_actor(info.getStaff().stream().map(BiliBiliInfo.User::getName).collect(Collectors.joining(",")));
+            }
             String time = "发布于" + Instant.ofEpochSecond(info.getPubdate()).atZone(ZoneId.systemDefault()).toLocalDateTime();
             time = time.replace("T", " ");
             if (info.getStat() != null) {
-                String stat = info.getStat().getCoin() + "投币; " + info.getStat().getLike() + "点赞; " + info.getStat().getFavorite() + "收藏";
+                String stat = info.getStat().getCoin() + "投币; "
+                        + info.getStat().getLike() + "点赞; "
+                        + info.getStat().getFavorite() + "收藏; "
+                        + info.getStat().getDanmaku() + "弹幕";
                 movieDetail.setVod_content(time + "; " + info.getDesc() + "; " + stat);
             } else {
                 movieDetail.setVod_content(time + info.getDesc());
@@ -1381,7 +1387,7 @@ public class BiliBiliService {
         String[] parts = bvid.split("-");
         Map<String, Object> result = new HashMap<>();
         List<String> qns = appProperties.getQns();
-        dash = appProperties.isSupportDash() || DashUtils.isClientSupport(client);
+        dash = dash || appProperties.isSupportDash() || DashUtils.isClientSupport(client);
         if (parts.length >= 2) {
             aid = parts[0];
             cid = parts[1];
@@ -1452,11 +1458,26 @@ public class BiliBiliService {
     private List<Sub> getSubtitles(String aid, String cid) {
         List<Sub> list = new ArrayList<>();
         try {
-            String url = String.format("https://api.bilibili.com/x/player/v2?aid=%s&cid=%s", aid, cid);
-            log.debug("getSubtitles {}", url);
-            HttpEntity<Void> entity = buildHttpEntity(null);
+            Map<String, Object> map = new HashMap<>();
+            map.put("aid", aid);
+            map.put("cid", cid);
+            map.put("isGaiaAvoided", false);
+            map.put("web_location", 1315873);
+            map.put("dm_img_list", "[]");
+            map.put("dm_img_inter", "{\"ds\":[{\"t\":1,\"c\":\"\",\"p\":[330,110,110],\"s\":[61,61,122]}],\"wh\":[6025,5600,11],\"of\":[316,632,316]}");
+            map.put("dm_img_str", BiliBiliUtils.getDmString(35));
+            map.put("dm_cover_img_str", BiliBiliUtils.getDmString(110));
+
+            HttpEntity<Void> entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://www.bilibili.com"));
+            getKeys(entity);
+            String url = PLAYER2 + "?" + Utils.encryptWbi(map, imgKey, subKey);
+
             ResponseEntity<BiliBiliV2InfoResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliV2InfoResponse.class);
+            log.debug("get subtitles: {}", url);
             for (BiliBiliV2Info.Subtitle subtitle : response.getBody().getData().getSubtitle().getSubtitles()) {
+                if (StringUtils.isBlank(subtitle.getSubtitle_url())) {
+                    continue;
+                }
                 if (subtitle.getLan_doc().contains("中文") && (subtitle.getLan_doc().contains("自动生成") || subtitle.getLan_doc().contains("自动翻译"))) {
                     continue;
                 }
@@ -1480,6 +1501,10 @@ public class BiliBiliService {
             HttpEntity<Void> entity = buildHttpEntity(null);
             ResponseEntity<SubtitleDataResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, SubtitleDataResponse.class);
             log.trace("subtitle: {}", response.getBody());
+            if (response.getBody().getBody() == null) {
+                log.warn("no data for subtitle: {}", url);
+                return "";
+            }
             int index = 1;
             for (SubtitleData subtitle : response.getBody().getBody()) {
                 text
