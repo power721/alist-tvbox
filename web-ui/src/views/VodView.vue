@@ -472,12 +472,13 @@ const form = ref({
 const options = [
   {label: '全部', value: ''},
   {label: '夸克', value: '5'},
+  {label: 'UC', value: '7'},
   {label: '阿里', value: '0'},
+  {label: '115', value: '8'},
   {label: '123', value: '3'},
   {label: '天翼', value: '9'},
   {label: '迅雷', value: '2'},
-  {label: 'UC', value: '7'},
-  {label: '115', value: '8'},
+  {label: '移动', value: '6'},
   {label: 'PikPak', value: '1'},
 ]
 
@@ -536,6 +537,9 @@ const getShareType = (type: string) => {
   }
   if (type == '9') {
     return '☁'
+  }
+  if (type == '6') {
+    return '🚁'
   }
   if (type == '1') {
     return '🅿'

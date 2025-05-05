@@ -163,6 +163,9 @@ public class Message {
         if (link.contains("189.cn")) {
             return "9";
         }
+        if (link.contains("139.com")) {
+            return "6";
+        }
         return null;
     }
 
