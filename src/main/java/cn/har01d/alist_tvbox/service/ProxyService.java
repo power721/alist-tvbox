@@ -125,7 +125,7 @@ public class ProxyService {
         }
 
         log.trace("headers: {}", headers);
-        downloadStraight(url, response, headers);
+        downloadStraight(url, request, response, headers);
     }
 
     private void updateShareTime(String path) {
@@ -167,8 +167,9 @@ public class ProxyService {
         return path.replaceAll("/+", "/");
     }
 
-    public void downloadStraight(String url, HttpServletResponse response, Map<String, String> headers) throws IOException {
+    public void downloadStraight(String url, HttpServletRequest request, HttpServletResponse response, Map<String, String> headers) throws IOException {
         HttpURLConnection urlConnection = openConnection(url, headers);
+        urlConnection.setRequestMethod(request.getMethod());
         response.setStatus(urlConnection.getResponseCode());
         urlConnection.getHeaderFields().forEach((key, value) -> response.setHeader(key, value.get(0)));
         copyAndCloseInput(urlConnection.getInputStream(), response.getOutputStream());
