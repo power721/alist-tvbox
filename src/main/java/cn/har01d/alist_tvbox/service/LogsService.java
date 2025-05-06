@@ -9,7 +9,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -33,6 +32,7 @@ public class LogsService {
                 .replace(" WARN ", " <span class=\"error\">WARN</span> ")
                 .replace(" INFO ", " <span class=\"info\">INFO</span> ")
                 .replace("\u001b[31m", "<span class=\"error\">")
+                .replace("\u001b[33m", "<span class=\"error\">")
                 .replace("\u001b[36m", "<span class=\"success\">")
                 .replace("\u001b[37m", "<span class=\"debug\">")
                 .replace("\u001b[0m", " </span>");

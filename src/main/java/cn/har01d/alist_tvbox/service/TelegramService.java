@@ -432,6 +432,7 @@ public class TelegramService {
             case "7" -> "UC";
             case "8" -> "115";
             case "9" -> "天翼";
+            case "6" -> "移动";
             default -> null;
         };
     }
@@ -449,6 +450,7 @@ public class TelegramService {
             case "7" -> getUrl("/uc.png");
             case "8" -> getUrl("/115.jpg");
             case "9" -> getUrl("/189.png");
+            case "6" -> getUrl("/139.jpg");
             default -> null;
         };
     }

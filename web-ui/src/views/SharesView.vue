@@ -40,6 +40,9 @@
         <a v-else-if="scope.row.type==9" :href="getShareLink(scope.row)" target="_blank">
           https://cloud.189.cn/t/{{ scope.row.shareId }}
         </a>
+        <a v-else-if="scope.row.type==6" :href="getShareLink(scope.row)" target="_blank">
+          https://caiyun.139.com/m/i?{{ scope.row.shareId }}
+        </a>
         <a v-else-if="scope.row.type==2" :href="getShareLink(scope.row)" target="_blank">
           https://pan.xunlei.com/s/{{ scope.row.shareId }}
         </a>
@@ -57,6 +60,7 @@
         <span v-else-if="scope.row.type==7">UC分享</span>
         <span v-else-if="scope.row.type==8">115分享</span>
         <span v-else-if="scope.row.type==9">天翼分享</span>
+        <span v-else-if="scope.row.type==6">移动分享</span>
         <span v-else-if="scope.row.type==2">迅雷分享</span>
         <span v-else-if="scope.row.type==3">123分享</span>
         <span v-else>阿里分享</span>
@@ -98,6 +102,7 @@
         <span v-else-if="scope.row.driver=='UCShare'">UC分享</span>
         <span v-else-if="scope.row.driver=='115 Share'">115分享</span>
         <span v-else-if="scope.row.driver=='189Share'">天翼分享</span>
+        <span v-else-if="scope.row.driver=='Yun139Share'">移动分享</span>
         <span v-else-if="scope.row.driver=='ThunderShare'">迅雷分享</span>
         <span v-else-if="scope.row.driver=='123PanShare'">123分享</span>
         <span v-else-if="scope.row.driver=='Local'">本地存储</span>
@@ -141,6 +146,7 @@
           <el-radio :label="7" size="large">UC分享</el-radio>
           <el-radio :label="8" size="large">115分享</el-radio>
           <el-radio :label="9" size="large">天翼分享</el-radio>
+          <el-radio :label="6" size="large">移动分享</el-radio>
           <el-radio :label="2" size="large">迅雷分享</el-radio>
           <el-radio :label="3" size="large">123分享</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
@@ -200,6 +206,7 @@
           <el-radio :label="7" size="large">UC分享</el-radio>
           <el-radio :label="8" size="large">115分享</el-radio>
           <el-radio :label="9" size="large">天翼分享</el-radio>
+          <el-radio :label="6" size="large">移动分享</el-radio>
           <el-radio :label="2" size="large">迅雷分享</el-radio>
           <el-radio :label="3" size="large">123分享</el-radio>
         </el-radio-group>
@@ -228,6 +235,7 @@
         <el-radio :label="7" size="large">UC分享</el-radio>
         <el-radio :label="8" size="large">115分享</el-radio>
         <el-radio :label="9" size="large">天翼分享</el-radio>
+        <el-radio :label="6" size="large">移动分享</el-radio>
         <el-radio :label="2" size="large">迅雷分享</el-radio>
         <el-radio :label="3" size="large">123分享</el-radio>
       </el-radio-group>
@@ -400,6 +408,8 @@ const fullPath = (share: any) => {
     return '/我的115分享/' + path
   } else if (share.type == 9) {
     return '/我的天翼分享/' + path
+  } else if (share.type == 6) {
+    return '/我的移动分享/' + path
   } else if (share.type == 2) {
     return '/我的迅雷分享/' + path
   } else if (share.type == 3) {
@@ -430,6 +440,8 @@ const getShareLink = (shareInfo: ShareInfo) => {
     url = 'https://115.com/s/' + shareInfo.shareId
   } else if (shareInfo.type == 9) {
     url = 'https://cloud.189.cn/t/' + shareInfo.shareId
+  } else if (shareInfo.type == 6) {
+    url = 'https://caiyun.139.com/m/i?' + shareInfo.shareId
   } else if (shareInfo.type == 2) {
     url = 'https://pan.xunlei.com/s/' + shareInfo.shareId
   } else if (shareInfo.type == 3) {

@@ -1,6 +1,9 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.service.*;
+import cn.har01d.alist_tvbox.service.BiliBiliService;
+import cn.har01d.alist_tvbox.service.ProxyService;
+import cn.har01d.alist_tvbox.service.SubscriptionService;
+import cn.har01d.alist_tvbox.service.TvBoxService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +14,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
-import java.net.URLDecoder;
 import java.util.Map;
 
 @Slf4j
@@ -38,7 +40,7 @@ public class PlayController {
         proxyService.proxy(id, "", request, response);
     }
 
-    @GetMapping("/p/{token}")
+    @RequestMapping(value = "/p/{token}")
     public void proxy(@PathVariable String token, String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
         subscriptionService.checkToken(token);
 
