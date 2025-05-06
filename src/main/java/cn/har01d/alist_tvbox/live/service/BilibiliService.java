@@ -17,6 +17,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -28,6 +31,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 
@@ -139,15 +144,18 @@ public class BilibiliService implements LivePlatform {
             Map<String, Object> map = new HashMap<>();
             map.put("platform", "web");
             map.put("sort_type", "");
+            map.put("vajra_business_key", "");
+            map.put("web_location", "444.43");
             map.put("parent_area_id", pid);
             map.put("area_id", id);
             map.put("page", pg);
 
             getKeys();
             String url = "https://api.live.bilibili.com/xlive/web-interface/v1/second/getList?" + Utils.encryptWbi(map, imgKey, subKey);
-            log.debug("url: {}", url);
-            var response = restTemplate.getForObject(url, BilibiliRoomsResponse.class);
-            for (var room : response.getData().getList()) {
+            log.debug("list url: {}", url);
+            var response = restTemplate.exchange(url, HttpMethod.GET, buildHttpEntity(null), BilibiliRoomsResponse.class);
+            log.debug("list response: {} {}", response.getBody().getCode(), response.getBody().getMessage());
+            for (var room : response.getBody().getData().getList()) {
                 MovieDetail detail = new MovieDetail();
                 detail.setVod_id(getType() + "$" + room.getRoomid());
                 detail.setVod_name(room.getTitle());
@@ -170,6 +178,14 @@ public class BilibiliService implements LivePlatform {
 
         log.debug("list result: {}", result);
         return result;
+    }
+
+    private <T> HttpEntity<T> buildHttpEntity(T data) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.REFERER, "https://live.bilibili.com/");
+        headers.set(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
+        headers.set(HttpHeaders.COOKIE, "buvid3=" + UUID.randomUUID() + ThreadLocalRandom.current().nextInt(10000, 99999) + "infoc");
+        return new HttpEntity<>(data, headers);
     }
 
     private void getKeys() {
