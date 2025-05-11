@@ -12,6 +12,11 @@
       <el-table-column prop="dir" label="文件目录" width="250"/>
       <el-table-column prop="name" label="文件名称" width="180"/>
       <el-table-column prop="path" label="完整路径"/>
+      <el-table-column prop="link" label="链接">
+        <template #default="scope">
+          <a :href="currentUrl+scope.row.path.substring(4)" target="_blank" v-if="scope.row.path.startsWith('/www/')">{{currentUrl + scope.row.path.substring(4)}}</a>
+        </template>
+      </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
@@ -84,6 +89,7 @@
 import {onMounted, ref} from 'vue'
 import axios from "axios"
 
+const currentUrl = window.location.origin
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
