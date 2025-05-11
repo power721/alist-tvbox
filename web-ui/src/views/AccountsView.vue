@@ -74,10 +74,10 @@
                     autocomplete="off"/>
           AList:<a href="https://alist.nn.ci/tool/aliyundrive/request.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
           <div class="hint">
-            webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
+            ycyup:<a href="https://ycyup.cn/alipan/authorize" title="需要选择ycyup的认证URL" target="_blank">获取开放token</a>
           </div>
           <div class="hint">
-            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>
+            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码获取</a>
           </div>
         </el-form-item>
         <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
@@ -149,10 +149,10 @@
           <el-input v-model="form.openToken" type="textarea" rows="4" minlength="256" placeholder="长度280位"/>
           AList:<a href="https://alist.nn.ci/tool/aliyundrive/request.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
           <div class="hint">
-            webdav:<a href="https://messense-aliyundrive-webdav-backendrefresh-token-ucs0wn.streamlit.app/" title="需要选择webdav的认证URL" target="_blank">获取开放token</a>
+            ycyup:<a href="https://ycyup.cn/alipan/authorize" title="需要选择ycyup的认证URL" target="_blank">获取开放token</a>
           </div>
           <div class="hint">
-            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码</a>
+            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码获取</a>
           </div>
           <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
           <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>

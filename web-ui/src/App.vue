@@ -1,9 +1,11 @@
 <script setup lang="ts">
+// @ts-nocheck
 import {RouterView, useRouter} from 'vue-router'
 import accountService from "@/services/account.service";
 import {onMounted, ref} from "vue";
 import axios from "axios";
 import {store} from "@/services/store";
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
 const account = accountService.account
 const router = useRouter()
@@ -85,7 +87,9 @@ onMounted(() => {
       </el-header>
 
       <el-main v-if="mounted">
-        <RouterView/>
+        <el-config-provider :locale="zhCn">
+          <RouterView/>
+        </el-config-provider>
       </el-main>
     </el-container>
   </div>
