@@ -291,12 +291,12 @@
                       <div>减速： -</div>
                       <div>加速： +</div>
                       <div>原速： =</div>
-                      <div>音量-： [</div>
-                      <div>音量+： ]</div>
+                      <div>音量-： ↓</div>
+                      <div>音量+： ↑</div>
                       <div>后退15秒： ←</div>
                       <div>前进15秒： →</div>
-                      <div v-if="playlist.length>1">上集： ↑</div>
-                      <div v-if="playlist.length>1">下集： ↓</div>
+                      <div v-if="playlist.length>1">上集： PageUp</div>
+                      <div v-if="playlist.length>1">下集： PageDown</div>
                     </div>
                   </template>
                 </el-popover>
@@ -802,10 +802,10 @@ const handleKeyDown = (event: KeyboardEvent) => {
   } else if (event.code === 'ArrowLeft') {
     event.preventDefault()
     backward()
-  } else if (event.code === 'ArrowUp') {
+  } else if (event.code === 'PageUp') {
     event.preventDefault()
     playPrevVideo()
-  } else if (event.code === 'ArrowDown') {
+  } else if (event.code === 'PageDown') {
     event.preventDefault()
     playNextVideo()
   } else if (event.code === 'Enter') {
@@ -820,10 +820,10 @@ const handleKeyDown = (event: KeyboardEvent) => {
   } else if (event.key === '=') {
     event.preventDefault()
     setSpeed(1.0)
-  } else if (event.key === '[') {
+  } else if (event.key === 'ArrowDown') {
     event.preventDefault()
     decVolume()
-  } else if (event.key === ']') {
+  } else if (event.key === 'ArrowUp') {
     event.preventDefault()
     incVolume()
   } else if (event.code === 'KeyM') {
