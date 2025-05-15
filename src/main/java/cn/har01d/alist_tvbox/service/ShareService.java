@@ -620,21 +620,21 @@ public class ShareService {
         return "";
     }
 
-    private static final Pattern SHARE_115_LINK = Pattern.compile("https://(?:115|115cdn).com/s/(\\w+)(?:\\?password=([^/&#]+)#?)?");
-    private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([^/?]+)(?:\\?pwd=([^/&#]+))?");
-    private static final Pattern SHARE_BD_LINK = Pattern.compile("https://pan.baidu.com/s/([^/?]+)(?:\\?pwd=([^/&#]+))?");
-    private static final Pattern SHARE_PK_LINK = Pattern.compile("https://mypikpak.com/s/([^/?]+)(?:\\?pwd=([^/&#]+))?");
-    private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share\\?code=([^/&#]+)");
-    private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/([^/?&#]+)");
-    private static final Pattern SHARE_189_LINK3 = Pattern.compile("https://h5.cloud.189.cn/share.html#/t/([^/?&#]+)");
-    private static final Pattern SHARE_139_LINK1 = Pattern.compile("https://caiyun.139.com/m/i\\?([^/?&#]+)");
-    private static final Pattern SHARE_139_LINK2 = Pattern.compile("https://yun.139.com/shareweb/#/w/i/([^/?&#]+)");
-    private static final Pattern SHARE_QUARK_LINK = Pattern.compile("https://pan.quark.cn/s/([^/?&#]+)");
-    private static final Pattern SHARE_UC_LINK = Pattern.compile("https://(?:drive|fast).uc.cn/s/([^/?&#]+)(?:\\?password=([A-Za-z0-9]+))?");
-    private static final Pattern SHARE_ALI_LINK1 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([^/]+)/folder/([^/?&#]+)(?:\\?password=([A-Za-z0-9]+))?");
-    private static final Pattern SHARE_ALI_LINK2 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([^/?&#]+)(?:\\?password=([A-Za-z0-9]+))?");
-    private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?]+)提取码[:：]([A-Za-z0-9]+)");
-    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([^/?.]+)(?:\\.html)?(?:\\??提取码[:：]([A-Za-z0-9]+))?");
+    private static final Pattern SHARE_115_LINK = Pattern.compile("https://(?:115|115cdn).com/s/([\\w-]+)(?:\\?password=([\\w-]+))?");
+    private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
+    private static final Pattern SHARE_BD_LINK = Pattern.compile("https://pan.baidu.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
+    private static final Pattern SHARE_PK_LINK = Pattern.compile("https://mypikpak.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
+    private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share\\?code=([\\w-]+)");
+    private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/([\\w-]+)(?:（访问码：(\\w+)）)?");
+    private static final Pattern SHARE_189_LINK3 = Pattern.compile("https://h5.cloud.189.cn/share.html#/t/([\\w-]+)");
+    private static final Pattern SHARE_139_LINK1 = Pattern.compile("https://caiyun.139.com/m/i\\?([\\w-]+)");
+    private static final Pattern SHARE_139_LINK2 = Pattern.compile("https://yun.139.com/shareweb/#/w/i/([\\w-]+)");
+    private static final Pattern SHARE_QUARK_LINK = Pattern.compile("https://pan.quark.cn/s/([\\w-]+)");
+    private static final Pattern SHARE_UC_LINK = Pattern.compile("https://(?:drive|fast).uc.cn/s/([\\w-]+)(?:\\?password=(\\w+))?");
+    private static final Pattern SHARE_ALI_LINK1 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([\\w-]+)/folder/([\\w-]+)(?:\\?password=(\\w+))?");
+    private static final Pattern SHARE_ALI_LINK2 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([\\w-]+)(?:\\?password=(\\w+))?");
+    private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([\\w-]+)提取码[:：](\\w+)");
+    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([\\w-]+)(?:\\.html)?(?:\\??提取码[:：](\\w+))?");
 
     public boolean parseLink(Share share) {
         String url = share.getShareId();
@@ -669,6 +669,10 @@ public class ShareService {
         if (m.find()) {
             share.setType(9);
             share.setShareId(m.group(1));
+            String code = m.group(2);
+            if (code != null) {
+                share.setPassword(code);
+            }
             return true;
         }
 
