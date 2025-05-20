@@ -71,6 +71,21 @@ public class NavigationService {
         if (list.stream().filter(e -> "follow$0".equals(e.getValue())).findAny().isEmpty()) {
             navigationRepository.save(new Navigation("我的关注", "follow$0", 1, true, true, 12));
         }
+        if (list.stream().filter(e -> "follow:1".equals(e.getValue())).findAny().isEmpty()) {
+            navigationRepository.save(new Navigation("我的追番", "follow:1", 1, true, true, 13));
+        }
+        if (list.stream().filter(e -> "follow:2".equals(e.getValue())).findAny().isEmpty()) {
+            navigationRepository.save(new Navigation("我的追剧", "follow:2", 1, true, true, 14));
+        }
+        if (list.stream().filter(e -> "coin$0".equals(e.getValue())).findAny().isEmpty()) {
+            navigationRepository.save(new Navigation("我的投币", "coin$0", 1, true, true, 15));
+        }
+        if (list.stream().filter(e -> "like$0".equals(e.getValue())).findAny().isEmpty()) {
+            navigationRepository.save(new Navigation("我的点赞", "like$0", 1, true, true, 16));
+        }
+        if (list.stream().filter(e -> "collect$0".equals(e.getValue())).findAny().isEmpty()) {
+            navigationRepository.save(new Navigation("我的收藏", "collect$0", 1, true, true, 17));
+        }
     }
 
     private void addTypes(List<Navigation> all) {
