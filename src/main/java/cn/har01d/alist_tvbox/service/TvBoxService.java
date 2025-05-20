@@ -997,13 +997,13 @@ public class TvBoxService {
             movieDetail.setVod_tag(fsInfo.getType() == 1 ? FOLDER : FILE);
             movieDetail.setVod_pic(getCover(ac, fsInfo.getThumb(), fsInfo.getType()));
             if (fsInfo.getType() == 1) {
-                movieDetail.setVod_remarks(("web".equals(ac) ? "" : "文件夹"));
+                movieDetail.setVod_remarks(("web".equals(ac) || "gui".equals(ac) ? "" : "文件夹"));
             } else {
                 movieDetail.setVod_remarks(fileSize(fsInfo.getSize()));
             }
             movieDetail.setVod_time(fsInfo.getModified());
             movieDetail.setSize(fsInfo.getSize());
-            if ("web".equals(ac)) {
+            if ("web".equals(ac) || "gui".equals(ac)) {
                 movieDetail.setType(fsInfo.getType());
             }
             if (fsInfo.getType() == 1) {
@@ -1029,7 +1029,7 @@ public class TvBoxService {
 
         result.getList().addAll(folders);
 
-        if (page == 1 && files.size() > 1) {
+        if (page == 1 && files.size() > 1 && !"gui".equals(ac)) {
             MovieDetail playlist = generatePlaylist(site, path, total - folders.size(), files);
             if ("web".equals(ac)) {
                 playlist.setType(9);
@@ -1051,6 +1051,9 @@ public class TvBoxService {
     }
 
     private boolean isAcceptType(FsInfo fsInfo, String ac) {
+        if ("gui".equals(ac)) {
+            return fsInfo.getType() == 1 || fsInfo.getType() == 2;
+        }
         if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3) {
             return true;
         }
@@ -1572,7 +1575,7 @@ public class TvBoxService {
             movieDetail.setVod_play_from(String.join("$$$", from));
             movieDetail.setVod_play_url(playUrl);
 
-            if (!"web".equals(ac)) {
+            if (!"web".equals(ac) && !"gui".equals(ac)) {
                 movieDetail.setVod_content(getParent(path));
             }
             setMovieInfo(movieDetail, meta, true);
@@ -1592,7 +1595,7 @@ public class TvBoxService {
             if ("detail".equals(ac)) {
                 String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
                 movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
-            } else if ("web".equals(ac)) {
+            } else if ("web".equals(ac) || "gui".equals(ac)) {
                 String url = fsDetail.getRawUrl();
                 if (fsDetail.getProvider().contains("Aliyundrive")) {
                     movieDetail.setVod_play_url(proxyService.generateProxyUrl("ali", url));
@@ -1609,7 +1612,7 @@ public class TvBoxService {
                 movieDetail.setVod_play_url(fsDetail.getName() + "$" + buildPlayUrl(site, path));
             }
             String parent = getParent(path);
-            if (!"web".equals(ac)) {
+            if (!"web".equals(ac) && !"gui".equals(ac)) {
                 movieDetail.setVod_content(parent);
             }
             if (fsDetail.getType() != 5 && !setMovieInfo(site, movieDetail, fsDetail.getName(), parent, true)) {
@@ -1713,7 +1716,7 @@ public class TvBoxService {
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(site.getName());
-        if (!"web".equals(ac)) {
+        if (!"web".equals(ac) && !"gui".equals(ac)) {
             movieDetail.setVod_content(site.getName() + ":" + newPath);
         } else {
             movieDetail.setType(9);
@@ -1749,7 +1752,7 @@ public class TvBoxService {
                 List<String> urls = new ArrayList<>();
                 for (String name : fileNames) {
                     String filepath = newPath + "/" + folder + "/" + name;
-                    if ("detail".equals(ac) || "web".equals(ac)) {
+                    if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
                         String url = buildProxyUrl(site.getId() + "$" + filepath);
                         urls.add(fixName(name, prefix, suffix) + "$" + url);
                     } else {
@@ -1777,7 +1780,7 @@ public class TvBoxService {
 
             for (String name : fileNames) {
                 String filepath = newPath + "/" + name;
-                if ("detail".equals(ac) || "web".equals(ac)) {
+                if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
                     String url = buildProxyUrl(site.getId() + "$" + filepath);
                     list.add(fixName(name, prefix, suffix) + "$" + url);
                 } else {

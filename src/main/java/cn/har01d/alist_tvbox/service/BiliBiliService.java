@@ -6,6 +6,9 @@ import cn.har01d.alist_tvbox.dto.NavigationDto;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelItem;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelListResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliChannelResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliCoinListResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliCollectionItem;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliCollectionResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliFavItemsResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliFavListResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliFeedResponse;
@@ -15,6 +18,7 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliHistoryResult;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliHotResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoListResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliInfoResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliListResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliLoginResponse;
@@ -29,8 +33,10 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchPgcResult;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResult;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfo;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfo2;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfoList;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonResponse2;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliTokenResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2InfoResponse;
@@ -41,6 +47,7 @@ import cn.har01d.alist_tvbox.dto.bili.ChannelArchives;
 import cn.har01d.alist_tvbox.dto.bili.ChannelList;
 import cn.har01d.alist_tvbox.dto.bili.CookieData;
 import cn.har01d.alist_tvbox.dto.bili.FavItem;
+import cn.har01d.alist_tvbox.dto.bili.FavItems;
 import cn.har01d.alist_tvbox.dto.bili.QrCode;
 import cn.har01d.alist_tvbox.dto.bili.QrCodeResult;
 import cn.har01d.alist_tvbox.dto.bili.Resp;
@@ -141,6 +148,11 @@ public class BiliBiliService {
     public static final String CHANNEL_API = "https://api.bilibili.com/x/web-interface/web/channel/multiple/list?channel_id=%s&sort_type=%s&offset=%s&page_size=30";
     public static final String FAV_API = "https://api.bilibili.com/x/v3/fav/resource/list?media_id=%s&keyword=&order=%s&type=0&tid=0&platform=web&pn=%d&ps=20";
     public static final String FOLLOW_API = "https://api.bilibili.com/x/relation/followings";
+    public static final String FOLLOW_LIST_API = "https://api.bilibili.com/x/space/bangumi/follow/list";
+    public static final String COIN_LIST_API = "https://api.bilibili.com/x/space/coin/video?vmid=%d";
+    public static final String LIKE_LIST_API = "https://api.bilibili.com/x/space/like/video?vmid=%d";
+    public static final String COLLECTED_API = "https://api.bilibili.com/x/v3/fav/folder/collected/list?pn=%d&ps=30&up_mid=%d&platform=web&web_location=333.1387";
+    public static final String FAV_LIST_API = "https://api.bilibili.com/x/space/fav/season/list?season_id=%s&pn=%d&ps=30&web_location=333.1387";
 
     private final List<FilterValue> filters1 = Arrays.asList(
             new FilterValue("综合排序", ""),
@@ -542,6 +554,27 @@ public class BiliBiliService {
         return movieDetail;
     }
 
+    private MovieDetail getMovieDetail(BiliBiliSeasonInfo2 info) {
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id("season$" + info.getSeason_id());
+        movieDetail.setVod_name(info.getTitle());
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setType_name(info.getBadge());
+        movieDetail.setVod_pic(fixCover(info.getCover()));
+        movieDetail.setVod_remarks(info.getRating() == null ? "" : String.valueOf(info.getRating().getScore()));
+        return movieDetail;
+    }
+
+    private MovieDetail getMovieDetail(BiliBiliCollectionItem info) {
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id("fav-season$" + info.getId());
+        movieDetail.setVod_name(info.getTitle());
+        movieDetail.setVod_tag(FOLDER);
+        movieDetail.setVod_pic(fixCover(info.getCover()));
+        movieDetail.setVod_remarks(String.valueOf(info.getMedia_count()));
+        return movieDetail;
+    }
+
     private MovieDetail getMovieDetail(BiliBiliVideoInfo.Video info) {
         String id = info.getBvid();
         MovieDetail movieDetail = new MovieDetail();
@@ -800,6 +833,181 @@ public class BiliBiliService {
         result.setTotal(followings.getTotal());
         result.setPagecount((followings.getTotal() + 29) / 30);
         log.debug("getFollowings: {}", result);
+        return result;
+    }
+
+    public MovieList getBangumiFollowings(String type, int page) {
+        if (mid == null) {
+            getLoginStatus();
+        }
+        MovieList result = new MovieList();
+        if (mid == BiliBiliUtils.getMid()) {
+            return result;
+        }
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("vmid", mid);
+        map.put("type", type);
+        map.put("pn", page);
+        map.put("ps", 30);
+        map.put("playform", "web");
+        map.put("follow_status", 0);
+        map.put("web_location", "333.1387\n");
+
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        getKeys(entity);
+        String url = FOLLOW_LIST_API + "?" + Utils.encryptWbi(map, imgKey, subKey);
+        log.debug("getBangumiFollowings: {}", url);
+
+        ResponseEntity<BiliBiliSeasonResponse2> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSeasonResponse2.class);
+        log.debug("{}", response.getBody());
+        var followings = response.getBody().getData();
+
+        List<MovieDetail> list = new ArrayList<>();
+        for (var info : followings.getList()) {
+            MovieDetail movieDetail = getMovieDetail(info);
+            list.add(movieDetail);
+        }
+
+        result.getList().addAll(list);
+        result.setLimit(result.getList().size());
+        result.setTotal(followings.getTotal());
+        result.setPagecount((followings.getTotal() + 29) / 30);
+        log.debug("getBangumiFollowings: {}", result);
+        return result;
+    }
+
+    public MovieList getLikeList() {
+        if (mid == null) {
+            getLoginStatus();
+        }
+        MovieList result = new MovieList();
+        if (mid == BiliBiliUtils.getMid()) {
+            return result;
+        }
+
+        String url = String.format(LIKE_LIST_API, mid);
+        log.debug("getLikeList: {}", url);
+
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        var response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliInfoListResponse.class);
+
+        List<MovieDetail> list = new ArrayList<>();
+        for (var info : response.getBody().getData().getList()) {
+            MovieDetail movieDetail = getMovieDetail(info);
+            list.add(movieDetail);
+        }
+
+        result.getList().addAll(list);
+        result.setLimit(result.getList().size());
+        result.setTotal(result.getList().size());
+        log.debug("getLikeList: {}", result);
+        return result;
+    }
+
+    public MovieList getCoinList() {
+        if (mid == null) {
+            getLoginStatus();
+        }
+        MovieList result = new MovieList();
+        if (mid == BiliBiliUtils.getMid()) {
+            return result;
+        }
+
+        String url = String.format(COIN_LIST_API, mid);
+        log.debug("getCoinList: {}", url);
+
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        var response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliCoinListResponse.class);
+
+        List<MovieDetail> list = new ArrayList<>();
+        for (var info : response.getBody().getData()) {
+            MovieDetail movieDetail = getMovieDetail(info);
+            list.add(movieDetail);
+        }
+
+        result.getList().addAll(list);
+        result.setLimit(result.getList().size());
+        result.setTotal(result.getList().size());
+        log.debug("getCoinList: {}", result);
+        return result;
+    }
+
+    public MovieList getCollections(int page) {
+        if (mid == null) {
+            getLoginStatus();
+        }
+        MovieList result = new MovieList();
+        if (mid == BiliBiliUtils.getMid()) {
+            return result;
+        }
+
+        String url = String.format(COLLECTED_API, page, mid);
+        log.debug("getCollections: {}", url);
+
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        var response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliCollectionResponse.class);
+
+        List<MovieDetail> list = new ArrayList<>();
+        for (var info : response.getBody().getData().getList()) {
+            MovieDetail movieDetail = getMovieDetail(info);
+            list.add(movieDetail);
+        }
+
+        result.getList().addAll(list);
+        result.setLimit(result.getList().size());
+        result.setTotal(result.getList().size());
+        log.debug("getCollections: {}", result);
+        return result;
+    }
+
+    public FavItems getFavList(String id, int page) {
+        if (mid == null) {
+            getLoginStatus();
+        }
+        if (mid == BiliBiliUtils.getMid()) {
+            return new FavItems();
+        }
+
+        String url = String.format(FAV_LIST_API, id, page);
+        log.debug("getFavCollection: {}", url);
+
+        HttpEntity<Void> entity = buildHttpEntity(null);
+        var response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliFavItemsResponse.class);
+        return response.getBody().getData();
+    }
+
+    public MovieList getFavCollection(String id, int page) {
+        if (mid == null) {
+            getLoginStatus();
+        }
+        MovieList result = new MovieList();
+        if (mid == BiliBiliUtils.getMid()) {
+            return result;
+        }
+
+        List<FavItem> medias = getFavList(id, page).getMedias();
+        List<MovieDetail> list = new ArrayList<>();
+        for (var info : medias) {
+            MovieDetail movieDetail = getMovieDetail(info);
+            list.add(movieDetail);
+        }
+
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id("collect$" + id + "$0$" + page);
+        movieDetail.setVod_name("合集");
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_pic(getListPic());
+        //movieDetail.setVod_play_from(BILI_BILI);
+        //String playUrl = list.stream().map(e -> fixTitle(e.getVod_name()) + "$" + buildPlayUrl(e.getVod_id())).collect(Collectors.joining("#"));
+        //movieDetail.setVod_play_url(playUrl);
+        //movieDetail.setVod_content("共" + list.size() + "个视频");
+        result.getList().add(movieDetail);
+
+        result.getList().addAll(list);
+        result.setLimit(result.getList().size());
+        result.setTotal(result.getList().size());
+        log.debug("getFavCollection: {}", result);
         return result;
     }
 
@@ -1145,6 +1353,10 @@ public class BiliBiliService {
 
         if (bvid.startsWith("type$")) {
             return getTypePlaylist(bvid);
+        }
+
+        if (bvid.startsWith("collect$")) {
+            return getFavCollectPlaylist(bvid);
         }
 
         if (bvid.startsWith("recommend$")) {
@@ -1617,6 +1829,9 @@ public class BiliBiliService {
         } else if (tid.startsWith("up:")) {
             String[] parts = tid.split(":");
             return getUpMedia(parts[1], filter.getSort(), page);
+        } else if (tid.startsWith("follow:")) {
+            String[] parts = tid.split(":");
+            return getBangumiFollowings(parts[1], page);
         }
 
         if (StringUtils.isNotBlank(filter.getCategory())) {
@@ -1650,6 +1865,14 @@ public class BiliBiliService {
             return recommend(page, true);
         } else if ("follow".equals(parts[0])) {
             return getFollowings(page);
+        } else if ("coin".equals(parts[0])) {
+            return getCoinList();
+        } else if ("like".equals(parts[0])) {
+            return getLikeList();
+        } else if ("collect".equals(parts[0])) {
+            return getCollections(page);
+        } else if ("fav-season".equals(parts[0])) {
+            return getFavCollection(parts[1], page);
         } else {
             int rid = Integer.parseInt(parts[1]);
             list = getHotRank(parts[0], rid, page);
@@ -1867,6 +2090,29 @@ public class BiliBiliService {
         movieDetail.setVod_play_url(playUrl);
         movieDetail.setVod_content("共" + list.size() + "个视频");
         movieDetail.setVod_remarks(Utils.secondsToDuration(seconds));
+        MovieList result = new MovieList();
+        result.getList().add(movieDetail);
+
+        return result;
+    }
+
+    public MovieList getFavCollectPlaylist(String tid) {
+        String[] parts = tid.split("\\$");
+        String id = parts[1];
+        int page = Integer.parseInt(parts[3]);
+        var list = getFavList(id, page);
+
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id("collect$" + id + "$0$" + page);
+        movieDetail.setVod_name(list.getInfo().getTitle());
+        movieDetail.setVod_tag(FILE);
+        movieDetail.setVod_director(list.getInfo().getUpper().getName());
+        movieDetail.setVod_pic(getListPic());
+        movieDetail.setVod_play_from(BILI_BILI);
+        String playUrl = list.getMedias().stream().map(e -> fixTitle(e.getTitle()) + "$" + buildPlayUrl(e.getBvid())).collect(Collectors.joining("#"));
+        movieDetail.setVod_play_url(playUrl);
+        //movieDetail.setVod_remarks("共" + list.getMedias().size() + "个视频" );
+        movieDetail.setVod_content(list.getInfo().getIntro());
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
 
