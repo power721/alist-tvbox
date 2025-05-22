@@ -629,6 +629,7 @@ public class ShareService {
     private static final Pattern SHARE_189_LINK3 = Pattern.compile("https://h5.cloud.189.cn/share.html#/t/([\\w-]+)");
     private static final Pattern SHARE_139_LINK1 = Pattern.compile("https://caiyun.139.com/m/i\\?([\\w-]+)");
     private static final Pattern SHARE_139_LINK2 = Pattern.compile("https://yun.139.com/shareweb/#/w/i/([\\w-]+)");
+    private static final Pattern SHARE_139_LINK3 = Pattern.compile("https://caiyun.139.com/w/i/([\\w-]+)");
     private static final Pattern SHARE_QUARK_LINK = Pattern.compile("https://pan.quark.cn/s/([\\w-]+)");
     private static final Pattern SHARE_UC_LINK = Pattern.compile("https://(?:drive|fast).uc.cn/s/([\\w-]+)(?:\\?password=(\\w+))?");
     private static final Pattern SHARE_ALI_LINK1 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([\\w-]+)/folder/([\\w-]+)(?:\\?password=(\\w+))?");
@@ -691,6 +692,13 @@ public class ShareService {
         }
 
         m = SHARE_139_LINK2.matcher(url);
+        if (m.find()) {
+            share.setType(6);
+            share.setShareId(m.group(1));
+            return true;
+        }
+
+        m = SHARE_139_LINK3.matcher(url);
         if (m.find()) {
             share.setType(6);
             share.setShareId(m.group(1));
