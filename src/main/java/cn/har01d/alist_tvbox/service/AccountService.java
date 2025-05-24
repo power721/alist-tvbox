@@ -195,8 +195,9 @@ public class AccountService {
 
     private void updateAliAccountId() {
         accountRepository.getFirstByMasterTrue().map(Account::getId).ifPresent(id -> {
-            log.info("updateAliAccountId {}", id);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + id + "','','number','',0,1)");
+            int storageId = base + (id - 1) * 2;
+            log.info("updateAliAccountId {}", storageId);
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + storageId + "','','number','',0,1)");
         });
     }
 
@@ -773,7 +774,8 @@ public class AccountService {
 
         if (count == 0) {
             updateTokens();
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + account.getId() + "','','number','',1,0)");
+            int storageId = base + (account.getId() - 1) * 2;
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + storageId + "','','number','',1,0)");
             aListLocalService.startAListServer();
         } else if (account.isMaster()) {
             log.info("sync tokens for account {}", account);
@@ -868,9 +870,10 @@ public class AccountService {
     }
 
     private void updateAliAccountByApi(Account account) {
+        int storageId = base + (account.getId() - 1) * 2;
         int status = aListLocalService.getAListStatus();
         if (status == 1) {
-            Utils.executeUpdate("UPDATE x_setting_items SET value=" + account.getId() + " WHERE key = 'ali_account_id'");
+            Utils.executeUpdate("UPDATE x_setting_items SET value=" + storageId + " WHERE key = 'ali_account_id'");
             throw new BadRequestException("AList服务启动中");
         }
 
@@ -881,7 +884,7 @@ public class AccountService {
         body.put("key", "ali_account_id");
         body.put("type", "number");
         body.put("flag", 1);
-        body.put("value", String.valueOf(account.getId()));
+        body.put("value", String.valueOf(storageId));
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<String> response = aListClient.exchange("/api/admin/setting/update", HttpMethod.POST, entity, String.class);
         log.info("updateAliAccountByApi {} response: {}", account.getId(), response.getBody());

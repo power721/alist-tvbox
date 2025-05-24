@@ -101,10 +101,7 @@ public class LogsService {
         if (parts.length > 7 && parts[3].equals("---") && parts[1].equals(level)) {
             return true;
         }
-        if (parts.length > 3 && parts[2].equals(level)) {
-            return true;
-        }
-        return false;
+        return parts.length > 3 && parts[2].equals(level);
     }
 
     private boolean isLogLine(String line) {
@@ -115,10 +112,7 @@ public class LogsService {
         if (parts.length > 3 && (parts[2].equals("ERROR") || parts[2].equals("WARN") || parts[2].equals("INFO") || parts[2].equals("DEBUG"))) {
             return true;
         }
-        if (line.startsWith("\u001b[")) {
-            return true;
-        }
-        return false;
+        return line.startsWith("\u001b[");
     }
 
     public FileSystemResource downloadLog() throws IOException {
