@@ -35,7 +35,8 @@ public class LogsService {
                 .replace("\u001b[33m", "<span class=\"error\">")
                 .replace("\u001b[36m", "<span class=\"success\">")
                 .replace("\u001b[37m", "<span class=\"debug\">")
-                .replace("\u001b[0m", " </span>");
+                .replace("\u001b[0m", "</span> ")
+                ;
     }
 
     private Path getLogFile(String type) {
@@ -58,10 +59,9 @@ public class LogsService {
         List<String> filtered = new ArrayList<>();
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
-            String[] parts = line.trim().split("\\s+");
             if (!type.equals("app")) {
                 filtered.add(fixLine(line));
-            } else if (StringUtils.isBlank(level) || (parts.length > 7 && parts[3].equals("---") && parts[1].equals(level))) {
+            } else if (matchLogLevel(line, level)) {
                 StringBuilder sb = new StringBuilder(fixLine(line));
                 sb.append("<pre>");
                 while (i + 1 < lines.size()) {
@@ -85,9 +85,40 @@ public class LogsService {
         return new PageImpl<>(result, pageable, filtered.size());
     }
 
+    private boolean matchLogLevel(String line, String level) {
+        if (StringUtils.isBlank(level) || "ALL".equals(level)) {
+            return true;
+        }
+        if (line.startsWith("\u001b[")) {
+            line = line.replace("\u001b[31m", "")
+                    .replace("\u001b[33m", "")
+                    .replace("\u001b[36m", "")
+                    .replace("\u001b[37m", "")
+                    .replace("\u001b[0m", " ");
+            return line.split("\\s+")[0].equals(level);
+        }
+        String[] parts = line.split("\\s+");
+        if (parts.length > 7 && parts[3].equals("---") && parts[1].equals(level)) {
+            return true;
+        }
+        if (parts.length > 3 && parts[2].equals(level)) {
+            return true;
+        }
+        return false;
+    }
+
     private boolean isLogLine(String line) {
-        String[] parts = line.trim().split("\\s+");
-        return parts.length > 7 && parts[3].equals("---") && (parts[1].equals("ERROR") || parts[1].equals("WARN") || parts[1].equals("INFO") || parts[1].equals("DEBUG"));
+        String[] parts = line.split("\\s+");
+        if (parts.length > 7 && parts[3].equals("---") && (parts[1].equals("ERROR") || parts[1].equals("WARN") || parts[1].equals("INFO") || parts[1].equals("DEBUG"))) {
+            return true;
+        }
+        if (parts.length > 3 && (parts[2].equals("ERROR") || parts[2].equals("WARN") || parts[2].equals("INFO") || parts[2].equals("DEBUG"))) {
+            return true;
+        }
+        if (line.startsWith("\u001b[")) {
+            return true;
+        }
+        return false;
     }
 
     public FileSystemResource downloadLog() throws IOException {

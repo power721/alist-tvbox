@@ -1014,7 +1014,7 @@ public class TvBoxService {
                     }
                     movieDetail.setCate(new CategoryList());
                 }
-                if (!"/".equals(path)) {
+                if (!"/".equals(path) && !"gui".equals(ac)) {
                     setMovieInfo(site, movieDetail, fsInfo.getName(), newPath, false);
                 }
                 folders.add(movieDetail);
