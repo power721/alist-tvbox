@@ -779,11 +779,13 @@ public class AccountService {
             aListLocalService.startAListServer();
         } else if (account.isMaster()) {
             log.info("sync tokens for account {}", account);
+            account.setShowMyAli(true);
             updateTokenToAList(account);
             updateAliAccountByApi(account);
         }
 
         if (count == 0) {
+            account.setShowMyAli(true);
             showMyAli(account);
         } else {
             showMyAliWithAPI(account);
@@ -840,9 +842,9 @@ public class AccountService {
         validateUpdate(id, dto);
 
         Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
-        boolean aliChanged = account.isShowMyAli() != dto.isShowMyAli();
         boolean tokenChanged = !Objects.equals(account.getRefreshToken(), dto.getRefreshToken()) || !Objects.equals(account.getOpenToken(), dto.getOpenToken());
         boolean changed = tokenChanged || account.isMaster() != dto.isMaster();
+        boolean showMyAli = account.isShowMyAli();
 
         account.setRefreshToken(dto.getRefreshToken().trim());
         account.setOpenToken(dto.getOpenToken().trim());
@@ -856,6 +858,7 @@ public class AccountService {
             updateAliAccountByApi(account);
         }
 
+        boolean aliChanged = account.isShowMyAli() != showMyAli;
         if (aliChanged) {
             showMyAliWithAPI(account);
         }
@@ -895,6 +898,9 @@ public class AccountService {
         List<Account> list = accountRepository.findAll();
         for (Account a : list) {
             a.setMaster(a.getId().equals(account.getId()));
+            if (a.isMaster()) {
+                a.setShowMyAli(true);
+            }
         }
         accountRepository.saveAll(list);
     }
