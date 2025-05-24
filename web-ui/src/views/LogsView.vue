@@ -4,7 +4,7 @@ import {onMounted, ref} from "vue";
 import axios from "axios";
 
 const type = ref('app')
-const level = ref(localStorage.getItem('log_level') || '')
+const level = ref(localStorage.getItem('log_level') || 'ALL')
 const page = ref(1)
 const count = ref(0)
 const total = ref(0)
@@ -12,7 +12,7 @@ const logs = ref([])
 const options = [
   {
     label: '全部',
-    value: ''
+    value: 'ALL'
   },
   {
     label: 'ERROR',
