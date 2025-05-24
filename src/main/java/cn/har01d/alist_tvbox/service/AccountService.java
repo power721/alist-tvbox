@@ -922,7 +922,7 @@ public class AccountService {
             if (StringUtils.isBlank(name)) {
                 name = String.valueOf(account.getId());
             }
-            if (account.isShowMyAli()) {
+            if (account.isShowMyAli() || account.isMaster()) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'/\uD83D\uDCC0我的阿里云盘/%s/资源盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"%s\",\"refresh_token2\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"drive_type\":\"resource\",\"account_id\":%d}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','',0,0,0);".formatted(storageId, name, account.getOpenToken(), account.getRefreshToken(), account.getId());
                 Utils.executeUpdate(sql);
                 storageId++;
@@ -953,7 +953,7 @@ public class AccountService {
             if (StringUtils.isBlank(name)) {
                 name = String.valueOf(account.getId());
             }
-            if (account.isShowMyAli()) {
+            if (account.isShowMyAli() || account.isMaster()) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'/\uD83D\uDCC0我的阿里云盘/%s/资源盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"%s\",\"refresh_token2\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"drive_type\":\"resource\",\"account_id\":%d}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);".formatted(storageId, name, account.getOpenToken(), account.getRefreshToken(), account.getId());
                 int code = Utils.executeUpdate(sql);
                 log.debug("{} {}", code, sql);
