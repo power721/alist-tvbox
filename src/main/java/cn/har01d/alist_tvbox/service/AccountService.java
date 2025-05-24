@@ -195,8 +195,9 @@ public class AccountService {
 
     private void updateAliAccountId() {
         accountRepository.getFirstByMasterTrue().map(Account::getId).ifPresent(id -> {
-            log.info("updateAliAccountId {}", id);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + id + "','','number','',0,1)");
+            int storageId = base + (id - 1) * 2;
+            log.info("updateAliAccountId {}", storageId);
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + storageId + "','','number','',0,1)");
         });
     }
 
@@ -486,7 +487,7 @@ public class AccountService {
                         name = String.valueOf(account.getId());
                     }
                     String sql;
-                    if (account.isShowMyAli()) {
+                    if (account.isShowMyAli() || account.isMaster()) {
                         sql = "INSERT INTO x_storages VALUES(%d,'/\uD83D\uDCC0我的阿里云盘/%s/资源盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"%s\",\"refresh_token2\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"drive_type\":\"resource\",\"account_id\":%d}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');".formatted(id, name, account.getOpenToken(), account.getRefreshToken(), account.getId());
                         int code = Utils.executeUpdate(sql);
                         log.info("add AList storage {} {} {}", id, name, code);
@@ -773,15 +774,18 @@ public class AccountService {
 
         if (count == 0) {
             updateTokens();
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + account.getId() + "','','number','',1,0)");
+            int storageId = base + (account.getId() - 1) * 2;
+            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + storageId + "','','number','',1,0)");
             aListLocalService.startAListServer();
         } else if (account.isMaster()) {
             log.info("sync tokens for account {}", account);
+            account.setShowMyAli(true);
             updateTokenToAList(account);
             updateAliAccountByApi(account);
         }
 
         if (count == 0) {
+            account.setShowMyAli(true);
             showMyAli(account);
         } else {
             showMyAliWithAPI(account);
@@ -838,9 +842,9 @@ public class AccountService {
         validateUpdate(id, dto);
 
         Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
-        boolean aliChanged = account.isShowMyAli() != dto.isShowMyAli();
         boolean tokenChanged = !Objects.equals(account.getRefreshToken(), dto.getRefreshToken()) || !Objects.equals(account.getOpenToken(), dto.getOpenToken());
         boolean changed = tokenChanged || account.isMaster() != dto.isMaster();
+        boolean showMyAli = account.isShowMyAli();
 
         account.setRefreshToken(dto.getRefreshToken().trim());
         account.setOpenToken(dto.getOpenToken().trim());
@@ -854,6 +858,7 @@ public class AccountService {
             updateAliAccountByApi(account);
         }
 
+        boolean aliChanged = account.isShowMyAli() != showMyAli;
         if (aliChanged) {
             showMyAliWithAPI(account);
         }
@@ -868,9 +873,10 @@ public class AccountService {
     }
 
     private void updateAliAccountByApi(Account account) {
+        int storageId = base + (account.getId() - 1) * 2;
         int status = aListLocalService.getAListStatus();
         if (status == 1) {
-            Utils.executeUpdate("UPDATE x_setting_items SET value=" + account.getId() + " WHERE key = 'ali_account_id'");
+            Utils.executeUpdate("UPDATE x_setting_items SET value=" + storageId + " WHERE key = 'ali_account_id'");
             throw new BadRequestException("AList服务启动中");
         }
 
@@ -881,7 +887,7 @@ public class AccountService {
         body.put("key", "ali_account_id");
         body.put("type", "number");
         body.put("flag", 1);
-        body.put("value", String.valueOf(account.getId()));
+        body.put("value", String.valueOf(storageId));
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
         ResponseEntity<String> response = aListClient.exchange("/api/admin/setting/update", HttpMethod.POST, entity, String.class);
         log.info("updateAliAccountByApi {} response: {}", account.getId(), response.getBody());
@@ -892,6 +898,9 @@ public class AccountService {
         List<Account> list = accountRepository.findAll();
         for (Account a : list) {
             a.setMaster(a.getId().equals(account.getId()));
+            if (a.isMaster()) {
+                a.setShowMyAli(true);
+            }
         }
         accountRepository.saveAll(list);
     }
@@ -913,7 +922,7 @@ public class AccountService {
             if (StringUtils.isBlank(name)) {
                 name = String.valueOf(account.getId());
             }
-            if (account.isShowMyAli()) {
+            if (account.isShowMyAli() || account.isMaster()) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'/\uD83D\uDCC0我的阿里云盘/%s/资源盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"%s\",\"refresh_token2\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"drive_type\":\"resource\",\"account_id\":%d}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','',0,0,0);".formatted(storageId, name, account.getOpenToken(), account.getRefreshToken(), account.getId());
                 Utils.executeUpdate(sql);
                 storageId++;
@@ -944,7 +953,7 @@ public class AccountService {
             if (StringUtils.isBlank(name)) {
                 name = String.valueOf(account.getId());
             }
-            if (account.isShowMyAli()) {
+            if (account.isShowMyAli() || account.isMaster()) {
                 String sql = "INSERT INTO x_storages VALUES(%d,'/\uD83D\uDCC0我的阿里云盘/%s/资源盘',0,'AliyundriveOpen',30,'work','{\"root_folder_id\":\"root\",\"refresh_token\":\"%s\",\"refresh_token2\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\",\"drive_type\":\"resource\",\"account_id\":%d}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);".formatted(storageId, name, account.getOpenToken(), account.getRefreshToken(), account.getId());
                 int code = Utils.executeUpdate(sql);
                 log.debug("{} {}", code, sql);
