@@ -56,7 +56,7 @@ public final class Utils {
 
     private static void readUserAgents() {
         try {
-            var resource = new ClassPathResource("/ua.txt");
+            var resource = new ClassPathResource("ua.txt");
             String lines = resource.getContentAsString(StandardCharsets.UTF_8);
             userAgents.addAll(Arrays.asList(lines.split("\n")));
             log.info("Read {} user agents", userAgents.size());
