@@ -127,12 +127,6 @@
 
     <el-dialog v-model="detailVisible" title="阿里账号详情" width="60%">
       <el-form :model="form" label-width="150px">
-        <el-form-item v-if="form.accessToken" prop="accessToken" label="阿里access token">
-          <el-input v-model="form.accessToken" maxlength="128" readonly/>
-          <span class="hint">创建时间： {{ formatTime(iat[0]) }}</span>
-          <span class="hint">更新时间： {{ formatTime(form.accessTokenTime) }}</span>
-          <span class="hint">过期时间： {{ formatTime(exp[0]) }}</span>
-        </el-form-item>
         <el-form-item v-if="form.accessTokenOpen" prop="accessTokenOpen" label="开放access token">
           <el-input v-model="form.accessTokenOpen" maxlength="128" readonly/>
           <span class="hint">创建时间： {{ formatTime(iat[1]) }}</span>
@@ -252,7 +246,7 @@
 
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
-import {Check, Close} from '@element-plus/icons-vue'
+import {Calendar, Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
 import {store} from "@/services/store";

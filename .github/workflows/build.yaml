@@ -112,8 +112,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build native with Maven
-        run: |
-          mvn -B -Pnative package --file pom.xml
+        run: mvn -B -Pnative package --file pom.xml
       - name: Build native docker and push
         uses: docker/build-push-action@v4
         with:

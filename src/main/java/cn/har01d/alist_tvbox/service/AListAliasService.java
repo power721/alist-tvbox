@@ -19,7 +19,7 @@ public class AListAliasService {
     private final ShareService shareService;
     private final AListLocalService aListLocalService;
 
-    private volatile int shareId = 6000;
+    private int shareId = 6000;
 
     public AListAliasService(AListAliasRepository aliasRepository,
                              AccountService accountService,
@@ -33,7 +33,9 @@ public class AListAliasService {
 
     @PostConstruct
     public void init() {
-        shareId += aliasRepository.count();
+        for (var alias : aliasRepository.findAll()) {
+            shareId = Math.max(shareId, alias.getId() + 1);
+        }
     }
 
     public AListAlias create(AListAliasDto dto) {
