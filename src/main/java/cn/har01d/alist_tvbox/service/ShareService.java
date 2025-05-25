@@ -82,6 +82,7 @@ public class ShareService {
     private final RestTemplate restTemplate;
     private final Environment environment;
 
+    private final int offset = 99900;
     private int shareId = 20000;
 
     public ShareService(ObjectMapper objectMapper,
@@ -136,7 +137,7 @@ public class ShareService {
             list = loadSharesFromFile();
         }
 
-        list = list.stream().filter(e -> e.getId() < 99900).collect(Collectors.toList());
+        list = list.stream().filter(e -> e.getId() < offset).collect(Collectors.toList());
         list.addAll(loadLatestShare());
 
         loadAListShares(list);
@@ -489,7 +490,7 @@ public class ShareService {
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     }
-                    if (share.getId() < 99900) {
+                    if (share.getId() < offset) {
                         shareId = Math.max(shareId, share.getId() + 1);
                     }
                     if (share.getType() == null) {
@@ -1116,7 +1117,7 @@ public class ShareService {
         try {
             Share share = new Share();
             share.setType(0);
-            share.setId(99900);
+            share.setId(offset);
             share.setShareId("cdqCsAWD9wC");
             share.setPassword("6666");
             share.setFolderId("635151fc53641440ad95492c8174c57584c56f68");
@@ -1129,7 +1130,7 @@ public class ShareService {
         try {
             Share share = new Share();
             share.setType(0);
-            share.setId(99901);
+            share.setId(offset + 1);
             share.setShareId("4ydLxf7VgH7");
             share.setFolderId("6411b6c459de9db58ea5439cb7f537bbed4f4f4b");
             share.setPath("/\uD83C\uDE34我的阿里分享/每日更新");
@@ -1141,7 +1142,7 @@ public class ShareService {
         try {
             Share share = new Share();
             share.setType(0);
-            share.setId(99902);
+            share.setId(offset + 2);
             share.setShareId("UuHi9PeYSVz");
             share.setFolderId("633bfc72b2f11449546041cea0e90bdfe680a110");
             share.setPath("/\uD83C\uDE34我的阿里分享/YYDSVIP综艺");
