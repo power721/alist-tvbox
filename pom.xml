@@ -217,6 +217,7 @@
                                     --enable-http
                                     --enable-https
                                     -march=compatibility
+                                    -H:ResourceConfigurationFiles=resource-config.json
                                 </buildArg>
                             </buildArgs>
                         </configuration>

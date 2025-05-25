@@ -42,6 +42,10 @@ if [ $# -gt 2 ]; then
 	PORT2=$3
 fi
 
+export TOOLCHAIN_DIR=/opt/x86_64-linux-musl-native/
+export CC=$TOOLCHAIN_DIR/bin/gcc
+export PATH="$TOOLCHAIN_DIR/bin:$PATH"
+
 if [ "$BUILD" = "true" ]; then
   rm -rf src/main/resources/static/assets && \
   cd web-ui && \
