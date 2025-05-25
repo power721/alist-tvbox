@@ -5,7 +5,11 @@ APPNAME=atv
 
 sudo adduser --system --group --no-create-home ${USERNAME}
 sudo mkdir -p /opt/${APPNAME}/config
+sudo mkdir -p /opt/${APPNAME}/data
 sudo mkdir -p /opt/${APPNAME}/log
+
+sudo mkdir -p /opt/alist/data
+sudo mkdir -p /opt/alist/log
 
 sudo touch /opt/${APPNAME}/config/application-production.yaml
 
