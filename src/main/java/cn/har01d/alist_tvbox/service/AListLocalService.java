@@ -25,7 +25,6 @@ import java.io.File;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -88,7 +87,7 @@ public class AListLocalService {
 
     public void updateSetting(String key, String value, String type) {
         log.info("update setting {}={}", key, value);
-        if (getAListStatus() == 2) {
+        if (checkStatus() == 2) {
             Map<String, Object> body = new HashMap<>();
             body.put("key", key);
             body.put("value", value);
@@ -134,7 +133,7 @@ public class AListLocalService {
             log.warn("Token is empty: {} {} ", accountId, key);
             return;
         }
-        if (getAListStatus() == 2) {
+        if (checkStatus() == 2) {
             String token = siteRepository.findById(1).orElseThrow().getToken();
             HttpHeaders headers = new HttpHeaders();
             headers.set(HttpHeaders.AUTHORIZATION, token);
@@ -142,7 +141,7 @@ public class AListLocalService {
             body.put("key", key);
             body.put("value", value);
             body.put("accountId", accountId);
-            body.put("modified",OffsetDateTime.now().toString());
+            body.put("modified", OffsetDateTime.now().toString());
             log.debug("updateTokenToAList: {}", body);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
             ResponseEntity<String> response = restTemplate.exchange("/api/admin/token/update", HttpMethod.POST, entity, String.class);
@@ -219,7 +218,7 @@ public class AListLocalService {
     }
 
     public void validateAListStatus() {
-        getAListStatus();
+        checkStatus();
         if (aListStatus == 1) {
             throw new BadRequestException("AList服务启动中");
         }
@@ -228,7 +227,7 @@ public class AListLocalService {
         }
     }
 
-    public int getAListStatus() {
+    public int checkStatus() {
         try {
             ResponseEntity<SettingResponse> response = restTemplate.getForEntity("/api/public/settings", SettingResponse.class);
             if (response.getBody() != null) {
@@ -247,4 +246,11 @@ public class AListLocalService {
         return 0;
     }
 
+    public int getStatus() {
+        return aListStatus;
+    }
+
+    public void updateStatus(int status) {
+        aListStatus = status;
+    }
 }

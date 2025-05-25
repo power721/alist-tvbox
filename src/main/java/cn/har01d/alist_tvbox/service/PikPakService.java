@@ -210,7 +210,7 @@ public class PikPakService {
     }
 
     public void updatePikPak(PikPakAccount account) {
-        int status = aListLocalService.getAListStatus();
+        int status = aListLocalService.checkStatus();
         try {
             int id = base + account.getId();
             int disabled = status == 0 ? 0 : 1;

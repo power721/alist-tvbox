@@ -14,7 +14,6 @@ import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.AListUser;
-import cn.har01d.alist_tvbox.model.AliToken;
 import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.UserResponse;
@@ -908,7 +907,7 @@ public class AccountService {
 
     private void updateAliAccountByApi(Account account) {
         int storageId = base + (account.getId() - 1) * 2;
-        int status = aListLocalService.getAListStatus();
+        int status = aListLocalService.checkStatus();
         if (status == 1) {
             Utils.executeUpdate("UPDATE x_setting_items SET value=" + storageId + " WHERE key = 'ali_account_id'");
             throw new BadRequestException("AList服务启动中");
@@ -970,7 +969,7 @@ public class AccountService {
     }
 
     public void showMyAliWithAPI(Account account) {
-        int status = aListLocalService.getAListStatus();
+        int status = aListLocalService.checkStatus();
         if (status == 1) {
             throw new BadRequestException("AList服务启动中");
         }
