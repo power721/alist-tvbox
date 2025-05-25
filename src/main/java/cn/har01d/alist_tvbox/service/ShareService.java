@@ -82,7 +82,8 @@ public class ShareService {
     private final RestTemplate restTemplate;
     private final Environment environment;
 
-    private volatile int shareId = 5000;
+    private final int offset = 99900;
+    private int shareId = 20000;
 
     public ShareService(ObjectMapper objectMapper,
                         ShareRepository shareRepository,
@@ -121,6 +122,7 @@ public class ShareService {
 
     @PostConstruct
     public void setup() {
+        migrateId();
         updateAListDriverType();
         loadOpenTokenUrl();
 
@@ -135,7 +137,7 @@ public class ShareService {
             list = loadSharesFromFile();
         }
 
-        list = list.stream().filter(e -> e.getId() < 9900).collect(Collectors.toList());
+        list = list.stream().filter(e -> e.getId() < offset).collect(Collectors.toList());
         list.addAll(loadLatestShare());
 
         loadAListShares(list);
@@ -147,6 +149,18 @@ public class ShareService {
 
         if ("new".equals(environment.getProperty("INSTALL")) || accountRepository.count() > 0 || pikPakAccountRepository.count() > 0 || panAccountRepository.count() > 0) {
             aListLocalService.startAListServer();
+        }
+    }
+
+    private void migrateId() {
+        if (!settingRepository.existsByName("migrate_share_ids")) {
+            List<Share> list = shareRepository.findAll();
+            for (Share share : list) {
+                share.setId(shareId++);
+            }
+            shareRepository.deleteAll();
+            shareRepository.saveAll(list);
+            settingRepository.save(new Setting("migrate_share_ids", ""));
         }
     }
 
@@ -476,7 +490,7 @@ public class ShareService {
                         int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
                         log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     }
-                    if (share.getId() < 6000) {
+                    if (share.getId() < offset) {
                         shareId = Math.max(shareId, share.getId() + 1);
                     }
                     if (share.getType() == null) {
@@ -868,7 +882,9 @@ public class ShareService {
 
         try {
             String token = accountService.login();
-            share.setId(shareId++);
+            synchronized (this) {
+                share.setId(shareId++);
+            }
 
             int result = 0;
             if (share.getType() == null || share.getType() == 0) {
@@ -1091,10 +1107,17 @@ public class ShareService {
             settingRepository.save(new Setting("fix_share_id", ""));
         }
 
+        if (!settingRepository.existsByName("fix_share_id1")) {
+            shareRepository.deleteById(9900);
+            shareRepository.deleteById(9901);
+            shareRepository.deleteById(9902);
+            settingRepository.save(new Setting("fix_share_id1", ""));
+        }
+
         try {
             Share share = new Share();
             share.setType(0);
-            share.setId(9900);
+            share.setId(offset);
             share.setShareId("cdqCsAWD9wC");
             share.setPassword("6666");
             share.setFolderId("635151fc53641440ad95492c8174c57584c56f68");
@@ -1107,7 +1130,7 @@ public class ShareService {
         try {
             Share share = new Share();
             share.setType(0);
-            share.setId(9901);
+            share.setId(offset + 1);
             share.setShareId("4ydLxf7VgH7");
             share.setFolderId("6411b6c459de9db58ea5439cb7f537bbed4f4f4b");
             share.setPath("/\uD83C\uDE34我的阿里分享/每日更新");
@@ -1119,7 +1142,7 @@ public class ShareService {
         try {
             Share share = new Share();
             share.setType(0);
-            share.setId(9902);
+            share.setId(offset + 2);
             share.setShareId("UuHi9PeYSVz");
             share.setFolderId("633bfc72b2f11449546041cea0e90bdfe680a110");
             share.setPath("/\uD83C\uDE34我的阿里分享/YYDSVIP综艺");

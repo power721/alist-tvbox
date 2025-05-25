@@ -13,6 +13,8 @@ sudo mkdir -p /opt/alist/log
 
 sudo touch /opt/${APPNAME}/config/application-production.yaml
 
+wget https://github.com/power721/alist-tvbox/releases/download/v1.0.1/alist-tvbox-1.0.jar -O /opt/${APPNAME}/${APPNAME}
+
 sudo chown -R ${USERNAME}:${USERNAME} /opt/${APPNAME}/
 
 cat <<EOT > /tmp/${APPNAME}.service
