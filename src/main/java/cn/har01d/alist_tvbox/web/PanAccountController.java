@@ -32,6 +32,11 @@ public class PanAccountController {
         return driverAccountService.update(id, account);
     }
 
+    @PostMapping("/{id}/token")
+    public void updateToken(@PathVariable Integer id, @RequestBody DriverAccount account) {
+        driverAccountService.updateToken(id, account);
+    }
+
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Integer id) {
         driverAccountService.delete(id);

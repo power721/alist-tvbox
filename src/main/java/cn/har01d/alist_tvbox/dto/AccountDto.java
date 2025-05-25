@@ -9,8 +9,12 @@ public class AccountDto {
     private String nickname;
     private String refreshToken = "";
     private Instant refreshTokenTime;
+    private String accessToken = "";
+    private Instant accessTokenTime;
     private String openToken = "";
     private Instant openTokenTime;
+    private String openAccessToken = "";
+    private Instant openAccessTokenTime;
     private Instant checkinTime;
     private int checkinDays;
     private boolean autoCheckin;

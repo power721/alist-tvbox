@@ -52,6 +52,11 @@ public class AccountController {
         return accountService.getCheckinLogs(id);
     }
 
+    @PostMapping("/api/ali/accounts/{id}/token")
+    public void updateTokens(@PathVariable Integer id, @RequestBody AccountDto account) {
+        accountService.updateTokens(id, account);
+    }
+
     @PostMapping("/api/ali/accounts/{id}")
     public Account update(@PathVariable Integer id, @RequestBody AccountDto account) {
         return accountService.update(id, account);

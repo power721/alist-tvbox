@@ -10,7 +10,6 @@ import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
-import cn.har01d.alist_tvbox.model.AliToken;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -22,7 +21,6 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -32,7 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -81,7 +78,6 @@ public class DriverAccountService {
         }
         drivers.put("QUARK_TV", new QuarkUCTV(restTemplate, new QuarkUCTV.Conf("https://open-api-drive.quark.cn", "d3194e61504e493eb6222857bccfed94", "kw2dvtd7p4t3pjl2d9ed9yc8yej8kw2d", "1.5.6", "CP", "http://api.extscreen.com/quarkdrive", deviceId)));
         drivers.put("UC_TV", new QuarkUCTV(restTemplate, new QuarkUCTV.Conf("https://open-api-drive.uc.cn", "5acf882d27b74502b7040b0c65519aa7", "l3srvtd7p42l0d0x1u8d7yc8ye9kki4d", "1.6.5", "UCTVOFFICIALWEB", "http://api.extscreen.com/ucdrive", deviceId)));
-        syncTokens(30_000);
     }
 
     private void migrateDriverAccounts() {
@@ -306,6 +302,17 @@ public class DriverAccountService {
         return account;
     }
 
+    public void updateToken(Integer id, DriverAccount dto) {
+        log.debug("update token: {} {}", id - IDX, dto);
+        var account = get(id - IDX);
+        if (TOKEN_TYPES.contains(account.getType())) {
+            account.setToken(dto.getToken());
+        } else {
+            account.setCookie(dto.getToken());
+        }
+        driverAccountRepository.save(account);
+    }
+
     public DriverAccount update(Integer id, DriverAccount dto) {
         validate(dto);
         var account = get(id);
@@ -443,9 +450,6 @@ public class DriverAccountService {
             updateAList(account);
             if (status == 2) {
                 accountService.enableStorage(id, token);
-                if (TOKEN_TYPES.contains(account.getType()) || COOKIE_TYPES.contains(account.getType())) {
-                    syncTokens(5000);
-                }
             }
         } catch (Exception e) {
             throw new BadRequestException(e);
@@ -580,66 +584,5 @@ public class DriverAccountService {
         }
 
         return String.join("; ", cookieValues);
-    }
-
-    @Scheduled(initialDelay = 300_000, fixedDelay = 1800_000)
-    public void syncCookies() {
-        if (aListLocalService.getAListStatus() != 2) {
-            return;
-        }
-        syncToken();
-    }
-
-    private void syncTokens(long sleep) {
-        new Thread(() -> {
-            try {
-                Thread.sleep(sleep);
-            } catch (InterruptedException e) {
-                return;
-            }
-
-            while (true) {
-                if (aListLocalService.getAListStatus() == 2) {
-                    syncToken();
-                    break;
-                }
-                try {
-                    Thread.sleep(1000L);
-                } catch (InterruptedException e) {
-                    return;
-                }
-            }
-        }).start();
-    }
-
-    private void syncToken() {
-        List<AliToken> tokens = aListLocalService.getTokens().getData();
-        if (tokens == null || tokens.isEmpty()) {
-            return;
-        }
-
-        Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
-        List<DriverAccount> list = new ArrayList<>();
-        List<DriverAccount> accounts = driverAccountRepository.findAll();
-        for (var account : accounts) {
-            int id = IDX + account.getId();
-            String key = account.getType() + "_" + id;
-            AliToken token = map.get(key);
-            if (token != null) {
-                boolean changed;
-                if (TOKEN_TYPES.contains(account.getType())) {
-                    changed = !token.getValue().equals(account.getToken());
-                    account.setToken(token.getValue());
-                } else {
-                    changed = !token.getValue().equals(account.getCookie());
-                    account.setCookie(token.getValue());
-                }
-                if (changed) {
-                    log.debug("update {} {}", key, token);
-                    list.add(account);
-                }
-            }
-        }
-        driverAccountRepository.saveAll(list);
     }
 }
