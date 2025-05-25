@@ -31,6 +31,9 @@ public class Account {
     private String refreshToken = "";
     private Instant refreshTokenTime;
     @Column(columnDefinition = "TEXT")
+    private String accessToken = "";
+    private Instant accessTokenTime;
+    @Column(columnDefinition = "TEXT")
     private String openToken = "";
     private Instant openTokenTime;
     @Column(columnDefinition = "TEXT")

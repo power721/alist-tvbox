@@ -33,7 +33,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -396,6 +395,7 @@ public class AccountService {
                 Map<Object, Object> response = getAliToken(account.getRefreshToken());
                 account.setNickname((String) response.get("nick_name"));
                 account.setRefreshToken((String) response.get(REFRESH_TOKEN));
+                account.setAccessToken((String) response.get(ACCESS_TOKEN));
                 changed = true;
             }
         } catch (Exception e) {
@@ -518,6 +518,10 @@ public class AccountService {
             Utils.executeUpdate(String.format(sql, account.getId(), account.getRefreshToken(), account.getId(), getTime(account.getRefreshTokenTime())));
             sql = "INSERT INTO x_tokens VALUES('RefreshTokenOpen-%d','%s',%d,'%s')";
             Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenToken(), account.getId(), getTime(account.getOpenTokenTime())));
+            if (StringUtils.isNotBlank(account.getAccessToken())) {
+                sql = "INSERT INTO x_tokens VALUES('AccessToken-%d','%s',%d,'%s')";
+                Utils.executeUpdate(String.format(sql, account.getId(), account.getAccessToken(), account.getId(), getTime(account.getAccessTokenTime())));
+            }
             if (StringUtils.isNotBlank(account.getOpenAccessToken())) {
                 sql = "INSERT INTO x_tokens VALUES('AccessTokenOpen-%d','%s',%d,'%s')";
                 Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenAccessToken(), account.getId(), getTime(account.getOpenAccessTokenTime())));
@@ -769,7 +773,10 @@ public class AccountService {
         account.setShowMyAli(dto.isShowMyAli());
         account.setClean(dto.isClean());
 
-        account.setMaster(count == 0);
+        account.setMaster(dto.isMaster() || count == 0);
+        if (account.isMaster()) {
+            account.setShowMyAli(true);
+        }
         accountRepository.save(account);
 
         if (count == 0) {
@@ -779,13 +786,12 @@ public class AccountService {
             aListLocalService.startAListServer();
         } else if (account.isMaster()) {
             log.info("sync tokens for account {}", account);
-            account.setShowMyAli(true);
+            updateMaster(account);
             updateTokenToAList(account);
             updateAliAccountByApi(account);
         }
 
         if (count == 0) {
-            account.setShowMyAli(true);
             showMyAli(account);
         } else {
             showMyAliWithAPI(account);
@@ -806,7 +812,7 @@ public class AccountService {
         try {
             String token = login();
             updateTokenToAList(account.getId(), "RefreshToken-" + account.getId(), account.getRefreshToken(), account.getRefreshTokenTime(), token);
-            //updateTokenToAList(account.getId(), "AccessToken-" + account.getId(), "", null, token);
+            updateTokenToAList(account.getId(), "AccessToken-" + account.getId(), account.getAccessToken(), account.getAccessTokenTime(), token);
             updateTokenToAList(account.getId(), "RefreshTokenOpen-" + account.getId(), account.getOpenToken(), account.getOpenTokenTime(), token);
             updateTokenToAList(account.getId(), "AccessTokenOpen-" + account.getId(), account.getOpenAccessToken(), account.getOpenAccessTokenTime(), token);
         } catch (Exception e) {
@@ -836,6 +842,34 @@ public class AccountService {
             throw new BadRequestException("至少需要一个token");
         }
         return count;
+    }
+
+    public void updateTokens(Integer id, AccountDto dto) {
+        log.debug("update tokens: {} {}", id, dto);
+
+        Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
+
+        if (StringUtils.isNotBlank(dto.getRefreshToken())) {
+            account.setRefreshToken(dto.getRefreshToken());
+            account.setRefreshTokenTime(dto.getRefreshTokenTime());
+        }
+
+        if (StringUtils.isNotBlank(dto.getAccessToken())) {
+            account.setAccessToken(dto.getAccessToken());
+            account.setAccessTokenTime(dto.getAccessTokenTime());
+        }
+
+        if (StringUtils.isNotBlank(dto.getOpenToken())) {
+            account.setOpenToken(dto.getOpenToken());
+            account.setOpenTokenTime(dto.getOpenTokenTime());
+        }
+
+        if (StringUtils.isNotBlank(dto.getOpenAccessToken())) {
+            account.setOpenAccessToken(dto.getOpenAccessToken());
+            account.setOpenAccessTokenTime(dto.getOpenAccessTokenTime());
+        }
+
+        accountRepository.save(account);
     }
 
     public Account update(Integer id, AccountDto dto) {
@@ -1040,54 +1074,5 @@ public class AccountService {
                     .orElseThrow(NotFoundException::new);
         }
         return null;
-    }
-
-    private int syncs = 0;
-
-    @Scheduled(initialDelay = 200_000, fixedDelay = 300_000)
-    public void syncTokens() {
-        if (syncs > 1 && syncs % 12 != 0) {
-            syncs++;
-            return;
-        }
-        if (aListLocalService.getAListStatus() != 2) {
-            return;
-        }
-        List<AliToken> tokens = aListLocalService.getTokens().getData();
-        if (tokens == null || tokens.isEmpty()) {
-            return;
-        }
-
-        syncs++;
-        log.info("syncTokens {}", tokens.size());
-        log.debug("syncTokens {}", tokens);
-        Map<String, AliToken> map = tokens.stream().collect(Collectors.toMap(AliToken::getKey, e -> e));
-        List<Account> accounts = accountRepository.findAll();
-        for (Account account : accounts) {
-            AliToken token = map.get("RefreshToken-" + account.getId());
-            if (token != null && StringUtils.isNotEmpty(token.getValue()) && (account.getRefreshTokenTime() == null || token.getModified().isAfter(account.getRefreshTokenTime()))) {
-                account.setRefreshToken(token.getValue());
-                account.setRefreshTokenTime(token.getModified());
-            }
-
-            token = map.get("RefreshTokenOpen-" + account.getId());
-            if (token != null && StringUtils.isNotEmpty(token.getValue()) && (account.getOpenTokenTime() == null || token.getModified().isAfter(account.getOpenTokenTime()))) {
-                account.setOpenToken(token.getValue());
-                account.setOpenTokenTime(token.getModified());
-            }
-
-            token = map.get("AccessTokenOpen-" + account.getId());
-            if (token != null && StringUtils.isNotEmpty(token.getValue()) && (account.getOpenAccessTokenTime() == null || token.getModified().isAfter(account.getOpenAccessTokenTime()))) {
-                account.setOpenAccessToken(token.getValue());
-                account.setOpenAccessTokenTime(token.getModified());
-            }
-
-            if (token != null && account.getOpenAccessTokenTime() != null && token.getModified().isBefore(account.getOpenAccessTokenTime())) {
-                updateTokenToAList(account);
-            }
-
-            log.info("account {} token time: {} {} {}", account.getId(), account.getRefreshTokenTime(), account.getOpenTokenTime(), account.getOpenAccessTokenTime());
-        }
-        accountRepository.saveAll(accounts);
     }
 }
