@@ -24,23 +24,7 @@ jobs:
           mvn -B clean package -DskipTests --file pom.xml
           chmod +x target/*.jar
 
-      - name: Get tag version
-        id: get-version
-        run: |
-          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        id: create-release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.get-version.outputs.version }}
-          draft: false
-          prerelease: false
-
-      - name: Upload Release Asset
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: target/*.jar
