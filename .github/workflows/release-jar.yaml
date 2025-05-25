@@ -16,7 +16,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '17'
-          distribution: 'temurin'
+          distribution: 'corretto'
           cache: 'maven'
 
       - name: Build with Maven
@@ -41,11 +41,6 @@ jobs:
           prerelease: false
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./target/*.jar
-          asset_name: alist-tvbox-${{ steps.get-version.outputs.version }}.jar
-          asset_content_type: application/java-archive
+          files: target/*.jar
