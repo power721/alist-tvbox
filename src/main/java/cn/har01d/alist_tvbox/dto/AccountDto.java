@@ -21,4 +21,5 @@ public class AccountDto {
     private boolean showMyAli;
     private boolean master;
     private boolean clean;
+    private boolean force;
 }

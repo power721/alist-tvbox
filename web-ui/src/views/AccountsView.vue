@@ -177,6 +177,14 @@
             inactive-text="关闭"
           />
         </el-form-item>
+        <el-form-item label="强制更新">
+          <el-switch
+            v-model="form.force"
+            inline-prompt
+            active-text="是"
+            inactive-text="否"
+          />
+        </el-form-item>
         <el-form-item label="上次签到时间" v-if="form.checkinTime">
           <el-input :model-value="formatTime(form.checkinTime)" readonly/>
           <span class="hint" v-if="form.checkinDays">{{ form.nickname }} 本月签到{{ form.checkinDays }}次</span>
@@ -279,6 +287,7 @@ const form = ref({
   accessTokenOpen: '',
   autoCheckin: true,
   showMyAli: false,
+  force: false,
   master: false,
   refreshTokenTime: '',
   openTokenTime: '',
@@ -353,6 +362,7 @@ const handleAdd = () => {
     accessTokenOpen: '',
     autoCheckin: true,
     showMyAli: false,
+    force: false,
     master: false,
     refreshTokenTime: '',
     openTokenTime: '',
