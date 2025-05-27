@@ -1364,11 +1364,11 @@ public class TvBoxService {
             result.put("header", "{\"User-Agent\":\"AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (url.contains("115cdn.net")) {
             DriverAccount account;
-            if (url.contains("#storageId=")) {
-                int index = url.indexOf("#storageId=");
-                url = url.substring(0, index);
-                int id = Integer.parseInt(url.substring(index + 11));
+            if (url.contains(ProxyService.STORAGE_ID_FRAGMENT)) {
+                int index = url.indexOf(ProxyService.STORAGE_ID_FRAGMENT);
+                int id = Integer.parseInt(url.substring(index + ProxyService.STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
                 account = driverAccountRepository.findById(id).orElse(null);
+                url = url.substring(0, index);
             } else {
                 account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElse(null);
             }

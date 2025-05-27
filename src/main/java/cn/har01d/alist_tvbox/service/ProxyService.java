@@ -97,12 +97,13 @@ public class ProxyService {
                 DriverAccount account;
                 if (url.contains(STORAGE_ID_FRAGMENT)) {
                     int index = url.indexOf(STORAGE_ID_FRAGMENT);
-                    url = url.substring(0, index);
-                    int accountId = Integer.parseInt(url.substring(index + STORAGE_ID_FRAGMENT.length()));
+                    int accountId = Integer.parseInt(url.substring(index + STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
                     account = driverAccountRepository.findById(accountId).orElseThrow();
+                    url = url.substring(0, index);
                 } else {
                     account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElseThrow();
                 }
+                log.debug("use 115 account: {}", account.getId());
                 String cookie = account.getCookie();
                 headers.put("cookie", cookie);
                 headers.put("referer", "https://115.com/");
@@ -127,12 +128,13 @@ public class ProxyService {
                 DriverAccount account;
                 if (url.contains(STORAGE_ID_FRAGMENT)) {
                     int index = url.indexOf(STORAGE_ID_FRAGMENT);
-                    url = url.substring(0, index);
-                    int accountId = Integer.parseInt(url.substring(index + STORAGE_ID_FRAGMENT.length()));
+                    int accountId = Integer.parseInt(url.substring(index + STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
                     account = driverAccountRepository.findById(accountId).orElseThrow();
+                    url = url.substring(0, index);
                 } else {
                     account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElseThrow();
                 }
+                log.debug("use 115 account: {}", account.getId());
                 String cookie = account.getCookie();
                 headers.put("cookie", cookie);
                 headers.put("referer", "https://115.com/");
