@@ -1363,7 +1363,15 @@ public class TvBoxService {
         if (url.contains("xunlei.com")) {
             result.put("header", "{\"User-Agent\":\"AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (url.contains("115cdn.net")) {
-            var account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElse(null);
+            DriverAccount account;
+            if (url.contains("#storageId=")) {
+                int index = url.indexOf("#storageId=");
+                url = url.substring(0, index);
+                int id = Integer.parseInt(url.substring(index + 11));
+                account = driverAccountRepository.findById(id).orElse(null);
+            } else {
+                account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElse(null);
+            }
             if (account == null || account.isUseProxy()) {
                 url = proxyService.generateProxyUrl("115", url);
                 result.put("url", url);

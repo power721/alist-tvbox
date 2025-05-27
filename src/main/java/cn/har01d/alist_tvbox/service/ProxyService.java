@@ -38,6 +38,7 @@ import java.util.concurrent.CancellationException;
 @Slf4j
 @Service
 public class ProxyService {
+    public static final String STORAGE_ID_FRAGMENT = "#storageId=";
     private static final int BUFFER_SIZE = 64 * 1024;
     private final Cache<String, String> cache = Caffeine.newBuilder()
             .maximumSize(50)
@@ -93,7 +94,16 @@ public class ProxyService {
         if (url != null) {
             log.info("proxy url: {} {}", id, url);
             if (id.startsWith("115-")) {
-                String cookie = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
+                DriverAccount account;
+                if (url.contains(STORAGE_ID_FRAGMENT)) {
+                    int index = url.indexOf(STORAGE_ID_FRAGMENT);
+                    url = url.substring(0, index);
+                    int accountId = Integer.parseInt(url.substring(index + STORAGE_ID_FRAGMENT.length()));
+                    account = driverAccountRepository.findById(accountId).orElseThrow();
+                } else {
+                    account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElseThrow();
+                }
+                String cookie = account.getCookie();
                 headers.put("cookie", cookie);
                 headers.put("referer", "https://115.com/");
             } else if (id.startsWith("xl-")) {
@@ -108,15 +118,22 @@ public class ProxyService {
                 throw new BadRequestException("找不到文件 " + path);
             }
 
+            url = fsDetail.getRawUrl();
             if (fsDetail.getProvider().contains("Aliyundrive")) {
-                url = fsDetail.getRawUrl();
                 headers.put("origin", Constants.ALIPAN);
             } /*else if (fsDetail.getProvider().contains("Thunder")) {
-                url = fsDetail.getRawUrl();
                 headers.put("user-agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)");
-            }*/ else if (fsDetail.getProvider().contains("115")) {
-                url = fsDetail.getRawUrl();
-                String cookie = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("");
+            }*/ else if (url.contains("115cdn.net")) {
+                DriverAccount account;
+                if (url.contains(STORAGE_ID_FRAGMENT)) {
+                    int index = url.indexOf(STORAGE_ID_FRAGMENT);
+                    url = url.substring(0, index);
+                    int accountId = Integer.parseInt(url.substring(index + STORAGE_ID_FRAGMENT.length()));
+                    account = driverAccountRepository.findById(accountId).orElseThrow();
+                } else {
+                    account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElseThrow();
+                }
+                String cookie = account.getCookie();
                 headers.put("cookie", cookie);
                 headers.put("referer", "https://115.com/");
             } else {
