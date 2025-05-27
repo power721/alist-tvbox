@@ -476,7 +476,7 @@ public class AccountService {
     }
 
     public void enableMyAli() {
-        List<Account> list = accountRepository.findAll().stream().filter(Account::isShowMyAli).collect(Collectors.toList());
+        List<Account> list = accountRepository.findAll();
         log.debug("enableMyAli {}", list.size());
         try {
             for (Account account : list) {
@@ -499,7 +499,7 @@ public class AccountService {
                         sql = "DELETE FROM x_storages WHERE id = " + (id + 1);
                     }
                     int code = Utils.executeUpdate(sql);
-                    log.info("enableMyAli {} {}", account.isShowMyAli(), code);
+                    log.info("enableMyAli {} {}", account.isShowMyAli() || account.isMaster(), code);
                 } catch (Exception e) {
                     log.warn("", e);
                 }
