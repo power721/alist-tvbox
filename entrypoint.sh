@@ -1,13 +1,19 @@
 #!/bin/sh
 
-if [ -f /data/proxy.txt ]; then
+if [ -r /data/env ]; then
+    echo "Reading env file"
+    cp /data/env /etc/profile.d/custom_env.sh
+    chmod +x /etc/profile.d/custom_env.sh
+fi
+
+if [ -r /data/proxy.txt ]; then
   proxy_url=$(head -n1 /data/proxy.txt)
   export HTTP_PROXY=$proxy_url
   export HTTPS_PROXY=$proxy_url
   export no_proxy="*.aliyundrive.com"
 fi
 
-chmod a+x /init.sh /index.sh /downloadPg.sh /downloadZx.sh
+chmod a+x /*.sh
 
 if [ ! -d /data/log ]; then
   mkdir -p /data/log
@@ -22,4 +28,4 @@ ln -sf /data/log /opt/atv/log
 /usr/sbin/nginx
 shift
 
-java "$MEM_OPT" -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication "$@"
+/jre/bin/java "$MEM_OPT" -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication "$@"
