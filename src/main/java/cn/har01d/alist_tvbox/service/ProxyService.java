@@ -139,6 +139,7 @@ public class ProxyService {
             } else {
                 url = buildProxyUrl(site, path, fsDetail.getSign());
             }
+            log.debug("play url: {}", url);
         }
 
         log.trace("headers: {}", headers);
