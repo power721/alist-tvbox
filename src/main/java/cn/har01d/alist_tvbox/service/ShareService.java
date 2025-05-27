@@ -520,7 +520,7 @@ public class ShareService {
     }
 
     private void updateCookieByApi(String key, String cookie) {
-        int status = aListLocalService.getAListStatus();
+        int status = aListLocalService.checkStatus();
         if (status == 1) {
             Utils.executeUpdate("INSERT INTO x_setting_items VALUES('" + key + "','" + cookie + "','','text','',1,0);");
             throw new BadRequestException("AList服务启动中");

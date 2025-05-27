@@ -26,8 +26,18 @@ public class AListController {
     }
 
     @GetMapping("/status")
-    public int getAListStatus() {
-        return service.getAListStatus();
+    public int checkStatus() {
+        return service.checkStatus();
+    }
+
+    @GetMapping("/start/status")
+    public int getStatus() {
+        return service.getStatus();
+    }
+
+    @PostMapping("/status")
+    public void updateStatus(int code) {
+        service.updateStatus(code);
     }
 
     @PostMapping("/stop")

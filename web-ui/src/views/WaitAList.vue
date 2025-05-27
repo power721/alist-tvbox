@@ -22,7 +22,7 @@ const increase = () => {
 const aListStarted = ref(false)
 
 const getAListStatus = () => {
-  axios.get('/api/alist/status').then(({data}) => {
+  axios.get('/api/alist/start/status').then(({data}) => {
     increase()
     store.aListStatus = data
     aListStarted.value = data != 0

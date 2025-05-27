@@ -440,7 +440,7 @@ public class DriverAccountService {
     }
 
     private void updateStorage(DriverAccount account) {
-        int status = aListLocalService.getAListStatus();
+        int status = aListLocalService.checkStatus();
         try {
             int id = IDX + account.getId();
             String token = status == 2 ? accountService.login() : "";

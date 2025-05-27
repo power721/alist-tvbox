@@ -77,7 +77,6 @@ import java.util.zip.ZipOutputStream;
 import static cn.har01d.alist_tvbox.util.Constants.APP_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.DOCKER_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.INDEX_VERSION;
-import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
@@ -353,7 +352,7 @@ public class IndexService {
 
     @Scheduled(cron = "0 0 10,12,14,16,18-23 * * ?")
     public void autoIndex() {
-        if (aListLocalService.getAListStatus() != 2) {
+        if (aListLocalService.checkStatus() != 2) {
             return;
         }
         String hour = String.valueOf(LocalTime.now().getHour());
