@@ -93,7 +93,7 @@ public class ProxyService {
         String url = cache.getIfPresent(id);
         if (url != null) {
             log.info("proxy url: {} {}", id, url);
-            if (id.startsWith("115-")) {
+            if (id.startsWith("115-") || url.contains("115cdn.net")) {
                 DriverAccount account;
                 if (url.contains(STORAGE_ID_FRAGMENT)) {
                     int index = url.indexOf(STORAGE_ID_FRAGMENT);
@@ -106,6 +106,7 @@ public class ProxyService {
                 log.debug("use 115 account: {}", account.getId());
                 String cookie = account.getCookie();
                 headers.put("cookie", cookie);
+                headers.put("user-agent", Constants.USER_AGENT);
                 headers.put("referer", "https://115.com/");
             } else if (id.startsWith("xl-")) {
                 headers.put("user-agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)");
@@ -120,11 +121,9 @@ public class ProxyService {
             }
 
             url = fsDetail.getRawUrl();
-            if (fsDetail.getProvider().contains("Aliyundrive")) {
-                headers.put("origin", Constants.ALIPAN);
-            } /*else if (fsDetail.getProvider().contains("Thunder")) {
-                headers.put("user-agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)");
-            }*/ else if (url.contains("115cdn.net")) {
+            if (fsDetail.getProvider().equals("115 Share")) {
+                // ignore
+            } else if (url.contains("115cdn.net")) {
                 DriverAccount account;
                 if (url.contains(STORAGE_ID_FRAGMENT)) {
                     int index = url.indexOf(STORAGE_ID_FRAGMENT);
@@ -137,7 +136,12 @@ public class ProxyService {
                 log.debug("use 115 account: {}", account.getId());
                 String cookie = account.getCookie();
                 headers.put("cookie", cookie);
+                headers.put("user-agent", Constants.USER_AGENT);
                 headers.put("referer", "https://115.com/");
+            } else if (fsDetail.getProvider().contains("Thunder")) {
+                headers.put("user-agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)");
+            } else if (fsDetail.getProvider().contains("Aliyundrive")) {
+                headers.put("origin", Constants.ALIPAN);
             } else {
                 url = buildProxyUrl(site, path, fsDetail.getSign());
             }

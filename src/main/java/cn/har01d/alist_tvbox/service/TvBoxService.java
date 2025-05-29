@@ -1303,65 +1303,26 @@ public class TvBoxService {
         result.put("parse", 0);
         result.put("playUrl", "");
 
-        List<Subtitle> subtitles = new ArrayList<>();
-
-//        if ("com.fongmi.android.tv".equals(client)) {
-//            try {
-//                var preview = aListService.preview(site, fullPath);
-//                log.debug("preview: {} {}", fullPath, preview);
-//                if (preview != null) {
-//                    Collections.reverse(preview.getPlayInfo().getVideos());
-//                    List<String> urls = new ArrayList<>();
-//                    for (var item : preview.getPlayInfo().getVideos()) {
-//                        if (!"finished".equals(item.getStatus())) {
-//                            continue;
-//                        }
-//                        urls.add(item.getId());
-//                        urls.add(item.getUrl());
-//                    }
-//                    if (urls.size() > 1) {
-//                        url = urls.get(1);
-//                        result.put("url", urls);
-//                    }
-//
-//                    if (preview.getPlayInfo().getSubtitles() != null) {
-//                        for (var item : preview.getPlayInfo().getSubtitles()) {
-//                            if (!"finished".equals(item.getStatus())) {
-//                                continue;
-//                            }
-//                            Subtitle subtitle = new Subtitle();
-//                            subtitle.setUrl(item.getUrl());
-//                            subtitle.setLang(item.getLanguage());
-//                            subtitles.add(subtitle);
-//                        }
-//                    }
-//                }
-//            } catch (Exception e) {
-//                log.warn("preview failed", e);
-//            }
-//        }
-
-        if (url == null) {
-            FsDetail fsDetail = aListService.getFile(site, path);
-            if (fsDetail == null) {
-                throw new BadRequestException("找不到文件 " + path);
-            }
-
-            if ("com.fongmi.android.tv".equals(client)) {
-                url = fixHttp(fsDetail.getRawUrl());
-            } else if ((fsDetail.getProvider().contains("Aliyundrive") && !fsDetail.getRawUrl().contains("115cdn.net"))
-                    || (("open".equals(client) || "node".equals(client)) && fsDetail.getProvider().contains("115"))) {
-                url = buildProxyUrl(site, path, fsDetail.getSign());
-                log.info("play url: {}", url);
-            } else {
-                url = fixHttp(fsDetail.getRawUrl());
-            }
-
-            result.put("url", url);
+        FsDetail fsDetail = aListService.getFile(site, path);
+        if (fsDetail == null) {
+            throw new BadRequestException("找不到文件 " + path);
         }
+
+        url = fixHttp(fsDetail.getRawUrl());
+        if ("com.fongmi.android.tv".equals(client)) {
+            // ignore
+        } else if ((fsDetail.getProvider().contains("Aliyundrive") && !fsDetail.getRawUrl().contains("115cdn.net"))
+                || (("open".equals(client) || "node".equals(client)) && fsDetail.getProvider().contains("115"))) {
+            url = buildProxyUrl(site, path, fsDetail.getSign());
+            log.info("play url: {}", url);
+        }
+
+        result.put("url", url);
 
         if (url.contains("xunlei.com")) {
             result.put("header", "{\"User-Agent\":\"AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)\"}");
+        } else if (fsDetail.getProvider().equals("115 Share")) {
+            // ignore
         } else if (url.contains("115cdn.net")) {
             DriverAccount account;
             if (url.contains(ProxyService.STORAGE_ID_FRAGMENT)) {
@@ -1378,7 +1339,7 @@ public class TvBoxService {
             } else {
                 String cookie = account.getCookie();
                 // 115会把UA生成签名校验
-                result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + appProperties.getUserAgent() + "\",\"Referer\":\"https://115.com/\"}");
+                result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
             }
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
@@ -1390,6 +1351,7 @@ public class TvBoxService {
             return result;
         }
 
+        List<Subtitle> subtitles = new ArrayList<>();
         Subtitle subtitle = getSubtitle(site, isMediaFile(path) ? getParent(path) : path, name);
         if (subtitle != null) {
             subtitles.add(subtitle);
@@ -1401,7 +1363,7 @@ public class TvBoxService {
 
         result.put("subs", subtitles);
 
-        log.debug("getPlayUrl result: {}", result);
+        log.debug("[{}] getPlayUrl result: {}", fsDetail.getProvider(), result);
         return result;
     }
 
