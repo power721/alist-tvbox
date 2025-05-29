@@ -1131,8 +1131,8 @@ public class ShareService {
             Share share = new Share();
             share.setType(0);
             share.setId(offset + 1);
-            share.setShareId("4ydLxf7VgH7");
-            share.setFolderId("6411b6c459de9db58ea5439cb7f537bbed4f4f4b");
+            share.setShareId("BJ5sGgevHVi");
+            share.setFolderId("65099417e6650c00e2b741b6a903e46062fafc1e");
             share.setPath("/\uD83C\uDE34我的阿里分享/每日更新");
             shares.add(shareRepository.save(share));
         } catch (Exception e) {
