@@ -426,7 +426,7 @@ const tgChannels = ref('')
 const tgWebChannels = ref('')
 const tgSearch = ref('')
 const tgTimeout = ref(3000)
-const shareType = ref('')
+const shareType = ref('ALL')
 const title = ref('')
 const playUrl = ref('')
 const poster = ref('')
@@ -470,7 +470,7 @@ const form = ref({
   code: '',
 })
 const options = [
-  {label: '全部', value: ''},
+  {label: '全部', value: 'ALL'},
   {label: '夸克', value: '5'},
   {label: 'UC', value: '7'},
   {label: '阿里', value: '0'},
@@ -516,7 +516,7 @@ const search = () => {
 }
 
 const filterSearchResults = () => {
-  filteredResults.value = shareType.value ? results.value.filter(e => e.type_name == shareType.value) : results.value
+  filteredResults.value = shareType.value != 'ALL' ? results.value.filter(e => e.type_name == shareType.value) : results.value
 }
 
 const getShareType = (type: string) => {

@@ -654,6 +654,15 @@ public class ShareService {
     public boolean parseLink(Share share) {
         String url = share.getShareId();
         if (!url.startsWith("http")) {
+            String[] parts = url.split("@");
+            if (parts.length == 3 || (parts.length == 2 && url.endsWith("@"))) {
+                share.setType(Integer.parseInt(parts[0]));
+                share.setShareId(parts[1]);
+                if (parts.length > 2) {
+                    share.setPassword(parts[2]);
+                }
+                return true;
+            }
             return false;
         }
 
@@ -848,7 +857,7 @@ public class ShareService {
         }
         if (StringUtils.isBlank(dto.getPath())) {
             share.setTemp(true);
-            share.setPath("temp/" + share.getShareId());
+            share.setPath("temp/" + share.getType() + "@" + share.getShareId() + "@" + share.getPassword());
         } else {
             share.setPath(dto.getPath());
         }
