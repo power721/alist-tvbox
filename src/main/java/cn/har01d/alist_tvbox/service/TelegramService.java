@@ -15,6 +15,8 @@ import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
@@ -34,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import reactor.core.publisher.Mono;
+import telegram4j.core.InitConnectionParams;
 import telegram4j.core.MTProtoTelegramClient;
 import telegram4j.core.auth.AuthorizationHandler;
 import telegram4j.core.auth.CodeAuthorizationHandler;
@@ -42,16 +45,7 @@ import telegram4j.core.auth.TwoFactorHandler;
 import telegram4j.mtproto.store.FileStoreLayout;
 import telegram4j.mtproto.store.StoreLayout;
 import telegram4j.mtproto.store.StoreLayoutImpl;
-import telegram4j.tl.BaseChat;
-import telegram4j.tl.BaseMessage;
-import telegram4j.tl.Channel;
-import telegram4j.tl.ImmutableInputPeerChannel;
-import telegram4j.tl.ImmutableInputPeerChat;
-import telegram4j.tl.InputMessagesFilterEmpty;
-import telegram4j.tl.InputPeer;
-import telegram4j.tl.InputPeerSelf;
-import telegram4j.tl.InputUserSelf;
-import telegram4j.tl.User;
+import telegram4j.tl.*;
 import telegram4j.tl.messages.ChannelMessages;
 import telegram4j.tl.messages.DialogsSlice;
 import telegram4j.tl.messages.Messages;
@@ -60,6 +54,8 @@ import telegram4j.tl.request.messages.ImmutableGetHistory;
 import telegram4j.tl.request.messages.ImmutableSearch;
 
 import java.io.IOException;
+import java.lang.module.ModuleDescriptor;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -68,13 +64,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -215,7 +205,12 @@ public class TelegramService {
                 });
             }
             StoreLayout storeLayout = new FileStoreLayout(new StoreLayoutImpl(c -> c.maximumSize(1000)), Path.of("/data/t4j.bin"));
-            client = MTProtoTelegramClient.create(apiId, apiHash, authHandler).setStoreLayout(storeLayout).connect().block();
+            client = MTProtoTelegramClient
+                    .create(apiId, apiHash, authHandler)
+                    .setStoreLayout(storeLayout)
+                    .setInitConnectionParams(initConnectionParams())
+                    .connect()
+                    .block();
 
             if (client == null) {
                 settingRepository.save(new Setting("tg_phase", "0"));
@@ -229,6 +224,47 @@ public class TelegramService {
             client = null;
             log.info("Telegram关闭连接");
         }).start();
+    }
+
+    private static InitConnectionParams initConnectionParams() {
+        InputClientProxy proxy = null;
+        Path path = Path.of("/data/proxy.txt");
+        if (Files.exists(path)) {
+            try {
+                String text = Files.readString(path).trim();
+                URI uri = new URI(text);
+                int port = uri.getPort();
+                if (port == -1) {
+                    port = getDefaultPort(uri.getScheme());
+                }
+                proxy = ImmutableInputClientProxy.of(uri.getHost(), port);
+            } catch (Exception e) {
+                log.warn("Read proxy failed.", e);
+            }
+        }
+
+        String appVersion = "1.0.0";
+        String deviceModel = "AList-TvBox";
+        String systemVersion = String.join(" ", System.getProperty("os.name"),
+                System.getProperty("os.version"),
+                System.getProperty("os.arch"));
+
+        String langCode = Locale.getDefault().getLanguage().toLowerCase(Locale.ROOT);
+        JsonNode node = JsonNodeFactory.instance.objectNode()
+                .put("tz_offset", TimeZone.getDefault().getRawOffset() / 1000d);
+
+        return new InitConnectionParams(appVersion, deviceModel, langCode,
+                "", systemVersion, langCode, proxy, node);
+    }
+
+    private static int getDefaultPort(String scheme) {
+        if (scheme == null) return 8080;
+        return switch (scheme.toLowerCase()) {
+            case "http" -> 80;
+            case "https" -> 443;
+            case "socks", "socks5" -> 1080;
+            default -> 8080;
+        };
     }
 
     public User getUser() {
