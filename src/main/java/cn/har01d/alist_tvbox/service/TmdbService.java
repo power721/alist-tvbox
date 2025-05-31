@@ -24,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Async;
@@ -84,7 +83,7 @@ public class TmdbService {
         this.settingRepository = settingRepository;
         this.siteService = siteService;
         this.taskService = taskService;
-        restTemplate = builder.build();
+        this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
     }
 

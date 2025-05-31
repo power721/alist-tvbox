@@ -431,7 +431,7 @@ public class IndexService {
                 context.getTime().clear();
                 path = customize(context, indexRequest, path);
                 stopWatch.start("index " + path);
-                var shareInfo = aListService.getShareInfo(site, path);
+                var shareInfo = getShareInfo(site, path);
                 if (shareInfo != null) {
                     index(context, shareInfo, shareInfo.getFileId(), path, 0);
                 } else {
@@ -460,6 +460,14 @@ public class IndexService {
 
         log.info("index done, total time : {} {}", Duration.ofNanos(stopWatch.getTotalTimeNanos()), stopWatch.prettyPrint());
         log.info("index file: {}", file.getAbsolutePath());
+    }
+
+    private ShareInfo getShareInfo(Site site, String path) {
+        try {
+            return aListService.getShareInfo(site, path);
+        } catch (BadRequestException e) {
+            return null;
+        }
     }
 
     private void handleUpdateTime(String path, Map<String, String> times) {
@@ -588,9 +596,13 @@ public class IndexService {
                 log.warn("Too many requests: {} {}", i + 1, path);
             } catch (HttpClientErrorException.Unauthorized e) {
                 if (e.getMessage().contains("ShareLinkToken is invalid")) {
-                    shareInfo.setShareToken(aListService.getShareInfo(context.getSite(), path).getShareToken());
+                    var info = getShareInfo(context.getSite(), path);
+                    if (info == null) {
+                        break;
+                    }
+                    shareInfo.setShareToken(info.getShareToken());
                 } else {
-                    throw e;
+                    break;
                 }
             }
 
@@ -745,7 +757,7 @@ public class IndexService {
             log.info("index {} : {}", context.getSiteName(), path);
         }
 
-        FsResponse fsResponse = aListService.listFiles(context.getSite(), path, 1, 5000);
+        FsResponse fsResponse = listFiles(context, path);
         if (fsResponse == null) {
             log.warn("response null: {} {}", path, context.stats);
             context.stats.errors++;
@@ -837,6 +849,14 @@ public class IndexService {
         }
 
         taskService.updateTaskSummary(context.getTaskId(), context.stats.toString());
+    }
+
+    private FsResponse listFiles(IndexContext context, String path) {
+        try {
+            return aListService.listFiles(context.getSite(), path, 1, 5000);
+        } catch (BadRequestException e) {
+            return null;
+        }
     }
 
     private boolean isMovie(String path) {
