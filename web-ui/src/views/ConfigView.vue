@@ -217,51 +217,67 @@
             B站 Cookie
           </a>
         </el-form-item>
-        <el-form-item label="订阅替换阿里token地址">
-          <el-switch
-            v-model="replaceAliToken"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateReplaceAliToken"
-          />
-        </el-form-item>
-        <el-form-item label="订阅域名支持HTTPS">
-          <el-switch
-            v-model="enableHttps"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateEnableHttps"
-          />
-        </el-form-item>
-        <el-form-item label="开启调试日志">
-          <el-switch
-            v-model="debugLog"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateDebugLog"
-          />
-        </el-form-item>
-        <el-form-item label="开启AList调试模式">
-          <el-switch
-            v-model="aListDebug"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateAListDebug"
-          />
-        </el-form-item>
-        <el-form-item label="网盘帐号负载均衡">
-          <el-switch
-            v-model="driverRoundRobin"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateDriverRoundRobin"
-          />
-        </el-form-item>
+        <div class="el-row">
+          <el-form-item label="订阅替换阿里token地址">
+            <el-switch
+              v-model="replaceAliToken"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateReplaceAliToken"
+            />
+          </el-form-item>
+          <el-form-item label="订阅域名支持HTTPS">
+            <el-switch
+              v-model="enableHttps"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateEnableHttps"
+            />
+          </el-form-item>
+        </div>
+        <div class="el-row">
+          <el-form-item label="开启调试日志">
+            <el-switch
+              v-model="debugLog"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateDebugLog"
+            />
+          </el-form-item>
+          <el-form-item label="开启AList调试模式">
+            <el-switch
+              v-model="aListDebug"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateAListDebug"
+            />
+          </el-form-item>
+        </div>
+        <div class="el-row">
+          <el-form-item label="网盘分享延迟校验">
+            <el-switch
+              v-model="aliLazyLoad"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateAliLazyLoad"
+            />
+          </el-form-item>
+          <el-form-item label="网盘帐号负载均衡">
+            <el-switch
+              v-model="driverRoundRobin"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateDriverRoundRobin"
+            />
+          </el-form-item>
+        </div>
+
         <el-form-item label="开启阿里快传115">
           <el-switch
             v-model="aliTo115"
@@ -276,15 +292,6 @@
             <el-button type="primary" @click="updateDeleteCode115">更新</el-button>
           </el-form-item>
         </el-form-item>
-        <!--        <el-form-item label="开启阿里延迟加载">-->
-        <!--          <el-switch-->
-        <!--            v-model="aliLazyLoad"-->
-        <!--            inline-prompt-->
-        <!--            active-text="开启"-->
-        <!--            inactive-text="关闭"-->
-        <!--            @change="updateAliLazyLoad"-->
-        <!--          />-->
-        <!--        </el-form-item>-->
         <el-form-item label="AList管理密码" v-if="!store.xiaoya">
           <el-input v-model="atvPass" type="password" show-password/>
         </el-form-item>
@@ -585,7 +592,7 @@ onMounted(() => {
     aListDebug.value = data.alist_debug === 'true'
     aliTo115.value = data.ali_to_115 === 'true'
     driverRoundRobin.value = data.driver_round_robin === 'true'
-    aliLazyLoad.value = data.ali_lazy_load === 'true'
+    aliLazyLoad.value = data.ali_lazy_load !== 'false'
     mixSiteSource.value = data.mix_site_source !== 'false'
     atvPass.value = data.atv_password
     apiClientId.value = data.open_api_client_id || ''
