@@ -194,6 +194,9 @@ public class SettingService {
         if ("driver_round_robin".equals(setting.getName())) {
             aListLocalService.updateSetting("driver_round_robin", setting.getValue(), "bool");
         }
+        if ("ali_lazy_load".equals(setting.getName())) {
+            aListLocalService.updateSetting("ali_lazy_load", setting.getValue(), "bool");
+        }
         if ("ali_to_115".equals(setting.getName())) {
             aListLocalService.updateSetting("ali_to_115", setting.getValue(), "bool");
         }
