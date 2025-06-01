@@ -82,6 +82,11 @@
   <div class="space"></div>
   <h2>失败资源</h2>
   <el-row justify="end">
+    <el-popconfirm @confirm="cleanStorages" title="是否删除全部失效资源？">
+      <template #reference>
+        <el-button type="danger">清理</el-button>
+      </template>
+    </el-popconfirm>
     <el-button @click="refreshStorages">刷新</el-button>
     <el-button type="danger" @click="dialogVisible1=true" v-if="selectedStorages.length">删除</el-button>
   </el-row>
@@ -475,6 +480,13 @@ const loadStorages = (value: number) => {
   axios.get('/api/storages?page=' + page1.value + '&size=' + size1.value).then(({data}) => {
     storages.value = data.data.content
     total1.value = data.data.total
+  })
+}
+
+const cleanStorages = () => {
+  axios.delete('/api/storages').then(({data}) => {
+    ElMessage.success(`删除${data}个失效资源`)
+    loadStorages(1)
   })
 }
 

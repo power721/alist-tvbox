@@ -5,26 +5,16 @@ import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
-import cn.har01d.alist_tvbox.entity.AListAlias;
-import cn.har01d.alist_tvbox.entity.AListAliasRepository;
-import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.DriverAccount;
-import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
-import cn.har01d.alist_tvbox.entity.PikPakAccount;
-import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.Share;
-import cn.har01d.alist_tvbox.entity.ShareRepository;
-import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.entity.SiteRepository;
+import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +22,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -56,9 +47,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
-import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
-import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
+import static cn.har01d.alist_tvbox.util.Constants.*;
 
 @Slf4j
 @Service
@@ -66,6 +55,7 @@ import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
 public class ShareService {
 
     private final ObjectMapper objectMapper;
+    private final AppProperties appProperties;
     private final ShareRepository shareRepository;
     private final AListAliasRepository aliasRepository;
     private final SettingRepository settingRepository;
@@ -86,6 +76,7 @@ public class ShareService {
     private int shareId = 20000;
 
     public ShareService(ObjectMapper objectMapper,
+                        AppProperties appProperties1,
                         ShareRepository shareRepository,
                         AListAliasRepository aliasRepository,
                         SettingRepository settingRepository,
@@ -103,6 +94,7 @@ public class ShareService {
                         RestTemplateBuilder builder,
                         Environment environment) {
         this.objectMapper = objectMapper;
+        this.appProperties = appProperties1;
         this.shareRepository = shareRepository;
         this.aliasRepository = aliasRepository;
         this.settingRepository = settingRepository;
@@ -174,6 +166,10 @@ public class ShareService {
                 log.info("Delete temp share: {} {}", share.getId(), share.getPath());
                 shareRepository.delete(share);
             }
+        }
+
+        if (appProperties.isCleanInvalidShares()) {
+            cleanStorages();
         }
     }
 
@@ -935,6 +931,10 @@ public class ShareService {
 
             String error = enableStorage(share.getId(), token);
             share.setError(error);
+            if (appProperties.isCleanInvalidShares() && invalid(error)) {
+                shareRepository.delete(share);
+                deleteStorage(share.getId(), token);
+            }
         } catch (Exception e) {
             log.warn("", e);
             throw new BadRequestException(e);
@@ -1083,13 +1083,43 @@ public class ShareService {
         log.info("delete storage response: {}", response.getBody());
     }
 
-    public Object listStorages(Pageable pageable) {
+    public JsonNode listStorages(Pageable pageable) {
         aListLocalService.validateAListStatus();
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, accountService.login());
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
-        ResponseEntity<Object> response = restTemplate.exchange("/api/admin/storage/failed?page=" + pageable.getPageNumber() + "&per_page=" + pageable.getPageSize(), HttpMethod.GET, entity, Object.class);
+        ResponseEntity<JsonNode> response = restTemplate.exchange("/api/admin/storage/failed?page=" + pageable.getPageNumber() + "&per_page=" + pageable.getPageSize(), HttpMethod.GET, entity, JsonNode.class);
         return response.getBody();
+    }
+
+    public int cleanStorages() {
+        int count = 0;
+        Pageable pageable = PageRequest.of(1, 500);
+        JsonNode result = listStorages(pageable);
+        JsonNode content = result.get("data").get("content");
+        if (content instanceof ArrayNode) {
+            for (int i = 0; i < content.size(); i++) {
+                JsonNode item = content.get(i);
+                int id = item.get("id").asInt();
+                String status = item.get("status").asText();
+                if (invalid(status)) {
+                    log.warn("delete invalid share: {}", id);
+                    deleteShare(id);
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private static boolean invalid(String status) {
+        return status.contains("分享码错误或者分享地址错误")
+                || status.contains("share_link is forbidden")
+                || status.contains("share_link is expired")
+                || status.contains("share_link cannot be found")
+                || status.contains("share_pwd is not valid")
+                || status.contains("获取天翼网盘分享信息为空")
+                || status.contains("分享链接已失效");
     }
 
     public Response reloadStorage(Integer id) {

@@ -267,6 +267,15 @@
               @change="updateAliLazyLoad"
             />
           </el-form-item>
+          <el-form-item label="自动清理失效资源">
+            <el-switch
+              v-model="cleanInvalidShares"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateCleanInvalidShares"
+            />
+          </el-form-item>
           <el-form-item label="网盘帐号负载均衡">
             <el-switch
               v-model="driverRoundRobin"
@@ -375,6 +384,7 @@ const aListDebug = ref(false)
 const aliTo115 = ref(false)
 const driverRoundRobin = ref(false)
 const aliLazyLoad = ref(false)
+const cleanInvalidShares = ref(false)
 const enableHttps = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
@@ -529,6 +539,12 @@ const updateAliLazyLoad = () => {
   })
 }
 
+const updateCleanInvalidShares = () => {
+  axios.post('/api/settings', {name: 'clean_invalid_shares', value: cleanInvalidShares.value}).then(() => {
+    ElMessage.success('更新成功，重启生效')
+  })
+}
+
 const updateLogin = () => {
   axios.post('/api/alist/login', login.value).then(({data}) => {
     ElMessage.success('保存成功')
@@ -592,6 +608,7 @@ onMounted(() => {
     aListDebug.value = data.alist_debug === 'true'
     aliTo115.value = data.ali_to_115 === 'true'
     driverRoundRobin.value = data.driver_round_robin === 'true'
+    cleanInvalidShares.value = data.clean_invalid_shares === 'true'
     aliLazyLoad.value = data.ali_lazy_load !== 'false'
     mixSiteSource.value = data.mix_site_source !== 'false'
     atvPass.value = data.atv_password
