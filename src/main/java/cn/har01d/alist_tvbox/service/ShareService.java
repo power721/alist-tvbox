@@ -170,7 +170,7 @@ public class ShareService {
         }
     }
 
-    @Scheduled(cron = "0 0 * * * *")
+    @Scheduled(cron = "0 30 * * * *")
     public void cleanShares() {
         cleanTempShares();
         cleanInvalidShares();
@@ -190,6 +190,13 @@ public class ShareService {
     private void cleanInvalidShares() {
         if (appProperties.isCleanInvalidShares()) {
             cleanStorages();
+        }
+    }
+
+    @Scheduled(cron = "0 0 */4 * * *")
+    public void validateShares() {
+        if (appProperties.isCleanInvalidShares()) {
+            validateStorages();
         }
     }
 
@@ -1110,6 +1117,14 @@ public class ShareService {
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
         ResponseEntity<JsonNode> response = restTemplate.exchange("/api/admin/storage/failed?page=" + pageable.getPageNumber() + "&per_page=" + pageable.getPageSize(), HttpMethod.GET, entity, JsonNode.class);
         return response.getBody();
+    }
+
+    public void validateStorages() {
+        aListLocalService.validateAListStatus();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, accountService.login());
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
+        ResponseEntity<JsonNode> response = restTemplate.exchange("/api/admin/storage/failed", HttpMethod.POST, entity, JsonNode.class);
     }
 
     public int cleanStorages() {
