@@ -167,7 +167,7 @@ public class DoubanService {
                 try {
                     jdbcTemplate.execute("RUNSCRIPT FROM '/data/atv/cmd.sql'");
                 } catch (Exception e) {
-                    log.warn("execute sql failed: {}", e);
+                    log.warn("execute sql file failed", e);
                 }
                 Files.delete(path);
             }
