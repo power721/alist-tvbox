@@ -58,6 +58,7 @@ public class SettingService {
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
+        appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(24));
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));
@@ -166,6 +167,9 @@ public class SettingService {
         }
         if ("clean_invalid_shares".equals(setting.getName())) {
             appProperties.setCleanInvalidShares("true".equals(setting.getValue()));
+        }
+        if ("temp_share_expiration".equals(setting.getName())) {
+            appProperties.setTempShareExpiration(Integer.parseInt(setting.getValue()));
         }
         if ("tg_channels".equals(setting.getName())) {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_CHANNELS : setting.getValue();

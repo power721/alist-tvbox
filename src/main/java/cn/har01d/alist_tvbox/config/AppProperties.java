@@ -30,6 +30,7 @@ public class AppProperties {
     private String tgWebChannels = Constants.TG_WEB_CHANNELS;
     private String tgSearch;
     private int tgTimeout = 5000;
+    private int tempShareExpiration = 24;
     private Set<String> formats;
     private Set<String> subtitles;
     private List<Site> sites;

@@ -135,7 +135,7 @@ public class ShareService {
         pikPakService.readPikPak();
         driverAccountService.loadStorages();
 
-        cleanShares();
+        cleanTempShares();
 
         List<Share> list = shareRepository.findAll();
 
@@ -170,18 +170,20 @@ public class ShareService {
         }
     }
 
-    @Scheduled(cron = "0 0 4 * * *")
-    public void cleanShares() {
+    @Scheduled(cron = "0 0 * * * *")
+    public void cleanTempShares() {
         List<Share> list = shareRepository.findByTempTrue();
-
-        Instant time = Instant.now().minus(30, ChronoUnit.HOURS);
+        Instant time = Instant.now().minus(appProperties.getTempShareExpiration(), ChronoUnit.HOURS);
         for (Share share : list) {
             if (share.isTemp() && share.getTime() != null && share.getTime().isBefore(time)) {
                 log.info("Delete temp share: {} {}", share.getId(), share.getPath());
                 shareRepository.delete(share);
             }
         }
+    }
 
+    @Scheduled(cron = "0 30 5 * * *")
+    public void cleanInvalidShares() {
         if (appProperties.isCleanInvalidShares()) {
             cleanStorages();
         }
