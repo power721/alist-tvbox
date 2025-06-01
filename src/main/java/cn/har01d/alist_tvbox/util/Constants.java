@@ -16,6 +16,7 @@ public final class Constants {
     public static final String UC_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) uc-cloud-drive/2.5.20 Chrome/100.0.4896.160 Electron/18.3.5.4-b478491100 Safari/537.36 Channel/pckk_other_ch";
     public static final String AndroidXMedia3 = "com.android.chrome/131.0.6778.200 (Linux;Android 15) AndroidXMedia3/1.5.1";
     public static final String ALIPAN = "https://www.alipan.com/";
+    public static final String STORAGE_ID_FRAGMENT = "#storageId=";
 
     public static final String ALIST_PIC = "https://avatars.githubusercontent.com/u/97389433?s=120&v=4";
     public static final String TMDB_API_KEY = "77f111cda6c6fb55322f3d7f2b6ef71f";

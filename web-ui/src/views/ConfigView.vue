@@ -197,6 +197,9 @@
           <el-button type="primary" @click="currentUserAgent">当前UA</el-button>
           <el-button type="primary" @click="randomUserAgent">随机UA</el-button>
         </el-form-item>
+        <el-form-item label="AList管理密码" v-if="!store.xiaoya">
+          <el-input v-model="atvPass" style="width: 160px" type="password" show-password/>
+        </el-form-item>
         <el-form-item label="Cookie地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
             阿里 Token
@@ -303,9 +306,6 @@
             <el-button type="primary" @click="updateDeleteCode115">更新</el-button>
           </el-form-item>
         </div>
-        <el-form-item label="AList管理密码" v-if="!store.xiaoya">
-          <el-input v-model="atvPass" type="password" show-password/>
-        </el-form-item>
         <div class="el-row">
           <el-form-item label="网盘文件删除延时">
             <el-input-number v-model="deleteDelayTime" min="0"></el-input-number>

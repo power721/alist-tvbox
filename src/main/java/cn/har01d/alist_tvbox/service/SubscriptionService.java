@@ -87,6 +87,8 @@ public class SubscriptionService {
     private final ConfigFileService configFileService;
     private final TenantService tenantService;
 
+    private final ThreadLocal<String> currentToken = new ThreadLocal<>();
+
     private String tokens = "";
 
     public SubscriptionService(Environment environment,
@@ -233,6 +235,7 @@ public class SubscriptionService {
     }
 
     public void checkToken(String rawToken) {
+        currentToken.set(rawToken);
         tenantService.setTenant(rawToken);
         if (tokens.isBlank()) {
             return;
@@ -253,6 +256,10 @@ public class SubscriptionService {
 
     public String getToken() {
         return tokens.isEmpty() ? "-" : tokens.split(",")[0];
+    }
+
+    public String getCurrentToken() {
+        return currentToken.get();
     }
 
     public void deleteToken() {
