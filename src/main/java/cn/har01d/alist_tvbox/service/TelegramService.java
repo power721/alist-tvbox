@@ -270,6 +270,7 @@ public class TelegramService {
         JsonNode node = JsonNodeFactory.instance.objectNode()
                 .put("tz_offset", TimeZone.getDefault().getRawOffset() / 1000d);
 
+        log.debug("InitConnectionParams: {} {} {}", langCode, systemVersion, node);
         return new InitConnectionParams(appVersion, deviceModel, langCode,
                 "", systemVersion, langCode, proxy, node);
     }
@@ -433,7 +434,13 @@ public class TelegramService {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        List<Message> messages = searchFromChannel(channel, "", 100);
+        List<Message> messages;
+        if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+            messages = searchRemote(channel, "", 100);
+        } else {
+            messages = searchFromChannel(channel, "", 100);
+        }
+
         for (Message message : messages) {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(encodeUrl(message.getLink()));
@@ -608,10 +615,6 @@ public class TelegramService {
     }
 
     public List<Message> searchFromChannel(String username, String keyword, int size) throws IOException {
-        if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
-            return searchRemote(username, keyword, size);
-        }
-
         if (client == null) {
             List<Message> list = searchFromWeb(username, keyword);
             List<Message> result = list.stream().filter(e -> e.getType() != null).toList();
