@@ -1148,6 +1148,9 @@ public class ShareService {
     }
 
     private static boolean invalid(String status) {
+        if (status == null) {
+            return false;
+        }
         return status.contains("分享码错误或者分享地址错误")
                 || status.contains("share_link is forbidden")
                 || status.contains("share_link is expired")
