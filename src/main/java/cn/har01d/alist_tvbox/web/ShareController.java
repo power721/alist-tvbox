@@ -83,6 +83,11 @@ public class ShareController {
         return shareService.listStorages(pageable);
     }
 
+    @PostMapping("/api/storages")
+    public void validateStorages() {
+        shareService.validateStorages();
+    }
+
     @DeleteMapping("/api/storages")
     public int cleanStorages() {
         return shareService.cleanStorages();
