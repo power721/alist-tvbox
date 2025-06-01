@@ -30,7 +30,9 @@
       <el-table-column prop="name" label="名称" sortable width="200"/>
       <el-table-column label="路径">
         <template #default="scope">
-          {{ fullPath(scope.row) }}
+          <router-link :to="'/vod' + fullPath(scope.row)">
+            {{ fullPath(scope.row) }}
+          </router-link>
         </template>
       </el-table-column>
       <el-table-column prop="master" label="主账号？" width="120">
@@ -124,13 +126,14 @@
         <el-form-item label="文件夹ID">
           <el-input v-model="form.folder"/>
         </el-form-item>
-        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'" label="本地代理">
+        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'" label="加速代理">
           <el-switch
             v-model="form.useProxy"
             inline-prompt
             active-text="开启"
             inactive-text="关闭"
           />
+          <span class="hint">服务端多线程加速</span>
         </el-form-item>
         <el-form-item label="主账号" v-if="form.type!='OPEN115'&&form.type!='QUARK_TV'&&form.type!='UC_TV'">
           <el-switch
@@ -139,7 +142,7 @@
             active-text="是"
             inactive-text="否"
           />
-          <span class="hint">主账号用来观看分享。</span>
+          <span class="hint">主账号用来观看分享</span>
         </el-form-item>
         <span v-if="form.name">完整路径： {{ fullPath(form) }}</span>
       </el-form>
