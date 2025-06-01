@@ -20,6 +20,7 @@ public class AppProperties {
     private boolean replaceAliToken;
     private boolean searchable;
     private boolean enableHttps;
+    private boolean cleanInvalidShares;
     private int pageSize = 100;
     private int maxSearchResult = 60;
     private String secretKey;

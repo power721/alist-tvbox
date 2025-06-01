@@ -54,6 +54,7 @@ public class SettingService {
         appProperties.setSupportDash(settingRepository.findById("bilibili_dash").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setReplaceAliToken(settingRepository.findById("replace_ali_token").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setEnableHttps(settingRepository.findById("enable_https").map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setCleanInvalidShares(settingRepository.findById("clean_invalid_shares").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
@@ -162,6 +163,9 @@ public class SettingService {
         }
         if ("enable_https".equals(setting.getName())) {
             appProperties.setEnableHttps("true".equals(setting.getValue()));
+        }
+        if ("clean_invalid_shares".equals(setting.getName())) {
+            appProperties.setCleanInvalidShares("true".equals(setting.getValue()));
         }
         if ("tg_channels".equals(setting.getName())) {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_CHANNELS : setting.getValue();
