@@ -1309,7 +1309,7 @@ public class TvBoxService {
             // ignore
         } else if ((fsDetail.getProvider().contains("Aliyundrive") && !fsDetail.getRawUrl().contains("115cdn.net"))
                 || (("open".equals(client) || "node".equals(client)) && fsDetail.getProvider().contains("115"))) {
-            url = buildProxyUrl(site, path, fsDetail.getSign());
+            url = buildAListProxyUrl(site, path, fsDetail.getSign());
             log.info("play url: {}", url);
         }
 
@@ -1318,7 +1318,7 @@ public class TvBoxService {
         if (fsDetail.getProvider().equals("QuarkShare") || fsDetail.getProvider().equals("Quark")) {
             DriverAccount account = getDriverAccount(url, DriverType.QUARK);
             if (account == null || account.isUseProxy()) {
-                url = buildProxyUrl(site, path, fsDetail.getSign());
+                url = buildAListProxyUrl(site, path, fsDetail.getSign());
                 result.put("url", url);
             } else {
                 String cookie = account.getCookie();
@@ -1327,7 +1327,7 @@ public class TvBoxService {
         } else if (fsDetail.getProvider().equals("UCShare") || fsDetail.getProvider().equals("UC")) {
             DriverAccount account = getDriverAccount(url, DriverType.UC);
             if (account == null || account.isUseProxy()) {
-                url = buildProxyUrl(site, path, fsDetail.getSign());
+                url = buildAListProxyUrl(site, path, fsDetail.getSign());
                 result.put("url", url);
             } else {
                 String cookie = account.getCookie();
@@ -1335,12 +1335,10 @@ public class TvBoxService {
             }
         } else if (url.contains("xunlei.com")) {
             result.put("header", "{\"User-Agent\":\"AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)\"}");
-        } else if (fsDetail.getProvider().equals("115 Share")) {
-            // ignore
         } else if (url.contains("115cdn.net")) {
             DriverAccount account = getDriverAccount(url, DriverType.PAN115);
             if (account == null || account.isUseProxy()) {
-                url = buildProxyUrl(site, path, fsDetail.getSign());
+                url = buildAListProxyUrl(site, path, fsDetail.getSign());
                 result.put("url", url);
             } else {
                 String cookie = account.getCookie();
@@ -1582,7 +1580,7 @@ public class TvBoxService {
             movieDetail.setVod_play_from(site.getName());
             String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
             if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
+                movieDetail.setVod_play_url(buildAListProxyUrl(site, path, sign));
                 movieDetail.setType(fsDetail.getType());
             } else {
                 movieDetail.setVod_play_url(fsDetail.getName() + "$" + buildPlayUrl(site, path));
@@ -2192,6 +2190,7 @@ public class TvBoxService {
         return url;
     }
 
+    // AList-TvBox proxy
     private String buildProxyUrl(String path) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
@@ -2201,7 +2200,8 @@ public class TvBoxService {
                 .toUriString();
     }
 
-    private String buildProxyUrl(Site site, String path, String sign) {
+    // AList proxy
+    private String buildAListProxyUrl(Site site, String path, String sign) {
         if (site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
