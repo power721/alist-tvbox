@@ -135,7 +135,7 @@ public class ShareService {
         pikPakService.readPikPak();
         driverAccountService.loadStorages();
 
-        cleanTempShares();
+        cleanShares();
 
         List<Share> list = shareRepository.findAll();
 
