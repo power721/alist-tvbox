@@ -889,7 +889,11 @@ public class ShareService {
         if (!shareRepository.existsByPath(path)) {
             create(share);
             if (StringUtils.isNotBlank(share.getError())) {
-                throw new BadRequestException(share.getError());
+                String error = share.getError()
+                        .replace("failed load storage:", "")
+                        .replace("failed init storage:", "")
+                        .trim();
+                throw new BadRequestException(error);
             }
         }
         Site site = siteRepository.findById(1).orElseThrow();

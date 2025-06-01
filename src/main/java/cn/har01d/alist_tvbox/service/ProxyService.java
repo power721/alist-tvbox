@@ -33,7 +33,7 @@ public class ProxyService {
     private final Environment environment;
     private final SiteService siteService;
     private final AListService aListService;
-    private final Set<String> proxyDrivers = Set.of("Quark", "UC", "QuarkShare", "UCShare");
+    private final Set<String> proxyDrivers = Set.of("AliyundriveShare2Open", "Quark", "UC", "QuarkShare", "UCShare");
 
     public ProxyService(AppProperties appProperties,
                         Environment environment,
@@ -46,15 +46,6 @@ public class ProxyService {
     }
 
     public void proxy(String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        Map<String, String> headers = new HashMap<>();
-        var it = request.getHeaderNames().asIterator();
-        while (it.hasNext()) {
-            String name = it.next();
-            headers.put(name, request.getHeader(name));
-        }
-        headers.put("user-agent", appProperties.getUserAgent());
-        headers.put("referer", Constants.ALIPAN);
-
         String[] parts = path.split("\\$");
         Site site = siteService.getById(Integer.parseInt(parts[0]));
         path = parts[1];
@@ -68,14 +59,24 @@ public class ProxyService {
         if (proxyDrivers.contains(driver) || url.contains("115cdn.net")) {
             log.debug("{} {}", driver, url);
             url = buildAListProxyUrl(site, path, fsDetail.getSign());
-        } else if (driver.contains("Thunder")) {
-            headers.put("user-agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)");
-        } else if (driver.contains("Aliyundrive")) {
-            headers.put("origin", Constants.ALIPAN);
+        } else {
+            // 302
+            log.debug("302 {} {}", driver, url);
+            response.sendRedirect(url);
+            return;
         }
-        log.debug("play url: {}", url);
+        log.debug("proxy url: {}", url);
 
+        Map<String, String> headers = new HashMap<>();
+        var it = request.getHeaderNames().asIterator();
+        while (it.hasNext()) {
+            String name = it.next();
+            headers.put(name, request.getHeader(name));
+        }
+        headers.put("user-agent", appProperties.getUserAgent());
+        headers.put("referer", Constants.ALIPAN);
         log.trace("headers: {}", headers);
+
         downloadStraight(url, request, response, headers);
     }
 
@@ -95,6 +96,28 @@ public class ProxyService {
             }
             return UriComponentsBuilder.fromHttpUrl(site.getUrl())
                     .replacePath("/p" + path)
+                    .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
+                    .build()
+                    .toUri()
+                    .toASCIIString();
+        }
+    }
+
+    private String buildDownloadUrl(Site site, String path, String sign) {
+        if (site.getUrl().startsWith("http://localhost")) {
+            return ServletUriComponentsBuilder.fromCurrentRequest()
+                    .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
+                    .replacePath("/d" + path)
+                    .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
+                    .build()
+                    .toUri()
+                    .toASCIIString();
+        } else {
+            if (StringUtils.isNotBlank(site.getFolder())) {
+                path = fixPath(site.getFolder() + "/" + path);
+            }
+            return UriComponentsBuilder.fromHttpUrl(site.getUrl())
+                    .replacePath("/d" + path)
                     .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()
                     .toUri()
