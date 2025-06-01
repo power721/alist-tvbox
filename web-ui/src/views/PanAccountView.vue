@@ -124,7 +124,7 @@
         <el-form-item label="文件夹ID">
           <el-input v-model="form.folder"/>
         </el-form-item>
-        <el-form-item v-if="form.type=='PAN115'" label="本地代理">
+        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'" label="本地代理">
           <el-switch
             v-model="form.useProxy"
             inline-prompt

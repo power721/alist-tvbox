@@ -33,13 +33,10 @@ import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-
 import lombok.extern.slf4j.Slf4j;
-
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -85,7 +82,6 @@ import static cn.har01d.alist_tvbox.util.Constants.ALIST_PIC;
 import static cn.har01d.alist_tvbox.util.Constants.FILE;
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
-import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
@@ -1319,22 +1315,32 @@ public class TvBoxService {
 
         result.put("url", url);
 
-        if (url.contains("xunlei.com")) {
+        if (fsDetail.getProvider().equals("QuarkShare") || fsDetail.getProvider().equals("Quark")) {
+            DriverAccount account = getDriverAccount(url, DriverType.QUARK);
+            if (account == null || account.isUseProxy()) {
+                url = buildProxyUrl(site, path, fsDetail.getSign());
+                result.put("url", url);
+            } else {
+                String cookie = account.getCookie();
+                result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.QUARK_USER_AGENT + "\",\"Referer\":\"https://pan.quark.cn\"}");
+            }
+        } else if (fsDetail.getProvider().equals("UCShare") || fsDetail.getProvider().equals("UC")) {
+            DriverAccount account = getDriverAccount(url, DriverType.UC);
+            if (account == null || account.isUseProxy()) {
+                url = buildProxyUrl(site, path, fsDetail.getSign());
+                result.put("url", url);
+            } else {
+                String cookie = account.getCookie();
+                result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.UC_USER_AGENT + "\",\"Referer\":\"https://drive.uc.cn\"}");
+            }
+        } else if (url.contains("xunlei.com")) {
             result.put("header", "{\"User-Agent\":\"AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)\"}");
         } else if (fsDetail.getProvider().equals("115 Share")) {
             // ignore
         } else if (url.contains("115cdn.net")) {
-            DriverAccount account;
-            if (url.contains(ProxyService.STORAGE_ID_FRAGMENT)) {
-                int index = url.indexOf(ProxyService.STORAGE_ID_FRAGMENT);
-                int id = Integer.parseInt(url.substring(index + ProxyService.STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
-                account = driverAccountRepository.findById(id).orElse(null);
-                url = url.substring(0, index);
-            } else {
-                account = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).orElse(null);
-            }
+            DriverAccount account = getDriverAccount(url, DriverType.PAN115);
             if (account == null || account.isUseProxy()) {
-                url = proxyService.generateProxyUrl("115", url);
+                url = buildProxyUrl(site, path, fsDetail.getSign());
                 result.put("url", url);
             } else {
                 String cookie = account.getCookie();
@@ -1365,6 +1371,18 @@ public class TvBoxService {
 
         log.debug("[{}] getPlayUrl result: {}", fsDetail.getProvider(), result);
         return result;
+    }
+
+    private DriverAccount getDriverAccount(String url, DriverType quark) {
+        DriverAccount account;
+        if (url.contains(Constants.STORAGE_ID_FRAGMENT)) {
+            int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
+            int id = Integer.parseInt(url.substring(index + Constants.STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
+            account = driverAccountRepository.findById(id).orElse(null);
+        } else {
+            account = driverAccountRepository.findByTypeAndMasterTrue(quark).orElse(null);
+        }
+        return account;
     }
 
     public Map<String, Object> getPlayUrl(Integer siteId, Integer id, Integer index, boolean getSub, String client) {
@@ -1562,21 +1580,9 @@ public class TvBoxService {
             movieDetail.setVod_time(fsDetail.getModified());
             movieDetail.setVod_pic(getCover(ac, fsDetail.getThumb(), fsDetail.getType()));
             movieDetail.setVod_play_from(site.getName());
-            if ("detail".equals(ac)) {
-                String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
+            String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
+            if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
                 movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
-            } else if ("web".equals(ac) || "gui".equals(ac)) {
-                String url = fsDetail.getRawUrl();
-                if (fsDetail.getProvider().contains("Aliyundrive")) {
-                    movieDetail.setVod_play_url(proxyService.generateProxyUrl("ali", url));
-                } /*else if (fsDetail.getProvider().contains("Thunder")) {
-                    movieDetail.setVod_play_url(proxyService.generateProxyUrl("xl", url));
-                }*/ else if (fsDetail.getProvider().equals("115 Cloud") || fsDetail.getProvider().equals("115 Share")) {
-                    movieDetail.setVod_play_url(proxyService.generateProxyUrl("115", url));
-                } else {
-                    String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
-                    movieDetail.setVod_play_url(buildProxyUrl(site, path, sign));
-                }
                 movieDetail.setType(fsDetail.getType());
             } else {
                 movieDetail.setVod_play_url(fsDetail.getName() + "$" + buildPlayUrl(site, path));
@@ -2189,7 +2195,7 @@ public class TvBoxService {
     private String buildProxyUrl(String path) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                .replacePath("/p/" + subscriptionService.getToken())
+                .replacePath("/p/" + subscriptionService.getCurrentToken())
                 .replaceQuery("path=" + encodeUrl(path))
                 .build()
                 .toUriString();
@@ -2199,7 +2205,7 @@ public class TvBoxService {
         if (site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
                     .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
-                    .replacePath("/d" + path)
+                    .replacePath("/p" + path)
                     .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()
                     .toUri()
@@ -2209,7 +2215,7 @@ public class TvBoxService {
                 path = fixPath(site.getFolder() + "/" + path);
             }
             return UriComponentsBuilder.fromHttpUrl(site.getUrl())
-                    .replacePath("/d" + path)
+                    .replacePath("/p" + path)
                     .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()
                     .toUri()
@@ -2239,7 +2245,7 @@ public class TvBoxService {
     private String buildM3u8Url(String path) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                .replacePath("/m3u8/" + subscriptionService.getToken())
+                .replacePath("/m3u8/" + subscriptionService.getCurrentToken())
                 .replaceQuery("path=" + encodeUrl(path))
                 .build()
                 .toUriString();
