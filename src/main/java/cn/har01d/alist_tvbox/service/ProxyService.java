@@ -80,7 +80,6 @@ public class ProxyService {
         downloadStraight(url, request, response, headers);
     }
 
-    // AList proxy
     private String buildAListProxyUrl(Site site, String path, String sign) {
         if (site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
@@ -96,28 +95,6 @@ public class ProxyService {
             }
             return UriComponentsBuilder.fromHttpUrl(site.getUrl())
                     .replacePath("/p" + path)
-                    .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
-                    .build()
-                    .toUri()
-                    .toASCIIString();
-        }
-    }
-
-    private String buildDownloadUrl(Site site, String path, String sign) {
-        if (site.getUrl().startsWith("http://localhost")) {
-            return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
-                    .replacePath("/d" + path)
-                    .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
-                    .build()
-                    .toUri()
-                    .toASCIIString();
-        } else {
-            if (StringUtils.isNotBlank(site.getFolder())) {
-                path = fixPath(site.getFolder() + "/" + path);
-            }
-            return UriComponentsBuilder.fromHttpUrl(site.getUrl())
-                    .replacePath("/d" + path)
                     .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()
                     .toUri()
