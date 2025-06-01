@@ -31,6 +31,7 @@ import java.net.URL;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 
 import static cn.har01d.alist_tvbox.util.Constants.STORAGE_ID_FRAGMENT;
@@ -48,6 +49,7 @@ public class ProxyService {
     private final ShareRepository shareRepository;
     private final SiteService siteService;
     private final AListService aListService;
+    private final Set<String> proxyDrivers = Set.of("Quark", "UC", "QuarkShare", "UCShare", "115 Cloud");
 
     public ProxyService(AppProperties appProperties,
                         Environment environment,
@@ -103,7 +105,7 @@ public class ProxyService {
             headers.put("user-agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)");
         } else if (fsDetail.getProvider().contains("Aliyundrive")) {
             headers.put("origin", Constants.ALIPAN);
-        } else {
+        } else if (proxyDrivers.contains(fsDetail.getProvider())) {
             url = buildProxyUrl(site, path, fsDetail.getSign());
         }
         log.debug("play url: {}", url);
