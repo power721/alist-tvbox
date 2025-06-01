@@ -65,9 +65,7 @@ public class ProxyService {
 
         String url = fsDetail.getRawUrl();
         String driver = fsDetail.getProvider();
-        if (proxyDrivers.contains(driver)) {
-            url = buildAListProxyUrl(site, path, fsDetail.getSign());
-        } else if (url.contains("115cdn.net")) {
+        if (proxyDrivers.contains(driver) || url.contains("115cdn.net")) {
             log.debug("{} {}", driver, url);
             url = buildAListProxyUrl(site, path, fsDetail.getSign());
         } else if (driver.contains("Thunder")) {
