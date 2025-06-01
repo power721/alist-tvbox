@@ -101,7 +101,7 @@
     </el-table-column>
     <el-table-column prop="driver" label="类型" width="120">
       <template #default="scope">
-        <span v-if="scope.row.driver=='AliyundriveShare2Open'">阿里分享</span>
+        <span v-if="scope.row.driver=='AliyunShare'">阿里分享</span>
         <span v-else-if="scope.row.driver=='PikPakShare'">PikPak分享</span>
         <span v-else-if="scope.row.driver=='QuarkShare'">夸克分享</span>
         <span v-else-if="scope.row.driver=='UCShare'">UC分享</span>
