@@ -340,7 +340,7 @@ public class DriverAccountService {
         account.setSafePassword(dto.getSafePassword());
         account.setFolder(dto.getFolder());
 
-        if (driverAccountRepository.countByType(account.getType()) == 0) {
+        if (driverAccountRepository.countByType(account.getType()) <= 1) {
             account.setMaster(true);
         }
 

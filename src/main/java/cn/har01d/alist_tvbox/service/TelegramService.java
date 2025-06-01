@@ -45,7 +45,18 @@ import telegram4j.core.auth.TwoFactorHandler;
 import telegram4j.mtproto.store.FileStoreLayout;
 import telegram4j.mtproto.store.StoreLayout;
 import telegram4j.mtproto.store.StoreLayoutImpl;
-import telegram4j.tl.*;
+import telegram4j.tl.BaseChat;
+import telegram4j.tl.BaseMessage;
+import telegram4j.tl.Channel;
+import telegram4j.tl.ImmutableInputClientProxy;
+import telegram4j.tl.ImmutableInputPeerChannel;
+import telegram4j.tl.ImmutableInputPeerChat;
+import telegram4j.tl.InputClientProxy;
+import telegram4j.tl.InputMessagesFilterEmpty;
+import telegram4j.tl.InputPeer;
+import telegram4j.tl.InputPeerSelf;
+import telegram4j.tl.InputUserSelf;
+import telegram4j.tl.User;
 import telegram4j.tl.messages.ChannelMessages;
 import telegram4j.tl.messages.DialogsSlice;
 import telegram4j.tl.messages.Messages;
@@ -54,7 +65,6 @@ import telegram4j.tl.request.messages.ImmutableGetHistory;
 import telegram4j.tl.request.messages.ImmutableSearch;
 
 import java.io.IOException;
-import java.lang.module.ModuleDescriptor;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -64,7 +74,15 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.TimeZone;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -73,8 +91,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
@@ -237,6 +253,7 @@ public class TelegramService {
                 if (port == -1) {
                     port = getDefaultPort(uri.getScheme());
                 }
+                log.info("use proxy {}:{}", uri.getHost(), port);
                 proxy = ImmutableInputClientProxy.of(uri.getHost(), port);
             } catch (Exception e) {
                 log.warn("Read proxy failed.", e);
@@ -390,7 +407,7 @@ public class TelegramService {
         List<Category> list = new ArrayList<>();
 
         String[] channels;
-        if (client == null) {
+        if (client == null && StringUtils.isBlank(appProperties.getTgSearch())) {
             channels = appProperties.getTgWebChannels().split(",");
         } else {
             channels = appProperties.getTgChannels().split(",");
@@ -591,6 +608,10 @@ public class TelegramService {
     }
 
     public List<Message> searchFromChannel(String username, String keyword, int size) throws IOException {
+        if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+            return searchRemote(username, keyword, size);
+        }
+
         if (client == null) {
             List<Message> list = searchFromWeb(username, keyword);
             List<Message> result = list.stream().filter(e -> e.getType() != null).toList();
