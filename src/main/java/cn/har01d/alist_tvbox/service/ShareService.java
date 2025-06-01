@@ -171,7 +171,7 @@ public class ShareService {
     }
 
     @Scheduled(cron = "0 0 * * * *")
-    public void cleanTempShares() {
+    public void cleanShares() {
         List<Share> list = shareRepository.findByTempTrue();
         Instant time = Instant.now().minus(appProperties.getTempShareExpiration(), ChronoUnit.HOURS);
         for (Share share : list) {
@@ -180,10 +180,7 @@ public class ShareService {
                 shareRepository.delete(share);
             }
         }
-    }
 
-    @Scheduled(cron = "0 30 5 * * *")
-    public void cleanInvalidShares() {
         if (appProperties.isCleanInvalidShares()) {
             cleanStorages();
         }
