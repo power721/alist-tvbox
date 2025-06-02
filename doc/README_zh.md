@@ -198,7 +198,7 @@ docker run -d \
 第一次启动会自动读取/data/mytoken.txt,/data/myopentoken.txt里面的内容，以后这些文件不再生效。
 自动创建转存文件夹，不需要再填写转存文件夹ID。
 
-修改主账号后需要重启AList服务。
+修改主账号后不需要重启AList服务。
 
 ![账号详情](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_detail.png)
 
