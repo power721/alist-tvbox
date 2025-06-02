@@ -18,14 +18,12 @@ AList代理，支持xiaoya版AList界面管理。
 - 多个AList站点
 - 多个阿里云盘账号
 - 挂载我的云盘
-- 支持夸克、UC、115网盘
-- 自动签到
+- 支持夸克、UC、115、123、天翼、移动、迅雷网盘
+- 支持夸克、UC、115、123、天翼、移动、迅雷分享
 - 自动刷新阿里Token
 - 自定义TvBox配置
 - 安全订阅配置
 - TvBox配置聚合
-- 添加阿里云盘分享
-- 添加PikPak分享
 - 支持BiliBili
 - 管理AList服务
 - 小雅配置文件管理
@@ -93,7 +91,7 @@ sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_hostmode.sh)"
 5234 - AList
 
 #### 纯净版
-没有内置分享数据。
+没有内置分享数据、可以直接访问AList管理界面。
 ```bash
 sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)"
 ```
@@ -119,14 +117,20 @@ crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh -u"; } | crontab -
 每天凌晨2点检查更新并重启应用。
 
 ### 定时重启
-使用root用户创建corntab定时任务
+使用root用户创建crontab定时任务
+
+每天凌晨2点重启应用：
 ```bash
 wget http://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
 chmod a+x /opt/update_xiaoya.sh
 crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh"; } | crontab -
 ```
-每天凌晨2点重启应用。
-
+每天凌晨2点检查更新：
+```bash
+wget http://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
+chmod a+x /opt/update_xiaoya.sh
+crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh -u"; } | crontab -
+```
 ### 自动更新
 使用docker镜像watchtower实现自动更新。
 ```bash
@@ -360,7 +364,31 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 添加资源如果路径以/开头就会创建在根目录下。否则在/🈴我的阿里分享/下面。
 
+系统会添加一些默认阿里分享资源，不能彻底删除。
 ![分享列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_shares.png)
+
+### 加速代理
+有些网盘资源需要发送HTTP请求头或者Cookie才能播放。如果播放器支持（如影视），直接返回播放地址和HTTP请求头。
+
+如果播放器不支持（如网页播放器），需要使用AList代理访问。网页播放强制使用代理播放。
+
+AList代理具有多线程加速。也可以在网盘帐号开启加速代理，使影视播放加速。
+
+- 阿里需要HTTP请求头。
+- 夸克、UC需要Cookie。
+- 115需要Cookie。
+- 其它网盘使用302直接播放原始地址。
+
+![加速代理](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_proxy.png)
+
+### 网盘帐号负载均衡
+在高级配置开启网盘帐号负载均衡。
+
+如果添加了多个同一类型的网盘帐号，观看分享会轮流使用网盘帐号获取播放地址。
+
+阿里帐号如果同时存在会员帐号和非会员帐号，只会使用会员帐号。
+
+开启后主帐号不再生效。
 
 ### 海报墙模式
 ![海报](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_poster.jpg)
@@ -413,6 +441,8 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ![频道](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_bilibili_channel.png)
 
 ### YouTube
+已经停用！！！
+
 服务端代理，需要消耗服务器流量！
 
 订阅定制可以屏蔽：
@@ -442,11 +472,11 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 强制登录AList后，连接webdav需要使用下面的用户名和密码。
 
-如果打开了挂载我的云盘功能，每次启动会消耗两次开放token请求。60分钟内只能请求10次，超过后需要等待60分钟后才能操作。
+如果打开了挂载我的云盘功能，每次启动会消耗两次开放token请求。
+如果使用AList官方认证URL，60分钟内只能请求10次，超过后需要等待60分钟后才能操作。
 
 可以换IP绕开限制。或者更换开放token的认证URL。配置页面->高级设置 选择一个认证URL。
 
-- https://api-cf.nn.ci/alist/ali_open/token
 - https://api.xhofe.top/alist/ali_open/token
 - https://api.nn.ci/alist/ali_open/token
 
@@ -513,7 +543,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ### 电报搜索
 不登陆默认使用网页搜索公开频道资源。
 
-在订阅页面登陆电报后可以搜索更多频道。
+在订阅页面登陆电报或者配置远程搜索，可以搜索更多频道。
 在播放页面配置频道列表。
 
 如果在订阅页面不能登陆电报，在播放页面配置远程搜索地址 http://IP:7856 。
@@ -529,6 +559,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 5. 环境变量`TGS_PORT`，设置端口，默认为`7856`
 
 ### 猫影视
+不再提供支持！
 #### 自定义猫影视配置
 
 在应用目录（默认/etc/xiaoya）创建cat文件夹(/etc/xiaoya/cat)。
@@ -622,3 +653,25 @@ alist_list.txt第一次启动时加载，以后不再生效，请在界面添加
 proxy.txt、tv.txt、my.json、iptv.m3u还是生效的，可以在文件页面编辑。
 
 本项目不会使用alist.min.js。
+
+### 常见问题
+1. AList出现错误 failed get objs: failed to list objs: driver not init
+
+   在管理界面->资源页面->失败资源 查看具体原因
+2. AList出现错误 failed link: failed get link: The resource drive has exceeded the limit. File size exceeded drive capacity
+
+   阿里网盘空间满了，清理一下文件。
+3. AList出现错误 failed link: failed get link: No permission to access resource File
+
+   token失效，重启应用。AList日志检查阿里token账号昵称和开放token账号昵称是否一致。
+4. 管理界面没有账号页面，刷新一下网页。
+5. 夸克分享需要在帐号页面添加夸克网盘cookie。
+6. UC分享需要在帐号页面添加UC网盘cookie。
+7. 阿里转存115有文件大小限制，并且115必须有对应文件存在。115需要会员。115删除码在115应用设置。
+8. 迅雷云盘，用户名 +86后面要加一个空格，比如+86 12345678900 在资源页面 -> 失败资源 -> 点击 重新加载。
+多试几次，状态列出现链接后，打开链接验证。然后再次点击重新加载。
+9. 纯净版可以进AList后台管理页面。管理员用户名是atv，密码在高级设置里面查看。
+10. 重置用户名和密码。创建文件/etc/xiaoya/atv/cmd.sql，写入下面的内容。重启应用，恢复默认的admin密码。
+```sql
+UPDATE users SET username='admin', password='$2a$10$90MH0QCl098tffOA3ZBDwu0pm24xsVyJeQ41Tvj7N5bXspaqg8b2m' WHERE id=1;
+```
