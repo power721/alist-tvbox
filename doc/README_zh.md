@@ -672,6 +672,7 @@ proxy.txt、tv.txt、my.json、iptv.m3u还是生效的，可以在文件页面�
 多试几次，状态列出现链接后，打开链接验证。然后再次点击重新加载。
 9. 纯净版可以进AList后台管理页面。管理员用户名是atv，密码在高级设置里面查看。
 10. 重置用户名和密码。创建文件/etc/xiaoya/atv/cmd.sql，写入下面的内容。重启应用，恢复默认的admin密码。
-```sql
+   ```sql
 UPDATE users SET username='admin', password='$2a$10$90MH0QCl098tffOA3ZBDwu0pm24xsVyJeQ41Tvj7N5bXspaqg8b2m' WHERE id=1;
-```
+   ```
+11. 网盘添加了文件，在AList看不到。因为AList有缓存，默认30分钟。等待缓存过期，或者重启AList。
