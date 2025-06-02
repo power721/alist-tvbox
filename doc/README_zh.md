@@ -215,6 +215,29 @@ UC网盘Cookie获取方式： https://alist.nn.ci/zh/guide/drivers/uc.html
 
 115网盘开启本地代理后才能使用webdav播放。
 
+### 加速代理
+有些网盘资源需要发送HTTP请求头或者Cookie才能播放。如果播放器支持（如影视），直接返回播放地址和HTTP请求头。
+
+如果播放器不支持（如网页播放器），需要使用AList代理访问。网页播放强制使用代理播放。
+
+AList代理具有多线程加速。也可以在网盘帐号开启加速代理，使影视播放加速。
+
+- 阿里需要HTTP请求头。
+- 夸克、UC需要Cookie。
+- 115需要Cookie。
+- 其它网盘使用302直接播放原始地址。
+
+![加速代理](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_proxy.png)
+
+### 网盘帐号负载均衡
+在高级配置开启网盘帐号负载均衡。
+
+如果添加了多个同一类型的网盘帐号，观看分享会轮流使用网盘帐号获取播放地址。
+
+阿里帐号如果同时存在会员帐号和非会员帐号，只会使用会员帐号。
+
+开启后主帐号不再生效。
+
 ### 订阅
 tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
@@ -366,29 +389,6 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 系统会添加一些默认阿里分享资源，不能彻底删除。
 ![分享列表](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_shares.png)
-
-### 加速代理
-有些网盘资源需要发送HTTP请求头或者Cookie才能播放。如果播放器支持（如影视），直接返回播放地址和HTTP请求头。
-
-如果播放器不支持（如网页播放器），需要使用AList代理访问。网页播放强制使用代理播放。
-
-AList代理具有多线程加速。也可以在网盘帐号开启加速代理，使影视播放加速。
-
-- 阿里需要HTTP请求头。
-- 夸克、UC需要Cookie。
-- 115需要Cookie。
-- 其它网盘使用302直接播放原始地址。
-
-![加速代理](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_account_proxy.png)
-
-### 网盘帐号负载均衡
-在高级配置开启网盘帐号负载均衡。
-
-如果添加了多个同一类型的网盘帐号，观看分享会轮流使用网盘帐号获取播放地址。
-
-阿里帐号如果同时存在会员帐号和非会员帐号，只会使用会员帐号。
-
-开启后主帐号不再生效。
 
 ### 海报墙模式
 ![海报](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_poster.jpg)
