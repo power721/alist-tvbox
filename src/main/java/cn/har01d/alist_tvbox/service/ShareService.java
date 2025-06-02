@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -1160,8 +1161,11 @@ public class ShareService {
                 || status.contains("share_link is expired")
                 || status.contains("share_link cannot be found")
                 || status.contains("share_pwd is not valid")
+                || status.contains("guest missing pwd_id or stoken")
                 || status.contains("获取天翼网盘分享信息为空")
-                || status.contains("分享链接已失效");
+                || status.contains("分享链接已失效")
+                || status.contains("分享已取消")
+                ;
     }
 
     public Response reloadStorage(Integer id) {
@@ -1195,43 +1199,50 @@ public class ShareService {
             settingRepository.save(new Setting("fix_share_id1", ""));
         }
 
+        int id = offset;
         try {
-            Share share = new Share();
-            share.setType(0);
-            share.setId(offset);
-            share.setShareId("cdqCsAWD9wC");
-            share.setPassword("6666");
-            share.setFolderId("635151fc53641440ad95492c8174c57584c56f68");
-            share.setPath("/\uD83C\uDE34我的阿里分享/Tacit0924");
-            shares.add(shareRepository.save(share));
-        } catch (Exception e) {
-            log.warn("", e);
+            var resource = new ClassPathResource("shares.txt");
+            String lines = resource.getContentAsString(StandardCharsets.UTF_8);
+            for (String line : lines.split("\n")) {
+                Share share = importShare(line, id++);
+                if (share != null) {
+                    shares.add(share);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("load shares.txt failed", e);
         }
-
-        try {
-            Share share = new Share();
-            share.setType(0);
-            share.setId(offset + 1);
-            share.setShareId("BJ5sGgevHVi");
-            share.setFolderId("65099417e6650c00e2b741b6a903e46062fafc1e");
-            share.setPath("/\uD83C\uDE34我的阿里分享/每日更新");
-            shares.add(shareRepository.save(share));
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            Share share = new Share();
-            share.setType(0);
-            share.setId(offset + 2);
-            share.setShareId("UuHi9PeYSVz");
-            share.setFolderId("633bfc72b2f11449546041cea0e90bdfe680a110");
-            share.setPath("/\uD83C\uDE34我的阿里分享/YYDSVIP综艺");
-            shares.add(shareRepository.save(share));
-        } catch (Exception e) {
-            log.warn("", e);
-        }
+        log.info("load {} shares", shares.size());
         return shares;
+    }
+
+    private Share importShare(String line, int id) {
+        String[] parts = line.trim().split("\\s+");
+        if (parts.length > 1) {
+            try {
+                Share share = new Share();
+                share.setId(id);
+                share.setPath(parts[0]);
+                String[] sid = parts[1].split(":", 2);
+                if (sid.length > 1) {
+                    share.setType(Integer.parseInt(sid[0]));
+                    share.setShareId(sid[1]);
+                } else {
+                    share.setType(0);
+                    share.setShareId(sid[0]);
+                }
+                if (parts.length > 2) {
+                    share.setFolderId(parts[2]);
+                }
+                if (parts.length > 3) {
+                    share.setPassword(parts[3]);
+                }
+                return shareRepository.save(share);
+            } catch (Exception e) {
+                log.warn("{}", e.getMessage());
+            }
+        }
+        return null;
     }
 
 }
