@@ -87,6 +87,11 @@
         <el-button type="danger">清理</el-button>
       </template>
     </el-popconfirm>
+    <el-popconfirm @confirm="validateStorages" title="是否校验全部资源？">
+      <template #reference>
+        <el-button>校验</el-button>
+      </template>
+    </el-popconfirm>
     <el-button @click="refreshStorages">刷新</el-button>
     <el-button type="danger" @click="dialogVisible1=true" v-if="selectedStorages.length">删除</el-button>
   </el-row>
@@ -487,6 +492,12 @@ const cleanStorages = () => {
   axios.delete('/api/storages').then(({data}) => {
     ElMessage.success(`删除${data}个失效资源`)
     loadStorages(1)
+  })
+}
+
+const validateStorages = () => {
+  axios.post('/api/storages').then(() => {
+    ElMessage.success('开始校验')
   })
 }
 
