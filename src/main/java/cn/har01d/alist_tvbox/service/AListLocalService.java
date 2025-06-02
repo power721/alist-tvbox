@@ -87,7 +87,7 @@ public class AListLocalService {
 
     public void updateSetting(String key, String value, String type) {
         log.info("update setting {}={}", key, value);
-        if (checkStatus() == 2) {
+        if (checkStatus() >= 2) {
             Map<String, Object> body = new HashMap<>();
             body.put("key", key);
             body.put("value", value);
@@ -133,7 +133,7 @@ public class AListLocalService {
             log.warn("Token is empty: {} {} ", accountId, key);
             return;
         }
-        if (checkStatus() == 2) {
+        if (checkStatus() >= 2) {
             String token = siteRepository.findById(1).orElseThrow().getToken();
             HttpHeaders headers = new HttpHeaders();
             headers.set(HttpHeaders.AUTHORIZATION, token);

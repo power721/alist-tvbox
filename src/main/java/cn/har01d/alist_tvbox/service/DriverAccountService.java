@@ -443,12 +443,12 @@ public class DriverAccountService {
         int status = aListLocalService.checkStatus();
         try {
             int id = IDX + account.getId();
-            String token = status == 2 ? accountService.login() : "";
-            if (status == 2) {
+            String token = status >= 2 ? accountService.login() : "";
+            if (status >= 2) {
                 accountService.deleteStorage(id, token);
             }
             updateAList(account);
-            if (status == 2) {
+            if (status >= 2) {
                 accountService.enableStorage(id, token);
             }
         } catch (Exception e) {

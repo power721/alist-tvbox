@@ -352,7 +352,7 @@ public class IndexService {
 
     @Scheduled(cron = "0 0 10,12,14,16,18-23 * * ?")
     public void autoIndex() {
-        if (aListLocalService.checkStatus() != 2) {
+        if (aListLocalService.checkStatus() < 2) {
             return;
         }
         String hour = String.valueOf(LocalTime.now().getHour());

@@ -550,7 +550,7 @@ public class ShareService {
             throw new BadRequestException("AList服务启动中");
         }
 
-        String token = status == 2 ? login() : "";
+        String token = status >= 2 ? login() : "";
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, token);
         Map<String, Object> body = new HashMap<>();

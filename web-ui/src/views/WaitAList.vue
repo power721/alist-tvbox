@@ -67,7 +67,7 @@ onUnmounted(() => {
         v-model="aListStarted"
         inline-prompt
         :disabled="true"
-        :active-text="store.aListStatus===2?'运行中':'启动中'"
+        :active-text="store.aListStatus>=2?'运行中':'启动中'"
         inactive-text="停止中"
       />
       <el-progress

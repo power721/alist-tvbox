@@ -214,14 +214,14 @@ public class PikPakService {
         try {
             int id = base + account.getId();
             int disabled = status == 0 ? 0 : 1;
-            String token = status == 2 ? accountService.login() : "";
-            if (status == 2) {
+            String token = status >= 2 ? accountService.login() : "";
+            if (status >= 2) {
                 accountService.deleteStorage(id, token);
             }
             String sql = "INSERT INTO x_storages (id,mount_path,driver,cache_expiration,status,addition,modified,disabled,webdav_policy) VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",'PikPak',30,'work','{\"root_folder_id\":\"\",\"platform\":\"%s\",\"refresh_token_method\":\"%s\",\"username\":\"%s\",\"password\":\"%s\"}','2023-06-20 12:00:00+00:00',%d,'302_redirect');";
             Utils.executeUpdate(String.format(sql, id, account.getNickname(), account.getPlatform(), account.getRefreshTokenMethod(), account.getUsername(), account.getPassword(), disabled));
             log.info("add AList PikPak {} {}: {}", id, account.getNickname(), account.getUsername());
-            if (status == 2) {
+            if (status >= 2) {
                 accountService.enableStorage(id, token);
             }
         } catch (Exception e) {

@@ -913,7 +913,7 @@ public class AccountService {
             throw new BadRequestException("AList服务启动中");
         }
 
-        String token = status == 2 ? login() : "";
+        String token = status >= 2 ? login() : "";
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, token);
         Map<String, Object> body = new HashMap<>();
@@ -974,9 +974,9 @@ public class AccountService {
             throw new BadRequestException("AList服务启动中");
         }
 
-        String token = status == 2 ? login() : "";
+        String token = status >= 2 ? login() : "";
         int storageId = base + (account.getId() - 1) * 2;
-        if (status == 2) {
+        if (status >= 2) {
             deleteStorage(storageId, token);
             deleteStorage(storageId + 1, token);
         }
@@ -994,7 +994,7 @@ public class AccountService {
                 code = Utils.executeUpdate(sql);
                 log.debug("{} {}", code, sql);
                 log.info("add AList storage {}", name);
-                if (status == 2) {
+                if (status >= 2) {
                     enableStorage(storageId, token);
                     enableStorage(storageId + 1, token);
                 }
