@@ -21,12 +21,12 @@ import cn.har01d.alist_tvbox.storage.AliyundriveOpen;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.env.Environment;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -91,9 +91,8 @@ public class AccountService {
     private final TaskScheduler scheduler;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
-    private final Environment environment;
     private final AppProperties appProperties;
-    private ScheduledFuture scheduledFuture;
+    private ScheduledFuture<?> scheduledFuture;
 
     public AccountService(AccountRepository accountRepository,
                           SettingRepository settingRepository,
@@ -104,8 +103,7 @@ public class AccountService {
                           TaskScheduler scheduler,
                           RestTemplateBuilder builder,
                           ObjectMapper objectMapper,
-                          JdbcTemplate jdbcTemplate,
-                          Environment environment) {
+                          JdbcTemplate jdbcTemplate) {
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
         this.userRepository = userRepository;
@@ -115,7 +113,6 @@ public class AccountService {
         this.scheduler = scheduler;
         this.objectMapper = objectMapper;
         this.jdbcTemplate = jdbcTemplate;
-        this.environment = environment;
         this.aListClient = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
         this.restTemplate = builder.build();
     }
@@ -357,9 +354,9 @@ public class AccountService {
         try {
             String json = account.getOpenToken().split("\\.")[1];
             byte[] bytes = Base64.getDecoder().decode(json);
-            Map<Object, Object> map = objectMapper.readValue(bytes, Map.class);
+            JsonNode map = objectMapper.readTree(bytes);
             log.debug("open token: {}", map);
-            int exp = (int) map.get("exp");
+            int exp = map.get("exp").asInt();
             Instant expireTime = Instant.ofEpochSecond(exp).plus(3, ChronoUnit.DAYS);
             return expireTime.isAfter(Instant.now());
         } catch (Exception e) {
@@ -481,7 +478,6 @@ public class AccountService {
         try {
             for (Account account : list) {
                 try {
-
                     int code;
                     int id = base + (account.getId() - 1) * 2;
                     String name = account.getNickname();
@@ -489,7 +485,7 @@ public class AccountService {
                         name = String.valueOf(account.getId());
                     }
                     String sql;
-                    if (account.isShowMyAli() || account.isMaster()) {
+                    if (account.isShowMyAli() || account.isMaster() || list.size() == 1) {
                         AliyundriveOpen storage = new AliyundriveOpen(account, "resource");
                         aListLocalService.saveStorage(storage);
                         storage = new AliyundriveOpen(account, "backup");
