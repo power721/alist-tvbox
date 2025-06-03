@@ -10,9 +10,19 @@ import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.storage.Open115;
+import cn.har01d.alist_tvbox.storage.Pan115;
+import cn.har01d.alist_tvbox.storage.Pan123;
+import cn.har01d.alist_tvbox.storage.Pan139;
+import cn.har01d.alist_tvbox.storage.Pan189;
+import cn.har01d.alist_tvbox.storage.Quark;
+import cn.har01d.alist_tvbox.storage.QuarkTV;
+import cn.har01d.alist_tvbox.storage.Storage;
+import cn.har01d.alist_tvbox.storage.ThunderBrowser;
+import cn.har01d.alist_tvbox.storage.UC;
+import cn.har01d.alist_tvbox.storage.UCTV;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
-import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -145,132 +155,43 @@ public class DriverAccountService {
             if (account.isMaster()) {
                 updateMasterToken(account, false);
             }
-            insertAList(account);
+            saveStorage(account, false);
         }
     }
 
-    private void insertAList(DriverAccount account) {
+    private void saveStorage(DriverAccount account, boolean disabled) {
         String deviceId = settingRepository.findById("quark_device_id").map(Setting::getValue).orElse("");
-        int id = account.getId() + IDX;
+        Storage storage = null;
         if (account.getType() == DriverType.QUARK) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',%d,'native_proxy','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder(), account.isUseProxy() ? 1 : 0));
-            log.info("insert Quark account {} : {}, result: {}", id, getMountPath(account), count);
+            storage = new Quark(account);
         } else if (account.getType() == DriverType.QUARK_TV) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'QuarkTV',30,'work','{\"refresh_token\":\"%s\",\"device_id\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), deviceId, account.getFolder()));
-            log.info("insert QuarkTV account {} : {}, result: {}", id, getMountPath(account), count);
+            storage = new QuarkTV(account, deviceId);
         } else if (account.getType() == DriverType.UC) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UC',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',%d,'native_proxy','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder(), account.isUseProxy() ? 1 : 0));
-            log.info("insert UC account {} : {}, result: {}", id, getMountPath(account), count);
+            storage = new UC(account);
         } else if (account.getType() == DriverType.UC_TV) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCTV',30,'work','{\"refresh_token\":\"%s\",\"device_id\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), deviceId, account.getFolder()));
-            log.info("insert UCTV account {} : {}, result: {}", id, getMountPath(account), count);
+            storage = new UCTV(account, deviceId);
         } else if (account.getType() == DriverType.THUNDER) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'ThunderBrowser',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"safe_password\":\"%s\",\"root_folder_id\":\"%s\",\"remove_way\":\"delete\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getSafePassword(), account.getFolder()));
-            log.info("insert ThunderBrowser account {} : {}, result: {}", id, getMountPath(account), count);
+            storage = new ThunderBrowser(account);
         } else if (account.getType() == DriverType.CLOUD189) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189CloudPC',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"validate_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getToken(), account.getFolder()));
-            log.info("insert 189CloudPC account {} : {}, result: {}", id, getMountPath(account), count);
+            storage = new Pan189(account);
         } else if (account.getType() == DriverType.PAN123) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'123Pan',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"root_folder_id\":\"%s\",\"platformType\":\"android\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getFolder()));
-            log.info("insert 123Pan account {} : {}, result: {}", id, getMountPath(account), count);
+            storage = new Pan123(account);
         } else if (account.getType() == DriverType.PAN139) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'139Yun',30,'work','{\"authorization\":\"%s\",\"root_folder_id\":\"%s\",\"type\":\"personal_new\",\"cloud_id\":\"\",\"custom_upload_part_size\":0}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
-            log.info("insert 139Yun account {} : {}, result: {}", id, getMountPath(account), count);
+            storage = new Pan139(account);
         } else if (account.getType() == DriverType.PAN115) {
-            String sql;
-            sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1000}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',%d,'native_proxy','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder(), account.isUseProxy() ? 1 : 0));
-            log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
+            storage = new Pan115(account);
         } else if (account.getType() == DriverType.OPEN115) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
-            log.info("insert 115 Open account {} : {}, result: {}", id, getMountPath(account), count);
+            storage = new Open115(account);
         }
-    }
 
-    private void updateAList(DriverAccount account) {
-        int id = account.getId() + IDX;
-        if (account.getType() == DriverType.QUARK) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Quark',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',%d,'native_proxy','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder(), account.isUseProxy() ? 1 : 0));
-            log.info("insert Quark account {} : {}, result: {}", id, getMountPath(account), count);
-        } else if (account.getType() == DriverType.QUARK_TV) {
-            String deviceId = settingRepository.findById("quark_device_id").map(Setting::getValue).orElse("");
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'QuarkTV',30,'work','{\"refresh_token\":\"%s\",\"device_id\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), deviceId, account.getFolder()));
-            log.info("insert QuarkTV account {} : {}, result: {}", id, getMountPath(account), count);
-        } else if (account.getType() == DriverType.UC) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UC',30,'work','{\"cookie\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',%d,'native_proxy','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getFolder(), account.isUseProxy() ? 1 : 0));
-            log.info("insert UC account {} : {}, result: {}", id, getMountPath(account), count);
-        } else if (account.getType() == DriverType.UC_TV) {
-            String deviceId = settingRepository.findById("quark_device_id").map(Setting::getValue).orElse("");
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCTV',30,'work','{\"refresh_token\":\"%s\",\"device_id\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), deviceId, account.getFolder()));
-            log.info("insert UCTV account {} : {}, result: {}", id, getMountPath(account), count);
-        } else if (account.getType() == DriverType.THUNDER) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'ThunderBrowser',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"safe_password\":\"%s\",\"root_folder_id\":\"%s\",\"remove_way\":\"delete\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getSafePassword(), account.getFolder()));
-            log.info("insert ThunderBrowser account {} : {}, result: {}", id, getMountPath(account), count);
-        } else if (account.getType() == DriverType.CLOUD189) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189CloudPC',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"validate_code\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getToken(), account.getFolder()));
-            log.info("insert 189CloudPC account {} : {}, result: {}", id, getMountPath(account), count);
-        } else if (account.getType() == DriverType.PAN123) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'123Pan',30,'work','{\"username\":\"%s\",\"password\":\"%s\",\"root_folder_id\":\"%s\",\"platformType\":\"android\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getUsername(), account.getPassword(), account.getFolder()));
-            log.info("insert 123Pan account {} : {}, result: {}", id, getMountPath(account), count);
-        } else if (account.getType() == DriverType.PAN139) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'139Yun',30,'work','{\"authorization\":\"%s\",\"root_folder_id\":\"%s\",\"type\":\"personal_new\",\"cloud_id\":\"\",\"custom_upload_part_size\":0}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
-            log.info("insert 139Yun account {} : {}, result: {}", id, getMountPath(account), count);
-        } else if (account.getType() == DriverType.PAN115) {
-            String sql;
-            sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Cloud',30,'work','{\"cookie\":\"%s\",\"qrcode_token\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1000}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',%d,'native_proxy','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getCookie(), account.getToken(), account.getFolder(), account.isUseProxy() ? 1 : 0));
-            log.info("insert 115 account {}: {}, result: {}", id, getMountPath(account), count);
-        } else if (account.getType() == DriverType.OPEN115) {
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Open',30,'work','{\"refresh_token\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, id, getMountPath(account), account.getToken(), account.getFolder()));
-            log.info("insert 115 Open account {} : {}, result: {}", id, getMountPath(account), count);
+        if (storage != null) {
+            storage.setDisabled(disabled);
+            aListLocalService.saveStorage(storage);
         }
     }
 
     private String getMountPath(DriverAccount account) {
-        if (account.getName().startsWith("/")) {
-            return account.getName();
-        }
-        if (account.getType() == DriverType.QUARK) {
-            return "/\uD83C\uDF1E我的夸克网盘/" + account.getName();
-        } else if (account.getType() == DriverType.UC) {
-            return "/\uD83C\uDF1E我的UC网盘/" + account.getName();
-        } else if (account.getType() == DriverType.QUARK_TV) {
-            return "/我的夸克网盘/" + account.getName();
-        } else if (account.getType() == DriverType.UC_TV) {
-            return "/我的UC网盘/" + account.getName();
-        } else if (account.getType() == DriverType.PAN115) {
-            return "/115云盘/" + account.getName();
-        } else if (account.getType() == DriverType.OPEN115) {
-            return "/115网盘/" + account.getName();
-        } else if (account.getType() == DriverType.THUNDER) {
-            return "/我的迅雷云盘/" + account.getName();
-        } else if (account.getType() == DriverType.CLOUD189) {
-            return "/我的天翼云盘/" + account.getName();
-        } else if (account.getType() == DriverType.PAN139) {
-            return "/我的移动云盘/" + account.getName();
-        } else if (account.getType() == DriverType.PAN123) {
-            return "/我的123网盘/" + account.getName();
-        }
-        return "/网盘" + account.getName();
-        // cn.har01d.alist_tvbox.service.TvBoxService.addMyFavorite
+        return Storage.getMountPath(account);
     }
 
     public List<DriverAccount> list() {
@@ -447,7 +368,7 @@ public class DriverAccountService {
             if (status >= 2) {
                 accountService.deleteStorage(id, token);
             }
-            updateAList(account);
+            saveStorage(account, true);
             if (status >= 2) {
                 accountService.enableStorage(id, token);
             }

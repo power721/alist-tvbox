@@ -1,49 +1,8 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.domain.DriverType;
-import cn.har01d.alist_tvbox.dto.OpenApiDto;
-import cn.har01d.alist_tvbox.dto.ShareLink;
-import cn.har01d.alist_tvbox.dto.SharesDto;
-import cn.har01d.alist_tvbox.entity.AListAlias;
-import cn.har01d.alist_tvbox.entity.AListAliasRepository;
-import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.DriverAccount;
-import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
-import cn.har01d.alist_tvbox.entity.PikPakAccount;
-import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.Share;
-import cn.har01d.alist_tvbox.entity.ShareRepository;
-import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.entity.SiteRepository;
-import cn.har01d.alist_tvbox.exception.BadRequestException;
-import cn.har01d.alist_tvbox.model.FsResponse;
-import cn.har01d.alist_tvbox.model.LoginRequest;
-import cn.har01d.alist_tvbox.model.LoginResponse;
-import cn.har01d.alist_tvbox.model.Response;
-import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import jakarta.annotation.PostConstruct;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.env.Environment;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
+import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
+import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
 
 import java.io.IOException;
 import java.net.URLDecoder;
@@ -60,9 +19,63 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
-import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
-import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
+import cn.har01d.alist_tvbox.storage.UrlTree;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+
+import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.OpenApiDto;
+import cn.har01d.alist_tvbox.dto.ShareLink;
+import cn.har01d.alist_tvbox.dto.SharesDto;
+import cn.har01d.alist_tvbox.entity.AListAlias;
+import cn.har01d.alist_tvbox.entity.AListAliasRepository;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.Share;
+import cn.har01d.alist_tvbox.entity.ShareRepository;
+import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.SiteRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.FsResponse;
+import cn.har01d.alist_tvbox.model.LoginRequest;
+import cn.har01d.alist_tvbox.model.LoginResponse;
+import cn.har01d.alist_tvbox.model.Response;
+import cn.har01d.alist_tvbox.storage.AliyunShare;
+import cn.har01d.alist_tvbox.storage.Local;
+import cn.har01d.alist_tvbox.storage.Pan115Share;
+import cn.har01d.alist_tvbox.storage.Pan123Share;
+import cn.har01d.alist_tvbox.storage.Pan139Share;
+import cn.har01d.alist_tvbox.storage.Pan189Share;
+import cn.har01d.alist_tvbox.storage.PikPakShare;
+import cn.har01d.alist_tvbox.storage.QuarkShare;
+import cn.har01d.alist_tvbox.storage.Storage;
+import cn.har01d.alist_tvbox.storage.ThunderShare;
+import cn.har01d.alist_tvbox.storage.UCShare;
+import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -210,9 +223,9 @@ public class ShareService {
         try {
             for (AListAlias alias : list) {
                 try {
-                    String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'name','asc','front',0,'302_redirect','');";
-                    int count = Utils.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
-                    log.info("insert Alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
+                    Storage storage = new Storage(alias.getId(), "Alias", alias.getPath(), String.format("{\"paths\":\"%s\"}", Utils.getAliasPaths(alias.getContent())));
+                    storage.setCacheExpiration(0);
+                    aListLocalService.saveStorage(storage);
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
                 }
@@ -228,9 +241,13 @@ public class ShareService {
                 continue;
             }
             try {
-                String sql = "INSERT INTO x_storages VALUES(%d,'/\uD83C\uDF8E我的套娃/%s',0,'AList V%d',0,'work','{\"root_folder_path\":\"%s\",\"url\":\"%s\",\"meta_password\":\"%s\",\"token\":\"%s\",\"username\":\"\",\"password\":\"\"}','','2023-06-20 12:00:00+00:00',0,'name','asc','front',0,'302_redirect','');";
-                int count = Utils.executeUpdate(String.format(sql, 8000 + site.getId(), site.getName(), site.getVersion(), getFolder(site), site.getUrl(), site.getPassword(), site.getToken()));
-                log.info("insert Site {}:{} {}, result: {}", site.getId(), site.getName(), site.getUrl(), count);
+                int id = 8000 + site.getId();
+                String driver = "AList V" + site.getVersion();
+                String path = "/\uD83C\uDF8E我的套娃/" + site.getName();
+                String addition = String.format("{\"root_folder_path\":\"%s\",\"url\":\"%s\",\"meta_password\":\"%s\",\"token\":\"%s\",\"username\":\"\",\"password\":\"\"}", getFolder(site), site.getUrl(), site.getPassword(), site.getToken());
+                Storage storage = new Storage(id, driver, path, addition);
+                storage.setCacheExpiration(0);
+                aListLocalService.saveStorage(storage);
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());
             }
@@ -469,50 +486,11 @@ public class ShareService {
 
         boolean pikpak = false;
         try {
-            PikPakAccount account2 = pikPakAccountRepository.getFirstByMasterTrue().orElse(new PikPakAccount());
             for (Share share : list) {
                 try {
-                    if (share.getType() == null || share.getType() == 0) {
-                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'AliyunShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
-                    } else if (share.getType() == 1) {
-                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"username\":\"%s\",\"platform\":\"pc\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account2.getUsername(), account2.getPassword(), share.getShareId(), share.getPassword()));
+                    Storage storage = saveStorage(share, false);
+                    if (storage != null && storage.getDriver().equals("PikPakShare")) {
                         pikpak = true;
-                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
-                    } else if (share.getType() == 8) {
-                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Share',30,'work','{\"share_code\":\"%s\",\"receive_code\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1500,\"limit_rate\":1}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
-                    } else if (share.getType() == 4) {
-                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Local',30,'work','{\"root_folder_path\":\"%s\",\"thumbnail\":false,\"thumb_cache_folder\":\"\",\"show_hidden\":true,\"mkdir_perm\":\"777\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
-                        int count = Utils.executeUpdate(String.format(sql, share.getId(), share.getPath(), share.getFolderId()));
-                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getPath(), share.getFolderId(), count);
-                    } else if (share.getType() == 5) {
-                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'QuarkShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
-                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
-                    } else if (share.getType() == 7) {
-                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'native_proxy','');";
-                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
-                    } else if (share.getType() == 9) {
-                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
-                    } else if (share.getType() == 2) {
-                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'ThunderShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
-                    } else if (share.getType() == 3) {
-                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'123PanShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
-                    } else if (share.getType() == 6) {
-                        String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Yun139Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',0,'name','ASC','',0,'302_redirect','');";
-                        int count = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-                        log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), count);
                     }
                     if (share.getId() < offset) {
                         shareId = Math.max(shareId, share.getId() + 1);
@@ -534,6 +512,38 @@ public class ShareService {
         }
     }
 
+    private Storage saveStorage(Share share, boolean disabled) {
+        Storage storage = null;
+        if (share.getType() == null || share.getType() == 0) {
+            storage = new AliyunShare(share);
+        } else if (share.getType() == 1) {
+            storage = new PikPakShare(share);
+        } else if (share.getType() == 8) {
+            storage = new Pan115Share(share);
+        } else if (share.getType() == 4) {
+            storage = new Local(share);
+        } else if (share.getType() == 5) {
+            storage = new QuarkShare(share);
+        } else if (share.getType() == 7) {
+            storage = new UCShare(share);
+        } else if (share.getType() == 9) {
+            storage = new Pan189Share(share);
+        } else if (share.getType() == 2) {
+            storage = new ThunderShare(share);
+        } else if (share.getType() == 3) {
+            storage = new Pan123Share(share);
+        } else if (share.getType() == 6) {
+            storage = new Pan139Share(share);
+        }
+
+        if (storage != null) {
+            storage.setDisabled(disabled);
+            aListLocalService.saveStorage(storage);
+        }
+
+        return storage;
+    }
+
     private void updateAListDriverType() {
         try {
             log.info("update storage driver type");
@@ -546,7 +556,7 @@ public class ShareService {
     private void updateCookieByApi(String key, String cookie) {
         int status = aListLocalService.checkStatus();
         if (status == 1) {
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('" + key + "','" + cookie + "','','text','',1,0);");
+            aListLocalService.setSetting(key, cookie, "text");
             throw new BadRequestException("AList服务启动中");
         }
 
@@ -575,30 +585,7 @@ public class ShareService {
     }
 
     private String getMountPath(Share share) {
-        String path = share.getPath();
-        if (path.startsWith("/")) {
-            return path;
-        }
-        if (share.getType() == null || share.getType() == 0) {
-            return "/\uD83C\uDE34我的阿里分享/" + path;
-        } else if (share.getType() == 1) {
-            return "/\uD83D\uDD78️我的PikPak分享/" + path;
-        } else if (share.getType() == 5) {
-            return "/我的夸克分享/" + path;
-        } else if (share.getType() == 7) {
-            return "/我的UC分享/" + path;
-        } else if (share.getType() == 8) {
-            return "/我的115分享/" + path;
-        } else if (share.getType() == 9) {
-            return "/我的天翼分享/" + path;
-        } else if (share.getType() == 2) {
-            return "/我的迅雷分享/" + path;
-        } else if (share.getType() == 3) {
-            return "/我的123分享/" + path;
-        } else if (share.getType() == 6) {
-            return "/我的移动分享/" + path;
-        }
-        return path;
+        return Storage.getMountPath(share);
     }
 
     private void readTvTxt() {
@@ -607,7 +594,8 @@ public class ShareService {
             log.info("read tv from file");
             try {
                 StringBuilder sb = parseTvFile(file);
-                Utils.executeUpdate("INSERT INTO x_storages VALUES(2050,'/\uD83C\uDDF9\uD83C\uDDFB直播/我的自选',0,'UrlTree',0,'work','{\"url_structure\":\"" + sb + "\",\"head_size\":false}','','2023-06-20 12:00:00+00:00',0,'name','','',0,'302_redirect','');");
+                Storage storage = new UrlTree(2050, "/\uD83C\uDDF9\uD83C\uDDFB直播/我的自选", sb.toString());
+                aListLocalService.saveStorage(storage);
             } catch (Exception e) {
                 log.warn("", e);
             }
@@ -923,41 +911,7 @@ public class ShareService {
                 share.setId(shareId++);
             }
 
-            int result = 0;
-            if (share.getType() == null || share.getType() == 0) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'AliyunShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 1) {
-                PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"platform\":\"pc\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
-            } else if (share.getType() == 8) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Share',30,'work','{\"share_code\":\"%s\",\"receive_code\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1500,\"limit_rate\":1}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 4) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Local',30,'work','{\"root_folder_path\":\"%s\",\"thumbnail\":false,\"thumb_cache_folder\":\"\",\"show_hidden\":true,\"mkdir_perm\":\"777\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0,0,0);";
-                int count = Utils.executeUpdate(String.format(sql, share.getId(), share.getPath(), share.getFolderId()));
-                log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getPath(), share.getFolderId(), count);
-            } else if (share.getType() == 5) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'QuarkShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 7) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 9) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 2) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'ThunderShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 3) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'123PanShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 6) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Yun139Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            }
-            log.info("insert result: {}", result);
+            saveStorage(share, true);
 
             shareRepository.save(share);
 
@@ -987,43 +941,7 @@ public class ShareService {
         String token = accountService.login();
         try {
             deleteStorage(id, token);
-
-            int result = 0;
-            if (share.getType() == null || share.getType() == 0) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'AliyunShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"name\",\"order_direction\":\"ASC\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 1) {
-                PikPakAccount account = pikPakAccountRepository.getFirstByMasterTrue().orElseThrow(BadRequestException::new);
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'PikPakShare',30,'work','{\"root_folder_id\":\"%s\",\"platform\":\"pc\",\"username\":\"%s\",\"password\":\"%s\",\"share_id\":\"%s\",\"share_pwd\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getFolderId(), account.getUsername(), account.getPassword(), share.getShareId(), share.getPassword()));
-            } else if (share.getType() == 8) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'115 Share',30,'work','{\"share_code\":\"%s\",\"receive_code\":\"%s\",\"root_folder_id\":\"%s\",\"page_size\":1500,\"limit_rate\":1}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 4) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Local',30,'work','{\"root_folder_path\":\"%s\",\"thumbnail\":false,\"thumb_cache_folder\":\"\",\"show_hidden\":true,\"mkdir_perm\":\"777\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0,0,0);";
-                int count = Utils.executeUpdate(String.format(sql, share.getId(), share.getPath(), share.getFolderId()));
-                log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getPath(), share.getFolderId(), count);
-            } else if (share.getType() == 5) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'QuarkShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 7) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'UCShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\",\"order_by\":\"file_name\",\"order_direction\":\"asc\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'native_proxy','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 9) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'189Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 2) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'ThunderShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 3) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'123PanShare',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            } else if (share.getType() == 6) {
-                String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Yun139Share',30,'work','{\"share_id\":\"%s\",\"share_pwd\":\"%s\",\"root_folder_id\":\"%s\"}','','2023-06-15 12:00:00+00:00',1,'name','ASC','',0,'302_redirect','',0,0,0);";
-                result = Utils.executeUpdate(String.format(sql, share.getId(), getMountPath(share), share.getShareId(), share.getPassword(), share.getFolderId()));
-            }
-            log.info("insert result: {}", result);
-
+            saveStorage(share, true);
             enableStorage(id, token);
         } catch (Exception e) {
             throw new BadRequestException(e);
