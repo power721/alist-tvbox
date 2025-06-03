@@ -33,7 +33,7 @@ public class ProxyService {
     private final Environment environment;
     private final SiteService siteService;
     private final AListService aListService;
-    private final Set<String> proxyDrivers = Set.of("AliyundriveOpen", "AliyunShare", "Quark", "UC", "QuarkShare", "UCShare");
+    private final Set<String> proxyDrivers = Set.of("AList V3", "AliyundriveOpen", "AliyunShare", "Quark", "UC", "QuarkShare", "UCShare");
 
     public ProxyService(AppProperties appProperties,
                         Environment environment,
