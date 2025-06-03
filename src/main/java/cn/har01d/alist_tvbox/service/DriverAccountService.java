@@ -10,6 +10,7 @@ import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.storage.Storage;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -245,32 +246,7 @@ public class DriverAccountService {
     }
 
     private String getMountPath(DriverAccount account) {
-        if (account.getName().startsWith("/")) {
-            return account.getName();
-        }
-        if (account.getType() == DriverType.QUARK) {
-            return "/\uD83C\uDF1E我的夸克网盘/" + account.getName();
-        } else if (account.getType() == DriverType.UC) {
-            return "/\uD83C\uDF1E我的UC网盘/" + account.getName();
-        } else if (account.getType() == DriverType.QUARK_TV) {
-            return "/我的夸克网盘/" + account.getName();
-        } else if (account.getType() == DriverType.UC_TV) {
-            return "/我的UC网盘/" + account.getName();
-        } else if (account.getType() == DriverType.PAN115) {
-            return "/115云盘/" + account.getName();
-        } else if (account.getType() == DriverType.OPEN115) {
-            return "/115网盘/" + account.getName();
-        } else if (account.getType() == DriverType.THUNDER) {
-            return "/我的迅雷云盘/" + account.getName();
-        } else if (account.getType() == DriverType.CLOUD189) {
-            return "/我的天翼云盘/" + account.getName();
-        } else if (account.getType() == DriverType.PAN139) {
-            return "/我的移动云盘/" + account.getName();
-        } else if (account.getType() == DriverType.PAN123) {
-            return "/我的123网盘/" + account.getName();
-        }
-        return "/网盘" + account.getName();
-        // cn.har01d.alist_tvbox.service.TvBoxService.addMyFavorite
+        return Storage.getMountPath(account);
     }
 
     public List<DriverAccount> list() {

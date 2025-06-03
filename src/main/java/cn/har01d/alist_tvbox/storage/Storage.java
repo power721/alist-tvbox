@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.Share;
 import lombok.Data;
 
@@ -23,6 +25,12 @@ public class Storage {
     private Map<String, Object> map = new HashMap<>();
 
     public Storage() {
+    }
+
+    public Storage(int id, String driver, String path) {
+        this.id = id;
+        this.driver = driver;
+        this.path = path;
     }
 
     public Storage(int id, String driver, String path, Instant time) {
@@ -77,6 +85,35 @@ public class Storage {
             return "/我的移动分享/" + path;
         }
         return path;
+    }
+
+    public static String getMountPath(DriverAccount account) {
+        if (account.getName().startsWith("/")) {
+            return account.getName();
+        }
+        if (account.getType() == DriverType.QUARK) {
+            return "/\uD83C\uDF1E我的夸克网盘/" + account.getName();
+        } else if (account.getType() == DriverType.UC) {
+            return "/\uD83C\uDF1E我的UC网盘/" + account.getName();
+        } else if (account.getType() == DriverType.QUARK_TV) {
+            return "/我的夸克网盘/" + account.getName();
+        } else if (account.getType() == DriverType.UC_TV) {
+            return "/我的UC网盘/" + account.getName();
+        } else if (account.getType() == DriverType.PAN115) {
+            return "/115云盘/" + account.getName();
+        } else if (account.getType() == DriverType.OPEN115) {
+            return "/115网盘/" + account.getName();
+        } else if (account.getType() == DriverType.THUNDER) {
+            return "/我的迅雷云盘/" + account.getName();
+        } else if (account.getType() == DriverType.CLOUD189) {
+            return "/我的天翼云盘/" + account.getName();
+        } else if (account.getType() == DriverType.PAN139) {
+            return "/我的移动云盘/" + account.getName();
+        } else if (account.getType() == DriverType.PAN123) {
+            return "/我的123网盘/" + account.getName();
+        }
+        return "/网盘" + account.getName();
+        // cn.har01d.alist_tvbox.service.TvBoxService.addMyFavorite
     }
 
 }
