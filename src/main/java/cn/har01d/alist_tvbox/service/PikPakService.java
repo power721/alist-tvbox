@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.storage.PikPak;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -113,8 +114,8 @@ public class PikPakService {
         try {
             List<PikPakAccount> list = pikPakAccountRepository.findAll();
             for (PikPakAccount account : list) {
-                String sql = "INSERT INTO x_storages VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",0,'PikPak',30,'work','{\"root_folder_id\":\"\",\"platform\":\"%s\",\"refresh_token_method\":\"%s\",\"username\":\"%s\",\"password\":\"%s\"}','','2023-06-20 12:00:00+00:00',0,'','','',0,'302_redirect','');";
-                Utils.executeUpdate(String.format(sql, base + account.getId(), account.getNickname(), account.getPlatform(), account.getRefreshTokenMethod(), account.getUsername(), account.getPassword()));
+                PikPak pikPak = new PikPak(account);
+                aListLocalService.saveStorage(pikPak);
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -213,14 +214,14 @@ public class PikPakService {
         int status = aListLocalService.checkStatus();
         try {
             int id = base + account.getId();
-            int disabled = status == 0 ? 0 : 1;
+            boolean disabled = status > 0;
             String token = status >= 2 ? accountService.login() : "";
             if (status >= 2) {
                 accountService.deleteStorage(id, token);
             }
-            String sql = "INSERT INTO x_storages (id,mount_path,driver,cache_expiration,status,addition,modified,disabled,webdav_policy) VALUES(%d,\"/\uD83C\uDD7F️我的PikPak/%s\",'PikPak',30,'work','{\"root_folder_id\":\"\",\"platform\":\"%s\",\"refresh_token_method\":\"%s\",\"username\":\"%s\",\"password\":\"%s\"}','2023-06-20 12:00:00+00:00',%d,'302_redirect');";
-            Utils.executeUpdate(String.format(sql, id, account.getNickname(), account.getPlatform(), account.getRefreshTokenMethod(), account.getUsername(), account.getPassword(), disabled));
-            log.info("add AList PikPak {} {}: {}", id, account.getNickname(), account.getUsername());
+            PikPak pikPak = new PikPak(account);
+            pikPak.setDisabled(disabled);
+            aListLocalService.saveStorage(pikPak);
             if (status >= 2) {
                 accountService.enableStorage(id, token);
             }

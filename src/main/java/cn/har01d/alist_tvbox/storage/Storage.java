@@ -7,9 +7,12 @@ import java.util.List;
 import java.util.Map;
 
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
+import cn.har01d.alist_tvbox.entity.PikPakAccount;
 import cn.har01d.alist_tvbox.entity.Share;
 import lombok.Data;
+import org.apache.commons.lang3.StringUtils;
 
 @Data
 public class Storage {
@@ -27,17 +30,35 @@ public class Storage {
     public Storage() {
     }
 
-    public Storage(int id, String driver, String path) {
-        this.id = id;
-        this.driver = driver;
-        this.path = path;
+    public Storage(PikPakAccount account) {
+        this.id = 4500 + account.getId();
+        this.driver = "PikPak";
+        this.path = "/\uD83C\uDD7F️我的PikPak/" + account.getNickname();
     }
 
-    public Storage(int id, String driver, String path, Instant time) {
-        this.id = id;
+    public Storage(Account account, String type) {
+        this.id = 4600 + (account.getId() - 1) * 2 +  ("backup".equals(type) ? 1 : 0);
+        this.driver = "AliyundriveOpen";
+        String name = account.getNickname();
+        if (StringUtils.isBlank(name)) {
+            name = String.valueOf(account.getId());
+        }
+        this.path = String.format("/\uD83D\uDCC0我的阿里云盘/%s/%s", name, "backup".equals(type) ? "备份盘" : "资源盘");
+    }
+
+    public Storage(DriverAccount account, String driver) {
+        this.id = 4000 + account.getId();
         this.driver = driver;
-        this.path = path;
-        this.time = time;
+        this.path = getMountPath(account);
+    }
+
+    public Storage(Share share, String driver) {
+        this.id = share.getId();
+        this.driver = driver;
+        this.path = getMountPath(share);
+        if (share.getTime() != null) {
+            this.time = share.getTime();
+        }
     }
 
     public Storage(int id, String driver, String path, String addition) {

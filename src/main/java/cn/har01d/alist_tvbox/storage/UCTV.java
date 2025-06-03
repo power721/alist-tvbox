@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.entity.DriverAccount;
 
 public class UCTV extends Storage {
     public UCTV(DriverAccount account, String deviceId) {
-        super(account.getId(), "UCTV", getMountPath(account));
+        super(account, "UCTV");
         addAddition("refresh_token", account.getToken());
         addAddition("root_folder_id", account.getFolder());
         addAddition("device_id", deviceId);

@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.entity.DriverAccount;
 
 public class Pan189 extends Storage {
     public Pan189(DriverAccount account) {
-        super(account.getId(), "189CloudPC", getMountPath(account));
+        super(account, "189CloudPC");
         addAddition("username", account.getUsername());
         addAddition("password", account.getPassword());
         addAddition("validate_code", account.getToken());

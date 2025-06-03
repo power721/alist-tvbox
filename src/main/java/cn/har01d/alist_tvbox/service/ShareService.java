@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import cn.har01d.alist_tvbox.storage.UrlTree;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
@@ -224,8 +225,7 @@ public class ShareService {
                 try {
                     Storage storage = new Storage(alias.getId(), "Alias", alias.getPath(), String.format("{\"paths\":\"%s\"}", Utils.getAliasPaths(alias.getContent())));
                     storage.setCacheExpiration(0);
-                    int count = aListLocalService.saveStorage(storage);
-                    log.info("insert Alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
+                    aListLocalService.saveStorage(storage);
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
                 }
@@ -247,8 +247,7 @@ public class ShareService {
                 String addition = String.format("{\"root_folder_path\":\"%s\",\"url\":\"%s\",\"meta_password\":\"%s\",\"token\":\"%s\",\"username\":\"\",\"password\":\"\"}", getFolder(site), site.getUrl(), site.getPassword(), site.getToken());
                 Storage storage = new Storage(id, driver, path, addition);
                 storage.setCacheExpiration(0);
-                int count = aListLocalService.saveStorage(storage);
-                log.info("insert Site {}:{} {}, result: {}", site.getId(), site.getName(), site.getUrl(), count);
+                aListLocalService.saveStorage(storage);
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());
             }
@@ -539,8 +538,7 @@ public class ShareService {
 
         if (storage != null) {
             storage.setDisabled(disabled);
-            int code = aListLocalService.saveStorage(storage);
-            log.info("insert Share {} {}: {}, result: {}", share.getId(), share.getShareId(), getMountPath(share), code);
+            aListLocalService.saveStorage(storage);
         }
 
         return storage;
@@ -596,7 +594,8 @@ public class ShareService {
             log.info("read tv from file");
             try {
                 StringBuilder sb = parseTvFile(file);
-                Utils.executeUpdate("INSERT INTO x_storages VALUES(2050,'/\uD83C\uDDF9\uD83C\uDDFB直播/我的自选',0,'UrlTree',0,'work','{\"url_structure\":\"" + sb + "\",\"head_size\":false}','','2023-06-20 12:00:00+00:00',0,'name','','',0,'302_redirect','');");
+                Storage storage = new UrlTree(2050, "/\uD83C\uDDF9\uD83C\uDDFB直播/我的自选", sb.toString());
+                aListLocalService.saveStorage(storage);
             } catch (Exception e) {
                 log.warn("", e);
             }

@@ -4,7 +4,8 @@ import cn.har01d.alist_tvbox.entity.Share;
 
 public class Local extends Storage {
     public Local(Share share) {
-        super(share.getId(), "Local", getMountPath(share), share.getTime());
+        super(share, "Local");
+        setCacheExpiration(0);
         setWebdavPolicy("native_proxy");
         addAddition("root_folder_id", share.getFolderId());
         addAddition("thumbnail", false);

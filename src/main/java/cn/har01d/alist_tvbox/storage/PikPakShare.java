@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.entity.Share;
 
 public class PikPakShare extends Storage {
     public PikPakShare(Share share) {
-        super(share.getId(), "PikPakShare", getMountPath(share), share.getTime());
+        super(share, "PikPakShare");
         addAddition("share_id", share.getShareId());
         addAddition("share_pwd", share.getPassword());
         addAddition("root_folder_id", share.getFolderId());

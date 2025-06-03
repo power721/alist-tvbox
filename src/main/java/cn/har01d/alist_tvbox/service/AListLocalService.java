@@ -119,13 +119,14 @@ public class AListLocalService {
         return response.getBody();
     }
 
-    public int saveStorage(Storage storage) {
-        String time = storage.getTime().atZone(ZoneId.systemDefault()).toString();
+    public void saveStorage(Storage storage) {
+        String time = storage.getTime().atZone(ZoneId.systemDefault()).toLocalDateTime().toString();
         String sql = "INSERT INTO x_storages " +
-                "(id,mount_path,order,driver,cache_expiration,status,addition,modified,disabled,order_by,order_direction,extract_folder,web_proxy,webdav_policy) " +
+                "(id,mount_path,\"order\",driver,cache_expiration,status,addition,modified,disabled,order_by,order_direction,extract_folder,web_proxy,webdav_policy) " +
                 "VALUES (%d,'%s',0,'%s',%d,'work','%s','%s',%d,'name','asc','front',%d,'%s');";
-        return Utils.executeUpdate(String.format(sql, storage.getId(), storage.getPath(), storage.getDriver(),
+        int code = Utils.executeUpdate(String.format(sql, storage.getId(), storage.getPath(), storage.getDriver(),
                 storage.getCacheExpiration(), storage.getAddition(), time, storage.isDisabled() ? 1 : 0, storage.isWebProxy() ? 1 : 0, storage.getWebdavPolicy()));
+        log.info("[{}] insert {} storage : {} result: {}", storage.getId(), storage.getDriver(), storage.getPath(), code);
     }
 
     public void setToken(Integer accountId, String key, String value) {

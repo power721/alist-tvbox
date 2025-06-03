@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.entity.Share;
 
 public class UCShare extends Storage {
     public UCShare(Share share) {
-        super(share.getId(), "UCShare", getMountPath(share), share.getTime());
+        super(share, "UCShare");
         setWebdavPolicy("native_proxy");
         addAddition("share_id", share.getShareId());
         addAddition("share_pwd", share.getPassword());

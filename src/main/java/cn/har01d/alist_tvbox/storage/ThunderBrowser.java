@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.entity.DriverAccount;
 
 public class ThunderBrowser extends Storage {
     public ThunderBrowser(DriverAccount account) {
-        super(account.getId(), "ThunderBrowser", getMountPath(account));
+        super(account, "ThunderBrowser");
         addAddition("username", account.getUsername());
         addAddition("password", account.getPassword());
         addAddition("safe_password", account.getSafePassword());

@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.dto.AListAliasDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.storage.Alias;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -45,9 +46,8 @@ public class AListAliasService {
         try {
             String token = accountService.login();
             alias.setId(shareId++);
-            String sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'name','asc','front',0,'302_redirect','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
-            log.info("insert alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
+            Alias storage = new Alias(alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent()));
+            aListLocalService.saveStorage(storage);
             aliasRepository.save(alias);
             shareService.enableStorage(alias.getId(), token);
         } catch (Exception e) {
@@ -71,10 +71,9 @@ public class AListAliasService {
             String sql = "DELETE FROM x_storages WHERE id = " + id;
             Utils.executeUpdate(sql);
 
-            sql = "INSERT INTO x_storages VALUES(%d,'%s',0,'Alias',0,'work','{\"paths\":\"%s\"}','','2023-06-20 12:00:00+00:00',1,'name','asc','front',0,'302_redirect','',0,0,0);";
-            int count = Utils.executeUpdate(String.format(sql, alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent())));
-            log.info("update alias {}: {}, result: {}", alias.getId(), alias.getPath(), count);
-
+            Alias storage = new Alias(alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent()));
+            storage.setDisabled(true);
+            aListLocalService.saveStorage(storage);
             shareService.enableStorage(id, token);
         } catch (Exception e) {
             throw new BadRequestException(e);

@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.entity.DriverAccount;
 
 public class UC extends Storage {
     public UC(DriverAccount account) {
-        super(account.getId(), "UC", getMountPath(account));
+        super(account, "UC");
         setWebProxy(account.isUseProxy());
         setWebdavPolicy("native_proxy");
         addAddition("cookie", account.getCookie());

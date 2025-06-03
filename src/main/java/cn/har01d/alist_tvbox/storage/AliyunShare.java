@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.entity.Share;
 
 public class AliyunShare extends Storage {
     public AliyunShare(Share share) {
-        super(share.getId(), "AliyunShare", getMountPath(share), share.getTime());
+        super(share, "AliyunShare");
         addAddition("share_id", share.getShareId());
         addAddition("share_pwd", share.getPassword());
         addAddition("root_folder_id", share.getFolderId());

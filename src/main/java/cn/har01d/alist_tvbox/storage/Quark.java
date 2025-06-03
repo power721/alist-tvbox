@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.entity.DriverAccount;
 
 public class Quark extends Storage {
     public Quark(DriverAccount account) {
-        super(account.getId(), "QuarkShare", getMountPath(account));
+        super(account, "Quark");
         setWebProxy(account.isUseProxy());
         setWebdavPolicy("native_proxy");
         addAddition("cookie", account.getCookie());

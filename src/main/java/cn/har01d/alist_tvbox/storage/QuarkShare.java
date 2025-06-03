@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.entity.Share;
 
 public class QuarkShare extends Storage {
     public QuarkShare(Share share) {
-        super(share.getId(), "QuarkShare", getMountPath(share), share.getTime());
+        super(share, "QuarkShare");
         setWebdavPolicy("native_proxy");
         addAddition("share_id", share.getShareId());
         addAddition("share_pwd", share.getPassword());
