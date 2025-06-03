@@ -6,8 +6,8 @@ public class Pan123Share extends Storage {
     public Pan123Share(Share share) {
         super(share, "123PanShare");
         addAddition("share_id", share.getShareId());
-        addAddition("receive_code", share.getPassword());
-        addAddition("share_pwd", share.getFolderId());
+        addAddition("share_pwd", share.getPassword());
+        addAddition("root_folder_id", share.getFolderId());
         buildAddition();
     }
 }

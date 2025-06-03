@@ -11,6 +11,7 @@ public class Pan115 extends Storage {
         addAddition("qrcode_token", account.getToken());
         addAddition("root_folder_id", account.getFolder());
         addAddition("page_size", 1000);
+        addAddition("limit_rate", 2);
         buildAddition();
     }
 }

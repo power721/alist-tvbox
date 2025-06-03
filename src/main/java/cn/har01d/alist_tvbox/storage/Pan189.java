@@ -9,6 +9,12 @@ public class Pan189 extends Storage {
         addAddition("password", account.getPassword());
         addAddition("validate_code", account.getToken());
         addAddition("root_folder_id", account.getFolder());
+        addAddition("order_by", "filename");
+        addAddition("order_direction", "asc");
+        addAddition("type", "personal");
+        addAddition("upload_method", "stream");
+        addAddition("upload_thread", "3");
+        addAddition("rapid_upload", true);
         buildAddition();
     }
 }
