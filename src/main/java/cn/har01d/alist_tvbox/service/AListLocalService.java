@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.AliTokensResponse;
 import cn.har01d.alist_tvbox.model.SettingResponse;
+import cn.har01d.alist_tvbox.storage.Storage;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ import org.springframework.web.client.RestTemplate;
 import java.io.File;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -55,45 +57,45 @@ public class AListLocalService {
     @PostConstruct
     public void setup() {
         String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
-        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('external_port','" + port + "','','number','',1,0);");
+        setSetting("external_port", port, "number");
         String url = settingRepository.findById("open_token_url").map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token");
-        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_token_url','" + url + "','','string','',1,0);");
+        setSetting("open_token_url", url, "string");
         String apiKey = settingRepository.findById("api_key").map(Setting::getValue).orElse("");
-        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('atv_api_key','" + apiKey + "','','string','',1,0);");
+        setSetting("atv_api_key", apiKey, "string");
         String clientId = settingRepository.findById("open_api_client_id").map(Setting::getValue).orElse("");
-        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_api_client_id','" + clientId + "','','string','',1,0);");
+        setSetting("open_api_client_id", clientId, "string");
         String clientSecret = settingRepository.findById("open_api_client_secret").map(Setting::getValue).orElse("");
-        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('open_api_client_secret','" + clientSecret + "','','string','',1,0);");
+        setSetting("open_api_client_secret", clientSecret, "string");
         String token = settingRepository.findById("token").map(Setting::getValue).orElse("");
         Utils.executeUpdate("UPDATE x_setting_items SET value = '" + StringUtils.isNotBlank(token) + "' WHERE key = 'sign_all'");
         String code = settingRepository.findById("delete_code_115").map(Setting::getValue).orElse("");
-        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('delete_code_115','" + code + "','','string','',1,0);");
+        setSetting("delete_code_115", code, "string");
         String time = settingRepository.findById("delete_delay_time").map(Setting::getValue).orElse("900");
-        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('delete_delay_time','" + time + "','','number','',1,0)");
+        setSetting("delete_delay_time", time, "number");
         String aliTo115 = settingRepository.findById("ali_to_115").map(Setting::getValue).orElse("false");
-        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_to_115','" + aliTo115 + "','','bool','',1,0)");
+        setSetting("ali_to_115", aliTo115, "bool");
         String roundRobin = settingRepository.findById("driver_round_robin").map(Setting::getValue).orElse("false");
-        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('driver_round_robin','" + roundRobin + "','','bool','',1,0)");
+        setSetting("driver_round_robin", roundRobin, "bool");
         String lazy = settingRepository.findById("ali_lazy_load").map(Setting::getValue).orElse("true");
-        Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_lazy_load','" + lazy + "','','bool','',1,0)");
+        setSetting("ali_lazy_load", lazy, "bool");
     }
 
     public void setSetting(String key, String value, String type) {
-        log.info("update setting {}={}", key, value);
-        Utils.executeUpdate(String.format("INSERT INTO x_setting_items VALUES('%s','%s','','%s','',1,0)", key, value, type));
+        log.debug("set setting {}={}", key, value);
+        Utils.executeUpdate(String.format("INSERT INTO x_setting_items (key,value,type,flag,\"group\") VALUES('%s','%s','%s',1,0)", key, value, type));
         int code = Utils.executeUpdate(String.format("UPDATE x_setting_items SET value = '%s' WHERE key = '%s'", value, key));
-        log.info("update setting by SQL: {}", code);
+        log.info("update setting by SQL: {} {}", key, code);
     }
 
     public void updateSetting(String key, String value, String type) {
-        log.info("update setting {}={}", key, value);
         if (checkStatus() >= 2) {
+            log.debug("update setting {}={}", key, value);
             Map<String, Object> body = new HashMap<>();
             body.put("key", key);
             body.put("value", value);
             body.put("type", type);
             body.put("flag", 1);
-            body.put("group", 4);
+            body.put("group", 0);
             body.put("help", "");
             body.put("options", "");
             HttpHeaders headers = new HttpHeaders();
@@ -103,9 +105,7 @@ public class AListLocalService {
             SettingResponse response = restTemplate.postForObject("/api/admin/setting/update", entity, SettingResponse.class);
             log.debug("update setting by API: {}", response);
         } else {
-            Utils.executeUpdate(String.format("INSERT INTO x_setting_items VALUES('%s','%s','','%s','',1,0)", key, value, type));
-            int code = Utils.executeUpdate(String.format("UPDATE x_setting_items SET value = '%s' WHERE key = '%s'", value, key));
-            log.info("update setting by SQL: {}", code);
+            setSetting(key, value, type);
         }
     }
 
@@ -117,6 +117,15 @@ public class AListLocalService {
         String url = "/api/admin/setting/get?key=" + key;
         ResponseEntity<SettingResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, SettingResponse.class);
         return response.getBody();
+    }
+
+    public int saveStorage(Storage storage) {
+        String time = storage.getTime().atZone(ZoneId.systemDefault()).toString();
+        String sql = "INSERT INTO x_storages " +
+                "(id,mount_path,order,driver,cache_expiration,status,addition,modified,disabled,order_by,order_direction,extract_folder,web_proxy,webdav_policy) " +
+                "VALUES (%d,'%s',0,'%s',%d,'work','%s','%s',%d,'name','asc','front',%d,'%s');";
+        return Utils.executeUpdate(String.format(sql, storage.getId(), storage.getPath(), storage.getDriver(),
+                storage.getCacheExpiration(), storage.getAddition(), time, storage.isDisabled() ? 1 : 0, storage.isWebProxy() ? 1 : 0, storage.getWebdavPolicy()));
     }
 
     public void setToken(Integer accountId, String key, String value) {

@@ -14,6 +14,7 @@ import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
@@ -41,6 +42,7 @@ public class SiteService {
     private final AppProperties appProperties;
     private final SiteRepository siteRepository;
     private final SettingRepository settingRepository;
+    private final AListLocalService aListLocalService;
     private final JdbcTemplate jdbcTemplate;
     private final RestTemplate restTemplate;
     private String aListToken = "";
@@ -48,11 +50,13 @@ public class SiteService {
     public SiteService(AppProperties appProperties,
                        SiteRepository siteRepository,
                        SettingRepository settingRepository,
+                       AListLocalService aListLocalService,
                        JdbcTemplate jdbcTemplate,
                        RestTemplateBuilder builder) {
         this.appProperties = appProperties;
         this.siteRepository = siteRepository;
         this.settingRepository = settingRepository;
+        this.aListLocalService = aListLocalService;
         this.jdbcTemplate = jdbcTemplate;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
@@ -155,8 +159,7 @@ public class SiteService {
             } else {
                 aListToken = site.getToken();
             }
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('token','" + aListToken + "','','string','',1,0);");
-            Utils.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
+            aListLocalService.setSetting("token", aListToken, "string");
         } catch (Exception e) {
             log.warn("", e);
         }

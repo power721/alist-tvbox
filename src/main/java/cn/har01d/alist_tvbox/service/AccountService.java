@@ -194,7 +194,7 @@ public class AccountService {
         accountRepository.getFirstByMasterTrue().map(Account::getId).ifPresent(id -> {
             int storageId = base + (id - 1) * 2;
             log.info("updateAliAccountId {}", storageId);
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + storageId + "','','number','',0,1)");
+            aListLocalService.setSetting("ali_account_id", String.valueOf(storageId), "number");
         });
     }
 
@@ -781,7 +781,7 @@ public class AccountService {
         if (count == 0) {
             updateTokens();
             int storageId = base + (account.getId() - 1) * 2;
-            Utils.executeUpdate("INSERT INTO x_setting_items VALUES('ali_account_id','" + storageId + "','','number','',1,0)");
+            aListLocalService.setSetting("ali_account_id", String.valueOf(storageId), "number");
             aListLocalService.startAListServer();
         } else if (account.isMaster()) {
             log.info("sync tokens for account {}", account);
