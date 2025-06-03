@@ -92,6 +92,9 @@
             <el-button type="primary" @click="show115QrCode">扫码获取</el-button>
           </span>
         </el-form-item>
+<!--        <el-form-item label="UT" v-if="form.type=='UC'">-->
+<!--          <el-input v-model="form.token"/>-->
+<!--        </el-form-item>-->
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
           <el-input v-model="form.token" type="textarea" :rows="5"/>
           <a href="https://yun.139.com/" target="_blank">移动云盘</a>
