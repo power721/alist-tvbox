@@ -57,7 +57,7 @@ public class ProxyService {
         String url = fsDetail.getRawUrl();
         String driver = fsDetail.getProvider();
         // check url for Alias
-        if (proxyDrivers.contains(driver) || url.contains("115cdn.net") || url.contains("aliyundrive")) {
+        if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive") || url.contains("quark.cn") || url.contains("uc.cn")) {
             log.debug("{} {}", driver, url);
             url = buildAListProxyUrl(site, path, fsDetail.getSign());
         } else {
