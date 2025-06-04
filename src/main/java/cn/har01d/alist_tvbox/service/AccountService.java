@@ -972,7 +972,10 @@ public class AccountService {
 
         String token = status >= 2 ? login() : "";
         int storageId = base + (account.getId() - 1) * 2;
-        if (status >= 2) {
+        if (status == 0) {
+            Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + storageId);
+            Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + (storageId + 1));
+        } else {
             deleteStorage(storageId, token);
             deleteStorage(storageId + 1, token);
         }
