@@ -68,11 +68,10 @@ public class Storage {
         }
     }
 
-    public Storage(int id, String driver, String path, String addition) {
+    public Storage(int id, String driver, String path) {
         this.id = id;
         this.driver = driver;
         this.path = path;
-        this.addition = addition;
     }
 
     public void addAddition(String key, Object value) {

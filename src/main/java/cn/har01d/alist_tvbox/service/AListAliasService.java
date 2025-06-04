@@ -46,7 +46,7 @@ public class AListAliasService {
         try {
             String token = accountService.login();
             alias.setId(shareId++);
-            Alias storage = new Alias(alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent()));
+            Alias storage = new Alias(alias);
             aListLocalService.saveStorage(storage);
             aliasRepository.save(alias);
             shareService.enableStorage(alias.getId(), token);
@@ -71,7 +71,7 @@ public class AListAliasService {
             String sql = "DELETE FROM x_storages WHERE id = " + id;
             Utils.executeUpdate(sql);
 
-            Alias storage = new Alias(alias.getId(), alias.getPath(), Utils.getAliasPaths(alias.getContent()));
+            Alias storage = new Alias(alias);
             storage.setDisabled(true);
             aListLocalService.saveStorage(storage);
             shareService.enableStorage(id, token);

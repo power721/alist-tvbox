@@ -61,6 +61,7 @@ import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.storage.AList;
+import cn.har01d.alist_tvbox.storage.Alias;
 import cn.har01d.alist_tvbox.storage.AliyunShare;
 import cn.har01d.alist_tvbox.storage.Local;
 import cn.har01d.alist_tvbox.storage.Pan115Share;
@@ -224,7 +225,7 @@ public class ShareService {
         try {
             for (AListAlias alias : list) {
                 try {
-                    Storage storage = new Storage(alias.getId(), "Alias", alias.getPath(), String.format("{\"paths\":\"%s\"}", Utils.getAliasPaths(alias.getContent())));
+                    Alias storage = new Alias(alias);
                     aListLocalService.saveStorage(storage);
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
