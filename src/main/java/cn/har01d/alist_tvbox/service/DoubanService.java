@@ -273,7 +273,7 @@ public class DoubanService {
 
     private Stream<Path> getSqlFiles(String version) throws IOException {
         double local = Double.parseDouble(version);
-        return Files.list(Path.of("/data/atv/sql"))
+        return Files.list(Utils.getDataPath("atv", "sql"))
                 .filter(e -> Double.compare(getVersionNumber(e), local) > 0)
                 .sorted((a, b) -> Double.compare(getVersionNumber(a), getVersionNumber(b)));
     }

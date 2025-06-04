@@ -5,6 +5,8 @@ import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,7 +51,7 @@ public class PgTokenController {
     public Object version() throws IOException {
         String remote = restTemplate.getForObject("http://har01d.org/pg.version", String.class);
         String local = "";
-        Path path = Path.of("/data/pg_version.txt");
+        Path path = Utils.getDataPath("pg_version.txt");
         if (Files.exists(path)) {
             local = Files.readString(path);
         }
@@ -99,7 +101,7 @@ public class PgTokenController {
             objectNode.put("pikpak_password", account.getPassword());
         });
 
-        Path path = Path.of("/data/tokenm.json");
+        Path path = Utils.getDataPath("tokenm.json");
         if (Files.exists(path)) {
             json = Files.readString(path);
             String address = subscriptionService.readHostAddress();

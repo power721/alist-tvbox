@@ -8,6 +8,8 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,14 +52,14 @@ public class ZxConfigController {
     public Object version() throws IOException {
         String remote = restTemplate.getForObject("http://har01d.org/zx.version", String.class);
         String local = "";
-        Path path = Path.of("/data/zx_version.txt");
+        Path path = Utils.getDataPath("zx_version.txt");
         if (Files.exists(path)) {
             local = Files.readString(path);
         }
 
         String remote2 = restTemplate.getForObject("http://har01d.org/zx.base.version", String.class);
         String local2 = "";
-        path = Path.of("/data/zx_base_version.txt");
+        path = Utils.getDataPath("zx_base_version.txt");
         if (Files.exists(path)) {
             local2 = Files.readString(path);
         }
@@ -86,7 +88,7 @@ public class ZxConfigController {
 
         objectNode.put("exeAddr", subscriptionService.readHostAddress("/zx/lib/"));
 
-        Path path = Path.of("/data/zx.json");
+        Path path = Utils.getDataPath("zx.json");
         if (Files.exists(path)) {
             json = Files.readString(path);
             String address = subscriptionService.readHostAddress();

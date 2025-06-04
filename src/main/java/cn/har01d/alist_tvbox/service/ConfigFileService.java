@@ -50,7 +50,7 @@ public class ConfigFileService {
 
     private void loadLabels() {
         try {
-            Path path = Path.of("/data/label.txt");
+            Path path = Utils.getDataPath("label.txt");
             if (Files.exists(path)) {
                 loadLabels(Files.readAllLines(path));
             }
