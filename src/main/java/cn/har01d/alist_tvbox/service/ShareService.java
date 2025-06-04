@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import cn.har01d.alist_tvbox.storage.UrlTree;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
@@ -61,6 +60,7 @@ import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.Response;
+import cn.har01d.alist_tvbox.storage.AList;
 import cn.har01d.alist_tvbox.storage.AliyunShare;
 import cn.har01d.alist_tvbox.storage.Local;
 import cn.har01d.alist_tvbox.storage.Pan115Share;
@@ -72,6 +72,7 @@ import cn.har01d.alist_tvbox.storage.QuarkShare;
 import cn.har01d.alist_tvbox.storage.Storage;
 import cn.har01d.alist_tvbox.storage.ThunderShare;
 import cn.har01d.alist_tvbox.storage.UCShare;
+import cn.har01d.alist_tvbox.storage.UrlTree;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
@@ -240,23 +241,12 @@ public class ShareService {
                 continue;
             }
             try {
-                int id = 8000 + site.getId();
-                String driver = "AList V" + site.getVersion();
-                String path = "/\uD83C\uDF8E我的套娃/" + site.getName();
-                String addition = String.format("{\"root_folder_path\":\"%s\",\"url\":\"%s\",\"meta_password\":\"%s\",\"token\":\"%s\",\"username\":\"\",\"password\":\"\"}", getFolder(site), site.getUrl(), site.getPassword(), site.getToken());
-                Storage storage = new Storage(id, driver, path, addition);
+                AList storage = new AList(site);
                 aListLocalService.saveStorage(storage);
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());
             }
         }
-    }
-
-    private String getFolder(Site site) {
-        if (StringUtils.isBlank(site.getFolder())) {
-            return "/";
-        }
-        return site.getFolder();
     }
 
     private void loadOpenTokenUrl() {

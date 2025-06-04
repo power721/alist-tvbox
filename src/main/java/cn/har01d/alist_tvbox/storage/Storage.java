@@ -11,6 +11,7 @@ import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.PikPakAccount;
 import cn.har01d.alist_tvbox.entity.Share;
+import cn.har01d.alist_tvbox.entity.Site;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 
@@ -28,6 +29,12 @@ public class Storage {
     private Map<String, Object> map = new HashMap<>();
 
     public Storage() {
+    }
+
+    public Storage(Site site) {
+        this.id = 8000 + site.getId();
+        this.driver = "AList V" + site.getVersion();
+        this.path = "/\uD83C\uDF8E我的套娃/" + site.getName();
     }
 
     public Storage(PikPakAccount account) {
