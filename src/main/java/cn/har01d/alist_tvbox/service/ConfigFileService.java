@@ -6,9 +6,8 @@ import cn.har01d.alist_tvbox.entity.ConfigFile;
 import cn.har01d.alist_tvbox.entity.ConfigFileRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -18,7 +17,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;

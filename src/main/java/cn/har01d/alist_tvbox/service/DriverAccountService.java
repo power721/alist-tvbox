@@ -417,7 +417,6 @@ public class DriverAccountService {
     public String getRefreshToken(String type, String queryToken) {
         if (DriverType.QUARK.name().equals(type)) {
             return getQuarkCookie(queryToken);
-
         }
         if (DriverType.UC.name().equals(type)) {
             return getUcCookie(queryToken);
