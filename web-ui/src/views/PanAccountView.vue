@@ -110,8 +110,12 @@
         <el-form-item label="Token" v-if="form.type=='PAN115'">
           <el-input v-model="form.token"/>
         </el-form-item>
-        <el-form-item label="Token" v-if="form.type=='QUARK_TV'||form.type=='UC_TV'||form.type=='BAIDU'" required>
+        <el-form-item label="Token" v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
           <el-input v-model="form.token" type="textarea" :rows="3"/>
+        </el-form-item>
+        <el-form-item label="Token" v-if="form.type=='BAIDU'" required>
+          <el-input v-model="form.token" type="textarea" :rows="3"/>
+          <a href="https://openapi.baidu.com/oauth/2.0/authorize?response_type=code&client_id=iYCeC9g08h5vuP9UqvPHKKSVrKFXGa1v&redirect_uri=https://alist.nn.ci/tool/baidu/callback&scope=basic,netdisk&qrcode=1" target="_blank">获取刷新令牌</a>
         </el-form-item>
         <el-form-item v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
