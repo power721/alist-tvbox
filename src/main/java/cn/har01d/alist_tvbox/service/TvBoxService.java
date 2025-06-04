@@ -814,7 +814,7 @@ public class TvBoxService {
         }
 
         List<MovieDetail> result = new ArrayList<>();
-        for (File file : Utils.listFiles("/data/index/" + site.getId(), "txt")) {
+        for (File file : Utils.listFiles(Utils.getIndexPath(String.valueOf(site.getId())), "txt")) {
             result.addAll(searchFromIndexFile(site, ac, keyword, file.getAbsolutePath()));
         }
 
@@ -855,7 +855,7 @@ public class TvBoxService {
 
     private List<MovieDetail> searchByXiaoya(Site site, String ac, String keyword) throws IOException {
         List<MovieDetail> list = new ArrayList<>();
-        for (File file : Utils.listFiles("/data/index/" + site.getId(), "txt")) {
+        for (File file : Utils.listFiles(Utils.getIndexPath(String.valueOf(site.getId())), "txt")) {
             list.addAll(searchFromIndexFile(site, ac, keyword, file.getAbsolutePath()));
         }
 

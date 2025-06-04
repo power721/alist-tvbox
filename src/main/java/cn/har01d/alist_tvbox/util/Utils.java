@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.util;
 
+import static org.aspectj.weaver.tools.cache.SimpleCacheFactory.path;
+
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
@@ -289,6 +291,16 @@ public final class Utils {
         return Path.of(base, path);
     }
 
+    public static Path getIndexPath(String... path) {
+        String base = inDocker ? "/data/index" : "/opt/atv/data/index";
+        return Path.of(base, path);
+    }
+
+    public static Path getLogPath(String name) {
+        String base = inDocker ? "/data/log" : "/opt/atv/log";
+        return Path.of(base, name);
+    }
+
     public static long durationToSeconds(String duration) {
         if (StringUtils.isBlank(duration)) {
             return 0;
@@ -393,7 +405,7 @@ public final class Utils {
         return text.trim();
     }
 
-    public static Collection<File> listFiles(String path, String... ext) {
-        return FileUtils.listFiles(new File(path), ext, false);
+    public static Collection<File> listFiles(Path path, String... ext) {
+        return FileUtils.listFiles(path.toFile(), ext, false);
     }
 }

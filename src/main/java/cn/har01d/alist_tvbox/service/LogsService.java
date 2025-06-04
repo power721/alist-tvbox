@@ -1,14 +1,5 @@
 package cn.har01d.alist_tvbox.service;
 
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -22,9 +13,45 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import cn.har01d.alist_tvbox.util.Utils;
+import lombok.extern.slf4j.Slf4j;
+
 @Slf4j
 @Service
 public class LogsService {
+    private final ObjectMapper objectMapper;
+
+    private String aListLogPath = "/opt/alist/log/alist.log";
+
+    public LogsService(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+        readAListLogPath();
+    }
+
+    public void readAListLogPath() {
+        Path path = Paths.get("/opt/alist/data/config.json");
+        if (Files.exists(path)) {
+            try {
+                String text = Files.readString(path);
+                JsonNode json = objectMapper.readTree(text);
+                aListLogPath = json.get("log").get("name").asText();
+                log.info("AList log path: {}", aListLogPath);
+            } catch (IOException e) {
+                log.warn("read AList config failed", e);
+            }
+        }
+    }
 
     private String fixLine(String text) {
         return text
@@ -41,11 +68,11 @@ public class LogsService {
 
     private Path getLogFile(String type) {
         if ("alist".equals(type)) {
-            return Paths.get("/opt/alist/log/alist.log");
+            return Paths.get(aListLogPath);
         } else if ("init".equals(type)) {
-            return Paths.get("/data/log/init.log");
+            return Utils.getLogPath("init.log");
         } else {
-            return Paths.get("/data/log/app.log");
+            return Utils.getLogPath("app.log");
         }
     }
 
@@ -116,7 +143,7 @@ public class LogsService {
     }
 
     public FileSystemResource downloadLog() throws IOException {
-        File file = new File("/opt/alist/log/alist.log");
+        File file = new File(aListLogPath);
         if (file.exists()) {
             FileUtils.copyFileToDirectory(file, new File("/opt/atv/log/"));
         }
