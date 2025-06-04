@@ -10,6 +10,7 @@ import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.storage.BaiduNetdisk;
 import cn.har01d.alist_tvbox.storage.Open115;
 import cn.har01d.alist_tvbox.storage.Pan115;
 import cn.har01d.alist_tvbox.storage.Pan123;
@@ -182,16 +183,14 @@ public class DriverAccountService {
             storage = new Pan115(account);
         } else if (account.getType() == DriverType.OPEN115) {
             storage = new Open115(account);
+        } else if (account.getType() == DriverType.BAIDU) {
+            storage = new BaiduNetdisk(account);
         }
 
         if (storage != null) {
             storage.setDisabled(disabled);
             aListLocalService.saveStorage(storage);
         }
-    }
-
-    private String getMountPath(DriverAccount account) {
-        return Storage.getMountPath(account);
     }
 
     public List<DriverAccount> list() {
@@ -317,6 +316,8 @@ public class DriverAccountService {
                 dto.setFolder("0");
             } else if (dto.getType() == DriverType.CLOUD189) {
                 dto.setFolder("-11");
+            } else if (dto.getType() == DriverType.BAIDU) {
+                dto.setFolder("/");
             }
         }
         if (dto.getCookie() != null) {

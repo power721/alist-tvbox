@@ -25,6 +25,7 @@
           <span v-else-if="scope.row.type=='CLOUD189'">天翼云盘</span>
           <span v-else-if="scope.row.type=='PAN139'">移动云盘</span>
           <span v-else-if="scope.row.type=='PAN123'">123网盘</span>
+          <span v-else-if="scope.row.type=='BAIDU'">百度网盘</span>
         </template>
       </el-table-column>
       <el-table-column prop="name" label="名称" sortable width="200"/>
@@ -70,6 +71,7 @@
             <el-radio label="CLOUD189" size="large">天翼云盘</el-radio>
             <el-radio label="PAN139" size="large">移动云盘</el-radio>
             <el-radio label="PAN123" size="large">123网盘</el-radio>
+            <el-radio label="BAIDU" size="large">百度网盘</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'">
@@ -108,7 +110,7 @@
         <el-form-item label="Token" v-if="form.type=='PAN115'">
           <el-input v-model="form.token"/>
         </el-form-item>
-        <el-form-item label="Token" v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
+        <el-form-item label="Token" v-if="form.type=='QUARK_TV'||form.type=='UC_TV'||form.type=='BAIDU'" required>
           <el-input v-model="form.token" type="textarea" :rows="3"/>
         </el-form-item>
         <el-form-item v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
@@ -323,6 +325,9 @@ const getTypeName = (type: string) => {
   if (type == 'PAN123') {
     return '123网盘'
   }
+  if (type == 'BAIDU') {
+    return '百度网盘'
+  }
   return '未知'
 }
 
@@ -351,6 +356,8 @@ const fullPath = (share: any) => {
     return '/我的移动云盘/' + path
   } else if (share.type == 'PAN123') {
     return '/我的123网盘/' + path
+  } else if (share.type == 'BAIDU') {
+    return '/我的百度网盘/' + path
   } else {
     return '/网盘/' + path
   }

@@ -110,6 +110,8 @@ public class Storage {
             return "/我的123分享/" + path;
         } else if (share.getType() == 6) {
             return "/我的移动分享/" + path;
+        } else if (share.getType() == 10) {
+            return "/我的百度分享/" + path;
         }
         return path;
     }
@@ -138,6 +140,8 @@ public class Storage {
             return "/我的移动云盘/" + account.getName();
         } else if (account.getType() == DriverType.PAN123) {
             return "/我的123网盘/" + account.getName();
+        } else if (account.getType() == DriverType.BAIDU) {
+            return "/我的百度网盘/" + account.getName();
         }
         return "/网盘" + account.getName();
         // cn.har01d.alist_tvbox.service.TvBoxService.addMyFavorite

@@ -62,6 +62,7 @@ import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.storage.AList;
 import cn.har01d.alist_tvbox.storage.Alias;
 import cn.har01d.alist_tvbox.storage.AliyunShare;
+import cn.har01d.alist_tvbox.storage.BaiduShare;
 import cn.har01d.alist_tvbox.storage.Local;
 import cn.har01d.alist_tvbox.storage.Pan115Share;
 import cn.har01d.alist_tvbox.storage.Pan123Share;
@@ -446,6 +447,8 @@ public class ShareService {
             fileName = "123_shares.txt";
         } else if (type == 0) {
             fileName = "ali_shares.txt";
+        } else if (type == 4) {
+            fileName = "baidu_shares.txt";
         }
 
         for (Share share : list) {
@@ -522,6 +525,8 @@ public class ShareService {
             storage = new Pan123Share(share);
         } else if (share.getType() == 6) {
             storage = new Pan139Share(share);
+        } else if (share.getType() == 10) {
+            storage = new BaiduShare(share);
         }
 
         if (storage != null) {
@@ -791,6 +796,17 @@ public class ShareService {
             return true;
         }
 
+        m = SHARE_BD_LINK.matcher(url);
+        if (m.find()) {
+            share.setType(10);
+            share.setShareId(m.group(1));
+            String code = m.group(2);
+            if (code != null) {
+                share.setPassword(code);
+            }
+            return true;
+        }
+
         m = SHARE_PK_LINK.matcher(url);
         if (m.find()) {
             share.setType(1);
@@ -973,7 +989,7 @@ public class ShareService {
                 share.setFolderId("");
             } else if (share.getType() == 3 || share.getType() == 5 || share.getType() == 7 || share.getType() == 8) {
                 share.setFolderId("0");
-            } else if (share.getType() == 4) {
+            } else if (share.getType() == 10) {
                 share.setFolderId("/");
             }
         }
