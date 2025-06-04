@@ -7,7 +7,7 @@ public class Local extends Storage {
         super(share, "Local");
         setCacheExpiration(0);
         setWebdavPolicy("native_proxy");
-        addAddition("root_folder_id", share.getFolderId());
+        addAddition("root_folder_path", share.getFolderId());
         addAddition("thumbnail", false);
         addAddition("show_hidden", true);
         addAddition("mkdir_perm", "777");
