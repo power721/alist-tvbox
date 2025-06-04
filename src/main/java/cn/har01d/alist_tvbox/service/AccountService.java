@@ -21,10 +21,13 @@ import cn.har01d.alist_tvbox.storage.AliyundriveOpen;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
@@ -1016,6 +1019,11 @@ public class AccountService {
     }
 
     public void delete(Integer id) {
+        int status = aListLocalService.checkStatus();
+        if (status == 1) {
+            throw new BadRequestException("AList服务启动中");
+        }
+
         Account account = accountRepository.findById(id).orElse(null);
         if (account != null) {
             accountRepository.deleteById(id);
