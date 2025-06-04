@@ -46,7 +46,7 @@ import java.util.Set;
 @Service
 public class DriverAccountService {
     public static final int IDX = 4000;
-    private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139);
+    private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139, DriverType.BAIDU);
     private static final Set<DriverType> COOKIE_TYPES = Set.of(DriverType.PAN115, DriverType.QUARK, DriverType.UC);
     private final PanAccountRepository panAccountRepository;
     private final DriverAccountRepository driverAccountRepository;

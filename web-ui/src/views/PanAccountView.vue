@@ -94,11 +94,8 @@
             <el-button type="primary" @click="show115QrCode">扫码获取</el-button>
           </span>
         </el-form-item>
-<!--        <el-form-item label="UT" v-if="form.type=='UC'">-->
-<!--          <el-input v-model="form.token"/>-->
-<!--        </el-form-item>-->
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
-          <el-input v-model="form.token" type="textarea" :rows="5"/>
+          <el-input v-model="form.token"/>
           <a href="https://yun.139.com/" target="_blank">移动云盘</a>
           <div class="hint"></div>
           <a href="https://alist.nn.ci/zh/guide/drivers/139.html" target="_blank">使用说明</a>
@@ -114,7 +111,7 @@
           <el-input v-model="form.token" type="textarea" :rows="3"/>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='BAIDU'" required>
-          <el-input v-model="form.token" type="textarea" :rows="3"/>
+          <el-input v-model="form.token"/>
           <a href="https://openapi.baidu.com/oauth/2.0/authorize?response_type=code&client_id=iYCeC9g08h5vuP9UqvPHKKSVrKFXGa1v&redirect_uri=https://alist.nn.ci/tool/baidu/callback&scope=basic,netdisk&qrcode=1" target="_blank">获取刷新令牌</a>
         </el-form-item>
         <el-form-item v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
@@ -135,7 +132,7 @@
         <el-form-item label="文件夹ID">
           <el-input v-model="form.folder"/>
         </el-form-item>
-        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'" label="加速代理">
+        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'" label="加速代理">
           <el-switch
             v-model="form.useProxy"
             inline-prompt
