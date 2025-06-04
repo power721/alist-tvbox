@@ -135,7 +135,7 @@ public class IndexService {
     @PostConstruct
     public void setup() {
         try {
-            Path path = Paths.get("/data/index/version.txt");
+            Path path = Utils.getDataPath("index", "version.txt");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
@@ -159,7 +159,7 @@ public class IndexService {
         }
 
         try {
-            Path path = Paths.get("/opt/atv/data/app_version");
+            Path path = Paths.get("/opt/atv/data/app_version"); // TODO:
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
@@ -965,7 +965,7 @@ public class IndexService {
 
     public List<FileItem> listIndexFiles(int id) {
         try {
-            Path path = Paths.get("/data/index/" + id);
+            Path path = Utils.getDataPath("index/" + id);
             return Files.list(path)
                     .filter(p -> p.getFileName().toString().endsWith(".txt"))
                     .sorted()

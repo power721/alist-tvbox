@@ -26,7 +26,7 @@ import java.util.zip.ZipOutputStream;
 public class IndexFileService {
     public Page<String> getIndexContent(Pageable pageable, String siteId, String index) throws IOException {
         List<String> list = new ArrayList<>();
-        Path file = Paths.get("/data/index", siteId, index + ".txt");
+        Path file = Utils.getDataPath("index", siteId, index + ".txt");
         if (!Files.exists(file)) {
             return new PageImpl<>(list);
         }
@@ -50,7 +50,7 @@ public class IndexFileService {
         if (index < 0) {
             throw new BadRequestException("行数不正确");
         }
-        Path file = Paths.get("/data/index", siteId, indexName + ".txt");
+        Path file = Utils.getDataPath("index", siteId, indexName + ".txt");
         if (!Files.exists(file)) {
             throw new BadRequestException("索引文件不存在");
         }
@@ -93,7 +93,7 @@ public class IndexFileService {
             }
 
             lines = lines.stream().map(e -> e.startsWith("./") ? e.substring(1) : e).toList();
-            Path path = Paths.get("/data/index", siteId, indexName + ".txt");
+            Path path = Utils.getDataPath("index", siteId, indexName + ".txt");
             if (!Files.exists(path)) {
                 Files.createDirectories(path.getParent());
                 Files.createFile(path);
@@ -110,7 +110,7 @@ public class IndexFileService {
     }
 
     public void deleteIndexFile(String siteId, String indexName) throws IOException {
-        Path path = Paths.get("/data/index", siteId, indexName + ".txt");
+        Path path = Utils.getDataPath("index", siteId, indexName + ".txt");
         Files.delete(path);
     }
 }

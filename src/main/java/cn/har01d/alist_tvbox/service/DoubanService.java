@@ -1,5 +1,45 @@
 package cn.har01d.alist_tvbox.service;
 
+import static cn.har01d.alist_tvbox.util.Constants.MOVIE_VERSION;
+import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+
+import org.apache.commons.lang3.StringUtils;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
@@ -21,51 +61,12 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
-import org.apache.commons.lang3.StringUtils;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.env.Environment;
-import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpHeaders;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
-import java.io.File;
-import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Stream;
-
-import static cn.har01d.alist_tvbox.util.Constants.MOVIE_VERSION;
-import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 
 @Slf4j
 @Service
@@ -124,7 +125,7 @@ public class DoubanService {
     @PostConstruct
     public void setup() {
         try {
-            Path path = Paths.get("/data/atv/movie_version");
+            Path path = Utils.getDataPath("atv/movie_version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
@@ -151,7 +152,7 @@ public class DoubanService {
                 }
 
                 log.debug("reset data.sql");
-                writeText("/data/atv/data.sql", "SELECT COUNT(*) FROM META;");
+                writeText("data.sql", "SELECT COUNT(*) FROM META;");
             }
         }
 
@@ -161,7 +162,7 @@ public class DoubanService {
 
     private void runCmd() {
         try {
-            Path path = Paths.get("/data/atv/cmd.sql");
+            Path path = Utils.getDataPath("atv/cmd.sql");
             if (Files.exists(path)) {
                 log.info("run sql from file {}", path);
                 try {
@@ -237,7 +238,7 @@ public class DoubanService {
 
     private String getCachedVersion() {
         try {
-            Path file = Paths.get("/data/atv/movie_version");
+            Path file = Utils.getDataPath("atv/movie_version");
             if (Files.exists(file)) {
                 return Files.readString(file).trim();
             }
@@ -461,7 +462,7 @@ public class DoubanService {
     }
 
     private Set<String> loadFailed() {
-        Path path = Paths.get("/data/atv/failed.txt");
+        Path path = Utils.getDataPath("atv/failed.txt");
         try {
             List<String> lines = Files.readAllLines(path).stream().filter(e -> !e.startsWith("/")).toList();
             return new HashSet<>(lines);
@@ -473,7 +474,7 @@ public class DoubanService {
 
     @Async
     public void scrape(Integer siteId, boolean force) throws IOException {
-        Path path = Paths.get("/data/index", String.valueOf(siteId), "custom_index.txt");
+        Path path = Utils.getDataPath("index", String.valueOf(siteId), "custom_index.txt");
         if (!Files.exists(path)) {
             throw new BadRequestException("索引文件不存在");
         }
@@ -518,13 +519,13 @@ public class DoubanService {
 
         taskService.completeTask(task.getId());
 
-        writeText("/data/atv/paths.txt", String.join("\n", paths));
-        writeText("/data/atv/failed.txt", String.join("\n", failed));
+        writeText("paths.txt", String.join("\n", paths));
+        writeText("failed.txt", String.join("\n", failed));
     }
 
-    private static void writeText(String path, String content) {
+    private static void writeText(String name, String content) {
         try {
-            Files.writeString(Paths.get(path), content);
+            Files.writeString(Utils.getDataPath("atv", name), content);
         } catch (Exception e) {
             log.warn("", e);
         }

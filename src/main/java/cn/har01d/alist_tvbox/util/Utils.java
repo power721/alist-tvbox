@@ -16,6 +16,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -48,8 +50,11 @@ public final class Utils {
             36, 20, 34, 44, 52
     };
 
+    public static boolean inDocker;
+
     static {
         readUserAgents();
+        inDocker = System.getenv("INSTALL") != null && Files.exists(Path.of("/entrypoint.sh"));
     }
 
     private static void readUserAgents() {
@@ -277,6 +282,11 @@ public final class Utils {
             }
         }
         return sb.toString();
+    }
+
+    public static Path getDataPath(String... path) {
+        String base = inDocker ? "/data" : "/opt/atv/data";
+        return Path.of(base, path);
     }
 
     public static long durationToSeconds(String duration) {

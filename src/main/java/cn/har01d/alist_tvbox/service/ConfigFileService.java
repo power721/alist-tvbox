@@ -7,6 +7,8 @@ import cn.har01d.alist_tvbox.entity.ConfigFileRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -85,11 +87,11 @@ public class ConfigFileService {
         readFile("/data/tv.txt");
         readFile("/data/proxy.txt");
 
-        if (Files.exists(Paths.get("/data/iptv.m3u"))) {
+        if (Files.exists(Utils.getDataPath("iptv.m3u"))) {
             readFile("/www/tvbox/iptv.m3u");
         }
 
-        if (Files.exists(Paths.get("/data/my.json"))) {
+        if (Files.exists(Utils.getDataPath("my.json"))) {
             readFile("/www/tvbox/my.json");
         }
 

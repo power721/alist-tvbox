@@ -19,6 +19,8 @@ import cn.har01d.alist_tvbox.entity.TmdbRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -302,7 +304,7 @@ public class TmdbService {
 
     @Async
     public void scrape(Integer siteId, String indexName, boolean force) throws IOException {
-        Path path = Paths.get("/data/index", String.valueOf(siteId), indexName + ".txt");
+        Path path = Utils.getDataPath("index", String.valueOf(siteId), indexName + ".txt");
         if (!Files.exists(path)) {
             throw new BadRequestException("索引文件不存在");
         }
@@ -355,8 +357,8 @@ public class TmdbService {
                 }
 
                 if (i > 0 && i % 10 == 0) {
-                    writeText("/data/atv/tmdb_paths.txt", String.join("\n", paths));
-                    writeText("/data/atv/tmdb_failed.txt", String.join("\n", failed));
+                    writeText("tmdb_paths.txt", String.join("\n", paths));
+                    writeText("tmdb_failed.txt", String.join("\n", failed));
                 }
             } catch (Exception e) {
                 log.warn("{}: {}", i, line, e);
@@ -365,8 +367,8 @@ public class TmdbService {
 
         taskService.completeTask(task.getId());
 
-        writeText("/data/atv/tmdb_paths.txt", String.join("\n", paths));
-        writeText("/data/atv/tmdb_failed.txt", String.join("\n", failed));
+        writeText("tmdb_paths.txt", String.join("\n", paths));
+        writeText("tmdb_failed.txt", String.join("\n", failed));
     }
 
     private String guessType(String path) {
@@ -382,16 +384,16 @@ public class TmdbService {
         return null;
     }
 
-    private static void writeText(String path, String content) {
+    private static void writeText(String name, String content) {
         try {
-            Files.writeString(Paths.get(path), content);
+            Files.writeString(Utils.getDataPath("atv", name), content);
         } catch (Exception e) {
             log.warn("", e);
         }
     }
 
     private Set<String> loadFailed() {
-        Path path = Paths.get("/data/atv/tmdb_failed.txt");
+        Path path = Utils.getDataPath("atv", "tmdb_failed.txt");
         try {
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path).stream().filter(e -> !e.startsWith("/")).toList();

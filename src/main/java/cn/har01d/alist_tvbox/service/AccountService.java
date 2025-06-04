@@ -219,7 +219,7 @@ public class AccountService {
     }
 
     private String readRefreshToken() {
-        Path path = Paths.get("/data/mytoken.txt");
+        Path path = Utils.getDataPath("mytoken.txt");
         if (Files.exists(path)) {
             try {
                 log.info("read refresh token from file");
@@ -235,7 +235,7 @@ public class AccountService {
     }
 
     private String readOpenToken() {
-        Path path = Paths.get("/data/myopentoken.txt");
+        Path path = Utils.getDataPath("myopentoken.txt");
         if (Files.exists(path)) {
             try {
                 log.info("read open token from file");
@@ -258,7 +258,7 @@ public class AccountService {
             }
 
             AListLogin login = new AListLogin();
-            Path pass = Paths.get("/data/guestpass.txt");
+            Path pass = Utils.getDataPath("guestpass.txt");
             if (Files.exists(pass)) {
                 log.info("read guest password from file");
                 List<String> lines = Files.readAllLines(pass);
@@ -269,7 +269,7 @@ public class AccountService {
                 }
             }
 
-            Path guest = Paths.get("/data/guestlogin.txt");
+            Path guest = Utils.getDataPath("guestlogin.txt");
             if (Files.exists(guest)) {
                 log.info("guestlogin.txt");
                 login.setUsername("dav");

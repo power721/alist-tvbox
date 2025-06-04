@@ -258,7 +258,7 @@ public class ShareService {
         try {
             String url = null;
             try {
-                Path file = Paths.get("/data/open_token_url.txt");
+                Path file = Utils.getDataPath("open_token_url.txt");
                 if (Files.exists(file)) {
                     url = Files.readString(file).trim();
                     log.debug("loadOpenTokenUrl {}", url);
@@ -301,7 +301,7 @@ public class ShareService {
         }
 
         try {
-            Path file = Paths.get("/data/open_token_url.txt");
+            Path file = Utils.getDataPath("open_token_url.txt");
             Files.writeString(file, url);
         } catch (Exception e) {
             log.warn("", e);
@@ -317,7 +317,7 @@ public class ShareService {
 
     private List<Share> loadSharesFromFile() {
         List<Share> list = new ArrayList<>();
-        Path path = Paths.get("/data/alishare_list.txt");
+        Path path = Utils.getDataPath("alishare_list.txt");
         if (Files.exists(path)) {
             try {
                 log.info("loading share list from file");
@@ -351,7 +351,7 @@ public class ShareService {
 
     private List<Share> loadPikPakFromFile() {
         List<Share> list = new ArrayList<>();
-        Path path = Paths.get("/data/pikpakshare_list.txt");
+        Path path = Utils.getDataPath("pikpakshare_list.txt");
         if (Files.exists(path)) {
             try {
                 log.info("loading PikPak share list from file");
@@ -578,7 +578,7 @@ public class ShareService {
     }
 
     private void readTvTxt() {
-        Path file = Paths.get("/data/tv.txt");
+        Path file = Utils.getDataPath("tv.txt");
         if (Files.exists(file)) {
             log.info("read tv from file");
             try {

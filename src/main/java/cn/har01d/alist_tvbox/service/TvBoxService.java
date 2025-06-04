@@ -265,7 +265,7 @@ public class TvBoxService {
         }
 
         try {
-            Path file = Paths.get("/data/category.txt");
+            Path file = Utils.getDataPath("category.txt");
             if (Files.exists(file)) {
                 String typeId = "";
                 List<FilterValue> filters = new ArrayList<>();

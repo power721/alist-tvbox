@@ -46,7 +46,7 @@ public class PikPakService {
             return;
         }
 
-        Path file = Paths.get("/data/pikpak.txt");
+        Path file = Utils.getDataPath("pikpak.txt");
         if (Files.exists(file)) {
             log.info("read PikPak account from file");
             try {
@@ -84,7 +84,7 @@ public class PikPakService {
     }
 
     private void readPikPakAccounts() {
-        Path file = Paths.get("/data/pikpak_list.txt");
+        Path file = Utils.getDataPath("pikpak_list.txt");
         if (Files.exists(file)) {
             log.info("read PikPak accounts from file");
             try {
