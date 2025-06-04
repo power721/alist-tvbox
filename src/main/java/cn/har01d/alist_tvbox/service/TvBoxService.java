@@ -2122,7 +2122,7 @@ public class TvBoxService {
     private boolean isMediaFormat(String name) {
         int index = name.lastIndexOf('.');
         if (index > 0) {
-            String suffix = name.substring(index + 1);
+            String suffix = name.substring(index + 1).toLowerCase();
             return appProperties.getFormats().contains(suffix);
         }
         return false;
@@ -2131,7 +2131,7 @@ public class TvBoxService {
     private boolean isSubtitleFormat(String name) {
         int index = name.lastIndexOf('.');
         if (index > 0) {
-            String suffix = name.substring(index + 1);
+            String suffix = name.substring(index + 1).toLowerCase();
             return appProperties.getSubtitles().contains(suffix);
         }
         return false;

@@ -7,6 +7,8 @@ public class BaiduNetdisk extends Storage {
         super(account, "BaiduNetdisk");
         addAddition("refresh_token", account.getToken());
         addAddition("root_folder_path", account.getFolder());
+        addAddition("download_api", "crack_video");
+        addAddition("only_list_video_file", true);
         buildAddition();
     }
 }
