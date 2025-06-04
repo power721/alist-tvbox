@@ -2,8 +2,8 @@ package cn.har01d.alist_tvbox.storage;
 
 import cn.har01d.alist_tvbox.entity.Share;
 
-public class BaiduShare2 extends Storage {
-    public BaiduShare2(Share share) {
+public class BaiduShare extends Storage {
+    public BaiduShare(Share share) {
         super(share, "BaiduShare2");
         addAddition("share_id", share.getShareId());
         addAddition("share_pwd", share.getPassword());

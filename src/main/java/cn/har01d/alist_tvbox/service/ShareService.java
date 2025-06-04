@@ -25,7 +25,7 @@ import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.storage.AList;
 import cn.har01d.alist_tvbox.storage.Alias;
 import cn.har01d.alist_tvbox.storage.AliyunShare;
-import cn.har01d.alist_tvbox.storage.BaiduShare2;
+import cn.har01d.alist_tvbox.storage.BaiduShare;
 import cn.har01d.alist_tvbox.storage.Local;
 import cn.har01d.alist_tvbox.storage.Pan115Share;
 import cn.har01d.alist_tvbox.storage.Pan123Share;
@@ -529,7 +529,7 @@ public class ShareService {
         } else if (share.getType() == 6) {
             storage = new Pan139Share(share);
         } else if (share.getType() == 10) {
-            storage = new BaiduShare2(share);
+            storage = new BaiduShare(share);
         }
 
         if (storage != null) {
