@@ -164,7 +164,7 @@
           <el-radio :label="6" size="large">移动分享</el-radio>
           <el-radio :label="2" size="large">迅雷分享</el-radio>
           <el-radio :label="3" size="large">123分享</el-radio>
-<!--          <el-radio :label="10" size="large">百度分享</el-radio>-->
+          <el-radio :label="10" size="large">百度分享</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
         </el-radio-group>
       </el-form-item>
@@ -225,7 +225,7 @@
           <el-radio :label="6" size="large">移动分享</el-radio>
           <el-radio :label="2" size="large">迅雷分享</el-radio>
           <el-radio :label="3" size="large">123分享</el-radio>
-<!--          <el-radio :label="10" size="large">百度分享</el-radio>-->
+          <el-radio :label="10" size="large">百度分享</el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="分享内容" label-width="120">
@@ -255,7 +255,7 @@
         <el-radio :label="6" size="large">移动分享</el-radio>
         <el-radio :label="2" size="large">迅雷分享</el-radio>
         <el-radio :label="3" size="large">123分享</el-radio>
-<!--        <el-radio :label="10" size="large">百度分享</el-radio>-->
+        <el-radio :label="10" size="large">百度分享</el-radio>
       </el-radio-group>
     </el-form-item>
     <template #footer>
