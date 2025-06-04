@@ -162,11 +162,11 @@ public class DoubanService {
 
     private void runCmd() {
         try {
-            Path path = Utils.getDataPath("atv/cmd.sql");
+            Path path = Utils.getDataPath("atv", "cmd.sql");
             if (Files.exists(path)) {
                 log.info("run sql from file {}", path);
                 try {
-                    jdbcTemplate.execute("RUNSCRIPT FROM '/data/atv/cmd.sql'");
+                    jdbcTemplate.execute("RUNSCRIPT FROM '" + path + "'");
                 } catch (Exception e) {
                     log.warn("execute sql file failed", e);
                 }
