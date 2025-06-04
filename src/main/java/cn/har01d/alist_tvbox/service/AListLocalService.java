@@ -120,6 +120,7 @@ public class AListLocalService {
     }
 
     public void saveStorage(Storage storage) {
+        Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + storage.getId());
         String time = storage.getTime().atZone(ZoneId.systemDefault()).toLocalDateTime().toString();
         String sql = "INSERT INTO x_storages " +
                 "(id,mount_path,\"order\",driver,cache_expiration,status,addition,modified,disabled,order_by,order_direction,extract_folder,web_proxy,webdav_policy) " +

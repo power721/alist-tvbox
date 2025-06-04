@@ -159,7 +159,7 @@ public class IndexService {
         }
 
         try {
-            Path path = Paths.get("data/app_version");
+            Path path = Paths.get("/opt/atv/data/app_version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
