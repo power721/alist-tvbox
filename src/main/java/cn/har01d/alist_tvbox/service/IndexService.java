@@ -55,7 +55,6 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -135,7 +134,7 @@ public class IndexService {
     @PostConstruct
     public void setup() {
         try {
-            Path path = Paths.get("/data/index/version.txt");
+            Path path = Utils.getIndexPath("version.txt");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
@@ -147,7 +146,7 @@ public class IndexService {
         }
 
         try {
-            Path path = Paths.get("/docker.version");
+            Path path = Path.of("/docker.version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
@@ -159,7 +158,7 @@ public class IndexService {
         }
 
         try {
-            Path path = Paths.get("data/app_version");
+            Path path = Path.of("/opt/atv/data/app_version"); // TODO:
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
@@ -316,7 +315,7 @@ public class IndexService {
     }
 
     public static void unzip(File file) throws IOException {
-        Path destFolderPath = Paths.get(file.getParent());
+        Path destFolderPath = Path.of(file.getParent());
 
         try (ZipFile zipFile = new ZipFile(file, ZipFile.OPEN_READ, StandardCharsets.UTF_8)) {
             Enumeration<? extends ZipEntry> entries = zipFile.entries();
@@ -965,7 +964,7 @@ public class IndexService {
 
     public List<FileItem> listIndexFiles(int id) {
         try {
-            Path path = Paths.get("/data/index/" + id);
+            Path path = Utils.getIndexPath(String.valueOf(id));
             return Files.list(path)
                     .filter(p -> p.getFileName().toString().endsWith(".txt"))
                     .sorted()

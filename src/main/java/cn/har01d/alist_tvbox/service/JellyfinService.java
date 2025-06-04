@@ -5,7 +5,6 @@ import cn.har01d.alist_tvbox.dto.emby.EmbyInfo;
 import cn.har01d.alist_tvbox.dto.emby.EmbyItem;
 import cn.har01d.alist_tvbox.dto.emby.EmbyItems;
 import cn.har01d.alist_tvbox.dto.emby.EmbyMediaSources;
-import cn.har01d.alist_tvbox.entity.Emby;
 import cn.har01d.alist_tvbox.entity.Jellyfin;
 import cn.har01d.alist_tvbox.entity.JellyfinRepository;
 import cn.har01d.alist_tvbox.entity.Setting;

@@ -1,5 +1,7 @@
 package cn.har01d.alist_tvbox.util;
 
+import static org.aspectj.weaver.tools.cache.SimpleCacheFactory.path;
+
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +18,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -48,8 +52,11 @@ public final class Utils {
             36, 20, 34, 44, 52
     };
 
+    public static boolean inDocker;
+
     static {
         readUserAgents();
+        inDocker = System.getenv("INSTALL") != null && Files.exists(Path.of("/entrypoint.sh"));
     }
 
     private static void readUserAgents() {
@@ -279,6 +286,21 @@ public final class Utils {
         return sb.toString();
     }
 
+    public static Path getDataPath(String... path) {
+        String base = inDocker ? "/data" : "/opt/atv/data";
+        return Path.of(base, path);
+    }
+
+    public static Path getIndexPath(String... path) {
+        String base = inDocker ? "/data/index" : "/opt/atv/data/index";
+        return Path.of(base, path);
+    }
+
+    public static Path getLogPath(String name) {
+        String base = inDocker ? "/data/log" : "/opt/atv/log";
+        return Path.of(base, name);
+    }
+
     public static long durationToSeconds(String duration) {
         if (StringUtils.isBlank(duration)) {
             return 0;
@@ -383,7 +405,7 @@ public final class Utils {
         return text.trim();
     }
 
-    public static Collection<File> listFiles(String path, String... ext) {
-        return FileUtils.listFiles(new File(path), ext, false);
+    public static Collection<File> listFiles(Path path, String... ext) {
+        return FileUtils.listFiles(path.toFile(), ext, false);
     }
 }

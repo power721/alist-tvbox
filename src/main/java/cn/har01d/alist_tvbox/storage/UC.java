@@ -8,7 +8,6 @@ public class UC extends Storage {
         setWebProxy(account.isUseProxy());
         setWebdavPolicy("native_proxy");
         addAddition("cookie", account.getCookie());
-        addAddition("token", account.getToken());
         addAddition("root_folder_id", account.getFolder());
         addAddition("order_by", "file_name");
         addAddition("order_direction", "asc");

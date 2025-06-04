@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.entity.ConfigFile;
 import cn.har01d.alist_tvbox.entity.ConfigFileRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +17,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -48,7 +48,7 @@ public class ConfigFileService {
 
     private void loadLabels() {
         try {
-            Path path = Path.of("/data/label.txt");
+            Path path = Utils.getDataPath("label.txt");
             if (Files.exists(path)) {
                 loadLabels(Files.readAllLines(path));
             }
@@ -85,11 +85,11 @@ public class ConfigFileService {
         readFile("/data/tv.txt");
         readFile("/data/proxy.txt");
 
-        if (Files.exists(Paths.get("/data/iptv.m3u"))) {
+        if (Files.exists(Utils.getDataPath("iptv.m3u"))) {
             readFile("/www/tvbox/iptv.m3u");
         }
 
-        if (Files.exists(Paths.get("/data/my.json"))) {
+        if (Files.exists(Utils.getDataPath("my.json"))) {
             readFile("/www/tvbox/my.json");
         }
 
@@ -99,7 +99,7 @@ public class ConfigFileService {
 
     private void readFile(String filepath) {
         try {
-            Path path = Paths.get(filepath);
+            Path path = Path.of(filepath);
             if (Files.exists(path)) {
                 String content = Files.readString(path);
                 ConfigFile file = new ConfigFile();
@@ -156,8 +156,8 @@ public class ConfigFileService {
 
     public void writeFileContent(ConfigFile configFile) throws IOException {
         log.info("write file: {}", configFile.getPath());
-        Files.createDirectories(Paths.get(configFile.getDir()));
-        Path path = Paths.get(configFile.getDir(), configFile.getName());
+        Files.createDirectories(Path.of(configFile.getDir()));
+        Path path = Path.of(configFile.getDir(), configFile.getName());
         Files.writeString(path, configFile.getContent());
         if (path.toString().equals("/data/label.txt")) {
             loadLabels(Arrays.asList(configFile.getContent().split("\n")));
@@ -168,7 +168,7 @@ public class ConfigFileService {
         validate(dto);
         ConfigFile configFile = repository.findById(id).orElseThrow(NotFoundException::new);
         try {
-            Path path = Paths.get(configFile.getDir(), configFile.getName());
+            Path path = Path.of(configFile.getDir(), configFile.getName());
             Files.delete(path);
         } catch (Exception e) {
             log.warn("", e);
@@ -194,7 +194,7 @@ public class ConfigFileService {
         }
 
         repository.deleteById(id);
-        Path path = Paths.get(configFile.getDir(), configFile.getName());
+        Path path = Path.of(configFile.getDir(), configFile.getName());
         Files.delete(path);
     }
 }

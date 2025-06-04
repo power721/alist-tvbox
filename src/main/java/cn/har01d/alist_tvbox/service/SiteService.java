@@ -14,7 +14,6 @@ import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
@@ -31,7 +30,6 @@ import java.io.File;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -119,7 +117,7 @@ public class SiteService {
     }
 
     private void readAList(int order) {
-        Path path = Paths.get("/data/alist_list.txt");
+        Path path = Utils.getDataPath("alist_list.txt");
         if (Files.exists(path)) {
             try {
                 log.info("loading site list from file");

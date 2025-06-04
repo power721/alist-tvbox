@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.auth;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
+import cn.har01d.alist_tvbox.util.Utils;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jws;
@@ -38,7 +39,7 @@ public class JwtTokenService implements TokenService {
 
     @PostConstruct
     public void init() throws IOException {
-        Path path = Path.of("/data/.jwt");
+        Path path = Utils.getDataPath(".jwt");
         if (Files.exists(path)) {
             String secret = Files.readString(path);
             appProperties.setSecretKey(secret);

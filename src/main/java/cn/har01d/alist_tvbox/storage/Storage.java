@@ -11,6 +11,7 @@ import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.PikPakAccount;
 import cn.har01d.alist_tvbox.entity.Share;
+import cn.har01d.alist_tvbox.entity.Site;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 
@@ -28,6 +29,12 @@ public class Storage {
     private Map<String, Object> map = new HashMap<>();
 
     public Storage() {
+    }
+
+    public Storage(Site site) {
+        this.id = 8000 + site.getId();
+        this.driver = "AList V" + site.getVersion();
+        this.path = "/\uD83C\uDF8E我的套娃/" + site.getName();
     }
 
     public Storage(PikPakAccount account) {
@@ -61,11 +68,10 @@ public class Storage {
         }
     }
 
-    public Storage(int id, String driver, String path, String addition) {
+    public Storage(int id, String driver, String path) {
         this.id = id;
         this.driver = driver;
         this.path = path;
-        this.addition = addition;
     }
 
     public void addAddition(String key, Object value) {
@@ -104,6 +110,8 @@ public class Storage {
             return "/我的123分享/" + path;
         } else if (share.getType() == 6) {
             return "/我的移动分享/" + path;
+        } else if (share.getType() == 10) {
+            return "/我的百度分享/" + path;
         }
         return path;
     }
@@ -132,6 +140,8 @@ public class Storage {
             return "/我的移动云盘/" + account.getName();
         } else if (account.getType() == DriverType.PAN123) {
             return "/我的123网盘/" + account.getName();
+        } else if (account.getType() == DriverType.BAIDU) {
+            return "/我的百度网盘/" + account.getName();
         }
         return "/网盘" + account.getName();
         // cn.har01d.alist_tvbox.service.TvBoxService.addMyFavorite

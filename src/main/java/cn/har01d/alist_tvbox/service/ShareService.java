@@ -1,44 +1,5 @@
 package cn.har01d.alist_tvbox.service;
 
-import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
-import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
-import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
-
-import java.io.IOException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-import cn.har01d.alist_tvbox.storage.UrlTree;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.env.Environment;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
@@ -61,7 +22,10 @@ import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.model.LoginRequest;
 import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.Response;
+import cn.har01d.alist_tvbox.storage.AList;
+import cn.har01d.alist_tvbox.storage.Alias;
 import cn.har01d.alist_tvbox.storage.AliyunShare;
+import cn.har01d.alist_tvbox.storage.BaiduShare;
 import cn.har01d.alist_tvbox.storage.Local;
 import cn.har01d.alist_tvbox.storage.Pan115Share;
 import cn.har01d.alist_tvbox.storage.Pan123Share;
@@ -72,10 +36,46 @@ import cn.har01d.alist_tvbox.storage.QuarkShare;
 import cn.har01d.alist_tvbox.storage.Storage;
 import cn.har01d.alist_tvbox.storage.ThunderShare;
 import cn.har01d.alist_tvbox.storage.UCShare;
+import cn.har01d.alist_tvbox.storage.UrlTree;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
+import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
+import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
 
 @Slf4j
 @Service
@@ -158,7 +158,8 @@ public class ShareService {
         }
 
         list = list.stream().filter(e -> e.getId() < offset).collect(Collectors.toList());
-        list.addAll(loadLatestShare());
+        var add = loadLatestShare();
+        list.addAll(add);
 
         loadAListShares(list);
         loadAListAlias();
@@ -167,7 +168,11 @@ public class ShareService {
         configFileService.writeFiles();
         readTvTxt();
 
-        if ("new".equals(environment.getProperty("INSTALL")) || accountRepository.count() > 0 || pikPakAccountRepository.count() > 0 || panAccountRepository.count() > 0) {
+        if ("new".equals(environment.getProperty("INSTALL"))
+                || accountRepository.count() > 0
+                || pikPakAccountRepository.count() > 0
+                || panAccountRepository.count() > 0
+                || shareRepository.count() > add.size()) {
             aListLocalService.startAListServer();
         }
     }
@@ -223,8 +228,7 @@ public class ShareService {
         try {
             for (AListAlias alias : list) {
                 try {
-                    Storage storage = new Storage(alias.getId(), "Alias", alias.getPath(), String.format("{\"paths\":\"%s\"}", Utils.getAliasPaths(alias.getContent())));
-                    storage.setCacheExpiration(0);
+                    Alias storage = new Alias(alias);
                     aListLocalService.saveStorage(storage);
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
@@ -241,24 +245,12 @@ public class ShareService {
                 continue;
             }
             try {
-                int id = 8000 + site.getId();
-                String driver = "AList V" + site.getVersion();
-                String path = "/\uD83C\uDF8E我的套娃/" + site.getName();
-                String addition = String.format("{\"root_folder_path\":\"%s\",\"url\":\"%s\",\"meta_password\":\"%s\",\"token\":\"%s\",\"username\":\"\",\"password\":\"\"}", getFolder(site), site.getUrl(), site.getPassword(), site.getToken());
-                Storage storage = new Storage(id, driver, path, addition);
-                storage.setCacheExpiration(0);
+                AList storage = new AList(site);
                 aListLocalService.saveStorage(storage);
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());
             }
         }
-    }
-
-    private String getFolder(Site site) {
-        if (StringUtils.isBlank(site.getFolder())) {
-            return "/";
-        }
-        return site.getFolder();
     }
 
     private void loadOpenTokenUrl() {
@@ -269,7 +261,7 @@ public class ShareService {
         try {
             String url = null;
             try {
-                Path file = Paths.get("/data/open_token_url.txt");
+                Path file = Utils.getDataPath("open_token_url.txt");
                 if (Files.exists(file)) {
                     url = Files.readString(file).trim();
                     log.debug("loadOpenTokenUrl {}", url);
@@ -279,7 +271,7 @@ public class ShareService {
                 log.warn("", e);
             }
 
-            Path path = Paths.get("/opt/alist/data/config.json");
+            Path path = Path.of("/opt/alist/data/config.json");
             if (Files.exists(path)) {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);
@@ -299,7 +291,7 @@ public class ShareService {
     public void updateOpenTokenUrl(OpenApiDto dto) {
         String url = dto.getUrl();
         try {
-            Path path = Paths.get("/opt/alist/data/config.json");
+            Path path = Path.of("/opt/alist/data/config.json");
             if (Files.exists(path)) {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);
@@ -312,7 +304,7 @@ public class ShareService {
         }
 
         try {
-            Path file = Paths.get("/data/open_token_url.txt");
+            Path file = Utils.getDataPath("open_token_url.txt");
             Files.writeString(file, url);
         } catch (Exception e) {
             log.warn("", e);
@@ -328,7 +320,7 @@ public class ShareService {
 
     private List<Share> loadSharesFromFile() {
         List<Share> list = new ArrayList<>();
-        Path path = Paths.get("/data/alishare_list.txt");
+        Path path = Utils.getDataPath("alishare_list.txt");
         if (Files.exists(path)) {
             try {
                 log.info("loading share list from file");
@@ -362,7 +354,7 @@ public class ShareService {
 
     private List<Share> loadPikPakFromFile() {
         List<Share> list = new ArrayList<>();
-        Path path = Paths.get("/data/pikpakshare_list.txt");
+        Path path = Utils.getDataPath("pikpakshare_list.txt");
         if (Files.exists(path)) {
             try {
                 log.info("loading PikPak share list from file");
@@ -458,6 +450,8 @@ public class ShareService {
             fileName = "123_shares.txt";
         } else if (type == 0) {
             fileName = "ali_shares.txt";
+        } else if (type == 4) {
+            fileName = "baidu_shares.txt";
         }
 
         for (Share share : list) {
@@ -534,6 +528,8 @@ public class ShareService {
             storage = new Pan123Share(share);
         } else if (share.getType() == 6) {
             storage = new Pan139Share(share);
+        } else if (share.getType() == 10) {
+            storage = new BaiduShare(share);
         }
 
         if (storage != null) {
@@ -589,7 +585,7 @@ public class ShareService {
     }
 
     private void readTvTxt() {
-        Path file = Paths.get("/data/tv.txt");
+        Path file = Utils.getDataPath("tv.txt");
         if (Files.exists(file)) {
             log.info("read tv from file");
             try {
@@ -803,6 +799,17 @@ public class ShareService {
             return true;
         }
 
+        m = SHARE_BD_LINK.matcher(url);
+        if (m.find()) {
+            share.setType(10);
+            share.setShareId(m.group(1));
+            String code = m.group(2);
+            if (code != null) {
+                share.setPassword(code);
+            }
+            return true;
+        }
+
         m = SHARE_PK_LINK.matcher(url);
         if (m.find()) {
             share.setType(1);
@@ -985,7 +992,7 @@ public class ShareService {
                 share.setFolderId("");
             } else if (share.getType() == 3 || share.getType() == 5 || share.getType() == 7 || share.getType() == 8) {
                 share.setFolderId("0");
-            } else if (share.getType() == 4) {
+            } else if (share.getType() == 10) {
                 share.setFolderId("/");
             }
         }

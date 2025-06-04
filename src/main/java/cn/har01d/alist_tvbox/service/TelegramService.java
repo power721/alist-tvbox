@@ -140,7 +140,7 @@ public class TelegramService {
         settingRepository.save(new Setting("tg_phase", "0"));
 
         try {
-            Files.deleteIfExists(Path.of("/data/t4j.bin"));
+            Files.deleteIfExists(Utils.getDataPath("t4j.bin"));
         } catch (IOException e) {
             log.warn("删除session文件失败", e);
         }
@@ -220,7 +220,7 @@ public class TelegramService {
                     }
                 });
             }
-            StoreLayout storeLayout = new FileStoreLayout(new StoreLayoutImpl(c -> c.maximumSize(1000)), Path.of("/data/t4j.bin"));
+            StoreLayout storeLayout = new FileStoreLayout(new StoreLayoutImpl(c -> c.maximumSize(1000)), Utils.getDataPath("t4j.bin"));
             client = MTProtoTelegramClient
                     .create(apiId, apiHash, authHandler)
                     .setStoreLayout(storeLayout)
@@ -244,7 +244,7 @@ public class TelegramService {
 
     private static InitConnectionParams initConnectionParams() {
         InputClientProxy proxy = null;
-        Path path = Path.of("/data/proxy.txt");
+        Path path = Utils.getDataPath("proxy.txt");
         if (Files.exists(path)) {
             try {
                 String text = Files.readString(path).trim();

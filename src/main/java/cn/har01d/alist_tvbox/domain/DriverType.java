@@ -11,7 +11,7 @@ public enum DriverType {
     QUARK_TV,
     UC_TV,
     OPEN115,
-    OTHER3,
+    BAIDU,
     OTHER4,
     OTHER5,
     OTHER6,

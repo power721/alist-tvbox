@@ -166,6 +166,9 @@ public class Message {
         if (link.contains("139.com")) {
             return "6";
         }
+        if (link.contains("baidu.com")) {
+            return "10";
+        }
         return null;
     }
 

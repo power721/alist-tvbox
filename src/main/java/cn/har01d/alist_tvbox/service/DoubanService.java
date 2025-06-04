@@ -50,7 +50,6 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -124,7 +123,7 @@ public class DoubanService {
     @PostConstruct
     public void setup() {
         try {
-            Path path = Paths.get("/data/atv/movie_version");
+            Path path = Utils.getDataPath("atv/movie_version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
@@ -151,7 +150,7 @@ public class DoubanService {
                 }
 
                 log.debug("reset data.sql");
-                writeText("/data/atv/data.sql", "SELECT COUNT(*) FROM META;");
+                writeText("data.sql", "SELECT COUNT(*) FROM META;");
             }
         }
 
@@ -161,11 +160,11 @@ public class DoubanService {
 
     private void runCmd() {
         try {
-            Path path = Paths.get("/data/atv/cmd.sql");
+            Path path = Utils.getDataPath("atv", "cmd.sql");
             if (Files.exists(path)) {
                 log.info("run sql from file {}", path);
                 try {
-                    jdbcTemplate.execute("RUNSCRIPT FROM '/data/atv/cmd.sql'");
+                    jdbcTemplate.execute("RUNSCRIPT FROM '" + path + "'");
                 } catch (Exception e) {
                     log.warn("execute sql file failed", e);
                 }
@@ -237,7 +236,7 @@ public class DoubanService {
 
     private String getCachedVersion() {
         try {
-            Path file = Paths.get("/data/atv/movie_version");
+            Path file = Utils.getDataPath("atv/movie_version");
             if (Files.exists(file)) {
                 return Files.readString(file).trim();
             }
@@ -272,7 +271,7 @@ public class DoubanService {
 
     private Stream<Path> getSqlFiles(String version) throws IOException {
         double local = Double.parseDouble(version);
-        return Files.list(Path.of("/data/atv/sql"))
+        return Files.list(Utils.getDataPath("atv", "sql"))
                 .filter(e -> Double.compare(getVersionNumber(e), local) > 0)
                 .sorted((a, b) -> Double.compare(getVersionNumber(a), getVersionNumber(b)));
     }
@@ -461,7 +460,7 @@ public class DoubanService {
     }
 
     private Set<String> loadFailed() {
-        Path path = Paths.get("/data/atv/failed.txt");
+        Path path = Utils.getDataPath("atv/failed.txt");
         try {
             List<String> lines = Files.readAllLines(path).stream().filter(e -> !e.startsWith("/")).toList();
             return new HashSet<>(lines);
@@ -473,7 +472,7 @@ public class DoubanService {
 
     @Async
     public void scrape(Integer siteId, boolean force) throws IOException {
-        Path path = Paths.get("/data/index", String.valueOf(siteId), "custom_index.txt");
+        Path path = Utils.getDataPath("index", String.valueOf(siteId), "custom_index.txt");
         if (!Files.exists(path)) {
             throw new BadRequestException("索引文件不存在");
         }
@@ -518,13 +517,13 @@ public class DoubanService {
 
         taskService.completeTask(task.getId());
 
-        writeText("/data/atv/paths.txt", String.join("\n", paths));
-        writeText("/data/atv/failed.txt", String.join("\n", failed));
+        writeText("paths.txt", String.join("\n", paths));
+        writeText("failed.txt", String.join("\n", failed));
     }
 
-    private static void writeText(String path, String content) {
+    private static void writeText(String name, String content) {
         try {
-            Files.writeString(Paths.get(path), content);
+            Files.writeString(Utils.getDataPath("atv", name), content);
         } catch (Exception e) {
             log.warn("", e);
         }

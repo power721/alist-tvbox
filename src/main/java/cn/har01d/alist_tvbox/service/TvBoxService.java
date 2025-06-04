@@ -59,7 +59,6 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -265,7 +264,7 @@ public class TvBoxService {
         }
 
         try {
-            Path file = Paths.get("/data/category.txt");
+            Path file = Utils.getDataPath("category.txt");
             if (Files.exists(file)) {
                 String typeId = "";
                 List<FilterValue> filters = new ArrayList<>();
@@ -749,7 +748,7 @@ public class TvBoxService {
     private List<MovieDetail> searchFromIndexFile(Site site, String ac, String keyword, String indexFile) throws IOException {
         log.info("search \"{}\" from site {}:{}, index file: {}", keyword, site.getId(), site.getName(), indexFile);
         Set<String> keywords = Arrays.stream(keyword.split("\\s+")).collect(Collectors.toSet());
-        Set<String> lines = Files.readAllLines(Paths.get(indexFile))
+        Set<String> lines = Files.readAllLines(Path.of(indexFile))
                 .stream()
                 .filter(path -> !path.startsWith("-"))
                 .filter(path -> keywords.stream().allMatch(path::contains))
@@ -814,7 +813,7 @@ public class TvBoxService {
         }
 
         List<MovieDetail> result = new ArrayList<>();
-        for (File file : Utils.listFiles("/data/index/" + site.getId(), "txt")) {
+        for (File file : Utils.listFiles(Utils.getIndexPath(String.valueOf(site.getId())), "txt")) {
             result.addAll(searchFromIndexFile(site, ac, keyword, file.getAbsolutePath()));
         }
 
@@ -855,7 +854,7 @@ public class TvBoxService {
 
     private List<MovieDetail> searchByXiaoya(Site site, String ac, String keyword) throws IOException {
         List<MovieDetail> list = new ArrayList<>();
-        for (File file : Utils.listFiles("/data/index/" + site.getId(), "txt")) {
+        for (File file : Utils.listFiles(Utils.getIndexPath(String.valueOf(site.getId())), "txt")) {
             list.addAll(searchFromIndexFile(site, ac, keyword, file.getAbsolutePath()));
         }
 
@@ -1345,6 +1344,8 @@ public class TvBoxService {
                 // 115会把UA生成签名校验
                 result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
             }
+        } else if (fsDetail.getProvider().equals("BaiduNetdisk")) {
+            result.put("header", "{\"User-Agent\":\"netdisk\"}");
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
             result.put("header", "{\"User-Agent\":\"" + appProperties.getUserAgent() + "\",\"Referer\":\"" + Constants.ALIPAN + "\",\"origin\":\"" + Constants.ALIPAN + "\"}");
@@ -2121,7 +2122,7 @@ public class TvBoxService {
     private boolean isMediaFormat(String name) {
         int index = name.lastIndexOf('.');
         if (index > 0) {
-            String suffix = name.substring(index + 1);
+            String suffix = name.substring(index + 1).toLowerCase();
             return appProperties.getFormats().contains(suffix);
         }
         return false;
@@ -2130,7 +2131,7 @@ public class TvBoxService {
     private boolean isSubtitleFormat(String name) {
         int index = name.lastIndexOf('.');
         if (index > 0) {
-            String suffix = name.substring(index + 1);
+            String suffix = name.substring(index + 1).toLowerCase();
             return appProperties.getSubtitles().contains(suffix);
         }
         return false;

@@ -39,7 +39,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -216,7 +215,7 @@ public class AccountService {
     }
 
     private String readRefreshToken() {
-        Path path = Paths.get("/data/mytoken.txt");
+        Path path = Utils.getDataPath("mytoken.txt");
         if (Files.exists(path)) {
             try {
                 log.info("read refresh token from file");
@@ -232,7 +231,7 @@ public class AccountService {
     }
 
     private String readOpenToken() {
-        Path path = Paths.get("/data/myopentoken.txt");
+        Path path = Utils.getDataPath("myopentoken.txt");
         if (Files.exists(path)) {
             try {
                 log.info("read open token from file");
@@ -255,7 +254,7 @@ public class AccountService {
             }
 
             AListLogin login = new AListLogin();
-            Path pass = Paths.get("/data/guestpass.txt");
+            Path pass = Utils.getDataPath("guestpass.txt");
             if (Files.exists(pass)) {
                 log.info("read guest password from file");
                 List<String> lines = Files.readAllLines(pass);
@@ -266,7 +265,7 @@ public class AccountService {
                 }
             }
 
-            Path guest = Paths.get("/data/guestlogin.txt");
+            Path guest = Utils.getDataPath("guestlogin.txt");
             if (Files.exists(guest)) {
                 log.info("guestlogin.txt");
                 login.setUsername("dav");
@@ -969,7 +968,10 @@ public class AccountService {
 
         String token = status >= 2 ? login() : "";
         int storageId = base + (account.getId() - 1) * 2;
-        if (status >= 2) {
+        if (status == 0) {
+            Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + storageId);
+            Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + (storageId + 1));
+        } else {
             deleteStorage(storageId, token);
             deleteStorage(storageId + 1, token);
         }
@@ -1016,11 +1018,13 @@ public class AccountService {
     }
 
     public void delete(Integer id) {
+        int status = aListLocalService.checkStatus();
+        if (status == 1) {
+            throw new BadRequestException("AList服务启动中");
+        }
+
         Account account = accountRepository.findById(id).orElse(null);
         if (account != null) {
-            if (account.isMaster()) {
-                throw new BadRequestException("不能删除主账号");
-            }
             accountRepository.deleteById(id);
             account.setShowMyAli(false);
             showMyAliWithAPI(account);
