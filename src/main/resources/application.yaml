@@ -6,7 +6,7 @@ spring:
       max-file-size: 20MB
       max-request-size: 20MB
   datasource:
-    url: jdbc:h2:file:~/.config/atv/data
+    url: jdbc:h2:file:/opt/atv/data/data
     username: sa
     password: password
     driverClassName: org.h2.Driver
@@ -27,6 +27,12 @@ spring:
   sql:
     init:
       mode: always
+
+logging:
+  file:
+    name: /opt/atv/log/app.log
+  level:
+    cn.har01d: info
 
 server:
   error:

@@ -160,7 +160,8 @@ public class ShareService {
         }
 
         list = list.stream().filter(e -> e.getId() < offset).collect(Collectors.toList());
-        list.addAll(loadLatestShare());
+        var add = loadLatestShare();
+        list.addAll(add);
 
         loadAListShares(list);
         loadAListAlias();
@@ -169,7 +170,11 @@ public class ShareService {
         configFileService.writeFiles();
         readTvTxt();
 
-        if ("new".equals(environment.getProperty("INSTALL")) || accountRepository.count() > 0 || pikPakAccountRepository.count() > 0 || panAccountRepository.count() > 0) {
+        if ("new".equals(environment.getProperty("INSTALL"))
+                || accountRepository.count() > 0
+                || pikPakAccountRepository.count() > 0
+                || panAccountRepository.count() > 0
+                || shareRepository.count() > add.size()) {
             aListLocalService.startAListServer();
         }
     }
