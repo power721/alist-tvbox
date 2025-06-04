@@ -224,7 +224,6 @@ public class ShareService {
             for (AListAlias alias : list) {
                 try {
                     Storage storage = new Storage(alias.getId(), "Alias", alias.getPath(), String.format("{\"paths\":\"%s\"}", Utils.getAliasPaths(alias.getContent())));
-                    storage.setCacheExpiration(0);
                     aListLocalService.saveStorage(storage);
                 } catch (Exception e) {
                     log.warn("{}", e.getMessage());
@@ -246,7 +245,6 @@ public class ShareService {
                 String path = "/\uD83C\uDF8E我的套娃/" + site.getName();
                 String addition = String.format("{\"root_folder_path\":\"%s\",\"url\":\"%s\",\"meta_password\":\"%s\",\"token\":\"%s\",\"username\":\"\",\"password\":\"\"}", getFolder(site), site.getUrl(), site.getPassword(), site.getToken());
                 Storage storage = new Storage(id, driver, path, addition);
-                storage.setCacheExpiration(0);
                 aListLocalService.saveStorage(storage);
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());

@@ -1018,9 +1018,6 @@ public class AccountService {
     public void delete(Integer id) {
         Account account = accountRepository.findById(id).orElse(null);
         if (account != null) {
-            if (account.isMaster()) {
-                throw new BadRequestException("不能删除主账号");
-            }
             accountRepository.deleteById(id);
             account.setShowMyAli(false);
             showMyAliWithAPI(account);
