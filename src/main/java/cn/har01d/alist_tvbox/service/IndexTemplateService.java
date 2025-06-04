@@ -1,5 +1,13 @@
 package cn.har01d.alist_tvbox.service;
 
+import java.time.Instant;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.env.Environment;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
 import cn.har01d.alist_tvbox.dto.IndexTemplateDto;
 import cn.har01d.alist_tvbox.entity.IndexTemplate;
 import cn.har01d.alist_tvbox.entity.IndexTemplateRepository;
@@ -9,13 +17,6 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.core.env.Environment;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-
-import java.time.Instant;
 
 @Slf4j
 @Service
@@ -33,7 +34,7 @@ public class IndexTemplateService {
                     "\"/🈴我的阿里分享/Tacit0924/【综艺 纪录片 节目 晚会】/更新中的【综丨艺纪丨录片节丨目晚丨会 】和完结的/还在【更新中】的综艺 5 TB\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【综艺 纪录片 节目 晚会】/更新中的【综丨艺纪丨录片节丨目晚丨会 】和完结的/【近期的完结综艺】6TB(未整理国内外仅首字母)\"," +
                     "\"/🈴我的阿里分享/Tacit0924/【综艺 纪录片 节目 晚会】/更新中的【综丨艺纪丨录片节丨目晚丨会 】和完结的/一些近期【更新的】和完结的和纪录片合集 15TB/【一些近期更新的纪录片】(未整理国内外仅首字母)\"," +
-                    "\"/🈴我的阿里分享/Tacit0924/【电a影】/近期热门【电影】和一些电影大合集/【近期一些热门的电影】22TB::2\"" ;
+                    "\"/🈴我的阿里分享/Tacit0924/【电a影】/近期热门【电影】和一些电影大合集/【近期一些热门的电影】22TB::2\"";
 
     private final IndexTemplateRepository indexTemplateRepository;
     private final SettingRepository settingRepository;

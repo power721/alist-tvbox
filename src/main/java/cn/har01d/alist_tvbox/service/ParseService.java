@@ -1,7 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.util.Constants;
-import lombok.extern.slf4j.Slf4j;
+import java.net.HttpURLConnection;
+
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -9,7 +9,8 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.net.HttpURLConnection;
+import cn.har01d.alist_tvbox.util.Constants;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service

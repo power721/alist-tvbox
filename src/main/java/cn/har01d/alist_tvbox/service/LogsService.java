@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -40,7 +39,7 @@ public class LogsService {
     }
 
     public void readAListLogPath() {
-        Path path = Paths.get("/opt/alist/data/config.json");
+        Path path = Path.of("/opt/alist/data/config.json");
         if (Files.exists(path)) {
             try {
                 String text = Files.readString(path);
@@ -68,7 +67,7 @@ public class LogsService {
 
     private Path getLogFile(String type) {
         if ("alist".equals(type)) {
-            return Paths.get(aListLogPath);
+            return Path.of(aListLogPath);
         } else if ("init".equals(type)) {
             return Utils.getLogPath("init.log");
         } else {

@@ -9,7 +9,6 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -268,7 +267,7 @@ public class ShareService {
                 log.warn("", e);
             }
 
-            Path path = Paths.get("/opt/alist/data/config.json");
+            Path path = Path.of("/opt/alist/data/config.json");
             if (Files.exists(path)) {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);
@@ -288,7 +287,7 @@ public class ShareService {
     public void updateOpenTokenUrl(OpenApiDto dto) {
         String url = dto.getUrl();
         try {
-            Path path = Paths.get("/opt/alist/data/config.json");
+            Path path = Path.of("/opt/alist/data/config.json");
             if (Files.exists(path)) {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);

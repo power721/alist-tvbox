@@ -1,9 +1,14 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.exception.BadRequestException;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.HexFormat;
+import java.util.Map;
+import java.util.Objects;
+
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -13,14 +18,11 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.HexFormat;
-import java.util.Map;
-import java.util.Objects;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class QuarkUCTV {

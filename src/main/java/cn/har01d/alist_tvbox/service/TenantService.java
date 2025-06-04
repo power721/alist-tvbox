@@ -1,17 +1,18 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.entity.Tenant;
-import cn.har01d.alist_tvbox.entity.TenantRepository;
-import cn.har01d.alist_tvbox.exception.BadRequestException;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Service;
-
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
+
+import cn.har01d.alist_tvbox.entity.Tenant;
+import cn.har01d.alist_tvbox.entity.TenantRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service

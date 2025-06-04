@@ -1,5 +1,58 @@
 package cn.har01d.alist_tvbox.service;
 
+import static cn.har01d.alist_tvbox.util.Constants.APP_VERSION;
+import static cn.har01d.alist_tvbox.util.Constants.DOCKER_VERSION;
+import static cn.har01d.alist_tvbox.util.Constants.INDEX_VERSION;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StopWatch;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestTemplate;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.TaskResult;
 import cn.har01d.alist_tvbox.domain.TaskStatus;
@@ -23,60 +76,8 @@ import cn.har01d.alist_tvbox.tvbox.IndexContext;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.env.Environment;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StopWatch;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestTemplate;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.URL;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
-
-import static cn.har01d.alist_tvbox.util.Constants.APP_VERSION;
-import static cn.har01d.alist_tvbox.util.Constants.DOCKER_VERSION;
-import static cn.har01d.alist_tvbox.util.Constants.INDEX_VERSION;
 
 @Slf4j
 @Service
@@ -147,7 +148,7 @@ public class IndexService {
         }
 
         try {
-            Path path = Paths.get("/docker.version");
+            Path path = Path.of("/docker.version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
@@ -159,7 +160,7 @@ public class IndexService {
         }
 
         try {
-            Path path = Paths.get("/opt/atv/data/app_version"); // TODO:
+            Path path = Path.of("/opt/atv/data/app_version"); // TODO:
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
@@ -316,7 +317,7 @@ public class IndexService {
     }
 
     public static void unzip(File file) throws IOException {
-        Path destFolderPath = Paths.get(file.getParent());
+        Path destFolderPath = Path.of(file.getParent());
 
         try (ZipFile zipFile = new ZipFile(file, ZipFile.OPEN_READ, StandardCharsets.UTF_8)) {
             Enumeration<? extends ZipEntry> entries = zipFile.entries();

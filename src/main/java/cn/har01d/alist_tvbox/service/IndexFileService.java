@@ -84,7 +84,7 @@ public class IndexFileService {
     }
 
     public void uploadIndexFile(String siteId, String indexName, MultipartFile file) throws IOException {
-        Path temp = Paths.get("/tmp/index.txt");
+        Path temp = Path.of("/tmp/index.txt");
         try {
             FileUtils.copyToFile(file.getInputStream(), temp.toFile());
             List<String> lines = Files.readAllLines(temp);

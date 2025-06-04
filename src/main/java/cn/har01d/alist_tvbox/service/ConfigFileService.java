@@ -101,7 +101,7 @@ public class ConfigFileService {
 
     private void readFile(String filepath) {
         try {
-            Path path = Paths.get(filepath);
+            Path path = Path.of(filepath);
             if (Files.exists(path)) {
                 String content = Files.readString(path);
                 ConfigFile file = new ConfigFile();
@@ -158,8 +158,8 @@ public class ConfigFileService {
 
     public void writeFileContent(ConfigFile configFile) throws IOException {
         log.info("write file: {}", configFile.getPath());
-        Files.createDirectories(Paths.get(configFile.getDir()));
-        Path path = Paths.get(configFile.getDir(), configFile.getName());
+        Files.createDirectories(Path.of(configFile.getDir()));
+        Path path = Path.of(configFile.getDir(), configFile.getName());
         Files.writeString(path, configFile.getContent());
         if (path.toString().equals("/data/label.txt")) {
             loadLabels(Arrays.asList(configFile.getContent().split("\n")));
@@ -170,7 +170,7 @@ public class ConfigFileService {
         validate(dto);
         ConfigFile configFile = repository.findById(id).orElseThrow(NotFoundException::new);
         try {
-            Path path = Paths.get(configFile.getDir(), configFile.getName());
+            Path path = Path.of(configFile.getDir(), configFile.getName());
             Files.delete(path);
         } catch (Exception e) {
             log.warn("", e);
@@ -196,7 +196,7 @@ public class ConfigFileService {
         }
 
         repository.deleteById(id);
-        Path path = Paths.get(configFile.getDir(), configFile.getName());
+        Path path = Path.of(configFile.getDir(), configFile.getName());
         Files.delete(path);
     }
 }

@@ -53,7 +53,7 @@ public class Main {
         ObjectMapper objectMapper = new ObjectMapper();
         String json = objectMapper.writeValueAsString(result);
         System.out.println("Working Directory = " + System.getProperty("user.dir"));
-        Path path = Paths.get(System.getProperty("user.dir") + "/src/main/resources/META-INF/native-image/reflect-config.json");
+        Path path = Path.of(System.getProperty("user.dir") + "/src/main/resources/META-INF/native-image/reflect-config.json");
         Files.writeString(path, json);
     }
 
