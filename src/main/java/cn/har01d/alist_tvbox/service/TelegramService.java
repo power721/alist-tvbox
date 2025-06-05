@@ -493,6 +493,7 @@ public class TelegramService {
             case "8" -> "115";
             case "9" -> "天翼";
             case "6" -> "移动";
+            case "10" -> "百度";
             default -> null;
         };
     }
@@ -511,6 +512,7 @@ public class TelegramService {
             case "8" -> getUrl("/115.jpg");
             case "9" -> getUrl("/189.png");
             case "6" -> getUrl("/139.jpg");
+            case "10" -> getUrl("/baidu.jpg");
             default -> null;
         };
     }
