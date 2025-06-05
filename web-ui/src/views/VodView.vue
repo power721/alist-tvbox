@@ -135,7 +135,22 @@
       </el-row>
     </el-dialog>
 
-    <el-dialog v-model="dialogVisible" :title="title" :fullscreen="true" @opened="start" @close="stop">
+    <el-dialog class="player" v-model="dialogVisible" :fullscreen="true" top="0" width="70%" :show-close="false" @opened="start" @close="stop">
+      <template #header="{ close, titleId, titleClass }">
+        <div class="my-header">
+          <h5 :id="titleId" :class="titleClass">{{ title }}</h5>
+          <div class="buttons">
+            <el-button @click="toggleFullscreen">
+              <el-icon class="el-icon--left"><FullScreen /></el-icon>
+              全屏
+            </el-button>
+            <el-button @click="close">
+              <el-icon class="el-icon--left"><CircleCloseFilled /></el-icon>
+              关闭
+            </el-button>
+          </div>
+        </div>
+      </template>
       <div class="video-container">
         <el-row>
           <el-col :span="18">
@@ -164,7 +179,9 @@
               <el-scrollbar ref="scrollbarRef" height="1050px">
                 <ul>
                   <li v-for="(video, index) in playlist" :key="index" @click="playVideo(index)">
-                    <el-link type="primary" v-if="currentVideoIndex==index">{{ video.text }}</el-link>
+                    <el-link type="primary" v-if="currentVideoIndex==index">
+                      {{ video.text }}
+                    </el-link>
                     <el-link v-else>{{ video.text }}</el-link>
                   </li>
                 </ul>
@@ -309,7 +326,7 @@
 
         <el-row>
           <el-col :span="18">
-            <el-descriptions>
+            <el-descriptions class="movie">
               <el-descriptions-item label="名称">{{ movies[0].vod_name }}</el-descriptions-item>
               <el-descriptions-item label="类型">{{ movies[0].type_name || '未知' }}</el-descriptions-item>
               <el-descriptions-item label="年代">{{ movies[0].vod_year || '未知' }}</el-descriptions-item>
@@ -406,7 +423,17 @@ import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
-import {Delete, Film, Menu, Plus, QuestionFilled, Search, Setting} from "@element-plus/icons-vue";
+import {
+  CircleCloseFilled,
+  Delete,
+  Film,
+  FullScreen,
+  Menu,
+  Plus,
+  QuestionFilled,
+  Search,
+  Setting, VideoPlay
+} from "@element-plus/icons-vue";
 
 let {toClipboard} = clipBorad();
 
@@ -1378,5 +1405,12 @@ video {
 
 .players a {
   margin: 0 6px;
+}
+
+.my-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 16px;
 }
 </style>

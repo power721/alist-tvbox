@@ -19,3 +19,11 @@ span.error {
 .vod tr.el-table__row {
     cursor: pointer;
 }
+
+div.el-dialog.player {
+    padding: 6px;
+}
+
+div.player .el-descriptions__body .el-descriptions__table:not(.is-bordered) .el-descriptions__cell {
+    padding-bottom: 6px;
+}
