@@ -5,8 +5,8 @@ import cn.har01d.alist_tvbox.entity.Share;
 public class BaiduShare extends Storage {
     public BaiduShare(Share share) {
         super(share, "BaiduShare2");
-        addAddition("share_id", share.getShareId());
-        addAddition("share_pwd", share.getPassword());
+        addAddition("surl", share.getShareId());
+        addAddition("pwd", share.getPassword());
         addAddition("root_folder_path", share.getFolderId());
         buildAddition();
     }

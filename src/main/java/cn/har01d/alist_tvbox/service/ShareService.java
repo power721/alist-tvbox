@@ -642,6 +642,14 @@ public class ShareService {
         return "";
     }
 
+    public String getBaiduCookie(String id) {
+        String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
+        if (aliSecret.equals(id)) {
+            return panAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).map(DriverAccount::getCookie).orElse("").trim();
+        }
+        return "";
+    }
+
     private static final Pattern SHARE_115_LINK = Pattern.compile("https://(?:115|115cdn).com/s/([\\w-]+)(?:\\?password=([\\w-]+))?");
     private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
     private static final Pattern SHARE_BD_LINK = Pattern.compile("https://pan.baidu.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");

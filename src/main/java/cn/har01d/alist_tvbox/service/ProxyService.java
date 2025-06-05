@@ -33,7 +33,7 @@ public class ProxyService {
     private final Environment environment;
     private final SiteService siteService;
     private final AListService aListService;
-    private final Set<String> proxyDrivers = Set.of("AliyundriveOpen", "AliyunShare", "BaiduNetdisk", "Quark", "UC", "QuarkShare", "UCShare");
+    private final Set<String> proxyDrivers = Set.of("AliyundriveOpen", "AliyunShare", "BaiduNetdisk", "BaiduShare2", "Quark", "UC", "QuarkShare", "UCShare");
 
     public ProxyService(AppProperties appProperties,
                         Environment environment,
@@ -57,7 +57,8 @@ public class ProxyService {
         String url = fsDetail.getRawUrl();
         String driver = fsDetail.getProvider();
         // check url for Alias
-        if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive") || url.contains("quark.cn") || url.contains("uc.cn")) {
+        if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive")
+                || url.contains("baidu.com") || url.contains("quark.cn") || url.contains("uc.cn")) {
             log.debug("{} {}", driver, url);
             url = buildAListProxyUrl(site, path, fsDetail.getSign());
         } else {
