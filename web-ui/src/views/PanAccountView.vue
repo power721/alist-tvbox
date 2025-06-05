@@ -93,6 +93,10 @@
             <span class="hint"></span>
             <el-button type="primary" @click="show115QrCode">扫码获取</el-button>
           </span>
+
+          <span v-if="form.type=='BAIDU'">
+            <a href="https://pan.baidu.com/disk/main" target="_blank">百度网盘</a>
+          </span>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
           <el-input v-model="form.token"/>
