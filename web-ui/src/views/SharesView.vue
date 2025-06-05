@@ -211,7 +211,7 @@
     </template>
   </el-dialog>
 
-  <el-dialog v-model="uploadVisible" title="导入分享" width="50%">
+  <el-dialog v-model="uploadVisible" title="导入分享" width="60%">
     <el-form>
       <el-form-item label="类型" label-width="140">
         <el-radio-group v-model="sharesDto.type" class="ml-4">
@@ -242,7 +242,7 @@
     </template>
   </el-dialog>
 
-  <el-dialog v-model="exportVisible" title="导出分享" width="50%">
+  <el-dialog v-model="exportVisible" title="导出分享" width="60%">
     <el-form-item label="类型" label-width="140">
       <el-radio-group v-model="form.type" class="ml-4">
         <el-radio :label="-1" size="large">全部</el-radio>
