@@ -356,7 +356,7 @@ public class TvBoxService {
         if (accountRepository.findAll().stream().anyMatch(Account::isShowMyAli) && tenantService.valid("/\uD83D\uDCC0我的阿里云盘")) {
             Category category = new Category();
             category.setType_id("1$/\uD83D\uDCC0我的阿里云盘$1");
-            category.setType_name("我的云盘");
+            category.setType_name("阿里云盘");
             result.getCategories().add(category);
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
@@ -469,6 +469,24 @@ public class TvBoxService {
             result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
         }
 
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).ifPresent(account -> {
+            if (tenantService.valid(getMountPath(account))) {
+                Category category = new Category();
+                category.setType_id("1$" + getMountPath(account) + "$1");
+                category.setType_name("百度网盘");
+                result.getCategories().add(category);
+                result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+            }
+        });
+
+        if (shareRepository.countByType(10) > 0 && tenantService.valid("/我的百度分享")) {
+            Category category = new Category();
+            category.setType_id("1$/我的百度分享$1");
+            category.setType_name("百度分享");
+            result.getCategories().add(category);
+            result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
+        }
+
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.THUNDER).ifPresent(account -> {
             if (tenantService.valid(getMountPath(account))) {
                 Category category = new Category();
@@ -522,6 +540,8 @@ public class TvBoxService {
             return "/我的移动云盘";
         } else if (account.getType() == DriverType.THUNDER) {
             return "/我的迅雷云盘";
+        } else if (account.getType() == DriverType.BAIDU) {
+            return "/我的百度网盘";
         }
         return "/网盘";
     }
