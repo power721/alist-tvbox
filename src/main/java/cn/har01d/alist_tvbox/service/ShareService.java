@@ -642,9 +642,18 @@ public class ShareService {
         return "";
     }
 
+    public String getBaiduCookie(String id) {
+        String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
+        if (aliSecret.equals(id)) {
+            return panAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).map(DriverAccount::getCookie).orElse("").trim();
+        }
+        return "";
+    }
+
     private static final Pattern SHARE_115_LINK = Pattern.compile("https://(?:115|115cdn).com/s/([\\w-]+)(?:\\?password=([\\w-]+))?");
     private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
-    private static final Pattern SHARE_BD_LINK = Pattern.compile("https://pan.baidu.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
+    private static final Pattern SHARE_BD_LINK1 = Pattern.compile("https://pan.baidu.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
+    private static final Pattern SHARE_BD_LINK2 = Pattern.compile("https://pan.baidu.com/share/init\\?surl=([\\w-]+)(?:&pwd=([\\w-]+))?");
     private static final Pattern SHARE_PK_LINK = Pattern.compile("https://mypikpak.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
     private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share\\?code=([\\w-]+)");
     private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/([\\w-]+)(?:（访问码：(\\w+)）)?");
@@ -799,7 +808,18 @@ public class ShareService {
             return true;
         }
 
-        m = SHARE_BD_LINK.matcher(url);
+        m = SHARE_BD_LINK1.matcher(url);
+        if (m.find()) {
+            share.setType(10);
+            share.setShareId(m.group(1));
+            String code = m.group(2);
+            if (code != null) {
+                share.setPassword(code);
+            }
+            return true;
+        }
+
+        m = SHARE_BD_LINK2.matcher(url);
         if (m.find()) {
             share.setType(10);
             share.setShareId(m.group(1));

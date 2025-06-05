@@ -74,7 +74,7 @@
             <el-radio label="BAIDU" size="large">百度网盘</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'">
+        <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'||form.type=='BAIDU'">
           <el-input v-model="form.cookie" type="textarea" :rows="5"/>
           <span v-if="form.type=='QUARK'">
             <a href="https://pan.quark.cn/" target="_blank">夸克网盘</a>
@@ -92,6 +92,10 @@
             <a href="https://115.com/" target="_blank">115云盘</a>
             <span class="hint"></span>
             <el-button type="primary" @click="show115QrCode">扫码获取</el-button>
+          </span>
+
+          <span v-if="form.type=='BAIDU'">
+            <a href="https://pan.baidu.com/disk/main" target="_blank">百度网盘</a>
           </span>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>

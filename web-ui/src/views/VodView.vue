@@ -479,6 +479,7 @@ const options = [
   {label: '天翼', value: '9'},
   {label: '迅雷', value: '2'},
   {label: '移动', value: '6'},
+  {label: '百度', value: '10'},
   {label: 'PikPak', value: '1'},
 ]
 
@@ -546,6 +547,9 @@ const getShareType = (type: string) => {
   }
   if (type == '2') {
     return '⚡'
+  }
+  if (type == '10') {
+    return '🐌'
   }
   return ''
 }

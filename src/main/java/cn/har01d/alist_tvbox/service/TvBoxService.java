@@ -1344,7 +1344,7 @@ public class TvBoxService {
                 // 115会把UA生成签名校验
                 result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
             }
-        } else if (fsDetail.getProvider().equals("BaiduNetdisk")) {
+        } else if (fsDetail.getProvider().contains("Baidu")) {
             result.put("header", "{\"User-Agent\":\"netdisk\"}");
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");

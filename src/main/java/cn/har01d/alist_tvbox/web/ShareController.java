@@ -78,6 +78,11 @@ public class ShareController {
         return shareService.get115Cookie(id);
     }
 
+    @GetMapping("/baidu/cookie/{id}")
+    public String getBaiduCookie(@PathVariable String id) {
+        return shareService.getBaiduCookie(id);
+    }
+
     @GetMapping("/api/storages")
     public JsonNode listStorages(Pageable pageable) {
         return shareService.listStorages(pageable);

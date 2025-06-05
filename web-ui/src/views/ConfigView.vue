@@ -216,6 +216,9 @@
           <a :href="currentUrl + '/115/cookie/' + aliSecret" target="_blank">
             115 Cookie
           </a><span class="hint"></span>
+          <a :href="currentUrl + '/baidu/cookie/' + aliSecret" target="_blank">
+            百度 Cookie
+          </a><span class="hint"></span>
           <a :href="currentUrl + '/bili/cookie/' + aliSecret" target="_blank">
             B站 Cookie
           </a>
