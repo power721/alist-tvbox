@@ -548,6 +548,9 @@ const getShareType = (type: string) => {
   if (type == '2') {
     return '⚡'
   }
+  if (type == '10') {
+    return '🐌'
+  }
   return ''
 }
 
