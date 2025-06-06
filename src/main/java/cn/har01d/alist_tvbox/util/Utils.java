@@ -288,11 +288,14 @@ public final class Utils {
 
     public static Path getDataPath(String... path) {
         String base = inDocker ? "/data" : "/opt/atv/data";
+        if (!inDocker && path.length > 0 && "atv".equals(path[0])) {
+            path[0] = "temp";
+        }
         return Path.of(base, path);
     }
 
     public static Path getIndexPath(String... path) {
-        String base = inDocker ? "/data/index" : "/opt/atv/data/index";
+        String base = inDocker ? "/data/index" : "/opt/atv/index";
         return Path.of(base, path);
     }
 

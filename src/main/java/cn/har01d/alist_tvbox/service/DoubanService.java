@@ -123,7 +123,7 @@ public class DoubanService {
     @PostConstruct
     public void setup() {
         try {
-            Path path = Utils.getDataPath("atv/movie_version");
+            Path path = Utils.getDataPath("atv", "movie_version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
@@ -236,7 +236,7 @@ public class DoubanService {
 
     private String getCachedVersion() {
         try {
-            Path file = Utils.getDataPath("atv/movie_version");
+            Path file = Utils.getDataPath("atv", "movie_version");
             if (Files.exists(file)) {
                 return Files.readString(file).trim();
             }
@@ -460,7 +460,7 @@ public class DoubanService {
     }
 
     private Set<String> loadFailed() {
-        Path path = Utils.getDataPath("atv/failed.txt");
+        Path path = Utils.getDataPath("atv", "failed.txt");
         try {
             List<String> lines = Files.readAllLines(path).stream().filter(e -> !e.startsWith("/")).toList();
             return new HashSet<>(lines);
@@ -472,7 +472,7 @@ public class DoubanService {
 
     @Async
     public void scrape(Integer siteId, boolean force) throws IOException {
-        Path path = Utils.getDataPath("index", String.valueOf(siteId), "custom_index.txt");
+        Path path = Utils.getIndexPath(String.valueOf(siteId), "custom_index.txt");
         if (!Files.exists(path)) {
             throw new BadRequestException("索引文件不存在");
         }
