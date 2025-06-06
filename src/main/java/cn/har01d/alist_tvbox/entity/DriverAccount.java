@@ -32,6 +32,7 @@ public class DriverAccount {
     private String password = "";
     private String safePassword = "";
     private String folder = "";
+    private Integer concurrency = 1;
     @Column(columnDefinition = "BOOLEAN DEFAULT false")
     private boolean useProxy;
     private boolean master;
