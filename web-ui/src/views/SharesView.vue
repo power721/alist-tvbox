@@ -1,6 +1,15 @@
 <template>
   <h2>资源列表</h2>
   <el-row justify="end">
+    <el-select style="width: 90px" v-model="type" @change="filter">
+      <el-option
+        v-for="item in options"
+        :key="item.value"
+        :label="item.label"
+        :value="item.value"
+      />
+    </el-select>
+    <div class="hint"></div>
     <el-button type="success" @click="uploadVisible=true">导入</el-button>
     <el-button type="success" @click="exportVisible=true">导出</el-button>
     <!--    <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>-->
@@ -295,6 +304,20 @@ interface Storage {
   addition: string
 }
 
+const options = [
+  {label: '全部', value: -1},
+  {label: '夸克', value: 5},
+  {label: 'UC', value: 7},
+  {label: '阿里', value: 0},
+  {label: '115', value: 8},
+  {label: '123', value: 3},
+  {label: '天翼', value: 9},
+  {label: '百度', value: 10},
+  {label: '迅雷', value: 2},
+  {label: '移动', value: 6},
+  {label: 'PikPak', value: 1},
+]
+
 const multipleSelection = ref<ShareInfo[]>([])
 const storages = ref<Storage[]>([])
 const selectedStorages = ref<Storage[]>([])
@@ -308,6 +331,7 @@ const storage = ref<Storage>({
 const page = ref(1)
 const page1 = ref(1)
 const size = ref(20)
+const type = ref(-1)
 const size1 = ref(20)
 const total = ref(0)
 const total1 = ref(0)
@@ -484,9 +508,13 @@ const getShareLink = (shareInfo: ShareInfo) => {
   return url
 }
 
+const filter = () => {
+  loadShares(1)
+}
+
 const loadShares = (value: number) => {
   page.value = value
-  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
+  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value + '&type=' + type.value).then(({data}) => {
     shares.value = data.content
     total.value = data.totalElements
   })
@@ -535,7 +563,7 @@ const refreshStorages = () => {
 const handleSizeChange = (value: number) => {
   size.value = value
   page.value = 1
-  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
+  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value + '&type=' + type.value).then(({data}) => {
     shares.value = data.content
     total.value = data.totalElements
   })
