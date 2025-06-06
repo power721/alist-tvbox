@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 
-USERNAME=atv
+USERNAME=$USER
 APPNAME=atv
-
-sudo adduser --system --group --no-create-home ${USERNAME}
 
 sudo mkdir -p /opt/${APPNAME}/alist/data
 sudo mkdir -p /opt/${APPNAME}/alist/log

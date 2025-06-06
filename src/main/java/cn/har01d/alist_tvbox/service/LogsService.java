@@ -43,6 +43,9 @@ public class LogsService {
                 String text = Files.readString(path);
                 JsonNode json = objectMapper.readTree(text);
                 aListLogPath = json.get("log").get("name").asText();
+                if (!aListLogPath.startsWith("/")) {
+                    aListLogPath = Utils.getAListPath(aListLogPath);
+                }
                 log.info("AList log path: {}", aListLogPath);
             } catch (IOException e) {
                 log.warn("read AList config failed", e);

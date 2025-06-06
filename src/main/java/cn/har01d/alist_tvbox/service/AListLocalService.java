@@ -186,7 +186,7 @@ public class AListLocalService {
         try {
             log.info("start AList server");
             ProcessBuilder builder = new ProcessBuilder();
-            File outFile = new File("/opt/atv/log/app.log");
+            File outFile = Utils.getLogPath("app.log").toFile();
             builder.redirectOutput(ProcessBuilder.Redirect.appendTo(outFile));
             builder.redirectError(ProcessBuilder.Redirect.appendTo(outFile));
             boolean debug = settingRepository.findById("alist_debug").map(Setting::getValue).orElse("").equals("true");
@@ -195,7 +195,7 @@ public class AListLocalService {
             } else {
                 builder.command(Utils.getAListPath("alist"), "server", "--no-prefix");
             }
-            builder.directory(new File("/opt/alist"));
+            builder.directory(new File(Utils.getAListPath("")));
             Process process = builder.start();
             settingRepository.save(new Setting(ALIST_RESTART_REQUIRED, "false"));
             settingRepository.save(new Setting(ALIST_START_TIME, Instant.now().toString()));
@@ -210,7 +210,7 @@ public class AListLocalService {
         log.info("stop AList server");
         try {
             ProcessBuilder builder = new ProcessBuilder();
-            File outFile = new File("/opt/atv/log/app.log");
+            File outFile = Utils.getLogPath("app.log").toFile();
             builder.redirectOutput(ProcessBuilder.Redirect.appendTo(outFile));
             builder.redirectError(ProcessBuilder.Redirect.appendTo(outFile));
             builder.command("pkill", "-f", Utils.getAListPath("alist"));

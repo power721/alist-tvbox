@@ -16,6 +16,7 @@ echo "=== build maven ===" && \
 mvn clean package -s ~/.m2/empty-settings.xml && \
 sudo cp target/alist-tvbox-1.0.jar /opt/atv/alist-tvbox.jar && \
 sudo systemctl restart atv.service && \
+sleep 3 && \
 sudo systemctl status atv.service
 
 #java -jar target/alist-tvbox-1.0.jar
