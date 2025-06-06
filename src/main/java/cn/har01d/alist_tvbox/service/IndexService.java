@@ -394,7 +394,7 @@ public class IndexService {
     @Async
     public void index(IndexRequest indexRequest, cn.har01d.alist_tvbox.entity.Site site, Task task) throws IOException {
         StopWatch stopWatch = new StopWatch("index");
-        File dir = new File("/data/index/" + indexRequest.getSiteId());
+        File dir = Utils.getIndexPath(String.valueOf(indexRequest.getSiteId())).toFile();
         Files.createDirectories(dir.toPath());
         File file = new File(dir, indexRequest.getIndexName() + ".txt");
         File info = new File(dir, indexRequest.getIndexName() + ".info");

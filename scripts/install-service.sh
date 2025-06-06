@@ -10,6 +10,12 @@ sudo mkdir -p /opt/${APPNAME}/data/backup
 sudo mkdir -p /opt/${APPNAME}/data/atv
 sudo mkdir -p /opt/${APPNAME}/index
 sudo mkdir -p /opt/${APPNAME}/log
+sudo mkdir -p /opt/${APPNAME}/scripts
+sudo mkdir -p /opt/${APPNAME}/www/cat
+sudo mkdir -p /opt/${APPNAME}/www/pg
+sudo mkdir -p /opt/${APPNAME}/www/zx
+sudo mkdir -p /opt/${APPNAME}/www/tvbox
+sudo mkdir -p /opt/${APPNAME}/www/files
 
 cat <<EOF >/tmp/${APPNAME}.yaml
 spring:

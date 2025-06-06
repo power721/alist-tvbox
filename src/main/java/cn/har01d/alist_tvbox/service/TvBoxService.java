@@ -756,7 +756,7 @@ public class TvBoxService {
         }
 
         List<MovieDetail> list = searchFromIndexFile(site, ac, keyword, indexFile);
-        File customIndexFile = new File("/data/index/" + site.getId() + "/custom_index.txt");
+        File customIndexFile = Utils.getIndexPath(String.valueOf(site.getId()), "custom_index.txt").toFile();
         log.debug("custom index file: {}", customIndexFile);
         if (customIndexFile.exists()) {
             list.addAll(searchFromIndexFile(site, ac, keyword, customIndexFile.getAbsolutePath()));
@@ -879,7 +879,7 @@ public class TvBoxService {
         }
 
         if (site.getId() == 1) {
-            list.addAll(searchFromIndexFile(site, ac, keyword, "/data/index/index.video.txt"));
+            list.addAll(searchFromIndexFile(site, ac, keyword, Utils.getIndexPath(String.valueOf("index.video.txt")).toString()));
             return list;
         }
 

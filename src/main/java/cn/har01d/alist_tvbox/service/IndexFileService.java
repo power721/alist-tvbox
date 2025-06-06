@@ -76,7 +76,7 @@ public class IndexFileService {
         out.createNewFile();
         try (FileOutputStream fos = new FileOutputStream(out);
              ZipOutputStream zipOut = new ZipOutputStream(fos)) {
-            File fileToZip = new File("/data/index/" + siteId);
+            File fileToZip = Utils.getIndexPath(siteId).toFile();
             Utils.zipFile(fileToZip, fileToZip.getName(), zipOut);
         }
         return new FileSystemResource(out);
