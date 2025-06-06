@@ -321,6 +321,7 @@ public class SubscriptionService {
     }
 
     public int syncCat() {
+        // TODO:
         Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && [ -d /data/cat ] && cp -r /data/cat/* /www/cat/");
         Utils.execute("/downloadZx.sh");
         Utils.execute("/downloadPg.sh");

@@ -82,8 +82,8 @@ public class ConfigFileService {
     }
 
     private void readFiles() {
-        readFile("/data/tv.txt");
-        readFile("/data/proxy.txt");
+        readFile(Utils.getDataPath("tv.txt").toString());
+        readFile(Utils.getDataPath("proxy.txt").toString());
 
         if (Files.exists(Utils.getDataPath("iptv.m3u"))) {
             readFile("/www/tvbox/iptv.m3u");

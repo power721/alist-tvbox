@@ -8,6 +8,7 @@ public class BaiduNetdisk extends Storage {
         addAddition("cookie", account.getCookie());
         addAddition("refresh_token", account.getToken());
         addAddition("root_folder_path", account.getFolder());
+        addAddition("concurrency", account.getConcurrency());
         addAddition("order_by", "name");
         addAddition("order_direction", "asc");
         addAddition("client_id", "iYCeC9g08h5vuP9UqvPHKKSVrKFXGa1v");

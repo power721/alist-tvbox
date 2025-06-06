@@ -47,4 +47,5 @@ public class Account {
     private boolean master;
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean clean;
+    private Integer concurrency = 4;
 }

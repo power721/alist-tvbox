@@ -1,5 +1,57 @@
 package cn.har01d.alist_tvbox.service;
 
+import static cn.har01d.alist_tvbox.util.Constants.ACCESS_TOKEN;
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_LOGIN;
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_PASSWORD;
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_USERNAME;
+import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
+import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
+import static cn.har01d.alist_tvbox.util.Constants.AUTO_CHECKIN;
+import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_DAYS;
+import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_TIME;
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER_ID;
+import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN;
+import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_TIME;
+import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
+import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN;
+import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN_TIME;
+import static cn.har01d.alist_tvbox.util.Constants.SCHEDULE_TIME;
+import static cn.har01d.alist_tvbox.util.Constants.SHOW_MY_ALI;
+import static cn.har01d.alist_tvbox.util.Constants.ZONE_ID;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.ScheduledFuture;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.support.CronTrigger;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.AListLogin;
 import cn.har01d.alist_tvbox.dto.AccountDto;
@@ -21,58 +73,8 @@ import cn.har01d.alist_tvbox.storage.AliyundriveOpen;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.support.CronTrigger;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
-import java.util.concurrent.ScheduledFuture;
-
-import static cn.har01d.alist_tvbox.util.Constants.ACCESS_TOKEN;
-import static cn.har01d.alist_tvbox.util.Constants.ALIST_LOGIN;
-import static cn.har01d.alist_tvbox.util.Constants.ALIST_PASSWORD;
-import static cn.har01d.alist_tvbox.util.Constants.ALIST_USERNAME;
-import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
-import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
-import static cn.har01d.alist_tvbox.util.Constants.AUTO_CHECKIN;
-import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_DAYS;
-import static cn.har01d.alist_tvbox.util.Constants.CHECKIN_TIME;
-import static cn.har01d.alist_tvbox.util.Constants.FOLDER_ID;
-import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN;
-import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_TIME;
-import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
-import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN;
-import static cn.har01d.alist_tvbox.util.Constants.REFRESH_TOKEN_TIME;
-import static cn.har01d.alist_tvbox.util.Constants.SCHEDULE_TIME;
-import static cn.har01d.alist_tvbox.util.Constants.SHOW_MY_ALI;
-import static cn.har01d.alist_tvbox.util.Constants.ZONE_ID;
 
 @Slf4j
 @Service
@@ -120,6 +122,9 @@ public class AccountService {
     public void setup() {
         if (!settingRepository.existsById(ALI_SECRET)) {
             settingRepository.save(new Setting(ALI_SECRET, UUID.randomUUID().toString().replace("-", "")));
+        }
+        if (!settingRepository.existsByName("fix_ali_concurrency")) {
+            fixConcurrency();
         }
         scheduleAutoCheckinTime();
 
@@ -185,6 +190,15 @@ public class AccountService {
         } catch (Exception e) {
             log.warn("", e);
         }
+    }
+
+    private void fixConcurrency() {
+        List<Account> accounts = accountRepository.findAll();
+        for (Account account : accounts) {
+            account.setConcurrency(4);
+        }
+        accountRepository.saveAll(accounts);
+        settingRepository.save(new Setting("fix_ali_concurrency", ""));
     }
 
     private void updateAliAccountId() {

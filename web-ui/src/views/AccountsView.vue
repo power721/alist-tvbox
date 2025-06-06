@@ -97,6 +97,9 @@
           />
           <span class="hint">主账号用来观看分享。</span>
         </el-form-item>
+        <el-form-item label="代理线程数">
+          <el-input-number :min="1" :max="16" v-model="form.concurrency"/>
+        </el-form-item>
         <el-form-item label="自动签到" label-width="140">
           <el-switch
             v-model="form.autoCheckin"
@@ -176,6 +179,9 @@
             active-text="开启"
             inactive-text="关闭"
           />
+        </el-form-item>
+        <el-form-item label="代理线程数">
+          <el-input-number :min="1" :max="16" v-model="form.concurrency"/>
         </el-form-item>
         <el-form-item label="上次签到时间" v-if="form.checkinTime">
           <el-input :model-value="formatTime(form.checkinTime)" readonly/>
@@ -286,6 +292,7 @@ const form = ref({
   accessTokenOpenTime: '',
   checkinTime: '',
   checkinDays: 1,
+  concurrency: 2,
 })
 
 const formatTime = (value: string | number) => {
@@ -360,6 +367,7 @@ const handleAdd = () => {
     accessTokenOpenTime: '',
     checkinTime: '',
     checkinDays: 1,
+    concurrency: 2,
   }
   formVisible.value = true
 }

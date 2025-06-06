@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
 
-USERNAME=atv
+USERNAME=$USER
 APPNAME=atv
 
-sudo adduser --system --group --no-create-home ${USERNAME}
+sudo mkdir -p /opt/${APPNAME}/alist/data
+sudo mkdir -p /opt/${APPNAME}/alist/log
 sudo mkdir -p /opt/${APPNAME}/config
-sudo mkdir -p /opt/${APPNAME}/data
+sudo mkdir -p /opt/${APPNAME}/data/backup
+sudo mkdir -p /opt/${APPNAME}/data/atv
+sudo mkdir -p /opt/${APPNAME}/index
 sudo mkdir -p /opt/${APPNAME}/log
-
-sudo mkdir -p /opt/alist/data
-sudo mkdir -p /opt/alist/log
-sudo mkdir -p /data
+sudo mkdir -p /opt/${APPNAME}/scripts
+sudo mkdir -p /opt/${APPNAME}/www/cat
+sudo mkdir -p /opt/${APPNAME}/www/pg
+sudo mkdir -p /opt/${APPNAME}/www/zx
+sudo mkdir -p /opt/${APPNAME}/www/tvbox
+sudo mkdir -p /opt/${APPNAME}/www/files
 
 cat <<EOF >/tmp/${APPNAME}.yaml
 spring:
@@ -20,7 +25,7 @@ EOF
 
 sudo mv /tmp/${APPNAME}.yaml /opt/${APPNAME}/config/application-production.yaml
 
-sudo wget https://github.com/power721/alist-tvbox/releases/download/v1.0.1/alist-tvbox-1.0.jar -O /opt/${APPNAME}/${APPNAME}
+sudo wget https://github.com/power721/alist-tvbox/releases/download/v1.0.1/alist-tvbox-1.0.jar -O /opt/${APPNAME}/alist-tvbox.jar
 
 sudo chown -R ${USERNAME}:${USERNAME} /opt/${APPNAME}/
 
@@ -32,7 +37,7 @@ After=syslog.target
 [Service]
 User=${USERNAME}
 WorkingDirectory=/opt/${APPNAME}
-ExecStart=java -jar /opt/${APPNAME}/${APPNAME} --spring.profiles.active=production
+ExecStart=java -jar /opt/${APPNAME}/alist-tvbox.jar --spring.profiles.active=production
 SuccessExitStatus=143
 
 [Install]
@@ -41,10 +46,7 @@ EOF
 
 [[ -f /etc/systemd/system/${APPNAME}.service ]] || sudo cp /tmp/${APPNAME}.service /etc/systemd/system/
 sudo systemctl stop ${APPNAME}.service
-sudo chown -R ${USERNAME}:${USERNAME} /data
-sudo chown -R ${USERNAME}:${USERNAME} /opt/alist
 sudo chown -R ${USERNAME}:${USERNAME} /opt/${APPNAME}
-sudo chmod a+x /opt/${APPNAME}/${APPNAME}
 
 sudo systemctl enable ${APPNAME}.service
 sudo systemctl restart ${APPNAME}.service

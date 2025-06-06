@@ -756,7 +756,7 @@ public class TvBoxService {
         }
 
         List<MovieDetail> list = searchFromIndexFile(site, ac, keyword, indexFile);
-        File customIndexFile = new File("/data/index/" + site.getId() + "/custom_index.txt");
+        File customIndexFile = Utils.getIndexPath(String.valueOf(site.getId()), "custom_index.txt").toFile();
         log.debug("custom index file: {}", customIndexFile);
         if (customIndexFile.exists()) {
             list.addAll(searchFromIndexFile(site, ac, keyword, customIndexFile.getAbsolutePath()));
@@ -879,7 +879,7 @@ public class TvBoxService {
         }
 
         if (site.getId() == 1) {
-            list.addAll(searchFromIndexFile(site, ac, keyword, "/data/index/index.video.txt"));
+            list.addAll(searchFromIndexFile(site, ac, keyword, Utils.getIndexPath(String.valueOf("index.video.txt")).toString()));
             return list;
         }
 
@@ -1365,7 +1365,13 @@ public class TvBoxService {
                 result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
             }
         } else if (fsDetail.getProvider().contains("Baidu")) {
-            result.put("header", "{\"User-Agent\":\"netdisk\"}");
+            DriverAccount account = getDriverAccount(url, DriverType.BAIDU);
+            if (account == null || account.isUseProxy()) {
+                url = buildAListProxyUrl(site, path, fsDetail.getSign());
+                result.put("url", url);
+            } else {
+                result.put("header", "{\"User-Agent\":\"netdisk\"}");
+            }
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
             result.put("header", "{\"User-Agent\":\"" + appProperties.getUserAgent() + "\",\"Referer\":\"" + Constants.ALIPAN + "\",\"origin\":\"" + Constants.ALIPAN + "\"}");

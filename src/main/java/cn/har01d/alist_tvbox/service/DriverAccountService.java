@@ -1,5 +1,23 @@
 package cn.har01d.alist_tvbox.service;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import cn.har01d.alist_tvbox.util.Utils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
@@ -24,23 +42,8 @@ import cn.har01d.alist_tvbox.storage.UC;
 import cn.har01d.alist_tvbox.storage.UCTV;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 @Slf4j
 @Service
@@ -81,6 +84,10 @@ public class DriverAccountService {
         if (!settingRepository.existsByName("migrate_driver_account")) {
             migrateDriverAccounts();
         }
+        if (!settingRepository.existsByName("fix_driver_concurrency")) {
+            fixConcurrency();
+        }
+
 
         String deviceId = settingRepository.findById("quark_device_id").map(Setting::getValue).orElse(null);
         if (deviceId == null) {
@@ -89,6 +96,21 @@ public class DriverAccountService {
         }
         drivers.put("QUARK_TV", new QuarkUCTV(restTemplate, new QuarkUCTV.Conf("https://open-api-drive.quark.cn", "d3194e61504e493eb6222857bccfed94", "kw2dvtd7p4t3pjl2d9ed9yc8yej8kw2d", "1.5.6", "CP", "http://api.extscreen.com/quarkdrive", deviceId)));
         drivers.put("UC_TV", new QuarkUCTV(restTemplate, new QuarkUCTV.Conf("https://open-api-drive.uc.cn", "5acf882d27b74502b7040b0c65519aa7", "l3srvtd7p42l0d0x1u8d7yc8ye9kki4d", "1.6.5", "UCTVOFFICIALWEB", "http://api.extscreen.com/ucdrive", deviceId)));
+    }
+
+    private void fixConcurrency() {
+        List<DriverAccount> accounts = driverAccountRepository.findAll();
+        for (DriverAccount account : accounts) {
+            switch (account.getType()) {
+                case PAN115, OPEN115 -> account.setConcurrency(2);
+                case BAIDU -> account.setConcurrency(4);
+                case UC, UC_TV -> account.setConcurrency(8);
+                case QUARK, QUARK_TV -> account.setConcurrency(10);
+                default -> account.setConcurrency(1);
+            }
+        }
+        driverAccountRepository.saveAll(accounts);
+        settingRepository.save(new Setting("fix_driver_concurrency", ""));
     }
 
     private void migrateDriverAccounts() {
@@ -156,7 +178,9 @@ public class DriverAccountService {
             if (account.isMaster()) {
                 updateMasterToken(account, false);
             }
-            saveStorage(account, false);
+            if (!account.isDisabled()) {
+                saveStorage(account, false);
+            }
         }
     }
 
@@ -243,6 +267,7 @@ public class DriverAccountService {
 
         boolean changed = account.isMaster() != dto.isMaster()
                 || account.isUseProxy() != dto.isUseProxy()
+                || account.isDisabled() != dto.isDisabled()
                 || !account.getType().equals(dto.getType())
                 || !account.getToken().equals(dto.getToken())
                 || !account.getCookie().equals(dto.getCookie())
@@ -251,6 +276,7 @@ public class DriverAccountService {
 
         account.setMaster(dto.isMaster());
         account.setUseProxy(dto.isUseProxy());
+        account.setDisabled(dto.isDisabled());
         account.setName(dto.getName());
         account.setType(dto.getType());
         account.setCookie(dto.getCookie());
@@ -368,10 +394,14 @@ public class DriverAccountService {
             String token = status >= 2 ? accountService.login() : "";
             if (status >= 2) {
                 accountService.deleteStorage(id, token);
+            } else {
+                Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + id);
             }
-            saveStorage(account, true);
-            if (status >= 2) {
-                accountService.enableStorage(id, token);
+            if (!account.isDisabled()) {
+                saveStorage(account, true);
+                if (status >= 2) {
+                    accountService.enableStorage(id, token);
+                }
             }
         } catch (Exception e) {
             throw new BadRequestException(e);

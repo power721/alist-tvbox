@@ -46,6 +46,27 @@
           </el-icon>
         </template>
       </el-table-column>
+      <el-table-column prop="master" label="禁用？" width="100">
+        <template #default="scope">
+          <el-icon v-if="scope.row.disabled">
+            <Check/>
+          </el-icon>
+          <el-icon v-else>
+            <Close/>
+          </el-icon>
+        </template>
+      </el-table-column>
+      <el-table-column prop="master" label="开启代理？" width="120">
+        <template #default="scope">
+          <el-icon v-if="scope.row.useProxy">
+            <Check/>
+          </el-icon>
+          <el-icon v-else>
+            <Close/>
+          </el-icon>
+        </template>
+      </el-table-column>
+      <el-table-column prop="concurrency" label="线程数" width="110"/>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
@@ -100,7 +121,7 @@
           </span>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
-          <el-input v-model="form.token"/>
+          <el-input v-model="form.token" type="textarea" :rows="3"/>
           <a href="https://yun.139.com/" target="_blank">移动云盘</a>
           <div class="hint"></div>
           <a href="https://alist.nn.ci/zh/guide/drivers/139.html" target="_blank">使用说明</a>
@@ -144,7 +165,10 @@
             active-text="开启"
             inactive-text="关闭"
           />
-          <span class="hint">服务端多线程加速</span>
+          <span class="hint">服务端多线程加速，网页播放强制开启</span>
+        </el-form-item>
+        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'" label="代理线程数">
+          <el-input-number :min="1" :max="16" v-model="form.concurrency"/>
         </el-form-item>
         <el-form-item label="主账号" v-if="!driverRoundRobin&&form.type!='OPEN115'&&form.type!='QUARK_TV'&&form.type!='UC_TV'">
           <el-switch
@@ -154,6 +178,14 @@
             inactive-text="否"
           />
           <span class="hint">主账号用来观看分享</span>
+        </el-form-item>
+        <el-form-item label="禁用账号">
+          <el-switch
+            v-model="form.disabled"
+            inline-prompt
+            active-text="是"
+            inactive-text="否"
+          />
         </el-form-item>
         <span style="margin-left: 72px" v-if="form.name">完整路径： {{ fullPath(form) }}</span>
       </el-form>
@@ -236,7 +268,9 @@ const form = ref({
   password: '',
   safePassword: '',
   folder: '',
+  concurrency: 2,
   useProxy: false,
+  disabled: false,
   master: false,
 })
 const qr = ref({
@@ -295,7 +329,9 @@ const handleAdd = () => {
     password: '',
     safePassword: '',
     folder: '',
+    concurrency: 2,
     useProxy: false,
+    disabled: false,
     master: false,
   }
   formVisible.value = true
