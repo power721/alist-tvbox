@@ -304,6 +304,11 @@ public final class Utils {
         return Path.of(base, name);
     }
 
+    public static String getAListPath(String name) {
+        String base = inDocker ? "/opt/alist/" : "/opt/atv/alist/";
+        return base + name;
+    }
+
     public static long durationToSeconds(String duration) {
         if (StringUtils.isBlank(duration)) {
             return 0;

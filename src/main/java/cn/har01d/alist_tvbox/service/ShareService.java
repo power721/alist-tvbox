@@ -271,7 +271,7 @@ public class ShareService {
                 log.warn("", e);
             }
 
-            Path path = Path.of("/opt/alist/data/config.json");
+            Path path = Path.of(Utils.getAListPath("data/config.json"));
             if (Files.exists(path)) {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);
@@ -291,7 +291,7 @@ public class ShareService {
     public void updateOpenTokenUrl(OpenApiDto dto) {
         String url = dto.getUrl();
         try {
-            Path path = Path.of("/opt/alist/data/config.json");
+            Path path = Path.of(Utils.getAListPath("data/config.json"));
             if (Files.exists(path)) {
                 String text = Files.readString(path);
                 Map<String, Object> json = objectMapper.readValue(text, Map.class);

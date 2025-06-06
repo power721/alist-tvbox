@@ -10,6 +10,7 @@ public class Pan115 extends Storage {
         addAddition("cookie", account.getCookie());
         addAddition("qrcode_token", account.getToken());
         addAddition("root_folder_id", account.getFolder());
+        addAddition("concurrency", account.getConcurrency());
         addAddition("page_size", 1000);
         addAddition("limit_rate", 2);
         buildAddition();

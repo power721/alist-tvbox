@@ -7,6 +7,7 @@ public class Pan139 extends Storage {
         super(account, "139Yun");
         addAddition("authorization", account.getToken());
         addAddition("root_folder_id", account.getFolder());
+        addAddition("concurrency", account.getConcurrency());
         addAddition("type", "personal_new");
         buildAddition();
     }

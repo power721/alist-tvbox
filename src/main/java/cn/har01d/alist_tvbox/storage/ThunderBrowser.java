@@ -9,6 +9,7 @@ public class ThunderBrowser extends Storage {
         addAddition("password", account.getPassword());
         addAddition("safe_password", account.getSafePassword());
         addAddition("root_folder_id", account.getFolder());
+        addAddition("concurrency", account.getConcurrency());
         addAddition("remove_way", "delete");
         buildAddition();
     }
