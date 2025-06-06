@@ -217,7 +217,7 @@ public final class Utils {
         try {
             ProcessBuilder builder = new ProcessBuilder();
             builder.inheritIO();
-            builder.command("sqlite3", "/opt/alist/data/data.db", sql);
+            builder.command("sqlite3", Utils.getAListPath("data/data.db"), sql);
             Process process = builder.start();
             code = process.waitFor();
         } catch (Exception e) {
@@ -241,7 +241,7 @@ public final class Utils {
         log.debug("executeQuery {}", sql);
         try {
             ProcessBuilder builder = new ProcessBuilder();
-            builder.command("sqlite3", "/opt/alist/data/data.db", sql);
+            builder.command("sqlite3", Utils.getAListPath("data/data.db"), sql);
             Process process = builder.start();
             BufferedReader reader =
                     new BufferedReader(new InputStreamReader(process.getInputStream()));
@@ -288,9 +288,6 @@ public final class Utils {
 
     public static Path getDataPath(String... path) {
         String base = inDocker ? "/data" : "/opt/atv/data";
-        if (!inDocker && path.length > 0 && "atv".equals(path[0])) {
-            path[0] = "temp";
-        }
         return Path.of(base, path);
     }
 

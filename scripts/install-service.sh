@@ -7,7 +7,7 @@ sudo mkdir -p /opt/${APPNAME}/alist/data
 sudo mkdir -p /opt/${APPNAME}/alist/log
 sudo mkdir -p /opt/${APPNAME}/config
 sudo mkdir -p /opt/${APPNAME}/data/backup
-sudo mkdir -p /opt/${APPNAME}/data/temp
+sudo mkdir -p /opt/${APPNAME}/data/atv
 sudo mkdir -p /opt/${APPNAME}/index
 sudo mkdir -p /opt/${APPNAME}/log
 
