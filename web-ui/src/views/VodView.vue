@@ -504,9 +504,9 @@ const options = [
   {label: '115', value: '8'},
   {label: '123', value: '3'},
   {label: '天翼', value: '9'},
+  {label: '百度', value: '10'},
   {label: '迅雷', value: '2'},
   {label: '移动', value: '6'},
-  {label: '百度', value: '10'},
   {label: 'PikPak', value: '1'},
 ]
 
