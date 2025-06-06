@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import cn.har01d.alist_tvbox.util.Utils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
@@ -177,7 +178,9 @@ public class DriverAccountService {
             if (account.isMaster()) {
                 updateMasterToken(account, false);
             }
-            saveStorage(account, false);
+            if (!account.isDisabled()) {
+                saveStorage(account, false);
+            }
         }
     }
 
@@ -264,6 +267,7 @@ public class DriverAccountService {
 
         boolean changed = account.isMaster() != dto.isMaster()
                 || account.isUseProxy() != dto.isUseProxy()
+                || account.isDisabled() != dto.isDisabled()
                 || !account.getType().equals(dto.getType())
                 || !account.getToken().equals(dto.getToken())
                 || !account.getCookie().equals(dto.getCookie())
@@ -272,6 +276,7 @@ public class DriverAccountService {
 
         account.setMaster(dto.isMaster());
         account.setUseProxy(dto.isUseProxy());
+        account.setDisabled(dto.isDisabled());
         account.setName(dto.getName());
         account.setType(dto.getType());
         account.setCookie(dto.getCookie());
@@ -389,10 +394,14 @@ public class DriverAccountService {
             String token = status >= 2 ? accountService.login() : "";
             if (status >= 2) {
                 accountService.deleteStorage(id, token);
+            } else {
+                Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + id);
             }
-            saveStorage(account, true);
-            if (status >= 2) {
-                accountService.enableStorage(id, token);
+            if (!account.isDisabled()) {
+                saveStorage(account, true);
+                if (status >= 2) {
+                    accountService.enableStorage(id, token);
+                }
             }
         } catch (Exception e) {
             throw new BadRequestException(e);

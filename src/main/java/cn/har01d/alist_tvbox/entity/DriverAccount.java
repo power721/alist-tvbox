@@ -34,6 +34,8 @@ public class DriverAccount {
     private String folder = "";
     private Integer concurrency = 1;
     @Column(columnDefinition = "BOOLEAN DEFAULT false")
+    private boolean disabled;
+    @Column(columnDefinition = "BOOLEAN DEFAULT false")
     private boolean useProxy;
     private boolean master;
 }
