@@ -614,7 +614,10 @@ public class ShareService {
         return sb;
     }
 
-    public Page<Share> list(Pageable pageable) {
+    public Page<Share> list(Pageable pageable, Integer type) {
+        if (type != null && type > -1) {
+            return shareRepository.findByType(type, pageable);
+        }
         return shareRepository.findAll(pageable);
     }
 
@@ -1157,6 +1160,22 @@ public class ShareService {
         } catch (IOException e) {
             log.warn("load shares.txt failed", e);
         }
+
+        if (driverAccountService.countByType(DriverType.PAN115) > 0) {
+            try {
+                var resource = new ClassPathResource("115_shares.txt");
+                String lines = resource.getContentAsString(StandardCharsets.UTF_8);
+                for (String line : lines.split("\n")) {
+                    Share share = importShare(line, id++);
+                    if (share != null) {
+                        shares.add(share);
+                    }
+                }
+            } catch (IOException e) {
+                log.warn("load 115_shares.txt failed", e);
+            }
+        }
+
         log.info("load {} shares", shares.size());
         return shares;
     }

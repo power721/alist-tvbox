@@ -3,6 +3,7 @@
     "includes": [
       {"pattern": "ua.txt"},
       {"pattern": "shares.txt"},
+      {"pattern": "115_shares.txt"},
       {"pattern": "countries.json"}
     ]
   }
