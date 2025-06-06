@@ -121,7 +121,7 @@
           </span>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
-          <el-input v-model="form.token"/>
+          <el-input v-model="form.token" type="textarea" :rows="3"/>
           <a href="https://yun.139.com/" target="_blank">移动云盘</a>
           <div class="hint"></div>
           <a href="https://alist.nn.ci/zh/guide/drivers/139.html" target="_blank">使用说明</a>
