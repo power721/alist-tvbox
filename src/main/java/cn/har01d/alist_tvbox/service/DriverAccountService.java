@@ -102,7 +102,7 @@ public class DriverAccountService {
         List<DriverAccount> accounts = driverAccountRepository.findAll();
         for (DriverAccount account : accounts) {
             switch (account.getType()) {
-                case THUNDER, PAN115, OPEN115, PAN139 -> account.setConcurrency(2);
+                case PAN115, OPEN115 -> account.setConcurrency(2);
                 case BAIDU -> account.setConcurrency(4);
                 case UC, UC_TV -> account.setConcurrency(8);
                 case QUARK, QUARK_TV -> account.setConcurrency(10);
