@@ -1354,7 +1354,7 @@ const showPrevImage = () => {
 
 onMounted(async () => {
   axios.get('/api/token').then(({data}) => {
-    token.value = data ? '/' + (data + '').split(',')[0] : ''
+    token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
     if (Array.isArray(route.params.path)) {
       const path = route.params.path.join('/')
       loadFiles('/' + path)

@@ -99,12 +99,12 @@ public class TvBoxController {
     }
 
     @GetMapping("/api/token")
-    public String getToken() {
+    public TokenDto getToken() {
         return subscriptionService.getTokens();
     }
 
     @PostMapping("/api/token")
-    public TokenDto createToken(@RequestBody TokenDto dto) {
+    public TokenDto updateToken(@RequestBody TokenDto dto) {
         return subscriptionService.updateToken(dto);
     }
 

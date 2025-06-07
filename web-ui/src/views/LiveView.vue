@@ -307,7 +307,7 @@ const updateLive = () => {
 
 onMounted(async () => {
   token.value = await axios.get("/api/token").then(({data}) => {
-    return data ? "/" + (data + "").split(",")[0] : "";
+    return data.enabledToken ? "/" + data.token.split(",")[0] : ""
   });
   loadCategories(route.params.id as string);
 });
