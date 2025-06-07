@@ -713,11 +713,7 @@ public class TvBoxService {
                 movieDetail.setVod_name(name);
                 movieDetail.setVod_pic(Constants.ALIST_PIC);
                 movieDetail.setVod_content(meta.getPath());
-                if ("web".equals(ac)) {
-                    movieDetail.setVod_play_url(buildWebUrl(meta.getPath()));
-                } else {
-                    movieDetail.setVod_remarks(getLabel(newPath));
-                }
+                movieDetail.setVod_remarks(getLabel(newPath));
                 setMovieInfo(movieDetail, meta, false);
                 list.add(movieDetail);
             }
@@ -835,11 +831,7 @@ public class TvBoxService {
             movieDetail.setVod_pic(Constants.ALIST_PIC);
             movieDetail.setVod_content(path.replace(PLAYLIST, ""));
             movieDetail.setVod_tag(FILE);
-            if ("web".equals(ac)) {
-                movieDetail.setVod_play_url(buildWebUrl(path.replace(PLAYLIST, "")));
-            } else {
-                movieDetail.setVod_remarks(getLabel(path));
-            }
+            movieDetail.setVod_remarks(getLabel(path));
             if (!isMediaFile) {
                 setMovieInfo(site, movieDetail, "", getParent(path), false);
             }
@@ -2277,10 +2269,6 @@ public class TvBoxService {
                     .toUri()
                     .toASCIIString();
         }
-    }
-
-    private String buildWebUrl(String path) {
-        return "/#/vod" + path;
     }
 
     private String buildUrl(Site site, String path) {
