@@ -714,7 +714,7 @@ public class TvBoxService {
                 movieDetail.setVod_pic(Constants.ALIST_PIC);
                 movieDetail.setVod_content(meta.getPath());
                 if ("web".equals(ac)) {
-                    movieDetail.setVod_play_url(buildUrl(getSite(meta.getSiteId()), meta.getPath()));
+                    movieDetail.setVod_play_url(buildWebUrl(meta.getPath()));
                 } else {
                     movieDetail.setVod_remarks(getLabel(newPath));
                 }
@@ -811,6 +811,9 @@ public class TvBoxService {
                 continue;
             }
             String path = fixPath("/" + line + (isMediaFile ? "" : PLAYLIST));
+            if (path.startsWith("/\uD83C\uDFF7\uFE0F我的115分享/")) {
+                path = path.replace("/\uD83C\uDFF7\uFE0F我的115分享/", "/我的115分享/");
+            }
             if (StringUtils.isNotBlank(site.getFolder()) && !"/".equals(site.getFolder())) {
                 if (path.startsWith(site.getFolder())) {
                     path = path.substring(site.getFolder().length());
@@ -833,7 +836,7 @@ public class TvBoxService {
             movieDetail.setVod_content(path.replace(PLAYLIST, ""));
             movieDetail.setVod_tag(FILE);
             if ("web".equals(ac)) {
-                movieDetail.setVod_play_url(buildUrl(getSite(site.getId()), path.replace(PLAYLIST, "")));
+                movieDetail.setVod_play_url(buildWebUrl(path.replace(PLAYLIST, "")));
             } else {
                 movieDetail.setVod_remarks(getLabel(path));
             }
@@ -904,7 +907,7 @@ public class TvBoxService {
 
         if (site.getId() == 1) {
             for (String index : settingService.getSearchSources()) {
-                list.addAll(searchFromIndexFile(site, ac, keyword, index));
+                list.addAll(searchFromIndexFile(site, ac, keyword, Utils.getIndexPath(index).toString()));
             }
             return list;
         }
@@ -2274,6 +2277,10 @@ public class TvBoxService {
                     .toUri()
                     .toASCIIString();
         }
+    }
+
+    private String buildWebUrl(String path) {
+        return "/#/vod" + path;
     }
 
     private String buildUrl(Site site, String path) {

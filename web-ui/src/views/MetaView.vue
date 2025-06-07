@@ -228,15 +228,7 @@ const fixMeta = () => {
 }
 
 const getUrl = (meta: Meta) => {
-  const site = sites.value.find(e => e.id == meta.siteId)
-  if (site && site.url !== 'http://localhost') {
-    let surl = site.url
-    if (surl.endsWith('/')) {
-      surl = surl.substring(0, surl.length - 1)
-    }
-    return surl + meta.path
-  }
-  return url.value + meta.path
+  return '/#/vod' + meta.path
 }
 
 const addMeta = () => {
