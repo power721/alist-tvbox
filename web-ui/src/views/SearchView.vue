@@ -29,14 +29,14 @@
     <el-table v-if="(type==''||type=='1')&&config" :data="config.list" border style="width: 100%">
       <el-table-column prop="vod_name" label="名称" width="300">
         <template #default="scope">
-          <a :href="scope.row.vod_play_url" target="_blank">
+          <a :href="'/#/vod'+scope.row.vod_content" target="_blank">
             {{ scope.row.vod_name }}
           </a>
         </template>
       </el-table-column>
       <el-table-column prop="vod_content" label="路径">
         <template #default="scope">
-          <a :href="scope.row.vod_play_url" target="_blank">
+          <a :href="'/#/vod'+scope.row.vod_content" target="_blank">
             {{ scope.row.vod_content }}
           </a>
         </template>
