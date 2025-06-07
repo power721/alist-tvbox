@@ -697,6 +697,14 @@ public class TvBoxService {
 
         if (type != null && type == 0) {
             for (Meta meta : metaRepository.findByPathContains(keyword, PageRequest.of(page - 1, appProperties.getMaxSearchResult(), Sort.Direction.DESC, "time", "id"))) {
+                if (appProperties.getExcludedPaths().stream().anyMatch(meta.getPath()::startsWith)) {
+                    log.debug("exclude: {}", meta.getPath());
+                    continue;
+                }
+                if (!tenantService.valid(meta.getPath())) {
+                    log.debug("invalid: {}", meta.getPath());
+                    continue;
+                }
                 String name = getName(meta);
                 boolean isMediaFile = isMediaFile(meta.getPath());
                 String newPath = fixPath(meta.getPath() + (isMediaFile ? "" : PLAYLIST));
@@ -717,10 +725,17 @@ public class TvBoxService {
             List<Future<List<MovieDetail>>> futures = new ArrayList<>();
             for (Site site : siteService.list()) {
                 if (site.isSearchable()) {
+                    String tenant = tenantService.getCurrent();
                     if (StringUtils.isNotEmpty(site.getIndexFile())) {
-                        futures.add(executorService.submit(() -> searchByFile(site, ac, keyword)));
+                        futures.add(executorService.submit(() -> {
+                            tenantService.setTenant(tenant);
+                            return searchByFile(site, ac, keyword);
+                        }));
                     } else {
-                        futures.add(executorService.submit(() -> searchByApi(site, ac, keyword)));
+                        futures.add(executorService.submit(() -> {
+                            tenantService.setTenant(tenant);
+                            return searchByApi(site, ac, keyword);
+                        }));
                     }
                 }
             }
@@ -804,9 +819,11 @@ public class TvBoxService {
                 }
             }
             if (appProperties.getExcludedPaths().stream().anyMatch(path::startsWith)) {
+                log.debug("exclude: {}", path);
                 continue;
             }
-            if (tenantService.valid(path)) {
+            if (!tenantService.valid(path)) {
+                log.debug("invalid: {}", path);
                 continue;
             }
             MovieDetail movieDetail = new MovieDetail();
