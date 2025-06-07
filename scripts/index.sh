@@ -11,7 +11,8 @@ if [ $# -gt 0 ]; then
     cat /index/index.share.txt >> index.video.txt
     sed -i 's/🏷️我的115分享/我的115分享/' /index/index.115.txt
     sed -i 's/🌀我的夸克分享/我的夸克分享/' /index/index.quark.txt
-    cat index.video.txt index.comics.txt index.docu.txt index.book.txt index.music.txt index.non.video.txt >/index/index.txt
+    cat index.video.txt index.comics.txt index.docu.txt index.daily.txt index.movie.txt index.tv.txt | sort -u >index.merged.txt
+    cat index.merged.txt index.book.txt index.music.txt index.non.video.txt index.reality.txt | sort -u >/index/index.txt
     mv index*.txt /index/
     echo $(date) "update index successfully, your new version.txt is $remote"
     echo "$remote" >/index/version.txt

@@ -105,7 +105,7 @@ public class TvBoxService {
     private final SubscriptionService subscriptionService;
     private final ConfigFileService configFileService;
     private final TenantService tenantService;
-    private final ProxyService proxyService;
+    private final SettingService settingService;
     private final ObjectMapper objectMapper;
     private final Environment environment;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
@@ -159,7 +159,7 @@ public class TvBoxService {
                         SubscriptionService subscriptionService,
                         ConfigFileService configFileService,
                         TenantService tenantService,
-                        ProxyService proxyService,
+                        SettingService settingService,
                         ObjectMapper objectMapper,
                         Environment environment,
                         DriverAccountRepository driverAccountRepository,
@@ -177,7 +177,7 @@ public class TvBoxService {
         this.subscriptionService = subscriptionService;
         this.configFileService = configFileService;
         this.tenantService = tenantService;
-        this.proxyService = proxyService;
+        this.settingService = settingService;
         this.objectMapper = objectMapper;
         this.environment = environment;
         this.driverAccountRepository = driverAccountRepository;
@@ -879,16 +879,9 @@ public class TvBoxService {
         }
 
         if (site.getId() == 1) {
-            list.addAll(searchFromIndexFile(site, ac, keyword, Utils.getIndexPath("index.video.txt").toString()));
-
-            if (driverAccountRepository.countByType(DriverType.PAN115) > 0) {
-                File index115 = Utils.getIndexPath("index.115.txt").toFile();
-                log.debug("115 index file: {}", index115);
-                if (index115.exists()) {
-                    list.addAll(searchFromIndexFile(site, ac, keyword, index115.getAbsolutePath()));
-                }
+            for (String index : settingService.getSearchSources()) {
+                list.addAll(searchFromIndexFile(site, ac, keyword, index));
             }
-
             return list;
         }
 
