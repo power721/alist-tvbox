@@ -879,7 +879,16 @@ public class TvBoxService {
         }
 
         if (site.getId() == 1) {
-            list.addAll(searchFromIndexFile(site, ac, keyword, Utils.getIndexPath(String.valueOf("index.video.txt")).toString()));
+            list.addAll(searchFromIndexFile(site, ac, keyword, Utils.getIndexPath("index.video.txt").toString()));
+
+            if (driverAccountRepository.countByType(DriverType.PAN115) > 0) {
+                File index115 = Utils.getIndexPath("index.115.txt").toFile();
+                log.debug("115 index file: {}", index115);
+                if (index115.exists()) {
+                    list.addAll(searchFromIndexFile(site, ac, keyword, index115.getAbsolutePath()));
+                }
+            }
+
             return list;
         }
 
@@ -1029,7 +1038,7 @@ public class TvBoxService {
                     }
                     movieDetail.setCate(new CategoryList());
                 }
-                if (!"/".equals(path) && !"gui".equals(ac)) {
+                if (!"/".equals(path) && !"gui".equals(ac) && !newPath.contains("短剧")) {
                     setMovieInfo(site, movieDetail, fsInfo.getName(), newPath, false);
                 }
                 folders.add(movieDetail);
@@ -1605,7 +1614,7 @@ public class TvBoxService {
             movieDetail.setVod_time(fsDetail.getModified());
             movieDetail.setVod_pic(getCover(ac, fsDetail.getThumb(), fsDetail.getType()));
             movieDetail.setVod_play_from(site.getName());
-            String sign = subscriptionService.getTokens().isEmpty() ? "" : fsDetail.getSign();
+            String sign = appProperties.isEnabledToken() ? "" : fsDetail.getSign();
             if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
                 movieDetail.setVod_play_url(buildAListProxyUrl(site, path, sign));
                 movieDetail.setType(fsDetail.getType());

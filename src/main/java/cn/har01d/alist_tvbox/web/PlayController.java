@@ -35,6 +35,11 @@ public class PlayController {
         this.proxyService = proxyService;
     }
 
+    @RequestMapping(value = "/p")
+    public void proxy(String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        proxy("", path, request, response);
+    }
+
     @RequestMapping(value = "/p/{token}")
     public void proxy(@PathVariable String token, String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
         subscriptionService.checkToken(token);

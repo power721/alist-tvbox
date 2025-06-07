@@ -64,6 +64,7 @@ import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
+import static cn.har01d.alist_tvbox.util.Constants.ENABLED_TOKEN;
 import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 
 @Slf4j
@@ -133,6 +134,10 @@ public class SubscriptionService {
         tokens = settingRepository.findById(TOKEN)
                 .map(Setting::getValue)
                 .orElse("");
+
+        if (settingRepository.findById(ENABLED_TOKEN).isEmpty()) {
+            settingRepository.save(new Setting(ENABLED_TOKEN, String.valueOf(!tokens.isEmpty())));
+        }
 
         List<Subscription> list = subscriptionRepository.findAll();
         if (list.isEmpty()) {
@@ -237,7 +242,7 @@ public class SubscriptionService {
     public void checkToken(String rawToken) {
         currentToken.set(rawToken);
         tenantService.setTenant(rawToken);
-        if (tokens.isBlank()) {
+        if (!appProperties.isEnabledToken()) {
             return;
         }
 
@@ -254,30 +259,34 @@ public class SubscriptionService {
         return tokens;
     }
 
-    public String getToken() {
-        return tokens.isEmpty() ? "-" : tokens.split(",")[0];
+    public String getFirstToken() {
+        return appProperties.isEnabledToken() ? tokens.split(",")[0] : "";
     }
 
     public String getCurrentToken() {
         return currentToken.get();
     }
 
-    public void deleteToken() {
-        tokens = "";
-        settingRepository.save(new Setting(TOKEN, tokens));
-        aListLocalService.updateSetting("sign_all", "false", "bool");
+    public String getCurrentOrFirstToken() {
+        String value = currentToken.get();
+        if (StringUtils.isBlank(value)) {
+            return getFirstToken();
+        }
+        return value;
     }
 
-    public String createToken(TokenDto dto) {
-        if (StringUtils.isBlank(dto.getToken())) {
+    public TokenDto updateToken(TokenDto dto) {
+        if (dto.isEnabledToken() && StringUtils.isBlank(dto.getToken())) {
             tokens = IdUtils.generate(8);
         } else {
             tokens = Arrays.stream(dto.getToken().split(",")).filter(StringUtils::isNotBlank).collect(Collectors.joining(","));
         }
-
+        dto.setToken(tokens);
+        aListLocalService.updateSetting("sign_all", String.valueOf(dto.isEnabledToken()), "bool");
+        settingRepository.save(new Setting(ENABLED_TOKEN, String.valueOf(dto.isEnabledToken())));
         settingRepository.save(new Setting(TOKEN, tokens));
-        aListLocalService.updateSetting("sign_all", String.valueOf(StringUtils.isNotBlank(tokens)), "bool");
-        return tokens;
+        appProperties.setEnabledToken(dto.isEnabledToken());
+        return dto;
     }
 
     public List<String> getProfiles() {
@@ -293,7 +302,7 @@ public class SubscriptionService {
         if (file.contains("index.config.js")) {
             Path config = Path.of("/www/cat/index.config.js");
             String json = Files.readString(config);
-            String secret = tokens.isEmpty() ? "" : ("/" + tokens.split(",")[0]);
+            String secret = appProperties.isEnabledToken() ? ("/" + tokens.split(",")[0]) : "";
             json = json.replace("VOD_URL", readHostAddress("/vod" + secret));
             json = json.replace("VOD1_URL", readHostAddress("/vod1" + secret));
             json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret));
@@ -421,7 +430,7 @@ public class SubscriptionService {
     private String replaceOpen(String json) {
         json = json.replace("./", "/cat/");
         json = json.replace("assets://js/", "/cat/");
-        String secret = tokens.isEmpty() ? "" : ("/" + tokens.split(",")[0]);
+        String secret = appProperties.isEnabledToken() ? ("/" + tokens.split(",")[0]) : "";
         json = json.replace("VOD_EXT", readHostAddress("/vod" + secret));
         json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
         json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
@@ -716,7 +725,7 @@ public class SubscriptionService {
             json = json.replace("DOCKER_ADDRESS", address);
             json = json.replace("ATV_ADDRESS", address);
             json = json.replace("BILI_COOKIE", settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(""));
-            json = json.replace("TOKEN", tokens.split(",")[0]);
+            json = json.replace("TOKEN", getCurrentOrFirstToken());
             Map<String, Object> override = objectMapper.readValue(json, Map.class);
             overrideConfig(config, null, "", override);
             return replaceString(config, override);
@@ -740,7 +749,7 @@ public class SubscriptionService {
                         String address = readHostAddress();
                         value = value.replace("DOCKER_ADDRESS", address);
                         value = value.replace("ATV_ADDRESS", address);
-                        value = value.replace("TOKEN", tokens.split(",")[0]);
+                        value = value.replace("TOKEN", getCurrentOrFirstToken());
                         log.info("replace text '{}' by '{}'", key, value);
                         configJson = configJson.replace(key, value);
                     }
@@ -1071,7 +1080,7 @@ public class SubscriptionService {
                 log.info("load json from {}", file);
                 String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
                 String address = readHostAddress();
-                String token = tokens.split(",")[0];
+                String token = getCurrentOrFirstToken();
                 json = appendMd5sum(name, json);
                 json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
                 json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));

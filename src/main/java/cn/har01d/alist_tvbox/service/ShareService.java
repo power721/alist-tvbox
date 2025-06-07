@@ -10,6 +10,7 @@ import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.MetaRepository;
 import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -85,6 +86,7 @@ public class ShareService {
     private final ObjectMapper objectMapper;
     private final AppProperties appProperties;
     private final ShareRepository shareRepository;
+    private final MetaRepository metaRepository;
     private final AListAliasRepository aliasRepository;
     private final SettingRepository settingRepository;
     private final SiteRepository siteRepository;
@@ -106,6 +108,7 @@ public class ShareService {
     public ShareService(ObjectMapper objectMapper,
                         AppProperties appProperties1,
                         ShareRepository shareRepository,
+                        MetaRepository metaRepository,
                         AListAliasRepository aliasRepository,
                         SettingRepository settingRepository,
                         SiteRepository siteRepository,
@@ -124,6 +127,7 @@ public class ShareService {
         this.objectMapper = objectMapper;
         this.appProperties = appProperties1;
         this.shareRepository = shareRepository;
+        this.metaRepository = metaRepository;
         this.aliasRepository = aliasRepository;
         this.settingRepository = settingRepository;
         this.siteRepository = siteRepository;
@@ -1111,8 +1115,9 @@ public class ShareService {
                 || status.contains("share_pwd is not valid")
                 || status.contains("guest missing pwd_id or stoken")
                 || status.contains("获取天翼网盘分享信息为空")
-                || status.contains("分享链接已失效")
+                || status.contains("链接已失效")
                 || status.contains("分享已取消")
+                || status.contains("文件没有被分享")
                 ;
     }
 
@@ -1174,6 +1179,10 @@ public class ShareService {
             } catch (IOException e) {
                 log.warn("load 115_shares.txt failed", e);
             }
+            metaRepository.enableByTid(8);
+        } else {
+            log.info("disable 115 shares data");
+            metaRepository.disableByTid(8);
         }
 
         log.info("load {} shares", shares.size());

@@ -21,6 +21,7 @@ public class AppProperties {
     private boolean searchable;
     private boolean enableHttps;
     private boolean cleanInvalidShares;
+    private boolean enabledToken;
     private int pageSize = 100;
     private int maxSearchResult = 60;
     private String secretKey;

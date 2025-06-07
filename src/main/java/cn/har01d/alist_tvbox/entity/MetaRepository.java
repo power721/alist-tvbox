@@ -1,12 +1,35 @@
 package cn.har01d.alist_tvbox.entity;
 
+import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 
 public interface MetaRepository extends JpaRepository<Meta, Integer> {
+    @Modifying
+    @Transactional
+    @Query("UPDATE Meta m SET m.disabled = true WHERE m.path LIKE ?1%")
+    int disableByPathStartsWith(String pathPrefix);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE Meta m SET m.disabled = false WHERE m.path LIKE ?1%")
+    int enableByPathStartsWith(String pathPrefix);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE Meta m SET m.disabled = true WHERE m.tid = ?1")
+    int disableByTid(int tid);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE Meta m SET m.disabled = false WHERE m.tid = ?1")
+    int enableByTid(int tid);
+
     Meta findByPath(String path);
 
     List<Meta> findByTmdb(Tmdb tmdb);
