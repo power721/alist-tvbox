@@ -17,7 +17,6 @@
         <el-radio label="1" size="large">点播模式</el-radio>
         <el-radio label="" size="large">网盘模式</el-radio>
         <el-radio label="2" size="large">BiliBili</el-radio>
-        <el-radio label="3" size="large">YouTube</el-radio>
         <el-radio label="4" size="large">Emby</el-radio>
         <el-radio label="5" size="large">Jellyfin</el-radio>
       </el-radio-group>
