@@ -904,7 +904,7 @@ public class TvBoxService {
 
         if (site.getId() == 1) {
             for (String index : settingService.getSearchSources()) {
-                list.addAll(searchFromIndexFile(site, ac, keyword, index));
+                list.addAll(searchFromIndexFile(site, ac, keyword, Utils.getIndexPath(index).toString()));
             }
             return list;
         }

@@ -265,8 +265,9 @@ public class SettingService {
 
     private List<String> getIndexFiles() {
         List<String> list = new ArrayList<>();
+        String base = Utils.getIndexPath() + "/";
         for (File file : Utils.listFiles(Utils.getIndexPath(), "txt")) {
-            list.add(file.getAbsolutePath());
+            list.add(file.getAbsolutePath().replace(base, ""));
         }
         return list;
     }
@@ -280,18 +281,22 @@ public class SettingService {
         if (CollectionUtils.isEmpty(sources)) {
             sources = new ArrayList<>();
             Path index = Utils.getIndexPath("index.merged.txt");
-            if (!Files.exists(index)) {
-                index = Utils.getIndexPath("index.video.txt");
-            }
             if (Files.exists(index)) {
-                sources.add(index.toString());
+                sources.add("index.merged.txt");
+            } else {
+                sources.add("index.video.txt");
             }
 
             if (driverAccountRepository.countByType(DriverType.PAN115) > 0) {
                 Path index115 = Utils.getIndexPath("index.115.txt");
                 if (Files.exists(index115)) {
-                    sources.add(index115.toString());
+                    sources.add("index.115.txt");
                 }
+            }
+        } else {
+            for (int i = 0; i < sources.size(); i++) {
+                String source = sources.get(i);
+                sources.set(i, source.replace("/data/index/", ""));
             }
         }
         log.debug("search sources: {}", sources);
