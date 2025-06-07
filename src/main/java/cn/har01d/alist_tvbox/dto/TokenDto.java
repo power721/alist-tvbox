@@ -4,5 +4,6 @@ import lombok.Data;
 
 @Data
 public class TokenDto {
+    private boolean enabledToken;
     private String token;
 }

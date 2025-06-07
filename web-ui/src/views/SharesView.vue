@@ -22,7 +22,7 @@
     <el-table-column type="selection" width="55"/>
     <el-table-column prop="id" label="ID" width="70" sortable/>
     <el-table-column prop="path" label="路径" sortable/>
-    <el-table-column label="完整路径" width="380" sortable>
+    <el-table-column label="完整路径" sortable>
       <template #default="scope">
         <router-link :to="'/vod' + fullPath(scope.row)">
           {{ fullPath(scope.row) }}
@@ -63,8 +63,8 @@
         </a>
       </template>
     </el-table-column>
-    <el-table-column prop="password" label="密码" width="180"/>
-    <el-table-column prop="type" label="类型" width="150" sortable>
+    <el-table-column prop="password" label="密码" width="120"/>
+    <el-table-column prop="type" label="类型" width="120" sortable>
       <template #default="scope">
         <span v-if="scope.row.type==1">PikPak分享</span>
         <span v-else-if="scope.row.type==4">本地存储</span>
@@ -79,7 +79,7 @@
         <span v-else>阿里分享</span>
       </template>
     </el-table-column>
-    <el-table-column fixed="right" label="操作" width="200">
+    <el-table-column fixed="right" label="操作" width="120">
       <template #default="scope">
         <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
         <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>

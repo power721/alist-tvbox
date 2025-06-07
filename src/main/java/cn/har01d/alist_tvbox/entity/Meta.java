@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.Where;
 
 import java.time.Instant;
 
@@ -20,6 +21,7 @@ import java.time.Instant;
 @RequiredArgsConstructor
 @Entity
 @TableGenerator(name = "tableGenerator", table = "id_generator", pkColumnName = "entity_name", valueColumnName = "next_id", allocationSize = 1)
+@Where(clause = "disabled = false")
 public class Meta {
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
@@ -33,9 +35,12 @@ public class Meta {
     @ManyToOne
     private Movie movie;
     private String type;
+    private Integer tid;
     private Integer tmId;
     private Integer siteId;
     @ManyToOne
     private Tmdb tmdb;
+    @Column(columnDefinition = "BOOLEAN DEFAULT false")
+    private boolean disabled;
     private Instant time = Instant.now();
 }

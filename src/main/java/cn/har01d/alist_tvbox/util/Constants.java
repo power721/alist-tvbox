@@ -50,6 +50,7 @@ public final class Constants {
     public static final String MOVIE_VERSION = "movie_version";
     public static final String OPEN_TOKEN_URL = "open_token_url";
     public static final String TOKEN = "token";
+    public static final String ENABLED_TOKEN = "enabled_token";
     public static final String INDEX_VERSION = "index_version";
     public static final String DOCKER_VERSION = "docker_version";
     public static final String APP_VERSION = "app_version";

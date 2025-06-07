@@ -31,6 +31,7 @@ public class TmdbMeta {
     @Column(name = "`year`")
     private Integer year;
     private Integer score;
+    private Integer tid;
     private Integer tmId;
     private Integer siteId;
     @ManyToOne

@@ -66,7 +66,7 @@
               />
               <span class="hint">建议外网开启，多个安全Token，逗号分割。</span>
             </el-form-item>
-            <el-form-item prop="token" label="安全Token" v-if="form.enabledToken">
+            <el-form-item prop="token" label="安全Token">
               <el-input v-model="form.token" type="password" show-password/>
             </el-form-item>
             <el-form-item>
@@ -431,7 +431,7 @@ const login = ref({
 
 const form = ref({
   token: '',
-  enabledToken: false
+  enabledToken: true
 })
 
 const formatTime = (value: string | number) => {
@@ -439,17 +439,14 @@ const formatTime = (value: string | number) => {
 }
 
 const updateToken = () => {
-  if (form.value.enabledToken) {
-    axios.post('/api/token', {token: form.value.token}).then(({data}) => {
-      form.value.token = data
+  axios.post('/api/token', form.value).then(({data}) => {
+    form.value = data
+    if (data.enabledToken) {
       ElMessage.success('成功开启安全订阅')
-    })
-  } else {
-    axios.delete('/api/token').then(() => {
-      form.value.token = ''
+    } else {
       ElMessage.info('成功关闭安全订阅')
-    })
-  }
+    }
+  })
 }
 
 const resetAListToken = () => {
@@ -607,7 +604,7 @@ const getAListStatus = () => {
 onMounted(() => {
   axios.get('/api/settings').then(({data}) => {
     form.value.token = data.token
-    form.value.enabledToken = !!data.token
+    form.value.enabledToken = data.enabled_token === 'true'
     scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
     aListStartTime.value = data.alist_start_time
     deleteDelayTime.value = +data.delete_delay_time || 900
