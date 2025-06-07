@@ -255,8 +255,11 @@ public class SubscriptionService {
         throw new BadRequestException();
     }
 
-    public String getTokens() {
-        return tokens;
+    public TokenDto getTokens() {
+        TokenDto tokenDto = new TokenDto();
+        tokenDto.setEnabledToken(appProperties.isEnabledToken());
+        tokenDto.setToken(tokens);
+        return tokenDto;
     }
 
     public String getFirstToken() {

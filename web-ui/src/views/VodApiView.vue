@@ -82,7 +82,7 @@ const load = function () {
 
 onMounted(async () => {
   token.value = await axios.get('/api/token').then(({data}) => {
-    return data ? '/' + (data + '').split(',')[0] : ''
+    return data.enabledToken ? "/" + data.token.split(",")[0] : ""
   })
   url.value = currentUrl + getPath(type.value) + token.value
   axios.get(getPath(type.value) + token.value).then(({data}) => {

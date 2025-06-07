@@ -413,7 +413,7 @@ const loadVersion = () => {
 
 onMounted(() => {
   axios.get('/api/token').then(({data}) => {
-    token.value = data ? '/' + (data + '').split(',')[0] : ''
+    token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
     load()
     loadVersion()
     axios.get('/api/settings/tg_phase').then(({data}) => {
