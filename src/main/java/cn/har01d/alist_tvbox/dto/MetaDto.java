@@ -18,6 +18,7 @@ public class MetaDto {
     private Integer tmId;
     private Integer siteId;
     private Instant time;
+    private boolean disabled;
     private String type = "movie";
 
     public MetaDto() {
@@ -31,6 +32,7 @@ public class MetaDto {
         this.score = meta.getScore();
         this.siteId = meta.getSiteId();
         this.time = meta.getTime();
+        this.disabled = meta.isDisabled();
         if (time != null) {
             time = time.truncatedTo(ChronoUnit.SECONDS);
         }

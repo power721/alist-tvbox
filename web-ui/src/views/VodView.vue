@@ -135,7 +135,7 @@
       </el-row>
     </el-dialog>
 
-    <el-dialog class="player" v-model="dialogVisible" :fullscreen="true" top="0" width="70%" :show-close="false" @opened="start" @close="stop">
+    <el-dialog class="player" v-model="dialogVisible" :fullscreen="true" :show-close="false" @opened="start" @close="stop">
       <template #header="{ close, titleId, titleClass }">
         <div class="my-header">
           <h5 :id="titleId" :class="titleClass">{{ title }}</h5>

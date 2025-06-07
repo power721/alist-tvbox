@@ -3,6 +3,8 @@ package cn.har01d.alist_tvbox.service;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.util.Constants;
@@ -16,11 +18,15 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -36,14 +42,22 @@ public class SettingService {
     private final TmdbService tmdbService;
     private final AListLocalService aListLocalService;
     private final SettingRepository settingRepository;
+    private final DriverAccountRepository driverAccountRepository;
 
-    public SettingService(JdbcTemplate jdbcTemplate, Environment environment, AppProperties appProperties, TmdbService tmdbService, AListLocalService aListLocalService, SettingRepository settingRepository) {
+    public SettingService(JdbcTemplate jdbcTemplate,
+                          Environment environment,
+                          AppProperties appProperties,
+                          TmdbService tmdbService,
+                          AListLocalService aListLocalService,
+                          SettingRepository settingRepository,
+                          DriverAccountRepository driverAccountRepository) {
         this.jdbcTemplate = jdbcTemplate;
         this.environment = environment;
         this.appProperties = appProperties;
         this.tmdbService = tmdbService;
         this.aListLocalService = aListLocalService;
         this.settingRepository = settingRepository;
+        this.driverAccountRepository = driverAccountRepository;
     }
 
     @PostConstruct
@@ -224,5 +238,37 @@ public class SettingService {
             log.info("disable debug log");
             logger.setLevel(Level.INFO);
         }
+    }
+
+    public List<String> getSearchSources() {
+        List<String> sources = settingRepository.findById("search_index_source")
+                .map(Setting::getValue)
+                .map(e -> e.split(","))
+                .map(Arrays::asList)
+                .orElse(null);
+        if (CollectionUtils.isEmpty(sources)) {
+            sources = new ArrayList<>();
+            Path index = Utils.getIndexPath("index.merged.txt");
+            if (!Files.exists(index)) {
+                index = Utils.getIndexPath("index.video.txt");
+            }
+            if (Files.exists(index)) {
+                sources.add(index.toString());
+            }
+
+            if (driverAccountRepository.countByType(DriverType.PAN115) > 0) {
+                Path index115 = Utils.getIndexPath("index.115.txt");
+                if (Files.exists(index115)) {
+                    sources.add(index115.toString());
+                }
+            }
+        }
+        log.debug("search sources: {}", sources);
+        return sources;
+    }
+
+    public List<String> setSearchSources(List<String> searchSources) {
+        settingRepository.save(new Setting("search_index_source", String.join(",", searchSources)));
+        return searchSources;
     }
 }

@@ -2,12 +2,14 @@
   <div class="search">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="currentUrl+getPath(type)+token+'?wd=' + keyword" target="_blank">{{currentUrl}}{{getPath(type)}}{{token}}?wd={{keyword}}</a>
+      <a :href="currentUrl+getPath(type)+token+'?wd=' + keyword"
+         target="_blank">{{ currentUrl }}{{ getPath(type) }}{{ token }}?wd={{ keyword }}</a>
     </div>
 
     <div>
       <el-input v-model="keyword" @change="search"/>
       <el-button type="primary" @click="search" :disabled="!keyword">搜索</el-button>
+      <el-button type="primary" @click="showDialog">设置</el-button>
     </div>
 
     <el-form-item label="类型" label-width="140">
@@ -40,26 +42,49 @@
           </a>
         </template>
       </el-table-column>
-      <el-table-column prop="vod_year" label="年份" width="90" />
-      <el-table-column prop="vod_remarks" label="评分" width="100" />
+      <el-table-column prop="vod_year" label="年份" width="90"/>
+      <el-table-column prop="vod_remarks" label="评分" width="100"/>
     </el-table>
 
     <h2>API返回数据</h2>
     <div class="data">
-      <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=3></json-viewer>
+      <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=3>
+      </json-viewer>
     </div>
+
+    <el-dialog v-model="dialogVisible" title="配置搜索源">
+      <el-form label-width="140">
+        <el-form-item label="搜索文件">
+          <el-checkbox-group v-model="selected">
+            <el-checkbox :value="file" name="index" v-for="file in files">
+              {{ file }}
+            </el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="dialogVisible=false">取消</el-button>
+        <el-button type="primary" @click="update">更新</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
 import axios from "axios"
-import {store} from "@/services/store";
+import {ElMessage} from "element-plus";
 
 const token = ref('')
 const type = ref('1')
 const keyword = ref('')
 const config = ref<any>('')
+const files = ref<string[]>([])
+const selected = ref<string[]>([])
+const dialogVisible = ref(false)
 const currentUrl = window.location.origin
 
 const getPath = (type: string) => {
@@ -88,6 +113,22 @@ const search = function () {
   })
 }
 
+const showDialog = () => {
+  axios.get('/api/index-files/xiaoya').then(({data}) => {
+    files.value = data
+  })
+  axios.get('/api/index-files/sources').then(({data}) => {
+    selected.value = data
+    dialogVisible.value = true
+  })
+}
+
+const update = () => {
+  axios.post('/api/index-files/sources', selected.value).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 onMounted(() => {
   axios.get('/api/token').then(({data}) => {
     token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
@@ -99,6 +140,7 @@ onMounted(() => {
 .description {
   margin-bottom: 12px;
 }
+
 .divider {
   margin-left: 24px;
 }
