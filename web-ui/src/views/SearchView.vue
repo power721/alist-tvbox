@@ -53,13 +53,16 @@
     </div>
 
     <el-dialog v-model="dialogVisible" title="配置搜索源">
-      <el-form label-width="140">
+      <el-form label-width="auto">
         <el-form-item label="搜索文件">
-          <el-checkbox-group v-model="selected">
-            <el-checkbox :value="file" name="index" v-for="file in files">
+          <el-checkbox-group v-model="form.searchSources">
+            <el-checkbox :value="file" name="index" v-for="file in form.files">
               {{ file }}
             </el-checkbox>
           </el-checkbox-group>
+        </el-form-item>
+        <el-form-item label="排除路径">
+          <el-input v-model="form.excludedPaths" type="textarea" :rows="15" :placeholder="'多行以/开头的路径'"/>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -82,10 +85,13 @@ const token = ref('')
 const type = ref('1')
 const keyword = ref('')
 const config = ref<any>('')
-const files = ref<string[]>([])
-const selected = ref<string[]>([])
 const dialogVisible = ref(false)
 const currentUrl = window.location.origin
+const form = ref({
+  files: [],
+  searchSources: [],
+  excludedPaths: '',
+})
 
 const getPath = (type: string) => {
   if (type == '1') {
@@ -114,17 +120,17 @@ const search = function () {
 }
 
 const showDialog = () => {
-  axios.get('/api/index-files/xiaoya').then(({data}) => {
-    files.value = data
-  })
-  axios.get('/api/index-files/sources').then(({data}) => {
-    selected.value = data
+  axios.get('/api/index-files/settings').then(({data}) => {
+    data.excludedPaths = data.excludedPaths.replace(/,/g, '\n')
+    form.value = data
     dialogVisible.value = true
   })
 }
 
 const update = () => {
-  axios.post('/api/index-files/sources', selected.value).then(() => {
+  const rule = Object.assign({}, form.value)
+  rule.excludedPaths = rule.excludedPaths.replace(/\n/g, ',')
+  axios.post('/api/index-files/settings', rule).then(() => {
     ElMessage.success('更新成功')
   })
 }

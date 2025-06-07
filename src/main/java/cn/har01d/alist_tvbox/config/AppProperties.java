@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.util.Constants;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -35,4 +36,5 @@ public class AppProperties {
     private Set<String> formats;
     private Set<String> subtitles;
     private List<Site> sites;
+    private List<String> excludedPaths = new ArrayList<>();
 }

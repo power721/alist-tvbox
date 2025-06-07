@@ -112,12 +112,4 @@ public class IndexFileService {
         Path path = Utils.getIndexPath(siteId, indexName + ".txt");
         Files.delete(path);
     }
-
-    public List<String> getFiles() {
-        List<String> list = new ArrayList<>();
-        for (File file : Utils.listFiles(Utils.getIndexPath(), "txt")) {
-            list.add(file.getAbsolutePath());
-        }
-        return list;
-    }
 }

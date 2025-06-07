@@ -4,9 +4,11 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.SearchSetting;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
@@ -94,6 +96,12 @@ public class SettingService {
         } else {
             appProperties.setTgTimeout(Integer.parseInt(value));
         }
+        value = settingRepository.findById("search_excluded_paths").map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(value)) {
+            value = "/电视剧/韩国,/电视剧/英国,/电视剧/港台,/电视剧/泰剧,/电视剧/欧美,/电视剧/日本,/电视剧/新加坡,/电视剧/中国/七米蓝";
+            settingRepository.save(new Setting("search_excluded_paths", value));
+        }
+        appProperties.setExcludedPaths(Arrays.asList(value.split(",")));
     }
 
     public FileSystemResource exportDatabase() throws IOException {
@@ -240,6 +248,28 @@ public class SettingService {
         }
     }
 
+    public SearchSetting getSearchSetting() {
+        SearchSetting searchSetting = new SearchSetting();
+        searchSetting.setFiles(getIndexFiles());
+        searchSetting.setSearchSources(getSearchSources());
+        searchSetting.setExcludedPaths(settingRepository.findById("search_excluded_paths").map(Setting::getValue).orElse(""));
+        return searchSetting;
+    }
+
+    public SearchSetting setSearchSetting(SearchSetting searchSetting) {
+        setSearchSources(searchSetting.getSearchSources());
+        setExcludedPaths(searchSetting.getExcludedPaths());
+        return searchSetting;
+    }
+
+    private List<String> getIndexFiles() {
+        List<String> list = new ArrayList<>();
+        for (File file : Utils.listFiles(Utils.getIndexPath(), "txt")) {
+            list.add(file.getAbsolutePath());
+        }
+        return list;
+    }
+
     public List<String> getSearchSources() {
         List<String> sources = settingRepository.findById("search_index_source")
                 .map(Setting::getValue)
@@ -267,8 +297,17 @@ public class SettingService {
         return sources;
     }
 
-    public List<String> setSearchSources(List<String> searchSources) {
+    private void setSearchSources(List<String> searchSources) {
         settingRepository.save(new Setting("search_index_source", String.join(",", searchSources)));
-        return searchSources;
+    }
+
+    private void setExcludedPaths(String excludedPaths) {
+        for (String path : excludedPaths.split(",")) {
+            if (!path.startsWith("/")) {
+                throw new BadRequestException("路径必须以/开头");
+            }
+        }
+        appProperties.setExcludedPaths(Arrays.asList(excludedPaths.split(",")));
+        settingRepository.save(new Setting("search_excluded_paths", excludedPaths));
     }
 }

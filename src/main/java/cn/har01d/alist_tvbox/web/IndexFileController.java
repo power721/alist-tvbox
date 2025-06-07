@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.SearchSetting;
 import cn.har01d.alist_tvbox.service.IndexFileService;
 import cn.har01d.alist_tvbox.service.SettingService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,19 +36,14 @@ public class IndexFileController {
         return service.getIndexContent(pageable, siteId, indexName);
     }
 
-    @GetMapping("/xiaoya")
-    public List<String> getFiles() {
-        return service.getFiles();
+    @GetMapping("/settings")
+    public SearchSetting getSearchSetting() {
+        return settingService.getSearchSetting();
     }
 
-    @GetMapping("/sources")
-    public List<String> getSearchSources() {
-        return settingService.getSearchSources();
-    }
-
-    @PostMapping("/sources")
-    public List<String> setSearchSources(@RequestBody List<String> searchSources) {
-        return settingService.setSearchSources(searchSources);
+    @PostMapping("/settings")
+    public SearchSetting setSearchSetting(@RequestBody SearchSetting searchSetting) {
+        return settingService.setSearchSetting(searchSetting);
     }
 
     @DeleteMapping
