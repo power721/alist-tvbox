@@ -1,11 +1,8 @@
 package cn.har01d.alist_tvbox.util;
 
-import static org.aspectj.weaver.tools.cache.SimpleCacheFactory.path;
-
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.io.ClassPathResource;
@@ -16,6 +13,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -411,6 +409,10 @@ public final class Utils {
     }
 
     public static Collection<File> listFiles(Path path, String... ext) {
-        return FileUtils.listFiles(path.toFile(), ext, false);
+        try {
+            return FileUtils.listFiles(path.toFile(), ext, false);
+        } catch (UncheckedIOException e) {
+            return List.of();
+        }
     }
 }

@@ -127,6 +127,10 @@ public class TenantService {
         threadLocal.set(name);
     }
 
+    public String getCurrent() {
+        return threadLocal.get();
+    }
+
     public void clear() {
         threadLocal.remove();
     }
