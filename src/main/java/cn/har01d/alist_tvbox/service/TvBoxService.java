@@ -811,6 +811,9 @@ public class TvBoxService {
                 continue;
             }
             String path = fixPath("/" + line + (isMediaFile ? "" : PLAYLIST));
+            if (path.startsWith("/\uD83C\uDFF7\uFE0F我的115分享/")) {
+                path = path.replace("/\uD83C\uDFF7\uFE0F我的115分享/", "/我的115分享/");
+            }
             if (StringUtils.isNotBlank(site.getFolder()) && !"/".equals(site.getFolder())) {
                 if (path.startsWith(site.getFolder())) {
                     path = path.substring(site.getFolder().length());
