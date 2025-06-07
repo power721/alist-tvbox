@@ -775,7 +775,7 @@ public class TvBoxService {
                 .limit(appProperties.getMaxSearchResult())
                 .collect(Collectors.toSet());
 
-        log.debug("search \"{}\" from file: {}, result: {}", keyword, indexFile, lines.size());
+        log.debug("search \"{}\" from file: {}, original count: {}", keyword, indexFile, lines.size());
         List<MovieDetail> list = new ArrayList<>();
         for (String line : lines) {
             if (line.startsWith("+")) {
@@ -803,6 +803,12 @@ public class TvBoxService {
                     continue;
                 }
             }
+            if (appProperties.getExcludedPaths().stream().anyMatch(path::startsWith)) {
+                continue;
+            }
+            if (tenantService.valid(path)) {
+                continue;
+            }
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(site.getId() + "$" + encodeUrl(path) + "$1");
             movieDetail.setVod_name(getNameFromPath(line));
@@ -819,6 +825,7 @@ public class TvBoxService {
             }
             list.add(movieDetail);
         }
+        log.info("search \"{}\" from file: {}, result: {}", keyword, indexFile, list.size());
         list.sort(Comparator.comparing(MovieDetail::getVod_id));
         return list;
     }

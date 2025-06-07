@@ -35,4 +35,5 @@ public class AppProperties {
     private Set<String> formats;
     private Set<String> subtitles;
     private List<Site> sites;
+    private List<String> excludedPaths;
 }
