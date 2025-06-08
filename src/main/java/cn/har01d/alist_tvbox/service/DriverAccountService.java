@@ -287,6 +287,7 @@ public class DriverAccountService {
         account.setPassword(dto.getPassword());
         account.setSafePassword(dto.getSafePassword());
         account.setFolder(dto.getFolder());
+        account.setConcurrency(dto.getConcurrency());
 
         if (driverAccountRepository.countByType(account.getType()) <= 1) {
             account.setMaster(true);
