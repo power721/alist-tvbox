@@ -1362,6 +1362,7 @@ public class TvBoxService {
                 result.put("url", url);
             } else {
                 String cookie = account.getCookie();
+                result.put("thread", account.getConcurrency());
                 result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.QUARK_USER_AGENT + "\",\"Referer\":\"https://pan.quark.cn\"}");
             }
         } else if (fsDetail.getProvider().equals("UCShare") || fsDetail.getProvider().equals("UC")) {
@@ -1371,17 +1372,23 @@ public class TvBoxService {
                 result.put("url", url);
             } else {
                 String cookie = account.getCookie();
+                result.put("thread", account.getConcurrency());
                 result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.UC_USER_AGENT + "\",\"Referer\":\"https://drive.uc.cn\"}");
             }
-        } else if (url.contains("xunlei.com")) {
+        } /*else if (url.contains("xunlei.com")) {
+            DriverAccount account = getDriverAccount(url);
+            if (account != null) {
+                result.put("concurrency", account.getConcurrency());
+            }
             result.put("header", "{\"User-Agent\":\"AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)\"}");
-        } else if (url.contains("115cdn.net")) {
+        }*/ else if (url.contains("115cdn.net")) {
             DriverAccount account = getDriverAccount(url, DriverType.PAN115);
             if (account == null || account.isUseProxy()) {
                 url = buildAListProxyUrl(site, path, fsDetail.getSign());
                 result.put("url", url);
             } else {
                 String cookie = account.getCookie();
+                result.put("thread", account.getConcurrency());
                 // 115会把UA生成签名校验
                 result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
             }
@@ -1391,11 +1398,27 @@ public class TvBoxService {
                 url = buildAListProxyUrl(site, path, fsDetail.getSign());
                 result.put("url", url);
             } else {
+                result.put("thread", account.getConcurrency());
                 result.put("header", "{\"User-Agent\":\"netdisk\"}");
             }
         } else if (url.contains("ali")) {
+            DriverAccount account = getDriverAccount(url);
+            if (account != null) {
+                result.put("thread", account.getConcurrency());
+            }
             result.put("format", "application/octet-stream");
             result.put("header", "{\"User-Agent\":\"" + appProperties.getUserAgent() + "\",\"Referer\":\"" + Constants.ALIPAN + "\",\"origin\":\"" + Constants.ALIPAN + "\"}");
+        } else {
+            DriverAccount account = getDriverAccount(url);
+            if (account != null) {
+                result.put("thread", account.getConcurrency());
+            }
+        }
+
+        url = (String) result.get("url");
+        int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
+        if (index > 0) {
+            result.put("url", url.substring(0, index));
         }
 
         if (!getSub) {
@@ -1419,16 +1442,26 @@ public class TvBoxService {
         return result;
     }
 
-    private DriverAccount getDriverAccount(String url, DriverType quark) {
+    private DriverAccount getDriverAccount(String url, DriverType type) {
         DriverAccount account;
         if (url.contains(Constants.STORAGE_ID_FRAGMENT)) {
             int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
             int id = Integer.parseInt(url.substring(index + Constants.STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
             account = driverAccountRepository.findById(id).orElse(null);
         } else {
-            account = driverAccountRepository.findByTypeAndMasterTrue(quark).orElse(null);
+            account = driverAccountRepository.findByTypeAndMasterTrue(type).orElse(null);
         }
         return account;
+    }
+
+    private DriverAccount getDriverAccount(String url) {
+        if (url.contains(Constants.STORAGE_ID_FRAGMENT)) {
+            int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
+            int id = Integer.parseInt(url.substring(index + Constants.STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
+            return driverAccountRepository.findById(id).orElse(null);
+        } else {
+            return null;
+        }
     }
 
     public Map<String, Object> getPlayUrl(Integer siteId, Integer id, Integer index, boolean getSub, String client) {
