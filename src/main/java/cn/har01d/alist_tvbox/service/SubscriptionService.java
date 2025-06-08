@@ -135,7 +135,7 @@ public class SubscriptionService {
                 .map(Setting::getValue)
                 .orElse("");
 
-        if (settingRepository.findById(ENABLED_TOKEN).isEmpty()) {
+        if (!settingRepository.existsByName(ENABLED_TOKEN)) {
             settingRepository.save(new Setting(ENABLED_TOKEN, String.valueOf(!tokens.isEmpty())));
         }
 
