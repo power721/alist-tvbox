@@ -177,10 +177,10 @@ public final class Utils {
     public static String byte2size(long size) {
         String result;
         String unit = "B";
-        if (size >= GB) {
+        if (size > 999 * MB) {
             result = String.format("%.2f", size / (double) GB);
             unit = "GB";
-        } else if (size >= MB) {
+        } else if (size > 999 * KB) {
             result = String.format("%.2f", size / (double) MB);
             unit = "MB";
         } else if (size >= KB) {
