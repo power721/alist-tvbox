@@ -1,9 +1,16 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.AccountInfo;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.service.DriverAccountService;
 import cn.har01d.alist_tvbox.service.QuarkUCTV;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.util.List;
@@ -50,5 +57,10 @@ public class PanAccountController {
     @PostMapping("/-/token")
     public String getRefreshToken(String type, String queryToken) {
         return driverAccountService.getRefreshToken(type, queryToken);
+    }
+
+    @PostMapping("/-/info")
+    public AccountInfo getInfo(@RequestBody DriverAccount account) {
+        return driverAccountService.getInfo(account);
     }
 }
