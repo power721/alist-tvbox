@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.AccountInfo;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.PanAccountRepository;
@@ -42,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -537,5 +539,90 @@ public class DriverAccountService {
         }
 
         return String.join("; ", cookieValues);
+    }
+
+    public AccountInfo getInfo(DriverAccount account) {
+        return switch (account.getType()) {
+            case BAIDU -> getBaiduUserInfo(account);
+            case PAN115 -> get115UserInfo(account);
+            case QUARK -> getQuarkUserInfo(account);
+            case UC -> getUcUserInfo(account);
+            default -> null;
+        };
+    }
+
+    private AccountInfo getBaiduUserInfo(DriverAccount account) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.COOKIE, account.getCookie().trim());
+        headers.set(HttpHeaders.REFERER, "https://pan.baidu.com/disk/main");
+        headers.set(HttpHeaders.USER_AGENT, "netdisk");
+        HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+        String url = "https://pan.baidu.com/rest/2.0/membership/user/info?method=query&clienttype=0&app_id=250528&web=1&dp-logid=36187900205107340023";
+        var json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        var info = new AccountInfo();
+        info.setName(json.get("user_info").get("username").asText());
+        info.setId(String.valueOf(json.get("user_info").get("uk").asLong()));
+        if (json.get("user_info").get("is_svip").asInt() > 0) {
+            info.setVip("SVIP");
+        } else if (json.get("user_info").get("is_vip").asInt() > 0) {
+            info.setVip("VIP");
+        }
+        return info;
+    }
+
+    private AccountInfo get115UserInfo(DriverAccount account) {
+        var pattern = Pattern.compile("UID=(\\d+)");
+        var matcher = pattern.matcher(account.getCookie());
+        if (!matcher.find()) {
+            return null;
+        }
+        String uid = matcher.group(1);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.COOKIE, account.getCookie().trim());
+        headers.set(HttpHeaders.REFERER, "https://115.com/");
+        headers.set(HttpHeaders.USER_AGENT, Constants.USER_AGENT);
+        HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+        String url = "https://my.115.com/proapi/3.0/index.php?method=user_info&uid=" + uid;
+        var json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        var info = new AccountInfo();
+        info.setName(json.get("data").get("user_name").asText());
+        info.setId(uid);
+        info.setVip(String.valueOf(json.get("data").get("is_vip").asInt()));
+        return info;
+    }
+
+    private AccountInfo getQuarkUserInfo(DriverAccount account) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.COOKIE, account.getCookie().trim());
+        headers.set(HttpHeaders.REFERER, "https://pan.quark.cn/");
+        headers.set(HttpHeaders.USER_AGENT, Constants.QUARK_USER_AGENT);
+        HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+        String url = "https://drive-pc.quark.cn/1/clouddrive/member?pr=ucpro&fr=pc&uc_param_str=&fetch_subscribe=true&_ch=home&fetch_identity=true";
+        var json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        var info = new AccountInfo();
+        info.setVip(json.get("data").get("member_type").asText());
+
+        url = "https://pan.quark.cn/account/info?fr=pc&platform=pc";
+        json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        info.setName(json.get("data").get("nickname").asText());
+        return info;
+    }
+
+    private AccountInfo getUcUserInfo(DriverAccount account) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.COOKIE, account.getCookie().trim());
+        headers.set(HttpHeaders.REFERER, "https://drive.uc.cn/");
+        headers.set(HttpHeaders.USER_AGENT, Constants.USER_AGENT);
+        HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+        String url = "https://pc-api.uc.cn/1/clouddrive/member?pr=UCBrowser&fr=pc&fetch_subscribe=true&_ch=home";
+        var json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        var info = new AccountInfo();
+        info.setVip(json.get("data").get("member_type").asText());
+
+        url = "https://drive.uc.cn/account/info?fr=pc&platform=pc";
+        json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        info.setId(String.valueOf(json.get("data").get("uid").asLong()));
+        info.setName(json.get("data").get("nickname").asText());
+        return info;
     }
 }

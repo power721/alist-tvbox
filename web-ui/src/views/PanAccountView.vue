@@ -96,7 +96,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'||form.type=='BAIDU'">
-          <el-input v-model="form.cookie" type="textarea" :rows="5"/>
+          <el-input v-model="form.cookie" @change="getInfo" type="textarea" :rows="5"/>
           <span v-if="form.type=='QUARK'">
             <a href="https://pan.quark.cn/" target="_blank">夸克网盘</a>
             <span class="hint"></span>
@@ -446,6 +446,17 @@ const showQrCode = () => {
   axios.post('/api/pan/accounts/-/qr?type=' + form.value.type).then(({data}) => {
     qr.value = data
     qrModel.value = true
+  })
+}
+
+const getInfo = () => {
+  if (form.value.name || !form.value.cookie) {
+    return
+  }
+  axios.post('/api/pan/accounts/-/info', form.value).then(({data}) => {
+    if (data) {
+      form.value.name = data.name
+    }
   })
 }
 
