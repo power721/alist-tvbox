@@ -1633,7 +1633,7 @@ public class TvBoxService {
             movieDetail.setVod_time(fsDetail.getModified());
             movieDetail.setVod_pic(getCover(ac, fsDetail.getThumb(), fsDetail.getType()));
             movieDetail.setVod_play_from(site.getName());
-            String sign = appProperties.isEnabledToken() ? "" : fsDetail.getSign();
+            String sign = fsDetail.getSign();
             if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
                 movieDetail.setVod_play_url(buildAListProxyUrl(site, path, sign));
                 movieDetail.setType(fsDetail.getType());
