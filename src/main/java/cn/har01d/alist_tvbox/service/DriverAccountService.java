@@ -448,7 +448,7 @@ public class DriverAccountService {
         return res;
     }
 
-    public String getRefreshToken(String type, String queryToken) {
+    public AccountInfo getRefreshToken(String type, String queryToken) {
         if (DriverType.QUARK.name().equals(type)) {
             return getQuarkCookie(queryToken);
         }
@@ -460,10 +460,13 @@ public class DriverAccountService {
             throw new BadRequestException("不支持的类型");
         }
         String code = driver.getCode(queryToken);
-        return driver.getRefreshToken(code);
+        String token = driver.getRefreshToken(code);
+        var info = new AccountInfo();
+        info.setToken(token);
+        return info;
     }
 
-    private String getQuarkCookie(String token) {
+    private AccountInfo getQuarkCookie(String token) {
         long t = System.currentTimeMillis();
         var json = restTemplate.getForObject("https://uop.quark.cn/cas/ajax/getServiceTicketByQrcodeToken?client_id=532&v=1.2&token={token}&request_id={reqId}", ObjectNode.class, token, t);
         log.debug("getServiceTicketByQrcodeToken: {}", json);
@@ -473,6 +476,8 @@ public class DriverAccountService {
             String ticket = json.get("data").get("members").get("service_ticket").asText();
             var res = restTemplate.getForEntity("https://pan.quark.cn/account/info?st={st}&lw=scan", ObjectNode.class, ticket);
             log.debug("account info: {}", res.getBody());
+            var info = new AccountInfo();
+            info.setName(res.getBody().get("data").get("nickname").asText());
             List<String> cookies = new ArrayList<>(res.getHeaders().get(HttpHeaders.SET_COOKIE));
             String cookie = cookiesToString(cookies);
             HttpHeaders headers = new HttpHeaders();
@@ -484,8 +489,9 @@ public class DriverAccountService {
             log.debug("config: {}", res.getBody());
             cookies.addAll(res.getHeaders().get(HttpHeaders.SET_COOKIE));
             cookie = cookiesToString(cookies);
-            log.debug("cookie: {}", cookie);
-            return cookie;
+            info.setCookie(cookie);
+            log.debug("info: {}", info);
+            return info;
         } else if (status == 50004002) {
             log.warn("{} {}", status, message);
             throw new BadRequestException("二维码无效或已过期！");
@@ -496,7 +502,7 @@ public class DriverAccountService {
         throw new BadRequestException("未知错误： " + message);
     }
 
-    private String getUcCookie(String token) {
+    private AccountInfo getUcCookie(String token) {
         long t = System.currentTimeMillis();
         var json = restTemplate.getForObject("https://api.open.uc.cn/cas/ajax/getServiceTicketByQrcodeToken?token={token}&__t={t}&client_id=381&v=1.2&request_id={t}", ObjectNode.class, token, t, t);
         log.debug("getServiceTicketByQrcodeToken: {}", json);
@@ -506,6 +512,9 @@ public class DriverAccountService {
             String ticket = json.get("data").get("members").get("service_ticket").asText();
             var res = restTemplate.getForEntity("https://drive.uc.cn/account/info?st={st}", ObjectNode.class, ticket);
             log.debug("account info: {}", res.getBody());
+            var info = new AccountInfo();
+            info.setName(res.getBody().get("data").get("nickname").asText());
+            info.setId(String.valueOf(res.getBody().get("data").get("uid").asLong()));
             List<String> cookies = new ArrayList<>(res.getHeaders().get(HttpHeaders.SET_COOKIE));
             String cookie = cookiesToString(cookies);
             HttpHeaders headers = new HttpHeaders();
@@ -517,8 +526,9 @@ public class DriverAccountService {
             log.debug("config: {}", res.getBody());
             cookies.addAll(res.getHeaders().get(HttpHeaders.SET_COOKIE));
             cookie = cookiesToString(cookies);
-            log.debug("cookie: {}", cookie);
-            return cookie;
+            info.setCookie(cookie);
+            log.debug("info: {}", info);
+            return info;
         } else if (status == 50004002) {
             log.warn("{} {}", status, message);
             throw new BadRequestException("二维码无效或已过期！");

@@ -463,9 +463,12 @@ const getInfo = () => {
 const getRefreshToken = () => {
   axios.post('/api/pan/accounts/-/token?type=' + form.value.type + '&queryToken=' + qr.value.query_token).then(({data}) => {
     if (form.value.type == 'QUARK' || form.value.type == 'UC') {
-      form.value.cookie = data
+      form.value.cookie = data.cookie
     } else {
-      form.value.token = data
+      form.value.token = data.token
+    }
+    if (!form.value.name) {
+      form.value.name = data.name
     }
 
     qrModel.value = false
