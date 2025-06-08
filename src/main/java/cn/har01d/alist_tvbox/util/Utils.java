@@ -192,7 +192,7 @@ public final class Utils {
         if (result.endsWith(".00")) {
             result = result.substring(0, result.length() - 3);
         }
-        if (result.endsWith("0") && result.charAt(result.length() - 3) == '.') {
+        if (result.endsWith("0") && result.length() > 3 && result.charAt(result.length() - 3) == '.') {
             result = result.substring(0, result.length() - 1);
         }
         return result + " " + unit;
