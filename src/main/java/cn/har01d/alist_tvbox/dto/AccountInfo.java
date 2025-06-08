@@ -6,5 +6,7 @@ import lombok.Data;
 public class AccountInfo {
     private String id;
     private String name;
+    private String cookie;
+    private String token;
     private String vip = "user";
 }

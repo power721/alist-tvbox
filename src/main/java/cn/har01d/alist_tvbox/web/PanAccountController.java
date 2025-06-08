@@ -55,7 +55,7 @@ public class PanAccountController {
     }
 
     @PostMapping("/-/token")
-    public String getRefreshToken(String type, String queryToken) {
+    public AccountInfo getRefreshToken(String type, String queryToken) {
         return driverAccountService.getRefreshToken(type, queryToken);
     }
 
