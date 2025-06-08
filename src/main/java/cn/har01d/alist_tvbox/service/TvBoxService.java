@@ -1420,20 +1420,18 @@ public class TvBoxService {
     }
 
     private DriverAccount getDriverAccount(String url, DriverType type) {
-        DriverAccount account;
-        if (url.contains(Constants.STORAGE_ID_FRAGMENT)) {
-            int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
+        int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
+        if (index > 0) {
             int id = Integer.parseInt(url.substring(index + Constants.STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
-            account = driverAccountRepository.findById(id).orElse(null);
+            return driverAccountRepository.findById(id).orElse(null);
         } else {
-            account = driverAccountRepository.findByTypeAndMasterTrue(type).orElse(null);
+            return driverAccountRepository.findByTypeAndMasterTrue(type).orElse(null);
         }
-        return account;
     }
 
     private DriverAccount getDriverAccount(String url) {
-        if (url.contains(Constants.STORAGE_ID_FRAGMENT)) {
-            int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
+        int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
+        if (index > 0) {
             int id = Integer.parseInt(url.substring(index + Constants.STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
             return driverAccountRepository.findById(id).orElse(null);
         }
