@@ -1383,7 +1383,7 @@ public class TvBoxService {
         }
 
         if (!getSub) {
-            log.debug("getPlayUrl result: {}", result);
+            log.debug("[{}] getPlayUrl result: {}", fsDetail.getProvider(), result);
             return result;
         }
 
@@ -1643,12 +1643,7 @@ public class TvBoxService {
                 movieDetail.setVod_play_url(buildAListProxyUrl(site, path, sign));
                 movieDetail.setType(fsDetail.getType());
             } else {
-                String url = fsDetail.getRawUrl();
-                if (isUseProxy(url)) {
-                    movieDetail.setVod_play_url(getFilename(fsDetail) + "$" + buildAListProxyUrl(site, path, sign));
-                } else {
-                    movieDetail.setVod_play_url(getFilename(fsDetail) + "$" + url);
-                }
+                movieDetail.setVod_play_url(getFilename(fsDetail) + "$" + buildPlayUrl(site, path));
             }
             String parent = getParent(path);
             if (!"web".equals(ac) && !"gui".equals(ac)) {
