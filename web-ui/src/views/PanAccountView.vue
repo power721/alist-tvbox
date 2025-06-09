@@ -158,6 +158,12 @@
         <el-form-item label="文件夹ID">
           <el-input v-model="form.folder"/>
         </el-form-item>
+        <el-form-item v-if="form.type=='PAN115'" label="分页大小">
+          <el-input-number :min="100" :max="1500" v-model="form.addition.page_size"/>
+        </el-form-item>
+        <el-form-item v-if="form.type=='PAN115'" label="请求限速">
+          <el-input-number :min="1" :max="4" v-model="form.addition.limit_rate"/>
+        </el-form-item>
         <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'" label="加速代理">
           <el-switch
             v-model="form.useProxy"
@@ -245,6 +251,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import {onMounted, ref} from 'vue'
 import {Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
@@ -264,6 +271,7 @@ const form = ref({
   name: '',
   cookie: '',
   token: '',
+  addition: {},
   username: '',
   password: '',
   safePassword: '',
@@ -325,6 +333,7 @@ const handleAdd = () => {
     name: '',
     cookie: '',
     token: '',
+    addition: {},
     username: '',
     password: '',
     safePassword: '',
@@ -409,7 +418,7 @@ const fullPath = (share: any) => {
 const handleEdit = (data: any) => {
   dialogTitle.value = '更新网盘账号 - ' + data.name
   updateAction.value = true
-  form.value = Object.assign({}, data)
+  form.value = Object.assign({}, data, {addition: JSON.parse(data.addition || '{}')})
   formVisible.value = true
 }
 
@@ -430,8 +439,10 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
+  const data = Object.assign({}, form.value)
+  data.addition = JSON.stringify(form.value.addition)
   const url = updateAction.value ? '/api/pan/accounts/' + form.value.id : '/api/pan/accounts'
-  axios.post(url, form.value).then(() => {
+  axios.post(url, data).then(() => {
     formVisible.value = false
     if (accounts.value.length === 0) {
       ElMessage.success('添加成功')
@@ -450,12 +461,19 @@ const showQrCode = () => {
 }
 
 const getInfo = () => {
-  if (form.value.name || !form.value.cookie) {
+  if (!form.value.cookie) {
     return
   }
-  axios.post('/api/pan/accounts/-/info', form.value).then(({data}) => {
-    if (data) {
-      form.value.name = data.name
+  const data = Object.assign({}, form.value)
+  data.addition = JSON.stringify(form.value.addition)
+  axios.post('/api/pan/accounts/-/info', data).then(({data}) => {
+    if (data && data.name) {
+      ElMessage.success('Cookie有效：' + data.name)
+      if (!form.value.name) {
+        form.value.name = data.name
+      }
+    } else {
+      ElMessage.error('Cookie无效')
     }
   })
 }

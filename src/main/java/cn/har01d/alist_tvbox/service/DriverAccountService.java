@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -271,11 +272,12 @@ public class DriverAccountService {
         boolean changed = account.isMaster() != dto.isMaster()
                 || account.isUseProxy() != dto.isUseProxy()
                 || account.isDisabled() != dto.isDisabled()
-                || !account.getType().equals(dto.getType())
-                || !account.getToken().equals(dto.getToken())
-                || !account.getCookie().equals(dto.getCookie())
-                || !account.getFolder().equals(dto.getFolder())
-                || !account.getName().equals(dto.getName());
+                || !Objects.equals(account.getType(), dto.getType())
+                || !Objects.equals(account.getToken(), dto.getToken())
+                || !Objects.equals(account.getCookie(), dto.getCookie())
+                || !Objects.equals(account.getAddition(), dto.getAddition())
+                || !Objects.equals(account.getFolder(), dto.getFolder())
+                || !Objects.equals(account.getName(), dto.getName());
 
         account.setMaster(dto.isMaster());
         account.setUseProxy(dto.isUseProxy());
@@ -289,6 +291,7 @@ public class DriverAccountService {
         account.setSafePassword(dto.getSafePassword());
         account.setFolder(dto.getFolder());
         account.setConcurrency(dto.getConcurrency());
+        account.setAddition(dto.getAddition());
 
         if (driverAccountRepository.countByType(account.getType()) <= 1) {
             account.setMaster(true);

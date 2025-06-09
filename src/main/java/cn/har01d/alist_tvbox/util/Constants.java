@@ -26,7 +26,7 @@ public final class Constants {
     public static final String COLLECTION = "collection";
     public static final String LIST = "list";
 
-    public static String TG_CHANNELS = "BaiduCloudDisk,xx123pan1,xunleiyunpan,tgsearchers2,leoziyuan,zyzhpd123,xx123pan,tianyirigeng,tyypzhpd,cloudtianyi,kuakeclound,clouddriveresources,NewQuark,Channel_Shares_115,dianyingshare,XiangxiuNB,zaihuayun,Quark_Movies,vip115hot,yunpanshare,shareAliyun,alyp_1,yunpan139";
+    public static String TG_CHANNELS = "BaiduCloudDisk,SharePanBaidu,xx123pan1,xunleiyunpan,tgsearchers2,leoziyuan,zyzhpd123,xx123pan,tianyirigeng,tyypzhpd,cloudtianyi,kuakeclound,clouddriveresources,NewQuark,Channel_Shares_115,dianyingshare,XiangxiuNB,zaihuayun,Quark_Movies,vip115hot,yunpanshare,shareAliyun,alyp_1,yunpan139";
     public static String TG_WEB_CHANNELS = "tgsearchers2,leoziyuan,zyzhpd123,xx123pan,tianyirigeng,tyypzhpd,cloudtianyi,kuakeclound,clouddriveresources,NewQuark,Channel_Shares_115,dianyingshare,XiangxiuNB,zaihuayun,Quark_Movies,vip115hot,shareAliyun,alyp_1";
 
     public static final String ACCESS_TOKEN = "access_token";

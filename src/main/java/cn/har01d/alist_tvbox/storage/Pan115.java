@@ -13,6 +13,6 @@ public class Pan115 extends Storage {
         addAddition("concurrency", account.getConcurrency());
         addAddition("page_size", 1000);
         addAddition("limit_rate", 2);
-        buildAddition();
+        buildAddition(account);
     }
 }
