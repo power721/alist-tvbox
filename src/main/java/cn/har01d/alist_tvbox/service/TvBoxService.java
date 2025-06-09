@@ -1,5 +1,54 @@
 package cn.har01d.alist_tvbox.service;
 
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_PIC;
+import static cn.har01d.alist_tvbox.util.Constants.FILE;
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
+import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import org.apache.commons.lang3.StringUtils;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+import org.springframework.core.env.Environment;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.FileItem;
@@ -33,54 +82,7 @@ import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-import org.springframework.core.env.Environment;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-import org.springframework.web.util.UriComponentsBuilder;
-
-import java.io.File;
-import java.io.IOException;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-import static cn.har01d.alist_tvbox.util.Constants.ALIST_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.FILE;
-import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
-import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
 
 @Slf4j
 @Service
@@ -1355,51 +1357,33 @@ public class TvBoxService {
 
         result.put("url", url);
 
-        if (fsDetail.getProvider().equals("QuarkShare") || fsDetail.getProvider().equals("Quark")) {
-            DriverAccount account = getDriverAccount(url, DriverType.QUARK);
-            if (account == null || account.isUseProxy()) {
-                url = buildAListProxyUrl(site, path, fsDetail.getSign());
-                result.put("url", url);
-            } else {
-                String cookie = account.getCookie();
-                result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.QUARK_USER_AGENT + "\",\"Referer\":\"https://pan.quark.cn\"}");
-            }
+        if (isUseProxy(url)) {
+            url = buildAListProxyUrl(site, path, fsDetail.getSign());
+            result.put("url", url);
+        } else if (fsDetail.getProvider().equals("QuarkShare") || fsDetail.getProvider().equals("Quark")) {
+            var account = getDriverAccount(url, DriverType.QUARK);
+            String cookie = account.getCookie();
+            result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.QUARK_USER_AGENT, "Referer", "https://pan.quark.cn"));
         } else if (fsDetail.getProvider().equals("UCShare") || fsDetail.getProvider().equals("UC")) {
-            DriverAccount account = getDriverAccount(url, DriverType.UC);
-            if (account == null || account.isUseProxy()) {
-                url = buildAListProxyUrl(site, path, fsDetail.getSign());
-                result.put("url", url);
-            } else {
-                String cookie = account.getCookie();
-                result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.UC_USER_AGENT + "\",\"Referer\":\"https://drive.uc.cn\"}");
-            }
+            var account = getDriverAccount(url, DriverType.UC);
+            String cookie = account.getCookie();
+            result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.UC_USER_AGENT, "Referer", "https://drive.uc.cn"));
         } else if (url.contains("xunlei.com")) {
-            result.put("header", "{\"User-Agent\":\"AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)\"}");
+            result.put("header", Map.of("User-Agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)"));
         } else if (url.contains("115cdn.net")) {
-            DriverAccount account = getDriverAccount(url, DriverType.PAN115);
-            if (account == null || account.isUseProxy()) {
-                url = buildAListProxyUrl(site, path, fsDetail.getSign());
-                result.put("url", url);
-            } else {
-                String cookie = account.getCookie();
-                // 115会把UA生成签名校验
-                result.put("header", "{\"Cookie\":\"" + cookie + "\",\"User-Agent\":\"" + Constants.USER_AGENT + "\",\"Referer\":\"https://115.com/\"}");
-            }
+            var account = getDriverAccount(url, DriverType.PAN115);
+            String cookie = account.getCookie();
+            // 115会把UA生成签名校验
+            result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.USER_AGENT, "Referer", "https://115.com/"));
         } else if (fsDetail.getProvider().contains("Baidu")) {
-            DriverAccount account = getDriverAccount(url, DriverType.BAIDU);
-            if (account == null || account.isUseProxy()) {
-                url = buildAListProxyUrl(site, path, fsDetail.getSign());
-                result.put("url", url);
-            } else {
-                result.put("header", "{\"User-Agent\":\"netdisk\"}");
-            }
+            result.put("header", Map.of("User-Agent", "netdisk"));
         } else if (url.contains("ali")) {
             result.put("format", "application/octet-stream");
-            result.put("header", "{\"User-Agent\":\"" + appProperties.getUserAgent() + "\",\"Referer\":\"" + Constants.ALIPAN + "\",\"origin\":\"" + Constants.ALIPAN + "\"}");
+            result.put("header", Map.of("User-Agent", appProperties.getUserAgent(), "Referer", Constants.ALIPAN, "origin", Constants.ALIPAN));
         }
 
         if (!getSub) {
-            log.debug("getPlayUrl result: {}", result);
+            log.debug("[{}] getPlayUrl result: {}", fsDetail.getProvider(), result);
             return result;
         }
 
@@ -1429,11 +1413,32 @@ public class TvBoxService {
         }
     }
 
+    private boolean isUseProxy(String url) {
+        var driverAccount = getDriverAccount(url);
+        if (driverAccount != null) {
+            return driverAccount.isUseProxy();
+        }
+        var account = getAliAccount(url);
+        if (account != null) {
+            return account.isUseProxy();
+        }
+        return false;
+    }
+
     private DriverAccount getDriverAccount(String url) {
         int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
         if (index > 0) {
             int id = Integer.parseInt(url.substring(index + Constants.STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
             return driverAccountRepository.findById(id).orElse(null);
+        }
+        return null;
+    }
+
+    private Account getAliAccount(String url) {
+        int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
+        if (index > 0) {
+            int id = (Integer.parseInt(url.substring(index + Constants.STORAGE_ID_FRAGMENT.length())) - AccountService.IDX) / 2 + 1;
+            return accountRepository.findById(id).orElse(null);
         }
         return null;
     }
@@ -1638,13 +1643,7 @@ public class TvBoxService {
                 movieDetail.setVod_play_url(buildAListProxyUrl(site, path, sign));
                 movieDetail.setType(fsDetail.getType());
             } else {
-                String url = fsDetail.getRawUrl();
-                DriverAccount account = getDriverAccount(url);
-                if (account != null && account.isUseProxy()) {
-                    movieDetail.setVod_play_url(getFilename(fsDetail) + "$" + buildAListProxyUrl(site, path, sign));
-                } else {
-                    movieDetail.setVod_play_url(getFilename(fsDetail) + "$" + url);
-                }
+                movieDetail.setVod_play_url(getFilename(fsDetail) + "$" + buildPlayUrl(site, path));
             }
             String parent = getParent(path);
             if (!"web".equals(ac) && !"gui".equals(ac)) {

@@ -8,8 +8,6 @@ public class Pan115Share extends Storage {
         addAddition("share_code", share.getShareId());
         addAddition("receive_code", share.getPassword());
         addAddition("root_folder_id", share.getFolderId());
-        addAddition("page_size", 1000);
-        addAddition("limit_rate", 2);
         buildAddition();
     }
 }

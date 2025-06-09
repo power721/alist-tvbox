@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
@@ -175,14 +176,9 @@ public class QuarkUCTV {
         headers.set("x-pan-client-id", conf.clientID);
         HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
 
-        ResponseEntity<RefreshTokenAuthResp> responseEntity;
+        ResponseEntity<JsonNode> res;
         try {
-            responseEntity = restTemplate.exchange(
-                    url,
-                    HttpMethod.POST,
-                    requestEntity,
-                    RefreshTokenAuthResp.class
-            );
+            res = restTemplate.exchange(url, HttpMethod.POST, requestEntity, JsonNode.class);
         } catch (RestClientResponseException e) {
             String error = Objects.toString(e.getResponseBodyAs(Map.class).get("error_info"), e.getMessage());
             throw new BadRequestException(error, e);
@@ -190,7 +186,8 @@ public class QuarkUCTV {
             throw new RuntimeException("Failed to get refresh token", e);
         }
 
-        return responseEntity.getBody().data.refreshToken;
+        log.debug("get refresh token: {}", res.getBody());
+        return res.getBody().get("data").get("refresh_token").asText();
     }
 
     private Map<String, String> query(String reqID) {
@@ -253,8 +250,8 @@ public class QuarkUCTV {
         }
     }
 
-    public record Conf(String api, String clientID, String signKey, String appVer, String channel, String codeApi,
-                       String deviceId) {
+    public record Conf(String api, String clientID, String signKey, String appVer,
+                       String channel, String codeApi, String deviceId) {
     }
 
     @Data
@@ -266,20 +263,5 @@ public class QuarkUCTV {
         private String qrData;
         @JsonProperty("query_token")
         private String queryToken;
-    }
-
-    @Data
-    public static class RefreshTokenAuthResp {
-        private int code;
-        private String message;
-        private TokenData data;
-    }
-
-    @Data
-    public static class TokenData {
-        @JsonProperty("refresh_token")
-        private String refreshToken;
-        @JsonProperty("access_token")
-        private String accessToken;
     }
 }

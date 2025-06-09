@@ -1,19 +1,18 @@
 package cn.har01d.alist_tvbox.storage;
 
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.PikPakAccount;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.util.Utils;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
+
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 @Data
 public class Storage {
@@ -44,7 +43,7 @@ public class Storage {
     }
 
     public Storage(Account account, String type) {
-        this.id = 4600 + (account.getId() - 1) * 2 +  ("backup".equals(type) ? 1 : 0);
+        this.id = 4600 + (account.getId() - 1) * 2 + ("backup".equals(type) ? 1 : 0);
         this.driver = "AliyundriveOpen";
         String name = account.getNickname();
         if (StringUtils.isBlank(name)) {
@@ -79,12 +78,14 @@ public class Storage {
     }
 
     public void buildAddition() {
-        List<String> list = new ArrayList<>();
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
-            String dim = entry.getValue() instanceof String ? "\"" : "";
-            list.add("\"" + entry.getKey() + "\":" + dim + entry.getValue() + dim);
+        addition = Utils.toJsonString(map);
+    }
+
+    public void buildAddition(DriverAccount account) {
+        if (StringUtils.isNotBlank(account.getAddition())) {
+            map.putAll(Utils.readJson(account.getAddition()));
         }
-        addition = "{" + String.join(",", list) + "}";
+        addition = Utils.toJsonString(map);
     }
 
     public static String getMountPath(Share share) {

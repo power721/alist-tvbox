@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.util;
 
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
@@ -23,6 +25,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
@@ -43,6 +46,7 @@ public final class Utils {
     private static final Pattern NUMBERS = Pattern.compile("\\d+");
     private static final List<String> userAgents = new ArrayList<>();
     private static final SecureRandom secureRandom = new SecureRandom();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final int[] mixinKeyEncTab = new int[]{
             46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
             33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40,
@@ -413,6 +417,22 @@ public final class Utils {
             return FileUtils.listFiles(path.toFile(), ext, false);
         } catch (UncheckedIOException e) {
             return List.of();
+        }
+    }
+
+    public static Map<String, Object> readJson(String json) {
+        try {
+            return objectMapper.readValue(json, Map.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static String toJsonString(Object object) {
+        try {
+            return objectMapper.writeValueAsString(object);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
         }
     }
 }

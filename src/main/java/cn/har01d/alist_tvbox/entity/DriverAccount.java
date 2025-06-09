@@ -28,6 +28,8 @@ public class DriverAccount {
     private String cookie = "";
     @Column(columnDefinition = "TEXT")
     private String token = "";
+    @Column(columnDefinition = "TEXT")
+    private String addition = "";
     private String username = "";
     private String password = "";
     private String safePassword = "";
