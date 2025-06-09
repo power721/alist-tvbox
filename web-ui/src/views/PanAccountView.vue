@@ -76,11 +76,11 @@
     </el-table>
 
     <el-dialog v-model="formVisible" :title="dialogTitle" width="60%">
-      <el-form :model="form" label-width="140">
-        <el-form-item label="名称" label-width="140" required>
+      <el-form :model="form" label-width="auto">
+        <el-form-item label="名称" required>
           <el-input v-model="form.name" autocomplete="off"/>
         </el-form-item>
-        <el-form-item label="类型" label-width="120" required>
+        <el-form-item label="类型" required>
           <el-radio-group v-model="form.type" class="ml-4">
             <el-radio label="QUARK" size="large">夸克网盘</el-radio>
             <el-radio label="UC" size="large">UC网盘</el-radio>
