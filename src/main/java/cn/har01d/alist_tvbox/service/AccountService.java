@@ -81,7 +81,7 @@ import lombok.extern.slf4j.Slf4j;
 
 public class AccountService {
     public static final ZoneOffset ZONE_OFFSET = ZoneOffset.of("+08:00");
-    private final int base = 4600;
+    public static final int IDX = 4600;
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
     private final UserRepository userRepository;
@@ -203,7 +203,7 @@ public class AccountService {
 
     private void updateAliAccountId() {
         accountRepository.getFirstByMasterTrue().map(Account::getId).ifPresent(id -> {
-            int storageId = base + (id - 1) * 2;
+            int storageId = IDX + (id - 1) * 2;
             log.info("updateAliAccountId {}", storageId);
             aListLocalService.setSetting("ali_account_id", String.valueOf(storageId), "number");
         });
@@ -492,7 +492,7 @@ public class AccountService {
             for (Account account : list) {
                 try {
                     int code;
-                    int id = base + (account.getId() - 1) * 2;
+                    int id = IDX + (account.getId() - 1) * 2;
                     String name = account.getNickname();
                     if (StringUtils.isBlank(name)) {
                         name = String.valueOf(account.getId());
@@ -784,6 +784,7 @@ public class AccountService {
         account.setAutoCheckin(dto.isAutoCheckin());
         account.setShowMyAli(dto.isShowMyAli());
         account.setClean(dto.isClean());
+        account.setUseProxy(dto.isUseProxy());
 
         account.setMaster(dto.isMaster() || count == 0);
         if (account.isMaster()) {
@@ -793,7 +794,7 @@ public class AccountService {
 
         if (count == 0) {
             updateTokens();
-            int storageId = base + (account.getId() - 1) * 2;
+            int storageId = IDX + (account.getId() - 1) * 2;
             aListLocalService.setSetting("ali_account_id", String.valueOf(storageId), "number");
             aListLocalService.startAListServer();
         } else if (account.isMaster()) {
@@ -898,6 +899,7 @@ public class AccountService {
         account.setShowMyAli(dto.isShowMyAli());
         account.setMaster(dto.isMaster());
         account.setClean(dto.isClean());
+        account.setUseProxy(dto.isUseProxy());
 
         if (changed && account.isMaster()) {
             updateMaster(account);
@@ -919,7 +921,7 @@ public class AccountService {
     }
 
     private void updateAliAccountByApi(Account account) {
-        int storageId = base + (account.getId() - 1) * 2;
+        int storageId = IDX + (account.getId() - 1) * 2;
         int status = aListLocalService.checkStatus();
         if (status == 1) {
             Utils.executeUpdate("UPDATE x_setting_items SET value=" + storageId + " WHERE key = 'ali_account_id'");
@@ -981,7 +983,7 @@ public class AccountService {
         }
 
         String token = status >= 2 ? login() : "";
-        int storageId = base + (account.getId() - 1) * 2;
+        int storageId = IDX + (account.getId() - 1) * 2;
         if (status == 0) {
             Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + storageId);
             Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + (storageId + 1));

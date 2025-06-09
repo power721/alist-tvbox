@@ -47,5 +47,7 @@ public class Account {
     private boolean master;
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean clean;
+    @Column(columnDefinition = "BOOLEAN DEFAULT false")
+    private boolean useProxy;
     private Integer concurrency = 4;
 }
