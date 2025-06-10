@@ -141,6 +141,7 @@ public class IndexFileService {
                     }
                     line = line
                             .replace("\uD83C\uDFF7\uFE0F我的115分享", "我的115分享")
+                            .replace("\uD83C\uDFF7\uFE0F 我的115分享", "我的115分享")
                             .replace("\uD83C\uDF00我的夸克分享", "我的夸克分享");
                     String[] split = line.split("/");
                     String path = "";
