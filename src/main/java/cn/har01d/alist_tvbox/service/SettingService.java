@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.zip.ZipOutputStream;
 
@@ -98,11 +99,18 @@ public class SettingService {
             appProperties.setTgTimeout(Integer.parseInt(value));
         }
         value = settingRepository.findById("search_excluded_paths").map(Setting::getValue).orElse("");
-        if (StringUtils.isBlank(value)) {
-            value = "/电视剧/韩国,/电视剧/英国,/电视剧/港台,/电视剧/泰剧,/电视剧/欧美,/电视剧/日本,/电视剧/新加坡,/电视剧/中国/七米蓝";
+        String old = "/电视剧/韩国,/电视剧/英国,/电视剧/港台,/电视剧/泰剧,/电视剧/欧美,/电视剧/日本,/电视剧/新加坡,/电视剧/中国/七米蓝";
+        if (StringUtils.isBlank(value) || value.equals(old)) {
+            value = "/电视剧/韩国,/电视剧/英国,/电视剧/港台,/电视剧/泰剧,/电视剧/欧美,/电视剧/日本,/电视剧/新加坡,/电视剧/俄罗斯/,/电视剧/法国/,/电视剧/德国/,/电视剧/中国/七米蓝";
             settingRepository.save(new Setting("search_excluded_paths", value));
         }
         appProperties.setExcludedPaths(Arrays.asList(value.split(",")));
+        value = settingRepository.findById("system_id").map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(value)) {
+            value = UUID.randomUUID().toString();
+            settingRepository.save(new Setting("system_id", value));
+        }
+        log.info("system id: {}", value);
     }
 
     public FileSystemResource exportDatabase() throws IOException {
