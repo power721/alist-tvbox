@@ -8,6 +8,7 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -66,5 +67,11 @@ public class IndexFileController {
         response.addHeader("Content-Disposition", "attachment; filename=\"index.zip\"");
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
         return service.downloadIndexFile(siteId);
+    }
+
+    @Async
+    @PostMapping("/validate")
+    public void validate() {
+        service.validate();
     }
 }

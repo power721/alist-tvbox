@@ -78,6 +78,16 @@ public class AListService {
         return response.getData().getContent();
     }
 
+    public boolean validate(String path) {
+        Site site = siteService.getById(1);
+        try {
+            listFiles(site, path, 1, 1);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public List<FileItem> browse(int id, String path) {
         List<FileItem> list = new ArrayList<>();
         if (StringUtils.isEmpty(path)) {

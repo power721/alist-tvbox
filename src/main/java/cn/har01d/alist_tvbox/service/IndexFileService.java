@@ -17,12 +17,24 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Stream;
 import java.util.zip.ZipOutputStream;
 
 @Slf4j
 @Service
 public class IndexFileService {
+    private final AListService aListService;
+    private final SettingService settingService;
+
+    public IndexFileService(AListService aListService, SettingService settingService) {
+        this.aListService = aListService;
+        this.settingService = settingService;
+    }
+
     public Page<String> getIndexContent(Pageable pageable, String siteId, String index) throws IOException {
         List<String> list = new ArrayList<>();
         Path file = Utils.getIndexPath(siteId, index + ".txt");
@@ -111,5 +123,39 @@ public class IndexFileService {
     public void deleteIndexFile(String siteId, String indexName) throws IOException {
         Path path = Utils.getIndexPath(siteId, indexName + ".txt");
         Files.delete(path);
+    }
+
+    public void validate() {
+        Set<String> paths = new HashSet<>();
+        List<String> files = settingService.getSearchSources();
+        for (String path : files) {
+            try (Stream<String> stream = Files.lines(Path.of(path))) {
+                stream.forEach(line -> {
+                    if (line.startsWith(".")) {
+                        line = line.substring(1);
+                    }
+                    String[] split = line.split("/");
+                    List<String> list = new ArrayList<>();
+                    list.add(split[1]);
+                    paths.add(String.join("/", list));
+                    if (split.length > 2) {
+                        list.add(split[2]);
+                        paths.add(String.join("/", list));
+                    }
+                });
+            } catch (IOException e) {
+                log.error("read file {} failed", path, e);
+            }
+        }
+        log.info("validate {} paths: {}", paths.size(), paths);
+
+        List<String> invalid = new ArrayList<>();
+        for (String path : paths) {
+            boolean success = aListService.validate(path);
+            if (!success) {
+                invalid.add(path);
+            }
+        }
+        log.info("{} invalid paths: {}", invalid.size(), invalid);
     }
 }
