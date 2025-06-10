@@ -159,14 +159,14 @@ public class IndexFileService {
         }
         log.info("validate {} paths: {}", paths.size(), paths);
 
-        List<ValidateResult> results = new ArrayList<>();
+        List<String> results = new ArrayList<>();
         for (String path : paths) {
             ValidateResult result = aListService.validate(path);
             if (!result.success()) {
-                results.add(result);
+                results.add(path);
                 log.warn("validate path {} failed: {}", path, result.message());
             }
         }
-        log.info("validation completed: {}", results);
+        log.info("invalid paths: {} {}", results.size(), results);
     }
 }
