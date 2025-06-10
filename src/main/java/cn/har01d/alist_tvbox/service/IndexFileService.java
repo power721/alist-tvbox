@@ -163,7 +163,9 @@ public class IndexFileService {
         for (String path : paths) {
             ValidateResult result = aListService.validate(path);
             if (!result.success()) {
-                results.add(path);
+                if (result.message().contains("object not found")) {
+                    results.add(path);
+                }
                 log.warn("validate path {} failed: {}", path, result.message());
             }
         }
