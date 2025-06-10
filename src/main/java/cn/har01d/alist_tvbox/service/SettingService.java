@@ -318,10 +318,11 @@ public class SettingService {
     private void setExcludedPaths(String excludedPaths) {
         List<String> list = new ArrayList<>();
         for (String path : excludedPaths.split(",")) {
-            if (!path.trim().startsWith("/")) {
+            path = path.trim();
+            if (!path.startsWith("/")) {
                 throw new BadRequestException("路径必须以/开头");
             }
-            list.add(path.trim());
+            list.add(path);
         }
         appProperties.setExcludedPaths(list);
         settingRepository.save(new Setting("search_excluded_paths", String.join(",", list)));
