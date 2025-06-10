@@ -25,7 +25,6 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
@@ -280,9 +279,9 @@ public final class Utils {
         for (String line : content.split("\\n")) {
             String[] parts = line.split(":");
             if (parts.length == 2) {
-                sb.append(parts[1]).append(":").append(parts[0]).append("\\n");
+                sb.append(parts[1]).append(":").append(parts[0]).append("\n");
             } else {
-                sb.append("本地:").append(line).append("\\n");
+                sb.append("本地:").append(line).append("\n");
             }
         }
         return sb.toString();
