@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.FileItem;
+import cn.har01d.alist_tvbox.dto.ValidateResult;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.FsDetail;
@@ -78,13 +79,13 @@ public class AListService {
         return response.getData().getContent();
     }
 
-    public boolean validate(String path) {
+    public ValidateResult validate(String path) {
         Site site = siteService.getById(1);
         try {
             listFiles(site, path, 1, 1);
-            return true;
+            return new ValidateResult(true, "");
         } catch (Exception e) {
-            return false;
+            return new ValidateResult(false, e.getMessage());
         }
     }
 

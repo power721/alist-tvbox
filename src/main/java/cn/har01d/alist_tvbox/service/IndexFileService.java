@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.ValidateResult;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +18,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -128,34 +128,41 @@ public class IndexFileService {
     public void validate() {
         Set<String> paths = new HashSet<>();
         List<String> files = settingService.getSearchSources();
-        for (String path : files) {
-            try (Stream<String> stream = Files.lines(Path.of(path))) {
+        log.info("validate index files: {}", files);
+        for (String file : files) {
+            try (Stream<String> stream = Files.lines(Utils.getIndexPath(file))) {
                 stream.forEach(line -> {
                     if (line.startsWith(".")) {
                         line = line.substring(1);
                     }
+                    line = line
+                            .replace("\uD83C\uDFF7\uFE0F我的115分享", "我的115分享")
+                            .replace("\uD83C\uDF00我的夸克分享", "我的夸克分享");
                     String[] split = line.split("/");
-                    List<String> list = new ArrayList<>();
-                    list.add(split[1]);
-                    paths.add(String.join("/", list));
+                    String path = "";
+                    if (split.length > 1) {
+                        path += "/" + split[1];
+                        paths.add(path);
+                    }
                     if (split.length > 2) {
-                        list.add(split[2]);
-                        paths.add(String.join("/", list));
+                        path += "/" + split[2];
+                        paths.add(path);
                     }
                 });
             } catch (IOException e) {
-                log.error("read file {} failed", path, e);
+                log.error("read index file {} failed", file, e);
             }
         }
         log.info("validate {} paths: {}", paths.size(), paths);
 
-        List<String> invalid = new ArrayList<>();
+        List<ValidateResult> results = new ArrayList<>();
         for (String path : paths) {
-            boolean success = aListService.validate(path);
-            if (!success) {
-                invalid.add(path);
+            ValidateResult result = aListService.validate(path);
+            if (!result.success()) {
+                results.add(result);
+                log.warn("validate path {} failed: {}", path, result.message());
             }
         }
-        log.info("{} invalid paths: {}", invalid.size(), invalid);
+        log.info("validation completed: {}", results);
     }
 }
