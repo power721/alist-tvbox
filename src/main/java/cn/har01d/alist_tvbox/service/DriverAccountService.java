@@ -206,7 +206,7 @@ public class DriverAccountService {
         } else if (account.getType() == DriverType.PAN115) {
             storage = new Pan115(account);
         } else if (account.getType() == DriverType.OPEN115) {
-            storage = new Open115(account);
+            //storage = new Open115(account);
         } else if (account.getType() == DriverType.BAIDU) {
             storage = new BaiduNetdisk(account);
         }

@@ -20,7 +20,7 @@
           <span v-else-if="scope.row.type=='QUARK_TV'">夸克TV</span>
           <span v-else-if="scope.row.type=='UC_TV'">UC TV</span>
           <span v-else-if="scope.row.type=='PAN115'">115云盘</span>
-          <span v-else-if="scope.row.type=='OPEN115'">115 Open</span>
+          <span v-else-if="scope.row.type=='OPEN115'">115 Open(移除)</span>
           <span v-else-if="scope.row.type=='THUNDER'">迅雷云盘</span>
           <span v-else-if="scope.row.type=='CLOUD189'">天翼云盘</span>
           <span v-else-if="scope.row.type=='PAN139'">移动云盘</span>
@@ -87,7 +87,6 @@
             <el-radio label="QUARK_TV" size="large">夸克TV</el-radio>
             <el-radio label="UC_TV" size="large">UC TV</el-radio>
             <el-radio label="PAN115" size="large">115云盘</el-radio>
-            <el-radio label="OPEN115" size="large">115 Open</el-radio>
             <el-radio label="THUNDER" size="large">迅雷云盘</el-radio>
             <el-radio label="CLOUD189" size="large">天翼云盘</el-radio>
             <el-radio label="PAN139" size="large">移动云盘</el-radio>
@@ -126,22 +125,20 @@
           <div class="hint"></div>
           <a href="https://alist.nn.ci/zh/guide/drivers/139.html" target="_blank">使用说明</a>
         </el-form-item>
-        <el-form-item label="Refresh Token" required v-if="form.type=='OPEN115'">
-          <el-input v-model="form.token"/>
-          <a href="https://alist.nn.ci/zh/tool/115/token" target="_blank">获取刷新令牌</a>
-        </el-form-item>
+<!--        <el-form-item label="Refresh Token" required v-if="form.type=='OPEN115'">-->
+<!--          <el-input v-model="form.token"/>-->
+<!--          <a href="https://alist.nn.ci/zh/tool/115/token" target="_blank">获取刷新令牌</a>-->
+<!--        </el-form-item>-->
         <el-form-item label="Token" v-if="form.type=='PAN115'">
           <el-input v-model="form.token"/>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
           <el-input v-model="form.token" type="textarea" :rows="3"/>
+          <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='BAIDU'" required>
           <el-input v-model="form.token"/>
           <a href="https://openapi.baidu.com/oauth/2.0/authorize?response_type=code&client_id=iYCeC9g08h5vuP9UqvPHKKSVrKFXGa1v&redirect_uri=https://alist.nn.ci/tool/baidu/callback&scope=basic,netdisk&qrcode=1" target="_blank">获取刷新令牌</a>
-        </el-form-item>
-        <el-form-item v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
-          <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
         <el-form-item label="用户名" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
           <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'+86 12345678900':''"/>
