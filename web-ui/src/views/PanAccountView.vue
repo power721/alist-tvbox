@@ -136,9 +136,9 @@
           <el-input v-model="form.token" type="textarea" :rows="3"/>
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
-        <el-form-item label="Token" v-if="form.type=='BAIDU'" required>
-          <el-input v-model="form.token"/>
-          <a href="https://openapi.baidu.com/oauth/2.0/authorize?response_type=code&client_id=iYCeC9g08h5vuP9UqvPHKKSVrKFXGa1v&redirect_uri=https://alist.nn.ci/tool/baidu/callback&scope=basic,netdisk&qrcode=1" target="_blank">获取刷新令牌</a>
+        <el-form-item label="Access Token" v-if="form.type=='BAIDU'" required>
+          <el-input v-model="form.addition.access_token"/>
+          <el-button type="primary" @click="copyLink">获取认证令牌</el-button>
         </el-form-item>
         <el-form-item label="用户名" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
           <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'+86 12345678900':''"/>
@@ -248,11 +248,13 @@
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
 import {onMounted, ref} from 'vue'
 import {Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
+import clipBorad from "vue-clipboard3";
+
+let {toClipboard} = clipBorad();
 
 const updateAction = ref(false)
 const dialogTitle = ref('')
@@ -268,7 +270,11 @@ const form = ref({
   name: '',
   cookie: '',
   token: '',
-  addition: {},
+  addition: {
+    page_size: 1000,
+    limit_rate: 2,
+    access_token: '',
+  },
   username: '',
   password: '',
   safePassword: '',
@@ -330,7 +336,11 @@ const handleAdd = () => {
     name: '',
     cookie: '',
     token: '',
-    addition: {},
+    addition: {
+      page_size: 1000,
+      limit_rate: 2,
+      access_token: '',
+    },
     username: '',
     password: '',
     safePassword: '',
@@ -436,8 +446,7 @@ const handleCancel = () => {
 }
 
 const handleConfirm = () => {
-  const data = Object.assign({}, form.value)
-  data.addition = JSON.stringify(form.value.addition)
+  const data = Object.assign({}, form.value, {addition: JSON.stringify(form.value.addition)})
   const url = updateAction.value ? '/api/pan/accounts/' + form.value.id : '/api/pan/accounts'
   axios.post(url, data).then(() => {
     formVisible.value = false
@@ -461,8 +470,7 @@ const getInfo = () => {
   if (!form.value.cookie) {
     return
   }
-  const data = Object.assign({}, form.value)
-  data.addition = JSON.stringify(form.value.addition)
+  const data = Object.assign({}, form.value, {addition: JSON.stringify(form.value.addition)})
   axios.post('/api/pan/accounts/-/info', data).then(({data}) => {
     if (data && data.name) {
       ElMessage.success('Cookie有效：' + data.name)
@@ -472,6 +480,13 @@ const getInfo = () => {
     } else {
       ElMessage.error('Cookie无效')
     }
+  })
+}
+
+const copyLink = () => {
+  const url = 'https://openapi.baidu.com/oauth/2.0/authorize?response_type=token&scope=basic,netdisk&client_id=IlLqBbU3GjQ0t46TRwFateTprHWl39zF&redirect_uri=oob&confirm_login=0'
+  toClipboard(url).then(() => {
+    ElMessage.success('链接已复制，在新页面打开')
   })
 }
 

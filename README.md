@@ -3,6 +3,8 @@ AList proxy server for TvBox, support playlist and search.
 
 [中文文档](doc/README_zh.md)
 
+[AList](https://github.com/power721/alist)
+
 # Build
 ```bash
 mvn clean package
