@@ -28,8 +28,6 @@ COPY scripts/downloadPg.sh /
 COPY scripts/downloadZx.sh /
 COPY entrypoint-native.sh /entrypoint.sh
 
-COPY target/atv ./
-
 COPY data/update.sql /
 COPY data/tvbox.zip /
 COPY data/index.share.zip /
@@ -40,6 +38,8 @@ COPY data/data.zip /
 COPY data/base_version /
 
 COPY data/version data/app_version
+
+COPY target/atv ./
 
 EXPOSE 4567 80
 
