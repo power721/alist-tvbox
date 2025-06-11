@@ -22,4 +22,5 @@ public class AccountDto {
     private boolean useProxy;
     private boolean master;
     private boolean clean;
+    private Integer concurrency = 4;
 }

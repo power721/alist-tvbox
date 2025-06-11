@@ -360,15 +360,9 @@ const increase = () => {
 
 const options = [
   {
-    label: 'AList',
-    options: [
-      {label: 'api.xhofe.top', value: 'https://api.xhofe.top/alist/ali_open/token'},
-      {label: 'api.nn.ci ✈', value: 'https://api.nn.ci/alist/ali_open/token'},
-    ]
-  },
-  {
     label: '作者自建',
     options: [
+      {label: 'har01d', value: 'https://ali.har01d.org/access_token'},
       {label: 'ycyup', value: 'https://ycyup.cn/alipan/access_token'},
     ]
   },

@@ -783,6 +783,7 @@ public class AccountService {
         account.setShowMyAli(dto.isShowMyAli());
         account.setClean(dto.isClean());
         account.setUseProxy(dto.isUseProxy());
+        account.setConcurrency(dto.getConcurrency());
 
         account.setMaster(dto.isMaster() || count == 0);
         if (account.isMaster()) {
@@ -888,7 +889,10 @@ public class AccountService {
 
         Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
         boolean tokenChanged = !Objects.equals(account.getRefreshToken(), dto.getRefreshToken()) || !Objects.equals(account.getOpenToken(), dto.getOpenToken());
-        boolean changed = tokenChanged || account.isMaster() != dto.isMaster();
+        boolean changed = tokenChanged
+                || !Objects.equals(account.getConcurrency(), dto.getConcurrency())
+                || account.isMaster() != dto.isMaster()
+                || account.isUseProxy() != dto.isUseProxy();
         boolean showMyAli = account.isShowMyAli();
 
         account.setRefreshToken(dto.getRefreshToken().trim());
@@ -898,6 +902,7 @@ public class AccountService {
         account.setMaster(dto.isMaster());
         account.setClean(dto.isClean());
         account.setUseProxy(dto.isUseProxy());
+        account.setConcurrency(dto.getConcurrency());
 
         if (changed && account.isMaster()) {
             updateMaster(account);
