@@ -46,6 +46,7 @@
         <el-button type="primary" @click="handleForm">开始索引</el-button>
         <el-button type="info" @click="showTemplateSetting">存为模板</el-button>
         <el-button type="info" @click="showTemplates">索引模板</el-button>
+        <el-button type="info" @click="validateVisible=true">校验内置索引</el-button>
       </el-form-item>
     </el-form>
     <div class="space"></div>
@@ -53,6 +54,7 @@
     <h2>任务列表</h2>
     <el-row justify="end">
       <el-button @click="loadTasks">刷新</el-button>
+      <el-button @click="cleanVisible=true">清理</el-button>
     </el-row>
     <el-table :data="tasks.content" border style="width: 100%">
       <el-table-column prop="id" label="ID" sortable width="70"/>
@@ -98,26 +100,61 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="settingVisible" title="模板设置">
-        <el-form :model="form" :label-width="labelWidth">
-          <el-form-item label="定时索引？">
-            <el-switch v-model="form.scheduled"/>
+    <el-dialog v-model="cleanVisible" title="清理任务" width="60%">
+      <div>
+        清理{{ days }}天以前的任务
+        <el-form-item label="天数">
+          <el-input-number v-model="days" :min="1"/>
+        </el-form-item>
+      </div>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="cleanVisible = false">关闭</el-button>
+        <el-button type="primary" @click="cleanTasks">清理</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="validateVisible" title="校验内置索引文件" width="60%">
+      <div>
+        <p>校验内置的索引文件，检查路径是否失效。</p>
+        <el-form label-width="auto">
+          <el-form-item label="更新搜索排除列表？">
+            <el-switch v-model="updateExcludePath"/>
           </el-form-item>
-          <el-form-item label="索引时间(小时)">
-          <el-checkbox-group v-model="timeList" :disabled="!form.scheduled">
-            <el-checkbox label="10" />
-            <el-checkbox label="12" />
-            <el-checkbox label="14" />
-            <el-checkbox label="16" />
-            <el-checkbox label="18" />
-            <el-checkbox label="19" />
-            <el-checkbox label="20" />
-            <el-checkbox label="21" />
-            <el-checkbox label="22" />
-            <el-checkbox label="23" />
-          </el-checkbox-group>
-          </el-form-item>
+          <!--          <el-form-item label="最大校验目录层级">-->
+          <!--            <el-input-number v-model="depth" :min="1" :max="3"/>-->
+          <!--          </el-form-item>-->
         </el-form>
+      </div>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="dialogVisible = false">关闭</el-button>
+        <el-button type="primary" @click="validateIndexFiles">校验</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="settingVisible" title="模板设置">
+      <el-form :model="form" :label-width="labelWidth">
+        <el-form-item label="定时索引？">
+          <el-switch v-model="form.scheduled"/>
+        </el-form-item>
+        <el-form-item label="索引时间(小时)">
+          <el-checkbox-group v-model="timeList" :disabled="!form.scheduled">
+            <el-checkbox label="10"/>
+            <el-checkbox label="12"/>
+            <el-checkbox label="14"/>
+            <el-checkbox label="16"/>
+            <el-checkbox label="18"/>
+            <el-checkbox label="19"/>
+            <el-checkbox label="20"/>
+            <el-checkbox label="21"/>
+            <el-checkbox label="22"/>
+            <el-checkbox label="23"/>
+          </el-checkbox-group>
+        </el-form-item>
+      </el-form>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="settingVisible = false">关闭</el-button>
@@ -181,6 +218,11 @@ const labelWidth = 160
 const total = ref(0)
 const currentPage = ref(1)
 const templateId = ref(0)
+const days = ref(30)
+const depth = ref(2)
+const validateVisible = ref(false)
+const updateExcludePath = ref(false)
+const cleanVisible = ref(false)
 const dialogVisible = ref(false)
 const templatesVisible = ref(false)
 const settingVisible = ref(false)
@@ -188,7 +230,7 @@ const sites = ref([] as Site[])
 const tasks = ref({} as TaskPage)
 const task = ref({} as Task)
 const templates = ref([] as IndexTemplate[])
-const timeList = ref<string[]>(['10','14','18','22'])
+const timeList = ref<string[]>(['10', '14', '18', '22'])
 const form = reactive({
   siteId: 1,
   indexName: 'custom_index',
@@ -235,6 +277,13 @@ const loadTemplates = () => {
   })
 }
 
+const validateIndexFiles = () => {
+  axios.post('/api/index-files/validate?updateExcludePath=' + updateExcludePath.value + '&depth=' + depth.value).then(() => {
+    validateVisible.value = false
+    setTimeout(loadTasks, 3000)
+  })
+}
+
 const showTemplates = () => {
   loadTemplates()
   templatesVisible.value = true
@@ -265,12 +314,12 @@ const showTemplateSetting = () => {
   if (form.scheduleTime) {
     timeList.value = form.scheduleTime.split('|')
   } else {
-    timeList.value = ['10','14','18','22']
+    timeList.value = ['10', '14', '18', '22']
   }
   settingVisible.value = true
 }
 
-const saveTemplate = (id: number|null) => {
+const saveTemplate = (id: number | null) => {
   const data = {
     siteId: form.siteId,
     indexName: form.indexName,
@@ -324,6 +373,13 @@ const handleCancel = (data: any) => {
 
 const handleDelete = (data: any) => {
   axios.delete('/api/tasks/' + data.id).then(() => {
+    loadTasks()
+  })
+}
+
+const cleanTasks = () => {
+  axios.delete('/api/tasks?days=' + days.value).then(() => {
+    cleanVisible.value = false
     loadTasks()
   })
 }

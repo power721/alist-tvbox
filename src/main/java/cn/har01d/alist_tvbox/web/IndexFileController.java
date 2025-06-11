@@ -71,7 +71,7 @@ public class IndexFileController {
 
     @Async
     @PostMapping("/validate")
-    public void validate() {
-        service.validate();
+    public void validateIndexFiles(boolean updateExcludePath, int depth) {
+        service.validateIndexFiles(updateExcludePath, depth);
     }
 }

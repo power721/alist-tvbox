@@ -315,6 +315,11 @@ public class SettingService {
         settingRepository.save(new Setting("search_index_source", String.join(",", searchSources)));
     }
 
+    public void setExcludedPaths(List<String> excludedPaths) {
+        appProperties.setExcludedPaths(excludedPaths);
+        settingRepository.save(new Setting("search_excluded_paths", String.join(",", excludedPaths)));
+    }
+
     private void setExcludedPaths(String excludedPaths) {
         List<String> list = new ArrayList<>();
         for (String path : excludedPaths.split(",")) {
