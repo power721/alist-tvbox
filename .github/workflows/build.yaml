@@ -115,9 +115,9 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Build native with Maven
         run: |
-          mvn -B -Pnative package --file pom.xml
+          mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
           chmod a+x target/atv
-          ls -l target/atv
+          ls -l target
       - name: Release native binary
         uses: softprops/action-gh-release@v2
         if: github.ref_type == 'tag'
