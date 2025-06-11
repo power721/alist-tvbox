@@ -889,11 +889,10 @@ public class AccountService {
 
         Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
         boolean tokenChanged = !Objects.equals(account.getRefreshToken(), dto.getRefreshToken()) || !Objects.equals(account.getOpenToken(), dto.getOpenToken());
-        boolean changed = tokenChanged
-                || !Objects.equals(account.getConcurrency(), dto.getConcurrency())
-                || account.isMaster() != dto.isMaster()
-                || account.isUseProxy() != dto.isUseProxy();
-        boolean showMyAli = account.isShowMyAli();
+        boolean changed = tokenChanged || account.isMaster() != dto.isMaster();
+        boolean aliChanged = account.isShowMyAli() != dto.isShowMyAli()
+                || account.isUseProxy() != dto.isUseProxy()
+                || !Objects.equals(account.getConcurrency(), dto.getConcurrency());
 
         account.setRefreshToken(dto.getRefreshToken().trim());
         account.setOpenToken(dto.getOpenToken().trim());
@@ -909,7 +908,6 @@ public class AccountService {
             updateAliAccountByApi(account);
         }
 
-        boolean aliChanged = account.isShowMyAli() != showMyAli;
         if (aliChanged) {
             showMyAliWithAPI(account);
         }
