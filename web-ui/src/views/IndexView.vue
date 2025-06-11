@@ -122,9 +122,9 @@
           <el-form-item label="更新搜索排除列表？">
             <el-switch v-model="updateExcludePath"/>
           </el-form-item>
-          <!--          <el-form-item label="最大校验目录层级">-->
-          <!--            <el-input-number v-model="depth" :min="1" :max="3"/>-->
-          <!--          </el-form-item>-->
+          <el-form-item label="最大校验目录层级">
+            <el-input-number v-model="depth" :min="1" :max="3"/>
+          </el-form-item>
         </el-form>
       </div>
       <template #footer>
@@ -240,7 +240,7 @@ const form = reactive({
   includeFiles: false,
   compress: false,
   scheduled: false,
-  sleep: 5000,
+  sleep: 2000,
   maxDepth: 10,
   paths: '',
   stopWords: '',

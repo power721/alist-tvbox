@@ -32,6 +32,7 @@ import java.util.zip.ZipOutputStream;
 @Slf4j
 @Service
 public class IndexFileService {
+    private final int maxFolderSize = 30;
     private final AListService aListService;
     private final SettingService settingService;
     private final TaskService taskService;
@@ -135,7 +136,7 @@ public class IndexFileService {
     }
 
     public void validateIndexFiles(boolean updateExcludePath, int depth) throws InterruptedException {
-        if (depth < 1 || depth > 3) {
+        if (depth < 1 || depth > 4) {
             throw new BadRequestException("校验层级无效");
         }
         if (taskService.isTaskRunning(TaskType.VALIDATE_INDEX)) {
@@ -170,32 +171,55 @@ public class IndexFileService {
                             .replace("\uD83C\uDF00我的夸克分享", "我的夸克分享");
                     String[] split = line.split("/");
                     String path = "";
-                    ValidateRequest request1 = null;
-                    ValidateRequest request2 = null;
+                    ValidateRequest depth1 = null;
+                    ValidateRequest depth2 = null;
+                    ValidateRequest depth3 = null;
                     if (split.length > 1) {
                         path += "/" + split[1];
                         if (paths.add(path)) {
-                            request1 = new ValidateRequest(path);
-                            requests.add(request1);
-                            map.put(path, request1);
+                            depth1 = new ValidateRequest(path);
+                            requests.add(depth1);
+                            map.put(path, depth1);
                         } else {
-                            request1 = map.get(path);
+                            depth1 = map.get(path);
                         }
                     }
                     if (depth > 1 && split.length > 2) {
                         path += "/" + split[2];
                         if (paths.add(path)) {
-                            request2 = new ValidateRequest(path);
-                            map.put(path, request2);
-                            request1.getChildren().add(request2);
+                            depth2 = new ValidateRequest(path);
+                            map.put(path, depth2);
+                            depth1.getChildren().add(depth2);
                         } else {
-                            request2 = map.get(path);
+                            depth2 = map.get(path);
                         }
                     }
                     if (depth > 2 && split.length > 3) {
                         path += "/" + split[3];
-                        if (!isMediaFile(path) && paths.add(path)) {
-                            request2.getChildren().add(new ValidateRequest(path));
+                        if (depth2.getChildren().size() < maxFolderSize) {
+                            if (!isMediaFile(path) && paths.add(path)) {
+                                depth3 = new ValidateRequest(path);
+                                map.put(path, depth3);
+                                depth2.getChildren().add(depth3);
+                            } else {
+                                depth3 = map.get(path);
+                            }
+                        } else {
+                            for (var child : depth2.getChildren()) {
+                                paths.remove(child.getPath());
+                            }
+                        }
+                    }
+                    if (depth > 3 && split.length > 4) {
+                        path += "/" + split[4];
+                        if (depth3 != null && depth3.getChildren().size() < maxFolderSize) {
+                            if (!isMediaFile(path) && paths.add(path)) {
+                                depth3.getChildren().add(new ValidateRequest(path));
+                            }
+                        } else if (depth3 != null) {
+                            for (var child : depth3.getChildren()) {
+                                paths.remove(child.getPath());
+                            }
                         }
                     }
                 });
@@ -236,6 +260,10 @@ public class IndexFileService {
                 results.add(path);
             }
             log.warn("validate path {} failed: {}", path, result.message());
+            return results;
+        }
+
+        if (request.getChildren().size() >= maxFolderSize) {
             return results;
         }
 
