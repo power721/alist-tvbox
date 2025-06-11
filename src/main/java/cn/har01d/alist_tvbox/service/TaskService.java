@@ -14,6 +14,7 @@ import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -51,10 +52,22 @@ public class TaskService {
         });
     }
 
+    public boolean isTaskRunning(TaskType taskType) {
+        return taskRepository.countByStatusAndType(TaskStatus.RUNNING, taskType) > 0;
+    }
+
     public Task addIndexTask(Site site, String indexName) {
         Task task = new Task();
         task.setType(TaskType.INDEX);
         task.setName("索引站点 - " + site.getName() + " - " + indexName);
+        task.setCreatedTime(Instant.now());
+        return taskRepository.save(task);
+    }
+
+    public Task addValidateIndexTask() {
+        Task task = new Task();
+        task.setType(TaskType.VALIDATE_INDEX);
+        task.setName("校验索引文件");
         task.setCreatedTime(Instant.now());
         return taskRepository.save(task);
     }
@@ -109,6 +122,20 @@ public class TaskService {
         taskRepository.save(task);
     }
 
+    public void completeTask(Integer id, String summary, String data) {
+        Task task = getById(id);
+        if (task.getStatus() == TaskStatus.COMPLETED) {
+            return;
+        }
+        log.info("complete task {}: {}", id, task.getName());
+        task.setStatus(TaskStatus.COMPLETED);
+        task.setResult(TaskResult.OK);
+        task.setSummary(summary);
+        task.setData(data);
+        task.setEndTime(Instant.now());
+        taskRepository.save(task);
+    }
+
     public void failTask(Integer id, String error) {
         Task task = getById(id);
         if (task.getStatus() == TaskStatus.COMPLETED) {
@@ -153,6 +180,12 @@ public class TaskService {
         return taskRepository.save(task);
     }
 
+    public boolean isCancelled(Integer id) {
+        Task task = getById(id);
+        return task.getStatus() == TaskStatus.COMPLETED && task.getResult() == TaskResult.CANCELLED;
+    }
+
+    @Transactional
     public void clean(int days) {
         if (days == 0) {
             return;

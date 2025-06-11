@@ -4,8 +4,13 @@
     <el-row justify="space-between">
       <el-col :span="18">
         <el-breadcrumb separator="/">
-          <el-breadcrumb-item v-for="item in paths">
-            <a @click="loadFolder(item.path)">{{ item.text }}</a>
+          <el-breadcrumb-item v-for="(item,index) in paths">
+            <a id="copy" @click="copy(item.path)" v-if="index==paths.length-1">
+              {{ item.text }}
+            </a>
+            <a @click="loadFolder(item.path)" v-else>
+              {{ item.text }}
+            </a>
           </el-breadcrumb-item>
         </el-breadcrumb>
       </el-col>
@@ -425,6 +430,7 @@ import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
 import {
   CircleCloseFilled,
+  CopyDocument,
   Delete,
   Film,
   FullScreen,
@@ -432,7 +438,7 @@ import {
   Plus,
   QuestionFilled,
   Search,
-  Setting, VideoPlay
+  Setting
 } from "@element-plus/icons-vue";
 
 let {toClipboard} = clipBorad();
@@ -678,6 +684,12 @@ const handleSizeChange = (value: number) => {
 const reload = (value: number) => {
   page.value = value
   loadFiles(paths.value[paths.value.length - 1].path)
+}
+
+const copy = (text: string) => {
+  toClipboard(text).then(() => {
+    ElMessage.success('路径已复制')
+  })
 }
 
 const loadFolder = (path: string) => {
@@ -1412,5 +1424,9 @@ video {
   flex-direction: row;
   justify-content: space-between;
   gap: 16px;
+}
+
+#copy:hover {
+  cursor: pointer;
 }
 </style>
