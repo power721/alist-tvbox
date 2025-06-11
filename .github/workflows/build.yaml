@@ -116,17 +116,13 @@ jobs:
       - name: Build native with Maven
         run: |
           mvn -B -Pnative package --file pom.xml
+          chmod a+x target/atv
           ls -l target/atv
       - name: Upload Release Asset
         if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./target/atv
-          asset_name: atv-${{ github.ref_name }}
-          asset_content_type: application/octet-stream
+          files: target/atv
       - name: Build native docker and push
         uses: docker/build-push-action@v4
         with:
