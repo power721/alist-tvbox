@@ -240,7 +240,7 @@ public class IndexFileService {
         }
 
         for (var child : request.getChildren()) {
-            Thread.sleep(200);
+            Thread.sleep(500);
             results.addAll(validate(taskId, child));
         }
 
