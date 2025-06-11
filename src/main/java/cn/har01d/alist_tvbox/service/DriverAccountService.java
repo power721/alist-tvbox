@@ -292,6 +292,9 @@ public class DriverAccountService {
         account.setFolder(dto.getFolder());
         account.setConcurrency(dto.getConcurrency());
         account.setAddition(dto.getAddition());
+        if (StringUtils.isNotBlank(dto.getAddition())) {
+            account.setToken("");
+        }
 
         if (driverAccountRepository.countByType(account.getType()) <= 1) {
             account.setMaster(true);
