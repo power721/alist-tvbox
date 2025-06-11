@@ -74,16 +74,16 @@
     </el-table>
 
     <el-dialog v-model="formVisible" :title="dialogTitle" width="60%">
-      <el-form :model="form">
-        <el-form-item label="阿里refresh token" label-width="150" required>
+      <el-form :model="form" label-width="auto">
+        <el-form-item label="阿里refresh token" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位" autocomplete="off"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a>
-          <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
+<!--          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a>-->
+          <a href="https://aliyuntoken.vercel.app/" target="_blank">获取阿里token</a>
         </el-form-item>
-        <el-form-item label="开放refresh token" label-width="140" required>
+        <el-form-item label="开放refresh token" required>
           <el-input v-model="form.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"
                     autocomplete="off"/>
-          AList:<a href="https://alist.nn.ci/tool/aliyundrive/request.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
+          har01d:<a href="https://ali.har01d.org/authorize" title="需要选择har01d的认证URL" target="_blank">获取开放token</a>
           <div class="hint">
             ycyup:<a href="https://ycyup.cn/alipan/authorize" title="需要选择ycyup的认证URL" target="_blank">获取开放token</a>
           </div>
@@ -91,7 +91,7 @@
             会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码获取</a>
           </div>
         </el-form-item>
-        <el-form-item label="加载我的云盘" label-width="140" v-if="form.openToken">
+        <el-form-item label="加载我的云盘" v-if="form.openToken">
           <el-switch
             v-model="form.showMyAli"
             inline-prompt
@@ -99,7 +99,7 @@
             inactive-text="关闭"
           />
         </el-form-item>
-        <el-form-item label="主账号" label-width="140">
+        <el-form-item label="主账号">
           <el-switch
             v-model="form.master"
             inline-prompt
@@ -120,7 +120,7 @@
         <el-form-item label="代理线程数">
           <el-input-number :min="1" :max="16" v-model="form.concurrency"/>
         </el-form-item>
-        <el-form-item label="自动签到" label-width="140">
+        <el-form-item label="自动签到">
           <el-switch
             v-model="form.autoCheckin"
             inline-prompt
@@ -149,7 +149,7 @@
     </el-dialog>
 
     <el-dialog v-model="detailVisible" title="阿里账号详情" width="60%">
-      <el-form :model="form" label-width="150px">
+      <el-form :model="form" label-width="auto">
         <el-form-item v-if="form.accessTokenOpen" prop="accessTokenOpen" label="开放access token">
           <el-input v-model="form.accessTokenOpen" maxlength="128" readonly/>
           <span class="hint">创建时间： {{ formatTime(iat[1]) }}</span>
@@ -158,13 +158,13 @@
         </el-form-item>
         <el-form-item prop="refreshToken" label="阿里refresh token" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位"/>
-          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a>
-          <a href="https://aliyuntoken.vercel.app/" class="hint" target="_blank">获取阿里token</a>
+<!--          <a href="https://alist.nn.ci/zh/guide/drivers/aliyundrive.html" target="_blank">获取阿里token</a>-->
+          <a href="https://aliyuntoken.vercel.app/" target="_blank">获取阿里token</a>
           <span class="hint">更新时间： {{ formatTime(form.refreshTokenTime) }}</span>
         </el-form-item>
         <el-form-item prop="openToken" label="开放refresh token" required>
           <el-input v-model="form.openToken" type="textarea" rows="4" minlength="256" placeholder="长度280位"/>
-          AList:<a href="https://alist.nn.ci/tool/aliyundrive/request.html" title="需要选择AList的认证URL" target="_blank">获取开放token</a>
+          har01d:<a href="https://ali.har01d.org/authorize" title="需要选择har01d的认证URL" target="_blank">获取开放token</a>
           <div class="hint">
             ycyup:<a href="https://ycyup.cn/alipan/authorize" title="需要选择ycyup的认证URL" target="_blank">获取开放token</a>
           </div>
