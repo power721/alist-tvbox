@@ -71,7 +71,7 @@ public class IndexFileController {
 
     @Async
     @PostMapping("/validate")
-    public void validateIndexFiles(boolean updateExcludePath, int depth) {
+    public void validateIndexFiles(boolean updateExcludePath, int depth) throws InterruptedException {
         service.validateIndexFiles(updateExcludePath, depth);
     }
 }

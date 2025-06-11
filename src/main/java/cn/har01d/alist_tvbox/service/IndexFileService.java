@@ -134,7 +134,7 @@ public class IndexFileService {
         Files.delete(path);
     }
 
-    public void validateIndexFiles(boolean updateExcludePath, int depth) {
+    public void validateIndexFiles(boolean updateExcludePath, int depth) throws InterruptedException {
         if (depth < 1 || depth > 3) {
             throw new BadRequestException("校验层级无效");
         }
@@ -147,7 +147,12 @@ public class IndexFileService {
         Set<String> paths = new HashSet<>();
         List<ValidateRequest> requests = new ArrayList<>();
         Map<String, ValidateRequest> map = new HashMap<>();
-        List<String> files = settingService.getSearchSources();
+        List<String> files = new ArrayList<>(settingService.getSearchSources());
+        String base = Utils.getIndexPath() + "/";
+        for (File file : Utils.listFiles(Utils.getIndexPath("1"), "txt")) {
+            files.add(file.getAbsolutePath().replace(base, ""));
+        }
+
         log.info("validate index files: {}", files);
         for (String file : files) {
             try (Stream<String> stream = Files.lines(Utils.getIndexPath(file))) {
@@ -217,7 +222,7 @@ public class IndexFileService {
         }
     }
 
-    public List<String> validate(int taskId, ValidateRequest request) {
+    public List<String> validate(int taskId, ValidateRequest request) throws InterruptedException {
         List<String> results = new ArrayList<>();
         if (taskService.isCancelled(taskId)) {
             log.warn("task is cancelled");
@@ -235,6 +240,7 @@ public class IndexFileService {
         }
 
         for (var child : request.getChildren()) {
+            Thread.sleep(200);
             results.addAll(validate(taskId, child));
         }
 
