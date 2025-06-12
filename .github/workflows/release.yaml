@@ -12,6 +12,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Write tag version to file
+        run: |
+          echo "${{ github.ref_name }}" > app.version.txt
+          cat app.version.txt
+
       - name: Setup node
         uses: actions/setup-node@v4
         with:
@@ -55,3 +60,17 @@ jobs:
           files: |
             target/alist-tvbox-1.0.jar
             target/atv.tar.gz
+
+      - name: Send version file
+        env:
+          ssh_host: ${{ secrets.SSH_HOST }}
+        if: ${{ env.ssh_host != '' }}
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: 22
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "app.version.txt,scripts/install-service.sh"
+          strip_components: 1
+          target: /var/www/alist/
