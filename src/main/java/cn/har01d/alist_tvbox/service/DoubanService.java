@@ -36,7 +36,6 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -307,7 +306,7 @@ public class DoubanService {
     }
 
     public String getAppRemoteVersion() {
-        if (environment.acceptsProfiles(Profiles.of("standalone"))) {
+        if (environment.matchesProfiles("standalone")) {
             try {
                 return restTemplate.getForObject("http://d.har01d.cn/app.version.txt", String.class);
             } catch (Exception e) {
