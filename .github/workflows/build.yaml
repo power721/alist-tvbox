@@ -23,6 +23,7 @@ on:
       - 'Dockerfile-native-base'
       - 'Dockerfile-jre'
       - 'scripts/install.sh'
+      - 'scripts/install-service.sh'
       - '.github/workflows/build-base.yaml'
       - '.github/workflows/build-base-new.yaml'
       - '.github/workflows/build-native-dev.yaml'
