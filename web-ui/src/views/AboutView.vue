@@ -29,7 +29,7 @@
     </p>
     <p>
       一键部署(独立服务版)：
-      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/install-service.sh)"</code><br>
+      <code>bash -c "$(curl -fsSL http://d.har01d.cn/install-service.sh)"</code><br>
     </p>
     <p>
       一键部署(纯净版)：
