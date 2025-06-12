@@ -3,7 +3,7 @@ set -e
 
 LOCAL_VERSION1="0.0.0"
 LOCAL_VERSION2="0.0.0"
-VERSION1=0.1.10
+VERSION1=$(curl -s http://d.har01d.cn/app.version.txt)
 VERSION2=0.1.2
 USER=$(id -nu)
 GROUP=$(id -gn)
