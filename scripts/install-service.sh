@@ -9,7 +9,7 @@ LOCAL_VERSION2="0.0.0"
 
 USER=$(id -rnu)
 GROUP=$(id -rgn)
-APPNAME=alist-tvbox
+APPNAME=atv
 
 echo "$USER:$GROUP"
 
