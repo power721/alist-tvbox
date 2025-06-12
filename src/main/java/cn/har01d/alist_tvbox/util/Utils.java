@@ -292,6 +292,11 @@ public final class Utils {
         return Path.of(base, path);
     }
 
+    public static Path getWebPath(String... path) {
+        String base = inDocker ? "/www" : "/opt/atv/www";
+        return Path.of(base, path);
+    }
+
     public static Path getIndexPath(String... path) {
         String base = inDocker ? "/data/index" : "/opt/atv/index";
         return Path.of(base, path);

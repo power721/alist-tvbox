@@ -81,6 +81,8 @@ echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
 
 [ "$PULL" = "true" ] && echo "=== pull haroldli/alist-base ===" && docker pull haroldli/alist-base
 
+sudo systemctl stop atv
+
 docker image prune -f
 echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
 echo "=== build haroldli/xiaoya-tvbox ==="

@@ -155,11 +155,17 @@ public class ConfigFileService {
     }
 
     public void writeFileContent(ConfigFile configFile) throws IOException {
-        log.info("write file: {}", configFile.getPath());
-        Files.createDirectories(Path.of(configFile.getDir()));
-        Path path = Path.of(configFile.getDir(), configFile.getName());
+        Path dir = Path.of(configFile.getDir());
+        if ("/data".equals(configFile.getDir())) {
+            dir = Utils.getDataPath();
+        } else if (configFile.getDir().startsWith("/www/")) {
+            dir = Utils.getWebPath(configFile.getDir().replace("/www/", ""));
+        }
+        Files.createDirectories(dir);
+        Path path = Path.of(dir.toString(), configFile.getName());
+        log.info("write file: {}", path);
         Files.writeString(path, configFile.getContent());
-        if (path.toString().equals("/data/label.txt")) {
+        if ("/data/label.txt".equals(configFile.getPath())) {
             loadLabels(Arrays.asList(configFile.getContent().split("\n")));
         }
     }
