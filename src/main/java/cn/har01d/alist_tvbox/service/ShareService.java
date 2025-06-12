@@ -172,7 +172,8 @@ public class ShareService {
         configFileService.writeFiles();
         readTvTxt();
 
-        if ("new".equals(environment.getProperty("INSTALL"))
+        if (environment.getProperty("INSTALL") == null
+                || "new".equals(environment.getProperty("INSTALL"))
                 || accountRepository.count() > 0
                 || pikPakAccountRepository.count() > 0
                 || panAccountRepository.count() > 0

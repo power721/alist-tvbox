@@ -14,8 +14,6 @@ import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.AListUser;
-import cn.har01d.alist_tvbox.model.LoginRequest;
-import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.UserResponse;
 import cn.har01d.alist_tvbox.storage.AliyundriveOpen;
 import cn.har01d.alist_tvbox.util.Constants;
@@ -76,7 +74,6 @@ import static cn.har01d.alist_tvbox.util.Constants.ZONE_ID;
 
 @Slf4j
 @Service
-
 public class AccountService {
     public static final ZoneOffset ZONE_OFFSET = ZoneOffset.of("+08:00");
     public static final int IDX = 4600;
@@ -440,7 +437,7 @@ public class AccountService {
         body.put("grant_type", REFRESH_TOKEN);
         log.debug("body: {}", body);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
-        String url = settingRepository.findById(OPEN_TOKEN_URL).map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token");
+        String url = settingRepository.findById(OPEN_TOKEN_URL).map(Setting::getValue).orElse("https://ali.har01d.org/access_token");
         ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
         log.debug("get open token response: {}", response.getBody());
         return response.getBody();
@@ -586,14 +583,7 @@ public class AccountService {
     }
 
     public String login() {
-        String username = "atv";
-        String password = settingRepository.findById(ATV_PASSWORD).map(Setting::getValue).orElseThrow(BadRequestException::new);
-        LoginRequest request = new LoginRequest();
-        request.setUsername(username);
-        request.setPassword(password);
-        LoginResponse response = aListClient.postForObject("/api/auth/login", request, LoginResponse.class);
-        log.debug("AList login response: {}", response);
-        return response.getData().getToken();
+        return settingRepository.findById("alist_token").map(Setting::getValue).orElse("");
     }
 
     private AListUser getUser(Integer id, String token) {
@@ -803,12 +793,8 @@ public class AccountService {
             updateAliAccountByApi(account);
         }
 
-        if (count == 0) {
-            showMyAli(account);
-        } else {
-            showMyAliWithAPI(account);
-        }
         checkin(account, false);
+        showMyAliWithAPI(account);
         return account;
     }
 
@@ -980,6 +966,7 @@ public class AccountService {
     public void showMyAliWithAPI(Account account) {
         int status = aListLocalService.checkStatus();
         if (status == 1) {
+            showMyAli(account);
             throw new BadRequestException("AList服务启动中");
         }
 

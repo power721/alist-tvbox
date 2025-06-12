@@ -12,6 +12,7 @@ import cn.har01d.alist_tvbox.storage.Storage;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -59,8 +60,12 @@ public class AListLocalService {
     public void setup() {
         String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
         setSetting("external_port", port, "number");
-        String url = settingRepository.findById("open_token_url").map(Setting::getValue).orElse("https://api.xhofe.top/alist/ali_open/token");
-        setSetting("open_token_url", url, "string");
+        String url = settingRepository.findById(Constants.OPEN_TOKEN_URL).map(Setting::getValue).orElse("https://ali.har01d.org/access_token");
+        if (url.equals("https://api.xhofe.top/alist/ali_open/token")) {
+            url = "https://ali.har01d.org/access_token";
+            settingRepository.save(new Setting(Constants.OPEN_TOKEN_URL, url));
+        }
+        setSetting(Constants.OPEN_TOKEN_URL, url, "string");
         String apiKey = settingRepository.findById("api_key").map(Setting::getValue).orElse("");
         setSetting("atv_api_key", apiKey, "string");
         String clientId = settingRepository.findById("open_api_client_id").map(Setting::getValue).orElse("");
@@ -192,22 +197,24 @@ public class AListLocalService {
             builder.redirectOutput(ProcessBuilder.Redirect.appendTo(outFile));
             builder.redirectError(ProcessBuilder.Redirect.appendTo(outFile));
             boolean debug = settingRepository.findById("alist_debug").map(Setting::getValue).orElse("").equals("true");
+            String alist = Utils.getAListPath("alist");
             if (debug) {
-                builder.command(Utils.getAListPath("alist"), "server", "--no-prefix", "--debug");
+                builder.command(alist, "server", "--no-prefix", "--debug");
             } else {
-                builder.command(Utils.getAListPath("alist"), "server", "--no-prefix");
+                builder.command(alist, "server", "--no-prefix");
             }
             builder.directory(new File(Utils.getAListPath("")));
             Process process = builder.start();
             settingRepository.save(new Setting(ALIST_RESTART_REQUIRED, "false"));
             settingRepository.save(new Setting(ALIST_START_TIME, Instant.now().toString()));
-            log.info("AList server starting, PID: {}", process.pid());
+            log.info("{} server starting, PID: {}", alist, process.pid());
             aListStatus = 1;
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
     }
 
+    @PreDestroy
     public void stopAListServer() {
         log.info("stop AList server");
         try {

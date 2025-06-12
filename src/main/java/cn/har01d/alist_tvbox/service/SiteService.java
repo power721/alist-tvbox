@@ -157,6 +157,7 @@ public class SiteService {
             } else {
                 aListToken = site.getToken();
             }
+            settingRepository.save(new Setting("alist_token", aListToken));
             aListLocalService.setSetting("token", aListToken, "string");
         } catch (Exception e) {
             log.warn("", e);
