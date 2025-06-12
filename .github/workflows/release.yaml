@@ -11,8 +11,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Needed for proper version tagging
 
       - name: Setup node
         uses: actions/setup-node@v4
@@ -39,23 +37,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
 
-      - name: Cache Maven packages
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.m2
-            target
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-
       - name: Build native with Maven
         run: |
           mvn -B -Pnative \
               -Dnative.image.cache=true \
               -Dnative-image.parallelism=4 \
               -DskipTests \
-              package --file pom.xml
+              package
           chmod +x target/atv
           ls -lh target
 
