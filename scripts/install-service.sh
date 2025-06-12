@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
+if docker ps | egrep 'xiaoya-tvbox|alit-tvbox'; then
+  echo -e "\e[31m请停止Docker容器再运行！\e[0m"
+  exit 1
+fi
+
 VERSION1=$(curl -s http://d.har01d.cn/app.version.txt)
 VERSION2=$(curl -s http://d.har01d.cn/alist.version.txt)
 
