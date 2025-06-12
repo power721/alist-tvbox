@@ -1,0 +1,29 @@
+name: Send scripts
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'scripts/**'
+
+jobs:
+  send-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Send files
+        env:
+          ssh_host: ${{ secrets.SSH_HOST }}
+        if: ${{ env.ssh_host != '' }}
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: 22
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "scripts/update_new.sh,scripts/update_xiaoya.sh,scripts/update_hostmode.sh,scripts/update_native.sh,scripts/update_native_host.sh,scripts/install-service.sh"
+          strip_components: 1
+          target: /var/www/alist/

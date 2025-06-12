@@ -65,12 +65,12 @@ jobs:
         env:
           ssh_host: ${{ secrets.SSH_HOST }}
         if: ${{ env.ssh_host != '' }}
-        uses: appleboy/scp-action@v0.1.4
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           port: 22
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
-          source: "app.version.txt,scripts/install-service.sh"
+          source: "app.version.txt"
           strip_components: 1
           target: /var/www/alist/
