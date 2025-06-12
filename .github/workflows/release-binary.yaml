@@ -57,7 +57,7 @@ jobs:
               -DskipTests \
               package --file pom.xml
           chmod +x target/atv
-          ls -lh target/atv
+          ls -lh target
 
       - name: Create release and upload binary
         uses: softprops/action-gh-release@v2
