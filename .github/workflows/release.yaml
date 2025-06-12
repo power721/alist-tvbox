@@ -61,16 +61,9 @@ jobs:
             target/alist-tvbox-1.0.jar
             target/atv.tar.gz
 
-      - name: Send version file
+      - name: Send version
         env:
-          ssh_host: ${{ secrets.SSH_HOST }}
-        if: ${{ env.ssh_host != '' }}
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          port: 22
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "app.version.txt"
-          strip_components: 1
-          target: /var/www/alist/
+          api: ${{ secrets.VERSION_API }}
+        if: ${{ env.api != '' }}
+        run: |
+          curl -s "${{ env.api }}?type=app&version=${{ github.ref_name }}"

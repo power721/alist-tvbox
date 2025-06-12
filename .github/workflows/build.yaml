@@ -138,19 +138,12 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native-host
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Send version file
+      - name: Send version
         env:
-          ssh_host: ${{ secrets.SSH_HOST }}
-        if: ${{ env.ssh_host != '' }}
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          port: 22
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "data/app_version"
-          strip_components: 1
-          target: /var/www/alist/
+          api: ${{ secrets.VERSION_API }}
+        if: ${{ env.api != '' }}
+        run: |
+          curl -s "${{ env.api }}?type=atv&version=${{ github.ref_name }}"
       - name: send telegram message
         uses: appleboy/telegram-action@master
         with:
