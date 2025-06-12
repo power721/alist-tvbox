@@ -630,7 +630,11 @@ onMounted(() => {
     login.value.username = data.alist_username
     login.value.password = data.alist_password
     login.value.enabled = data.alist_login === 'true'
-    tooltip.value = 'sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_' + data.install_mode + '.sh)"'
+    if (store.standalone) {
+      tooltip.value = 'bash -c "$(curl -fsSL http://d.har01d.cn/install-service.sh)"'
+    } else {
+      tooltip.value = 'sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_' + data.install_mode + '.sh)"'
+    }
   })
   axios.get('/api/alist/status').then(({data}) => {
     store.aListStatus = data
