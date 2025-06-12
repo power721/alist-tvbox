@@ -45,8 +45,9 @@ jobs:
               -DskipTests \
               package
           chmod +x target/atv
-          tar zcvf target/atv.tar.gz target/atv
-          ls -lh target
+          cd target
+          tar zcvf atv.tar.gz atv
+          ls -lh
 
       - name: Create release and upload binary
         uses: softprops/action-gh-release@v2
