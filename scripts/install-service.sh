@@ -1,15 +1,26 @@
 #!/usr/bin/env bash
+set -e
 
-VERSION=$(curl -s https://api.github.com/repos/power721/alist-tvbox/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)
+LOCAL_VERSION=""
+LOCAL_APP_VERSION=""
+VERSION=$(curl -s https://api.github.com/repos/power721/alist/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)
+APP_VERSION=$(curl -s https://api.github.com/repos/power721/alist-tvbox/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)
 USERNAME=$USER
 APPNAME=atv
 
 if [ -f /opt/${APPNAME}/data/app_version ]; then
-  LOCAL=$(head -n 1 </opt/${APPNAME}/data/app_version)
-  if [ "$LOCAL" = "$VERSION" ]; then
-    echo "Already latest version: $VERSION"
-    exit 1
-  fi
+  LOCAL_APP_VERSION=$(head -n 1 </opt/${APPNAME}/data/app_version)
+fi
+
+if [ -f /opt/${APPNAME}/alist/data/version ]; then
+  LOCAL_VERSION=$(head -n 1 </opt/${APPNAME}/alist/data/version)
+fi
+
+if [ "$LOCAL_APP_VERSION" = "$APP_VERSION" ] && [ "$LOCAL_VERSION" = "$VERSION" ] ; then
+    echo "Already latest version"
+    echo "AList: $VERSION"
+    echo "AList TvBox: $APP_VERSION"
+    exit 0
 fi
 
 sudo mkdir -p /opt/${APPNAME}/alist/data
@@ -39,7 +50,8 @@ conf=/opt/${APPNAME}/config/application-production.yaml
 # TODO: download alist
 # TODO: init alist
 
-sudo wget https://github.com/power721/alist-tvbox/releases/download/$VERSION/atv -O /tmp/${APPNAME}
+[ "$LOCAL_APP_VERSION" = "$APP_VERSION" ] || wget https://github.com/power721/alist-tvbox/releases/download/$APP_VERSION/atv -O /tmp/${APPNAME}
+[ "$LOCAL_VERSION" = "$VERSION" ] || wget https://github.com/power721/alist/releases/download/$VERSION/alist-linux-musl-amd64.tar.gz -O /tmp/alist.tgz && tar xf /tmp/alist.tgz -C /tmp
 
 cat <<EOF > /tmp/${APPNAME}.service
 [Unit]
@@ -59,9 +71,11 @@ EOF
 sudo mv /tmp/${APPNAME}.service /etc/systemd/system/${APPNAME}.service
 sudo systemctl daemon-reload
 sudo systemctl stop ${APPNAME}.service
-sudo mv /tmp/${APPNAME} /opt/${APPNAME}/${APPNAME}
+[ "$LOCAL_APP_VERSION" = "$APP_VERSION" ] || sudo mv /tmp/${APPNAME} /opt/${APPNAME}/${APPNAME}
+[ "$LOCAL_VERSION" = "$VERSION" ] || mv /tmp/alist /opt/${APPNAME}/alist/
 sudo chmod +x /opt/${APPNAME}/${APPNAME}
-sudo echo $VERSION > /opt/${APPNAME}/data/app_version
+sudo echo $APP_VERSION > /opt/${APPNAME}/data/app_version
+sudo echo $VERSION > /opt/${APPNAME}/alist/data/version
 sudo chown -R ${USERNAME}:${USERNAME} /opt/${APPNAME}
 
 sudo systemctl enable ${APPNAME}.service

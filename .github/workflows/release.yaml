@@ -45,6 +45,7 @@ jobs:
               -DskipTests \
               package
           chmod +x target/atv
+          tar zcvf target/atv.tar.gz target/atv
           ls -lh target
 
       - name: Create release and upload binary
@@ -52,4 +53,4 @@ jobs:
         with:
           files: |
             target/alist-tvbox-1.0.jar
-            target/atv
+            target/atv.tar.gz
