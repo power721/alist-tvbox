@@ -11,6 +11,8 @@ USER=$(id -rnu)
 GROUP=$(id -rgn)
 APPNAME=alist-tvbox
 
+echo "$USER:$GROUP"
+
 if [ -f /opt/${APPNAME}/data/app_version ]; then
   LOCAL_VERSION1=$(head -n 1 </opt/${APPNAME}/data/app_version)
 fi
