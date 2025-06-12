@@ -4,7 +4,7 @@ set -e
 LOCAL_VERSION1="0.0.0"
 LOCAL_VERSION2="0.0.0"
 VERSION1=$(curl -s http://d.har01d.cn/app.version.txt)
-VERSION2=0.1.2
+VERSION2=$(curl -s http://d.har01d.cn/alist.version.txt)
 USER=$(id -nu)
 GROUP=$(id -gn)
 APPNAME=atv
