@@ -74,7 +74,10 @@ sudo systemctl daemon-reload
 sudo systemctl stop ${APPNAME}.service
 
 [ "$LOCAL_VERSION1" != "$VERSION1" ] && sudo mv /tmp/${APPNAME}/atv /opt/${APPNAME}/${APPNAME}
-[ "$LOCAL_VERSION2" != "$VERSION2" ] && sudo mv /tmp/${APPNAME}/alist /opt/${APPNAME}/alist/alist && /opt/${APPNAME}/alist/alist admin
+[ "$LOCAL_VERSION2" != "$VERSION2" ] && \
+sudo mv /tmp/${APPNAME}/alist /opt/${APPNAME}/alist/alist && \
+cd /opt/${APPNAME}/alist/ && \
+/opt/${APPNAME}/alist/alist admin
 sudo chmod +x /opt/${APPNAME}/${APPNAME} /opt/${APPNAME}/alist/alist
 sudo echo $VERSION1 > /opt/${APPNAME}/data/app_version
 sudo echo $VERSION2 > /opt/${APPNAME}/alist/data/version
