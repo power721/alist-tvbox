@@ -182,8 +182,8 @@ public class AccountService {
         }
 
         try {
-            enableLogin();
             addAdminUser();
+            enableLogin();
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -208,7 +208,9 @@ public class AccountService {
 
     private void addAdminUser() {
         try {
-            String sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,16383)";
+            String sql = "DELETE FROM x_users WHERE username = 'atv'";
+            Utils.executeUpdate(sql);
+            sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,16383)";
             Utils.executeUpdate(sql);
         } catch (Exception e) {
             log.warn("", e);

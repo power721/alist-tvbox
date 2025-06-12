@@ -90,6 +90,7 @@ public class DoubanController {
             versions.setChangelog(parts[1]);
         }
         versions.setApp(appVersion);
+        versions.setAlist(service.getAListRemoteVersion().trim());
         return versions;
     }
 }

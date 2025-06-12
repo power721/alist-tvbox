@@ -108,6 +108,17 @@
             </el-tooltip>
             <div class="changelog" v-if="changelog">更新日志： {{ changelog }}</div>
           </div>
+          <div v-if="aListVersion">AList版本：{{ aListVersion }}</div>
+          <div v-if="aListRemoteVersion&&aListRemoteVersion>aListVersion">
+            <el-tooltip
+              class="box-item"
+              effect="dark"
+              :content="tooltip"
+              placement="top"
+            >
+              最新版本：{{ aListRemoteVersion }}，请重新运行安装脚本，升级应用。
+            </el-tooltip>
+          </div>
         </el-card>
 
         <el-card class="box-card" v-if="indexVersion">
@@ -396,6 +407,8 @@ const enableHttps = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
 const changelog = ref('')
+const aListVersion = ref('')
+const aListRemoteVersion = ref('')
 const appVersion = ref(0)
 const appRemoteVersion = ref(0)
 const dockerVersion = ref('')
@@ -607,6 +620,7 @@ onMounted(() => {
     indexVersion.value = data.index_version
     dockerVersion.value = data.docker_version
     appVersion.value = data.app_version
+    aListVersion.value = data.alist_version
     openTokenUrl.value = data.open_token_url
     dockerAddress.value = data.docker_address
     aliSecret.value = data.ali_secret
@@ -649,6 +663,7 @@ onMounted(() => {
     cachedMovieVersion.value = data.cachedMovie
     indexRemoteVersion.value = data.index
     appRemoteVersion.value = data.app
+    aListRemoteVersion.value = data.alist
     changelog.value = data.changelog
   })
 })
