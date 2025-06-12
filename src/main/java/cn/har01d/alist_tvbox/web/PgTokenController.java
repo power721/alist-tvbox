@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
+import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -70,7 +71,7 @@ public class PgTokenController {
             objectNode.put("token", account.getRefreshToken());
             objectNode.put("open_token", account.getOpenToken());
         });
-        settingRepository.findById("open_token_url").map(Setting::getValue).ifPresent(url -> objectNode.put("open_api_url", url));
+        settingRepository.findById(Constants.OPEN_TOKEN_URL).map(Setting::getValue).ifPresent(url -> objectNode.put("open_api_url", url));
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).stream().findFirst().ifPresent(share -> objectNode.put("quark_cookie", share.getCookie()));
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).stream().findFirst().ifPresent(share -> objectNode.put("pan115_cookie", share.getCookie()));
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("uc_cookie", share.getCookie()));

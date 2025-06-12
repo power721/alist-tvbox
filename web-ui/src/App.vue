@@ -31,6 +31,7 @@ onMounted(() => {
   showNotification.value = localStorage.getItem('notification2') != 'true'
   axios.get("/api/profiles").then(({data}) => {
     store.xiaoya = data.includes('xiaoya')
+    store.docker = data.includes('docker')
     store.hostmode = data.includes('host')
     mounted.value = true
     if (show.value) {

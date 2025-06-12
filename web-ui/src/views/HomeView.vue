@@ -55,8 +55,12 @@ onMounted(() => {
       <el-text v-if="store.hostmode" size="small">host网络模式</el-text>
       <a :href="url" class="hint" target="_blank">{{ url }}</a>
     </div>
-    <div v-else>
+    <div v-else-if="store.docker">
       <el-text size="large">纯净版</el-text>
+      <a :href="url" class="hint" target="_blank">{{ url }}</a>
+    </div>
+    <div v-else>
+      <el-text size="large">独立版</el-text>
       <a :href="url" class="hint" target="_blank">{{ url }}</a>
     </div>
     <iframe v-if="store.aListStatus" :src="url" :width="width" :height="height">
