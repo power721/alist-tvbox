@@ -3,8 +3,8 @@ name: Release native binary
 on:
   push:
     tags:
-      - '!v*'
-      - '*'
+      - '!v*'  # Exclude tags starting with 'v'
+      - '*'    # Include all other tags
 
 jobs:
   build-and-release:
@@ -12,33 +12,60 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for proper version tagging
+
       - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: ./web-ui
+
       - name: Install npm
         working-directory: ./web-ui
         run: npm ci
+
       - name: Build web UI
         working-directory: ./web-ui
         run: npm run build
-      - name: setup graalvm
+
+      - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '17'
-          distribution: 'graalvm' # See 'Options' for all available distributions
+          java-version: '23'
+          distribution: 'graalvm'
           components: 'native-image'
           native-image-musl: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
+
+      - name: Cache Maven packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.m2
+            target
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
       - name: Build native with Maven
         run: |
-          mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
-          chmod a+x target/atv
-          ls -l target
-      - name: Release native binary
+          mvn -B -Pnative \
+              -Dnative.image.cache=true \
+              -Dnative-image.parallelism=4 \
+              -DskipTests \
+              package --file pom.xml
+          chmod +x target/atv
+          ls -lh target/atv
+
+      - name: Create release and upload binary
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: "Release ${{ github.ref_name }}"
+          body: "Native binary release for ${{ github.ref_name }}"
           files: target/atv
+          draft: false
+          prerelease: false
