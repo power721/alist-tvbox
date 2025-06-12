@@ -73,6 +73,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.APP_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.DOCKER_VERSION;
 import static cn.har01d.alist_tvbox.util.Constants.INDEX_VERSION;
@@ -158,11 +159,23 @@ public class IndexService {
         }
 
         try {
-            Path path = Path.of("/opt/atv/data/app_version"); // TODO:
+            Path path = Path.of("/opt/atv/data/app_version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
                     settingRepository.save(new Setting(APP_VERSION, lines.get(0).trim()));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        try {
+            Path path = Path.of("/opt/atv/alist/data/version");
+            if (Files.exists(path)) {
+                List<String> lines = Files.readAllLines(path);
+                if (!lines.isEmpty()) {
+                    settingRepository.save(new Setting(ALIST_VERSION, lines.get(0).trim()));
                 }
             }
         } catch (Exception e) {

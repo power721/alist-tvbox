@@ -322,6 +322,17 @@ public class DoubanService {
         return "";
     }
 
+    public String getAListRemoteVersion() {
+        if (environment.matchesProfiles("standalone")) {
+            try {
+                return restTemplate.getForObject("http://d.har01d.cn/alist.version.txt", String.class);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+        return "";
+    }
+
     public Movie getByPath(String path) {
         try {
             Meta meta = metaRepository.findByPath(path);
