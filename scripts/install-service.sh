@@ -7,8 +7,8 @@ VERSION2=0.1.3
 LOCAL_VERSION1="0.0.0"
 LOCAL_VERSION2="0.0.0"
 
-USER=$(id -nu)
-GROUP=$(id -gn)
+USER=$(id -rnu)
+GROUP=$(id -rgn)
 APPNAME=alist-tvbox
 
 if [ -f /opt/${APPNAME}/data/app_version ]; then
