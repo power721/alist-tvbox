@@ -118,11 +118,6 @@ jobs:
           mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
           chmod a+x target/atv
           ls -l target
-      - name: Release native binary
-        uses: softprops/action-gh-release@v2
-        if: github.ref_type == 'tag'
-        with:
-          files: target/atv
       - name: Build native docker and push
         uses: docker/build-push-action@v4
         with:

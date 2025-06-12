@@ -1,9 +1,10 @@
-name: Release JAR
+name: Release native binary
 
 on:
   push:
     tags:
-      - 'v*' # Triggers on tags starting with 'v'
+      - '!v*'
+      - '*'
 
 jobs:
   build-and-release:
@@ -23,17 +24,21 @@ jobs:
       - name: Build web UI
         working-directory: ./web-ui
         run: npm run build
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - name: setup graalvm
+        uses: graalvm/setup-graalvm@v1
         with:
           java-version: '17'
-          distribution: 'corretto'
+          distribution: 'graalvm' # See 'Options' for all available distributions
+          components: 'native-image'
+          native-image-musl: 'true'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
-      - name: Build with Maven
+      - name: Build native with Maven
         run: |
-          mvn -B clean package -DskipTests --file pom.xml
-          chmod +x target/*.jar
-      - name: Release
+          mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
+          chmod a+x target/atv
+          ls -l target
+      - name: Release native binary
         uses: softprops/action-gh-release@v2
         with:
-          files: target/*.jar
+          files: target/atv
