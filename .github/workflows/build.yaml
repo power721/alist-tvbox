@@ -30,8 +30,7 @@ on:
       - '.github/workflows/build-dev.yaml'
       - '.github/workflows/build-java.yaml'
       - '.github/workflows/build-v7.yaml'
-      - '.github/workflows/release-jar.yaml'
-      - '.github/workflows/release-binary.yaml'
+      - '.github/workflows/release.yaml'
       - '.github/ISSUE_TEMPLATE/**'
 
 jobs:

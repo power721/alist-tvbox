@@ -34,7 +34,6 @@ jobs:
         with:
           java-version: '23'
           distribution: 'graalvm'
-          components: 'native-image'
           native-image-musl: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
@@ -62,11 +61,6 @@ jobs:
       - name: Create release and upload binary
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: "Release ${{ github.ref_name }}"
-          body: "Native binary release for ${{ github.ref_name }}"
-          draft: false
-          prerelease: false
           files: |
             target/alist-tvbox-1.0.jar
             target/atv
