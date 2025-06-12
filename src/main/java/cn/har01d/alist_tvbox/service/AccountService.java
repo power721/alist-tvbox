@@ -14,6 +14,8 @@ import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.AListUser;
+import cn.har01d.alist_tvbox.model.LoginRequest;
+import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.UserResponse;
 import cn.har01d.alist_tvbox.storage.AliyundriveOpen;
 import cn.har01d.alist_tvbox.util.Constants;
@@ -583,7 +585,14 @@ public class AccountService {
     }
 
     public String login() {
-        return settingRepository.findById("alist_token").map(Setting::getValue).orElse("");
+        String username = "atv";
+        String password = settingRepository.findById(ATV_PASSWORD).map(Setting::getValue).orElseThrow(BadRequestException::new);
+        LoginRequest request = new LoginRequest();
+        request.setUsername(username);
+        request.setPassword(password);
+        LoginResponse response = aListClient.postForObject("/api/auth/login", request, LoginResponse.class);
+        log.debug("AList login response: {}", response);
+        return response.getData().getToken();
     }
 
     private AListUser getUser(Integer id, String token) {
