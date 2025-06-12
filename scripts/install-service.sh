@@ -10,8 +10,6 @@ LOCAL_VERSION2="0.0.0"
 GROUP=$(id -rgn $USER)
 APP=atv
 
-echo "$USER:$GROUP"
-
 if [ -f /opt/${APP}/data/app_version ]; then
   LOCAL_VERSION1=$(head -n 1 </opt/${APP}/data/app_version)
 fi
@@ -26,6 +24,8 @@ if [ "$LOCAL_VERSION1" = "$VERSION1" ] && [ "$LOCAL_VERSION2" = "$VERSION2" ] ; 
     echo "AList TvBox: $VERSION1"
     exit 0
 fi
+
+echo "User: $USER:$GROUP"
 
 sudo mkdir -p /opt/${APP}/alist/{data,log}
 sudo mkdir -p /opt/${APP}/{config,scripts,index,log}
