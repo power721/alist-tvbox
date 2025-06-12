@@ -9,7 +9,6 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,6 +24,7 @@ public class Main {
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto.tg"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.tvbox"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.domain"));
+        classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.entity"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.model"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.storage"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.live.model"));
