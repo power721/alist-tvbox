@@ -7,8 +7,7 @@ VERSION2=0.1.3
 LOCAL_VERSION1="0.0.0"
 LOCAL_VERSION2="0.0.0"
 
-USER=$(id -rnu)
-GROUP=$(id -rgn)
+GROUP=$(id -rgn $USER)
 APP=atv
 
 echo "$USER:$GROUP"
