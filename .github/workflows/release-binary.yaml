@@ -3,8 +3,7 @@ name: Release native binary
 on:
   push:
     tags:
-      - '!v*'  # Exclude tags starting with 'v'
-      - '*'    # Include all other tags
+      - '*'
 
 jobs:
   build-and-release:
@@ -66,6 +65,8 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "Release ${{ github.ref_name }}"
           body: "Native binary release for ${{ github.ref_name }}"
-          files: target/atv
           draft: false
           prerelease: false
+          files: |
+            target/alist-tvbox-1.0.jar
+            target/atv
