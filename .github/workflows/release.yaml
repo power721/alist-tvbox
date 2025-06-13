@@ -1,4 +1,4 @@
-name: Release Native Binary
+name: Release jar and native binary
 
 on:
   push:
@@ -6,70 +6,64 @@ on:
       - '*'
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        arch: [ amd64, arm64 ]
+  build-and-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Write tag version to file
+        run: |
+          echo "${{ github.ref_name }}" > app.version.txt
+          cat app.version.txt
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ./web-ui
+
+      - name: Install npm
+        working-directory: ./web-ui
+        run: npm ci
+
+      - name: Build web UI
+        working-directory: ./web-ui
+        run: npm run build
 
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
         with:
           java-version: '17'
           distribution: 'graalvm'
+          components: 'native-image'
           native-image-musl: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'maven'
 
-      - name: Install ARM64 Toolchain
-        if: matrix.arch == 'arm64'
-        run: |
-          sudo apt-get update && sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            libstdc++6-arm64-cross \
-            libz-dev-arm64-cross
-
-      - name: Build Native Image
+      - name: Build native with Maven
         run: |
           mvn -B -Pnative \
-            -Dnative.image.cache=true \
-            -Dnative.buildtools.build.target=${{ matrix.arch == 'arm64' && 'linux-aarch64' || 'linux-x86_64' }} \
-            -Dnative-image.parallelism=4 \
-            -DskipTests \
-            package
-
+              -Dnative.image.cache=true \
+              -Dnative-image.parallelism=4 \
+              -DskipTests \
+              package
+          chmod +x target/atv
           cd target
-          mv atv atv-${{ matrix.arch }}
-          strip --strip-debug atv-${{ matrix.arch }}
-          tar zcvf atv-${{ matrix.arch }}.tgz atv-${{ matrix.arch }}
+          tar zcvf atv.tar.gz atv
+          ls -lh
 
-      - name: Test ARM64 Binary (QEMU)
-        if: matrix.arch == 'arm64'
-        run: |
-          sudo apt-get install -y qemu-user-static
-          qemu-aarch64-static ./target/atv-arm64 --version || true
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.arch }}
-          path: target/atv-${{ matrix.arch }}.tgz
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create Release
+      - name: Create release and upload binary
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/amd64/atv-amd64.tgz
-            artifacts/arm64/atv-arm64.tgz
+            target/alist-tvbox-1.0.jar
+            target/atv.tar.gz
+
+      - name: Send version
+        env:
+          api: ${{ secrets.VERSION_API }}
+        if: ${{ env.api != '' }}
+        run: |
+          curl -s "${{ env.api }}?type=app&version=${{ github.ref_name }}"
