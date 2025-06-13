@@ -35,6 +35,7 @@ jobs:
             -Dnative-image.parallelism=4 \
             -DskipTests \
             -Dnative.buildtools.build.target=${{ matrix.arch == 'arm64' && 'linux-aarch_64' || 'linux-x86_64' }} \
+            --file pom-standalone.xml \
             package
 
           cd target
