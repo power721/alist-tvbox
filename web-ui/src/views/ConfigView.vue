@@ -377,14 +377,14 @@ const options = [
       {label: 'ycyup', value: 'https://ycyup.cn/alipan/access_token'},
     ]
   },
-  // {
-  //   label: '会员TV Token',
-  //   options: [
-  //     {label: '会员 - 本地', value: window.location.origin + '/ali/access_token'},
-  //     {label: '会员 - 三方', value: 'https://alipan-tv-token.pages.dev/refresh'},
-  //     {label: '会员 - i-tools', value: 'https://i-tools.ilay.top/api/oauth/alipan/token'},
-  //   ]
-  // },
+  {
+    label: 'TV Token',
+    options: [
+      {label: '本地', value: window.location.origin + '/ali/access_token'},
+      {label: '三方', value: 'https://alipan-tv-token.pages.dev/refresh'},
+      {label: 'i-tools', value: 'https://i-tools.ilay.top/api/oauth/alipan/token'},
+    ]
+  },
   {
     label: '阿里',
     options: [

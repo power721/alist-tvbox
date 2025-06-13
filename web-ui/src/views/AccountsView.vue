@@ -88,7 +88,7 @@
             ycyup:<a href="https://ycyup.cn/alipan/authorize" title="需要选择ycyup的认证URL" target="_blank">获取开放token</a>
           </div>
           <div class="hint">
-            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码获取</a>
+            TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码获取</a>
           </div>
         </el-form-item>
         <el-form-item label="加载我的云盘" v-if="form.openToken">
