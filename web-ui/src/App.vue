@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // @ts-nocheck
-import {RouterView, useRouter} from 'vue-router'
+import {RouterView, useRoute, useRouter} from 'vue-router'
 import accountService from "@/services/account.service";
 import {onMounted, ref} from "vue";
 import axios from "axios";
@@ -8,6 +8,7 @@ import {store} from "@/services/store";
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
 const account = accountService.account
+const route = useRoute()
 const router = useRouter()
 const show = ref(true)
 const full = ref(localStorage.getItem('full_view') == 'true')
@@ -40,7 +41,7 @@ onMounted(() => {
         store.aListStatus = data
         show.value = show.value && data != 1
         if (data === 1) {
-         router.push('/wait')
+         router.push('/wait?redirect=' + route.path)
         }
       })
     }

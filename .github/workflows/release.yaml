@@ -20,6 +20,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'graalvm'
+          native-image-musl: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
 
@@ -44,7 +45,6 @@ jobs:
             -Dnative-image.parallelism=4 \
             -DskipTests \
             -Dnative.buildtools.build.target=${{ matrix.arch == 'arm64' && 'linux-aarch_64' || 'linux-x86_64' }} \
-            --file pom-standalone.xml \
             package
 
           cd target
