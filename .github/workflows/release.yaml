@@ -29,7 +29,7 @@ jobs:
       # Build AMD64 native image (default)
       - name: Build AMD64 native image
         run: |
-          mvn -Pnative,standalone native:compile -DskipTests \
+          mvn -Pnative,standalone -DskipTests \
               -Dnative.image.cache=true \
               -Dnative.buildtools.build.enabled=true
           mv target/atv target/atv-amd64
@@ -41,7 +41,7 @@ jobs:
           # Install cross-compilation dependencies
           sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libstdc++-12-dev-arm64-cross
 
-          mvn -Pnative,standalone native:compile -DskipTests \
+          mvn -Pnative,standalone -DskipTests \
               -Dnative.image.cache=true \
               -Dnative.buildtools.build.enabled=true \
               -Dnative.buildtools.build.target=linux-aarch_64
