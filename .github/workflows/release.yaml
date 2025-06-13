@@ -37,7 +37,6 @@ jobs:
               -Dnative.image.cache=true \
               -Dnative-image.parallelism=4 \
               -DskipTests \
-              --file pom-standalone.xml \
               package
           cd target
           chmod +x atv
@@ -53,7 +52,6 @@ jobs:
               -Dnative-image.parallelism=4 \
               -DskipTests \
               -Dnative.buildtools.build.target=linux-aarch_64 \
-              --file pom-standalone.xml \
               package
           cd target
           chmod +x atv
