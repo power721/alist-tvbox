@@ -23,10 +23,9 @@ jobs:
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'graalvm'
           components: 'native-image'
-          native-image-musl: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
 
@@ -42,6 +41,7 @@ jobs:
           chmod +x atv
           mv atv atv-amd64
           tar zcvf atv-amd64.tgz atv-amd64
+          ls -lh
 
       - name: Build ARM64 Native Image (Cross-Compilation)
         if: matrix.arch == 'arm64'
@@ -57,6 +57,7 @@ jobs:
           chmod +x atv
           mv atv atv-arm64
           tar zcvf atv-arm64.tgz atv-arm64
+          ls -lh
 
       - name: Upload Artifact (${{ matrix.arch }})
         uses: actions/upload-artifact@v4
@@ -72,6 +73,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: List Downloaded Files (Debugging)
+        run: |
+          ls -R artifacts/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
