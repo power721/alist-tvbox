@@ -24,32 +24,34 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
 
-      - name: Cache GraalVM
+      - name: Cache Maven
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/graalvm
-            ~/.m2
-          key: ${{ runner.os }}-graalvm-${{ matrix.arch }}-${{ hashFiles('**/pom-standalone.xml') }}
+          path: ~/.m2
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Install ARM64 Dependencies (if needed)
+        if: matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libstdc++-12-dev-arm64-cross
 
       - name: Build Native Image (${{ matrix.arch }})
         run: |
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libstdc++-12-dev-arm64-cross
-          fi
-
           mvn -B -Pnative \
             -Dnative.image.cache=true \
             -Dnative.image.cache.dir=$HOME/.cache/graalvm \
             -Dnative.image.cache.persistent=true \
             -Dnative-image.parallelism=4 \
             -DskipTests \
-            -Dnative.buildtools.build.target=${{ matrix.arch == 'arm64' && 'linux-aarch_64' || 'linux-x86_64' }} \
+            -Dnative.buildtools.build.target=${{ matrix.arch == 'arm64' && 'linux-aarch64' || 'linux-x86_64' }} \
             package
 
           cd target
           chmod +x atv
           mv atv atv-${{ matrix.arch }}
+          strip --strip-debug atv-${{ matrix.arch }}
           tar zcvf atv-${{ matrix.arch }}.tgz atv-${{ matrix.arch }}
           ls -lh
 
