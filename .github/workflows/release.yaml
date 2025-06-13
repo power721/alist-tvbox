@@ -20,7 +20,6 @@ jobs:
         with:
           java-version: '21'
           distribution: 'graalvm'
-          components: 'native-image'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
 
@@ -47,7 +46,7 @@ jobs:
       - name: Upload Artifact (${{ matrix.arch }})
         uses: actions/upload-artifact@v4
         with:
-          name: atv-${{ matrix.arch }}.tgz
+          name: ${{ matrix.arch }}
           path: target/atv-${{ matrix.arch }}.tgz
 
   release:
@@ -67,8 +66,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/atv-amd64.tgz
-            artifacts/atv-arm64.tgz
+            artifacts/amd64/atv-amd64.tgz
+            artifacts/arm64/atv-arm64.tgz
 
       - name: Send version notification
         env:
