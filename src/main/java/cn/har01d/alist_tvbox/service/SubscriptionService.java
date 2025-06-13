@@ -1,5 +1,48 @@
 package cn.har01d.alist_tvbox.service;
 
+import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
+import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
+import static cn.har01d.alist_tvbox.util.Constants.ENABLED_TOKEN;
+import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
+
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.spec.AlgorithmParameterSpec;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
+import org.springframework.http.HttpHeaders;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.web.util.UriComponents;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.TokenDto;
@@ -21,51 +64,8 @@ import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.env.Environment;
-import org.springframework.http.HttpHeaders;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-import org.springframework.web.util.UriComponents;
-
-import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-import java.io.File;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.spec.AlgorithmParameterSpec;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
-import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
-import static cn.har01d.alist_tvbox.util.Constants.ENABLED_TOKEN;
-import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 
 @Slf4j
 @Service
@@ -303,7 +303,7 @@ public class SubscriptionService {
     public String node(String file) throws IOException {
         log.debug("load file {}", file);
         if (file.contains("index.config.js")) {
-            Path config = Path.of("/www/cat/index.config.js");
+            Path config = Utils.getWebPath("cat", "index.config.js");
             String json = Files.readString(config);
             String secret = appProperties.isEnabledToken() ? ("/" + tokens.split(",")[0]) : "";
             json = json.replace("VOD_URL", readHostAddress("/vod" + secret));
@@ -329,7 +329,7 @@ public class SubscriptionService {
                 return Utils.md5(json);
             }
         }
-        return Files.readString(Path.of("/www/cat", file));
+        return Files.readString(Utils.getWebPath("cat", file));
     }
 
     public int syncCat() {
@@ -353,12 +353,12 @@ public class SubscriptionService {
     }
 
     public Map<String, Object> open() throws IOException {
-        Path path = Path.of("/www/cat/config_open.json");
+        Path path = Utils.getWebPath("cat", "config_open.json");
         String json = Files.readString(path).replace("\ufeff", "");
 
         Map<String, Object> config = objectMapper.readValue(json, Map.class);
 
-        path = Path.of("/www/cat/my.json");
+        path = Utils.getWebPath("cat", "my.json");
         if (Files.exists(path)) {
             try {
                 log.info("read {}", path);
@@ -632,7 +632,7 @@ public class SubscriptionService {
     }
 
     private Map<String, Object> handleIptv(Map<String, Object> config) {
-        if (Files.exists(Path.of("/www/tvbox/iptv.m3u"))) {
+        if (Files.exists(Utils.getWebPath("tvbox", "iptv.m3u"))) {
             return config;
         }
 
@@ -1070,18 +1070,18 @@ public class SubscriptionService {
 
     private String loadLocalConfigJson(String name) {
         try {
-            File file;
+            Path file;
             String folder;
             if (name.startsWith("/")) {
-                file = new File("/www" + name);
+                file = Utils.getWebPath(name);
                 folder = getFolder(name);
             } else {
-                file = new File("/www/tvbox/" + name);
+                file = Utils.getWebPath("tvbox", name);
                 folder = "/tvbox/" + getFolder(name);
             }
-            if (file.exists()) {
+            if (Files.exists(file)) {
                 log.info("load json from {}", file);
-                String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+                String json = Files.readString(file);
                 String address = readHostAddress();
                 String token = getCurrentOrFirstToken();
                 json = appendMd5sum(name, json);
@@ -1104,7 +1104,7 @@ public class SubscriptionService {
     private static String appendMd5sum(String name, String json) {
         if ("/pg/jsm.json".equals(name)) {
             try {
-                String md5 = FileUtils.readFileToString(new File("/www/pg/pg.jar.md5"), StandardCharsets.UTF_8).trim();
+                String md5 = Files.readString(Utils.getWebPath("pg", "pg.jar.md5")).trim();
                 log.debug("pg.jar.md5: {}", md5);
                 json = json.replace("./pg.jar", "./pg.jar;md5;" + md5);
             } catch (Exception e) {
@@ -1264,9 +1264,9 @@ public class SubscriptionService {
                 return getRepo(baseUrl);
             }
 
-            File file = new File("/www/tvbox/repo/" + id + ".json");
-            if (file.exists()) {
-                String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+            Path path = Utils.getWebPath("tvbox", "repo", id + ".json");
+            if (Files.exists(path)) {
+                String json = Files.readString(path);
                 if (StringUtils.isBlank(json)) {
                     return getRepo(baseUrl);
                 }
@@ -1276,9 +1276,9 @@ public class SubscriptionService {
                 return json;
             }
 
-            file = new File("/www/tvbox/juhe.json");
-            if (file.exists()) {
-                String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+            path = Utils.getWebPath("tvbox", "juhe.jso");
+            if (Files.exists(path)) {
+                String json = Files.readString(path);
                 json = json.replace("DOCKER_ADDRESS/tvbox/my.json", baseUrl + id);
                 return json;
             }

@@ -86,7 +86,7 @@ public final class BiliBiliUtils {
         } catch (Exception e) {
             log.warn("", e);
         }
-        Path file = Path.of("/www/tvbox/qr.png");
+        Path file = Utils.getWebPath("tvbox", "qr.png");
         return Base64.getEncoder().encodeToString(Files.readAllBytes(file));
     }
 
