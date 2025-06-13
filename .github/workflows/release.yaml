@@ -1,4 +1,4 @@
-name: Release Spring Boot Native (AMD64 + ARM64)
+name: Release Native Binary
 
 on:
   push:
@@ -15,11 +15,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Write tag version to file
-        run: |
-          echo "${{ github.ref_name }}" > app.version.txt
-          cat app.version.txt
-
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
         with:
@@ -30,33 +25,22 @@ jobs:
           cache: 'maven'
 
       - name: Build Native Image (${{ matrix.arch }})
-        if: matrix.arch == 'amd64'
         run: |
-          mvn -B -Pnative \
-              -Dnative.image.cache=true \
-              -Dnative-image.parallelism=4 \
-              -DskipTests \
-              package
-          cd target
-          chmod +x atv
-          mv atv atv-amd64
-          tar zcvf atv-amd64.tgz atv-amd64
-          ls -lh
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libstdc++-12-dev-arm64-cross
+          fi
 
-      - name: Build ARM64 Native Image (Cross-Compilation)
-        if: matrix.arch == 'arm64'
-        run: |
-          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libstdc++-12-dev-arm64-cross
           mvn -B -Pnative \
-              -Dnative.image.cache=true \
-              -Dnative-image.parallelism=4 \
-              -DskipTests \
-              -Dnative.buildtools.build.target=linux-aarch_64 \
-              package
+            -Dnative.image.cache=true \
+            -Dnative-image.parallelism=4 \
+            -DskipTests \
+            -Dnative.buildtools.build.target=${{ matrix.arch == 'arm64' && 'linux-aarch_64' || 'linux-x86_64' }} \
+            package
+
           cd target
           chmod +x atv
-          mv atv atv-arm64
-          tar zcvf atv-arm64.tgz atv-arm64
+          mv atv atv-${{ matrix.arch }}
+          tar zcvf atv-${{ matrix.arch }}.tgz atv-${{ matrix.arch }}
           ls -lh
 
       - name: Upload Artifact (${{ matrix.arch }})
