@@ -89,9 +89,9 @@ public class AListLocalService {
 
     public void setSetting(String key, String value, String type) {
         log.debug("set setting {}={}", key, value);
-        Utils.executeUpdate(String.format("INSERT INTO x_setting_items (key,value,type,flag,\"group\") VALUES('%s','%s','%s',1,0)", key, value, type));
-        int code = Utils.executeUpdate(String.format("UPDATE x_setting_items SET value = '%s' WHERE key = '%s'", value, key));
-        log.info("update setting by SQL: {} {}", key, code);
+        Utils.executeUpdate(String.format("DELETE FROM x_setting_items WHERE key = '%s'", key));
+        int code = Utils.executeUpdate(String.format("INSERT INTO x_setting_items (key,value,type,flag,\"group\") VALUES('%s','%s','%s',1,0)", key, value, type));
+        log.info("update setting by SQL: {} result: {}", key, code);
     }
 
     public void updateSetting(String key, String value, String type) {
