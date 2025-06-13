@@ -82,36 +82,35 @@ public class ConfigFileService {
     }
 
     private void readFiles() {
-        readFile(Utils.getDataPath("tv.txt").toString());
-        readFile(Utils.getDataPath("proxy.txt").toString());
+        readFile(Utils.getDataPath("tv.txt"));
+        readFile(Utils.getDataPath("proxy.txt"));
 
         if (Files.exists(Utils.getDataPath("iptv.m3u"))) {
-            readFile("/www/tvbox/iptv.m3u");
+            readFile(Utils.getWebPath("tvbox", "iptv.m3u"));
         }
 
         if (Files.exists(Utils.getDataPath("my.json"))) {
-            readFile("/www/tvbox/my.json");
+            readFile(Utils.getWebPath("tvbox", "my.json"));
         }
 
         //readFile("/opt/alist/data/config.json");
         //readFile("/etc/nginx/http.d/default.conf");
     }
 
-    private void readFile(String filepath) {
+    private void readFile(Path path) {
         try {
-            Path path = Path.of(filepath);
             if (Files.exists(path)) {
                 String content = Files.readString(path);
                 ConfigFile file = new ConfigFile();
                 file.setDir(path.getParent().toString());
                 file.setName(path.getFileName().toString());
-                file.setPath(filepath);
+                file.setPath(path.toString());
                 file.setContent(content);
                 repository.save(file);
                 log.info("load file: {}", path);
             }
         } catch (Exception e) {
-            log.warn("read file " + filepath, e);
+            log.warn("read file failed: {}", path, e);
         }
     }
 

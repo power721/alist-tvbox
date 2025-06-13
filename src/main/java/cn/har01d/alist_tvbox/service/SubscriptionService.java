@@ -303,7 +303,7 @@ public class SubscriptionService {
     public String node(String file) throws IOException {
         log.debug("load file {}", file);
         if (file.contains("index.config.js")) {
-            Path config = Path.of("/www/cat/index.config.js");
+            Path config = Utils.getWebPath("cat", "index.config.js");
             String json = Files.readString(config);
             String secret = appProperties.isEnabledToken() ? ("/" + tokens.split(",")[0]) : "";
             json = json.replace("VOD_URL", readHostAddress("/vod" + secret));
@@ -329,7 +329,7 @@ public class SubscriptionService {
                 return Utils.md5(json);
             }
         }
-        return Files.readString(Path.of("/www/cat", file));
+        return Files.readString(Utils.getWebPath("cat", file));
     }
 
     public int syncCat() {
@@ -353,12 +353,12 @@ public class SubscriptionService {
     }
 
     public Map<String, Object> open() throws IOException {
-        Path path = Path.of("/www/cat/config_open.json");
+        Path path = Utils.getWebPath("cat", "config_open.json");
         String json = Files.readString(path).replace("\ufeff", "");
 
         Map<String, Object> config = objectMapper.readValue(json, Map.class);
 
-        path = Path.of("/www/cat/my.json");
+        path = Utils.getWebPath("cat", "my.json");
         if (Files.exists(path)) {
             try {
                 log.info("read {}", path);
@@ -632,7 +632,7 @@ public class SubscriptionService {
     }
 
     private Map<String, Object> handleIptv(Map<String, Object> config) {
-        if (Files.exists(Path.of("/www/tvbox/iptv.m3u"))) {
+        if (Files.exists(Utils.getWebPath("tvbox", "iptv.m3u"))) {
             return config;
         }
 
@@ -1073,10 +1073,10 @@ public class SubscriptionService {
             File file;
             String folder;
             if (name.startsWith("/")) {
-                file = new File("/www" + name);
+                file = Utils.getWebPath(name).toFile();
                 folder = getFolder(name);
             } else {
-                file = new File("/www/tvbox/" + name);
+                file = Utils.getWebPath("tvbox", name).toFile();
                 folder = "/tvbox/" + getFolder(name);
             }
             if (file.exists()) {
@@ -1104,7 +1104,7 @@ public class SubscriptionService {
     private static String appendMd5sum(String name, String json) {
         if ("/pg/jsm.json".equals(name)) {
             try {
-                String md5 = FileUtils.readFileToString(new File("/www/pg/pg.jar.md5"), StandardCharsets.UTF_8).trim();
+                String md5 = Files.readString(Utils.getWebPath("pg", "pg.jar.md5")).trim();
                 log.debug("pg.jar.md5: {}", md5);
                 json = json.replace("./pg.jar", "./pg.jar;md5;" + md5);
             } catch (Exception e) {
@@ -1264,9 +1264,9 @@ public class SubscriptionService {
                 return getRepo(baseUrl);
             }
 
-            File file = new File("/www/tvbox/repo/" + id + ".json");
-            if (file.exists()) {
-                String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+            Path path = Utils.getWebPath("tvbox", "repo", id + ".json");
+            if (Files.exists(path)) {
+                String json = Files.readString(path);
                 if (StringUtils.isBlank(json)) {
                     return getRepo(baseUrl);
                 }
@@ -1276,9 +1276,9 @@ public class SubscriptionService {
                 return json;
             }
 
-            file = new File("/www/tvbox/juhe.json");
-            if (file.exists()) {
-                String json = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+            path = Utils.getWebPath("tvbox", "juhe.jso");
+            if (Files.exists(path)) {
+                String json = Files.readString(path);
                 json = json.replace("DOCKER_ADDRESS/tvbox/my.json", baseUrl + id);
                 return json;
             }
