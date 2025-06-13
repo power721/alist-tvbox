@@ -22,40 +22,37 @@ jobs:
           distribution: 'graalvm'
           native-image-musl: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          cache: 'maven'
 
-      - name: Cache Maven
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-
-      - name: Install ARM64 Dependencies (if needed)
+      - name: Install ARM64 Toolchain
         if: matrix.arch == 'arm64'
         run: |
-          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libstdc++-12-dev-arm64-cross
+          sudo apt-get update && sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            libstdc++6-arm64-cross \
+            libz-dev-arm64-cross
 
-      - name: Build Native Image (${{ matrix.arch }})
+      - name: Build Native Image
         run: |
           mvn -B -Pnative \
             -Dnative.image.cache=true \
-            -Dnative.image.cache.dir=$HOME/.cache/graalvm \
-            -Dnative.image.cache.persistent=true \
+            -Dnative.buildtools.build.target=${{ matrix.arch == 'arm64' && 'linux-aarch64' || 'linux-x86_64' }} \
             -Dnative-image.parallelism=4 \
             -DskipTests \
-            -Dnative.buildtools.build.target=${{ matrix.arch == 'arm64' && 'linux-aarch64' || 'linux-x86_64' }} \
             package
 
           cd target
-          chmod +x atv
           mv atv atv-${{ matrix.arch }}
           strip --strip-debug atv-${{ matrix.arch }}
           tar zcvf atv-${{ matrix.arch }}.tgz atv-${{ matrix.arch }}
-          ls -lh
 
-      - name: Upload Artifact (${{ matrix.arch }})
+      - name: Test ARM64 Binary (QEMU)
+        if: matrix.arch == 'arm64'
+        run: |
+          sudo apt-get install -y qemu-user-static
+          qemu-aarch64-static ./target/atv-arm64 --version || true
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.arch }}
@@ -76,10 +73,3 @@ jobs:
           files: |
             artifacts/amd64/atv-amd64.tgz
             artifacts/arm64/atv-arm64.tgz
-
-      - name: Send version
-        env:
-          API_URL: ${{ secrets.VERSION_API }}
-        if: ${{ env.API_URL != '' }}
-        run: |
-          curl -s "${{ env.API_URL }}?type=app&version=${{ github.ref_name }}"
