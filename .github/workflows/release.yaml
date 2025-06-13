@@ -31,7 +31,8 @@ jobs:
         run: |
           mvn -Pnative,standalone -DskipTests \
               -Dnative.image.cache=true \
-              -Dnative.buildtools.build.enabled=true
+              -Dnative.buildtools.build.enabled=true \
+              package
           mv target/atv target/atv-amd64
           chmod +x target/atv-amd64
 
@@ -44,7 +45,8 @@ jobs:
           mvn -Pnative,standalone -DskipTests \
               -Dnative.image.cache=true \
               -Dnative.buildtools.build.enabled=true \
-              -Dnative.buildtools.build.target=linux-aarch_64
+              -Dnative.buildtools.build.target=linux-aarch_64 \
+              package
           mv target/atv target/atv-arm64
           chmod +x target/atv-arm64
 
