@@ -37,6 +37,7 @@ jobs:
               -Dnative.image.cache=true \
               -Dnative-image.parallelism=4 \
               -DskipTests \
+              --file pom-standalone.xml \
               package
           cd target
           chmod +x atv
@@ -52,6 +53,7 @@ jobs:
               -Dnative-image.parallelism=4 \
               -DskipTests \
               -Dnative.buildtools.build.target=linux-aarch_64 \
+              --file pom-standalone.xml \
               package
           cd target
           chmod +x atv
@@ -59,7 +61,7 @@ jobs:
           tar zcvf atv-arm64.tgz atv-arm64
 
       - name: Upload Artifact (${{ matrix.arch }})
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: atv-${{ matrix.arch }}.tgz
           path: target/atv-${{ matrix.arch }}.tgz
