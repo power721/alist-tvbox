@@ -6,7 +6,10 @@ on:
       - '*'
 
 jobs:
-  build-and-release:
+  build:
+    strategy:
+      matrix:
+        arch: [ amd64, arm64 ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -27,46 +30,55 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
 
-      # Build AMD64 native image (default)
-      - name: Build AMD64 native image
+      - name: Build Native Image (${{ matrix.arch }})
+        if: matrix.arch == 'amd64'
         run: |
           mvn -B -Pnative \
               -Dnative.image.cache=true \
               -Dnative-image.parallelism=4 \
               -DskipTests \
               package
-          mv target/atv target/atv-amd64
-          chmod +x target/atv-amd64
+          cd target
+          chmod +x atv
+          mv atv atv-amd64
+          tar zcvf atv-amd64.tgz atv-amd64
 
-      # Build ARM64 native image using cross-compilation
-      - name: Build ARM64 native image
+      - name: Build ARM64 Native Image (Cross-Compilation)
+        if: matrix.arch == 'arm64'
         run: |
-          # Install cross-compilation dependencies
           sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libstdc++-12-dev-arm64-cross
-
           mvn -B -Pnative \
               -Dnative.image.cache=true \
               -Dnative-image.parallelism=4 \
               -DskipTests \
               -Dnative.buildtools.build.target=linux-aarch_64 \
               package
-          mv target/atv target/atv-arm64
-          chmod +x target/atv-arm64
-
-      - name: Package artifacts
-        run: |
           cd target
-          tar zcvf atv-amd64.tar.gz atv-amd64
-          tar zcvf atv-arm64.tar.gz atv-arm64
-          ls -lh
+          chmod +x atv
+          mv atv atv-arm64
+          tar zcvf atv-arm64.tgz atv-arm64
 
-      - name: Create release and upload binaries
+      - name: Upload Artifact (${{ matrix.arch }})
+        uses: actions/upload-artifact@v3
+        with:
+          name: atv-${{ matrix.arch }}.tgz
+          path: target/atv-${{ matrix.arch }}.tgz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/*.jar
-            target/atv-amd64.tar.gz
-            target/atv-arm64.tar.gz
+            artifacts/atv-amd64.tgz
+            artifacts/atv-arm64.tgz
 
       - name: Send version notification
         env:
