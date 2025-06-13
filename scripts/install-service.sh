@@ -92,7 +92,7 @@ sudo mv ${APP}.service /etc/systemd/system/${APP}.service
 sudo systemctl daemon-reload
 sudo systemctl stop ${APP}.service
 
-[ "$LOCAL_VERSION1" != "$VERSION1" ] && sudo mv atv /opt/${APP}/${APP} && \
+[ "$LOCAL_VERSION1" != "$VERSION1" ] && sudo mv atv-$OS /opt/${APP}/${APP} && \
 sudo chown ${USER}:${GROUP} /opt/${APP}/${APP} && \
 chmod +x /opt/${APP}/${APP} && \
 echo $VERSION1 > /opt/${APP}/data/app_version
