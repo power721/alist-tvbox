@@ -172,6 +172,13 @@
             </activation>
         </profile>
         <profile>
+            <properties>
+                <libc></libc>
+                <lib.static></lib.static>
+            </properties>
+            <id>standalone</id>
+        </profile>
+        <profile>
             <id>native</id>
             <build>
                 <plugins>
