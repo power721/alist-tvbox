@@ -23,13 +23,14 @@ jobs:
           java-version: '17'
           distribution: 'graalvm'
           components: 'native-image'
+          native-image-musl: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
 
       # Build AMD64 native image (default)
       - name: Build AMD64 native image
         run: |
-          mvn -B -Pnative,standalone \
+          mvn -B -Pnative \
               -Dnative.image.cache=true \
               -Dnative-image.parallelism=4 \
               -DskipTests \
@@ -43,7 +44,7 @@ jobs:
           # Install cross-compilation dependencies
           sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libstdc++-12-dev-arm64-cross
 
-          mvn -B -Pnative,standalone \
+          mvn -B -Pnative \
               -Dnative.image.cache=true \
               -Dnative-image.parallelism=4 \
               -DskipTests \
