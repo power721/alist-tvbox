@@ -3,9 +3,10 @@
 import {computed, onMounted, ref} from "vue";
 import axios from "axios";
 import {onUnmounted} from "@vue/runtime-core";
-import {useRouter} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {store} from "@/services/store";
 
+const route = useRoute()
 const router = useRouter()
 
 let intervalId = 0
@@ -45,7 +46,8 @@ onMounted(() => {
       percentage.value = 0
       intervalId = setInterval(getAListStatus, 1000)
     } else {
-      router.push('/')
+      const back = (route.query.redirect as string) || '/'
+      router.push(back)
     }
   })
 })
