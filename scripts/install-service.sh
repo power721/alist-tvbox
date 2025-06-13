@@ -30,6 +30,19 @@ if [ "$LOCAL_VERSION1" = "$VERSION1" ] && [ "$LOCAL_VERSION2" = "$VERSION2" ] ; 
     exit 0
 fi
 
+OS=""
+ARCH=$(uname -m)
+if [ "$ARCH" = "x86_64" ]; then
+    echo "Downloading amd64 binary"
+    OS="amd64"
+elif [ "$ARCH" = "aarch64" ]; then
+    echo "Downloading arm64 binary"
+    OS="arm64"
+else
+    echo "Unsupported architecture: $ARCH"
+    exit 1
+fi
+
 echo "User: $USER:$GROUP"
 
 sudo mkdir -p /opt/${APP}/alist/{data,log}
@@ -51,12 +64,12 @@ conf=/opt/${APP}/config/application-production.yaml
 
 [ "$LOCAL_VERSION1" != "$VERSION1" ] && \
 echo "Upgrade AList TvBox from $LOCAL_VERSION1 to $VERSION1" && \
-wget https://github.com/power721/alist-tvbox/releases/download/$VERSION1/atv.tar.gz -O atv.tgz && \
+wget https://github.com/power721/alist-tvbox/releases/download/$VERSION1/atv-$OS.tgz -O atv.tgz && \
 tar xf atv.tgz && rm -f atv.tgz
 
 [ "$LOCAL_VERSION2" != "$VERSION2" ] && \
 echo "Upgrade Power AList from $LOCAL_VERSION2 to $VERSION2" && \
-wget https://github.com/power721/alist/releases/download/$VERSION2/alist-linux-musl-amd64.tar.gz -O alist.tgz && \
+wget https://github.com/power721/alist/releases/download/$VERSION2/alist-linux-musl-$OS.tar.gz -O alist.tgz && \
 tar xf alist.tgz && rm -f alist.tgz
 
 cat <<EOF > ${APP}.service

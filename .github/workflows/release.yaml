@@ -58,10 +58,6 @@ jobs:
         with:
           path: artifacts
 
-      - name: List Downloaded Files (Debugging)
-        run: |
-          ls -R artifacts/
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -69,7 +65,7 @@ jobs:
             artifacts/amd64/atv-amd64.tgz
             artifacts/arm64/atv-arm64.tgz
 
-      - name: Send version notification
+      - name: Send version
         env:
           API_URL: ${{ secrets.VERSION_API }}
         if: ${{ env.API_URL != '' }}
