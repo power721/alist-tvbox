@@ -26,7 +26,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 切换到脚本所在目录
-#os.chdir(os.path.dirname(os.path.abspath(__file__)))
+os.chdir("/data/")
 logger.info(f"当前工作目录: {os.getcwd()}")
 
 # 命令行参数
