@@ -212,6 +212,9 @@
         <el-form-item label="AList管理密码" v-if="!store.xiaoya">
           <el-input v-model="atvPass" style="width: 160px" type="password" show-password/>
         </el-form-item>
+        <el-form-item label="AList TvBox API Key">
+          <el-input v-model="apiKey" style="width: 300px" type="password" readonly show-password/>
+        </el-form-item>
         <el-form-item label="Cookie地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
             阿里 Token
@@ -425,6 +428,7 @@ const aliSecret = ref('')
 const tmdbApiKey = ref('')
 const userAgent = ref('')
 const atvPass = ref('')
+const apiKey = ref('')
 const apiClientId = ref('')
 const apiClientSecret = ref('')
 const deleteCode115 = ref('')
@@ -637,6 +641,7 @@ onMounted(() => {
     aliLazyLoad.value = data.ali_lazy_load !== 'false'
     mixSiteSource.value = data.mix_site_source !== 'false'
     atvPass.value = data.atv_password
+    apiKey.value = data.api_key
     apiClientId.value = data.open_api_client_id || ''
     apiClientSecret.value = data.open_api_client_secret || ''
     deleteCode115.value = data.delete_code_115 || ''
