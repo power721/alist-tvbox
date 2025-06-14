@@ -887,7 +887,8 @@ public class AccountService {
         Account account = accountRepository.findById(id).orElseThrow(NotFoundException::new);
         boolean tokenChanged = !Objects.equals(account.getRefreshToken(), dto.getRefreshToken()) || !Objects.equals(account.getOpenToken(), dto.getOpenToken());
         boolean changed = tokenChanged || account.isMaster() != dto.isMaster();
-        boolean aliChanged = account.isShowMyAli() != dto.isShowMyAli()
+        boolean aliChanged = tokenChanged
+                || account.isShowMyAli() != dto.isShowMyAli()
                 || account.isUseProxy() != dto.isUseProxy()
                 || !Objects.equals(account.getConcurrency(), dto.getConcurrency());
 

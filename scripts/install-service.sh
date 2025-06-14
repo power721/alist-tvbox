@@ -38,14 +38,15 @@ sudo mkdir -p /opt/${APP}/data/{atv,backup}
 sudo mkdir -p /opt/${APP}/www/{cat,pg,zx,tvbox,files}
 sudo chown -R ${USER}:${GROUP} /opt/${APP}
 
+conf=/opt/${APP}/config/application-production.yaml
+if [ ! -f $conf ]; then
 cat <<EOF >${APP}.yaml
 spring:
   datasource:
     url: jdbc:h2:file:/opt/${APP}/data/data
 EOF
-
-conf=/opt/${APP}/config/application-production.yaml
-[ -f $conf ] || sudo mv ${APP}.yaml $conf
+sudo mv ${APP}.yaml $conf
+fi
 
 # TODO: download scripts
 
