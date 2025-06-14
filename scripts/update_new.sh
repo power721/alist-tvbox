@@ -4,8 +4,9 @@ PORT2=5344
 YES=false
 UPDATE=false
 MOUNT=""
+TAG="latest"
 
-while getopts ":d:p:P:v:yu" arg; do
+while getopts ":d:p:P:t:v:yu" arg; do
     case "${arg}" in
         d)
             BASE_DIR=${OPTARG}
@@ -18,6 +19,9 @@ while getopts ":d:p:P:v:yu" arg; do
             ;;
         v)
             MOUNT="${MOUNT} -v ${OPTARG}"
+            ;;
+        t)
+            TAG=${OPTARG}
             ;;
         y)
             YES=true
@@ -63,12 +67,8 @@ docker image prune -f --filter "label=MAINTAINER=Har01d"
 docker volume prune -f --filter "label=MAINTAINER=Har01d"
 
 platform="linux/amd64"
-TAG="latest"
 ARCH=$(uname -m)
-if [ "$ARCH" = "armv7l" ]; then
-  platform="linux/arm/v7"
-  TAG="arm-v7"
-elif [ "$ARCH" = "aarch64" ]; then
+if [ "$ARCH" = "aarch64" ]; then
     platform="linux/arm64"
 fi
 
