@@ -114,13 +114,13 @@ public class AListLocalService {
             return 5234;
         }
         if (environment.matchesProfiles("standalone")) {
-            readAListPort();
+            readAListConf();
             return aListPort;
         }
         return Integer.parseInt(environment.getProperty("ALIST_PORT", "5344"));
     }
 
-    public void readAListPort() {
+    public void readAListConf() {
         Path path = Path.of(Utils.getAListPath("data/config.json"));
         if (Files.exists(path)) {
             try {
