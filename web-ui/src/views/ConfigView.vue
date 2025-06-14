@@ -190,12 +190,13 @@
             </el-option-group>
           </el-select>
           <el-input v-model="openTokenUrl"/>
+          <el-button type="primary" @click="updateOpenTokenUrl">更新</el-button>
         </el-form-item>
-        <el-form-item label="Client ID">
-          <el-input v-model="apiClientId" type="text" placeholder="默认不要填写"/>
+        <el-form-item label="Client ID" v-if="openTokenUrl=='https://openapi.alipan.com/oauth/access_token'">
+          <el-input v-model="apiClientId" type="text"/>
         </el-form-item>
-        <el-form-item label="Client Secret">
-          <el-input v-model="apiClientSecret" type="password" show-password placeholder="默认不要填写"/>
+        <el-form-item label="Client Secret" v-if="openTokenUrl=='https://openapi.alipan.com/oauth/access_token'">
+          <el-input v-model="apiClientSecret" type="password" show-password/>
           <el-button type="primary" @click="updateOpenTokenUrl">更新</el-button>
         </el-form-item>
         <el-form-item label="TMDB API Key">
@@ -377,18 +378,16 @@ const options = [
       {label: 'ycyup', value: 'https://ycyup.cn/alipan/access_token'},
     ]
   },
-  // {
-  //   label: '会员TV Token',
-  //   options: [
-  //     {label: '会员 - 本地', value: window.location.origin + '/ali/access_token'},
-  //     {label: '会员 - 三方', value: 'https://alipan-tv-token.pages.dev/refresh'},
-  //     {label: '会员 - i-tools', value: 'https://i-tools.ilay.top/api/oauth/alipan/token'},
-  //   ]
-  // },
+  {
+    label: 'TV Token',
+    options: [
+      {label: '本地代理', value: window.location.origin + '/ali/access_token'},
+    ]
+  },
   {
     label: '阿里',
     options: [
-      {label: 'openapi.alipan.com', value: 'https://openapi.alipan.com/oauth/access_token'}
+      {label: '阿里官方', value: 'https://openapi.alipan.com/oauth/access_token'}
     ]
   }
 ]
