@@ -78,13 +78,14 @@
         <el-form-item label="阿里refresh token" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位" autocomplete="off"/>
           <a href="https://ali.har01d.org/" target="_blank">获取阿里token</a>
-<!--          <a href="https://aliyuntoken.vercel.app/" target="_blank">获取阿里token</a>-->
         </el-form-item>
         <el-form-item label="开放refresh token" required>
           <el-input v-model="form.openToken" type="textarea" rows="3" minlength="256" placeholder="长度280位"
                     autocomplete="off"/>
-          har01d:<a href="https://ali.har01d.org/authorize" title="需要选择har01d的认证URL" target="_blank">获取开放token</a>
-          <div class="hint">
+          <div v-if="tokenUrl.includes('har01d.org')">
+            har01d:<a href="https://ali.har01d.org/authorize" title="需要选择har01d的认证URL" target="_blank">获取开放token</a>
+          </div>
+          <div class="hint" v-if="tokenUrl.includes('ycyup.cn')">
             ycyup:<a href="https://ycyup.cn/alipan/authorize" title="需要选择ycyup的认证URL" target="_blank">获取开放token</a>
           </div>
           <div class="hint">
@@ -159,17 +160,18 @@
         <el-form-item prop="refreshToken" label="阿里refresh token" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位"/>
           <a href="https://ali.har01d.org/" target="_blank">获取阿里token</a>
-<!--          <a href="https://aliyuntoken.vercel.app/" target="_blank">获取阿里token</a>-->
           <span class="hint">更新时间： {{ formatTime(form.refreshTokenTime) }}</span>
         </el-form-item>
         <el-form-item prop="openToken" label="开放refresh token" required>
           <el-input v-model="form.openToken" type="textarea" rows="4" minlength="256" placeholder="长度280位"/>
-          har01d:<a href="https://ali.har01d.org/authorize" title="需要选择har01d的认证URL" target="_blank">获取开放token</a>
-          <div class="hint">
+          <div v-if="tokenUrl.includes('har01d.org')">
+            har01d:<a href="https://ali.har01d.org/authorize" title="需要选择har01d的认证URL" target="_blank">获取开放token</a>
+          </div>
+          <div class="hint" v-if="tokenUrl.includes('ycyup.cn')">
             ycyup:<a href="https://ycyup.cn/alipan/authorize" title="需要选择ycyup的认证URL" target="_blank">获取开放token</a>
           </div>
           <div class="hint">
-            会员TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码获取</a>
+            TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码获取</a>
           </div>
           <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
           <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>
@@ -297,6 +299,7 @@ const updateAction = ref(false)
 const dialogTitle = ref('')
 const sid = ref('')
 const code = ref('')
+const tokenUrl = ref('')
 const base64QrCode = ref('')
 const accounts = ref([])
 const formVisible = ref(false)
@@ -466,6 +469,9 @@ const load = () => {
 
 onMounted(() => {
   load()
+  axios.get('/api/settings/open_token_url').then(({data}) => {
+    tokenUrl.value = data.value
+  })
 })
 </script>
 
