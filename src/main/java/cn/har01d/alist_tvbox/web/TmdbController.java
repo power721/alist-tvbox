@@ -1,8 +1,10 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.MetaDto;
+import cn.har01d.alist_tvbox.entity.Tmdb;
 import cn.har01d.alist_tvbox.entity.TmdbMetaRepository;
 import cn.har01d.alist_tvbox.service.TmdbService;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
@@ -61,6 +63,11 @@ public class TmdbController {
     @PostMapping("/meta/{id}/scrape")
     public boolean scrape(@PathVariable Integer id, String type, String name) {
         return service.scrape(id, type, name);
+    }
+
+    @PostMapping("/meta/-/scrape")
+    public MovieDetail scrape(@RequestBody MetaDto dto) {
+        return service.scrape(dto);
     }
 
     @DeleteMapping("/meta/{id}")

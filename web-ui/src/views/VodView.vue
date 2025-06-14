@@ -282,6 +282,7 @@
                     <el-slider v-model="currentVolume" @change="setVolume" :min="0" :max="100" :step="5"/>
                   </template>
                 </el-popover>
+                <el-button @click="showScrape" title="刮削"><el-icon><Connection /></el-icon></el-button>
                 <el-popover placement="bottom" width="350px">
                   <template #reference>
                     <el-button :icon="Menu"></el-button>
@@ -416,6 +417,32 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="addVisible" title="刮削电影数据" width="60%">
+      <el-form label-width="140px">
+        <el-form-item label="类型" required>
+          <el-radio-group v-model="meta.type" class="ml-4">
+            <el-radio label="movie" size="large">电影</el-radio>
+            <el-radio label="tv" size="large">剧集</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="名称" required>
+          <el-input v-model="meta.name" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="年代">
+          <el-input-number v-model="meta.year" :min="1900" :max="2099" autocomplete="off"/>
+        </el-form-item>
+        <el-form-item label="路径">
+          <el-input v-model="meta.path" readonly autocomplete="off"/>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="addVisible=false">取消</el-button>
+        <el-button type="primary" :disabled="!meta.path||!meta.name" @click="scrape">刮削</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -430,7 +457,7 @@ import clipBorad from "vue-clipboard3";
 import {onUnmounted} from "@vue/runtime-core";
 import {
   CircleCloseFilled,
-  CopyDocument,
+  Connection,
   Delete,
   Film,
   FullScreen,
@@ -487,6 +514,7 @@ const dialogVisible = ref(false)
 const imageVisible = ref(false)
 const formVisible = ref(false)
 const settingVisible = ref(false)
+const addVisible = ref(false)
 const isHistory = ref(false)
 const searching = ref(false)
 const page = ref(1)
@@ -501,6 +529,12 @@ const form = ref({
   link: '',
   path: '',
   code: '',
+})
+const meta = ref({
+  type: 'tv',
+  name: '',
+  year: null,
+  path: '',
 })
 const options = [
   {label: '全部', value: 'ALL'},
@@ -618,6 +652,34 @@ const updateCover = () => {
   axios.post('/api/settings', {name: 'video_cover', value: cover.value}).then(({data}) => {
     cover.value = data.value
     ElMessage.success('更新成功')
+  })
+}
+
+const showScrape = () => {
+  meta.value.path = getParent(movies.value[0].vod_id)
+  meta.value.name = movies.value[0].vod_name
+  meta.value.year = movies.value[0].vod_year
+  addVisible.value = true
+}
+
+const scrape = () => {
+  axios.post('/api/tmdb/meta/-/scrape', meta.value).then(({data}) => {
+    if (data) {
+      const movie = movies.value[0]
+      movie.vod_name = data.vod_name
+      movie.vod_lang = data.vod_lang
+      movie.vod_actor = data.vod_actor
+      movie.vod_director = data.vod_director
+      movie.vod_area = data.vod_area
+      movie.vod_content = data.vod_content
+      movie.vod_year = data.vod_year
+      movie.vod_remarks = data.vod_remarks
+      movie.type_name = data.type_name
+      ElMessage.success('刮削成功')
+      addVisible.value = false
+    } else {
+      ElMessage.warning('刮削失败')
+    }
   })
 }
 
@@ -795,7 +857,7 @@ const loadDetail = (id: string) => {
 }
 
 const handleKeyDown = (event: KeyboardEvent) => {
-  if (formVisible.value) {
+  if (formVisible.value || addVisible.value) {
     return;
   }
   if (imageVisible.value) {

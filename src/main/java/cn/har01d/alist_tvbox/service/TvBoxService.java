@@ -2145,6 +2145,9 @@ public class TvBoxService {
         if (!details) {
             return;
         }
+        if (movieDetail.getVod_id().endsWith("playlist$1")) {
+            movieDetail.setVod_name(movie.getName());
+        }
         movieDetail.setVod_actor(movie.getActors());
         movieDetail.setVod_director(movie.getDirectors());
         movieDetail.setVod_area(movie.getCountry());
