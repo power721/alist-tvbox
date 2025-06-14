@@ -653,6 +653,9 @@ public class TmdbService {
             meta.setPath(dto.getPath());
             meta.setSiteId(1);
         }
+        if (dto.getYear() != null) {
+            meta.setYear(dto.getYear());
+        }
         Tmdb movie = scrape(dto.getType(), dto.getName(), meta);
         return setTmdbInfo(movie);
     }

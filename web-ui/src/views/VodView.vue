@@ -426,7 +426,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="名称" required>
-          <el-input v-model="meta.name" autocomplete="off"/>
+          <el-input v-model="meta.name" id="meta-name" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="年代">
           <el-input-number v-model="meta.year" :min="1900" :max="2099" autocomplete="off"/>
@@ -660,6 +660,7 @@ const showScrape = () => {
   meta.value.name = movies.value[0].vod_name
   meta.value.year = movies.value[0].vod_year
   addVisible.value = true
+  setTimeout(() => document.getElementById('meta-name').focus(), 500)
 }
 
 const scrape = () => {
