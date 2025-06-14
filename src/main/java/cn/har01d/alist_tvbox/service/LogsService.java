@@ -1,8 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -27,30 +25,10 @@ import java.util.zip.ZipOutputStream;
 @Slf4j
 @Service
 public class LogsService {
-    private final ObjectMapper objectMapper;
+    private final AListLocalService aListLocalService;
 
-    private String aListLogPath = "/opt/alist/log/alist.log";
-
-    public LogsService(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-        readAListLogPath();
-    }
-
-    public void readAListLogPath() {
-        Path path = Path.of(Utils.getAListPath("data/config.json"));
-        if (Files.exists(path)) {
-            try {
-                String text = Files.readString(path);
-                JsonNode json = objectMapper.readTree(text);
-                aListLogPath = json.get("log").get("name").asText();
-                if (!aListLogPath.startsWith("/")) {
-                    aListLogPath = Utils.getAListPath(aListLogPath);
-                }
-                log.info("AList log path: {}", aListLogPath);
-            } catch (IOException e) {
-                log.warn("read AList config failed", e);
-            }
-        }
+    public LogsService(AListLocalService aListLocalService) {
+        this.aListLocalService = aListLocalService;
     }
 
     private String fixLine(String text) {
@@ -68,7 +46,7 @@ public class LogsService {
 
     private Path getLogFile(String type) {
         if ("alist".equals(type)) {
-            return Path.of(aListLogPath);
+            return Path.of(aListLocalService.getLogPath());
         } else if ("init".equals(type)) {
             return Utils.getLogPath("init.log");
         } else {
@@ -143,7 +121,7 @@ public class LogsService {
     }
 
     public FileSystemResource downloadLog() throws IOException {
-        File file = new File(aListLogPath);
+        File file = new File(aListLocalService.getLogPath());
         if (file.exists()) {
             FileUtils.copyFileToDirectory(file, new File("/opt/atv/log/"));
         }

@@ -11,6 +11,8 @@ import cn.har01d.alist_tvbox.model.SettingResponse;
 import cn.har01d.alist_tvbox.storage.Storage;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -45,21 +50,30 @@ public class AListLocalService {
     private final AppProperties appProperties;
     private final RestTemplate restTemplate;
     private final Environment environment;
+    private final ObjectMapper objectMapper;
 
     private volatile int aListStatus;
+    private int aListPort = 5244;
+    private String aListLogPath = "/opt/alist/log/alist.log";
 
-    public AListLocalService(SettingRepository settingRepository, SiteRepository siteRepository, AppProperties appProperties, RestTemplateBuilder builder, Environment environment) {
+    public AListLocalService(SettingRepository settingRepository,
+                             SiteRepository siteRepository,
+                             AppProperties appProperties,
+                             RestTemplateBuilder builder,
+                             Environment environment,
+                             ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
         this.siteRepository = siteRepository;
         this.appProperties = appProperties;
         this.environment = environment;
+        this.objectMapper = objectMapper;
         this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
     }
 
     @PostConstruct
     public void setup() {
-        String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
-        setSetting("external_port", port, "number");
+        aListPort = findPort();
+        setSetting("external_port", String.valueOf(aListPort), "number");
         String url = settingRepository.findById(Constants.OPEN_TOKEN_URL).map(Setting::getValue).orElse("https://ali.har01d.org/access_token");
         if (url.equals("https://api.xhofe.top/alist/ali_open/token")) {
             url = "https://ali.har01d.org/access_token";
@@ -85,6 +99,46 @@ public class AListLocalService {
         setSetting("driver_round_robin", roundRobin, "bool");
         String lazy = settingRepository.findById("ali_lazy_load").map(Setting::getValue).orElse("true");
         setSetting("ali_lazy_load", lazy, "bool");
+    }
+
+    public int getPort() {
+        return aListPort;
+    }
+
+    public String getLogPath() {
+        return aListLogPath;
+    }
+
+    private int findPort() {
+        if (appProperties.isHostmode()) {
+            return 5234;
+        }
+        if (environment.matchesProfiles("standalone")) {
+            readAListConf();
+            return aListPort;
+        }
+        return Integer.parseInt(environment.getProperty("ALIST_PORT", "5344"));
+    }
+
+    public void readAListConf() {
+        Path path = Path.of(Utils.getAListPath("data/config.json"));
+        if (Files.exists(path)) {
+            try {
+                log.info("read alist port from {}", path);
+                String text = Files.readString(path);
+                JsonNode json = objectMapper.readTree(text);
+                aListPort = json.get("scheme").get("http_port").asInt();
+                log.info("AList port: {}", aListPort);
+
+                aListLogPath = json.get("log").get("name").asText();
+                if (!aListLogPath.startsWith("/")) {
+                    aListLogPath = Utils.getAListPath(aListLogPath);
+                }
+                log.info("AList log path: {}", aListLogPath);
+            } catch (IOException e) {
+                log.warn("read AList config failed", e);
+            }
+        }
     }
 
     public void setSetting(String key, String value, String type) {

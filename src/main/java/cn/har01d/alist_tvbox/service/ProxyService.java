@@ -10,7 +10,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -30,20 +29,20 @@ import java.util.concurrent.CancellationException;
 public class ProxyService {
     private static final int BUFFER_SIZE = 64 * 1024;
     private final AppProperties appProperties;
-    private final Environment environment;
     private final SiteService siteService;
     private final AListService aListService;
+    private final AListLocalService aListLocalService;
     private final Set<String> proxyDrivers = Set.of("AliyundriveOpen", "AliyunShare", "BaiduNetdisk", "BaiduShare2",
             "Quark", "UC", "QuarkShare", "UCShare");
 
     public ProxyService(AppProperties appProperties,
-                        Environment environment,
                         SiteService siteService,
-                        AListService aListService) {
+                        AListService aListService,
+                        AListLocalService aListLocalService) {
         this.appProperties = appProperties;
-        this.environment = environment;
         this.siteService = siteService;
         this.aListService = aListService;
+        this.aListLocalService = aListLocalService;
     }
 
     public void proxy(String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
@@ -86,7 +85,7 @@ public class ProxyService {
     private String buildAListProxyUrl(Site site, String path, String sign) {
         if (site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
+                    .port(aListLocalService.getPort())
                     .replacePath("/p" + path)
                     .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()

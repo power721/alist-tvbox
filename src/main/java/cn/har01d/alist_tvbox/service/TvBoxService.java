@@ -42,7 +42,6 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -106,8 +105,8 @@ public class TvBoxService {
     private final ConfigFileService configFileService;
     private final TenantService tenantService;
     private final SettingService settingService;
+    private final AListLocalService aListLocalService;
     private final ObjectMapper objectMapper;
-    private final Environment environment;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final Cache<Integer, List<String>> cache = Caffeine.newBuilder()
             .maximumSize(10)
@@ -160,8 +159,8 @@ public class TvBoxService {
                         ConfigFileService configFileService,
                         TenantService tenantService,
                         SettingService settingService,
+                        AListLocalService aListLocalService,
                         ObjectMapper objectMapper,
-                        Environment environment,
                         DriverAccountRepository driverAccountRepository,
                         PikPakAccountRepository pikPakAccountRepository) {
         this.accountRepository = accountRepository;
@@ -178,8 +177,8 @@ public class TvBoxService {
         this.configFileService = configFileService;
         this.tenantService = tenantService;
         this.settingService = settingService;
+        this.aListLocalService = aListLocalService;
         this.objectMapper = objectMapper;
-        this.environment = environment;
         this.driverAccountRepository = driverAccountRepository;
         this.pikPakAccountRepository = pikPakAccountRepository;
     }
@@ -2267,10 +2266,9 @@ public class TvBoxService {
         }
 
         if (url.startsWith("http://localhost")) {
-            String port = appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344");
             String proxy = ServletUriComponentsBuilder.fromCurrentRequest()
                     .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                    .port(port)
+                    .port(aListLocalService.getPort())
                     .replacePath("/")
                     .replaceQuery("")
                     .build()
@@ -2297,7 +2295,7 @@ public class TvBoxService {
     private String buildAListProxyUrl(Site site, String path, String sign) {
         if (site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
+                    .port(aListLocalService.getPort())
                     .replacePath("/p" + path)
                     .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()
@@ -2319,7 +2317,7 @@ public class TvBoxService {
     private String buildUrl(Site site, String path) {
         if (site == null || site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .port(appProperties.isHostmode() ? "5234" : environment.getProperty("ALIST_PORT", "5344"))
+                    .port(aListLocalService.getPort())
                     .replacePath(path)
                     .replaceQuery(null)
                     .build()
