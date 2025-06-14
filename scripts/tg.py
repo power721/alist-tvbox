@@ -26,18 +26,36 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 切换到脚本所在目录
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-logger.debug(f"当前工作目录: {os.getcwd()}")
+#os.chdir(os.path.dirname(os.path.abspath(__file__)))
+logger.info(f"当前工作目录: {os.getcwd()}")
 
 # 命令行参数
 parser = argparse.ArgumentParser(description='Telegram消息提取脚本')
 parser.add_argument('--reset', action='store_true', help='清空数据库，强制全新处理')
 args = parser.parse_args()
 
+# File path for storing phone number
+PHONE_FILE = '/data/tg_phone.txt'
+
+def get_phone_number():
+    if os.path.exists(PHONE_FILE):
+        with open(PHONE_FILE, 'r') as f:
+            phone = f.read().strip()
+            print(f"Using phone number from {PHONE_FILE}: {phone}")
+            return phone
+    else:
+        phone = input("Enter your Telegram phone number (e.g., +1234567890): ").strip()
+        # Save to file for future use
+        os.makedirs(os.path.dirname(PHONE_FILE), exist_ok=True)
+        with open(PHONE_FILE, 'w') as f:
+            f.write(phone)
+        print(f"Phone number saved to {PHONE_FILE}")
+        return phone
+
 # Telegram配置
 api_id = '6627460'
 api_hash = '27a53a0965e486a2bc1b1fcde473b1c4'
-phone = ''
+phone = get_phone_number()
 channels = ['@tgsearchers2', '@tianyirigeng', '@tyysypzypd', '@tyypzhpd', '@cloudtianyi', '@kuakeclound']
 
 # 初始化数据库
