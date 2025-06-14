@@ -275,19 +275,6 @@ public class ShareService {
             } catch (Exception e) {
                 log.warn("", e);
             }
-
-            Path path = Path.of(Utils.getAListPath("data/config.json"));
-            if (Files.exists(path)) {
-                String text = Files.readString(path);
-                Map<String, Object> json = objectMapper.readValue(text, Map.class);
-                if (url != null) {
-                    json.put("opentoken_auth_url", url);
-                    text = objectMapper.writeValueAsString(json);
-                    Files.writeString(path, text);
-                } else {
-                    settingRepository.save(new Setting(OPEN_TOKEN_URL, (String) json.get("opentoken_auth_url")));
-                }
-            }
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -295,32 +282,12 @@ public class ShareService {
 
     public void updateOpenTokenUrl(OpenApiDto dto) {
         String url = dto.getUrl();
-        try {
-            Path path = Path.of(Utils.getAListPath("data/config.json"));
-            if (Files.exists(path)) {
-                String text = Files.readString(path);
-                Map<String, Object> json = objectMapper.readValue(text, Map.class);
-                json.put("opentoken_auth_url", url);
-                text = objectMapper.writeValueAsString(json);
-                Files.writeString(path, text);
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            Path file = Utils.getDataPath("open_token_url.txt");
-            Files.writeString(file, url);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
         settingRepository.save(new Setting(OPEN_TOKEN_URL, url));
         settingRepository.save(new Setting("open_api_client_id", dto.getClientId() == null ? "" : dto.getClientId().trim()));
         settingRepository.save(new Setting("open_api_client_secret", dto.getClientSecret() == null ? "" : dto.getClientSecret().trim()));
-        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + url + "' WHERE key = 'open_token_url'");
-        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + dto.getClientId().trim() + "' WHERE key = 'open_api_client_id'");
-        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + dto.getClientSecret().trim() + "' WHERE key = 'open_api_client_secret'");
+        aListLocalService.setSetting("open_token_url", url, "string");
+        aListLocalService.setSetting("open_api_client_id", dto.getClientId().trim(), "string");
+        aListLocalService.setSetting("open_api_client_secret", dto.getClientSecret().trim(), "string");
     }
 
     private List<Share> loadSharesFromFile() {

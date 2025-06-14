@@ -53,7 +53,8 @@ public class AListLocalService {
     private final ObjectMapper objectMapper;
 
     private volatile int aListStatus;
-    private int port = 5244;
+    private int aListPort = 5244;
+    private String aListLogPath = "/opt/alist/log/alist.log";
 
     public AListLocalService(SettingRepository settingRepository,
                              SiteRepository siteRepository,
@@ -71,8 +72,8 @@ public class AListLocalService {
 
     @PostConstruct
     public void setup() {
-        port = findPort();
-        setSetting("external_port", String.valueOf(port), "number");
+        aListPort = findPort();
+        setSetting("external_port", String.valueOf(aListPort), "number");
         String url = settingRepository.findById(Constants.OPEN_TOKEN_URL).map(Setting::getValue).orElse("https://ali.har01d.org/access_token");
         if (url.equals("https://api.xhofe.top/alist/ali_open/token")) {
             url = "https://ali.har01d.org/access_token";
@@ -101,7 +102,11 @@ public class AListLocalService {
     }
 
     public int getPort() {
-        return port;
+        return aListPort;
+    }
+
+    public String getLogPath() {
+        return aListLogPath;
     }
 
     private int findPort() {
@@ -110,7 +115,7 @@ public class AListLocalService {
         }
         if (environment.matchesProfiles("standalone")) {
             readAListPort();
-            return port;
+            return aListPort;
         }
         return Integer.parseInt(environment.getProperty("ALIST_PORT", "5344"));
     }
@@ -122,8 +127,14 @@ public class AListLocalService {
                 log.info("read alist port from {}", path);
                 String text = Files.readString(path);
                 JsonNode json = objectMapper.readTree(text);
-                port = json.get("scheme").get("http_port").asInt();
-                log.info("AList port: {}", port);
+                aListPort = json.get("scheme").get("http_port").asInt();
+                log.info("AList port: {}", aListPort);
+
+                aListLogPath = json.get("log").get("name").asText();
+                if (!aListLogPath.startsWith("/")) {
+                    aListLogPath = Utils.getAListPath(aListLogPath);
+                }
+                log.info("AList log path: {}", aListLogPath);
             } catch (IOException e) {
                 log.warn("read AList config failed", e);
             }
