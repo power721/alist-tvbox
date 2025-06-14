@@ -211,7 +211,7 @@ public class ShareService {
         }
     }
 
-    private void cleanInvalidShares() {
+    public void cleanInvalidShares() {
         if (appProperties.isCleanInvalidShares()) {
             cleanStorages();
         }
@@ -1117,6 +1117,7 @@ public class ShareService {
                 || status.contains("guest missing pwd_id or stoken")
                 || status.contains("获取天翼网盘分享信息为空")
                 || status.contains("链接已失效")
+                || status.contains("分享地址已失效")
                 || status.contains("分享已取消")
                 || status.contains("文件没有被分享")
                 ;
