@@ -96,6 +96,8 @@ sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_hostmode.sh)"
 sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)"
 ```
 
+如果要保留AList数据，需要挂载/opt/alist目录。
+比如： -v /etc/xiaoya/alist:/opt/alist
 #### NAS
 对于群辉等NAS系统，请挂载Docker的/data目录到群辉文件系统，否则数据不会保留。
 #### 创建容器
