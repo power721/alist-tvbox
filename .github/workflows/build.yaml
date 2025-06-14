@@ -114,6 +114,16 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build tg docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-tg
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:tg
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Build native with Maven
         run: |
           mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml

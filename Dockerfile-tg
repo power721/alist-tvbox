@@ -12,6 +12,12 @@ LABEL MAINTAINER="Har01d"
 
 ENV MEM_OPT="-Xmx512M" ALIST_PORT=5344 INSTALL=new
 
+RUN apk update && \
+    apk upgrade --no-cache && \
+    apk add --no-cache python3 py3-pip; \
+    rm -rf /var/cache/apk/*; \
+    pip install telethon
+
 COPY config/config.json /opt/alist/data/config.json
 
 COPY --from=builder /app/atv-cli /
@@ -22,6 +28,7 @@ COPY scripts/downloadPg.sh /
 COPY scripts/downloadZx.sh /
 COPY scripts/movie.sh /
 COPY scripts/entrypoint.sh /
+COPY scripts/tg.py /
 
 COPY data/tvbox.zip /
 COPY data/base_version /
