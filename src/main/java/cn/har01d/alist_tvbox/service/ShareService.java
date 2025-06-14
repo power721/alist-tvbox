@@ -1079,6 +1079,7 @@ public class ShareService {
         return status.contains("分享码错误或者分享地址错误")
                 || status.contains("share_link is forbidden")
                 || status.contains("share_link is expired")
+                || status.contains("share_link is cancelled by the creator")
                 || status.contains("share_link cannot be found")
                 || status.contains("share_pwd is not valid")
                 || status.contains("guest missing pwd_id or stoken")
