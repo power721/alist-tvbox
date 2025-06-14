@@ -17,6 +17,7 @@ import cn.har01d.alist_tvbox.entity.TmdbMeta;
 import cn.har01d.alist_tvbox.entity.TmdbMetaRepository;
 import cn.har01d.alist_tvbox.entity.TmdbRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -644,6 +645,39 @@ public class TmdbService {
         return path;
     }
 
+    public MovieDetail scrape(MetaDto dto) {
+        var meta = tmdbMetaRepository.findByPath(dto.getPath());
+        if (meta == null) {
+            meta = new TmdbMeta();
+            meta.setName(dto.getName());
+            meta.setPath(dto.getPath());
+            meta.setSiteId(1);
+        }
+        if (dto.getYear() != null) {
+            meta.setYear(dto.getYear());
+        }
+        Tmdb movie = scrape(dto.getType(), dto.getName(), meta);
+        return setTmdbInfo(movie);
+    }
+
+    private MovieDetail setTmdbInfo(Tmdb movie) {
+        if (movie == null) {
+            return null;
+        }
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_name(movie.getName());
+        movieDetail.setVod_pic(movie.getCover());
+        movieDetail.setVod_year(String.valueOf(movie.getYear()));
+        movieDetail.setVod_remarks(Utils.trim(Objects.toString(movie.getScore(), "")));
+        movieDetail.setVod_actor(movie.getActors());
+        movieDetail.setVod_director(movie.getDirectors());
+        movieDetail.setVod_area(movie.getCountry());
+        movieDetail.setVod_lang(movie.getLanguage());
+        movieDetail.setVod_content(movie.getDescription());
+        movieDetail.setType_name(movie.getGenre());
+        return movieDetail;
+    }
+
     public boolean scrape(Integer id, String type, String name) {
         var meta = tmdbMetaRepository.findById(id).orElse(null);
         if (meta == null) {
@@ -668,7 +702,10 @@ public class TmdbService {
         if (StringUtils.isBlank(name)) {
             name = TextUtils.fixName(getNameFromPath(meta.getPath()));
         }
-        Integer year = getYearFromPath(meta.getPath());
+        Integer year = meta.getYear();
+        if (year == null) {
+            year = getYearFromPath(meta.getPath());
+        }
         Tmdb movie = search(type, name, year);
         if (movie != null) {
             meta.setTmdb(movie);
@@ -680,7 +717,7 @@ public class TmdbService {
             }
             saveMeta(meta);
         } else {
-            movie = search("tv", name, year);
+            movie = search("tv".equals(type) ? "movie" : "tv", name, year);
             if (movie != null) {
                 meta.setTmdb(movie);
                 meta.setTmId(movie.getTmdbId());

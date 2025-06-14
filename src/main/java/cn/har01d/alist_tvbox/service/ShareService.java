@@ -1096,7 +1096,7 @@ public class ShareService {
                 int id = item.get("id").asInt();
                 String status = item.get("status").asText();
                 if (invalid(status)) {
-                    log.warn("delete invalid share: {}", id);
+                    log.warn("delete invalid share: {} {}", id, item.get("mount_path").asText());
                     deleteShare(id);
                     count++;
                 }
