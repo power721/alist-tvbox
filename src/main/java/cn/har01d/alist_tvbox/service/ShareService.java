@@ -1050,10 +1050,10 @@ public class ShareService {
 
     public int cleanStorages() {
         int count = 0;
-        int page = 1;
         int size = 500;
-        while (page < 20) {
-            Pageable pageable = PageRequest.of(page++, size);
+        int retry = 1;
+        while (retry++ < 10) {
+            Pageable pageable = PageRequest.of(1, size);
             JsonNode result = listStorages(pageable);
             JsonNode content = result.get("data").get("content");
             if (content instanceof ArrayNode) {
