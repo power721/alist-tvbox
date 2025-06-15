@@ -1059,10 +1059,11 @@ public class ShareService {
             if (content instanceof ArrayNode) {
                 for (int i = 0; i < content.size(); i++) {
                     JsonNode item = content.get(i);
-                    int id = item.get("id").asInt();
                     String status = item.get("status").asText();
                     if (invalid(status)) {
-                        log.warn("delete invalid share: {} {}", id, item.get("mount_path").asText());
+                        int id = item.get("id").asInt();
+                        String path = item.get("mount_path").asText();
+                        log.warn("delete invalid share: {} {} reason: {}", id, path, status);
                         deleteShare(id);
                         count++;
                     }

@@ -158,7 +158,7 @@ jobs:
           api: ${{ secrets.VERSION_API }}
         if: ${{ env.api != '' }}
         run: |
-          curl -s "${{ env.api }}?type=atv&version=${{ github.ref_name }}"
+          curl -XPOST -s "${{ env.api }}" -H "Content-Type: application/json" --data-binary @data/version
       - name: send telegram message
         uses: appleboy/telegram-action@master
         with:
