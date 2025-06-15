@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.Share;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.service.ShareService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -15,8 +16,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 
@@ -105,6 +110,19 @@ public class ShareController {
 
     @PostMapping("/api/import-shares")
     public int importShares(@RequestBody SharesDto sharesDto) {
+        return shareService.importShares(sharesDto);
+    }
+
+    @PostMapping("/api/import-share-file")
+    public int importShares(@RequestParam("file") MultipartFile file, int type) throws IOException {
+        if (file.isEmpty()) {
+            throw new BadRequestException();
+        }
+
+        String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+        SharesDto sharesDto = new SharesDto();
+        sharesDto.setType(type);
+        sharesDto.setContent(content);
         return shareService.importShares(sharesDto);
     }
 

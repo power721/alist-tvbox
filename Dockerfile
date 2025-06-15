@@ -23,6 +23,7 @@ COPY scripts/downloadZx.sh /
 COPY scripts/movie.sh /
 COPY scripts/entrypoint.sh /
 
+COPY data/alist.config.json /
 COPY data/tvbox.zip /
 COPY data/base_version /
 COPY data/cat.zip /
