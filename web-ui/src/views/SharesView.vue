@@ -347,6 +347,7 @@ const options = [
   {label: '迅雷', value: 2},
   {label: '移动', value: 6},
   {label: 'PikPak', value: 1},
+  {label: '本地', value: 4},
 ]
 
 const multipleSelection = ref<ShareInfo[]>([])

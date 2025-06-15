@@ -40,7 +40,6 @@ import cn.har01d.alist_tvbox.storage.UCShare;
 import cn.har01d.alist_tvbox.storage.UrlTree;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
@@ -83,7 +82,6 @@ import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
 
 public class ShareService {
 
-    private final ObjectMapper objectMapper;
     private final AppProperties appProperties;
     private final ShareRepository shareRepository;
     private final MetaRepository metaRepository;
@@ -105,8 +103,7 @@ public class ShareService {
     private final int offset = 99900;
     private int shareId = 20000;
 
-    public ShareService(ObjectMapper objectMapper,
-                        AppProperties appProperties1,
+    public ShareService(AppProperties appProperties1,
                         ShareRepository shareRepository,
                         MetaRepository metaRepository,
                         AListAliasRepository aliasRepository,
@@ -124,7 +121,6 @@ public class ShareService {
                         PikPakService pikPakService,
                         RestTemplateBuilder builder,
                         Environment environment) {
-        this.objectMapper = objectMapper;
         this.appProperties = appProperties1;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
@@ -1054,18 +1050,25 @@ public class ShareService {
 
     public int cleanStorages() {
         int count = 0;
-        Pageable pageable = PageRequest.of(1, 500);
-        JsonNode result = listStorages(pageable);
-        JsonNode content = result.get("data").get("content");
-        if (content instanceof ArrayNode) {
-            for (int i = 0; i < content.size(); i++) {
-                JsonNode item = content.get(i);
-                int id = item.get("id").asInt();
-                String status = item.get("status").asText();
-                if (invalid(status)) {
-                    log.warn("delete invalid share: {} {}", id, item.get("mount_path").asText());
-                    deleteShare(id);
-                    count++;
+        int page = 1;
+        int size = 500;
+        while (page < 20) {
+            Pageable pageable = PageRequest.of(page++, size);
+            JsonNode result = listStorages(pageable);
+            JsonNode content = result.get("data").get("content");
+            if (content instanceof ArrayNode) {
+                for (int i = 0; i < content.size(); i++) {
+                    JsonNode item = content.get(i);
+                    int id = item.get("id").asInt();
+                    String status = item.get("status").asText();
+                    if (invalid(status)) {
+                        log.warn("delete invalid share: {} {}", id, item.get("mount_path").asText());
+                        deleteShare(id);
+                        count++;
+                    }
+                }
+                if (content.size() < size) {
+                    break;
                 }
             }
         }
@@ -1084,9 +1087,14 @@ public class ShareService {
                 || status.contains("share_pwd is not valid")
                 || status.contains("guest missing pwd_id or stoken")
                 || status.contains("获取天翼网盘分享信息为空")
+                || status.contains("文件涉及违规内容")
+                || status.contains("分享者用户封禁链接查看受限")
                 || status.contains("链接已失效")
                 || status.contains("分享地址已失效")
+                || status.contains("好友已取消了分享")
                 || status.contains("分享已取消")
+                || status.contains("分享不存在")
+                || status.contains("文件不存在")
                 || status.contains("文件没有被分享")
                 ;
     }
