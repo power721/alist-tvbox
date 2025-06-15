@@ -30,6 +30,7 @@ COPY scripts/movie.sh /
 COPY scripts/entrypoint.sh /
 COPY scripts/tg.py /
 
+COPY data/alist.config.json /
 COPY data/tvbox.zip /
 COPY data/base_version /
 COPY data/cat.zip /

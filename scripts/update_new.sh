@@ -86,8 +86,8 @@ if [ "$UPDATE" = "true" ] && [ "$IMAGE_ID" = "$NEW_IMAGE" ]; then
 fi
 
 echo -e "\e[33m重启应用\e[0m"
-docker rm -f alist-tvbox && \
-docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 --restart=always -v "$BASE_DIR":/data ${MOUNT} --name=alist-tvbox haroldli/alist-tvbox:${TAG}
+docker rm -f alist-tvbox
+docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 --restart=always -v "$BASE_DIR":/data -v "$BASE_DIR/alist":/opt/alist/data ${MOUNT} --name=alist-tvbox haroldli/alist-tvbox:${TAG}
 
 echo -e "\n\e[32m请使用以下命令查看日志输出：\e[0m"
 echo -e "    docker logs -f alist-tvbox\n"

@@ -5,7 +5,12 @@ on:
     branches:
       - master
     paths:
-      - 'scripts/**'
+      - 'scripts/install-service.sh'
+      - 'scripts/update_hostmode.sh'
+      - 'scripts/update_native.sh'
+      - 'scripts/update_native_host.sh'
+      - 'scripts/update_new.sh'
+      - 'scripts/update_xiaoya.sh'
 
 jobs:
   send-scripts:

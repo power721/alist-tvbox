@@ -36,6 +36,10 @@
       <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)"</code><br>
     </p>
     <p>
+      一键部署(电报监控版)：
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)" -s -t tg</code><br>
+    </p>
+    <p>
       一键部署(小雅版)：
       <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"</code><br>
     </p>
@@ -50,7 +54,7 @@
     </p>
     <p>
       一键部署(开发版)：
-      <code>wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && sh ./update_xiaoya.sh -t dev</code><br>
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)" -s -t dev</code><br>
     </p>
     <p>
       一键部署(NAS)：
