@@ -10,7 +10,7 @@
       />
     </el-select>
     <div class="hint"></div>
-    <el-button type="success" @click="uploadVisible=true">导入</el-button>
+    <el-button type="success" @click="showUpload">导入</el-button>
     <el-button type="success" @click="exportVisible=true">导出</el-button>
     <!--    <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>-->
     <el-button @click="refreshShares">刷新</el-button>
@@ -221,8 +221,8 @@
   </el-dialog>
 
   <el-dialog v-model="uploadVisible" title="导入分享" width="60%">
-    <el-form>
-      <el-form-item label="类型" label-width="140">
+    <el-form label-width="140">
+      <el-form-item label="类型">
         <el-radio-group v-model="sharesDto.type" class="ml-4">
           <el-radio :label="-1" size="large">自动</el-radio>
           <el-radio :label="0" size="large">阿里分享</el-radio>
@@ -237,16 +237,44 @@
           <el-radio :label="10" size="large">百度分享</el-radio>
         </el-radio-group>
       </el-form-item>
-      <el-form-item label="分享内容" label-width="120">
+      <el-form-item label="分享内容">
         <el-input v-model="sharesDto.content" type="textarea" :rows="15"
                   :placeholder="'多行分享\n格式1：挂载路径 分享ID 目录ID 提取码\n格式2：挂载路径 分享链接\n格式3：挂载路径 分享链接 root 提取码'"/>
+      </el-form-item>
+      <el-form-item label="导入文件">
+        <el-upload
+          ref="upload"
+          action="/api/import-share-file"
+          accept="text/plain"
+          class="upload"
+          :limit="1"
+          :on-exceed="handleExceed"
+          :on-success="onUploadSuccess"
+          :on-error="onUploadError"
+          :headers="{'x-access-token': token}"
+          :data="{type: sharesDto.type}"
+          :auto-upload="false"
+        >
+          <template #trigger>
+            <el-button type="primary" :disabled="uploading">选择文件</el-button>
+          </template>
+          <span class="hint"></span>
+          <el-button type="success" :disabled="uploading" @click="submitUpload">
+            上传导入
+          </el-button>
+          <template #tip>
+            <div class="el-upload__tip">
+              上传分享列表文件，最大20MB
+            </div>
+          </template>
+        </el-upload>
       </el-form-item>
       <el-progress v-if="uploading" :percentage="100" status="success" :indeterminate="true" :duration="5"/>
     </el-form>
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="uploadVisible = false">取消</el-button>
-        <el-button class="ml-3" type="success" :disabled="uploading" @click="submitUpload">导入</el-button>
+        <el-button class="ml-3" type="success" :disabled="uploading" @click="importShares">导入</el-button>
       </span>
     </template>
   </el-dialog>
@@ -281,6 +309,9 @@
 import {onMounted, ref} from "vue";
 import axios from "axios";
 import {ElMessage} from 'element-plus'
+import { genFileId } from 'element-plus'
+import type { UploadInstance, UploadProps, UploadRawFile } from 'element-plus'
+const upload = ref<UploadInstance>()
 import accountService from "@/services/account.service";
 
 const token = accountService.getToken()
@@ -581,7 +612,34 @@ const reload = () => {
   })
 }
 
+const showUpload = () => {
+  uploadVisible.value = true
+  if (upload.value) {
+    upload.value!.clearFiles()
+  }
+}
+
+const handleExceed: UploadProps['onExceed'] = (files) => {
+  upload.value!.clearFiles()
+  const file = files[0] as UploadRawFile
+  file.uid = genFileId()
+  upload.value!.handleStart(file)
+}
+
+const onUploadSuccess: UploadProps['onSuccess'] = (data) => {
+  uploadSuccess(data)
+}
+
+const onUploadError: UploadProps['onError'] = (err) => {
+  uploadError(err)
+}
+
 const submitUpload = () => {
+  uploading.value = true
+  upload.value!.submit()
+}
+
+const importShares = () => {
   uploading.value = true
   axios.post('/api/import-shares', sharesDto.value).then(({data}) => {
     uploadSuccess(data)
@@ -624,5 +682,9 @@ onMounted(() => {
 <style scoped>
 .space {
   margin: 12px 0;
+}
+
+.upload {
+  width: 50%;
 }
 </style>
