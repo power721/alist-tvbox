@@ -1,19 +1,23 @@
 set -e
 
-MOUNT=/opt/alist
+BASE_DIR=/opt/alist
 PORT1=4567
 PORT2=5344
+MOUNT=""
 
-while getopts ":d:p:P:" arg; do
+while getopts ":d:p:P:v:" arg; do
     case "${arg}" in
         d)
-            MOUNT=${OPTARG}
+            BASE_DIR=${OPTARG}
             ;;
         p)
             PORT1=${OPTARG}
             ;;
         P)
             PORT2=${OPTARG}
+            ;;
+        v)
+            MOUNT="${MOUNT} -v ${OPTARG}"
             ;;
         *)
             ;;
@@ -39,11 +43,11 @@ echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M)
 echo "build haroldli/alist-tvbox:latest"
 docker build --tag=haroldli/alist-tvbox:latest .
 
-echo -e "\e[36m使用配置目录：\e[0m $MOUNT"
+echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
 echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:5244"
 
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
-docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 -e INSTALL=new -v "$MOUNT":/data -v "$MOUNT/alist":/opt/alist/data --name=alist-tvbox haroldli/alist-tvbox:latest
+docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 -e INSTALL=new -v "$BASE_DIR":/data -v "$BASE_DIR/alist":/opt/alist/data ${MOUNT} --name=alist-tvbox haroldli/alist-tvbox:latest
 
 sleep 1
 
