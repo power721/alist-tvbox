@@ -292,7 +292,7 @@ public class DriverAccountService {
         account.setFolder(dto.getFolder());
         account.setConcurrency(dto.getConcurrency());
         account.setAddition(dto.getAddition());
-        if (dto.getType() == DriverType.BAIDU && StringUtils.isNotBlank(dto.getAddition())) {
+        if (dto.getType() == DriverType.BAIDU && (StringUtils.isNotBlank(dto.getAddition())) && !"{}".equals(dto.getAddition())) {
             account.setToken("");
         }
 
@@ -345,7 +345,7 @@ public class DriverAccountService {
                 throw new BadRequestException("Token不能为空");
             }
             if (dto.getToken().startsWith("Basic ")) {
-                dto.setToken(dto.getToken().substring(6));
+                dto.setToken(dto.getToken().substring(6).trim());
             }
         } else if (StringUtils.isBlank(dto.getCookie()) && StringUtils.isBlank(dto.getToken())) {
             throw new BadRequestException("Cookie和Token不能同时为空");
