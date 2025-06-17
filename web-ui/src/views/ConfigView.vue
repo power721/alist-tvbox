@@ -131,7 +131,7 @@
           </div>
         </el-card>
 
-        <el-card class="box-card" v-if="movieVersion">
+        <el-card class="box-card" v-if="movieVersion&&!store.standalone">
           <template #header>
             <div class="card-header">豆瓣电影数据</div>
           </template>
