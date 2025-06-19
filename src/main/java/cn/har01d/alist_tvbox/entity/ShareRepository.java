@@ -17,5 +17,9 @@ public interface ShareRepository extends JpaRepository<Share, Integer> {
 
     Page<Share> findByType(int type, Pageable pageable);
 
+    Page<Share> findByPathContains(String keyword, Pageable pageable);
+
+    Page<Share> findByTypeAndPathContains(int type, String keyword, Pageable pageable);
+
     List<Share> findByTempTrue();
 }

@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -183,7 +184,7 @@ public class AListLocalService {
 
     public void saveStorage(Storage storage) {
         Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + storage.getId());
-        String time = storage.getTime().atZone(ZoneId.systemDefault()).toLocalDateTime().toString();
+        String time = storage.getTime().truncatedTo(ChronoUnit.SECONDS).atZone(ZoneId.systemDefault()).toLocalDateTime().toString();
         String sql = "INSERT INTO x_storages " +
                 "(id,mount_path,\"order\",driver,cache_expiration,status,addition,modified,disabled,order_by,order_direction,extract_folder,web_proxy,webdav_policy) " +
                 "VALUES (%d,'%s',0,'%s',%d,'work','%s','%s',%d,'name','asc','front',%d,'%s');";

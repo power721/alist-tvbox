@@ -1,6 +1,12 @@
 <template>
   <h2>资源列表</h2>
   <el-row justify="end">
+    <el-input style="width: 200px;" v-model="keyword" @keyup="search">
+      <template #append>
+        <el-button :icon="Search" @click="search"/>
+      </template>
+    </el-input>
+    <div class="hint"></div>
     <el-select style="width: 90px" v-model="type" @change="filter">
       <el-option
         v-for="item in options"
@@ -313,6 +319,7 @@ import { genFileId } from 'element-plus'
 import type { UploadInstance, UploadProps, UploadRawFile } from 'element-plus'
 const upload = ref<UploadInstance>()
 import accountService from "@/services/account.service";
+import {Search} from "@element-plus/icons-vue";
 
 const token = accountService.getToken()
 
@@ -368,6 +375,7 @@ const size1 = ref(20)
 const total = ref(0)
 const total1 = ref(0)
 const shares = ref([])
+const keyword = ref('')
 const dialogTitle = ref('')
 const formVisible = ref(false)
 const uploadVisible = ref(false)
@@ -544,9 +552,13 @@ const filter = () => {
   loadShares(1)
 }
 
+const search = () => {
+  loadShares(1)
+}
+
 const loadShares = (value: number) => {
   page.value = value
-  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value + '&type=' + type.value).then(({data}) => {
+  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value + '&type=' + type.value + '&keyword=' + keyword.value).then(({data}) => {
     shares.value = data.content
     total.value = data.totalElements
   })
