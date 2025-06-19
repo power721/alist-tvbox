@@ -34,8 +34,8 @@ public class ShareController {
     }
 
     @GetMapping("/api/shares")
-    public Page<Share> list(Pageable pageable, Integer type) {
-        return shareService.list(pageable, type);
+    public Page<Share> list(Pageable pageable, Integer type, String keyword) {
+        return shareService.list(pageable, type, keyword);
     }
 
     @PostMapping("/api/shares")

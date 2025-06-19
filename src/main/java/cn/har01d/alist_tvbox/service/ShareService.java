@@ -582,11 +582,20 @@ public class ShareService {
         return sb;
     }
 
-    public Page<Share> list(Pageable pageable, Integer type) {
+    public Page<Share> list(Pageable pageable, Integer type, String keyword) {
         if (type != null && type > -1) {
-            return shareRepository.findByType(type, pageable);
+            if (StringUtils.isBlank(keyword)) {
+                return shareRepository.findByType(type, pageable);
+            } else {
+                return shareRepository.findByTypeAndPathContains(type, keyword, pageable);
+            }
         }
-        return shareRepository.findAll(pageable);
+
+        if (StringUtils.isBlank(keyword)) {
+            return shareRepository.findAll(pageable);
+        } else {
+            return shareRepository.findByPathContains(keyword, pageable);
+        }
     }
 
     public String getQuarkCookie(String id) {
