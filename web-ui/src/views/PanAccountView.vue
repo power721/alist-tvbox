@@ -184,7 +184,7 @@
         </el-form-item>
         <el-form-item label="自动签到" v-if="form.type=='CLOUD189'">
           <el-switch
-            v-model="form.autoCheckin"
+            v-model="form.addition.auto_checkin"
             inline-prompt
             active-text="开启"
             inactive-text="关闭"
@@ -282,6 +282,7 @@ const form = ref({
     page_size: 1000,
     limit_rate: 2,
     access_token: '',
+    auto_checkin: false,
   },
   username: '',
   password: '',
@@ -289,7 +290,6 @@ const form = ref({
   folder: '',
   concurrency: 2,
   useProxy: false,
-  autoCheckin: false,
   disabled: false,
   master: false,
 })
@@ -349,6 +349,7 @@ const handleAdd = () => {
       page_size: 1000,
       limit_rate: 2,
       access_token: '',
+      auto_checkin: false,
     },
     username: '',
     password: '',
@@ -356,7 +357,6 @@ const handleAdd = () => {
     folder: '',
     concurrency: 2,
     useProxy: false,
-    autoCheckin: false,
     disabled: false,
     master: false,
   }
