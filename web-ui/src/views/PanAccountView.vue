@@ -182,6 +182,14 @@
           />
           <span class="hint">主账号用来观看分享</span>
         </el-form-item>
+        <el-form-item label="自动签到">
+          <el-switch
+            v-model="form.autoCheckin"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+          />
+        </el-form-item>
         <el-form-item label="禁用账号">
           <el-switch
             v-model="form.disabled"
@@ -281,6 +289,7 @@ const form = ref({
   folder: '',
   concurrency: 2,
   useProxy: false,
+  autoCheckin: false,
   disabled: false,
   master: false,
 })
@@ -347,6 +356,7 @@ const handleAdd = () => {
     folder: '',
     concurrency: 2,
     useProxy: false,
+    autoCheckin: false,
     disabled: false,
     master: false,
   }
