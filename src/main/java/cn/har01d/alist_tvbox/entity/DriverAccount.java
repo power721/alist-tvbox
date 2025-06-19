@@ -39,7 +39,5 @@ public class DriverAccount {
     private boolean disabled;
     @Column(columnDefinition = "BOOLEAN DEFAULT false")
     private boolean useProxy;
-    @Column(columnDefinition = "BOOLEAN DEFAULT false")
-    private boolean autoCheckin;
     private boolean master;
 }

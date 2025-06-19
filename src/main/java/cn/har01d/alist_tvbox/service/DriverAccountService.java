@@ -271,7 +271,6 @@ public class DriverAccountService {
 
         boolean changed = account.isMaster() != dto.isMaster()
                 || account.isUseProxy() != dto.isUseProxy()
-                || account.isAutoCheckin() != dto.isAutoCheckin()
                 || account.isDisabled() != dto.isDisabled()
                 || !Objects.equals(account.getType(), dto.getType())
                 || !Objects.equals(account.getToken(), dto.getToken())
@@ -282,7 +281,6 @@ public class DriverAccountService {
 
         account.setMaster(dto.isMaster());
         account.setUseProxy(dto.isUseProxy());
-        account.setAutoCheckin(dto.isAutoCheckin());
         account.setDisabled(dto.isDisabled());
         account.setName(dto.getName());
         account.setType(dto.getType());
