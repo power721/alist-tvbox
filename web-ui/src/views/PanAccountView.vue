@@ -76,7 +76,7 @@
     </el-table>
 
     <el-dialog v-model="formVisible" :title="dialogTitle" width="60%">
-      <el-form :model="form" label-width="auto">
+      <el-form :model="form" label-width="120">
         <el-form-item label="名称" required>
           <el-input v-model="form.name" autocomplete="off"/>
         </el-form-item>
@@ -136,7 +136,7 @@
           <el-input v-model="form.token" type="textarea" :rows="3"/>
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
-        <el-form-item label="Access Token" v-if="form.type=='BAIDU'" required>
+        <el-form-item label="认证令牌" v-if="form.type=='BAIDU'" required>
           <el-input v-model="form.addition.access_token"/>
           <el-button type="primary" @click="copyLink">获取认证令牌</el-button>
         </el-form-item>
