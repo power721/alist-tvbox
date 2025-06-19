@@ -89,7 +89,6 @@ public class DriverAccountService {
             fixConcurrency();
         }
 
-
         String deviceId = settingRepository.findById("quark_device_id").map(Setting::getValue).orElse(null);
         if (deviceId == null) {
             deviceId = QuarkUCTV.generateDeviceId();
