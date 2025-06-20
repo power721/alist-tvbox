@@ -6,6 +6,8 @@ import cn.har01d.alist_tvbox.dto.tg.Chat;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.SearchResponse;
 import cn.har01d.alist_tvbox.dto.tg.SearchResult;
+import cn.har01d.alist_tvbox.entity.Movie;
+import cn.har01d.alist_tvbox.entity.MovieRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.tvbox.Category;
@@ -34,6 +36,9 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -103,6 +108,7 @@ import java.util.stream.Stream;
 public class TelegramService {
     private final AppProperties appProperties;
     private final SettingRepository settingRepository;
+    private final MovieRepository movieRepository;
     private final ShareService shareService;
     private final TvBoxService tvBoxService;
     private final RestTemplate restTemplate;
@@ -112,9 +118,15 @@ public class TelegramService {
     private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private MTProtoTelegramClient client;
 
-    public TelegramService(AppProperties appProperties, SettingRepository settingRepository, ShareService shareService, TvBoxService tvBoxService, RestTemplateBuilder restTemplateBuilder) {
+    public TelegramService(AppProperties appProperties,
+                           SettingRepository settingRepository,
+                           MovieRepository movieRepository,
+                           ShareService shareService,
+                           TvBoxService tvBoxService,
+                           RestTemplateBuilder restTemplateBuilder) {
         this.appProperties = appProperties;
         this.settingRepository = settingRepository;
+        this.movieRepository = movieRepository;
         this.shareService = shareService;
         this.tvBoxService = tvBoxService;
         this.restTemplate = restTemplateBuilder.build();
@@ -472,7 +484,7 @@ public class TelegramService {
         List<Message> messages = search(keyword, size);
         for (Message message : messages) {
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(encodeUrl(message.getLink() + "#name=" + keyword));
+            movieDetail.setVod_id(encodeUrl(message.getLink()));
             movieDetail.setVod_name(message.getName());
             movieDetail.setVod_pic(getPic(message.getType()));
             movieDetail.setVod_remarks(getTypeName(message.getType()));
@@ -570,6 +582,14 @@ public class TelegramService {
             list.add(category);
         }
 
+        {
+            var category = new Category();
+            category.setType_id("local");
+            category.setType_name("随便看看");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
         result.setCategories(list);
         result.setTotal(result.getCategories().size());
         result.setLimit(result.getCategories().size());
@@ -590,6 +610,33 @@ public class TelegramService {
         String key = type + "-" + page;
         MovieList result = douban.getIfPresent(key);
         if (result != null) {
+            return result;
+        }
+
+        if (type.equals("local")) {
+            result = new MovieList();
+            List<MovieDetail> list = new ArrayList<>();
+
+            Pageable pageable = PageRequest.of(page, 30);
+            Page<Movie> res = movieRepository.findAll(pageable);
+            int total = (int) res.getTotalElements();
+
+            for (Movie movie : res) {
+                MovieDetail movieDetail = new MovieDetail();
+                movieDetail.setVod_id("s:" + movie.getName());
+                movieDetail.setVod_name(movie.getName());
+                movieDetail.setVod_pic(movie.getCover());
+                movieDetail.setVod_remarks(movie.getDbScore());
+                movieDetail.setCate(new CategoryList());
+                list.add(movieDetail);
+            }
+
+            result.setList(list);
+            result.setTotal(total);
+            result.setPagecount(res.getTotalPages());
+            result.setLimit(list.size());
+
+            log.debug("list result: {}", result);
             return result;
         }
 
