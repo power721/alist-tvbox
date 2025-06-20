@@ -77,6 +77,27 @@ public class TelegramController {
         return telegramService.category();
     }
 
+    @GetMapping("/tg-db")
+    public Object db(String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+        return browse("", id, t, wd, pg);
+    }
+
+    @GetMapping("/tg-db/{token}")
+    public Object db(@PathVariable String token, String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+        subscriptionService.checkToken(token);
+        if (StringUtils.isNotBlank(id)) {
+            return telegramService.detail(id);
+        } else if (StringUtils.isNotBlank(t)) {
+            if (t.equals("0")) {
+                t = "suggestion";
+            }
+            return telegramService.listDouban(t, pg);
+        } else if (StringUtils.isNotBlank(wd)) {
+            return telegramService.searchDouban(wd, 20);
+        }
+        return telegramService.categoryDouban();
+    }
+
     @GetMapping("/tgsz")
     public Map<String, Object> searchZx(String keyword, String channelUsername, HttpServletResponse response) {
         response.setHeader("server", "hypercorn-h11");

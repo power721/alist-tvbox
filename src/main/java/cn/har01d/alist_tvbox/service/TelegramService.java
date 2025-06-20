@@ -16,7 +16,9 @@ import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
@@ -32,6 +34,9 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -70,6 +75,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -103,6 +109,7 @@ public class TelegramService {
     private final ExecutorService executorService = Executors.newFixedThreadPool(Math.min(10, Runtime.getRuntime().availableProcessors() * 2));
     private final OkHttpClient httpClient = new OkHttpClient();
     private final LoadingCache<String, InputPeer> cache = Caffeine.newBuilder().build(this::resolveUsername);
+    private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private MTProtoTelegramClient client;
 
     public TelegramService(AppProperties appProperties, SettingRepository settingRepository, ShareService shareService, TvBoxService tvBoxService, RestTemplateBuilder restTemplateBuilder) {
@@ -465,7 +472,7 @@ public class TelegramService {
         List<Message> messages = search(keyword, size);
         for (Message message : messages) {
             MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(encodeUrl(message.getLink()));
+            movieDetail.setVod_id(encodeUrl(message.getLink() + "#name=" + keyword));
             movieDetail.setVod_name(message.getName());
             movieDetail.setVod_pic(getPic(message.getType()));
             movieDetail.setVod_remarks(getTypeName(message.getType()));
@@ -476,6 +483,210 @@ public class TelegramService {
         result.setTotal(list.size());
         result.setLimit(list.size());
 
+        return result;
+    }
+
+    public CategoryList categoryDouban() {
+        CategoryList result = new CategoryList();
+        List<Category> list = new ArrayList<>();
+
+        {
+            var category = new Category();
+            category.setType_id("hot_tv");
+            category.setType_name("热门电视剧");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("hot_movie");
+            category.setType_name("热门电影");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("tv_domestic");
+            category.setType_name("国产剧");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("tv_american");
+            category.setType_name("欧美剧");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("tv_animation");
+            category.setType_name("动漫");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("tv_variety_show");
+            category.setType_name("综艺");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("tv_korean");
+            category.setType_name("韩剧");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("tv_japanese");
+            category.setType_name("日剧");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("suggestion_movie");
+            category.setType_name("电影推荐");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("suggestion_tv");
+            category.setType_name("电视剧推荐");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        result.setCategories(list);
+        result.setTotal(result.getCategories().size());
+        result.setLimit(result.getCategories().size());
+
+        log.debug("category result: {}", result);
+        return result;
+    }
+
+    public MovieList listDouban(String type, int page) {
+        if (type.startsWith("s:")) {
+            return searchMovies(type.substring(2), 30);
+        }
+
+        return getDoubanList(type, page);
+    }
+
+    private MovieList getDoubanList(String type, int page) {
+        String key = type + "-" + page;
+        MovieList result = douban.getIfPresent(key);
+        if (result != null) {
+            return result;
+        }
+
+        if (type.startsWith("suggestion_")) {
+            return getDoubanItems(type, page);
+        }
+
+        if (type.startsWith("hot_")) {
+            return getDoubanItems(type, page);
+        }
+
+        result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        int size = 30;
+        int start = (page - 1) * size;
+        String url = "https://m.douban.com/rexxar/api/v2/subject_collection/" + type + "/items?os=linux&for_mobile=1&callback=&start=" + start + "&count=" + size + "&loc_id=108288&_=0";
+        HttpEntity<Void> httpEntity = buildHttpEntity();
+
+        var response = restTemplate.exchange(url, HttpMethod.GET, httpEntity, JsonNode.class);
+        int total = response.getBody().get("total").asInt();
+        ArrayNode items = (ArrayNode) response.getBody().get("subject_collection_items");
+        for (JsonNode item : items) {
+            MovieDetail movieDetail = getMovieDetail(item);
+            list.add(movieDetail);
+        }
+
+        result.setList(list);
+        result.setTotal(total);
+        result.setPagecount((total + size - 1) / size);
+        result.setLimit(list.size());
+
+        douban.put(key, result);
+        log.debug("list result: {}", result);
+        return result;
+    }
+
+    private MovieList getDoubanItems(String type, int page) {
+        String key = type + "-" + page;
+        int size = 30;
+        int start = (page - 1) * size;
+        String url = "https://m.douban.com/rexxar/api/v2/subject/recent_hot/movie?limit=" + size + "&start=" + start;
+        if (type.equals("hot_tv")) {
+            url = "https://m.douban.com/rexxar/api/v2/subject/recent_hot/tv?limit=" + size + "&start=" + start;
+        } else if (type.equals("suggestion_movie")) {
+            url = "https://m.douban.com/rexxar/api/v2/movie/suggestion?start=" + start + "&count=" + size + "&new_struct=1&with_review=1&for_mobile=1";
+        } else if (type.equals("suggestion_tv")) {
+            url = "https://m.douban.com/rexxar/api/v2/tv/suggestion?start=" + start + "&count=" + size + "&new_struct=1&with_review=1&for_mobile=1";
+        }
+
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        HttpEntity<Void> httpEntity = buildHttpEntity();
+
+        var response = restTemplate.exchange(url, HttpMethod.GET, httpEntity, JsonNode.class);
+        int total = response.getBody().get("total").asInt();
+        ArrayNode items = (ArrayNode) response.getBody().get("items");
+        for (JsonNode item : items) {
+            MovieDetail movieDetail = getMovieDetail(item);
+            list.add(movieDetail);
+        }
+
+        result.setList(list);
+        result.setTotal(total);
+        result.setPagecount((total + size - 1) / size);
+        result.setLimit(list.size());
+
+        douban.put(key, result);
+        log.debug("list result: {}", result);
+        return result;
+    }
+
+    private static HttpEntity<Void> buildHttpEntity() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.ACCEPT_LANGUAGE, "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5");
+        headers.set(HttpHeaders.ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
+        headers.set(HttpHeaders.REFERER, "https://movie.douban.com/");
+        headers.set(HttpHeaders.USER_AGENT, Utils.getUserAgent());
+        return new HttpEntity<>(null, headers);
+    }
+
+    private static MovieDetail getMovieDetail(JsonNode item) {
+        double score = item.get("rating").get("value").asDouble();
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id("s:" + item.get("title").asText());
+        movieDetail.setVod_name(item.get("title").asText());
+        movieDetail.setVod_pic(item.get("pic").get("normal").asText());
+        if (score > 0) {
+            movieDetail.setVod_remarks(String.valueOf(score));
+        }
+        movieDetail.setCate(new CategoryList());
+        return movieDetail;
+    }
+
+    public MovieList searchDouban(String keyword, int size) {
+        MovieList result = new MovieList();
         return result;
     }
 
