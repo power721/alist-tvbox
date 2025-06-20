@@ -313,9 +313,6 @@ public class DriverAccountService {
     public void delete(Integer id) {
         DriverAccount account = driverAccountRepository.findById(id).orElse(null);
         if (account != null) {
-            if (account.isMaster() && account.getType() != DriverType.UC_TV && account.getType() != DriverType.QUARK_TV) {
-                throw new BadRequestException("不能删除主账号");
-            }
             driverAccountRepository.deleteById(id);
             String token = accountService.login();
             accountService.deleteStorage(IDX + account.getId(), token);
