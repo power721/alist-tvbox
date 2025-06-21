@@ -111,6 +111,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
+
 @Slf4j
 @Service
 public class TelegramService {
@@ -841,6 +843,7 @@ public class TelegramService {
             movieDetail.setVod_name(movie.getName());
             movieDetail.setVod_pic(movie.getCover());
             movieDetail.setVod_remarks(movie.getDbScore());
+            movieDetail.setVod_tag(FOLDER);
             movieDetail.setCate(new CategoryList());
             list.add(movieDetail);
         }
@@ -896,6 +899,7 @@ public class TelegramService {
             movieDetail.setVod_name(movie.getName());
             movieDetail.setVod_pic(movie.getCover());
             movieDetail.setVod_remarks(movie.getDbScore());
+            movieDetail.setVod_tag(FOLDER);
             movieDetail.setCate(new CategoryList());
             list.add(movieDetail);
         }
@@ -963,6 +967,7 @@ public class TelegramService {
         if (score > 0) {
             movieDetail.setVod_remarks(String.valueOf(score));
         }
+        movieDetail.setVod_tag(FOLDER);
         movieDetail.setCate(new CategoryList());
         return movieDetail;
     }
