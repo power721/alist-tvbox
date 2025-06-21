@@ -12,7 +12,6 @@ import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.storage.BaiduNetdisk;
-import cn.har01d.alist_tvbox.storage.Open115;
 import cn.har01d.alist_tvbox.storage.Pan115;
 import cn.har01d.alist_tvbox.storage.Pan123;
 import cn.har01d.alist_tvbox.storage.Pan139;
@@ -26,6 +25,9 @@ import cn.har01d.alist_tvbox.storage.UCTV;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +61,7 @@ public class DriverAccountService {
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
     private final Map<String, QuarkUCTV> drivers = new HashMap<>();
 
     public DriverAccountService(PanAccountRepository panAccountRepository,
@@ -67,7 +70,8 @@ public class DriverAccountService {
                                 ShareRepository shareRepository,
                                 AccountService accountService,
                                 AListLocalService aListLocalService,
-                                RestTemplateBuilder builder) {
+                                RestTemplateBuilder builder,
+                                ObjectMapper objectMapper) {
         this.panAccountRepository = panAccountRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.settingRepository = settingRepository;
@@ -75,6 +79,7 @@ public class DriverAccountService {
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
         this.restTemplate = builder.build();
+        this.objectMapper = objectMapper;
     }
 
     @PostConstruct
@@ -87,6 +92,9 @@ public class DriverAccountService {
         }
         if (!settingRepository.existsByName("fix_driver_concurrency")) {
             fixConcurrency();
+        }
+        if (!settingRepository.existsByName("migrate_115_delete_code")) {
+            migrate115DeleteCode();
         }
 
         String deviceId = settingRepository.findById("quark_device_id").map(Setting::getValue).orElse(null);
@@ -110,6 +118,23 @@ public class DriverAccountService {
         }
         driverAccountRepository.saveAll(accounts);
         settingRepository.save(new Setting("fix_driver_concurrency", ""));
+    }
+
+    private void migrate115DeleteCode() {
+        var driver = driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115);
+        driver.ifPresent(account -> {
+            settingRepository.findById("delete_code_115").ifPresent(setting -> {
+                try {
+                    ObjectNode jsonNode = objectMapper.readValue(account.getAddition(), ObjectNode.class);
+                    jsonNode.put("delete_code", setting.getValue());
+                    account.setAddition(objectMapper.writeValueAsString(jsonNode));
+                    driverAccountRepository.save(account);
+                } catch (JsonProcessingException e) {
+                    log.warn("", e);
+                }
+            });
+        });
+        settingRepository.save(new Setting("migrate_115_delete_code", ""));
     }
 
     private void migrateDriverAccounts() {
