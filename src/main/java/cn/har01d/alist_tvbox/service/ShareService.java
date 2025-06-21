@@ -152,6 +152,7 @@ public class ShareService {
         cleanTempShares();
 
         List<Share> list = shareRepository.findAll();
+        fixPath(list);
 
         if (list.isEmpty()) {
             list = loadSharesFromFile();
@@ -175,6 +176,22 @@ public class ShareService {
                 || panAccountRepository.count() > 0
                 || shareRepository.count() > add.size()) {
             aListLocalService.startAListServer();
+        }
+    }
+
+    private void fixPath(List<Share> shares) {
+        if (!settingRepository.existsByName("fix_share_path")) {
+            List<Share> changed = new ArrayList<>();
+            for (Share share : shares) {
+                String path = share.getPath();
+                share.setPath(Storage.getMountPath(share));
+                if (!path.equals(share.getPath())) {
+                    changed.add(share);
+                }
+            }
+            log.info("fix_share_path {}", changed.size());
+            shareRepository.saveAll(changed);
+            settingRepository.save(new Setting("fix_share_path", ""));
         }
     }
 
@@ -864,6 +881,7 @@ public class ShareService {
         } else {
             share.setShareId(parts[0]);
         }
+        share.setPath(Storage.getMountPath(share));
     }
 
     public String add(ShareLink dto) {

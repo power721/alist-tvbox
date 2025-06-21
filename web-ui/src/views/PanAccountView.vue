@@ -155,6 +155,9 @@
         <el-form-item label="文件夹ID">
           <el-input v-model="form.folder"/>
         </el-form-item>
+        <el-form-item label="删除码" v-if="form.type=='PAN115'">
+          <el-input type="password" show-password v-model="form.addition.delete_code"/>
+        </el-form-item>
         <el-form-item v-if="form.type=='PAN115'" label="分页大小">
           <el-input-number :min="100" :max="1500" v-model="form.addition.page_size"/>
         </el-form-item>
@@ -282,6 +285,7 @@ const form = ref({
     page_size: 1000,
     limit_rate: 2,
     access_token: '',
+    delete_code: '',
     auto_checkin: false,
   },
   username: '',
@@ -349,6 +353,7 @@ const handleAdd = () => {
       page_size: 1000,
       limit_rate: 2,
       access_token: '',
+      delete_code: '',
       auto_checkin: false,
     },
     username: '',

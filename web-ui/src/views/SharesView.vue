@@ -27,11 +27,10 @@
   <el-table :data="shares" border @selection-change="handleSelectionChange" style="width: 100%">
     <el-table-column type="selection" width="55"/>
     <el-table-column prop="id" label="ID" width="70" sortable/>
-    <el-table-column prop="path" label="路径" sortable/>
-    <el-table-column label="完整路径" sortable>
+    <el-table-column prop="path" label="路径" sortable>
       <template #default="scope">
-        <router-link :to="'/vod' + fullPath(scope.row)">
-          {{ fullPath(scope.row) }}
+        <router-link :to="'/vod' + scope.row.path">
+          {{ scope.row.path }}
         </router-link>
       </template>
     </el-table-column>

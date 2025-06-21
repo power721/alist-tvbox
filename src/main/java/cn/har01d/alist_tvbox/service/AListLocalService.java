@@ -91,8 +91,6 @@ public class AListLocalService {
         appProperties.setEnabledToken(settingRepository.findById(Constants.ENABLED_TOKEN).map(Setting::getValue).orElse("").equals("true"));
         boolean sign = appProperties.isEnabledToken();
         Utils.executeUpdate("UPDATE x_setting_items SET value = '" + sign + "' WHERE key = 'sign_all'");
-        String code = settingRepository.findById("delete_code_115").map(Setting::getValue).orElse("");
-        setSetting("delete_code_115", code, "string");
         String time = settingRepository.findById("delete_delay_time").map(Setting::getValue).orElse("900");
         setSetting("delete_delay_time", time, "number");
         String aliTo115 = settingRepository.findById("ali_to_115").map(Setting::getValue).orElse("false");
