@@ -152,6 +152,8 @@ public class TelegramService {
             new FilterValue("动画", "动画"),
             new FilterValue("悬疑", "悬疑"),
             new FilterValue("冒险", "冒险"),
+            new FilterValue("家庭", "家庭"),
+            new FilterValue("剧情", "剧情"),
             new FilterValue("历史", "历史"),
             new FilterValue("奇幻", "奇幻"),
             new FilterValue("音乐", "音乐"),
@@ -165,6 +167,8 @@ public class TelegramService {
             new FilterValue("武侠", "武侠"),
             new FilterValue("情色", "情色"),
             new FilterValue("西部", "西部"),
+            new FilterValue("真人秀", "真人秀"),
+            new FilterValue("脱口秀", "脱口秀"),
             new FilterValue("纪录片", "纪录片"),
             new FilterValue("短片", "短片")
     );
@@ -653,6 +657,70 @@ public class TelegramService {
             var category = new Category();
             category.setType_id("suggestion_tv");
             category.setType_name("电视剧推荐");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("movie_top250");
+            category.setType_name("电影Top250");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("movie_real_time_hotest");
+            category.setType_name("实时热门电影");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("movie_weekly_best");
+            category.setType_name("一周口碑电影榜");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("tv_real_time_hotest");
+            category.setType_name("实时热门电视");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("tv_chinese_best_weekly");
+            category.setType_name("华语口碑剧集榜");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("tv_global_best_weekly");
+            category.setType_name("全球口碑剧集榜");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("show_chinese_best_weekly");
+            category.setType_name("国内口碑综艺榜");
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("show_global_best_weekly");
+            category.setType_name("国外口碑综艺榜");
             category.setType_flag(0);
             list.add(category);
         }
