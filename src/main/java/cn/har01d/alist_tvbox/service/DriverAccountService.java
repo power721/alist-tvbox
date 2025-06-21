@@ -125,11 +125,14 @@ public class DriverAccountService {
         driver.ifPresent(account -> {
             settingRepository.findById("delete_code_115").ifPresent(setting -> {
                 try {
+                    if (StringUtils.isBlank(account.getAddition())) {
+                        account.setAddition("{}");
+                    }
                     ObjectNode jsonNode = objectMapper.readValue(account.getAddition(), ObjectNode.class);
                     jsonNode.put("delete_code", setting.getValue());
                     account.setAddition(objectMapper.writeValueAsString(jsonNode));
                     driverAccountRepository.save(account);
-                } catch (JsonProcessingException e) {
+                } catch (Exception e) {
                     log.warn("", e);
                 }
             });

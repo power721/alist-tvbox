@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
@@ -32,6 +33,7 @@ public class PgTokenController {
     private final PikPakAccountRepository pikPakAccountRepository;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final AppProperties appProperties;
 
     public PgTokenController(SubscriptionService subscriptionService,
                              AccountRepository accountRepository,
@@ -39,7 +41,8 @@ public class PgTokenController {
                              DriverAccountRepository driverAccountRepository,
                              PikPakAccountRepository pikPakAccountRepository,
                              ObjectMapper objectMapper,
-                             RestTemplateBuilder builder) {
+                             RestTemplateBuilder builder,
+                             AppProperties appProperties) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
@@ -47,11 +50,12 @@ public class PgTokenController {
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.objectMapper = objectMapper;
         this.restTemplate = builder.build();
+        this.appProperties = appProperties;
     }
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = restTemplate.getForObject("http://har01d.org/pg.version", String.class);
+        String remote = restTemplate.getForObject("http://har01d.org/pg.version?system=" + appProperties.getSystemId(), String.class);
         String local = "";
         Path path = Utils.getDataPath("pg_version.txt");
         if (Files.exists(path)) {
@@ -78,7 +82,7 @@ public class PgTokenController {
             objectNode.put("pan115_cookie", share.getCookie());
             try {
                 objectNode.put("pan115_delete_code", objectMapper.readTree(share.getAddition()).get("delete_code").asText());
-            } catch (JsonProcessingException e) {
+            } catch (Exception e) {
                 log.warn("", e);
             }
         });
