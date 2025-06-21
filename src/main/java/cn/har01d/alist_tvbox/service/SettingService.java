@@ -110,6 +110,7 @@ public class SettingService {
             value = UUID.randomUUID().toString();
             settingRepository.save(new Setting("system_id", value));
         }
+        appProperties.setSystemId(value);
         log.info("system id: {}", value);
     }
 

@@ -1,10 +1,9 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,36 +28,36 @@ import java.util.Map;
 public class ZxConfigController {
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
-    private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final AppProperties appProperties;
 
     public ZxConfigController(SubscriptionService subscriptionService,
                               AccountRepository accountRepository,
-                              SettingRepository settingRepository,
                               DriverAccountRepository driverAccountRepository,
                               ObjectMapper objectMapper,
-                              RestTemplateBuilder builder
+                              RestTemplateBuilder builder,
+                              AppProperties appProperties
     ) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
-        this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.objectMapper = objectMapper;
         this.restTemplate = builder.build();
+        this.appProperties = appProperties;
     }
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = restTemplate.getForObject("http://har01d.org/zx.version", String.class);
+        String remote = restTemplate.getForObject("http://har01d.org/zx.version?system=" + appProperties.getSystemId(), String.class);
         String local = "";
         Path path = Utils.getDataPath("zx_version.txt");
         if (Files.exists(path)) {
             local = Files.readString(path);
         }
 
-        String remote2 = restTemplate.getForObject("http://har01d.org/zx.base.version", String.class);
+        String remote2 = restTemplate.getForObject("http://har01d.org/zx.base.version?system=" + appProperties.getSystemId(), String.class);
         String local2 = "";
         path = Utils.getDataPath("zx_base_version.txt");
         if (Files.exists(path)) {
@@ -83,7 +82,7 @@ public class ZxConfigController {
             objectNode.put("115Cookie", share.getCookie());
             try {
                 objectNode.put("pwdRb115", objectMapper.readTree(share.getAddition()).get("delete_code").asText());
-            } catch (JsonProcessingException e) {
+            } catch (Exception e) {
                 log.warn("", e);
             }
         });
