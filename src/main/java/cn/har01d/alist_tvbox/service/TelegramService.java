@@ -10,6 +10,8 @@ import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.entity.MovieRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.model.Filter;
+import cn.har01d.alist_tvbox.model.FilterValue;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -36,9 +38,12 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.data.domain.Example;
+import org.springframework.data.domain.ExampleMatcher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -82,10 +87,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
@@ -98,6 +105,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -117,6 +125,73 @@ public class TelegramService {
     private final LoadingCache<String, InputPeer> cache = Caffeine.newBuilder().build(this::resolveUsername);
     private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private MTProtoTelegramClient client;
+    private final List<String> fields = new ArrayList<>(List.of("id", "name", "genre", "description", "language", "country", "directors", "editors", "actors", "cover", "dbScore", "year"));
+    private final List<FilterValue> filters = Arrays.asList(
+            new FilterValue("原始顺序", ""),
+            new FilterValue("评分⬇️", "dbScore,desc;year,desc"),
+            new FilterValue("评分⬆️", "dbScore,asc;year,desc"),
+            new FilterValue("年份⬇️", "year,desc;dbScore,desc"),
+            new FilterValue("年份⬆️", "year,asc;dbScore,desc"),
+            new FilterValue("名字⬇️", "name,desc;year,desc;dbScore,desc"),
+            new FilterValue("名字⬆️", "name,asc;year,desc;dbScore,desc"),
+            new FilterValue("类型⬇️", "genre,desc;year,desc;dbScore,desc"),
+            new FilterValue("类型⬆️", "genre,asc;year,desc;dbScore,desc"),
+            new FilterValue("地区⬇️", "country,desc;year,desc;dbScore,desc"),
+            new FilterValue("地区⬆️", "country,asc;year,desc;dbScore,desc"),
+            new FilterValue("语言⬇️", "language,desc;year,desc;dbScore,desc"),
+            new FilterValue("语言⬆️", "language,asc;year,desc;dbScore,desc"),
+            new FilterValue("ID⬇️", "id,desc"),
+            new FilterValue("ID⬆️", "id,asc")
+    );
+    private final List<FilterValue> filters2 = Arrays.asList(
+            new FilterValue("全部类型", ""),
+            new FilterValue("喜剧", "喜剧"),
+            new FilterValue("爱情", "爱情"),
+            new FilterValue("动作", "动作"),
+            new FilterValue("科幻", "科幻"),
+            new FilterValue("动画", "动画"),
+            new FilterValue("悬疑", "悬疑"),
+            new FilterValue("冒险", "冒险"),
+            new FilterValue("历史", "历史"),
+            new FilterValue("奇幻", "奇幻"),
+            new FilterValue("音乐", "音乐"),
+            new FilterValue("歌舞", "歌舞"),
+            new FilterValue("惊悚", "惊悚"),
+            new FilterValue("恐怖", "恐怖"),
+            new FilterValue("犯罪", "犯罪"),
+            new FilterValue("灾难", "灾难"),
+            new FilterValue("战争", "战争"),
+            new FilterValue("传记", "传记"),
+            new FilterValue("武侠", "武侠"),
+            new FilterValue("情色", "情色"),
+            new FilterValue("西部", "西部"),
+            new FilterValue("纪录片", "纪录片"),
+            new FilterValue("短片", "短片")
+    );
+    private final List<FilterValue> filters3 = Arrays.asList(
+            new FilterValue("全部地区", ""),
+            new FilterValue("中国", "中国"),
+            new FilterValue("中国大陆", "中国大陆"),
+            new FilterValue("中国香港", "中国香港"),
+            new FilterValue("中国台湾", "中国台湾"),
+            new FilterValue("美国", "美国"),
+            new FilterValue("英国", "英国"),
+            new FilterValue("韩国", "韩国"),
+            new FilterValue("日本", "日本"),
+            new FilterValue("法国", "法国"),
+            new FilterValue("德国", "德国"),
+            new FilterValue("意大利", "意大利"),
+            new FilterValue("西班牙", "西班牙"),
+            new FilterValue("印度", "印度"),
+            new FilterValue("泰国", "泰国"),
+            new FilterValue("俄罗斯", "俄罗斯"),
+            new FilterValue("加拿大", "加拿大"),
+            new FilterValue("澳大利亚", "澳大利亚"),
+            new FilterValue("爱尔兰", "爱尔兰"),
+            new FilterValue("瑞典", "瑞典"),
+            new FilterValue("巴西", "巴西"),
+            new FilterValue("丹麦", "丹麦")
+    );
 
     public TelegramService(AppProperties appProperties,
                            SettingRepository settingRepository,
@@ -585,6 +660,21 @@ public class TelegramService {
         {
             var category = new Category();
             category.setType_id("local");
+            category.setType_name("浏览");
+            category.setType_flag(0);
+            list.add(category);
+            List<FilterValue> years = new ArrayList<>();
+            years.add(new FilterValue("全部", ""));
+            int year = LocalDate.now().getYear();
+            for (int i = 0; i < 20; ++i) {
+                years.add(new FilterValue(String.valueOf(year - i), String.valueOf(year - i)));
+            }
+            result.getFilters().put("local", List.of(new Filter("sort", "排序", filters), new Filter("genre", "类型", filters2), new Filter("region", "地区", filters3), new Filter("year", "年份", years)));
+        }
+
+        {
+            var category = new Category();
+            category.setType_id("random");
             category.setType_name("随便看看");
             category.setType_flag(0);
             list.add(category);
@@ -598,15 +688,15 @@ public class TelegramService {
         return result;
     }
 
-    public MovieList listDouban(String type, int page) {
+    public MovieList listDouban(String type, String sort, Integer year, String genre, String region, int page) {
         if (type.startsWith("s:")) {
             return searchMovies(type.substring(2), 30);
         }
 
-        return getDoubanList(type, page);
+        return getDoubanList(type, sort, year, genre, region, page);
     }
 
-    private MovieList getDoubanList(String type, int page) {
+    private MovieList getDoubanList(String type, String sort, Integer year, String genre, String region, int page) {
         String key = type + "-" + page;
         MovieList result = douban.getIfPresent(key);
         if (result != null) {
@@ -614,30 +704,11 @@ public class TelegramService {
         }
 
         if (type.equals("local")) {
-            result = new MovieList();
-            List<MovieDetail> list = new ArrayList<>();
+            return getLocalMovieList(sort, year, genre, region, page);
+        }
 
-            Pageable pageable = PageRequest.of(page, 30);
-            Page<Movie> res = movieRepository.findAll(pageable);
-            int total = (int) res.getTotalElements();
-
-            for (Movie movie : res) {
-                MovieDetail movieDetail = new MovieDetail();
-                movieDetail.setVod_id("s:" + movie.getName());
-                movieDetail.setVod_name(movie.getName());
-                movieDetail.setVod_pic(movie.getCover());
-                movieDetail.setVod_remarks(movie.getDbScore());
-                movieDetail.setCate(new CategoryList());
-                list.add(movieDetail);
-            }
-
-            result.setList(list);
-            result.setTotal(total);
-            result.setPagecount(res.getTotalPages());
-            result.setLimit(list.size());
-
-            log.debug("list result: {}", result);
-            return result;
+        if (type.equals("random")) {
+            return getRandomMovie();
         }
 
         if (type.startsWith("suggestion_")) {
@@ -665,11 +736,107 @@ public class TelegramService {
         }
 
         result.setList(list);
+        result.setLimit(list.size());
         result.setTotal(total);
         result.setPagecount((total + size - 1) / size);
-        result.setLimit(list.size());
 
         douban.put(key, result);
+        log.debug("list result: {}", result);
+        return result;
+    }
+
+    private MovieList getLocalMovieList(String sort, Integer year, String genre, String region, int page) {
+        MovieList result;
+        result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        int size = 30;
+        Pageable pageable;
+        if (StringUtils.isNotBlank(sort)) {
+            List<Sort.Order> orders = new ArrayList<>();
+            for (String item : sort.split(";")) {
+                String[] parts = item.split(",");
+                Sort.Order order = parts[1].equals("asc") ? Sort.Order.asc(parts[0]) : Sort.Order.desc(parts[0]);
+                orders.add(order);
+            }
+            pageable = PageRequest.of(page - 1, size, Sort.by(orders));
+        } else {
+            pageable = PageRequest.of(page - 1, size);
+        }
+
+        Page<Movie> res = searchMovies(year, genre, region, pageable);
+        int total = (int) res.getTotalElements();
+
+        for (Movie movie : res) {
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id("s:" + movie.getName());
+            movieDetail.setVod_name(movie.getName());
+            movieDetail.setVod_pic(movie.getCover());
+            movieDetail.setVod_remarks(movie.getDbScore());
+            movieDetail.setCate(new CategoryList());
+            list.add(movieDetail);
+        }
+
+        result.setList(list);
+        result.setLimit(list.size());
+        result.setTotal(total);
+        result.setPagecount(res.getTotalPages());
+
+        log.debug("list result: {}", result);
+        return result;
+    }
+
+    public Page<Movie> searchMovies(Integer year, String genre, String region, Pageable pageable) {
+        ExampleMatcher matcher = ExampleMatcher.matching()
+                .withStringMatcher(ExampleMatcher.StringMatcher.CONTAINING)
+                .withIgnoreNullValues();
+
+        Movie movie = new Movie();
+        if (year != null) {
+            movie.setYear(year);
+        }
+        if (StringUtils.isNotBlank(genre)) {
+            movie.setGenre(genre);
+        }
+        if (StringUtils.isNotBlank(region)) {
+            movie.setCountry(region);
+        }
+        Example<Movie> example = Example.of(movie, matcher);
+        return movieRepository.findAll(example, pageable);
+    }
+
+    private MovieList getRandomMovie() {
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        int total = (int) movieRepository.count();
+        int size = 30;
+        int count = size + size / 2;
+        int page = ThreadLocalRandom.current().nextInt(total / count);
+        Collections.shuffle(fields);
+        List<Sort.Order> orders = fields.stream().limit(3).map(e -> ThreadLocalRandom.current().nextBoolean() ? Sort.Order.asc(e) : Sort.Order.desc(e)).toList();
+        Sort sort = Sort.by(orders);
+        Pageable pageable = PageRequest.of(page, count, sort);
+        Page<Movie> res = movieRepository.findAll(pageable);
+
+        List<Movie> movies = new ArrayList<>(res.getContent());
+        Collections.shuffle(movies);
+
+        for (Movie movie : movies.subList(0, size)) {
+            MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setVod_id("s:" + movie.getName());
+            movieDetail.setVod_name(movie.getName());
+            movieDetail.setVod_pic(movie.getCover());
+            movieDetail.setVod_remarks(movie.getDbScore());
+            movieDetail.setCate(new CategoryList());
+            list.add(movieDetail);
+        }
+
+        result.setList(list);
+        result.setLimit(list.size());
+        result.setTotal(total);
+        result.setPagecount((total + size - 1) / size);
+
         log.debug("list result: {}", result);
         return result;
     }
@@ -701,9 +868,9 @@ public class TelegramService {
         }
 
         result.setList(list);
+        result.setLimit(list.size());
         result.setTotal(total);
         result.setPagecount((total + size - 1) / size);
-        result.setLimit(list.size());
 
         douban.put(key, result);
         log.debug("list result: {}", result);
