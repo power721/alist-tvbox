@@ -86,9 +86,6 @@ public class TelegramController {
     public Object db(@PathVariable String token, String id, String t, String wd, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
-            if (id.startsWith("s:")) {
-                return telegramService.searchMovies(id.substring(2), 30);
-            }
             return telegramService.detail(id);
         } else if (StringUtils.isNotBlank(t)) {
             if (t.equals("0")) {
