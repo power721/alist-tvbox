@@ -186,11 +186,15 @@ public class ShareService {
                 String path = share.getPath();
                 share.setPath(Storage.getMountPath(share));
                 if (!path.equals(share.getPath())) {
-                    changed.add(share);
+                    try {
+                        shareRepository.save(share);
+                        changed.add(share);
+                    } catch (Exception e) {
+                        log.error("<UNK>", e);
+                    }
                 }
             }
             log.info("fix_share_path {}", changed.size());
-            shareRepository.saveAll(changed);
             settingRepository.save(new Setting("fix_share_path", ""));
         }
     }
