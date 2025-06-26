@@ -164,7 +164,7 @@
         <el-form-item v-if="form.type=='PAN115'" label="请求限速">
           <el-input-number :min="1" :max="4" v-model="form.addition.limit_rate"/>
         </el-form-item>
-        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'" label="加速代理">
+        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'||form.type=='PAN139'" label="加速代理">
           <el-switch
             v-model="form.useProxy"
             inline-prompt
@@ -173,8 +173,11 @@
           />
           <span class="hint">服务端多线程加速，网页播放强制开启</span>
         </el-form-item>
-        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'" label="代理线程数">
+        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'||form.type=='PAN139'" label="代理线程数">
           <el-input-number :min="1" :max="16" v-model="form.concurrency"/>
+        </el-form-item>
+        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'||form.type=='PAN139'" label="分片大小">
+          <el-input-number :min="64" :max="4096" v-model="form.addition.chunk_size"/>
         </el-form-item>
         <el-form-item label="主账号" v-if="!driverRoundRobin&&form.type!='OPEN115'&&form.type!='QUARK_TV'&&form.type!='UC_TV'">
           <el-switch

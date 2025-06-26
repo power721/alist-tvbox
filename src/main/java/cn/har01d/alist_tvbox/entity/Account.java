@@ -50,4 +50,5 @@ public class Account {
     @Column(columnDefinition = "BOOLEAN DEFAULT false")
     private boolean useProxy;
     private Integer concurrency = 4;
+    private Integer chunkSize = 256;
 }

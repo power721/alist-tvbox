@@ -25,8 +25,6 @@ import cn.har01d.alist_tvbox.storage.UCTV;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
@@ -93,6 +91,9 @@ public class DriverAccountService {
         if (!settingRepository.existsByName("fix_driver_concurrency")) {
             fixConcurrency();
         }
+        if (!settingRepository.existsByName("fix_driverChunkSize")) {
+            fixChunkSize();
+        }
         if (!settingRepository.existsByName("migrate_115_delete_code")) {
             migrate115DeleteCode();
         }
@@ -118,6 +119,30 @@ public class DriverAccountService {
         }
         driverAccountRepository.saveAll(accounts);
         settingRepository.save(new Setting("fix_driver_concurrency", ""));
+    }
+
+    private void fixChunkSize() {
+        log.info("fix chunk size");
+        List<DriverAccount> accounts = driverAccountRepository.findAll();
+        for (var account : accounts) {
+            int chunkSize = 256;
+            switch (account.getType()) {
+                case PAN115, OPEN115, BAIDU, THUNDER, CLOUD189 -> chunkSize = 1024;
+            }
+            String json = account.getAddition();
+            if (StringUtils.isBlank(json)) {
+                json = "{}";
+            }
+            try {
+                ObjectNode object = objectMapper.readValue(json, ObjectNode.class);
+                object.put("chunk_size", chunkSize);
+                account.setAddition(objectMapper.writeValueAsString(object));
+            } catch (Exception e) {
+                log.warn("<UNK>", e);
+            }
+        }
+        driverAccountRepository.saveAll(accounts);
+        settingRepository.save(new Setting("fix_driverChunkSize", ""));
     }
 
     private void migrate115DeleteCode() {
