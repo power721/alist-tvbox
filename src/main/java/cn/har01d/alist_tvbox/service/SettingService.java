@@ -211,6 +211,11 @@ public class SettingService {
         if ("temp_share_expiration".equals(setting.getName())) {
             appProperties.setTempShareExpiration(Integer.parseInt(setting.getValue()));
         }
+        if ("tg_drivers".equals(setting.getName())) {
+            String value = StringUtils.isBlank(setting.getValue()) ? "0,1,2,3,5,6,7,8,9,10" : setting.getValue();
+            setting.setValue(value);
+            appProperties.setTgDrivers(Arrays.stream(value.split(",")).collect(Collectors.toSet()));
+        }
         if ("tg_channels".equals(setting.getName())) {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_CHANNELS : setting.getValue();
             setting.setValue(value);
