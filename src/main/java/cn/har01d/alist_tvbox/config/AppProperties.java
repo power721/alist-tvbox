@@ -32,7 +32,7 @@ public class AppProperties {
     private String tgChannels = Constants.TG_CHANNELS;
     private String tgWebChannels = Constants.TG_WEB_CHANNELS;
     private String tgSearch;
-    private String tgOrder = "time";
+    private String tgSortField = "time";
     private String systemId;
     private int tgTimeout = 5000;
     private int tempShareExpiration = 24;

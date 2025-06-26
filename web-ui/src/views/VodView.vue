@@ -429,7 +429,7 @@
           <el-button type="primary" @click="updateDrivers">更新</el-button>
         </el-form-item>
         <el-form-item label="排序字段">
-          <el-radio-group v-model="tgOrder" class="ml-4">
+          <el-radio-group v-model="tgSortField" class="ml-4">
             <el-radio size="large" v-for="item in orders" :key="item.value" :value="item.value">
               {{ item.label }}
             </el-radio>
@@ -520,7 +520,7 @@ const keyword = ref('')
 const tgChannels = ref('')
 const tgWebChannels = ref('')
 const tgSearch = ref('')
-const tgOrder = ref('time')
+const tgSortField = ref('time')
 const tgTimeout = ref(3000)
 const shareType = ref('ALL')
 const title = ref('')
@@ -692,15 +692,9 @@ const updateTgSearch = () => {
   })
 }
 
-const updateOrder = () => {
-  axios.post('/api/settings', {name: 'tg_order', value: tgOrder.value}).then(({data}) => {
-    cover.value = data.value
-    ElMessage.success('更新成功')
-  })
-}
-
 const updateCover = () => {
   axios.post('/api/settings', {name: 'video_cover', value: cover.value}).then(({data}) => {
+    cover.value = data.value
     ElMessage.success('更新成功')
   })
 }
@@ -708,6 +702,12 @@ const updateCover = () => {
 const updateDrivers = () => {
   axios.post('/api/settings', {name: 'tg_drivers', value: drivers.value.join(',')}).then(({data}) => {
     drivers.value = data.value.split(',')
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateOrder = () => {
+  axios.post('/api/settings', {name: 'tg_sort_field', value: tgSortField.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -1498,7 +1498,7 @@ onMounted(async () => {
     tgChannels.value = data.tg_channels
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
-    tgOrder.value = data.tg_order || 'time'
+    tgSortField.value = data.tg_sort_field || 'time'
     if (data.tg_drivers && data.tg_drivers.length) {
       drivers.value = data.tg_drivers.split(',')
     }
