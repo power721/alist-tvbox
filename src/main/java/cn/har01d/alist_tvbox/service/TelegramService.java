@@ -1105,7 +1105,7 @@ public class TelegramService {
 
     private Comparator<Message> comparator() {
         return switch (appProperties.getTgSortField()) {
-            case "type" -> Comparator.comparing(a -> appProperties.getTgDrivers().indexOf(a.getType()));
+            case "type" -> Comparator.comparing(a -> appProperties.getTgDriverOrder().indexOf(a.getType()));
             case "name" -> Comparator.comparing(Message::getName);
             case "channel" -> Comparator.comparing(Message::getChannel);
             default -> Comparator.comparing(Message::getTime).reversed();

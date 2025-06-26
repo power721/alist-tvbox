@@ -413,8 +413,8 @@
         </el-form-item>
         <el-form-item label="网盘类型">
           <el-checkbox-group v-model="drivers">
-            <VueDraggable ref="el" v-model="list">
-              <el-checkbox v-for="item in list" :label="item.name" :value="item.id" :key="item.id">
+            <VueDraggable ref="el" v-model="tgDriverOrder">
+              <el-checkbox v-for="item in tgDriverOrder" :label="item.name" :value="item.id" :key="item.id">
               </el-checkbox>
             </VueDraggable>
           </el-checkbox-group>
@@ -569,48 +569,7 @@ const meta = ref({
   path: '',
 })
 const drivers = ref([])
-const list = ref([
-  {
-    name: '天翼',
-    id: '9'
-  },
-  {
-    name: '百度',
-    id: '10'
-  },
-  {
-    name: '夸克',
-    id: '5'
-  },
-  {
-    name: 'UC',
-    id: '7'
-  },
-  {
-    name: '115',
-    id: '8'
-  },
-  {
-    name: '123',
-    id: '3'
-  },
-  {
-    name: '迅雷',
-    id: '2'
-  },
-  {
-    name: '阿里',
-    id: '0'
-  },
-  {
-    name: '移动',
-    id: '6'
-  },
-  {
-    name: 'PikPak',
-    id: '1'
-  }
-])
+const tgDriverOrder = ref([])
 const options = [
   {label: '全部', value: 'ALL'},
   {label: '夸克', value: '5'},
@@ -738,8 +697,10 @@ const updateCover = () => {
 }
 
 const updateDrivers = () => {
-  const content = list.value.map(e => e.id).filter(e => drivers.value.includes(e)).join(',')
-  axios.post('/api/settings', {name: 'tg_drivers', value: content}).then(({data}) => {
+  const order = tgDriverOrder.value.map(e => e.id).join(',')
+  axios.post('/api/settings', {name: 'tgDriverOrder', value: order}).then()
+  const drivers = list.value.map(e => e.id).filter(e => drivers.value.includes(e)).join(',')
+  axios.post('/api/settings', {name: 'tg_drivers', value: drivers}).then(({data}) => {
     drivers.value = data.value.split(',')
     ElMessage.success('更新成功')
   })
@@ -1538,6 +1499,12 @@ onMounted(async () => {
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
     tgSortField.value = data.tg_sort_field || 'time'
+    tgDriverOrder.value = data.tgDriverOrder.split(',').map(e => {
+      return {
+        id: e,
+        name: options.find(o => o.value === e)?.label
+      }
+    })
     if (data.tg_drivers && data.tg_drivers.length) {
       drivers.value = data.tg_drivers.split(',')
     }

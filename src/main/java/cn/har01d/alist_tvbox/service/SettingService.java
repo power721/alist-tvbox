@@ -98,6 +98,19 @@ public class SettingService {
         } else {
             appProperties.setTgWebChannels(value);
         }
+        value = settingRepository.findById("tgDriverOrder").map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(value)) {
+            List<String> orders = new ArrayList<>(appProperties.getTgDrivers());
+            for (int i = 0; i < appProperties.getTgDriverOrder().size(); i++) {
+                if (i != 4 && !orders.contains(String.valueOf(i))) {
+                    orders.add(String.valueOf(i));
+                }
+            }
+            appProperties.setTgDriverOrder(orders);
+            settingRepository.save(new Setting("tgDriverOrder", String.join(",", orders)));
+        } else {
+            appProperties.setTgDriverOrder(Arrays.asList(value.split(",")));
+        }
         value = settingRepository.findById("tg_timeout").map(Setting::getValue).orElse("");
         if (StringUtils.isBlank(value)) {
             settingRepository.save(new Setting("tg_timeout", String.valueOf(appProperties.getTgTimeout())));
@@ -213,6 +226,11 @@ public class SettingService {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_DRIVERS : setting.getValue();
             setting.setValue(value);
             appProperties.setTgDrivers(Arrays.stream(value.split(",")).toList());
+        }
+        if ("tgDriverOrder".equals(setting.getName())) {
+            String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_DRIVERS : setting.getValue();
+            setting.setValue(value);
+            appProperties.setTgDriverOrder(Arrays.stream(value.split(",")).toList());
         }
         if ("tg_channels".equals(setting.getName())) {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_CHANNELS : setting.getValue();
