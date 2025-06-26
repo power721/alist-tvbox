@@ -542,12 +542,14 @@ public class TelegramService {
         }
 
         for (Message message : messages) {
-            MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(encodeUrl(message.getLink()));
-            movieDetail.setVod_name(message.getName());
-            movieDetail.setVod_pic(getPic(message.getType()));
-            movieDetail.setVod_remarks(getTypeName(message.getType()));
-            list.add(movieDetail);
+            if (appProperties.getTgDrivers().isEmpty() || appProperties.getTgDrivers().contains(message.getType())) {
+                MovieDetail movieDetail = new MovieDetail();
+                movieDetail.setVod_id(encodeUrl(message.getLink()));
+                movieDetail.setVod_name(message.getName());
+                movieDetail.setVod_pic(getPic(message.getType()));
+                movieDetail.setVod_remarks(getTypeName(message.getType()));
+                list.add(movieDetail);
+            }
         }
 
         result.setList(list);
@@ -987,10 +989,10 @@ public class TelegramService {
             case "2" -> "迅雷";
             case "3" -> "123";
             case "5" -> "夸克";
+            case "6" -> "移动";
             case "7" -> "UC";
             case "8" -> "115";
             case "9" -> "天翼";
-            case "6" -> "移动";
             case "10" -> "百度";
             default -> null;
         };
@@ -1056,6 +1058,7 @@ public class TelegramService {
                 .filter(e -> !e.getContent().contains("图书"))
                 .filter(e -> !e.getContent().contains("电子书"))
                 .filter(e -> !e.getContent().contains("分享文件："))
+                .filter(e -> appProperties.getTgDrivers().isEmpty() || appProperties.getTgDrivers().contains(e.getType()))
                 .sorted(Comparator.comparing(Message::getTime).reversed())
                 .distinct()
                 .toList();

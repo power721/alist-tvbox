@@ -30,8 +30,10 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.zip.ZipOutputStream;
@@ -78,6 +80,10 @@ public class SettingService {
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(24));
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
+        settingRepository.findById("tg_drivers")
+                .map(Setting::getValue).map(e -> e.split(","))
+                .map(Arrays::asList).map(HashSet::new)
+                .ifPresent(appProperties::setTgDrivers);
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));
         String value = settingRepository.findById("tg_channels").map(Setting::getValue).orElse("");
