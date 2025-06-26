@@ -76,6 +76,7 @@ public class SettingService {
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
+        appProperties.setTgOrder(settingRepository.findById("tg_order").map(Setting::getValue).orElse("time"));
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(24));
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("tg_drivers")
@@ -228,6 +229,9 @@ public class SettingService {
         }
         if ("tg_search".equals(setting.getName())) {
             appProperties.setTgSearch(setting.getValue());
+        }
+        if ("tg_order".equals(setting.getName())) {
+            appProperties.setTgOrder(setting.getValue());
         }
         if ("user_agent".equals(setting.getName())) {
             appProperties.setUserAgent(setting.getValue());
