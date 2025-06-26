@@ -1096,11 +1096,20 @@ public class TelegramService {
                 .filter(e -> !e.getContent().contains("图书"))
                 .filter(e -> !e.getContent().contains("电子书"))
                 .filter(e -> !e.getContent().contains("分享文件："))
-                .sorted(Comparator.comparing(Message::getTime).reversed())
+                .sorted(comparator())
                 .distinct()
                 .toList();
         log.info("Search {} get {} results from {} channels.", keyword, list.size(), channels.length);
         return list;
+    }
+
+    private Comparator<Message> comparator() {
+        return switch (appProperties.getTgOrder()) {
+            case "type" -> Comparator.comparing(a -> Integer.parseInt(a.getType()));
+            case "name" -> Comparator.comparing(Message::getName);
+            case "channel" -> Comparator.comparing(Message::getChannel);
+            default -> Comparator.comparing(Message::getTime).reversed();
+        };
     }
 
     private List<Message> searchRemote(String channels, String keyword, int size) {
