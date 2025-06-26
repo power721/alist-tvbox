@@ -1,52 +1,18 @@
-name: 'build docker images'
+name: 'release docker'
 
 on:
-  workflow_run:
-    workflows: [ "release base" ]
-    types:
-      - completed
-  workflow_dispatch:
   push:
-    branches:
-      - master
-    paths-ignore:
-      - 'build*'
-      - 'release*'
-      - 'config/**'
-      - 'doc/**'
-      - 'README.md'
-      - 'pom.xml'
-      - 'pom-standalone.xml'
-      - 'Dockerfile-v7'
-      - 'Dockerfile-base'
-      - 'Dockerfile-base-new'
-      - 'Dockerfile-native-base'
-      - 'Dockerfile-jre'
-      - 'scripts/install.sh'
-      - 'scripts/install-service.sh'
-      - 'scripts/update_hostmode.sh'
-      - 'scripts/update_native.sh'
-      - 'scripts/update_native_host.sh'
-      - 'scripts/update_new.sh'
-      - 'scripts/update_xiaoya.sh'
-      - '.github/workflows/build-base.yaml'
-      - '.github/workflows/build-base-new.yaml'
-      - '.github/workflows/build-native-dev.yaml'
-      - '.github/workflows/build-native-base.yaml'
-      - '.github/workflows/build-dev.yaml'
-      - '.github/workflows/build-java.yaml'
-      - '.github/workflows/build-v7.yaml'
-      - '.github/workflows/release.yaml'
-      - '.github/ISSUE_TEMPLATE/**'
+    tags:
+      - '*'
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
@@ -83,19 +49,16 @@ jobs:
       - name: Set APP version
         run: |
           [ -d data ] || mkdir data
-          export TZ=Asia/Shanghai
-          echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
-          echo "${{ github.event.head_commit.message }}" >> data/version
+          echo "${{ github.ref_name }}" > data/version
           cp data/version data/app_version
-          cat data/version
-      - name: Build xiaoya docker and push
+      - name: Build docker and push
         uses: docker/build-push-action@v4
         with:
           context: .
           file: Dockerfile-xiaoya
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build xiaoya TG docker and push
@@ -105,7 +68,7 @@ jobs:
           file: Dockerfile-xiaoya-tg
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:tg
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-tg:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build host mode docker and push
@@ -115,7 +78,7 @@ jobs:
           file: Dockerfile-host
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:hostmode
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-hostmode:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build standalone docker and push
@@ -125,7 +88,7 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build tg docker and push
@@ -135,7 +98,7 @@ jobs:
           file: Dockerfile-tg
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:tg
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-tg:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build native with Maven
@@ -150,7 +113,7 @@ jobs:
           file: Dockerfile-native
           platforms: linux/amd64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build host native docker and push
@@ -160,24 +123,6 @@ jobs:
           file: Dockerfile-native-host
           platforms: linux/amd64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native-host
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native-host:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Send version
-        env:
-          api: ${{ secrets.VERSION_API }}
-        if: ${{ env.api != '' }}
-        run: |
-          curl -XPOST -s "${{ env.api }}" -H "Content-Type: application/json" --data-binary @data/version
-      - name: send telegram message
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.CHANNEL_ID }}
-          token: ${{ secrets.BOT_TOKEN }}
-          message: |
-            ${{ github.actor }} created commit:
-            Commit message: ${{ github.event.commits[0].message }}
-
-            Repository: ${{ github.repository }}
-
-            See changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}
