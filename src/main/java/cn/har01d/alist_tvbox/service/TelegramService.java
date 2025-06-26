@@ -100,7 +100,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -1085,7 +1084,7 @@ public class TelegramService {
             results = getResult(futures);
         }
 
-        Set<String> tgDrivers = appProperties.getTgDrivers();
+        List<String> tgDrivers = appProperties.getTgDrivers();
         List<Message> list = results.stream()
                 .filter(e -> tgDrivers.isEmpty() || tgDrivers.contains(e.getType()))
                 .filter(e -> !e.getContent().toLowerCase().contains("pdf"))

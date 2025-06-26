@@ -282,6 +282,7 @@ const form = ref({
   cookie: '',
   token: '',
   addition: {
+    chunk_size: 256,
     page_size: 1000,
     limit_rate: 2,
     access_token: '',
@@ -350,6 +351,7 @@ const handleAdd = () => {
     cookie: '',
     token: '',
     addition: {
+      chunk_size: 256,
       page_size: 1000,
       limit_rate: 2,
       access_token: '',
