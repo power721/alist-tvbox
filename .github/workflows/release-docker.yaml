@@ -14,7 +14,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: ./web-ui
       - name: Install npm
@@ -106,6 +106,16 @@ jobs:
           mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
           chmod a+x target/atv
           ls -l target
+      - name: Build alist native docker and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile-alist-native
+          platforms: linux/amd64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-native:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Build native docker and push
         uses: docker/build-push-action@v4
         with:
