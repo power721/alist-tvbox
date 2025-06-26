@@ -52,7 +52,7 @@ jobs:
           echo "${{ github.ref_name }}" > data/version
           cp data/version data/app_version
       - name: Build docker and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile-xiaoya
@@ -62,7 +62,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build xiaoya TG docker and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile-xiaoya-tg
@@ -72,7 +72,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build host mode docker and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile-host
@@ -82,7 +82,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build standalone docker and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
@@ -92,7 +92,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build tg docker and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile-tg
@@ -107,7 +107,7 @@ jobs:
           chmod a+x target/atv
           ls -l target
       - name: Build alist native docker and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile-alist-native
@@ -117,7 +117,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build native docker and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile-native
@@ -127,7 +127,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build host native docker and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile-native-host
