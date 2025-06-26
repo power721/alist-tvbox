@@ -387,23 +387,24 @@
       <el-form label-width="140">
         <el-form-item label="电报频道群组">
           <el-input v-model="tgChannels" :rows="3" type="textarea" placeholder="逗号分割，留空使用默认值"/>
-          <span>登陆后使用此频道列表搜索。</span>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgChannels">更新</el-button>
+          <span class="hint">登陆后使用此频道列表搜索。</span>
         </el-form-item>
         <el-form-item label="电报频道列表">
           <el-input v-model="tgWebChannels" :rows="3" type="textarea" placeholder="逗号分割，留空使用默认值"/>
-          <span>未登陆使用此频道列表搜索。</span>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgWebChannels">更新</el-button>
+          <span class="hint">未登陆使用此频道列表搜索。</span>
         </el-form-item>
         <el-form-item label="远程搜索地址">
           <el-input v-model="tgSearch" placeholder="http://IP:7856"/>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgSearch">更新</el-button>
+          <a class="hint" target="_blank" href="https://t.me/alist_tvbox/711">部署</a>
         </el-form-item>
         <el-form-item label="搜索超时时间">
           <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒
@@ -411,17 +412,17 @@
         <el-form-item>
           <el-button type="primary" @click="updateTgTimeout">更新</el-button>
         </el-form-item>
-        <el-form-item label="网盘类型">
-          <el-checkbox-group v-model="drivers">
-            <VueDraggable ref="el" v-model="list">
-              <el-checkbox v-for="item in list" :label="item.name" :value="item.id" :key="item.id">
+        <el-form-item label="网盘顺序">
+          <el-checkbox-group v-model="tgDrivers">
+            <VueDraggable ref="el" v-model="tgDriverOrder">
+              <el-checkbox v-for="item in tgDriverOrder" :label="item.name" :value="item.id" :key="item.id">
               </el-checkbox>
             </VueDraggable>
           </el-checkbox-group>
-
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateDrivers">更新</el-button>
+          <span class="hint">拖动网盘设置顺序</span>
         </el-form-item>
         <el-form-item label="排序字段">
           <el-radio-group v-model="tgSortField" class="ml-4">
@@ -568,49 +569,8 @@ const meta = ref({
   year: null,
   path: '',
 })
-const drivers = ref([])
-const list = ref([
-  {
-    name: '天翼',
-    id: '9'
-  },
-  {
-    name: '百度',
-    id: '10'
-  },
-  {
-    name: '夸克',
-    id: '5'
-  },
-  {
-    name: 'UC',
-    id: '7'
-  },
-  {
-    name: '115',
-    id: '8'
-  },
-  {
-    name: '123',
-    id: '3'
-  },
-  {
-    name: '迅雷',
-    id: '2'
-  },
-  {
-    name: '阿里',
-    id: '0'
-  },
-  {
-    name: '移动',
-    id: '6'
-  },
-  {
-    name: 'PikPak',
-    id: '1'
-  }
-])
+const tgDrivers = ref('9,10,5,7,8,3,2,0,6,1'.split(','))
+const tgDriverOrder = ref('9,10,5,7,8,3,2,0,6,1'.split(','))
 const options = [
   {label: '全部', value: 'ALL'},
   {label: '夸克', value: '5'},
@@ -738,9 +698,11 @@ const updateCover = () => {
 }
 
 const updateDrivers = () => {
-  const content = list.value.map(e => e.id).filter(e => drivers.value.includes(e)).join(',')
-  axios.post('/api/settings', {name: 'tg_drivers', value: content}).then(({data}) => {
-    drivers.value = data.value.split(',')
+  const order = tgDriverOrder.value.map(e => e.id).join(',')
+  axios.post('/api/settings', {name: 'tgDriverOrder', value: order}).then()
+  const value = tgDriverOrder.value.map(e => e.id).filter(e => tgDrivers.value.includes(e)).join(',')
+  axios.post('/api/settings', {name: 'tg_drivers', value: value}).then(({data}) => {
+    tgDrivers.value = data.value.split(',')
     ElMessage.success('更新成功')
   })
 }
@@ -1538,8 +1500,14 @@ onMounted(async () => {
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
     tgSortField.value = data.tg_sort_field || 'time'
+    tgDriverOrder.value = data.tgDriverOrder.split(',').map(e => {
+      return {
+        id: e,
+        name: options.find(o => o.value === e)?.label
+      }
+    })
     if (data.tg_drivers && data.tg_drivers.length) {
-      drivers.value = data.tg_drivers.split(',')
+      tgDrivers.value = data.tg_drivers.split(',')
     }
     cover.value = data.video_cover
     tgTimeout.value = +data.tg_timeout

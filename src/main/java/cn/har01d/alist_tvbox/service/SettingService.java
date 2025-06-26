@@ -79,11 +79,6 @@ public class SettingService {
         appProperties.setTgSortField(settingRepository.findById("tg_sort_field").map(Setting::getValue).orElse("time"));
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(24));
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
-        settingRepository.findById("tg_drivers")
-                .map(Setting::getValue)
-                .map(e -> e.split(","))
-                .map(Arrays::asList)
-                .ifPresent(appProperties::setTgDrivers);
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));
         String value = settingRepository.findById("tg_channels").map(Setting::getValue).orElse("");
@@ -97,6 +92,25 @@ public class SettingService {
             settingRepository.save(new Setting("tg_web_channels", appProperties.getTgWebChannels()));
         } else {
             appProperties.setTgWebChannels(value);
+        }
+        value = settingRepository.findById("tg_drivers").map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(value)) {
+            settingRepository.save(new Setting("tg_drivers", String.join(",", appProperties.getTgDrivers())));
+        } else {
+            appProperties.setTgDrivers(Arrays.asList(value.split(",")));
+        }
+        value = settingRepository.findById("tgDriverOrder").map(Setting::getValue).orElse("");
+        if (StringUtils.isBlank(value)) {
+            List<String> orders = new ArrayList<>(appProperties.getTgDrivers());
+            for (int i = 0; i < appProperties.getTgDriverOrder().size(); i++) {
+                if (i != 4 && !orders.contains(String.valueOf(i))) {
+                    orders.add(String.valueOf(i));
+                }
+            }
+            appProperties.setTgDriverOrder(orders);
+            settingRepository.save(new Setting("tgDriverOrder", String.join(",", orders)));
+        } else {
+            appProperties.setTgDriverOrder(Arrays.asList(value.split(",")));
         }
         value = settingRepository.findById("tg_timeout").map(Setting::getValue).orElse("");
         if (StringUtils.isBlank(value)) {
@@ -213,6 +227,11 @@ public class SettingService {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_DRIVERS : setting.getValue();
             setting.setValue(value);
             appProperties.setTgDrivers(Arrays.stream(value.split(",")).toList());
+        }
+        if ("tgDriverOrder".equals(setting.getName())) {
+            String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_DRIVERS : setting.getValue();
+            setting.setValue(value);
+            appProperties.setTgDriverOrder(Arrays.stream(value.split(",")).toList());
         }
         if ("tg_channels".equals(setting.getName())) {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_CHANNELS : setting.getValue();

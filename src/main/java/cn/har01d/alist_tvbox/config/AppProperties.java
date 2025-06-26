@@ -28,6 +28,7 @@ public class AppProperties {
     private String secretKey;
     private List<String> qns = List.of();
     private List<String> tgDrivers = Arrays.asList(Constants.TG_DRIVERS.split(","));
+    private List<String> tgDriverOrder = Arrays.asList(Constants.TG_DRIVERS.split(","));
     private String userAgent = Constants.USER_AGENT;
     private String tgChannels = Constants.TG_CHANNELS;
     private String tgWebChannels = Constants.TG_WEB_CHANNELS;
