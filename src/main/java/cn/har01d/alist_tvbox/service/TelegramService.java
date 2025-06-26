@@ -100,6 +100,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -1048,7 +1049,9 @@ public class TelegramService {
             results = getResult(futures);
         }
 
+        Set<String> tgDrivers = appProperties.getTgDrivers();
         List<Message> list = results.stream()
+                .filter(e -> tgDrivers.isEmpty() || tgDrivers.contains(e.getType()))
                 .filter(e -> !e.getContent().toLowerCase().contains("pdf"))
                 .filter(e -> !e.getContent().toLowerCase().contains("epub"))
                 .filter(e -> !e.getContent().toLowerCase().contains("azw3"))
@@ -1058,7 +1061,6 @@ public class TelegramService {
                 .filter(e -> !e.getContent().contains("图书"))
                 .filter(e -> !e.getContent().contains("电子书"))
                 .filter(e -> !e.getContent().contains("分享文件："))
-                .filter(e -> appProperties.getTgDrivers().isEmpty() || appProperties.getTgDrivers().contains(e.getType()))
                 .sorted(Comparator.comparing(Message::getTime).reversed())
                 .distinct()
                 .toList();
