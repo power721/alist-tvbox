@@ -123,6 +123,9 @@ public class AccountService {
         if (!settingRepository.existsByName("fix_ali_concurrency")) {
             fixConcurrency();
         }
+        if (!settingRepository.existsByName("fix_ali_chunk_size")) {
+            fixChunkSize();
+        }
         scheduleAutoCheckinTime();
 
         if (accountRepository.count() == 0) {
@@ -196,6 +199,15 @@ public class AccountService {
         }
         accountRepository.saveAll(accounts);
         settingRepository.save(new Setting("fix_ali_concurrency", ""));
+    }
+
+    private void fixChunkSize() {
+        List<Account> accounts = accountRepository.findAll();
+        for (Account account : accounts) {
+            account.setChunkSize(256);
+        }
+        accountRepository.saveAll(accounts);
+        settingRepository.save(new Setting("fix_ali_chunk_size", ""));
     }
 
     private void updateAliAccountId() {

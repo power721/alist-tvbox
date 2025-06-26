@@ -122,6 +122,9 @@
         <el-form-item label="代理线程数">
           <el-input-number :min="1" :max="16" v-model="form.concurrency"/>
         </el-form-item>
+        <el-form-item label="分片大小">
+          <el-input-number :min="64" :max="4096" v-model="form.chunkSize"/>
+        </el-form-item>
         <el-form-item label="自动签到">
           <el-switch
             v-model="form.autoCheckin"
@@ -215,6 +218,9 @@
         </el-form-item>
         <el-form-item label="代理线程数">
           <el-input-number :min="1" :max="16" v-model="form.concurrency"/>
+        </el-form-item>
+        <el-form-item label="分片大小">
+          <el-input-number :min="64" :max="4096" v-model="form.chunkSize"/>
         </el-form-item>
         <el-form-item label="上次签到时间" v-if="form.checkinTime">
           <el-input :model-value="formatTime(form.checkinTime)" readonly/>
@@ -328,6 +334,7 @@ const form = ref({
   checkinTime: '',
   checkinDays: 1,
   concurrency: 2,
+  chunkSize: 256,
 })
 
 const formatTime = (value: string | number) => {
@@ -404,6 +411,7 @@ const handleAdd = () => {
     checkinTime: '',
     checkinDays: 1,
     concurrency: 2,
+    chunkSize: 256,
   }
   formVisible.value = true
 }

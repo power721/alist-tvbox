@@ -12,6 +12,6 @@ public class Quark extends Storage {
         addAddition("concurrency", account.getConcurrency());
         addAddition("order_by", "file_name");
         addAddition("order_direction", "asc");
-        buildAddition();
+        buildAddition(account);
     }
 }
