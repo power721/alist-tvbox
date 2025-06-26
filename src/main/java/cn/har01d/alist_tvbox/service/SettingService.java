@@ -81,8 +81,10 @@ public class SettingService {
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(24));
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("tg_drivers")
-                .map(Setting::getValue).map(e -> e.split(","))
-                .map(Arrays::asList).map(HashSet::new)
+                .map(Setting::getValue)
+                .map(e -> e.split(","))
+                .map(Arrays::asList)
+                .map(HashSet::new)
                 .ifPresent(appProperties::setTgDrivers);
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));
