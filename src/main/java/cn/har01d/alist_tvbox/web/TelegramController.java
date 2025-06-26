@@ -53,7 +53,7 @@ public class TelegramController {
 
     @GetMapping("/api/telegram/search")
     public List<Message> searchByKeyword(String wd) {
-        return telegramService.search(wd, 100);
+        return telegramService.search(wd, 100, false);
     }
 
     @GetMapping("/tg-search")

@@ -403,6 +403,23 @@
         <el-form-item>
           <el-button type="primary" @click="updateTgTimeout">更新</el-button>
         </el-form-item>
+        <el-form-item label="网盘类型">
+          <el-checkbox-group v-model="drivers">
+            <el-checkbox label="天翼" value="9" />
+            <el-checkbox label="百度" value="10" />
+            <el-checkbox label="夸克" value="5" />
+            <el-checkbox label="UC" value="7" />
+            <el-checkbox label="115" value="8" />
+            <el-checkbox label="123" value="3" />
+            <el-checkbox label="迅雷" value="2" />
+            <el-checkbox label="阿里" value="0" />
+            <el-checkbox label="移动" value="6" />
+            <el-checkbox label="PikPak" value="1" />
+          </el-checkbox-group>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateDrivers">更新</el-button>
+        </el-form-item>
         <el-form-item label="默认视频壁纸">
           <el-input v-model="cover"/>
         </el-form-item>
@@ -536,6 +553,7 @@ const meta = ref({
   year: null,
   path: '',
 })
+const drivers = ref(['0', '1', '2', '3', '5', '6', '7', '8', '9', '10'])
 const options = [
   {label: '全部', value: 'ALL'},
   {label: '夸克', value: '5'},
@@ -651,6 +669,12 @@ const updateTgSearch = () => {
 const updateCover = () => {
   axios.post('/api/settings', {name: 'video_cover', value: cover.value}).then(({data}) => {
     cover.value = data.value
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateDrivers = () => {
+  axios.post('/api/settings', {name: 'tg_drivers', value: drivers.value.join(',')}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -1441,6 +1465,9 @@ onMounted(async () => {
     tgChannels.value = data.tg_channels
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
+    if (data.tg_drivers && data.tg_drivers.length) {
+      drivers.value = data.tg_drivers.split(',')
+    }
     cover.value = data.video_cover
     tgTimeout.value = +data.tg_timeout
   })

@@ -100,6 +100,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -125,6 +126,7 @@ public class TelegramService {
     private final ExecutorService executorService = Executors.newFixedThreadPool(Math.min(10, Runtime.getRuntime().availableProcessors() * 2));
     private final OkHttpClient httpClient = new OkHttpClient();
     private final LoadingCache<String, InputPeer> cache = Caffeine.newBuilder().build(this::resolveUsername);
+    private final LoadingCache<String, List<Message>> searchCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(15)).build(this::getFromChannel);
     private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private MTProtoTelegramClient client;
     private final List<String> fields = new ArrayList<>(List.of("id", "name", "genre", "description", "language", "country", "directors", "editors", "actors", "cover", "dbScore", "year"));
@@ -514,6 +516,14 @@ public class TelegramService {
             channels = appProperties.getTgChannels().split(",");
         }
 
+        for (String type : appProperties.getTgDrivers()) {
+            var category = new Category();
+            category.setType_id("type:" + type);
+            category.setType_name(getTypeName(type));
+            category.setType_flag(0);
+            list.add(category);
+        }
+
         for (String channel : channels) {
             var category = new Category();
             category.setType_id(channel);
@@ -531,6 +541,10 @@ public class TelegramService {
     }
 
     public MovieList list(String channel) throws IOException {
+        if (channel.startsWith("type:")) {
+            return loadMovies(channel.substring(5));
+        }
+
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
@@ -542,12 +556,14 @@ public class TelegramService {
         }
 
         for (Message message : messages) {
-            MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(encodeUrl(message.getLink()));
-            movieDetail.setVod_name(message.getName());
-            movieDetail.setVod_pic(getPic(message.getType()));
-            movieDetail.setVod_remarks(getTypeName(message.getType()));
-            list.add(movieDetail);
+            if (appProperties.getTgDrivers().isEmpty() || appProperties.getTgDrivers().contains(message.getType())) {
+                MovieDetail movieDetail = new MovieDetail();
+                movieDetail.setVod_id(encodeUrl(message.getLink()));
+                movieDetail.setVod_name(message.getName());
+                movieDetail.setVod_pic(getPic(message.getType()));
+                movieDetail.setVod_remarks(getTypeName(message.getType()));
+                list.add(movieDetail);
+            }
         }
 
         result.setList(list);
@@ -558,11 +574,34 @@ public class TelegramService {
         return result;
     }
 
+    public MovieList loadMovies(String type) {
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+
+        List<Message> messages = search("", 100, true);
+        for (Message message : messages) {
+            if (type.equals(message.getType())) {
+                MovieDetail movieDetail = new MovieDetail();
+                movieDetail.setVod_id(encodeUrl(message.getLink()));
+                movieDetail.setVod_name(message.getName());
+                movieDetail.setVod_pic(getPic(message.getType()));
+                movieDetail.setVod_remarks(getTypeName(message.getType()));
+                list.add(movieDetail);
+            }
+        }
+
+        result.setList(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
+
+        return result;
+    }
+
     public MovieList searchMovies(String keyword, int size) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        List<Message> messages = search(keyword, size);
+        List<Message> messages = search(keyword, size, false);
         for (Message message : messages) {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(encodeUrl(message.getLink()));
@@ -987,10 +1026,10 @@ public class TelegramService {
             case "2" -> "迅雷";
             case "3" -> "123";
             case "5" -> "夸克";
+            case "6" -> "移动";
             case "7" -> "UC";
             case "8" -> "115";
             case "9" -> "天翼";
-            case "6" -> "移动";
             case "10" -> "百度";
             default -> null;
         };
@@ -1024,7 +1063,7 @@ public class TelegramService {
                 .toUriString();
     }
 
-    public List<Message> search(String keyword, int size) {
+    public List<Message> search(String keyword, int size, boolean cached) {
         List<Message> results = List.of();
         String[] channels = appProperties.getTgChannels().split(",");
         if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
@@ -1039,14 +1078,16 @@ public class TelegramService {
             List<Future<List<Message>>> futures = new ArrayList<>();
             for (String channel : channels) {
                 String name = channel.split("\\|")[0];
-                Future<List<Message>> future = executorService.submit(() -> searchFromChannel(name, keyword, size));
+                Future<List<Message>> future = executorService.submit(() -> cached ? searchCache.get(name) : searchFromChannel(name, keyword, size));
                 futures.add(future);
             }
 
             results = getResult(futures);
         }
 
+        Set<String> tgDrivers = appProperties.getTgDrivers();
         List<Message> list = results.stream()
+                .filter(e -> tgDrivers.isEmpty() || tgDrivers.contains(e.getType()))
                 .filter(e -> !e.getContent().toLowerCase().contains("pdf"))
                 .filter(e -> !e.getContent().toLowerCase().contains("epub"))
                 .filter(e -> !e.getContent().toLowerCase().contains("azw3"))
@@ -1112,6 +1153,10 @@ public class TelegramService {
         incompleteFutures.forEach(f -> f.cancel(true));
 
         return results;
+    }
+
+    private List<Message> getFromChannel(String username) throws IOException {
+        return searchFromChannel(username, "", 100);
     }
 
     public List<Message> searchFromChannel(String username, String keyword, int size) throws IOException {

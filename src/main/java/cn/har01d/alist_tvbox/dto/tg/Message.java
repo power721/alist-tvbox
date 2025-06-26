@@ -154,6 +154,9 @@ public class Message {
         if (link.contains("quark.cn")) {
             return "5";
         }
+        if (link.contains("139.com")) {
+            return "6";
+        }
         if (link.contains("uc.cn")) {
             return "7";
         }
@@ -162,9 +165,6 @@ public class Message {
         }
         if (link.contains("189.cn")) {
             return "9";
-        }
-        if (link.contains("139.com")) {
-            return "6";
         }
         if (link.contains("baidu.com")) {
             return "10";
