@@ -674,7 +674,8 @@ const updateCover = () => {
 }
 
 const updateDrivers = () => {
-  axios.post('/api/settings', {name: 'tg_drivers', value: drivers.value.join(',')}).then(() => {
+  axios.post('/api/settings', {name: 'tg_drivers', value: drivers.value.join(',')}).then(({data}) => {
+    drivers.value = data.value.split(',')
     ElMessage.success('更新成功')
   })
 }
