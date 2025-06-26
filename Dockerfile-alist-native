@@ -1,0 +1,46 @@
+FROM golang:1.20 AS builder
+
+WORKDIR /app/
+
+COPY atv-cli ./
+
+RUN go build
+
+FROM haroldli/alist:latest
+
+LABEL MAINTAINER="Har01d"
+
+ENV INSTALL=native
+
+VOLUME /opt/atv/data/
+
+WORKDIR /opt/atv/
+
+COPY config/config.json /opt/alist/data/config.json
+
+COPY --from=builder /app/atv-cli /
+
+COPY scripts/index.sh /
+
+COPY init.sh /
+COPY scripts/movie.sh /
+COPY scripts/downloadPg.sh /
+COPY scripts/downloadZx.sh /
+COPY entrypoint-native.sh /entrypoint.sh
+
+COPY data/alist.config.json /
+COPY data/tvbox.zip /
+COPY data/cat.zip /
+COPY data/pg.zip /
+COPY data/zx.zip /
+COPY data/base_version /
+
+COPY data/version data/app_version
+
+COPY target/atv ./
+
+EXPOSE 4567 5244
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+CMD ["81", "--spring.profiles.active=production,docker"]

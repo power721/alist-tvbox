@@ -1,0 +1,48 @@
+FROM golang:1.20 AS builder
+
+WORKDIR /app/
+
+COPY atv-cli ./
+
+RUN go build
+
+FROM haroldli/alist-base:latest
+
+LABEL MAINTAINER="Har01d"
+
+ENV MEM_OPT="-Xmx512M" ALIST_PORT=5344 INSTALL=xiaoya
+
+RUN apk update && \
+    apk upgrade --no-cache && \
+    apk add --no-cache python3 py3-pip; \
+    rm -rf /var/cache/apk/*; \
+    pip install telethon
+
+COPY config/config.json /opt/alist/data/config.json
+
+COPY --from=builder /app/atv-cli /
+
+COPY init.sh /
+COPY scripts/movie.sh /
+COPY scripts/downloadPg.sh /
+COPY scripts/downloadZx.sh /
+COPY entrypoint.sh /
+COPY scripts/tg.py /
+
+COPY target/application/ ./
+
+COPY data/tvbox.zip /
+COPY data/index.share.zip /
+COPY data/cat.zip /
+COPY data/pg.zip /
+COPY data/zx.zip /
+COPY data/data.zip /
+COPY data/base_version /
+
+COPY data/version data/app_version
+
+EXPOSE 4567 80
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+CMD ["81", "--spring.profiles.active=production,xiaoya"]
