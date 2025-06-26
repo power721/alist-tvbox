@@ -413,17 +413,12 @@
         </el-form-item>
         <el-form-item label="网盘类型">
           <el-checkbox-group v-model="drivers">
-            <el-checkbox label="天翼" value="9"/>
-            <el-checkbox label="百度" value="10"/>
-            <el-checkbox label="夸克" value="5"/>
-            <el-checkbox label="UC" value="7"/>
-            <el-checkbox label="115" value="8"/>
-            <el-checkbox label="123" value="3"/>
-            <el-checkbox label="迅雷" value="2"/>
-            <el-checkbox label="阿里" value="0"/>
-            <el-checkbox label="移动" value="6"/>
-            <el-checkbox label="PikPak" value="1"/>
+            <VueDraggable ref="el" v-model="list">
+              <el-checkbox v-for="item in list" :label="item.name" :value="item.id" :key="item.id">
+              </el-checkbox>
+            </VueDraggable>
           </el-checkbox-group>
+
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateDrivers">更新</el-button>
@@ -502,6 +497,7 @@ import {
   Search,
   Setting
 } from "@element-plus/icons-vue";
+import {VueDraggable} from "vue-draggable-plus";
 
 let {toClipboard} = clipBorad();
 
@@ -572,7 +568,49 @@ const meta = ref({
   year: null,
   path: '',
 })
-const drivers = ref(['0', '1', '2', '3', '5', '6', '7', '8', '9', '10'])
+const drivers = ref([])
+const list = ref([
+  {
+    name: '天翼',
+    id: '9'
+  },
+  {
+    name: '百度',
+    id: '10'
+  },
+  {
+    name: '夸克',
+    id: '5'
+  },
+  {
+    name: 'UC',
+    id: '7'
+  },
+  {
+    name: '115',
+    id: '8'
+  },
+  {
+    name: '123',
+    id: '3'
+  },
+  {
+    name: '迅雷',
+    id: '2'
+  },
+  {
+    name: '阿里',
+    id: '0'
+  },
+  {
+    name: '移动',
+    id: '6'
+  },
+  {
+    name: 'PikPak',
+    id: '1'
+  }
+])
 const options = [
   {label: '全部', value: 'ALL'},
   {label: '夸克', value: '5'},
@@ -700,7 +738,8 @@ const updateCover = () => {
 }
 
 const updateDrivers = () => {
-  axios.post('/api/settings', {name: 'tg_drivers', value: drivers.value.join(',')}).then(({data}) => {
+  const content = list.value.map(e => e.id).filter(e => drivers.value.includes(e)).join(',')
+  axios.post('/api/settings', {name: 'tg_drivers', value: content}).then(({data}) => {
     drivers.value = data.value.split(',')
     ElMessage.success('更新成功')
   })
