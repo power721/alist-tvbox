@@ -26,7 +26,7 @@ public class AppProperties {
     private int maxSearchResult = 60;
     private String secretKey;
     private List<String> qns = List.of();
-    private Set<String> tgDrivers = Set.of();
+    private Set<String> tgDrivers = Set.of("0", "1", "2", "3", "5", "6", "7", "8", "9", "10");
     private String userAgent = Constants.USER_AGENT;
     private String tgChannels = Constants.TG_CHANNELS;
     private String tgWebChannels = Constants.TG_WEB_CHANNELS;
