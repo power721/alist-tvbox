@@ -412,7 +412,7 @@
           <el-button type="primary" @click="updateTgTimeout">更新</el-button>
         </el-form-item>
         <el-form-item label="网盘类型">
-          <el-checkbox-group v-model="drivers">
+          <el-checkbox-group v-model="tgDrivers">
             <VueDraggable ref="el" v-model="tgDriverOrder">
               <el-checkbox v-for="item in tgDriverOrder" :label="item.name" :value="item.id" :key="item.id">
               </el-checkbox>
@@ -568,8 +568,8 @@ const meta = ref({
   year: null,
   path: '',
 })
-const drivers = ref([])
-const tgDriverOrder = ref([])
+const tgDrivers = ref('9,10,5,7,8,3,2,0,6,1'.split(','))
+const tgDriverOrder = ref('9,10,5,7,8,3,2,0,6,1'.split(','))
 const options = [
   {label: '全部', value: 'ALL'},
   {label: '夸克', value: '5'},
@@ -699,9 +699,9 @@ const updateCover = () => {
 const updateDrivers = () => {
   const order = tgDriverOrder.value.map(e => e.id).join(',')
   axios.post('/api/settings', {name: 'tgDriverOrder', value: order}).then()
-  const drivers = list.value.map(e => e.id).filter(e => drivers.value.includes(e)).join(',')
-  axios.post('/api/settings', {name: 'tg_drivers', value: drivers}).then(({data}) => {
-    drivers.value = data.value.split(',')
+  const value = tgDriverOrder.value.map(e => e.id).filter(e => tgDrivers.value.includes(e)).join(',')
+  axios.post('/api/settings', {name: 'tg_drivers', value: value}).then(({data}) => {
+    tgDrivers.value = data.value.split(',')
     ElMessage.success('更新成功')
   })
 }
@@ -1506,7 +1506,7 @@ onMounted(async () => {
       }
     })
     if (data.tg_drivers && data.tg_drivers.length) {
-      drivers.value = data.tg_drivers.split(',')
+      tgDrivers.value = data.tg_drivers.split(',')
     }
     cover.value = data.video_cover
     tgTimeout.value = +data.tg_timeout
