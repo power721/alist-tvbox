@@ -27,7 +27,7 @@ init() {
   cd /www/
   tar zxf mobi.tgz
 
-  [ -f /opt/alist/data/config.json ] || cp /alist.config.json /opt/alist/data/config.json
+  [ -f /opt/alist/data/config.json ] || cp /alist.json /opt/alist/data/config.json
   sed -i 's/127.0.0.1/0.0.0.0/' /opt/alist/data/config.json
 
   sqlite3 /opt/alist/data/data.db ".read /alist.sql"
@@ -48,7 +48,7 @@ date
 uname -mor
 
 restore_database
-if [ -f /www/tvbox/my.json ]; then
+if [ -f /opt/alist/data/config.json ]; then
   echo "已经初始化成功"
 else
   init
