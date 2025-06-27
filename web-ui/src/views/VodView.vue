@@ -1322,59 +1322,23 @@ const saveHistory = () => {
     return
   }
   const movie = movies.value[0]
-  const id = movie.vod_id
-  const name = movie.vod_name
-  const type = movie.type
-  const index = currentVideoIndex.value
-  const items = JSON.parse(localStorage.getItem('history') || '[]')
-  for (let item of items) {
-    if (item.id === id) {
-      if (item.i == index) {
-        item.c = videoPlayer.value.currentTime
-      } else {
-        item.c = 0
-      }
-      item.i = index
-      item.b = skipStart.value
-      item.e = skipEnd.value
-      item.s = currentSpeed.value
-      item.type = type
-      item.t = new Date().getTime()
-      localStorage.setItem('history', JSON.stringify(items))
-      return
-    }
-  }
-  items.push({
-    id: id,
-    n: name,
-    i: index,
-    c: videoPlayer.value.currentTime,
-    b: skipStart.value,
-    e: skipEnd.value,
-    s: currentSpeed.value,
-    type: type,
-    t: new Date().getTime()
-  })
-  const sorted = items.sort((a, b) => b.t - a.t).slice(0, 80);
-  localStorage.setItem('history', JSON.stringify(sorted))
+  const cid = 0
+  axios.post('/api/history', {
+    cid: cid,
+    key: "csp_AList@@@" + movie.vod_id + "@@@" + cid,
+    vodName: movie.vod_name,
+    vodPic: movie.vod_pic,
+    episode: currentVideoIndex.value,
+    position: videoPlayer.value.currentTime,
+    opening: skipStart.value,
+    ending: skipEnd.value,
+    speed: currentSpeed.value,
+    type: movie.type,
+    createTime: new Date().getTime()
+  }).then()
 }
 
 const getHistory = (id: string) => {
-  const items = JSON.parse(localStorage.getItem('history') || '[]')
-  for (let item of items) {
-    if (item.id === id) {
-      currentVideoIndex.value = item.i
-      currentTime.value = item.c
-      currentSpeed.value = item.s || 1
-      skipStart.value = item.b || 0
-      skipEnd.value = item.e || 0
-      minute1.value = Math.floor(skipStart.value / 60)
-      second1.value = skipStart.value % 60
-      minute2.value = Math.floor(skipEnd.value / 60)
-      second2.value = skipEnd.value % 60
-      return
-    }
-  }
   currentVideoIndex.value = 0
   currentTime.value = 0
   currentSpeed.value = 1
@@ -1384,6 +1348,22 @@ const getHistory = (id: string) => {
   second1.value = 0
   minute2.value = 0
   second2.value = 0
+
+  const cid = 0
+  const key = "csp_AList@@@" + id + "@@@" + cid
+  axios.get('/history/' + token.value + "?cid=" + cid + "&key=" + key).then(({data}) => {
+    if (data) {
+      currentVideoIndex.value = data.episode
+      currentTime.value = data.position
+      currentSpeed.value = data.speed
+      skipStart.value = data.opening
+      skipEnd.value = data.ending
+      minute1.value = Math.floor(skipStart.value / 60)
+      second1.value = skipStart.value % 60
+      minute2.value = Math.floor(skipEnd.value / 60)
+      second2.value = skipEnd.value % 60
+    }
+  })
 }
 
 const formatDate = (timestamp: number): string => {
@@ -1416,30 +1396,38 @@ const formatTime = (seconds: number): string => {
 }
 
 const loadHistory = () => {
-  const items = JSON.parse(localStorage.getItem('history') || '[]')
-  files.value = items.sort((a, b) => b.t - a.t).map(e => {
-    return {
-      vod_id: e.id,
-      vod_name: e.n,
-      index: e.i + 1,
-      progress: formatTime(e.c),
-      vod_tag: 'file',
-      type: e.type,
-      vod_time: formatDate(e.t)
-    }
+  const cid = 0
+  api.get('/history/' + token.value + '?cid=' + cid).then(() => {
+    files.value = items.sort((a, b) => b.t - a.t).map(e => {
+      return {
+        vod_id: e.id,
+        vod_name: e.vodName,
+        index: e.episode,
+        progress: formatTime(e.position),
+        vod_tag: 'file',
+        type: e.type,
+        vod_time: formatDate(e.createTime)
+      }
+    })
+    isHistory.value = true
+    total.value = files.value.length
+    paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
   })
-  isHistory.value = true
-  total.value = files.value.length
-  paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
 }
 
 const deleteHistory = (id: string) => {
-  const items = JSON.parse(localStorage.getItem('history') || '[]').filter(e => e.id != id)
-  localStorage.setItem('history', JSON.stringify(items))
-  loadHistory()
+  const cid = 0
+  const key = "csp_AList@@@" + id + "@@@" + cid
+  api.delete('/history/' + token.value + '?cid=' + cid + '&key=' + key).then(() => {
+    loadHistory()
+  })
 }
 
 const clearHistory = () => {
+  const cid = 0
+  api.delete('/history/' + token.value + '?cid=' + cid).then(() => {
+    loadHistory()
+  })
   localStorage.removeItem('history')
   files.value = []
   total.value = 0
