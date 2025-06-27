@@ -18,7 +18,7 @@ RUN apk update && \
     rm -rf /var/cache/apk/*; \
     pip install telethon
 
-COPY config/config.json /opt/alist/data/config.json
+COPY config/config.json /alist.json
 
 COPY --from=builder /app/atv-cli /
 
@@ -30,7 +30,7 @@ COPY scripts/movie.sh /
 COPY scripts/entrypoint.sh /
 COPY scripts/tg.py /
 
-COPY data/alist.config.json /
+COPY data/alist.config.json /alist.json
 COPY data/tvbox.zip /
 COPY data/base_version /
 COPY data/cat.zip /

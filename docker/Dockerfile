@@ -12,7 +12,7 @@ LABEL MAINTAINER="Har01d"
 
 ENV MEM_OPT="-Xmx512M" ALIST_PORT=5344 INSTALL=new
 
-COPY config/config.json /opt/alist/data/config.json
+COPY config/config.json /alist.json
 
 COPY --from=builder /app/atv-cli /
 
@@ -23,7 +23,7 @@ COPY scripts/downloadZx.sh /
 COPY scripts/movie.sh /
 COPY scripts/entrypoint.sh /
 
-COPY data/alist.config.json /
+COPY data/alist.config.json /alist.json
 COPY data/tvbox.zip /
 COPY data/base_version /
 COPY data/cat.zip /

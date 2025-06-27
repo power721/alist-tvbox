@@ -43,6 +43,7 @@ init() {
   mv whatsnew /www/cgi-bin/whatsnew
   mv header.html /www/cgi-bin/header.html
 
+  [ -f /opt/alist/data/config.json ] || cp /alist.json /opt/alist/data/config.json
   sed -i "s/127.0.0.1/0.0.0.0/" /opt/alist/data/config.json
   sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
 
@@ -80,7 +81,7 @@ uname -mor
 date
 
 restore_database
-if [ -f /opt/alist/data/data.db ]; then
+if [ -f /opt/alist/data/config.json ]; then
   update_movie
   echo "已经初始化成功"
 else
