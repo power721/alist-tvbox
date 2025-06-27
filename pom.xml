@@ -155,25 +155,6 @@
 
     <profiles>
         <profile>
-            <properties>
-                <libc></libc>
-                <lib.static></lib.static>
-            </properties>
-            <id>platform-arm</id>
-            <activation>
-                <os>
-                    <arch>aarch64</arch>
-                </os>
-            </activation>
-        </profile>
-        <profile>
-            <properties>
-                <libc></libc>
-                <lib.static></lib.static>
-            </properties>
-            <id>standalone</id>
-        </profile>
-        <profile>
             <id>native</id>
             <build>
                 <plugins>
