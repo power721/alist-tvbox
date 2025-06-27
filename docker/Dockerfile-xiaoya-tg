@@ -18,7 +18,7 @@ RUN apk update && \
     rm -rf /var/cache/apk/*; \
     pip install telethon
 
-COPY config/config.json /opt/alist/data/config.json
+COPY config/config.json /alist.json
 
 COPY --from=builder /app/atv-cli /
 

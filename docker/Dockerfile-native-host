@@ -16,7 +16,7 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY config/config-host.json /opt/alist/data/config.json
+COPY config/config-host.json /alist.json
 
 COPY --from=builder /app/atv-cli /
 

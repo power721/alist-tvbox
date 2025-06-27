@@ -16,19 +16,19 @@ VOLUME /opt/atv/data/
 
 WORKDIR /opt/atv/
 
-COPY config/config.json /opt/alist/data/config.json
+COPY config/config.json /alist.json
 
 COPY --from=builder /app/atv-cli /
 
 COPY scripts/index.sh /
 
-COPY init.sh /
+COPY scripts/init.sh /
 COPY scripts/movie.sh /
 COPY scripts/downloadPg.sh /
 COPY scripts/downloadZx.sh /
 COPY entrypoint-native.sh /entrypoint.sh
 
-COPY data/alist.config.json /
+COPY data/alist.config.json /alist.json
 COPY data/tvbox.zip /
 COPY data/cat.zip /
 COPY data/pg.zip /
