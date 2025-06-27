@@ -906,7 +906,7 @@ const loadDetail = (id: string) => {
         }
       }
     })
-    getHistory(id)
+    getHistory(movies.value[0].vod_id)
     getPlayUrl()
     loading.value = false
     dialogVisible.value = true

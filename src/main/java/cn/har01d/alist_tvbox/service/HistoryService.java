@@ -34,8 +34,7 @@ public class HistoryService {
     }
 
     public History findById(int cid, String key) {
-        key = URLEncoder.encode(key, StandardCharsets.UTF_8);
-        logger.debug("findById cid:{} key:{}", cid, key);
+        logger.debug("findById cid: {} key: {}", cid, key);
         return historyRepository.findByCidAndKey(cid, key);
     }
 
@@ -62,7 +61,6 @@ public class HistoryService {
     }
 
     public void delete(int cid, String key) {
-        key = URLEncoder.encode(key, StandardCharsets.UTF_8);
         historyRepository.deleteByCidAndKey(cid, key);
     }
 
