@@ -40,7 +40,7 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
 
 jobs:
-  build-ui:
+  build-docker:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -58,9 +58,6 @@ jobs:
         working-directory: ./web-ui
         run: npm run build
 
-  build-jar:
-    runs-on: ubuntu-latest
-    steps:
       - name: setup graalvm
         uses: graalvm/setup-graalvm@v1
         with:
@@ -151,18 +148,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  build-native:
-    runs-on: ubuntu-latest
-    steps:
-      - name: setup graalvm
-        uses: graalvm/setup-graalvm@v1
-        with:
-          java-version: '17'
-          distribution: 'graalvm'
-          components: 'native-image'
-          native-image-musl: 'true'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          cache: 'maven'
       - name: Build native with Maven
         run: |
           mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
@@ -205,9 +190,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  release:
-    runs-on: ubuntu-latest
-    steps:
       - name: Send version
         env:
           api: ${{ secrets.VERSION_API }}
