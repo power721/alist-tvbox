@@ -68,6 +68,12 @@ public class HistoryService {
         historyRepository.deleteAll();
     }
 
+    public void delete(List<Integer> ids) {
+        for (var id : ids) {
+            deleteById(id);
+        }
+    }
+
     public void deleteById(Integer id) {
         historyRepository.deleteById(id);
     }

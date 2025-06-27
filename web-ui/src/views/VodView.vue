@@ -25,8 +25,6 @@
 
       <el-col :span="2">
         <el-button :icon="Film" circle @click="loadHistory"/>
-        <el-button :icon="Delete" circle @click="clearHistory"
-                   v-if="paths.length>1&&paths[1].path=='/~history'"/>
         <el-button :icon="Setting" circle @click="settingVisible=true"/>
         <el-button :icon="Plus" circle @click="handleAdd"/>
       </el-col>
@@ -59,7 +57,14 @@
       </el-col>
 
       <el-col :xs="22" :sm="20" :md="18" :span="14">
-        <el-table v-loading="loading" :data="files" style="width: 100%" @row-click="load">
+        <el-row justify="end">
+          <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
+          <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
+          <el-button type="primary" @click="refresh">刷新</el-button>
+        </el-row>
+        <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" style="width: 100%"
+                  @row-click="load">
+          <el-table-column type="selection" width="55" v-if="isHistory"/>
           <el-table-column prop="vod_name" :label="isHistory?'路径':'名称'">
             <template #default="scope">
               <el-popover :width="300" placement="left-start" v-if="scope.row.vod_tag=='folder'&&scope.row.vod_pic">
@@ -76,7 +81,8 @@
               <span v-else-if="scope.row.type==4">🖹</span>
               <span v-else-if="scope.row.type==5">📷</span>
               <span v-else-if="scope.row.type==9">▶️</span>
-              {{ scope.row.vod_name }}
+              <span v-if="isHistory">{{ scope.row.path }}</span>
+              <span v-else>{{ scope.row.vod_name }}</span>
             </template>
           </el-table-column>
           <el-table-column label="大小" width="120" v-if="!isHistory">
@@ -102,7 +108,7 @@
           <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="165"/>
           <el-table-column width="90" v-if="isHistory">
             <template #default="scope">
-              <el-button link type="danger" @click.stop="deleteHistory(scope.row.id)">删除</el-button>
+              <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -469,6 +475,25 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="deleteVisible" title="删除播放记录" width="30%">
+      <div v-if="batch">
+        <p>是否删除选中的{{ selected.length }}个播放记录?</p>
+      </div>
+      <div v-else-if="clean">
+        <p>是否清空全部播放记录?</p>
+      </div>
+      <div v-else>
+        <p>是否删除播放记录 - {{ history.vod_name }}</p>
+        <p>{{ history.path }}</p>
+      </div>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="deleteVisible = false">取消</el-button>
+        <el-button type="danger" @click="deleteHistory">删除</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -541,6 +566,9 @@ const isFullscreen = ref(false)
 const dialogVisible = ref(false)
 const imageVisible = ref(false)
 const formVisible = ref(false)
+const batch = ref(false)
+const clean = ref(false)
+const deleteVisible = ref(false)
 const settingVisible = ref(false)
 const addVisible = ref(false)
 const isHistory = ref(false)
@@ -553,6 +581,11 @@ const images = ref<VodItem[]>([])
 const results = ref<VodItem[]>([])
 const filteredResults = ref<VodItem[]>([])
 const paths = ref<Item[]>([])
+const selected = ref<Item[]>([])
+const history = ref({
+  id: 0,
+  vod_name: ''
+})
 const form = ref({
   link: '',
   path: '',
@@ -662,6 +695,10 @@ const clearSearch = () => {
   keyword.value = ''
   results.value = []
   filteredResults.value = []
+}
+
+const handleSelectionChange = (val: ShareInfo[]) => {
+  selected.value = val
 }
 
 const updateTgChannels = () => {
@@ -1309,6 +1346,14 @@ const openInVLC = () => {
   }, 500)
 }
 
+const refresh = () => {
+  if (isHistory.value) {
+    loadHistory()
+  } else {
+    reload(page.value)
+  }
+}
+
 const save = () => {
   if (playing.value) {
     saveHistory()
@@ -1322,7 +1367,7 @@ const saveHistory = () => {
   const movie = movies.value[0]
   axios.post('/api/history', {
     cid: 0,
-    key: movie.vod_id ,
+    key: movie.vod_id,
     vodName: movie.vod_name,
     vodPic: movie.vod_pic,
     episode: currentVideoIndex.value,
@@ -1330,7 +1375,6 @@ const saveHistory = () => {
     opening: Math.round(skipStart.value * 1000),
     ending: Math.round(skipEnd.value * 1000),
     speed: currentSpeed.value,
-    type: movie.type,
     createTime: new Date().getTime()
   }).then()
 }
@@ -1361,6 +1405,70 @@ const getHistory = (id: string) => {
   })
 }
 
+const loadHistory = () => {
+  axios.get('/history' + token.value + '?cid=0').then(({data}) => {
+    files.value = data.sort((a, b) => b.t - a.t).map(e => {
+      return {
+        id: e.id,
+        vod_id: e.key,
+        vod_name: e.vodName,
+        path: getParent(e.key),
+        index: e.episode,
+        progress: formatTime(e.position / 1000),
+        vod_tag: 'file',
+        vod_time: formatDate(e.createTime)
+      }
+    })
+    isHistory.value = true
+    total.value = files.value.length
+    paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
+  })
+}
+
+const handleDeleteBatch = () => {
+  batch.value = true
+  clean.value = false
+  deleteVisible.value = true
+}
+
+const handleCleanAll = () => {
+  selected.value = []
+  batch.value = false
+  clean.value = true
+  deleteVisible.value = true
+}
+
+const showDelete = (data: VodItem) => {
+  batch.value = false
+  clean.value = false
+  deleteVisible.value = true
+  history.value = data
+}
+
+const deleteHistory = (id: string) => {
+  if (batch.value) {
+    if (clean.value) {
+      clearHistory()
+    } else {
+      axios.delete('/api/history', selected.value.map(s => s.id)).then(() => {
+        deleteVisible.value = false
+        loadHistory()
+      })
+    }
+  } else {
+    axios.delete('/api/history/' + id).then(() => {
+      deleteVisible.value = false
+      loadHistory()
+    })
+  }
+}
+
+const clearHistory = () => {
+  axios.delete('/history' + token.value + '?cid=0').then(() => {
+    loadHistory()
+  })
+}
+
 const formatDate = (timestamp: number): string => {
   const date: Date = new Date(timestamp);
   const year: number = date.getFullYear();
@@ -1388,41 +1496,6 @@ const formatTime = (seconds: number): string => {
     m.toString().padStart(2, '0'),
     s.toString().padStart(2, '0')
   ].join(':');
-}
-
-const loadHistory = () => {
-  axios.get('/history' + token.value + '?cid=0').then(({data}) => {
-    files.value = data.sort((a, b) => b.t - a.t).map(e => {
-      return {
-        id: e.id,
-        vod_id: e.key,
-        vod_name: getParent(e.key),
-        index: e.episode,
-        progress: formatTime(e.position / 1000),
-        vod_tag: 'file',
-        type: e.type,
-        vod_time: formatDate(e.createTime)
-      }
-    })
-    isHistory.value = true
-    total.value = files.value.length
-    paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
-  })
-}
-
-const deleteHistory = (id: string) => {
-  axios.delete('/api/history/' + id).then(() => {
-    loadHistory()
-  })
-}
-
-const clearHistory = () => {
-  axios.delete('/history' + token.value + '?cid=0').then(() => {
-    loadHistory()
-  })
-  localStorage.removeItem('history')
-  files.value = []
-  total.value = 0
 }
 
 const playNextVideo = () => {

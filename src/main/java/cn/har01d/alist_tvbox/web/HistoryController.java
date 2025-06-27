@@ -44,6 +44,11 @@ public class HistoryController {
         return historyService.save(history);
     }
 
+    @DeleteMapping("/api/history")
+    public void delete(@RequestBody List<Integer> ids) {
+        historyService.delete(ids);
+    }
+
     @DeleteMapping("/api/history/{id}")
     public void delete(@PathVariable Integer id) {
         historyService.deleteById(id);
