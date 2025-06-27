@@ -107,7 +107,7 @@
           <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="165"/>
           <el-table-column width="90" v-if="isHistory">
             <template #default="scope">
-              <el-button link type="danger" @click.stop="deleteHistory(scope.row.vod_id)">删除</el-button>
+              <el-button link type="danger" @click.stop="deleteHistory(scope.row.id)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -1396,6 +1396,7 @@ const loadHistory = () => {
   axios.get('/history' + token.value + '?cid=0').then(({data}) => {
     files.value = data.sort((a, b) => b.t - a.t).map(e => {
       return {
+        id: e.id,
         vod_id: e.key,
         vod_name: e.vodName,
         index: e.episode,
@@ -1412,7 +1413,7 @@ const loadHistory = () => {
 }
 
 const deleteHistory = (id: string) => {
-  axios.delete('/history' + token.value + '?cid=0&key=' + id).then(() => {
+  axios.delete('/api/history/' + id).then(() => {
     loadHistory()
   })
 }
