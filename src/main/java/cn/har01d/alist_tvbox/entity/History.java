@@ -40,6 +40,6 @@ public class History {
     private int scale = -1;
     private int cid;
 
-    private String type;
+    private Integer type;
     private int episode;
 }

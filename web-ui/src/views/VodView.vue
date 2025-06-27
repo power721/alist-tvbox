@@ -901,10 +901,13 @@ const loadDetail = (id: string) => {
         }
       }
     })
-    getHistory(movies.value[0].vod_id)
-    getPlayUrl()
-    loading.value = false
-    dialogVisible.value = true
+    getHistory(movies.value[0].vod_id).then(() => {
+      getPlayUrl()
+      loading.value = false
+      dialogVisible.value = true
+    }, () => {
+      loading.value = false
+    })
   }, () => {
     loading.value = false
   })
@@ -1343,7 +1346,7 @@ const getHistory = (id: string) => {
   minute2.value = 0
   second2.value = 0
 
-  axios.get('/history' + token.value + "?cid=0&key=" + id).then(({data}) => {
+  return axios.get('/history' + token.value + "?cid=0&key=" + id).then(({data}) => {
     if (data) {
       currentVideoIndex.value = data.episode
       currentTime.value = data.position / 1000
@@ -1481,13 +1484,6 @@ onMounted(async () => {
       return {
         id: e,
         name: options.find(o => o.value === e)?.label
-      }
-    })
-    options.value.push({label: '全部', value: 'ALL'})
-    options.value = data.tgDriverOrder.split(',').map(e => {
-      return {
-        value: e,
-        label: options.find(o => o.value === e)?.label
       }
     })
     if (data.tg_drivers && data.tg_drivers.length) {
