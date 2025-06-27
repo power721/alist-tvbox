@@ -17,11 +17,11 @@ on:
       - 'README.md'
       - 'pom.xml'
       - 'pom-standalone.xml'
-      - 'Dockerfile-v7'
-      - 'Dockerfile-base'
-      - 'Dockerfile-base-new'
-      - 'Dockerfile-native-base'
-      - 'Dockerfile-jre'
+      - 'docker/Dockerfile-v7'
+      - 'docker/Dockerfile-base'
+      - 'docker/Dockerfile-base-new'
+      - 'docker/Dockerfile-native-base'
+      - 'docker/Dockerfile-jre'
       - 'scripts/install.sh'
       - 'scripts/install-service.sh'
       - 'scripts/update_hostmode.sh'
@@ -92,7 +92,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-xiaoya
+          file: docker/Dockerfile-xiaoya
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
@@ -102,7 +102,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-xiaoya-tg
+          file: docker/Dockerfile-xiaoya-tg
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -114,7 +114,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-host
+          file: docker/Dockerfile-host
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -126,7 +126,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile
+          file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:latest
@@ -136,12 +136,14 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-tg
+          file: docker/Dockerfile-tg
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:tg
+            ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:python
             ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-tg:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-python:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build native with Maven
@@ -153,7 +155,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-alist-native
+          file: docker/Dockerfile-alist-native
           platforms: linux/amd64
           push: true
           tags: |
@@ -165,7 +167,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-native
+          file: docker/Dockerfile-native
           platforms: linux/amd64
           push: true
           tags: |
@@ -177,7 +179,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-native-host
+          file: docker/Dockerfile-native-host
           platforms: linux/amd64
           push: true
           tags: |

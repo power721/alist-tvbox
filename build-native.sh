@@ -65,7 +65,7 @@ docker pull xiaoyaliu/alist:latest
 
 docker image prune -f
 echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
-docker build -f Dockerfile-native --tag=haroldli/xiaoya-tvbox:native . || exit 1
+docker build -f docker/Dockerfile-native --tag=haroldli/xiaoya-tvbox:native . || exit 1
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
 docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e INSTALL=native -v "$MOUNT":/data --name=xiaoya-tvbox haroldli/xiaoya-tvbox:native
 

@@ -55,7 +55,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-xiaoya
+          file: docker/Dockerfile-xiaoya
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ github.ref_name }}
@@ -65,7 +65,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-xiaoya-tg
+          file: docker/Dockerfile-xiaoya-tg
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-tg:${{ github.ref_name }}
@@ -75,7 +75,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-host
+          file: docker/Dockerfile-host
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-hostmode:${{ github.ref_name }}
@@ -85,7 +85,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile
+          file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ github.ref_name }}
@@ -95,10 +95,12 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-tg
+          file: docker/Dockerfile-tg
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-tg:${{ github.ref_name }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-tg:${{ github.ref_name }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-python:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build native with Maven
@@ -110,7 +112,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-alist-native
+          file: docker/Dockerfile-alist-native
           platforms: linux/amd64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-native:${{ github.ref_name }}
@@ -120,7 +122,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-native
+          file: docker/Dockerfile-native
           platforms: linux/amd64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native:${{ github.ref_name }}
@@ -130,7 +132,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile-native-host
+          file: docker/Dockerfile-native-host
           platforms: linux/amd64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native-host:${{ github.ref_name }}
