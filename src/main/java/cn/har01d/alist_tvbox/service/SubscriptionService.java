@@ -90,7 +90,6 @@ public class SubscriptionService {
     private final TenantService tenantService;
 
     private final ThreadLocal<String> currentToken = new ThreadLocal<>();
-    private final Map<String, Integer> uidMap = new HashMap<>();
 
     private String tokens = "";
 
@@ -943,19 +942,8 @@ public class SubscriptionService {
         }
     }
 
-    public int getCid(String uid) {
-        return uidMap.getOrDefault(uid, 0);
-    }
-
-    public void saveCid(String uid, int cid) {
-        uidMap.put(uid, cid);
-        uidMap.put("", cid);
-    }
-
     private String generateUid() {
-        String uid = UUID.randomUUID().toString().replace("-", "");
-        uidMap.put(uid, 0);
-        return uid;
+        return UUID.randomUUID().toString().replace("-", "");
     }
 
     private void addSite(String token, Map<String, Object> config) {

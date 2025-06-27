@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,6 +22,7 @@ public class History {
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
     private Integer id;
 
+    @Column(name = "`key`")
     private String key;
     private String vodPic;
     private String vodName;

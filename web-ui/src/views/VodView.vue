@@ -573,13 +573,13 @@ const tgDrivers = ref('9,10,5,7,8,3,2,0,6,1'.split(','))
 const tgDriverOrder = ref('9,10,5,7,8,3,2,0,6,1'.split(','))
 const options = [
   {label: '全部', value: 'ALL'},
+  {label: '百度', value: '10'},
+  {label: '天翼', value: '9'},
   {label: '夸克', value: '5'},
   {label: 'UC', value: '7'},
   {label: '阿里', value: '0'},
   {label: '115', value: '8'},
   {label: '123', value: '3'},
-  {label: '天翼', value: '9'},
-  {label: '百度', value: '10'},
   {label: '迅雷', value: '2'},
   {label: '移动', value: '6'},
   {label: 'PikPak', value: '1'},
@@ -884,7 +884,7 @@ const loadDetail = (id: string) => {
     }
 
     movies.value = data.list
-    movies.value[0].vod_id = id
+    //movies.value[0].vod_id = id
     const pic = movies.value[0].vod_pic
     if (pic && pic.includes('doubanio.com')) {
       poster.value = '/images?url=' + pic.replace('s_ratio_poster', 'm')
@@ -1322,14 +1322,13 @@ const saveHistory = () => {
     return
   }
   const movie = movies.value[0]
-  const cid = 0
   axios.post('/api/history', {
-    cid: cid,
-    key: "csp_AList@@@" + movie.vod_id + "@@@" + cid,
+    cid: 0,
+    key: movie.vod_id ,
     vodName: movie.vod_name,
     vodPic: movie.vod_pic,
     episode: currentVideoIndex.value,
-    position: videoPlayer.value.currentTime,
+    position: Math.round(videoPlayer.value.currentTime * 1000),
     opening: skipStart.value,
     ending: skipEnd.value,
     speed: currentSpeed.value,
@@ -1349,12 +1348,10 @@ const getHistory = (id: string) => {
   minute2.value = 0
   second2.value = 0
 
-  const cid = 0
-  const key = "csp_AList@@@" + id + "@@@" + cid
-  axios.get('/history/' + token.value + "?cid=" + cid + "&key=" + key).then(({data}) => {
+  axios.get('/history' + token.value + "?cid=0&key=" + id).then(({data}) => {
     if (data) {
       currentVideoIndex.value = data.episode
-      currentTime.value = data.position
+      currentTime.value = data.position / 1000
       currentSpeed.value = data.speed
       skipStart.value = data.opening
       skipEnd.value = data.ending
@@ -1396,14 +1393,13 @@ const formatTime = (seconds: number): string => {
 }
 
 const loadHistory = () => {
-  const cid = 0
-  api.get('/history/' + token.value + '?cid=' + cid).then(() => {
-    files.value = items.sort((a, b) => b.t - a.t).map(e => {
+  axios.get('/history' + token.value + '?cid=0').then(({data}) => {
+    files.value = data.sort((a, b) => b.t - a.t).map(e => {
       return {
-        vod_id: e.id,
+        vod_id: e.key,
         vod_name: e.vodName,
         index: e.episode,
-        progress: formatTime(e.position),
+        progress: formatTime(e.position / 1000),
         vod_tag: 'file',
         type: e.type,
         vod_time: formatDate(e.createTime)
@@ -1416,16 +1412,13 @@ const loadHistory = () => {
 }
 
 const deleteHistory = (id: string) => {
-  const cid = 0
-  const key = "csp_AList@@@" + id + "@@@" + cid
-  api.delete('/history/' + token.value + '?cid=' + cid + '&key=' + key).then(() => {
+  axios.delete('/history' + token.value + '?cid=0&key=' + id).then(() => {
     loadHistory()
   })
 }
 
 const clearHistory = () => {
-  const cid = 0
-  api.delete('/history/' + token.value + '?cid=' + cid).then(() => {
+  axios.delete('/history' + token.value + '?cid=0').then(() => {
     loadHistory()
   })
   localStorage.removeItem('history')
@@ -1492,6 +1485,13 @@ onMounted(async () => {
       return {
         id: e,
         name: options.find(o => o.value === e)?.label
+      }
+    })
+    options.value.push({label: '全部', value: 'ALL'})
+    options.value = data.tgDriverOrder.split(',').map(e => {
+      return {
+        value: e,
+        label: options.find(o => o.value === e)?.label
       }
     })
     if (data.tg_drivers && data.tg_drivers.length) {
