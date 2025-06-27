@@ -2,8 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.entity.History;
 import cn.har01d.alist_tvbox.entity.HistoryRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.net.URLDecoder;
@@ -13,8 +12,6 @@ import java.util.List;
 
 @Service
 public class HistoryService {
-    private static Logger logger = LoggerFactory.getLogger(HistoryService.class);
-
     private final HistoryRepository historyRepository;
 
     public HistoryService(HistoryRepository historyRepository) {
@@ -30,12 +27,11 @@ public class HistoryService {
     }
 
     public List<History> findAll(int cid) {
-        return historyRepository.findByCid(cid);
+        return historyRepository.findByCid(cid, Sort.by("createTime").descending());
     }
 
     public History findById(int cid, String key) {
         key = decode(key);
-        logger.debug("findById cid: {} key: {}", cid, key);
         return historyRepository.findByCidAndKey(cid, key);
     }
 
@@ -56,7 +52,6 @@ public class HistoryService {
         if (exist != null) {
             history.setId(exist.getId());
         }
-        logger.debug("save history: {} {} {}", history.getId(), history.getCid(), history.getKey());
         return historyRepository.save(history);
     }
 

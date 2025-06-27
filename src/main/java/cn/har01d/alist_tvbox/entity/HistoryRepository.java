@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.entity;
 
 import java.util.List;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface HistoryRepository extends JpaRepository<History, Integer> {
@@ -9,7 +10,7 @@ public interface HistoryRepository extends JpaRepository<History, Integer> {
 
     void deleteByCidAndKey(int cid, String key);
 
-    List<History> findByCid(int cid);
+    List<History> findByCid(int cid, Sort sort);
 
     void deleteByCid(int cid);
 }

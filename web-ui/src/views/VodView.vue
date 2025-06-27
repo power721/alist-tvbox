@@ -60,7 +60,7 @@
 
       <el-col :xs="22" :sm="20" :md="18" :span="14">
         <el-table v-loading="loading" :data="files" style="width: 100%" @row-click="load">
-          <el-table-column prop="vod_name" label="名称">
+          <el-table-column prop="vod_name" :label="isHistory?'路径':'名称'">
             <template #default="scope">
               <el-popover :width="300" placement="left-start" v-if="scope.row.vod_tag=='folder'&&scope.row.vod_pic">
                 <template #reference>
@@ -76,12 +76,7 @@
               <span v-else-if="scope.row.type==4">🖹</span>
               <span v-else-if="scope.row.type==5">📷</span>
               <span v-else-if="scope.row.type==9">▶️</span>
-              <el-tooltip :content="getParent(scope.row.vod_id)" v-if="isHistory">
-                {{ scope.row.vod_name }}
-              </el-tooltip>
-              <span v-else>
-                {{ scope.row.vod_name }}
-              </span>
+              {{ scope.row.vod_name }}
             </template>
           </el-table-column>
           <el-table-column label="大小" width="120" v-if="!isHistory">
@@ -1329,8 +1324,8 @@ const saveHistory = () => {
     vodPic: movie.vod_pic,
     episode: currentVideoIndex.value,
     position: Math.round(videoPlayer.value.currentTime * 1000),
-    opening: skipStart.value,
-    ending: skipEnd.value,
+    opening: Math.round(skipStart.value * 1000),
+    ending: Math.round(skipEnd.value * 1000),
     speed: currentSpeed.value,
     type: movie.type,
     createTime: new Date().getTime()
@@ -1352,9 +1347,9 @@ const getHistory = (id: string) => {
     if (data) {
       currentVideoIndex.value = data.episode
       currentTime.value = data.position / 1000
+      skipStart.value = data.opening / 1000
+      skipEnd.value = data.ending / 1000
       currentSpeed.value = data.speed
-      skipStart.value = data.opening
-      skipEnd.value = data.ending
       minute1.value = Math.floor(skipStart.value / 60)
       second1.value = skipStart.value % 60
       minute2.value = Math.floor(skipEnd.value / 60)
@@ -1398,7 +1393,7 @@ const loadHistory = () => {
       return {
         id: e.id,
         vod_id: e.key,
-        vod_name: e.vodName,
+        vod_name: getParent(e.key),
         index: e.episode,
         progress: formatTime(e.position / 1000),
         vod_tag: 'file',

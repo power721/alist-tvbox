@@ -35,6 +35,9 @@ onMounted(() => {
     store.docker = data.includes('docker')
     store.standalone = data.includes('standalone')
     store.hostmode = data.includes('host')
+    axios.get('/api/settings/install_mode').then(({data}) => {
+      store.installMode = data.value
+    })
     mounted.value = true
     if (show.value) {
       axios.get('/api/alist/status').then(({data}) => {
