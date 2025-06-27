@@ -24,7 +24,8 @@
       </el-col>
 
       <el-col :span="2">
-        <el-button :icon="Film" circle @click="loadHistory"/>
+        <el-button :icon="HomeFilled" circle @click="loadFolder('/')" v-if="isHistory"/>
+        <el-button :icon="Film" circle @click="loadHistory" v-else/>
         <el-button :icon="Setting" circle @click="settingVisible=true"/>
         <el-button :icon="Plus" circle @click="handleAdd"/>
       </el-col>
@@ -60,7 +61,7 @@
         <el-row justify="end">
           <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
           <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
-          <el-button type="primary" @click="refresh">刷新</el-button>
+          <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
         </el-row>
         <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" style="width: 100%"
                   @row-click="load">
@@ -511,6 +512,7 @@ import {
   Connection,
   Delete,
   Film,
+  HomeFilled,
   FullScreen,
   Menu,
   Plus,
@@ -1365,7 +1367,7 @@ const saveHistory = () => {
     return
   }
   const movie = movies.value[0]
-  axios.post('/api/history', {
+  axios.post('/api/history?log=false', {
     cid: 0,
     key: movie.vod_id,
     vodName: movie.vod_name,
@@ -1425,26 +1427,6 @@ const loadHistory = () => {
   })
 }
 
-const handleDeleteBatch = () => {
-  batch.value = true
-  clean.value = false
-  deleteVisible.value = true
-}
-
-const handleCleanAll = () => {
-  selected.value = []
-  batch.value = false
-  clean.value = true
-  deleteVisible.value = true
-}
-
-const showDelete = (data: VodItem) => {
-  batch.value = false
-  clean.value = false
-  deleteVisible.value = true
-  history.value = data
-}
-
 const deleteHistory = (id: string) => {
   if (batch.value) {
     if (clean.value) {
@@ -1467,6 +1449,25 @@ const clearHistory = () => {
   axios.delete('/history' + token.value + '?cid=0').then(() => {
     loadHistory()
   })
+}
+
+const handleDeleteBatch = () => {
+  batch.value = true
+  clean.value = false
+  deleteVisible.value = true
+}
+
+const handleCleanAll = () => {
+  batch.value = false
+  clean.value = true
+  deleteVisible.value = true
+}
+
+const showDelete = (data: VodItem) => {
+  batch.value = false
+  clean.value = false
+  deleteVisible.value = true
+  history.value = data
 }
 
 const formatDate = (timestamp: number): string => {

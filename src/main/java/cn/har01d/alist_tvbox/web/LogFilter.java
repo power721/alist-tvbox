@@ -20,10 +20,15 @@ public class LogFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String url = request.getRequestURI();
-        if (!"/youtube-proxy".equals(url)) {
+        if (!skip(request)) {
             log.info("{} - {} {} {}", getRemoteAddr(request), request.getMethod(), url, decodeUrl(request.getQueryString()));
         }
         filterChain.doFilter(request, response);
+    }
+
+    private boolean skip(HttpServletRequest request) {
+        String query = request.getQueryString();
+        return query != null && query.contains("log=false");
     }
 
     private String getRemoteAddr(HttpServletRequest req) {
