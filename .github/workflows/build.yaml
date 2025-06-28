@@ -24,6 +24,7 @@ on:
       - 'docker/Dockerfile-jre'
       - 'scripts/install.sh'
       - 'scripts/install-service.sh'
+      - 'scripts/alist-tvbox.sh'
       - 'scripts/update_hostmode.sh'
       - 'scripts/update_native.sh'
       - 'scripts/update_native_host.sh'
@@ -108,7 +109,9 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:hostmode
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:host
             ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-hostmode:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-host:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build alist docker and push
