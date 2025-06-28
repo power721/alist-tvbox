@@ -295,7 +295,7 @@
                     <Connection/>
                   </el-icon>
                 </el-button>
-                <el-button @click="showPush" title="推送">
+                <el-button @click="showPush" title="推送" v-if="devices.length">
                   <el-icon><Upload /></el-icon>
                 </el-button>
                 <el-popover placement="bottom" width="350px">
