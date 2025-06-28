@@ -1,16 +1,9 @@
 package cn.har01d.alist_tvbox.entity;
 
-import java.util.List;
-
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface HistoryRepository extends JpaRepository<History, Integer> {
-    History findByCidAndKey(int cid, String key);
+    History findByKey(String key);
 
-    void deleteByCidAndKey(int cid, String key);
-
-    List<History> findByCid(int cid, Sort sort);
-
-    void deleteByCid(int cid);
+    void deleteByKey(String key);
 }

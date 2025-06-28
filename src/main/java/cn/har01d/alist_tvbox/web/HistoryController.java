@@ -60,9 +60,9 @@ public class HistoryController {
 
         if (cid != null) {
             if (StringUtils.isBlank(key)) {
-                return historyService.findAll(cid);
+                return historyService.findAll();
             } else {
-                return historyService.findById(cid, key);
+                return historyService.findById(key);
             }
         } else {
             return historyService.findAll();
@@ -82,9 +82,9 @@ public class HistoryController {
 
         if (cid != null) {
             if (StringUtils.isBlank(key)) {
-                historyService.delete(cid);
+                historyService.deleteAll();
             } else {
-                historyService.delete(cid, key);
+                historyService.delete(key);
             }
         } else {
             historyService.deleteAll();

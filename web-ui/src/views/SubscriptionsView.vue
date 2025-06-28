@@ -5,6 +5,7 @@
       <el-button @click="load">刷新</el-button>
       <el-button @click="handleLogin">登陆电报</el-button>
       <el-button @click="showScan">同步影视</el-button>
+      <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
     </el-row>
     <div class="space"></div>
@@ -36,9 +37,6 @@
         <template #default="scope">
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)" v-if="scope.row.id">
             编辑
-          </el-button>
-          <el-button link type="primary" size="small" @click="showPush(scope.row)" v-if="devices.length">
-            推送
           </el-button>
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">
             数据
@@ -240,36 +238,52 @@
     </el-dialog>
 
     <el-dialog v-model="push" title="推送订阅配置" width="30%">
-      <el-form-item label="影视设备" required>
-        <el-select
-          v-model="device.id"
-          style="width: 240px"
-        >
-          <el-option
-            v-for="item in devices"
-            :key="item.id"
-            :label="item.name"
-            :value="item.id"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="安全Token" required>
-        <el-select
-          v-model="device.name"
-          style="width: 240px"
-          @change="onTokenChange"
-        >
-          <el-option
-            v-for="item in tokens"
-            :key="item"
-            :label="item"
-            :value="item"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="订阅地址" required>
-        <a :href="device.ip" target="_blank">{{device.ip}}</a>
-      </el-form-item>
+      <el-form label-width="auto">
+        <el-form-item label="影视设备" required>
+          <el-select
+            v-model="pushForm.id"
+            style="width: 240px"
+          >
+            <el-option
+              v-for="item in devices"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="安全Token" required>
+          <el-select
+            v-model="pushForm.token"
+            style="width: 240px"
+            @change="onTokenChange"
+          >
+            <el-option
+              v-for="item in tokens"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="订阅" required>
+          <el-select
+            v-model="pushForm.sid"
+            style="width: 240px"
+            @change="onTokenChange"
+          >
+            <el-option
+              v-for="item in subscriptions"
+              :key="item.sid"
+              :label="item.name"
+              :value="item.sid"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="订阅地址" required>
+          <a :href="pushForm.url" target="_blank">{{pushForm.url}}</a>
+        </el-form-item>
+      </el-form>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="push = false">取消</el-button>
@@ -288,6 +302,11 @@ import {ElMessage} from "element-plus";
 import {onUnmounted} from "@vue/runtime-core";
 import type {Device} from "@/model/Device";
 
+interface Sub {
+  sid: '',
+  name: '',
+}
+
 const currentUrl = window.location.origin
 const tgPhase = ref(0)
 const tgPhone = ref('')
@@ -305,7 +324,7 @@ const zxRemote2 = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
-const subscriptions = ref([])
+const subscriptions = ref<Sub[]>([])
 const tokens = ref([])
 const devices = ref<Device[]>([])
 const detailVisible = ref(false)
@@ -321,6 +340,12 @@ const device = ref<Device>({
   uuid: "",
   id: 0,
   ip: ''
+})
+const pushForm = ref({
+  id: 0,
+  sid: '',
+  token: '',
+  url: '',
 })
 const sub = ref({
   name: "",
@@ -464,20 +489,20 @@ const loadDevices = () => {
   })
 }
 
-const showPush = (data: any) => {
-  sub.value = data
-  device.value.id = devices.value[0].id
-  device.value.name = tokens.value[0]
-  device.value.ip = currentUrl + '/sub/' + device.value.name + '/' + sub.value.sid
+const showPush = () => {
+  pushForm.value.id = devices.value[0].id
+  pushForm.value.sid = subscriptions.value[0].sid
+  pushForm.value.token = tokens.value[0]
+  pushForm.value.url = currentUrl + '/sub/' + pushForm.value.token + '/' + pushForm.value.sid
   push.value = true
 }
 
 const onTokenChange = () => {
-  device.value.ip = currentUrl + '/sub/' + device.value.name + '/' + sub.value.sid
+  pushForm.value.url = currentUrl + '/sub/' + pushForm.value.token + '/' + pushForm.value.sid
 }
 
 const pushConfig = () => {
-  axios.post(`/api/devices/${device.value.id}/push?url=${device.value.ip}`).then(() => {
+  axios.post(`/api/devices/${pushForm.value.id}/push?url=${pushForm.value.url}`).then(() => {
     ElMessage.success('推送成功')
   })
 }

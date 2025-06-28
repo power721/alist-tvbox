@@ -51,27 +51,23 @@ public class HistoryService {
         this.restTemplate = builder.build();
     }
 
-    public List<History> findAll() {
-        return historyRepository.findAll();
-    }
-
     public History get(Integer id) {
         return historyRepository.findById(id).orElse(null);
     }
 
-    public List<History> findAll(int cid) {
-        return historyRepository.findByCid(cid, Sort.by("createTime").descending());
+    public List<History> findAll() {
+        return historyRepository.findAll(Sort.by("createTime").descending());
     }
 
-    public History findById(int cid, String key) {
+    public History findById(String key) {
         key = decode(key);
-        return historyRepository.findByCidAndKey(cid, key);
+        return historyRepository.findByKey(key);
     }
 
     public void saveAll(List<History> histories) {
         for (var history : histories) {
             history.setKey(decode(history.getKey()));
-            var exist = findById(history.getCid(), history.getKey());
+            var exist = findById(history.getKey());
             if (exist != null) {
                 history.setId(exist.getId());
             }
@@ -81,7 +77,7 @@ public class HistoryService {
 
     public History save(History history) {
         history.setKey(decode(history.getKey()));
-        var exist = findById(history.getCid(), history.getKey());
+        var exist = findById(history.getKey());
         if (exist != null) {
             history.setId(exist.getId());
         }
@@ -94,23 +90,31 @@ public class HistoryService {
 
         for (History history : histories) {
             String[] parts = history.getKey().split("@@@");
-            String key = parts[1];
+            String key = decode(parts[1]);
             map.put(key, history);
             if (!parts[0].equals("csp_AList")) {
                 continue;
             }
             history.setCid(0);
-            history.setKey(decode(key));
-            History exist = historyRepository.findByCidAndKey(0, key);
+            history.setKey(key);
+            History exist = historyRepository.findByKey(key);
             if (exist != null) {
                 if (history.getCreateTime() > exist.getCreateTime() || history.getPosition() > exist.getPosition()) {
-                    history.setId(exist.getId());
-                    list.add(history);  // update to ATV
+                    if ("0".equals(mode) || "2".equals(mode)) {
+                        history.setId(exist.getId());
+                        list.add(history);  // pull from TvBox
+                        log.info("updated: {}", key);
+                    }
                 } else if (history.getCreateTime() < exist.getCreateTime() || history.getPosition() < exist.getPosition()) {
-                    map.put(key, exist); // update to TvBox
+                    if ("0".equals(mode) || "1".equals(mode)) {
+                        map.put(key, exist); // push to TvBox
+                    }
                 }
             } else {
-                list.add(history);
+                log.info("new: {}", key);
+                if ("0".equals(mode) || "2".equals(mode)) {
+                    list.add(history);
+                }
             }
         }
 
@@ -125,50 +129,47 @@ public class HistoryService {
 
         List<History> old = historyRepository.findAll();
 
-        if ("0".equals(mode) || "1".equals(mode)) {
-            log.warn("pull {} histories", list.size());
-            historyRepository.saveAll(list);
-        }
+        log.warn("pull {} histories", list.size());
+        historyRepository.saveAll(list);
 
         if (device == null || me.getIp().startsWith("http://127.0.0.1")) {
+            log.warn("skip push: {} {}", device == null, me.getIp());
             return;
         }
 
-        if ("0".equals(mode) || "2".equals(mode)) {
-            for (History history : old) {
-                if (!map.containsKey(history.getKey())) {
-                    map.put(history.getKey(), history);
-                }
+        for (History history : old) {
+            if (!map.containsKey(history.getKey())) {
+                map.put(history.getKey(), history);
             }
-
-            List<History> result = new ArrayList<>(map.values());
-            log.info("push {} histories", result.size());
-            int cid = 0;
-            if (config != null) {
-                ObjectNode node = objectMapper.readValue(config, ObjectNode.class);
-                cid = node.get("id").asInt();
-            }
-
-            for (History history : result) {
-                history.setCid(cid);
-                history.setKey("csp_AList@@@" + history.getKey() + "@@@1");
-                String url = history.getEpisodeUrl();
-                if (url != null && url.startsWith("1%24%")) {
-                    url = "1%7E%7E%7E%" + url.substring("1%24%".length());
-                    history.setEpisodeUrl(url);
-                }
-            }
-            MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-            formData.add("do", "sync");
-            formData.add("mode", mode);
-            formData.add("type", "history");
-            formData.add("device", objectMapper.writeValueAsString(me));
-            formData.add("config", config);
-            formData.add("targets", objectMapper.writeValueAsString(result));
-            log.debug("push: {}", formData);
-            String json = restTemplate.postForObject(device.getIp() + "/action", formData, String.class);
-            log.info(json);
         }
+
+        List<History> result = new ArrayList<>(map.values());
+        log.info("push {} histories", result.size());
+        int cid = 0;
+        if (config != null) {
+            ObjectNode node = objectMapper.readValue(config, ObjectNode.class);
+            cid = node.get("id").asInt();
+        }
+
+        for (History history : result) {
+            history.setCid(cid);
+            history.setKey("csp_AList@@@" + history.getKey() + "@@@1");
+            String url = history.getEpisodeUrl();
+            if (url != null && url.startsWith("1%24%")) {
+                url = "1%7E%7E%7E%" + url.substring("1%24%".length());
+                history.setEpisodeUrl(url);
+            }
+        }
+        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("do", "sync");
+        formData.add("mode", "0");
+        formData.add("type", "history");
+        formData.add("device", objectMapper.writeValueAsString(me));
+        formData.add("config", config);
+        formData.add("targets", objectMapper.writeValueAsString(result));
+        log.debug("push: {}", formData);
+        String json = restTemplate.postForObject(device.getIp() + "/action", formData, String.class);
+        log.info(json);
     }
 
     public void sync(Integer id, Device me, int mode) throws JsonProcessingException {
@@ -205,13 +206,9 @@ public class HistoryService {
         syncHistory("0", device, me, config, List.of());
     }
 
-    public void delete(int cid) {
-        historyRepository.deleteByCid(cid);
-    }
-
-    public void delete(int cid, String key) {
+    public void delete(String key) {
         key = decode(key);
-        historyRepository.deleteByCidAndKey(cid, key);
+        historyRepository.deleteByKey(key);
     }
 
     public void deleteAll() {

@@ -520,11 +520,11 @@
             <a :href="scope.row.ip" target="_blank">{{ scope.row.ip }}</a>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="100">
+        <el-table-column fixed="right" label="操作" width="200">
           <template #default="scope">
             <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 0)">同步</el-button>
-            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 1)">拉取</el-button>
-            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 2)">推送</el-button>
+            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 1)">推送</el-button>
+            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 2)">拉取</el-button>
             <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
           </template>
         </el-table-column>
