@@ -295,6 +295,9 @@
                     <Connection/>
                   </el-icon>
                 </el-button>
+                <el-button @click="showPush" title="推送">
+                  <el-icon><Upload /></el-icon>
+                </el-button>
                 <el-popover placement="bottom" width="350px">
                   <template #reference>
                     <el-button :icon="Menu"></el-button>
@@ -542,6 +545,30 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="pushVisible" title="推送播放地址" width="30%">
+      <el-form label-width="auto">
+        <el-form-item label="影视设备" required>
+          <el-select
+            v-model="device.id"
+            style="width: 240px"
+          >
+            <el-option
+              v-for="item in devices"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="pushVisible = false">取消</el-button>
+        <el-button type="primary" @click="doPush">推送</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -565,7 +592,7 @@ import {
   Plus,
   QuestionFilled,
   Search,
-  Setting
+  Setting, Upload
 } from "@element-plus/icons-vue";
 import {VueDraggable} from "vue-draggable-plus";
 import type {Device} from "@/model/Device";
@@ -594,7 +621,6 @@ const title = ref('')
 const playUrl = ref('')
 const poster = ref('')
 const cover = ref('')
-const prev = ref({})
 const base64QrCode = ref('')
 const devices = ref<Device[]>([])
 const movies = ref<VodItem[]>([])
@@ -621,6 +647,7 @@ const imageVisible = ref(false)
 const formVisible = ref(false)
 const scanVisible = ref(false)
 const confirm = ref(false)
+const pushVisible = ref(false)
 const batch = ref(false)
 const clean = ref(false)
 const deleteVisible = ref(false)
@@ -685,10 +712,14 @@ const orders = [
 const showScan = () => {
   axios.get('/api/qr-code').then(({data}) => {
     base64QrCode.value = data
+    scanVisible.value = true
   })
+  loadDevices()
+}
+
+const loadDevices = () => {
   axios.get('/api/devices').then(({data}) => {
     devices.value = data
-    scanVisible.value = true
   })
 }
 
@@ -1435,6 +1466,11 @@ const copyPlayUrl = () => {
 }
 
 const buildVlcUrl = (start: number) => {
+  const url = buildM3u8Url(start)
+  return `vlc://${url}`
+}
+
+const buildM3u8Url = (start: number) => {
   const id = movies.value[0].vod_id
   let url = playUrl.value
   if (id.endsWith('playlist$1')) {
@@ -1443,7 +1479,7 @@ const buildVlcUrl = (start: number) => {
     const parent = path.substring(0, index)
     url = window.location.origin + '/m3u8/' + token.value + '?path=' + encodeURIComponent(parent + '$' + start)
   }
-  return `vlc://${url}`
+  return url
 }
 
 const openInVLC = () => {
@@ -1597,6 +1633,23 @@ const showDelete = (data: VodItem) => {
   deleteVisible.value = true
 }
 
+const showPush = () => {
+  device.value.id = devices.value[0].id
+  if (devices.value.length > 1) {
+    pushVisible.value = true
+  } else {
+    doPush()
+  }
+}
+
+const doPush = () => {
+  const url = playUrl.value
+  axios.post(`/api/devices/${device.value.id}/push?type=push&url=${url}`).then(() => {
+    ElMessage.success('推送成功')
+    pushVisible.value = false
+  })
+}
+
 const formatDate = (timestamp: number): string => {
   const date: Date = new Date(timestamp);
   const year: number = date.getFullYear();
@@ -1693,6 +1746,7 @@ onMounted(async () => {
     cover.value = data.video_cover
     tgTimeout.value = +data.tg_timeout
   })
+  loadDevices()
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
   timer = setInterval(save, 5000)
   window.addEventListener('keydown', handleKeyDown);

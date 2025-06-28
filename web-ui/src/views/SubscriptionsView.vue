@@ -502,7 +502,7 @@ const onTokenChange = () => {
 }
 
 const pushConfig = () => {
-  axios.post(`/api/devices/${pushForm.value.id}/push?url=${pushForm.value.url}`).then(() => {
+  axios.post(`/api/devices/${pushForm.value.id}/push?type=setting&url=${pushForm.value.url}`).then(() => {
     ElMessage.success('推送成功')
   })
 }

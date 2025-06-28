@@ -168,7 +168,7 @@ public class HistoryService {
         formData.add("device", objectMapper.writeValueAsString(me));
         formData.add("config", config);
         formData.add("targets", objectMapper.writeValueAsString(result));
-        log.debug("push: {}", formData);
+        log.debug("push history: {}", formData);
         String json = restTemplate.postForObject(device.getIp() + "/action", formData, String.class);
         log.info(json);
     }
@@ -188,23 +188,29 @@ public class HistoryService {
         syncHistory(String.valueOf(mode), device, me, config, List.of());
     }
 
-    public void pushConfig(Integer id, String name, String url, Device me) throws JsonProcessingException {
+    public void push(Integer id, String type, String name, String url, Device me) throws JsonProcessingException {
         Device device = deviceRepository.findById(id).orElseThrow();
 
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-        formData.add("do", "setting");
-        formData.add("name", name);
-        formData.add("text", url);
-        log.debug("push configuration: {}", formData);
+        formData.add("do", type);
+        if ("push".equals(type)) {
+            formData.add("url", url);
+        } else {
+            formData.add("name", name);
+            formData.add("text", url);
+        }
+        log.debug("push: {}", formData);
         String json = restTemplate.postForObject(device.getIp() + "/action", formData, String.class);
         log.info(json);
 
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", 1);
-        map.put("type", 0);
-        map.put("url", url);
-        String config = objectMapper.writeValueAsString(map);
-        syncHistory("0", device, me, config, List.of());
+        if ("setting".equals(type)) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", 1);
+            map.put("type", 0);
+            map.put("url", url);
+            String config = objectMapper.writeValueAsString(map);
+            syncHistory("0", device, me, config, List.of());
+        }
     }
 
     public void delete(String key) {

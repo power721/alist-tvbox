@@ -2400,11 +2400,18 @@ public class TvBoxService {
 
     public Device device(HttpServletRequest request) {
         try {
-            getClientDevice(request);
+            Device device = getClientDevice(request);
+            if (device != null) {
+                return device;
+            }
         } catch (Exception e) {
             log.warn("get client device failed", e);
         }
 
+        return myDevice();
+    }
+
+    public Device myDevice() {
         Device device = new Device();
         device.setId(99);
         device.setIp(buildTvUrl());
@@ -2413,12 +2420,12 @@ public class TvBoxService {
         return device;
     }
 
-    private void getClientDevice(HttpServletRequest request) throws JsonProcessingException {
+    private Device getClientDevice(HttpServletRequest request) throws JsonProcessingException {
         String ipAddress = Utils.getClientIp(request);
-        addDevice(ipAddress);
+        return addDevice(ipAddress);
     }
 
-    public void addDevice(String ipAddress) throws JsonProcessingException {
+    public Device addDevice(String ipAddress) throws JsonProcessingException {
         String url = ipAddress;
         if (!url.startsWith("http://")) {
             url = "http://" + ipAddress + ":9978/device";
@@ -2435,10 +2442,12 @@ public class TvBoxService {
                     device.setId(exist.getId());
                 }
                 deviceRepository.save(device);
+                return device;
             }
         } catch (ResourceAccessException e) {
             throw new BadRequestException("无法访问设备", e);
         }
+        return null;
     }
 
     private String buildTvUrl() {

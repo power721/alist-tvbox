@@ -127,7 +127,7 @@ public class TvBoxController {
         if ("sync".equals(action) && "history".equals(type)) {
             historyService.syncHistory(mode,
                     device == null ? null : objectMapper.readValue(device, Device.class),
-                    tvBoxService.device(request),
+                    tvBoxService.myDevice(),
                     config,
                     objectMapper.readValue(targets, new TypeReference<List<History>>() {
                     }));
@@ -152,12 +152,12 @@ public class TvBoxController {
     @PostMapping("/devices/{token}/{id}/sync")
     public void sync(@PathVariable String token, @PathVariable Integer id, int mode, HttpServletRequest request) throws JsonProcessingException {
         subscriptionService.checkToken(token);
-        historyService.sync(id, tvBoxService.device(request), mode);
+        historyService.sync(id, tvBoxService.myDevice(), mode);
     }
 
     @PostMapping("/api/devices/{id}/push")
-    public void pushConfig(@PathVariable Integer id, String name, String url, HttpServletRequest request) throws JsonProcessingException {
-        historyService.pushConfig(id, name, url, tvBoxService.device(request));
+    public void push(@PathVariable Integer id, String type, String name, String url, HttpServletRequest request) throws JsonProcessingException {
+        historyService.push(id, type, name, url, tvBoxService.myDevice());
     }
 
     @DeleteMapping("/api/devices/{id}")
