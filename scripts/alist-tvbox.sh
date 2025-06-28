@@ -321,17 +321,32 @@ check_update() {
 
 # 显示版本选择菜单
 show_version_menu() {
-  clear
-  echo -e "${CYAN}=============================================${NC}"
-  echo -e "${GREEN}          请选择要使用的版本          ${NC}"
-  echo -e "${CYAN}=============================================${NC}"
-  for key in "${!VERSIONS[@]}"; do
-    echo -e "${YELLOW} $key. ${VERSIONS[$key]}${NC}"
-  done
-  echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请输入版本编号 [1-8]: " version_choice
+  while true; do
+    clear
+    echo -e "${CYAN}=============================================${NC}"
+    echo -e "${GREEN}          请选择要使用的版本          ${NC}"
+    echo -e "${CYAN}=============================================${NC}"
+    for key in {1..8}; do
+      echo -e "${YELLOW} $key. ${VERSIONS[$key]}${NC}"
+    done
+    echo -e "${GREEN} 0. 返回主菜单${NC}"
+    echo -e "${CYAN}---------------------------------------------${NC}"
 
-  if [[ -n "${VERSIONS[$version_choice]}" ]]; then
+    while true; do
+      read -p "请输入版本编号 [0-8]: " version_choice
+      # 验证输入是否为0-8的数字
+      if [[ "$version_choice" =~ ^[0-8]$ ]]; then
+        break
+      else
+        echo -e "${RED}无效输入! 请输入0-8的数字${NC}"
+      fi
+    done
+
+    # 如果选择0，返回主菜单
+    if [[ "$version_choice" == "0" ]]; then
+      return
+    fi
+
     local old_version="${CONFIG[IMAGE_NAME]}"
     CONFIG["IMAGE_ID"]="$version_choice"
     CONFIG["IMAGE_NAME"]="${VERSIONS[$version_choice]%% -*}"
@@ -348,10 +363,8 @@ show_version_menu() {
 
     echo -e "${GREEN}版本已切换为: ${VERSIONS[$version_choice]}${NC}"
     sleep 2
-  else
-    echo -e "${RED}无效选择!${NC}"
-    sleep 1
-  fi
+    return
+  done
 }
 
 # 添加重置密码函数
