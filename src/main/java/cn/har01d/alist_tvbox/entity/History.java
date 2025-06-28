@@ -22,7 +22,7 @@ public class History {
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
     private Integer id;
 
-    @Column(name = "`key`")
+    @Column(name = "`key`", columnDefinition = "TEXT")
     private String key;
     private String vodPic;
     private String vodName;

@@ -594,6 +594,7 @@ const title = ref('')
 const playUrl = ref('')
 const poster = ref('')
 const cover = ref('')
+const prev = ref({})
 const base64QrCode = ref('')
 const devices = ref<Device[]>([])
 const movies = ref<VodItem[]>([])
@@ -694,7 +695,9 @@ const showScan = () => {
 const syncHistory = (id: number, mode: number) => {
   axios.post(`/devices/${token.value}/${id}/sync?mode=${mode}`).then(() => {
     ElMessage.success('同步成功')
-    loadHistory()
+    if (isHistory.value) {
+      loadHistory()
+    }
   })
 }
 
@@ -1505,7 +1508,7 @@ const getHistory = (id: string) => {
   minute2.value = 0
   second2.value = 0
 
-  return axios.get('/history/' + token.value + "?cid=0&key=" + id).then(({data}) => {
+  return axios.get('/history/' + token.value + "?key=" + id).then(({data}) => {
     if (data) {
       let path = data.episodeUrl as string
       if (path) {
@@ -1531,7 +1534,7 @@ const getHistory = (id: string) => {
 }
 
 const loadHistory = () => {
-  axios.get('/history/' + token.value + '?cid=0').then(({data}) => {
+  axios.get('/history/' + token.value).then(({data}) => {
     files.value = data.sort((a, b) => b.t - a.t).map(e => {
       return {
         id: e.id,
@@ -1570,7 +1573,7 @@ const deleteHistory = () => {
 }
 
 const clearHistory = () => {
-  axios.delete('/history/' + token.value + '?cid=0').then(() => {
+  axios.delete('/history/' + token.value).then(() => {
     loadHistory()
   })
 }
@@ -1582,16 +1585,16 @@ const handleDeleteBatch = () => {
 }
 
 const handleCleanAll = () => {
-  batch.value = false
+  batch.value = true
   clean.value = true
   deleteVisible.value = true
 }
 
 const showDelete = (data: VodItem) => {
+  history.value = data
   batch.value = false
   clean.value = false
   deleteVisible.value = true
-  history.value = data
 }
 
 const formatDate = (timestamp: number): string => {

@@ -55,17 +55,13 @@ public class HistoryController {
     }
 
     @GetMapping("/history/{token}")
-    public Object pull(@PathVariable String token, Integer cid, String key) {
+    public Object pull(@PathVariable String token, String key) {
         subscriptionService.checkToken(token);
 
-        if (cid != null) {
-            if (StringUtils.isBlank(key)) {
-                return historyService.findAll();
-            } else {
-                return historyService.findById(key);
-            }
-        } else {
+        if (StringUtils.isBlank(key)) {
             return historyService.findAll();
+        } else {
+            return historyService.findById(key);
         }
     }
 
@@ -77,17 +73,12 @@ public class HistoryController {
     }
 
     @DeleteMapping("/history/{token}")
-    public void delete(@PathVariable String token, Integer cid, String key) {
+    public void delete(@PathVariable String token, String key) {
         subscriptionService.checkToken(token);
-
-        if (cid != null) {
-            if (StringUtils.isBlank(key)) {
-                historyService.deleteAll();
-            } else {
-                historyService.delete(key);
-            }
-        } else {
+        if (StringUtils.isBlank(key)) {
             historyService.deleteAll();
+        } else {
+            historyService.delete(key);
         }
     }
 }

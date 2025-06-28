@@ -22,6 +22,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -212,7 +213,9 @@ public class HistoryService {
     }
 
     public void deleteAll() {
-        historyRepository.deleteAll();
+        List<History> list = historyRepository.findAll();
+        log.info("deleteAll: {}", list.size());
+        historyRepository.deleteAll(list);
     }
 
     public void delete(List<Integer> ids) {
@@ -223,6 +226,22 @@ public class HistoryService {
 
     public void deleteById(Integer id) {
         historyRepository.deleteById(id);
+    }
+
+    private String base64Encode(String input) {
+        String encoded = Base64.getEncoder().encodeToString(input.getBytes(StandardCharsets.UTF_8))
+                .replace("+", "-")
+                .replace("/", "_");
+        if (encoded.endsWith("===")) {
+            encoded = encoded.substring(0, encoded.length() - 3);
+        }
+        if (encoded.endsWith("==")) {
+            encoded = encoded.substring(0, encoded.length() - 2);
+        }
+        if (encoded.endsWith("=")) {
+            encoded = encoded.substring(0, encoded.length() - 1);
+        }
+        return encoded;
     }
 
     private String decode(String str) {
