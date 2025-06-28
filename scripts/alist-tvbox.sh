@@ -13,10 +13,10 @@ NC='\033[0m' # No Color
 # 版本定义
 declare -A VERSIONS=(
   ["1"]="haroldli/alist-tvbox - 纯净版"
-  ["2"]="haroldli/alist-tvbox-native - 纯净原生版"
+  ["2"]="haroldli/alist-tvbox-native - 纯净原生版（推荐）"
   ["3"]="haroldli/alist-tvbox-tg - 纯净TG版"
   ["4"]="haroldli/xiaoya-tvbox - 小雅集成版"
-  ["5"]="haroldli/xiaoya-tvbox-native - 小雅原生版"
+  ["5"]="haroldli/xiaoya-tvbox-native - 小雅原生版（推荐）"
   ["6"]="haroldli/xiaoya-tvbox-native-host - 小雅原生主机版"
   ["7"]="haroldli/xiaoya-tvbox-hostmode - 小雅主机模式版"
   ["8"]="haroldli/xiaoya-tvbox-tg - 小雅TG版"
@@ -33,7 +33,7 @@ declare -A DEFAULT_CONFIG=(
   ["PORT2"]="5344"
   ["NETWORK"]="bridge"
   ["RESTART"]="always"
-  ["MOUNT_WWW"]="false"  # 新增配置项
+  ["MOUNT_WWW"]="false"
 )
 
 # 初始化配置字典
@@ -105,7 +105,7 @@ remove_opposite_container() {
   local opposite_name=$(get_opposite_container_name)
 
   if docker ps -a --format '{{.Names}}' | grep -q "^${opposite_name}\$"; then
-    echo -e "${YELLOW}正在移除对立容器 ${opposite_name}...${NC}"
+    echo -e "${YELLOW}正在移除容器 ${opposite_name}...${NC}"
     docker rm -f "$opposite_name" >/dev/null
   fi
 }
@@ -188,13 +188,8 @@ show_access_info() {
 
   echo -e "\n${CYAN}============== 访问信息 ==============${NC}"
   echo -e "容器名称: ${GREEN}${container_name}${NC}"
-  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
-    echo -e "管理界面: ${GREEN}http://localhost:${CONFIG[PORT1]}/${NC}"
-    echo -e "AList界面: ${GREEN}http://localhost:${CONFIG[PORT2]}/${NC}"
-  else
-    echo -e "管理界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT1]}/${NC}"
-    echo -e "AList界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT2]}/${NC}"
-  fi
+  echo -e "管理界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT1]}/${NC}"
+  echo -e "AList界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT2]}/${NC}"
   echo -e "${CYAN}=======================================${NC}"
   echo -e "查看日志: ${YELLOW}docker logs -f $container_name${NC}"
 }
@@ -206,7 +201,7 @@ show_menu() {
   local container_name=$(get_container_name)
 
   echo -e "${CYAN}=============================================${NC}"
-  echo -e "${GREEN}          小雅TVBox交互式管理系统          ${NC}"
+  echo -e "${GREEN}          AList TVBox交互式管理系统          ${NC}"
   echo -e "${CYAN}=============================================${NC}"
   echo -e "${YELLOW} 当前版本: ${CONFIG[IMAGE_NAME]}${NC}"
   echo -e "${YELLOW} 容器名称: ${container_name}${NC}"
@@ -430,7 +425,12 @@ show_config_menu() {
           CONFIG["MOUNT_WWW"]="true"
         fi
         save_config
-        echo -e "${GREEN}已${CONFIG[MOUNT_WWW]}挂载/www目录${NC}"
+        if [[ "${CONFIG[MOUNT_WWW]}" == "true" ]]; then
+          ACTION=""
+        else
+          ACTION="取消"
+        fi
+        echo -e "${GREEN}已${ACTION}挂载/www目录${NC}"
         sleep 1
         ;;
       5)
