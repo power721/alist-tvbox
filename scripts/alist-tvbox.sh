@@ -41,54 +41,6 @@ for key in "${!DEFAULT_CONFIG[@]}"; do
   CONFIG["$key"]="${DEFAULT_CONFIG[$key]}"
 done
 
-# 精确检测端口占用情况（兼容Docker容器映射）
-check_port() {
-  local port=$1
-  local type=$2
-  local container_name=$(get_container_name)
-
-  # 检查端口是否被监听
-  if ! ss -tuln | grep -q "LISTEN.*:${port}\b"; then
-    return 0
-  fi
-
-  # 获取占用端口的详细信息
-  local port_info=$(sudo lsof -i :${port} -sTCP:LISTEN -Fc 2>/dev/null | head -1)
-  port_info=${port_info#c}
-
-  # 如果是Docker相关进程
-  if [[ "$port_info" == "docker-proxy" ]] ||
-     [[ "$port_info" == "docker-pr" ]] ||
-     [[ "$port_info" == "com.docker"* ]] ||
-     [[ "$port_info" == "containerd" ]]; then
-
-    # 检查是否是当前容器映射的端口
-    if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-      local container_ports=$(docker port "$container_name" | grep ":${port}\$")
-      if [[ -n "$container_ports" ]]; then
-        echo -e "${YELLOW}提示：${type}端口 ${port} 被当前容器映射${NC}"
-        return 0
-      fi
-    fi
-
-    echo -e "${YELLOW}提示：${type}端口 ${port} 被Docker容器映射${NC}"
-    return 0
-  fi
-
-  # 如果是其他进程占用
-  echo -e "${RED}错误：${type}端口 ${port} 已被其他程序占用！${NC}"
-  if [[ -n "$port_info" ]]; then
-    echo -e "占用进程：$port_info"
-  else
-    echo -e "无法获取进程名，可能是系统进程"
-  fi
-  echo -e "使用以下命令查看详细信息："
-  echo -e "  sudo lsof -i :${port} -sTCP:LISTEN"
-  echo -e "或："
-  echo -e "  sudo netstat -tulnp | grep ':${port}\b'"
-  return 1
-}
-
 # 检测运行环境
 check_environment() {
   echo -e "${CYAN}正在检测运行环境...${NC}"
@@ -232,23 +184,98 @@ load_config() {
 # 保存配置
 save_config() {
   {
-    for key in "${!DEFAULT_CONFIG[@]}"; do
+    for key in "${!CONFIG[@]}"; do
       echo "$key=${CONFIG[$key]}"
     done
   } > "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
 }
 
-# 根据版本获取容器名称
+# 获取容器名称
 get_container_name() {
   case "${CONFIG[VERSION_ID]}" in
-    1|2|3)
-      echo "alist-tvbox"  # 纯净版
-      ;;
-    *)
-      echo "xiaoya-tvbox"  # 小雅版
+    1|2|3) echo "alist-tvbox";;
+    *) echo "xiaoya-tvbox";;
+  esac
+}
+
+# 获取对立容器名称
+get_opposite_container_name() {
+  case "${CONFIG[VERSION_ID]}" in
+    1|2|3) echo "xiaoya-tvbox";;
+    *) echo "alist-tvbox";;
+  esac
+}
+
+# 停止并移除对立容器
+remove_opposite_container() {
+  local opposite_name=$(get_opposite_container_name)
+
+  if docker ps -a --format '{{.Names}}' | grep -q "^${opposite_name}\$"; then
+    echo -e "${YELLOW}正在移除对立容器 ${opposite_name}...${NC}"
+    docker rm -f "$opposite_name" >/dev/null
+  fi
+}
+
+# 检查镜像更新
+check_image_update() {
+  local image="${CONFIG[IMAGE_NAME]}"
+  echo -e "${CYAN}正在检查镜像更新...${NC}"
+
+  # 获取当前镜像ID
+  local current_id=$(docker images --quiet "$image")
+
+  # 拉取最新镜像
+  echo -e "${BLUE}正在拉取最新镜像...${NC}"
+  docker pull "$image"
+
+  # 获取新镜像ID
+  local new_id=$(docker images --quiet "$image")
+
+  if [[ "$current_id" != "$new_id" ]]; then
+    echo -e "${GREEN}检测到新版本镜像${NC}"
+    return 0
+  else
+    echo -e "${YELLOW}当前已是最新版本${NC}"
+    return 1
+  fi
+}
+
+# 启动容器
+start_container() {
+  local image="${CONFIG[IMAGE_NAME]}"
+  local container_name=$(get_container_name)
+  local network_args=""
+  local port_args=""
+
+  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
+    network_args="--network host"
+  else
+    port_args="-p ${CONFIG[PORT1]}:4567 -p ${CONFIG[PORT2]}:80"
+  fi
+
+  # 固定内存参数为512MB
+  local mem_args="-Xmx512M"
+
+  # 特殊版本处理
+  local extra_args=""
+  case "${CONFIG[VERSION_ID]}" in
+    4|5)
+      extra_args+=" --network host"
       ;;
   esac
+
+  # 运行容器
+  docker run -d \
+    --name "$container_name" \
+    $port_args \
+    -e ALIST_PORT="${CONFIG[PORT2]}" \
+    -e MEM_OPT="$mem_args" \
+    -v "${CONFIG[BASE_DIR]}":/data \
+    --restart="${CONFIG[RESTART]}" \
+    $network_args \
+    $extra_args \
+    "$image"
 }
 
 # 显示访问信息
@@ -271,87 +298,57 @@ show_access_info() {
   echo -e "${CYAN}=======================================${NC}"
   echo -e "查看日志: ${YELLOW}docker logs -f $container_name${NC}"
 }
-
-# 安装/更新容器
-install_container() {
-  # 检查端口占用
-  if [[ "${CONFIG[NETWORK]}" != "host" ]]; then
-    check_port "${CONFIG[PORT1]}" "管理" || exit 1
-    check_port "${CONFIG[PORT2]}" "AList" || exit 1
-  fi
-
-  local image="${CONFIG[IMAGE_NAME]}"
+# 检测容器运行状态
+check_container_status() {
   local container_name=$(get_container_name)
-  local network_args=""
-  local port_args=""
-
-  # 设置网络参数
-  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
-    network_args="--network host"
+  if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    echo "running"
+  elif docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    echo "stopped"
   else
-    port_args="-p ${CONFIG[PORT1]}:4567 -p ${CONFIG[PORT2]}:80"
+    echo "not_exist"
   fi
-
-  # 停止并移除旧容器
-  if docker inspect "$container_name" &>/dev/null; then
-    echo -e "${YELLOW}发现已存在容器，停止并移除...${NC}"
-    docker stop "$container_name" >/dev/null
-    docker rm "$container_name" >/dev/null
-  fi
-
-  # 创建数据目录
-  mkdir -p "${CONFIG[BASE_DIR]}"
-
-  # 固定内存参数为512MB
-  local mem_args="-Xmx512M"
-
-  # 特殊版本处理
-  local extra_args=""
-  case "${CONFIG[VERSION_ID]}" in
-    4|5)
-      extra_args+=" --network host"
-      ;;
-  esac
-
-  # 拉取镜像
-  echo -e "${BLUE}正在拉取镜像: ${image}${NC}"
-  docker pull "$image"
-
-  # 运行容器
-  echo -e "${GREEN}启动容器...${NC}"
-  docker run -d \
-    --name "$container_name" \
-    $port_args \
-    -e ALIST_PORT="${CONFIG[PORT2]}" \
-    -e MEM_OPT="$mem_args" \
-    -v "${CONFIG[BASE_DIR]}":/data \
-    --restart="${CONFIG[RESTART]}" \
-    $network_args \
-    $extra_args \
-    "$image"
-
-  echo -e "${GREEN}操作成功完成!${NC}"
-  show_access_info
-  read -n 1 -s -r -p "按任意键继续..."
 }
 
 # 显示交互式菜单
 show_menu() {
   clear
+  local status=$(check_container_status)
+
   echo -e "${CYAN}=============================================${NC}"
   echo -e "${GREEN}          小雅TVBox交互式管理系统          ${NC}"
   echo -e "${CYAN}=============================================${NC}"
   echo -e "${YELLOW} 当前版本: ${CONFIG[IMAGE_NAME]}${NC}"
+  echo -e "${YELLOW} 容器状态: $(
+    case "$status" in
+      "running") echo -e "${GREEN}运行中${NC}";;
+      "stopped") echo -e "${RED}已停止${NC}";;
+      *) echo -e "${YELLOW}未创建${NC}";;
+    esac
+  )${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
   echo -e "${GREEN} 1. 安装/更新容器${NC}"
-  echo -e "${GREEN} 2. 启动容器${NC}"
-  echo -e "${GREEN} 3. 停止容器${NC}"
-  echo -e "${GREEN} 4. 重启容器${NC}"
-  echo -e "${GREEN} 5. 查看容器状态${NC}"
-  echo -e "${GREEN} 6. 查看容器日志${NC}"
-  echo -e "${GREEN} 7. 卸载容器${NC}"
-  echo -e "${GREEN} 8. 选择版本${NC}"
-  echo -e "${GREEN} 9. 配置管理${NC}"
+
+  # 动态显示启动/停止菜单项
+  case "$status" in
+    "running")
+      echo -e "${GREEN} 2. 停止容器${NC}"
+      ;;
+    "stopped")
+      echo -e "${GREEN} 2. 启动容器${NC}"
+      ;;
+    *)
+      echo -e "${GREEN} 2. 启动容器${NC}"
+      ;;
+  esac
+
+  echo -e "${GREEN} 3. 重启容器${NC}"
+  echo -e "${GREEN} 4. 查看容器状态${NC}"
+  echo -e "${GREEN} 5. 查看容器日志${NC}"
+  echo -e "${GREEN} 6. 卸载容器${NC}"
+  echo -e "${GREEN} 7. 选择版本${NC}"
+  echo -e "${GREEN} 8. 配置管理${NC}"
+  echo -e "${GREEN} 9. 检查更新${NC}"
   echo -e "${GREEN} 0. 退出${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
   read -p "请输入选项 [0-9]: " choice
@@ -426,73 +423,114 @@ show_config_menu() {
   fi
 }
 
-check_environment
-load_config
+# 安装/更新容器
+install_container() {
+  local container_name=$(get_container_name)
+  remove_opposite_container
+
+  if check_image_update; then
+    echo -e "${GREEN}正在更新容器...${NC}"
+  else
+    echo -e "${YELLOW}没有新版本可用，继续使用当前镜像${NC}"
+  fi
+
+  # 停止并移除旧容器
+  if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    echo -e "${YELLOW}正在移除现有容器...${NC}"
+    docker rm -f "$container_name" >/dev/null
+  fi
+
+  # 创建数据目录
+  mkdir -p "${CONFIG[BASE_DIR]}"
+
+  # 启动容器
+  start_container
+  echo -e "${GREEN}操作成功完成!${NC}"
+  show_access_info
+  read -n 1 -s -r -p "按任意键继续..."
+}
+
+# 检查更新
+check_update() {
+  if check_image_update; then
+    read -p "检测到新版本，是否立即更新容器？[Y/n] " yn
+    case $yn in
+      [Nn]* ) ;;
+      * )
+        local container_name=$(get_container_name)
+        if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+          echo -e "${YELLOW}正在重启容器...${NC}"
+          docker restart "$container_name"
+        else
+          echo -e "${YELLOW}容器未运行，请先启动容器${NC}"
+        fi
+        ;;
+    esac
+  fi
+  read -n 1 -s -r -p "按任意键继续..."
+}
 
 # 主循环
 interactive_mode() {
+  check_environment
   load_config
+
   while true; do
     show_menu
     local container_name=$(get_container_name)
+    local status=$(check_container_status)
 
     case $choice in
       1)
         install_container
         ;;
       2)
-        if docker inspect "$container_name" &>/dev/null; then
-          docker start "$container_name"
-          echo -e "${GREEN}容器已启动${NC}"
-          sleep 1
-        else
-          echo -e "${RED}容器不存在，请先安装${NC}"
-          sleep 1
-        fi
+        # 动态处理启动/停止
+        case "$status" in
+          "running")
+            docker stop "$container_name"
+            echo -e "${GREEN}容器已停止${NC}"
+            ;;
+          "stopped"|"not_exist")
+            docker start "$container_name" || {
+              echo -e "${RED}启动失败，请先安装容器${NC}"
+              read -p "是否立即安装容器？[Y/n] " yn
+              case $yn in
+                [Nn]* ) ;;
+                * ) install_container;;
+              esac
+            }
+            ;;
+        esac
+        sleep 1
         ;;
       3)
-        if docker inspect "$container_name" &>/dev/null; then
-          docker stop "$container_name"
-          echo -e "${GREEN}容器已停止${NC}"
-          sleep 1
+        if [ "$status" != "not_exist" ]; then
+          docker restart "$container_name"
+          echo -e "${GREEN}容器已重启${NC}"
+        else
+          echo -e "${RED}容器不存在，请先安装${NC}"
+        fi
+        sleep 1
+        ;;
+      4)
+        echo -e "${CYAN}容器状态:${NC}"
+        docker ps -a --filter "name=$container_name"
+        echo -e "\n${CYAN}资源使用:${NC}"
+        docker stats --no-stream "$container_name" 2>/dev/null || echo -e "${YELLOW}容器未运行${NC}"
+        read -n 1 -s -r -p "按任意键继续..."
+        ;;
+      5)
+        if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+          docker logs -f "$container_name"
         else
           echo -e "${YELLOW}容器不存在${NC}"
           sleep 1
         fi
         ;;
-      4)
-        if docker inspect "$container_name" &>/dev/null; then
-          docker restart "$container_name"
-          echo -e "${GREEN}容器已重启${NC}"
-          sleep 1
-        else
-          echo -e "${RED}容器不存在，请先安装${NC}"
-          sleep 1
-        fi
-        ;;
-      5)
-        if docker inspect "$container_name" &>/dev/null; then
-          echo -e "${CYAN}容器状态:${NC}"
-          docker ps -a --filter "name=$container_name"
-          echo -e "\n${CYAN}资源使用:${NC}"
-          docker stats --no-stream "$container_name"
-          read -n 1 -s -r -p "按任意键继续..."
-        else
-          echo -e "${YELLOW}容器未运行${NC}"
-          sleep 1
-        fi
-        ;;
       6)
-        if docker inspect "$container_name" &>/dev/null; then
-          docker logs -f "$container_name"
-        else
-          echo -e "${YELLOW}容器未运行${NC}"
-          sleep 1
-        fi
-        ;;
-      7)
-        if docker inspect "$container_name" &>/dev/null; then
-          docker stop "$container_name" && docker rm "$container_name"
+        if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+          docker rm -f "$container_name"
           echo -e "${GREEN}容器已卸载${NC}"
           sleep 1
         else
@@ -500,11 +538,14 @@ interactive_mode() {
           sleep 1
         fi
         ;;
-      8)
+      7)
         show_version_menu
         ;;
-      9)
+      8)
         show_config_menu
+        ;;
+      9)
+        check_update
         ;;
       0)
         echo -e "${GREEN}再见!${NC}"
@@ -520,6 +561,7 @@ interactive_mode() {
 
 # 命令行模式处理
 cli_mode() {
+  check_environment
   load_config
   local container_name=$(get_container_name)
 
@@ -543,14 +585,17 @@ cli_mode() {
       docker logs -f "$container_name"
       ;;
     uninstall)
-      docker stop "$container_name" && docker rm "$container_name"
+      docker rm -f "$container_name"
+      ;;
+    update)
+      check_update
       ;;
     menu)
       interactive_mode
       ;;
     *)
       echo -e "${RED}未知命令: $1${NC}"
-      echo "可用命令: install, start, stop, restart, status, logs, uninstall, menu"
+      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, menu"
       exit 1
       ;;
   esac
