@@ -1368,14 +1368,14 @@ public class TvBoxService {
             // ignore
         } else if ((fsDetail.getProvider().contains("Aliyundrive") && !fsDetail.getRawUrl().contains("115cdn.net"))
                 || (("open".equals(client) || "node".equals(client)) && fsDetail.getProvider().contains("115"))) {
-            url = buildAListProxyUrl(site, path, fsDetail.getSign());
+            url = buildProxyUrl(site, path);
             log.info("play url: {}", url);
         }
 
         result.put("url", url);
 
         if (isUseProxy(url)) {
-            url = buildAListProxyUrl(site, path, fsDetail.getSign());
+            url = buildProxyUrl(site, path);
             result.put("url", url);
         } else if (fsDetail.getProvider().equals("QuarkShare") || fsDetail.getProvider().equals("Quark")) {
             var account = getDriverAccount(url, DriverType.QUARK);
@@ -1657,7 +1657,7 @@ public class TvBoxService {
             movieDetail.setVod_play_from(site.getName());
             String sign = fsDetail.getSign();
             if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                movieDetail.setVod_play_url(buildAListProxyUrl(site, path, sign));
+                movieDetail.setVod_play_url(buildProxyUrl(site, path));
                 movieDetail.setType(fsDetail.getType());
             } else {
                 movieDetail.setVod_play_url(getFilename(fsDetail) + "$" + buildPlayUrl(site, path));
@@ -1813,7 +1813,7 @@ public class TvBoxService {
                     String filepath = newPath + "/" + folder + "/" + name;
                     String newName = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
                     if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                        String url = buildProxyUrl(site.getId() + "$" + filepath);
+                        String url = buildProxyUrl(site, filepath);
                         urls.add(newName + "$" + url);
                     } else {
                         String url = buildPlayUrl(site, filepath);
@@ -1846,7 +1846,7 @@ public class TvBoxService {
                 String filepath = newPath + "/" + name;
                 String newName = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
                 if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                    String url = buildProxyUrl(site.getId() + "$" + filepath);
+                    String url = buildProxyUrl(site, filepath);
                     list.add(newName + "$" + url);
                 } else {
                     String url = buildPlayUrl(site, filepath);
@@ -2299,11 +2299,11 @@ public class TvBoxService {
     }
 
     // AList-TvBox proxy
-    private String buildProxyUrl(String path) {
+    private String buildProxyUrl(Site site, String path) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath("/p/" + subscriptionService.getCurrentToken())
-                .replaceQuery("path=" + encodeUrl(path))
+                .replaceQuery("path=" + encodeUrl(site.getId() + "$" + path))
                 .build()
                 .toUriString();
     }
