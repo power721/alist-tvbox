@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - 'scripts/install-service.sh'
+      - 'scripts/alist-tvbox.sh'
       - 'scripts/update_hostmode.sh'
       - 'scripts/update_native.sh'
       - 'scripts/update_native_host.sh'
@@ -29,6 +30,6 @@ jobs:
           port: 22
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
-          source: "scripts/update_new.sh,scripts/update_xiaoya.sh,scripts/update_hostmode.sh,scripts/update_native.sh,scripts/update_native_host.sh,scripts/install-service.sh"
+          source: "scripts/alist-tvbox.sh,scripts/update_new.sh,scripts/update_xiaoya.sh,scripts/update_hostmode.sh,scripts/update_native.sh,scripts/update_native_host.sh,scripts/install-service.sh"
           strip_components: 1
           target: /var/www/alist/

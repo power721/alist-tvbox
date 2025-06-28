@@ -24,11 +24,20 @@ declare -A VERSIONS=(
 
 # 默认配置
 CONFIG_FILE="/$HOME/.config/alist-tvbox/app.conf"
+
+# 初始化基础目录
+INITIAL_BASE_DIR="/etc/xiaoya"
+if [[ -d "$INITIAL_BASE_DIR" ]]; then
+    DEFAULT_BASE_DIR="$INITIAL_BASE_DIR"
+else
+    DEFAULT_BASE_DIR="$PWD/alist-tvbox"
+fi
+
 declare -A DEFAULT_CONFIG=(
   ["MODE"]="docker"
   ["IMAGE_ID"]="5"
   ["IMAGE_NAME"]="haroldli/xiaoya-tvbox-native"
-  ["BASE_DIR"]="/etc/xiaoya"
+  ["BASE_DIR"]="$DEFAULT_BASE_DIR"
   ["PORT1"]="4567"
   ["PORT2"]="5344"
   ["NETWORK"]="bridge"
@@ -71,6 +80,12 @@ load_config() {
     done
     mkdir -p "$(dirname "$CONFIG_FILE")"
     save_config
+
+    # 确保基础目录存在
+    if [[ ! -d "${CONFIG[BASE_DIR]}" ]]; then
+      mkdir -p "${CONFIG[BASE_DIR]}"
+      echo -e "${YELLOW}创建基础目录: ${CONFIG[BASE_DIR]}${NC}"
+    fi
   fi
 }
 
@@ -157,6 +172,13 @@ start_container() {
   if [[ "${CONFIG[MOUNT_WWW]}" == "true" ]]; then
     volume_args="$volume_args -v ${CONFIG[BASE_DIR]}/www:/www"
     mkdir -p "${CONFIG[BASE_DIR]}/www"
+  fi
+
+  # 添加自定义挂载
+  if [[ -f "${CONFIG[BASE_DIR]}/mounts.conf" ]]; then
+    while IFS= read -r line; do
+      volume_args="$volume_args -v $line"
+    done < "${CONFIG[BASE_DIR]}/mounts.conf"
   fi
 
   # 只有版本6和7可以使用host模式
@@ -252,6 +274,12 @@ install_container() {
   local container_name=$(get_container_name)
   remove_opposite_container
 
+  # 检查基础目录是否存在
+  if [[ ! -d "${CONFIG[BASE_DIR]}" ]]; then
+    echo -e "${YELLOW}基础目录不存在，正在创建: ${CONFIG[BASE_DIR]}${NC}"
+    mkdir -p "${CONFIG[BASE_DIR]}"
+  fi
+
   if check_image_update; then
     echo -e "${GREEN}正在更新容器...${NC}"
   else
@@ -263,7 +291,6 @@ install_container() {
     docker rm -f "$container_name" >/dev/null
   fi
 
-  mkdir -p "${CONFIG[BASE_DIR]}"
   start_container
   echo -e "${GREEN}操作成功完成!${NC}"
   show_access_info
@@ -393,6 +420,106 @@ reset_admin_password() {
 
   sleep 3
 }
+# 管理自定义挂载目录
+manage_custom_mounts() {
+  while true; do
+    clear
+    echo -e "${CYAN}=============================================${NC}"
+    echo -e "${GREEN}          自定义挂载目录管理          ${NC}"
+    echo -e "${CYAN}=============================================${NC}"
+
+    # 显示当前挂载
+    if [[ -f "${CONFIG[BASE_DIR]}/mounts.conf" ]]; then
+      echo -e "${YELLOW}当前挂载配置:${NC}"
+      cat "${CONFIG[BASE_DIR]}/mounts.conf" | awk '{print " " NR ". " $0}'
+    else
+      echo -e "${YELLOW}暂无自定义挂载${NC}"
+    fi
+
+    echo -e "\n${GREEN} 1. 添加挂载目录"
+    echo -e " 2. 删除挂载目录"
+    echo -e " 0. 返回配置菜单${NC}"
+    echo -e "${CYAN}---------------------------------------------${NC}"
+    read -p "请选择操作 [0-2]: " mount_choice
+
+    case $mount_choice in
+      1)
+        add_custom_mount
+        ;;
+      2)
+        remove_custom_mount
+        ;;
+      0)
+        break
+        ;;
+      *)
+        echo -e "${RED}无效选择!${NC}"
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+# 添加自定义挂载
+add_custom_mount() {
+  echo -e "${YELLOW}格式: 主机目录:容器目录[:权限]"
+  echo -e "示例: /path/on/host:/path/in/container:ro${NC}"
+  read -p "请输入挂载配置: " mount_config
+
+  # 基本格式验证
+  if [[ "$mount_config" =~ ^[^:]+:[^:]+(:ro|:rw)?$ ]]; then
+    mkdir -p "${CONFIG[BASE_DIR]}"
+    echo "$mount_config" >> "${CONFIG[BASE_DIR]}/mounts.conf"
+    echo -e "${GREEN}挂载配置已添加!${NC}"
+
+    # 询问是否立即重启容器生效
+    local container_name=$(get_container_name)
+    if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+      read -p "是否立即重启容器使更改生效? [Y/n]: " restart_choice
+      case $restart_choice in
+        [Nn]*) ;;
+        *) docker restart "$container_name" ;;
+      esac
+    fi
+  else
+    echo -e "${RED}无效格式! 请使用 主机目录:容器目录[:权限] 格式${NC}"
+  fi
+  sleep 1
+}
+
+# 删除自定义挂载
+remove_custom_mount() {
+  if [[ ! -f "${CONFIG[BASE_DIR]}/mounts.conf" ]]; then
+    echo -e "${YELLOW}暂无自定义挂载配置${NC}"
+    sleep 1
+    return
+  fi
+
+  read -p "请输入要删除的挂载编号: " mount_num
+  local total_lines=$(wc -l < "${CONFIG[BASE_DIR]}/mounts.conf")
+
+  if [[ "$mount_num" =~ ^[0-9]+$ ]] && [[ "$mount_num" -ge 1 ]] && [[ "$mount_num" -le "$total_lines" ]]; then
+    # 创建临时文件
+    local temp_file=$(mktemp)
+    # 删除指定行
+    sed "${mount_num}d" "${CONFIG[BASE_DIR]}/mounts.conf" > "$temp_file"
+    mv "$temp_file" "${CONFIG[BASE_DIR]}/mounts.conf"
+    echo -e "${GREEN}挂载配置已删除!${NC}"
+
+    # 询问是否立即重启容器生效
+    local container_name=$(get_container_name)
+    if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+      read -p "是否立即重启容器使更改生效? [Y/n]: " restart_choice
+      case $restart_choice in
+        [Nn]*) ;;
+        *) docker restart "$container_name" ;;
+      esac
+    fi
+  else
+    echo -e "${RED}无效编号!${NC}"
+  fi
+  sleep 1
+}
 
 # 显示网络模式菜单
 show_network_menu() {
@@ -488,12 +615,13 @@ show_config_menu() {
     echo -e " 2. 管理端口: ${CONFIG[PORT1]}"
     echo -e " 3. AList端口: ${CONFIG[PORT2]}"
     echo -e " 4. 挂载/www目录: ${CONFIG[MOUNT_WWW]}"
-    echo -e " 5. 网络模式设置"
-    echo -e " 6. 重启策略设置"
-    echo -e " 7. 重置管理员密码"
+    echo -e " 5. 自定义挂载目录"
+    echo -e " 6. 网络模式设置"
+    echo -e " 7. 重启策略设置"
+    echo -e " 8. 重置管理员密码"
     echo -e " 0. 返回主菜单"
     echo -e "${CYAN}---------------------------------------------${NC}"
-    read -p "选择要修改的配置 [1-8]: " config_choice
+    read -p "选择要修改的配置 [0-8]: " config_choice
 
     case $config_choice in
       1)
@@ -527,14 +655,17 @@ show_config_menu() {
         sleep 1
         ;;
       5)
+        manage_custom_mounts
+        ;;
+      6)
         show_network_menu
         continue
         ;;
-      6)
+      7)
         show_restart_menu
         continue
         ;;
-      7)
+      8)
         reset_admin_password
         ;;
       0)

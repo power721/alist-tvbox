@@ -68,7 +68,9 @@ jobs:
           file: docker/Dockerfile-xiaoya-tg
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-tg:${{ github.ref_name }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-tg:${{ github.ref_name }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-python:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build host mode docker and push
