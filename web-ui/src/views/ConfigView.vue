@@ -389,7 +389,7 @@ const options = [
     ]
   }
 ]
-const tooltip = ref('sudo bash -c "$(curl -fsSL https://d.har01d.cn/update_xiaoya.sh)"')
+const tooltip = ref('sudo bash -c "$(curl -fsSL https://d.har01d.cn/alist-tvbox.sh)"')
 const aListStarted = ref(false)
 const aListRestart = ref(false)
 const mixSiteSource = ref(false)
@@ -638,7 +638,7 @@ onMounted(() => {
     if (store.standalone) {
       tooltip.value = 'bash -c "$(curl -fsSL http://d.har01d.cn/install-service.sh)"'
     } else {
-      tooltip.value = 'sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_' + data.install_mode + '.sh)"'
+      tooltip.value = 'sudo bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)"'
     }
   })
   axios.get('/api/alist/status').then(({data}) => {

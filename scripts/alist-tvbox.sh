@@ -18,16 +18,16 @@ declare -A VERSIONS=(
   ["4"]="haroldli/xiaoya-tvbox - 小雅集成版"
   ["5"]="haroldli/xiaoya-tvbox-native - 小雅原生版（推荐）"
   ["6"]="haroldli/xiaoya-tvbox-native-host - 小雅原生主机版"
-  ["7"]="haroldli/xiaoya-tvbox-hostmode - 小雅主机模式版"
+  ["7"]="haroldli/xiaoya-tvbox-host - 小雅主机模式版"
   ["8"]="haroldli/xiaoya-tvbox-tg - 小雅TG版"
 )
 
 # 默认配置
-CONFIG_FILE="/etc/xiaoya/xiaoya.conf"
+CONFIG_FILE="/$HOME/.config/alist-tvbox/app.conf"
 declare -A DEFAULT_CONFIG=(
   ["MODE"]="docker"
-  ["VERSION_ID"]="2"
-  ["IMAGE_NAME"]="haroldli/alist-tvbox-native"
+  ["IMAGE_ID"]="5"
+  ["IMAGE_NAME"]="haroldli/xiaoya-tvbox-native"
   ["BASE_DIR"]="/etc/xiaoya"
   ["PORT1"]="4567"
   ["PORT2"]="5344"
@@ -86,7 +86,7 @@ save_config() {
 
 # 获取容器名称
 get_container_name() {
-  case "${CONFIG[VERSION_ID]}" in
+  case "${CONFIG[IMAGE_ID]}" in
     1|2|3) echo "alist-tvbox";;
     *) echo "xiaoya-tvbox";;
   esac
@@ -94,7 +94,7 @@ get_container_name() {
 
 # 获取对立容器名称
 get_opposite_container_name() {
-  case "${CONFIG[VERSION_ID]}" in
+  case "${CONFIG[IMAGE_ID]}" in
     1|2|3) echo "xiaoya-tvbox";;
     *) echo "alist-tvbox";;
   esac
@@ -149,7 +149,7 @@ start_container() {
   local volume_args=""
 
   # 为alist-tvbox的三个版本添加特殊挂载
-  if [[ "${CONFIG[VERSION_ID]}" =~ ^[123]$ ]]; then
+  if [[ "${CONFIG[IMAGE_ID]}" =~ ^[123]$ ]]; then
     volume_args="-v ${CONFIG[BASE_DIR]}/alist:/opt/alist/data"
   fi
 
@@ -159,9 +159,17 @@ start_container() {
     mkdir -p "${CONFIG[BASE_DIR]}/www"
   fi
 
-  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
+  # 只有版本6和7可以使用host模式
+  if [[ "${CONFIG[NETWORK]}" == "host" && ("${CONFIG[IMAGE_ID]}" == "6" || "${CONFIG[IMAGE_ID]}" == "7") ]]; then
     network_args="--network host"
+    echo -e "${YELLOW}使用host网络模式${NC}"
   else
+    # 如果不是版本6或7，强制使用bridge模式
+    if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
+      CONFIG["NETWORK"]="bridge"
+      save_config
+      echo -e "${YELLOW}当前版本不支持host模式，已自动切换为bridge模式${NC}"
+    fi
     port_args="-p ${CONFIG[PORT1]}:4567 -p ${CONFIG[PORT2]}:80"
   fi
 
@@ -200,9 +208,9 @@ show_menu() {
   local status=$(check_container_status)
   local container_name=$(get_container_name)
 
-  echo -e "${CYAN}=============================================${NC}"
-  echo -e "${GREEN}          AList TVBox交互式管理系统          ${NC}"
-  echo -e "${CYAN}=============================================${NC}"
+  echo -e "${CYAN}==============================================${NC}"
+  echo -e "${GREEN}          AList TVBox 安装升级配置管理          ${NC}"
+  echo -e "${CYAN}==============================================${NC}"
   echo -e "${YELLOW} 当前版本: ${CONFIG[IMAGE_NAME]}${NC}"
   echo -e "${YELLOW} 容器名称: ${container_name}${NC}"
   echo -e "${YELLOW} 容器状态: $(
@@ -264,22 +272,51 @@ install_container() {
 
 # 检查更新
 check_update() {
-  if check_image_update; then
-    read -p "检测到新版本，是否立即更新容器？[Y/n] " yn
-    case $yn in
-      [Nn]* ) ;;
-      * )
-        local container_name=$(get_container_name)
-        if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-          echo -e "${YELLOW}正在重启容器...${NC}"
-          docker restart "$container_name"
-        else
-          echo -e "${YELLOW}容器未运行，请先启动容器${NC}"
-        fi
-        ;;
-    esac
+  local auto_update=false
+  # 检查是否包含-y参数
+  if [[ "$#" -ge 1 && "$1" == "-y" ]]; then
+    auto_update=true
   fi
-  read -n 1 -s -r -p "按任意键继续..."
+
+  local image="${CONFIG[IMAGE_NAME]}"
+  echo -e "${CYAN}正在检查镜像更新...${NC}"
+
+  local current_id=$(docker images --quiet "$image")
+  docker pull "$image" >/dev/null
+  local new_id=$(docker images --quiet "$image")
+
+  if [[ "$current_id" != "$new_id" ]]; then
+    echo -e "${GREEN}检测到新版本镜像${NC}"
+    if [[ "$auto_update" == true ]]; then
+      local container_name=$(get_container_name)
+      if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+        echo -e "${YELLOW}正在重启容器...${NC}"
+        docker restart "$container_name"
+      else
+        echo -e "${GREEN}正在启动容器...${NC}"
+        docker restart "$container_name"
+      fi
+      return 0
+    else
+      read -p "检测到新版本，是否立即更新容器？[Y/n] " yn
+      case $yn in
+        [Nn]* ) ;;
+        * )
+          local container_name=$(get_container_name)
+          if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+            echo -e "${YELLOW}正在重启容器...${NC}"
+            docker restart "$container_name"
+          else
+            echo -e "${GREEN}正在启动容器...${NC}"
+            docker restart "$container_name"
+          fi
+          ;;
+      esac
+    fi
+  else
+    echo -e "${YELLOW}当前已是最新版本${NC}"
+    return 1
+  fi
 }
 
 # 显示版本选择菜单
@@ -296,7 +333,7 @@ show_version_menu() {
 
   if [[ -n "${VERSIONS[$version_choice]}" ]]; then
     local old_version="${CONFIG[IMAGE_NAME]}"
-    CONFIG["VERSION_ID"]="$version_choice"
+    CONFIG["IMAGE_ID"]="$version_choice"
     CONFIG["IMAGE_NAME"]="${VERSIONS[$version_choice]%% -*}"
     save_config
 
@@ -317,6 +354,33 @@ show_version_menu() {
   fi
 }
 
+# 添加重置密码函数
+reset_admin_password() {
+  local container_name=$(get_container_name)
+  local cmd_file="${CONFIG[BASE_DIR]}/atv/cmd.sql"
+
+  # 确保目录存在
+  mkdir -p "$(dirname "$cmd_file")"
+
+  # 创建密码重置命令文件
+  echo "UPDATE users SET username='admin', password='\$2a\$10\$90MH0QCl098tffOA3ZBDwu0pm24xsVyJeQ41Tvj7N5bXspaqg8b2m' WHERE id=1;" > "$cmd_file"
+
+  # 检查容器状态
+  local status=$(check_container_status)
+
+  if [[ "$status" == "running" ]]; then
+    echo -e "${YELLOW}正在重启容器使密码重置生效...${NC}"
+    docker restart "$container_name"
+    echo -e "${GREEN}管理员密码已重置为默认密码!${NC}"
+    echo -e "${YELLOW}请尽快登录管理界面修改密码!${NC}"
+  else
+    echo -e "${GREEN}管理员密码将在容器启动时重置为默认密码!${NC}"
+    echo -e "${YELLOW}请启动容器后尽快登录管理界面修改密码!${NC}"
+  fi
+
+  sleep 3
+}
+
 # 显示网络模式菜单
 show_network_menu() {
   clear
@@ -325,10 +389,19 @@ show_network_menu() {
   echo -e "${CYAN}=============================================${NC}"
   echo -e " 当前网络模式: ${CONFIG[NETWORK]}"
   echo -e " 1. bridge模式 (默认)"
-  echo -e " 2. host模式"
-  echo -e " 3. 返回"
+
+  # 只有版本6和7显示host模式选项
+  if [[ "${CONFIG[IMAGE_ID]}" == "6" || "${CONFIG[IMAGE_ID]}" == "7" ]]; then
+    echo -e " 2. host模式"
+    echo -e " 0. 返回"
+    max_choice=2
+  else
+    echo -e " 0. 返回"
+    max_choice=1
+  fi
+
   echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请选择网络模式 [1-3]: " choice
+  read -p "请选择网络模式 [0-$max_choice]: " choice
 
   case $choice in
     1)
@@ -337,13 +410,19 @@ show_network_menu() {
       echo -e "${GREEN}已设置为bridge模式${NC}"
       ;;
     2)
-      CONFIG["NETWORK"]="host"
-      save_config
-      echo -e "${GREEN}已设置为host模式${NC}"
+      if [[ "$max_choice" == "2" ]]; then
+        CONFIG["NETWORK"]="host"
+        save_config
+        echo -e "${GREEN}已设置为host模式${NC}"
+      fi
+      ;;
+    0)
+      # 只有版本6和7会进入这个分支
+      return
       ;;
   esac
 
-  if [[ "$choice" != "3" ]]; then
+  if [[ "$choice" != "0" ]]; then
     sleep 1
   fi
 }
@@ -358,9 +437,9 @@ show_restart_menu() {
   echo -e " 1. always (总是重启)"
   echo -e " 2. unless-stopped (除非手动停止)"
   echo -e " 3. no (不自动重启)"
-  echo -e " 4. 返回"
+  echo -e " 0. 返回"
   echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请选择重启策略 [1-4]: " choice
+  read -p "请选择重启策略 [0-3]: " choice
 
   case $choice in
     1)
@@ -380,7 +459,7 @@ show_restart_menu() {
       ;;
   esac
 
-  if [[ "$choice" != "4" ]]; then
+  if [[ "$choice" != "0" ]]; then
     sleep 1
   fi
 }
@@ -398,9 +477,10 @@ show_config_menu() {
     echo -e " 4. 挂载/www目录: ${CONFIG[MOUNT_WWW]}"
     echo -e " 5. 网络模式设置"
     echo -e " 6. 重启策略设置"
-    echo -e " 7. 返回主菜单"
+    echo -e " 7. 重置管理员密码"
+    echo -e " 0. 返回主菜单"
     echo -e "${CYAN}---------------------------------------------${NC}"
-    read -p "选择要修改的配置 [1-7]: " config_choice
+    read -p "选择要修改的配置 [1-8]: " config_choice
 
     case $config_choice in
       1)
@@ -442,6 +522,9 @@ show_config_menu() {
         continue
         ;;
       7)
+        reset_admin_password
+        ;;
+      0)
         break
         ;;
     esac
@@ -584,7 +667,11 @@ cli_mode() {
       }
       ;;
     update)
-      check_update
+      if [[ "$#" -ge 2 && "$2" == "-y" ]]; then
+        check_update "-y"
+      else
+        check_update
+      fi
       ;;
     menu)
       interactive_mode
