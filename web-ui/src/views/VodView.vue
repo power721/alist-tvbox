@@ -61,6 +61,7 @@
         <el-row justify="end">
           <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
           <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
+          <el-button @click="showScan">同步影视</el-button>
           <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
         </el-row>
         <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" style="width: 100%"
@@ -104,7 +105,8 @@
               {{ scope.row.vod_tag === 'folder' ? scope.row.vod_remarks : '' }}
             </template>
           </el-table-column>
-          <el-table-column prop="index" label="集数" width="90" v-if="isHistory"/>
+<!--          <el-table-column prop="index" label="集数" width="90" v-if="isHistory"/>-->
+          <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
           <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
           <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="165"/>
           <el-table-column width="90" v-if="isHistory">
@@ -495,6 +497,51 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="scanVisible" title="影视设备">
+      <el-row>
+        <el-col span="8">
+          <div>影视扫码添加AList TvBox</div>
+          <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 200px;">
+        </el-col>
+        <el-col span="10">
+          <el-input v-model="device.ip" style="width: 200px" placeholder="输入影视IP或者URL" @keyup.enter="addDevice"></el-input>
+          <el-button @click="addDevice">添加</el-button>
+        </el-col>
+        <el-col span="6">
+        <el-button @click="scanDevices">扫描设备</el-button>
+        </el-col>
+      </el-row>
+
+      <el-table :data="devices" border style="width: 100%">
+        <el-table-column prop="name" label="名称" sortable width="180"/>
+        <el-table-column prop="uuid" label="ID" sortable width="180"/>
+        <el-table-column prop="ip" label="URL地址" sortable>
+          <template #default="scope">
+            <a :href="scope.row.ip" target="_blank">{{ scope.row.ip }}</a>
+          </template>
+        </el-table-column>
+        <el-table-column fixed="right" label="操作" width="100">
+          <template #default="scope">
+            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 0)">同步</el-button>
+            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 1)">拉取</el-button>
+            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id, 2)">推送</el-button>
+            <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="confirm" title="删除影视设备" width="30%">
+      <p>是否删除影视设备？</p>
+      <p> {{ device.name }}</p>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="confirm = false">取消</el-button>
+        <el-button type="danger" @click="deleteDevice">删除</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -521,6 +568,7 @@ import {
   Setting
 } from "@element-plus/icons-vue";
 import {VueDraggable} from "vue-draggable-plus";
+import type {Device} from "@/model/Device";
 
 let {toClipboard} = clipBorad();
 
@@ -546,6 +594,8 @@ const title = ref('')
 const playUrl = ref('')
 const poster = ref('')
 const cover = ref('')
+const base64QrCode = ref('')
+const devices = ref<Device[]>([])
 const movies = ref<VodItem[]>([])
 const playFrom = ref<string[]>([])
 const playlist = ref<Item[]>([])
@@ -568,6 +618,8 @@ const isFullscreen = ref(false)
 const dialogVisible = ref(false)
 const imageVisible = ref(false)
 const formVisible = ref(false)
+const scanVisible = ref(false)
+const confirm = ref(false)
 const batch = ref(false)
 const clean = ref(false)
 const deleteVisible = ref(false)
@@ -584,6 +636,13 @@ const results = ref<VodItem[]>([])
 const filteredResults = ref<VodItem[]>([])
 const paths = ref<Item[]>([])
 const selected = ref<Item[]>([])
+const device = ref<Device>({
+  name: "",
+  type: "",
+  uuid: "",
+  id: 0,
+  ip: ''
+})
 const history = ref({
   id: 0,
   vod_name: ''
@@ -621,6 +680,58 @@ const orders = [
   {label: '名称', value: 'name'},
   {label: '频道', value: 'channel'},
 ]
+
+const showScan = () => {
+  axios.get('/api/qr-code').then(({data}) => {
+    base64QrCode.value = data
+  })
+  axios.get('/api/devices').then(({data}) => {
+    devices.value = data
+    scanVisible.value = true
+  })
+}
+
+const syncHistory = (id: number, mode: number) => {
+  axios.post(`/devices/${token.value}/${id}/sync?mode=${mode}`).then(() => {
+    ElMessage.success('同步成功')
+    loadHistory()
+  })
+}
+
+const scanDevices = () => {
+  axios.post(`/api/devices/-/scan`).then(({data}) => {
+    ElMessage.success(`扫描完成，添加了${data}个设备`)
+  })
+}
+
+const handleDelete = (data: Device) => {
+  device.value = data
+  confirm.value = true
+}
+
+const addDevice = () => {
+  if (!device.value.ip) {
+    return
+  }
+  axios.post(`/api/devices?ip=` + device.value.ip).then(() => {
+    confirm.value = false
+    device.value.ip = ''
+    ElMessage.success('添加成功')
+    axios.get('/api/devices').then(({data}) => {
+      devices.value = data
+    })
+  })
+}
+
+const deleteDevice = () => {
+  axios.delete(`/api/devices/${device.value.id}`).then(() => {
+    confirm.value = false
+    ElMessage.success('删除成功')
+    axios.get('/api/devices').then(({data}) => {
+      devices.value = data
+    })
+  })
+}
 
 const handleAdd = () => {
   form.value = {
@@ -864,7 +975,7 @@ const loadFiles = (path: string) => {
   isHistory.value = false
   loading.value = true
   files.value = []
-  axios.get('/vod' + token.value + '?ac=web&pg=' + page.value + '&size=' + size.value + '&t=' + id).then(({data}) => {
+  axios.get('/vod/' + token.value + '?ac=web&pg=' + page.value + '&size=' + size.value + '&t=' + id).then(({data}) => {
     files.value = data.list
     images.value = data.list.filter(e => e.type == 5)
     total.value = data.total
@@ -906,7 +1017,7 @@ const extractPaths = (id: string) => {
 
 const loadDetail = (id: string) => {
   loading.value = true
-  axios.get('/vod' + token.value + '?ac=web&ids=' + id).then(({data}) => {
+  axios.get('/vod/' + token.value + '?ac=web&ids=' + id).then(({data}) => {
     if (data.list[0].type == 5) {
       let img = data.list[0]
       currentImageIndex.value = images.value.findIndex(e => e.vod_id == id)
@@ -1327,7 +1438,7 @@ const buildVlcUrl = (start: number) => {
     const path = getPath(id)
     const index = path.lastIndexOf('/')
     const parent = path.substring(0, index)
-    url = window.location.origin + '/m3u8' + token.value + '?path=' + encodeURIComponent(parent + '$' + start)
+    url = window.location.origin + '/m3u8/' + token.value + '?path=' + encodeURIComponent(parent + '$' + start)
   }
   return `vlc://${url}`
 }
@@ -1372,7 +1483,9 @@ const saveHistory = () => {
     key: movie.vod_id,
     vodName: movie.vod_name,
     vodPic: movie.vod_pic,
+    vodRemarks: title.value,
     episode: currentVideoIndex.value,
+    episodeUrl: playUrl.value.split('path=')[1],
     position: Math.round(videoPlayer.value.currentTime * 1000),
     opening: Math.round(skipStart.value * 1000),
     ending: Math.round(skipEnd.value * 1000),
@@ -1392,12 +1505,22 @@ const getHistory = (id: string) => {
   minute2.value = 0
   second2.value = 0
 
-  return axios.get('/history' + token.value + "?cid=0&key=" + id).then(({data}) => {
+  return axios.get('/history/' + token.value + "?cid=0&key=" + id).then(({data}) => {
     if (data) {
-      currentVideoIndex.value = data.episode
+      let path = data.episodeUrl as string
+      if (path) {
+        if (path.startsWith('1%7E%7E%7E%')) {
+          path = '1%24%' + path.substring(11)
+        }
+        currentVideoIndex.value = playlist.value.findIndex(e => e.path.split('path=')[1] === path)
+      }
+      if (currentVideoIndex.value < 0) {
+        currentVideoIndex.value = 0
+      }
+
       currentTime.value = data.position / 1000
-      skipStart.value = data.opening / 1000
-      skipEnd.value = data.ending / 1000
+      skipStart.value = data.opening > 0 ? data.opening / 1000 : 0
+      skipEnd.value = data.ending > 0 ? data.ending / 1000 : 0
       currentSpeed.value = data.speed
       minute1.value = Math.floor(skipStart.value / 60)
       second1.value = skipStart.value % 60
@@ -1408,14 +1531,15 @@ const getHistory = (id: string) => {
 }
 
 const loadHistory = () => {
-  axios.get('/history' + token.value + '?cid=0').then(({data}) => {
+  axios.get('/history/' + token.value + '?cid=0').then(({data}) => {
     files.value = data.sort((a, b) => b.t - a.t).map(e => {
       return {
         id: e.id,
         vod_id: e.key,
         vod_name: e.vodName,
+        vod_remarks: e.vodRemarks,
         path: getParent(e.key),
-        index: e.episode,
+        index: e.episode + 1,
         progress: formatTime(e.position / 1000),
         vod_tag: 'file',
         vod_time: formatDate(e.createTime)
@@ -1427,18 +1551,18 @@ const loadHistory = () => {
   })
 }
 
-const deleteHistory = (id: string) => {
+const deleteHistory = () => {
   if (batch.value) {
     if (clean.value) {
       clearHistory()
     } else {
-      axios.delete('/api/history', selected.value.map(s => s.id)).then(() => {
+      axios.post('/api/history/-/delete', selected.value.map(s => s.id)).then(() => {
         deleteVisible.value = false
         loadHistory()
       })
     }
   } else {
-    axios.delete('/api/history/' + id).then(() => {
+    axios.delete('/api/history/' + history.value.id).then(() => {
       deleteVisible.value = false
       loadHistory()
     })
@@ -1446,7 +1570,7 @@ const deleteHistory = (id: string) => {
 }
 
 const clearHistory = () => {
-  axios.delete('/history' + token.value + '?cid=0').then(() => {
+  axios.delete('/history/' + token.value + '?cid=0').then(() => {
     loadHistory()
   })
 }
@@ -1541,7 +1665,7 @@ const showPrevImage = () => {
 
 onMounted(async () => {
   axios.get('/api/token').then(({data}) => {
-    token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
+    token.value = data.enabledToken ? data.token.split(",")[0] : "-"
     if (Array.isArray(route.params.path)) {
       const path = route.params.path.join('/')
       loadFiles('/' + path)

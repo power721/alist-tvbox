@@ -44,7 +44,7 @@ public class HistoryController {
         return historyService.save(history);
     }
 
-    @DeleteMapping("/api/history")
+    @PostMapping("/api/history/-/delete")
     public void delete(@RequestBody List<Integer> ids) {
         historyService.delete(ids);
     }

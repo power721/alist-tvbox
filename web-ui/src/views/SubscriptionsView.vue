@@ -4,6 +4,7 @@
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
       <el-button @click="handleLogin">登陆电报</el-button>
+      <el-button @click="showScan">同步影视</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
     </el-row>
     <div class="space"></div>
@@ -33,11 +34,17 @@
       </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
-          <el-button link type="primary" size="small" @click="handleEdit(scope.row)" v-if="scope.row.id">编辑
+          <el-button link type="primary" size="small" @click="handleEdit(scope.row)" v-if="scope.row.id">
+            编辑
           </el-button>
-          <el-button link type="primary" size="small" @click="showDetails(scope.row)">数据
+          <el-button link type="primary" size="small" @click="showPush(scope.row)" v-if="devices.length">
+            推送
           </el-button>
-          <el-button link type="danger" size="small" @click="handleDelete(scope.row)" v-if="scope.row.id">删除
+          <el-button link type="primary" size="small" @click="showDetails(scope.row)">
+            数据
+          </el-button>
+          <el-button link type="danger" size="small" @click="handleDelete(scope.row)" v-if="scope.row.id">
+            删除
           </el-button>
         </template>
       </el-table-column>
@@ -67,22 +74,22 @@
       PG包本地： {{ pgLocal }}
       PG包远程： {{ pgRemote }}
       <span class="hint"></span>
-      <span v-if="pgLocal==pgRemote"><el-icon color="green"><Check /></el-icon></span>
-      <span v-else><el-icon color="orange"><Warning /></el-icon></span>
+      <span v-if="pgLocal==pgRemote"><el-icon color="green"><Check/></el-icon></span>
+      <span v-else><el-icon color="orange"><Warning/></el-icon></span>
     </el-row>
     <el-row>
       真心全量包本地： {{ zxLocal2 }}
       真心全量包远程： {{ zxRemote2 }}
       <span class="hint"></span>
-      <span v-if="zxLocal2==zxRemote2"><el-icon color="green"><Check /></el-icon></span>
-      <span v-else><el-icon color="orange"><Warning /></el-icon></span>
+      <span v-if="zxLocal2==zxRemote2"><el-icon color="green"><Check/></el-icon></span>
+      <span v-else><el-icon color="orange"><Warning/></el-icon></span>
     </el-row>
     <el-row>
       真心增量包本地： {{ zxLocal }}
       真心增量包远程： {{ zxRemote }}
       <span class="hint"></span>
-      <span v-if="zxLocal==zxRemote"><el-icon color="green"><Check /></el-icon></span>
-      <span v-else><el-icon color="orange"><Warning /></el-icon></span>
+      <span v-if="zxLocal==zxRemote"><el-icon color="green"><Check/></el-icon></span>
+      <span v-else><el-icon color="orange"><Warning/></el-icon></span>
     </el-row>
     <el-row>
       <el-button @click="syncCat">同步文件</el-button>
@@ -182,8 +189,91 @@
       <span class="dialog-footer">
         <el-button type="primary" @click="login">登陆</el-button>
         <el-button type="danger" @click="logout">退出登陆</el-button>
-<!--        <el-button @click="reset">重置</el-button>-->
+        <!--        <el-button @click="reset">重置</el-button>-->
         <el-button @click="cancelLogin">取消</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="scanVisible" title="影视设备">
+      <el-row>
+        <el-col span="8">
+          <div>影视扫码添加AList TvBox</div>
+          <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 200px;">
+        </el-col>
+        <el-col span="10">
+          <el-input v-model="device.ip" style="width: 200px" placeholder="输入影视IP或者URL"
+                    @keyup.enter="addDevice"></el-input>
+          <el-button @click="addDevice">添加</el-button>
+        </el-col>
+        <el-col span="6">
+          <el-button @click="scanDevices">扫描设备</el-button>
+        </el-col>
+      </el-row>
+
+      <el-table :data="devices" border style="width: 100%">
+        <el-table-column prop="name" label="名称" sortable width="180"/>
+        <el-table-column prop="uuid" label="ID" sortable width="180"/>
+        <el-table-column prop="ip" label="URL地址" sortable>
+          <template #default="scope">
+            <a :href="scope.row.ip" target="_blank">{{ scope.row.ip }}</a>
+          </template>
+        </el-table-column>
+        <el-table-column fixed="right" label="操作" width="100">
+          <template #default="scope">
+            <el-button link type="primary" size="small" @click="syncHistory(scope.row.id)">同步</el-button>
+            <el-button link type="danger" size="small" @click="showDelete(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="confirm" title="删除影视设备" width="30%">
+      <p>是否删除影视设备？</p>
+      <p> {{ device.name }}</p>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="confirm = false">取消</el-button>
+        <el-button type="danger" @click="deleteDevice">删除</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="push" title="推送订阅配置" width="30%">
+      <el-form-item label="影视设备" required>
+        <el-select
+          v-model="device.id"
+          style="width: 240px"
+        >
+          <el-option
+            v-for="item in devices"
+            :key="item.id"
+            :label="item.name"
+            :value="item.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="安全Token" required>
+        <el-select
+          v-model="device.name"
+          style="width: 240px"
+          @change="onTokenChange"
+        >
+          <el-option
+            v-for="item in tokens"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="订阅地址" required>
+        <a :href="device.ip" target="_blank">{{device.ip}}</a>
+      </el-form-item>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="push = false">取消</el-button>
+        <el-button type="primary" @click="pushConfig">推送</el-button>
       </span>
       </template>
     </el-dialog>
@@ -196,6 +286,7 @@ import {onMounted, ref} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
 import {onUnmounted} from "@vue/runtime-core";
+import type {Device} from "@/model/Device";
 
 const currentUrl = window.location.origin
 const tgPhase = ref(0)
@@ -215,10 +306,26 @@ const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
 const subscriptions = ref([])
+const tokens = ref([])
+const devices = ref<Device[]>([])
 const detailVisible = ref(false)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const tgVisible = ref(false)
+const scanVisible = ref(false)
+const confirm = ref(false)
+const push = ref(false)
+const device = ref<Device>({
+  name: "",
+  type: "",
+  uuid: "",
+  id: 0,
+  ip: ''
+})
+const sub = ref({
+  name: "",
+  sid: "",
+})
 const form = ref({
   id: 0,
   sid: '',
@@ -351,6 +458,74 @@ const handleCancel = () => {
   formVisible.value = false
 }
 
+const loadDevices = () => {
+  axios.get('/api/devices').then(({data}) => {
+    devices.value = data
+  })
+}
+
+const showPush = (data: any) => {
+  sub.value = data
+  device.value.id = devices.value[0].id
+  device.value.name = tokens.value[0]
+  device.value.ip = currentUrl + '/sub/' + device.value.name + '/' + sub.value.sid
+  push.value = true
+}
+
+const onTokenChange = () => {
+  device.value.ip = currentUrl + '/sub/' + device.value.name + '/' + sub.value.sid
+}
+
+const pushConfig = () => {
+  axios.post(`/api/devices/${device.value.id}/push?url=${device.value.ip}`).then(() => {
+    ElMessage.success('推送成功')
+  })
+}
+
+const showScan = () => {
+  axios.get('/api/qr-code').then(({data}) => {
+    base64QrCode.value = data
+    scanVisible.value = true
+  })
+}
+
+const syncHistory = (id: number) => {
+  axios.post(`/api/devices/${id}/sync?mode=0`).then(() => {
+    ElMessage.success('同步成功')
+  })
+}
+
+const scanDevices = () => {
+  axios.post(`/api/devices/-/scan`).then(() => {
+    ElMessage.success('开始扫描')
+  })
+}
+
+const showDelete = (data: Device) => {
+  device.value = data
+  confirm.value = true
+}
+
+const addDevice = () => {
+  if (!device.value.ip) {
+    return
+  }
+  axios.post(`/api/devices?ip=` + device.value.ip).then(() => {
+    confirm.value = false
+    device.value.ip = ''
+    ElMessage.success('添加成功')
+    loadDevices()
+  })
+}
+
+const deleteDevice = () => {
+  axios.delete(`/api/devices/${device.value.id}`).then(() => {
+    confirm.value = false
+    ElMessage.success('删除成功')
+    loadDevices()
+  })
+}
+
 const setAuthType = () => {
   base64QrCode.value = ''
   axios.post('/api/settings', {name: 'tg_auth_type', value: tgAuthType.value})
@@ -413,6 +588,7 @@ const loadVersion = () => {
 
 onMounted(() => {
   axios.get('/api/token').then(({data}) => {
+    tokens.value =  data.token ? data.token.split(",") : ['-']
     token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
     load()
     loadVersion()
@@ -420,6 +596,7 @@ onMounted(() => {
       tgPhase.value = data.value
     })
   })
+  loadDevices()
 })
 
 onUnmounted(() => {

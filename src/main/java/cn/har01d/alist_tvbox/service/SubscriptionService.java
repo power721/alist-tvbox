@@ -261,7 +261,7 @@ public class SubscriptionService {
     }
 
     public String getFirstToken() {
-        return appProperties.isEnabledToken() ? tokens.split(",")[0] : "";
+        return appProperties.isEnabledToken() ? tokens.split(",")[0] : "-";
     }
 
     public String getCurrentToken() {

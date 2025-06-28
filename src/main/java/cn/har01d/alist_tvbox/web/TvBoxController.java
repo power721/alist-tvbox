@@ -1,11 +1,19 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.TokenDto;
+import cn.har01d.alist_tvbox.entity.Device;
+import cn.har01d.alist_tvbox.entity.DeviceRepository;
+import cn.har01d.alist_tvbox.entity.History;
+import cn.har01d.alist_tvbox.service.HistoryService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,10 +30,20 @@ import java.util.Map;
 public class TvBoxController {
     private final TvBoxService tvBoxService;
     private final SubscriptionService subscriptionService;
+    private final HistoryService historyService;
+    private final DeviceRepository deviceRepository;
+    private final ObjectMapper objectMapper;
 
-    public TvBoxController(TvBoxService tvBoxService, SubscriptionService subscriptionService) {
+    public TvBoxController(TvBoxService tvBoxService,
+                           SubscriptionService subscriptionService,
+                           HistoryService historyService,
+                           DeviceRepository deviceRepository,
+                           ObjectMapper objectMapper) {
         this.tvBoxService = tvBoxService;
         this.subscriptionService = subscriptionService;
+        this.historyService = historyService;
+        this.deviceRepository = deviceRepository;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/vod1")
@@ -91,6 +109,60 @@ public class TvBoxController {
         subscriptionService.checkToken(token);
         response.setContentType("text/plain");
         return tvBoxService.m3u8(path);
+    }
+
+    @GetMapping("/api/qr-code")
+    public String getQrCode() throws IOException {
+        return tvBoxService.getQrCode();
+    }
+
+    @GetMapping("/tv/device")
+    public Device device(HttpServletRequest request) {
+        return tvBoxService.device(request);
+    }
+
+    @PostMapping("/tv/action")
+    public void action(@RequestParam("do") String action, String mode, String type, String device, String config, String targets, HttpServletRequest request) throws JsonProcessingException {
+        log.debug("device: {} config: {} history: {}", device, config, targets);
+        if ("sync".equals(action) && "history".equals(type)) {
+            historyService.syncHistory(mode,
+                    device == null ? null : objectMapper.readValue(device, Device.class),
+                    tvBoxService.device(request),
+                    config,
+                    objectMapper.readValue(targets, new TypeReference<List<History>>() {
+                    }));
+        }
+    }
+
+    @GetMapping("/api/devices")
+    public List<Device> devices() {
+        return deviceRepository.findAll();
+    }
+
+    @PostMapping("/api/devices")
+    public void devices(String ip) throws JsonProcessingException {
+        tvBoxService.addDevice(ip);
+    }
+
+    @PostMapping("/api/devices/-/scan")
+    public int scanDevices(HttpServletRequest request) {
+        return tvBoxService.scanDevices(request);
+    }
+
+    @PostMapping("/devices/{token}/{id}/sync")
+    public void sync(@PathVariable String token, @PathVariable Integer id, int mode, HttpServletRequest request) throws JsonProcessingException {
+        subscriptionService.checkToken(token);
+        historyService.sync(id, tvBoxService.device(request), mode);
+    }
+
+    @PostMapping("/api/devices/{id}/push")
+    public void pushConfig(@PathVariable Integer id, String name, String url, HttpServletRequest request) throws JsonProcessingException {
+        historyService.pushConfig(id, name, url, tvBoxService.device(request));
+    }
+
+    @DeleteMapping("/api/devices/{id}")
+    public void delete(@PathVariable Integer id) {
+        deviceRepository.deleteById(id);
     }
 
     @GetMapping("/api/profiles")
