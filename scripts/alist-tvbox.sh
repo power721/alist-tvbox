@@ -27,12 +27,13 @@ CONFIG_FILE="/etc/xiaoya/xiaoya.conf"
 declare -A DEFAULT_CONFIG=(
   ["MODE"]="docker"
   ["VERSION_ID"]="2"
-  ["IMAGE_NAME"]="haroldli/xiaoya-tvbox:native"
+  ["IMAGE_NAME"]="haroldli/alist-tvbox-native"
   ["BASE_DIR"]="/etc/xiaoya"
   ["PORT1"]="4567"
   ["PORT2"]="5344"
   ["NETWORK"]="bridge"
   ["RESTART"]="always"
+  ["MOUNT_WWW"]="false"  # 新增配置项
 )
 
 # 初始化配置字典
@@ -145,6 +146,18 @@ start_container() {
   local container_name=$(get_container_name)
   local network_args=""
   local port_args=""
+  local volume_args=""
+
+  # 为alist-tvbox的三个版本添加特殊挂载
+  if [[ "${CONFIG[VERSION_ID]}" =~ ^[123]$ ]]; then
+    volume_args="-v ${CONFIG[BASE_DIR]}/alist:/opt/alist/data"
+  fi
+
+  # 添加/www挂载选项
+  if [[ "${CONFIG[MOUNT_WWW]}" == "true" ]]; then
+    volume_args="$volume_args -v ${CONFIG[BASE_DIR]}/www:/www"
+    mkdir -p "${CONFIG[BASE_DIR]}/www"
+  fi
 
   if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
     network_args="--network host"
@@ -155,6 +168,7 @@ start_container() {
   docker run -d \
     --name "$container_name" \
     $port_args \
+    $volume_args \
     -e ALIST_PORT="${CONFIG[PORT2]}" \
     -e MEM_OPT="-Xmx512M" \
     -v "${CONFIG[BASE_DIR]}":/data \
@@ -386,11 +400,12 @@ show_config_menu() {
     echo -e " 1. 数据目录: ${CONFIG[BASE_DIR]}"
     echo -e " 2. 管理端口: ${CONFIG[PORT1]}"
     echo -e " 3. AList端口: ${CONFIG[PORT2]}"
-    echo -e " 4. 网络模式设置"
-    echo -e " 5. 重启策略设置"
-    echo -e " 6. 返回主菜单"
+    echo -e " 4. 挂载/www目录: ${CONFIG[MOUNT_WWW]}"
+    echo -e " 5. 网络模式设置"
+    echo -e " 6. 重启策略设置"
+    echo -e " 7. 返回主菜单"
     echo -e "${CYAN}---------------------------------------------${NC}"
-    read -p "选择要修改的配置 [1-6]: " config_choice
+    read -p "选择要修改的配置 [1-7]: " config_choice
 
     case $config_choice in
       1)
@@ -409,14 +424,24 @@ show_config_menu() {
         save_config
         ;;
       4)
+        if [[ "${CONFIG[MOUNT_WWW]}" == "true" ]]; then
+          CONFIG["MOUNT_WWW"]="false"
+        else
+          CONFIG["MOUNT_WWW"]="true"
+        fi
+        save_config
+        echo -e "${GREEN}已${CONFIG[MOUNT_WWW]}挂载/www目录${NC}"
+        sleep 1
+        ;;
+      5)
         show_network_menu
         continue
         ;;
-      5)
+      6)
         show_restart_menu
         continue
         ;;
-      6)
+      7)
         break
         ;;
     esac
