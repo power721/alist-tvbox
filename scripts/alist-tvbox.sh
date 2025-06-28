@@ -45,140 +45,32 @@ done
 check_environment() {
   echo -e "${CYAN}正在检测运行环境...${NC}"
 
-  # 检查Docker是否安装
   if ! command -v docker &>/dev/null; then
     echo -e "${RED}错误：Docker未安装！${NC}"
-    echo -e "请先安装Docker："
-    echo -e "官方安装文档：https://docs.docker.com/engine/install/"
     exit 1
   fi
 
-  # 检查Docker服务是否运行
   if ! docker info &>/dev/null; then
-    echo -e "${YELLOW}Docker服务未运行，尝试启动...${NC}"
-
-    if command -v sudo &>/dev/null && sudo -v &>/dev/null; then
-      if sudo systemctl start docker; then
-        echo -e "${GREEN}Docker服务已启动${NC}"
-      else
-        echo -e "${RED}无法启动Docker服务！${NC}"
-        echo -e "请手动启动Docker服务后重试："
-        echo -e "  sudo systemctl start docker"
-        exit 1
-      fi
-    else
-      echo -e "${RED}需要sudo权限来启动Docker服务！${NC}"
-      echo -e "请使用以下命令启动Docker后重试："
-      echo -e "  sudo systemctl start docker"
-      exit 1
-    fi
+    echo -e "${RED}错误：Docker服务未运行！${NC}"
+    exit 1
   fi
-
-  # 检查当前用户是否在docker组
-  if ! groups | grep -q '\bdocker\b'; then
-    echo -e "${YELLOW}警告：当前用户不在docker组中${NC}"
-    echo -e "这可能导致需要sudo权限才能运行docker命令"
-
-    if command -v sudo &>/dev/null && sudo -v &>/dev/null; then
-      read -p "是否要将当前用户添加到docker组？[Y/n] " yn
-      case $yn in
-        [Nn]* ) ;;
-        * )
-          if sudo usermod -aG docker $USER; then
-            echo -e "${GREEN}已添加用户到docker组，请重新登录生效${NC}"
-            echo -e "${YELLOW}注意：您需要注销并重新登录后才能生效${NC}"
-            exit 0
-          else
-            echo -e "${RED}添加用户到docker组失败！${NC}"
-          fi
-          ;;
-      esac
-    fi
-  fi
-
-  echo -e "${GREEN}环境检测通过${NC}"
-}
-
-# 初始配置向导
-init_config() {
-  echo -e "${CYAN}=============================================${NC}"
-  echo -e "${GREEN}          小雅TVBox初始配置向导          ${NC}"
-  echo -e "${CYAN}=============================================${NC}"
-
-  # 选择版本
-  echo -e "${YELLOW}请选择要安装的版本:${NC}"
-  for key in "${!VERSIONS[@]}"; do
-    echo -e " ${key}. ${VERSIONS[$key]}"
-  done
-  while true; do
-    read -p "请输入版本编号 [1-8]: " version_choice
-    if [[ -n "${VERSIONS[$version_choice]}" ]]; then
-      CONFIG["VERSION_ID"]="$version_choice"
-      CONFIG["IMAGE_NAME"]="${VERSIONS[$version_choice]%% -*}"
-      break
-    else
-      echo -e "${RED}无效选择，请重新输入!${NC}"
-    fi
-  done
-
-  # 设置数据目录
-  read -p "输入数据存储目录 [默认:/etc/xiaoya]: " base_dir
-  CONFIG["BASE_DIR"]="${base_dir:-/etc/xiaoya}"
-
-  # 设置端口并检查占用
-  while true; do
-    read -p "输入管理端口(默认4567): " port1
-    CONFIG["PORT1"]="${port1:-4567}"
-    if check_port "${CONFIG[PORT1]}" "管理"; then
-      break
-    fi
-  done
-
-  while true; do
-    read -p "输入AList端口(默认5344): " port2
-    CONFIG["PORT2"]="${port2:-5344}"
-    if check_port "${CONFIG[PORT2]}" "AList"; then
-      break
-    fi
-  done
-
-  # 网络模式
-  read -p "输入网络模式(bridge/host) [默认:bridge]: " network
-  CONFIG["NETWORK"]="${network:-bridge}"
-
-  # 重启策略
-  read -p "输入重启策略(always/unless-stopped/no) [默认:always]: " restart
-  CONFIG["RESTART"]="${restart:-always}"
-
-  # 保存配置
-  mkdir -p "$(dirname "$CONFIG_FILE")"
-  save_config
-  echo -e "${GREEN}初始配置已完成!${NC}"
-  echo -e "${YELLOW}配置文件保存在: ${CONFIG_FILE}${NC}"
-  sleep 2
 }
 
 # 加载配置
 load_config() {
-  # 如果配置文件不存在，运行初始配置向导
-  if [[ ! -f "$CONFIG_FILE" ]]; then
-    init_config
-    return
-  fi
-
-  # 加载现有配置
-  while IFS='=' read -r key value; do
-    if [[ -n "$key" && -n "${DEFAULT_CONFIG[$key]+x}" ]]; then
-      CONFIG["$key"]="$value"
-    fi
-  done < "$CONFIG_FILE"
-
-  # 确保所有配置项都有值
-  for key in "${!DEFAULT_CONFIG[@]}"; do
-    if [[ -z "${CONFIG[$key]+x}" ]]; then
+  if [[ -f "$CONFIG_FILE" ]]; then
+    while IFS='=' read -r key value; do
+      if [[ -n "$key" ]]; then
+        CONFIG["$key"]="$value"
+      fi
+    done < "$CONFIG_FILE"
+  else
+    for key in "${!DEFAULT_CONFIG[@]}"; do
       CONFIG["$key"]="${DEFAULT_CONFIG[$key]}"
-    fi
-  done
+    done
+    mkdir -p "$(dirname "$CONFIG_FILE")"
+    save_config
+  fi
 }
 
 # 保存配置
@@ -217,19 +109,25 @@ remove_opposite_container() {
   fi
 }
 
+# 检测容器状态
+check_container_status() {
+  local container_name=$(get_container_name)
+  if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    echo "running"
+  elif docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    echo "stopped"
+  else
+    echo "not_exist"
+  fi
+}
+
 # 检查镜像更新
 check_image_update() {
   local image="${CONFIG[IMAGE_NAME]}"
   echo -e "${CYAN}正在检查镜像更新...${NC}"
 
-  # 获取当前镜像ID
   local current_id=$(docker images --quiet "$image")
-
-  # 拉取最新镜像
-  echo -e "${BLUE}正在拉取最新镜像...${NC}"
-  docker pull "$image"
-
-  # 获取新镜像ID
+  docker pull "$image" >/dev/null
   local new_id=$(docker images --quiet "$image")
 
   if [[ "$current_id" != "$new_id" ]]; then
@@ -254,27 +152,14 @@ start_container() {
     port_args="-p ${CONFIG[PORT1]}:4567 -p ${CONFIG[PORT2]}:80"
   fi
 
-  # 固定内存参数为512MB
-  local mem_args="-Xmx512M"
-
-  # 特殊版本处理
-  local extra_args=""
-  case "${CONFIG[VERSION_ID]}" in
-    4|5)
-      extra_args+=" --network host"
-      ;;
-  esac
-
-  # 运行容器
   docker run -d \
     --name "$container_name" \
     $port_args \
     -e ALIST_PORT="${CONFIG[PORT2]}" \
-    -e MEM_OPT="$mem_args" \
+    -e MEM_OPT="-Xmx512M" \
     -v "${CONFIG[BASE_DIR]}":/data \
     --restart="${CONFIG[RESTART]}" \
     $network_args \
-    $extra_args \
     "$image"
 }
 
@@ -288,6 +173,7 @@ show_access_info() {
   fi
 
   echo -e "\n${CYAN}============== 访问信息 ==============${NC}"
+  echo -e "容器名称: ${GREEN}${container_name}${NC}"
   if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
     echo -e "管理界面: ${GREEN}http://localhost:${CONFIG[PORT1]}/${NC}"
     echo -e "AList界面: ${GREEN}http://localhost:${CONFIG[PORT2]}/${NC}"
@@ -298,27 +184,18 @@ show_access_info() {
   echo -e "${CYAN}=======================================${NC}"
   echo -e "查看日志: ${YELLOW}docker logs -f $container_name${NC}"
 }
-# 检测容器运行状态
-check_container_status() {
-  local container_name=$(get_container_name)
-  if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-    echo "running"
-  elif docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-    echo "stopped"
-  else
-    echo "not_exist"
-  fi
-}
 
 # 显示交互式菜单
 show_menu() {
   clear
   local status=$(check_container_status)
+  local container_name=$(get_container_name)
 
   echo -e "${CYAN}=============================================${NC}"
   echo -e "${GREEN}          小雅TVBox交互式管理系统          ${NC}"
   echo -e "${CYAN}=============================================${NC}"
   echo -e "${YELLOW} 当前版本: ${CONFIG[IMAGE_NAME]}${NC}"
+  echo -e "${YELLOW} 容器名称: ${container_name}${NC}"
   echo -e "${YELLOW} 容器状态: $(
     case "$status" in
       "running") echo -e "${GREEN}运行中${NC}";;
@@ -326,16 +203,15 @@ show_menu() {
       *) echo -e "${YELLOW}未创建${NC}";;
     esac
   )${NC}"
+  echo -e "${YELLOW} 网络模式: ${CONFIG[NETWORK]}${NC}"
+  echo -e "${YELLOW} 重启策略: ${CONFIG[RESTART]}${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
   echo -e "${GREEN} 1. 安装/更新容器${NC}"
 
-  # 动态显示启动/停止菜单项
+  # 动态菜单项
   case "$status" in
     "running")
       echo -e "${GREEN} 2. 停止容器${NC}"
-      ;;
-    "stopped")
-      echo -e "${GREEN} 2. 启动容器${NC}"
       ;;
     *)
       echo -e "${GREEN} 2. 启动容器${NC}"
@@ -354,75 +230,6 @@ show_menu() {
   read -p "请输入选项 [0-9]: " choice
 }
 
-# 显示版本选择菜单
-show_version_menu() {
-  clear
-  echo -e "${CYAN}=============================================${NC}"
-  echo -e "${GREEN}          请选择要使用的版本          ${NC}"
-  echo -e "${CYAN}=============================================${NC}"
-  for key in "${!VERSIONS[@]}"; do
-    echo -e "${YELLOW} $key. ${VERSIONS[$key]}${NC}"
-  done
-  echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请输入版本编号 [1-8]: " version_choice
-
-  if [[ -n "${VERSIONS[$version_choice]}" ]]; then
-    CONFIG["VERSION_ID"]="$version_choice"
-    CONFIG["IMAGE_NAME"]="${VERSIONS[$version_choice]%% -*}"
-    save_config
-    echo -e "${GREEN}版本已切换为: ${VERSIONS[$version_choice]}${NC}"
-    sleep 2
-  else
-    echo -e "${RED}无效选择!${NC}"
-    sleep 1
-  fi
-}
-
-# 显示配置管理菜单
-show_config_menu() {
-  clear
-  echo -e "${CYAN}=============================================${NC}"
-  echo -e "${GREEN}          当前配置管理          ${NC}"
-  echo -e "${CYAN}=============================================${NC}"
-  echo -e " 1. 数据目录: ${CONFIG[BASE_DIR]}"
-  echo -e " 2. 管理端口: ${CONFIG[PORT1]}"
-  echo -e " 3. AList端口: ${CONFIG[PORT2]}"
-  echo -e " 4. 网络模式: ${CONFIG[NETWORK]}"
-  echo -e " 5. 重启策略: ${CONFIG[RESTART]}"
-  echo -e " 6. 返回主菜单"
-  echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "选择要修改的配置 [1-6]: " config_choice
-
-  case $config_choice in
-    1)
-      read -p "输入新的数据目录 [${CONFIG[BASE_DIR]}]: " new_dir
-      [[ -n "$new_dir" ]] && CONFIG[BASE_DIR]="$new_dir"
-      ;;
-    2)
-      read -p "输入新的管理端口 [${CONFIG[PORT1]}]: " new_port
-      [[ -n "$new_port" ]] && CONFIG[PORT1]="$new_port"
-      ;;
-    3)
-      read -p "输入新的AList端口 [${CONFIG[PORT2]}]: " new_port
-      [[ -n "$new_port" ]] && CONFIG[PORT2]="$new_port"
-      ;;
-    4)
-      read -p "输入网络模式 (bridge/host) [${CONFIG[NETWORK]}]: " new_net
-      [[ -n "$new_net" ]] && CONFIG[NETWORK]="$new_net"
-      ;;
-    5)
-      read -p "输入重启策略 (always/unless-stopped/no) [${CONFIG[RESTART]}]: " new_restart
-      [[ -n "$new_restart" ]] && CONFIG[RESTART]="$new_restart"
-      ;;
-  esac
-
-  if [[ "$config_choice" != "6" ]]; then
-    save_config
-    echo -e "${GREEN}配置已更新!${NC}"
-    sleep 1
-  fi
-}
-
 # 安装/更新容器
 install_container() {
   local container_name=$(get_container_name)
@@ -434,16 +241,12 @@ install_container() {
     echo -e "${YELLOW}没有新版本可用，继续使用当前镜像${NC}"
   fi
 
-  # 停止并移除旧容器
   if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
     echo -e "${YELLOW}正在移除现有容器...${NC}"
     docker rm -f "$container_name" >/dev/null
   fi
 
-  # 创建数据目录
   mkdir -p "${CONFIG[BASE_DIR]}"
-
-  # 启动容器
   start_container
   echo -e "${GREEN}操作成功完成!${NC}"
   show_access_info
@@ -470,6 +273,159 @@ check_update() {
   read -n 1 -s -r -p "按任意键继续..."
 }
 
+# 显示版本选择菜单
+show_version_menu() {
+  clear
+  echo -e "${CYAN}=============================================${NC}"
+  echo -e "${GREEN}          请选择要使用的版本          ${NC}"
+  echo -e "${CYAN}=============================================${NC}"
+  for key in "${!VERSIONS[@]}"; do
+    echo -e "${YELLOW} $key. ${VERSIONS[$key]}${NC}"
+  done
+  echo -e "${CYAN}---------------------------------------------${NC}"
+  read -p "请输入版本编号 [1-8]: " version_choice
+
+  if [[ -n "${VERSIONS[$version_choice]}" ]]; then
+    local old_version="${CONFIG[IMAGE_NAME]}"
+    CONFIG["VERSION_ID"]="$version_choice"
+    CONFIG["IMAGE_NAME"]="${VERSIONS[$version_choice]%% -*}"
+    save_config
+
+    # 如果容器存在且版本变化，则重启容器
+    local container_name=$(get_container_name)
+    if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+      if [[ "$old_version" != "${CONFIG[IMAGE_NAME]}" ]]; then
+        echo -e "${YELLOW}版本已变更，正在重启容器...${NC}"
+        docker restart "$container_name"
+      fi
+    fi
+
+    echo -e "${GREEN}版本已切换为: ${VERSIONS[$version_choice]}${NC}"
+    sleep 2
+  else
+    echo -e "${RED}无效选择!${NC}"
+    sleep 1
+  fi
+}
+
+# 显示网络模式菜单
+show_network_menu() {
+  clear
+  echo -e "${CYAN}=============================================${NC}"
+  echo -e "${GREEN}          网络模式设置          ${NC}"
+  echo -e "${CYAN}=============================================${NC}"
+  echo -e " 当前网络模式: ${CONFIG[NETWORK]}"
+  echo -e " 1. bridge模式 (默认)"
+  echo -e " 2. host模式"
+  echo -e " 3. 返回"
+  echo -e "${CYAN}---------------------------------------------${NC}"
+  read -p "请选择网络模式 [1-3]: " choice
+
+  case $choice in
+    1)
+      CONFIG["NETWORK"]="bridge"
+      save_config
+      echo -e "${GREEN}已设置为bridge模式${NC}"
+      ;;
+    2)
+      CONFIG["NETWORK"]="host"
+      save_config
+      echo -e "${GREEN}已设置为host模式${NC}"
+      ;;
+  esac
+
+  if [[ "$choice" != "3" ]]; then
+    sleep 1
+  fi
+}
+
+# 显示重启策略菜单
+show_restart_menu() {
+  clear
+  echo -e "${CYAN}=============================================${NC}"
+  echo -e "${GREEN}          重启策略设置          ${NC}"
+  echo -e "${CYAN}=============================================${NC}"
+  echo -e " 当前重启策略: ${CONFIG[RESTART]}"
+  echo -e " 1. always (总是重启)"
+  echo -e " 2. unless-stopped (除非手动停止)"
+  echo -e " 3. no (不自动重启)"
+  echo -e " 4. 返回"
+  echo -e "${CYAN}---------------------------------------------${NC}"
+  read -p "请选择重启策略 [1-4]: " choice
+
+  case $choice in
+    1)
+      CONFIG["RESTART"]="always"
+      save_config
+      echo -e "${GREEN}已设置为always${NC}"
+      ;;
+    2)
+      CONFIG["RESTART"]="unless-stopped"
+      save_config
+      echo -e "${GREEN}已设置为unless-stopped${NC}"
+      ;;
+    3)
+      CONFIG["RESTART"]="no"
+      save_config
+      echo -e "${GREEN}已设置为no${NC}"
+      ;;
+  esac
+
+  if [[ "$choice" != "4" ]]; then
+    sleep 1
+  fi
+}
+
+# 显示配置管理菜单
+show_config_menu() {
+  while true; do
+    clear
+    echo -e "${CYAN}=============================================${NC}"
+    echo -e "${GREEN}          当前配置管理          ${NC}"
+    echo -e "${CYAN}=============================================${NC}"
+    echo -e " 1. 数据目录: ${CONFIG[BASE_DIR]}"
+    echo -e " 2. 管理端口: ${CONFIG[PORT1]}"
+    echo -e " 3. AList端口: ${CONFIG[PORT2]}"
+    echo -e " 4. 网络模式设置"
+    echo -e " 5. 重启策略设置"
+    echo -e " 6. 返回主菜单"
+    echo -e "${CYAN}---------------------------------------------${NC}"
+    read -p "选择要修改的配置 [1-6]: " config_choice
+
+    case $config_choice in
+      1)
+        read -p "输入新的数据目录 [${CONFIG[BASE_DIR]}]: " new_dir
+        [[ -n "$new_dir" ]] && CONFIG[BASE_DIR]="$new_dir"
+        save_config
+        ;;
+      2)
+        read -p "输入新的管理端口 [${CONFIG[PORT1]}]: " new_port
+        [[ -n "$new_port" ]] && CONFIG[PORT1]="$new_port"
+        save_config
+        ;;
+      3)
+        read -p "输入新的AList端口 [${CONFIG[PORT2]}]: " new_port
+        [[ -n "$new_port" ]] && CONFIG[PORT2]="$new_port"
+        save_config
+        ;;
+      4)
+        show_network_menu
+        continue
+        ;;
+      5)
+        show_restart_menu
+        continue
+        ;;
+      6)
+        break
+        ;;
+    esac
+
+    echo -e "${GREEN}配置已更新!${NC}"
+    sleep 1
+  done
+}
+
 # 主循环
 interactive_mode() {
   check_environment
@@ -485,21 +441,22 @@ interactive_mode() {
         install_container
         ;;
       2)
-        # 动态处理启动/停止
         case "$status" in
           "running")
             docker stop "$container_name"
             echo -e "${GREEN}容器已停止${NC}"
             ;;
-          "stopped"|"not_exist")
-            docker start "$container_name" || {
-              echo -e "${RED}启动失败，请先安装容器${NC}"
+          *)
+            if docker start "$container_name" 2>/dev/null; then
+              echo -e "${GREEN}容器已启动${NC}"
+            else
+              echo -e "${RED}启动失败，容器不存在${NC}"
               read -p "是否立即安装容器？[Y/n] " yn
               case $yn in
                 [Nn]* ) ;;
                 * ) install_container;;
               esac
-            }
+            fi
             ;;
         esac
         sleep 1
@@ -521,7 +478,7 @@ interactive_mode() {
         read -n 1 -s -r -p "按任意键继续..."
         ;;
       5)
-        if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+        if [ "$status" != "not_exist" ]; then
           docker logs -f "$container_name"
         else
           echo -e "${YELLOW}容器不存在${NC}"
@@ -529,14 +486,13 @@ interactive_mode() {
         fi
         ;;
       6)
-        if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+        if [ "$status" != "not_exist" ]; then
           docker rm -f "$container_name"
           echo -e "${GREEN}容器已卸载${NC}"
-          sleep 1
         else
           echo -e "${YELLOW}容器不存在${NC}"
-          sleep 1
         fi
+        sleep 1
         ;;
       7)
         show_version_menu
@@ -570,22 +526,37 @@ cli_mode() {
       install_container
       ;;
     start)
-      docker start "$container_name"
+      docker start "$container_name" || {
+        echo -e "${RED}启动失败，容器不存在${NC}"
+        exit 1
+      }
       ;;
     stop)
-      docker stop "$container_name"
+      docker stop "$container_name" || {
+        echo -e "${RED}停止失败，容器不存在${NC}"
+        exit 1
+      }
       ;;
     restart)
-      docker restart "$container_name"
+      docker restart "$container_name" || {
+        echo -e "${RED}重启失败，容器不存在${NC}"
+        exit 1
+      }
       ;;
     status)
       docker ps -a --filter "name=$container_name"
       ;;
     logs)
-      docker logs -f "$container_name"
+      docker logs -f "$container_name" || {
+        echo -e "${RED}容器不存在${NC}"
+        exit 1
+      }
       ;;
     uninstall)
-      docker rm -f "$container_name"
+      docker rm -f "$container_name" || {
+        echo -e "${RED}容器不存在${NC}"
+        exit 1
+      }
       ;;
     update)
       check_update
