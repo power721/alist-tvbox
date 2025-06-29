@@ -60,7 +60,7 @@ public class ProxyService {
 
     @Scheduled(cron = "0 45 * * * *")
     public void clean() {
-        List<PlayUrl> expired = playUrlRepository.findAllByTimeBefore(Instant.now());
+        List<PlayUrl> expired = playUrlRepository.findByTimeBefore(Instant.now());
         if (!expired.isEmpty()) {
             log.info("delete {} expired play urls", expired.size());
         }

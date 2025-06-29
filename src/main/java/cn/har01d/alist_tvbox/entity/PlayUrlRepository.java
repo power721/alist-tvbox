@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.List;
 
 public interface PlayUrlRepository extends JpaRepository<PlayUrl, Integer> {
-    List<PlayUrl> findAllByTimeBefore(Instant time);
+    List<PlayUrl> findByTimeBefore(Instant time);
 
     PlayUrl findFirstBySiteAndPath(int site, String path, Sort sort);
 }
