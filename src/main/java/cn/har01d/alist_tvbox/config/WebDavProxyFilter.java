@@ -69,8 +69,12 @@ public class WebDavProxyFilter implements Filter {
                 copyResponse(backendResponse, httpResponse);
             }
         } catch (Exception e) {
-            logger.error("WebDAV proxy error", e);
-            httpResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            logger.warn("WebDAV proxy error: {}", e.getMessage());
+            try {
+                httpResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            } catch (Exception ex) {
+                logger.debug("sendError: {}", ex.getMessage());
+            }
         }
     }
 
