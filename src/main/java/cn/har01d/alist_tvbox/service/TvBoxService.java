@@ -2325,7 +2325,7 @@ public class TvBoxService {
     }
 
     private String buildPlayUrl(Site site, String path) {
-        return (site.getId() + "@" + proxyService.generateProxyUrl(site, path));
+        return site.getId() + "@" + proxyService.generateProxyUrl(site, path);
     }
 
     // AList-TvBox proxy
