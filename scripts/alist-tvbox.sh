@@ -177,6 +177,12 @@ start_container() {
   # 添加自定义挂载
   if [[ -f "${CONFIG[BASE_DIR]}/mounts.conf" ]]; then
     while IFS= read -r line; do
+      # 检查主机目录是否存在，不存在则创建
+      local host_dir=$(echo "$line" | cut -d':' -f1)
+      if [[ ! -e "$host_dir" ]]; then
+        mkdir -p "$host_dir"
+        echo -e "${YELLOW}已创建主机目录: $host_dir${NC}"
+      fi
       volume_args="$volume_args -v $line"
     done < "${CONFIG[BASE_DIR]}/mounts.conf"
   fi
@@ -194,6 +200,9 @@ start_container() {
     fi
     port_args="-p ${CONFIG[PORT1]}:4567 -p ${CONFIG[PORT2]}:80"
   fi
+
+  # 确保数据目录存在
+  mkdir -p "${CONFIG[BASE_DIR]}"
 
   docker run -d \
     --name "$container_name" \
@@ -472,15 +481,8 @@ add_custom_mount() {
     echo "$mount_config" >> "${CONFIG[BASE_DIR]}/mounts.conf"
     echo -e "${GREEN}挂载配置已添加!${NC}"
 
-    # 询问是否立即重启容器生效
-    local container_name=$(get_container_name)
-    if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-      read -p "是否立即重启容器使更改生效? [Y/n]: " restart_choice
-      case $restart_choice in
-        [Nn]*) ;;
-        *) docker restart "$container_name" ;;
-      esac
-    fi
+    # 自动重建容器使挂载生效
+    recreate_container_for_mounts
   else
     echo -e "${RED}无效格式! 请使用 主机目录:容器目录[:权限] 格式${NC}"
   fi
@@ -506,19 +508,35 @@ remove_custom_mount() {
     mv "$temp_file" "${CONFIG[BASE_DIR]}/mounts.conf"
     echo -e "${GREEN}挂载配置已删除!${NC}"
 
-    # 询问是否立即重启容器生效
-    local container_name=$(get_container_name)
-    if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-      read -p "是否立即重启容器使更改生效? [Y/n]: " restart_choice
-      case $restart_choice in
-        [Nn]*) ;;
-        *) docker restart "$container_name" ;;
-      esac
-    fi
+    # 自动重建容器使挂载生效
+    recreate_container_for_mounts
   else
     echo -e "${RED}无效编号!${NC}"
   fi
   sleep 1
+}
+
+# 重建容器使挂载生效
+recreate_container_for_mounts() {
+  local container_name=$(get_container_name)
+
+  if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    echo -e "${YELLOW}正在重建容器使挂载配置生效...${NC}"
+    local was_running=$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null)
+
+    # 停止并删除现有容器
+    docker rm -f "$container_name" >/dev/null
+
+    # 重新创建容器
+    if [[ "$was_running" == "true" ]]; then
+      start_container
+      echo -e "${GREEN}容器已重建并启动!${NC}"
+    else
+      echo -e "${GREEN}容器已重建!${NC}"
+    fi
+  else
+    echo -e "${YELLOW}容器不存在，挂载配置将在下次启动时生效${NC}"
+  fi
 }
 
 # 显示网络模式菜单
