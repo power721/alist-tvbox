@@ -143,16 +143,10 @@ check_image_update() {
   echo -e "${CYAN}正在检查镜像更新...${NC}"
 
   local current_id=$(docker images --quiet "$image")
-  # 拉取适合当前架构的镜像
-  local arch=$(check_architecture)
-  echo -e "${CYAN}正在拉取镜像:${CONFIG[IMAGE_NAME]} linux/${arch}${NC}"
-  if ! docker pull --platform linux/${arch} "${CONFIG[IMAGE_NAME]}" >/dev/null; then
+  echo -e "${CYAN}正在拉取镜像：${CONFIG[IMAGE_NAME]}${NC}"
+  if ! docker pull "${CONFIG[IMAGE_NAME]}" >/dev/null; then
     echo -e "${RED}镜像拉取失败!${NC}"
-    echo -e "${YELLOW}尝试不指定架构拉取...${NC}"
-    if ! docker pull "${CONFIG[IMAGE_NAME]}" >/dev/null; then
-      echo -e "${RED}镜像拉取彻底失败!${NC}"
-      return 1
-    fi
+    return 1
   fi
   local new_id=$(docker images --quiet "$image")
 
@@ -284,17 +278,6 @@ show_menu() {
   read -p "请输入选项 [0-9]: " choice
 }
 
-# 检查系统架构
-check_architecture() {
-  local arch
-  arch=$(uname -m)
-  case "$arch" in
-    x86_64)    echo "amd64" ;;
-    aarch64)   echo "arm64" ;;
-    *)         echo "$arch" ;;
-  esac
-}
-
 # 检查系统架构支持
 check_architecture_support() {
   local arch=$(uname -m)
@@ -361,16 +344,10 @@ check_update() {
   echo -e "${CYAN}正在检查镜像更新...${NC}"
 
   local current_id=$(docker images --quiet "$image")
-  # 拉取适合当前架构的镜像
-  local arch=$(check_architecture)
-  echo -e "${CYAN}正在拉取镜像: ${CONFIG[IMAGE_NAME]} linux/${arch}${NC}"
-  if ! docker pull --platform linux/${arch} "${CONFIG[IMAGE_NAME]}" >/dev/null; then
+  echo -e "${CYAN}正在拉取镜像: ${CONFIG[IMAGE_NAME]}${NC}"
+  if ! docker pull "${CONFIG[IMAGE_NAME]}" >/dev/null; then
     echo -e "${RED}镜像拉取失败!${NC}"
-    echo -e "${YELLOW}尝试不指定架构拉取...${NC}"
-    if ! docker pull "${CONFIG[IMAGE_NAME]}" >/dev/null; then
-      echo -e "${RED}镜像拉取彻底失败!${NC}"
-      return 1
-    fi
+    return 1
   fi
   local new_id=$(docker images --quiet "$image")
 
