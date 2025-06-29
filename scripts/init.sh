@@ -30,7 +30,9 @@ init() {
   [ -f /opt/alist/data/config.json ] || cp /alist.json /opt/alist/data/config.json
   sed -i 's/127.0.0.1/0.0.0.0/' /opt/alist/data/config.json
 
-  sqlite3 /opt/alist/data/data.db ".read /alist.sql"
+  cd /opt/alist
+  /opt/alist/alist admin
+  cd /www/
 
   gh_proxy=$(head -n 1 "/data/github_proxy.txt" 2>/dev/null || echo "")
   wget -T 30 -t 2 ${gh_proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
