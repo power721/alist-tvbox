@@ -32,7 +32,6 @@ AList代理，支持xiaoya版AList界面管理。
 
 ## 安装
 ### 一键安装
-#### 小雅集成版
 不需要再安装小雅版Docker。
 
 如果找不到bash就替换为sh。
@@ -50,14 +49,15 @@ bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)"
 
 如果没有安装curl:
 ```bash
-wget http://d.har01d.cn/alist-tvbox.sh; bash ./alist-tvbox.sh
+wget http://d.har01d.cn/alist-tvbox.sh; sudo bash ./alist-tvbox.sh
 ```
 
+#### 小雅集成版
+内置了小雅的阿里分享和115分享资源。
+
 #### host网络模式
-使用host网络模式运行：
-```bash
-sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_hostmode.sh)"
-```
+使用host网络模式运行
+
 使用的端口：
 
 4567 - 管理应用
@@ -70,6 +70,9 @@ sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_hostmode.sh)"
 
 #### 纯净版
 没有内置分享数据、可以直接访问AList管理界面。
+
+#### 纯净版（Python运行环境） 小雅版（Python运行环境）
+添加了Python3、pip、telethon运行环境。
 
 #### NAS
 对于群辉等NAS系统，请挂载Docker的/data目录到群辉文件系统，否则数据不会保留。
