@@ -23,7 +23,7 @@ declare -A VERSIONS=(
 )
 
 # 默认配置
-CONFIG_FILE="/$HOME/.config/alist-tvbox/app.conf"
+CONFIG_FILE="$HOME/.config/alist-tvbox/app.conf"
 
 # 初始化基础目录
 INITIAL_BASE_DIR="/etc/xiaoya"
@@ -63,7 +63,10 @@ check_environment() {
 
   # 2. 检查Docker服务状态
   if ! docker info &>/dev/null; then
-    echo -e "${RED}错误：Docker服务未运行！${NC}"
+    echo -e "${RED}错误：无法连接 Docker 服务！${NC}"
+    echo -e "${YELLOW}请确保："
+    echo -e "1. Docker 已安装并运行"
+    echo -e "2. 当前用户已加入 'docker' 组${NC}"
     exit 1
   fi
 
@@ -379,7 +382,7 @@ check_update() {
         docker restart "$container_name"
       else
         echo -e "${GREEN}正在启动容器...${NC}"
-        docker restart "$container_name"
+        docker start "$container_name"
       fi
       return 0
     else
@@ -393,7 +396,7 @@ check_update() {
             docker restart "$container_name"
           else
             echo -e "${GREEN}正在启动容器...${NC}"
-            docker restart "$container_name"
+            docker start "$container_name"
           fi
           ;;
       esac
@@ -844,6 +847,11 @@ show_config_menu() {
         ;;
       2)
         read -p "输入新的管理端口 [${CONFIG[PORT1]}]: " new_port
+        if ! [[ "$new_port" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}端口号必须是数字!${NC}"
+            sleep 1
+            continue
+        fi
         if [[ -n "$new_port" && "$new_port" != "${CONFIG[PORT1]}" ]]; then
           CONFIG[PORT1]="$new_port"
           save_config
@@ -852,6 +860,11 @@ show_config_menu() {
         ;;
       3)
         read -p "输入新的AList端口 [${CONFIG[PORT2]}]: " new_port
+        if ! [[ "$new_port" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}端口号必须是数字!${NC}"
+            sleep 1
+            continue
+        fi
         if [[ -n "$new_port" && "$new_port" != "${CONFIG[PORT2]}" ]]; then
           CONFIG[PORT2]="$new_port"
           save_config
