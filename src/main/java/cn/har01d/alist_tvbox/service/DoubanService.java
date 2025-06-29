@@ -253,7 +253,7 @@ public class DoubanService {
             ProcessBuilder builder = new ProcessBuilder();
             builder.command("sh", "-c", "/movie.sh", remote);
             builder.inheritIO();
-            builder.directory(new File("/opt/atv/data/"));
+            builder.directory(new File("/tmp"));
             Process process = builder.start();
             int code = process.waitFor();
             if (code == 0) {

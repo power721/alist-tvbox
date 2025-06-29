@@ -23,7 +23,7 @@ declare -A VERSIONS=(
 )
 
 # 默认配置
-CONFIG_FILE="/$HOME/.config/alist-tvbox/app.conf"
+CONFIG_FILE="$HOME/.config/alist-tvbox/app.conf"
 
 # 初始化基础目录
 INITIAL_BASE_DIR="/etc/xiaoya"
@@ -63,7 +63,10 @@ check_environment() {
 
   # 2. 检查Docker服务状态
   if ! docker info &>/dev/null; then
-    echo -e "${RED}错误：Docker服务未运行！${NC}"
+    echo -e "${RED}错误：无法连接 Docker 服务！${NC}"
+    echo -e "${YELLOW}请确保："
+    echo -e "1. Docker 已安装并运行"
+    echo -e "2. 当前用户已加入 'docker' 组${NC}"
     exit 1
   fi
 
@@ -213,17 +216,10 @@ start_container() {
     done < "${CONFIG[BASE_DIR]}/mounts.conf"
   fi
 
-  # 只有版本6和7可以使用host模式
-  if [[ "${CONFIG[NETWORK]}" == "host" && ("${CONFIG[IMAGE_ID]}" == "6" || "${CONFIG[IMAGE_ID]}" == "7") ]]; then
+  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
     network_args="--network host"
     echo -e "${YELLOW}使用host网络模式${NC}"
   else
-    # 如果不是版本6或7，强制使用bridge模式
-    if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
-      CONFIG["NETWORK"]="bridge"
-      save_config
-      echo -e "${YELLOW}当前版本不支持host模式，已自动切换为bridge模式${NC}"
-    fi
     port_args="-p ${CONFIG[PORT1]}:4567 -p ${CONFIG[PORT2]}:${aList_port}"
   fi
 
@@ -386,7 +382,7 @@ check_update() {
         docker restart "$container_name"
       else
         echo -e "${GREEN}正在启动容器...${NC}"
-        docker restart "$container_name"
+        docker start "$container_name"
       fi
       return 0
     else
@@ -400,7 +396,7 @@ check_update() {
             docker restart "$container_name"
           else
             echo -e "${GREEN}正在启动容器...${NC}"
-            docker restart "$container_name"
+            docker start "$container_name"
           fi
           ;;
       esac
@@ -420,13 +416,18 @@ show_version_menu() {
     echo -e "${CYAN}=============================================${NC}"
 
     local arch=$(uname -m)
+    local current_version="${CONFIG[IMAGE_ID]}"
 
     for key in {1..8}; do
       # 如果是 ARM64 并且是版本 2、5、6，则跳过
       if [[ "$arch" == "aarch64" && ("$key" == "2" || "$key" == "5" || "$key" == "6") ]]; then
         continue
       fi
-      echo -e "${YELLOW} $key. ${VERSIONS[$key]}${NC}"
+      if [[ "$key" == "$current_version" ]]; then
+        echo -e "${GREEN} $key. ${VERSIONS[$key]}${NC} (当前使用)"
+      else
+        echo -e "${YELLOW} $key. ${VERSIONS[$key]}${NC}"
+      fi
     done
 
     echo -e "${GREEN} 0. 返回主菜单${NC}"
@@ -689,9 +690,27 @@ check_status() {
   local container_name=$(get_container_name)
   local status=$(check_container_status)
 
-  echo -e "${CYAN}============== 容器状态 ==============${NC}"
+  echo -e "${CYAN}============== 容器基础信息 ==============${NC}"
   docker ps -a --filter "name=$container_name" --format \
-    "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}"
+    "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+
+  # 显示端口映射（支持host和bridge模式）
+  echo -e "\n${CYAN}============== 端口映射 ==============${NC}"
+  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
+    echo -e "${YELLOW}host模式使用主机网络，无独立端口映射${NC}"
+    echo -e "管理端口: ${GREEN}4567${NC}"
+    echo -e "AList端口: ${GREEN}5244${NC}"
+  else
+    docker inspect --format \
+      '{{range $p, $conf := .NetworkSettings.Ports}}{{$p}} -> {{(index $conf 0).HostPort}}{{"\n"}}{{end}}' \
+      "$container_name" 2>/dev/null || echo -e "${RED}无端口映射信息${NC}"
+  fi
+
+  # 显示挂载信息（包括自定义挂载）
+  echo -e "\n${CYAN}============== 挂载目录 ==============${NC}"
+  docker inspect --format \
+    '{{range $mount := .Mounts}}{{$mount.Source}}:{{$mount.Destination}} ({{$mount.Mode}})'$'\n''{{end}}' \
+    "$container_name" 2>/dev/null | column -t -s: | sed 's/^/ /'
 
   echo -e "\n${CYAN}============== 镜像信息 ==============${NC}"
   local image_id=$(docker inspect --format '{{.Image}}' "$container_name" 2>/dev/null | cut -d: -f2 | cut -c1-12)
@@ -724,21 +743,12 @@ show_network_menu() {
   echo -e "${CYAN}=============================================${NC}"
   echo -e "${GREEN}          网络模式设置          ${NC}"
   echo -e "${CYAN}=============================================${NC}"
-  echo -e " 当前网络模式: ${CONFIG[NETWORK]}"
+  echo -e " 当前网络模式: ${GREEN}${CONFIG[NETWORK]}${NC}"
   echo -e " 1. bridge模式 (默认)"
-
-  # 只有版本6和7显示host模式选项
-  if [[ "${CONFIG[IMAGE_ID]}" == "6" || "${CONFIG[IMAGE_ID]}" == "7" ]]; then
-    echo -e " 2. host模式"
-    echo -e " 0. 返回"
-    max_choice=2
-  else
-    echo -e " 0. 返回"
-    max_choice=1
-  fi
-
+  echo -e " 2. host模式"
+  echo -e " 0. 返回"
   echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请选择网络模式 [0-$max_choice]: " choice
+  read -p "请选择网络模式 [0-2]: " choice
 
   case $choice in
     1)
@@ -747,16 +757,30 @@ show_network_menu() {
       echo -e "${GREEN}已设置为bridge模式${NC}"
       ;;
     2)
-      if [[ "$max_choice" == "3" ]]; then
-        CONFIG["NETWORK"]="host"
-        save_config
-        echo -e "${GREEN}已设置为host模式${NC}"
-      fi
+      CONFIG["NETWORK"]="host"
+      save_config
+      echo -e "${GREEN}已设置为host模式${NC}"
       ;;
     0)
       return
       ;;
+    *)
+      echo -e "${RED}无效选择!${NC}"
+      ;;
   esac
+
+  # 如果变更了网络模式且容器存在，提示需要重建
+  if [[ "$choice" =~ ^[12]$ ]]; then
+    local container_name=$(get_container_name)
+    if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+      echo -e "${YELLOW}注意: 网络模式变更将在下次启动容器时生效${NC}"
+      read -p "是否立即重建容器？[Y/n] " yn
+      case "$yn" in
+        [Nn]*) ;;
+        *) recreate_container_for_changes ;;
+      esac
+    fi
+  fi
 }
 
 # 显示重启策略菜单
@@ -765,7 +789,7 @@ show_restart_menu() {
   echo -e "${CYAN}=============================================${NC}"
   echo -e "${GREEN}          重启策略设置          ${NC}"
   echo -e "${CYAN}=============================================${NC}"
-  echo -e " 当前重启策略: ${CONFIG[RESTART]}"
+  echo -e " 当前重启策略: ${GREEN}${CONFIG[RESTART]}${NC}"
   echo -e " 1. always (总是重启)"
   echo -e " 2. unless-stopped (除非手动停止)"
   echo -e " 3. no (不自动重启)"
@@ -828,6 +852,11 @@ show_config_menu() {
         ;;
       2)
         read -p "输入新的管理端口 [${CONFIG[PORT1]}]: " new_port
+        if ! [[ "$new_port" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}端口号必须是数字!${NC}"
+            sleep 1
+            continue
+        fi
         if [[ -n "$new_port" && "$new_port" != "${CONFIG[PORT1]}" ]]; then
           CONFIG[PORT1]="$new_port"
           save_config
@@ -836,6 +865,11 @@ show_config_menu() {
         ;;
       3)
         read -p "输入新的AList端口 [${CONFIG[PORT2]}]: " new_port
+        if ! [[ "$new_port" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}端口号必须是数字!${NC}"
+            sleep 1
+            continue
+        fi
         if [[ -n "$new_port" && "$new_port" != "${CONFIG[PORT2]}" ]]; then
           CONFIG[PORT2]="$new_port"
           save_config

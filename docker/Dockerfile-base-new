@@ -17,8 +17,6 @@ RUN sqlite3 /opt/alist/data/data.db "drop table x_storages";\
 
 COPY --from=corretto-jdk /jre $JAVA_HOME
 
-VOLUME /opt/atv/data/
-
 WORKDIR /opt/atv/
 
 COPY scripts/index.sh /

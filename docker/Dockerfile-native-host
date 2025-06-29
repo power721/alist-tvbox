@@ -12,8 +12,6 @@ LABEL MAINTAINER="Har01d"
 
 ENV INSTALL=native-host
 
-VOLUME /opt/atv/data/
-
 WORKDIR /opt/atv/
 
 COPY config/config-host.json /alist.json
@@ -37,9 +35,9 @@ COPY data/zx.zip /
 COPY data/data.zip /
 COPY data/base_version /
 
-COPY data/version data/app_version
-
 COPY target/atv ./
+
+COPY data/version /app_version
 
 EXPOSE 4567 5678
 
