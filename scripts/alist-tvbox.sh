@@ -388,17 +388,22 @@ show_version_menu() {
     CONFIG["IMAGE_NAME"]="${VERSIONS[$version_choice]%% -*}"
     save_config
 
-    # 如果容器存在且版本变化，则重启容器
+    # 获取容器名称
     local container_name=$(get_container_name)
+
+    # 如果容器存在，则停止并删除
     if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-      if [[ "$old_version" != "${CONFIG[IMAGE_NAME]}" ]]; then
-        echo -e "${YELLOW}版本已变更，正在重启容器...${NC}"
-        docker restart "$container_name"
-      fi
+      echo -e "${YELLOW}正在停止并删除旧容器...${NC}"
+      docker rm -f "$container_name" >/dev/null
     fi
 
+    # 启动新容器
+    echo -e "${YELLOW}正在启动新版本容器...${NC}"
+    start_container
+
     echo -e "${GREEN}版本已切换为: ${VERSIONS[$version_choice]}${NC}"
-    sleep 2
+    show_access_info
+    read -n 1 -s -r -p "按任意键继续..."
     return
   done
 }
@@ -539,6 +544,30 @@ recreate_container_for_mounts() {
   fi
 }
 
+# 重建容器使配置变更生效
+recreate_container_for_changes() {
+  local container_name=$(get_container_name)
+
+  if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    echo -e "${YELLOW}正在重建容器使配置变更生效...${NC}"
+    local was_running=$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null)
+
+    # 停止并删除现有容器
+    docker rm -f "$container_name" >/dev/null
+
+    # 重新创建容器
+    if [[ "$was_running" == "true" ]]; then
+      start_container
+      echo -e "${GREEN}容器已重建并启动!${NC}"
+    else
+      echo -e "${GREEN}容器已重建!${NC}"
+    fi
+  else
+    echo -e "${YELLOW}容器不存在，变更将在下次启动时生效${NC}"
+  fi
+  sleep 1
+}
+
 # 显示网络模式菜单
 show_network_menu() {
   clear
@@ -568,21 +597,16 @@ show_network_menu() {
       echo -e "${GREEN}已设置为bridge模式${NC}"
       ;;
     2)
-      if [[ "$max_choice" == "2" ]]; then
+      if [[ "$max_choice" == "3" ]]; then
         CONFIG["NETWORK"]="host"
         save_config
         echo -e "${GREEN}已设置为host模式${NC}"
       fi
       ;;
     0)
-      # 只有版本6和7会进入这个分支
       return
       ;;
   esac
-
-  if [[ "$choice" != "0" ]]; then
-    sleep 1
-  fi
 }
 
 # 显示重启策略菜单
@@ -641,21 +665,32 @@ show_config_menu() {
     echo -e "${CYAN}---------------------------------------------${NC}"
     read -p "选择要修改的配置 [0-8]: " config_choice
 
+    local need_recreate=false
+
     case $config_choice in
       1)
         read -p "输入新的数据目录 [${CONFIG[BASE_DIR]}]: " new_dir
-        [[ -n "$new_dir" ]] && CONFIG[BASE_DIR]="$new_dir"
-        save_config
+        if [[ -n "$new_dir" && "$new_dir" != "${CONFIG[BASE_DIR]}" ]]; then
+          CONFIG[BASE_DIR]="$new_dir"
+          save_config
+          need_recreate=true
+        fi
         ;;
       2)
         read -p "输入新的管理端口 [${CONFIG[PORT1]}]: " new_port
-        [[ -n "$new_port" ]] && CONFIG[PORT1]="$new_port"
-        save_config
+        if [[ -n "$new_port" && "$new_port" != "${CONFIG[PORT1]}" ]]; then
+          CONFIG[PORT1]="$new_port"
+          save_config
+          need_recreate=true
+        fi
         ;;
       3)
         read -p "输入新的AList端口 [${CONFIG[PORT2]}]: " new_port
-        [[ -n "$new_port" ]] && CONFIG[PORT2]="$new_port"
-        save_config
+        if [[ -n "$new_port" && "$new_port" != "${CONFIG[PORT2]}" ]]; then
+          CONFIG[PORT2]="$new_port"
+          save_config
+          need_recreate=true
+        fi
         ;;
       4)
         if [[ "${CONFIG[MOUNT_WWW]}" == "true" ]]; then
@@ -664,35 +699,38 @@ show_config_menu() {
           CONFIG["MOUNT_WWW"]="true"
         fi
         save_config
-        if [[ "${CONFIG[MOUNT_WWW]}" == "true" ]]; then
-          ACTION=""
-        else
-          ACTION="取消"
-        fi
-        echo -e "${GREEN}已${ACTION}挂载/www目录${NC}"
-        sleep 1
+        need_recreate=true
         ;;
       5)
         manage_custom_mounts
+        # manage_custom_mounts内部已处理重建逻辑
+        continue
         ;;
       6)
         show_network_menu
+        need_recreate=true
         continue
         ;;
       7)
         show_restart_menu
+        save_config
+        # 重启策略修改不需要重建容器
+        docker update --restart="${CONFIG[RESTART]}" $(get_container_name) >/dev/null 2>&1
         continue
         ;;
       8)
         reset_admin_password
+        # 密码重置已包含重启逻辑
+        continue
         ;;
       0)
         break
         ;;
     esac
 
-    echo -e "${GREEN}配置已更新!${NC}"
-    sleep 1
+    if [[ "$need_recreate" == "true" ]]; then
+      recreate_container_for_changes
+    fi
   done
 }
 
