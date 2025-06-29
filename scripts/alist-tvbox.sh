@@ -219,11 +219,7 @@ start_container() {
 # 显示访问信息
 show_access_info() {
   local container_name=$(get_container_name)
-  local ip=""
-  if [[ "${CONFIG[NETWORK]}" != "host" ]]; then
-    ip=$(ip a | grep -F '192.168.' | awk '{print $2}' | awk -F/ '{print $1}' | head -1)
-    [[ -z "$ip" ]] && ip=$(ip a | grep -F '10.' | awk '{print $2}' | awk -F/ '{print $1}' | grep -E '\b10.' | head -1)
-  fi
+  local ip=$(get_host_ip)
 
   echo -e "\n${CYAN}============== 访问信息 ==============${NC}"
   echo -e "容器名称: ${GREEN}${container_name}${NC}"
@@ -254,7 +250,7 @@ show_menu() {
   echo -e "${YELLOW} 网络模式: ${CONFIG[NETWORK]}${NC}"
   echo -e "${YELLOW} 重启策略: ${CONFIG[RESTART]}${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
-  echo -e "${GREEN} 1. 安装/更新容器${NC}"
+  echo -e "${GREEN} 1. 安装/更新${NC}"
 
   # 动态菜单项
   case "$status" in
@@ -267,8 +263,8 @@ show_menu() {
   esac
 
   echo -e "${GREEN} 3. 重启容器${NC}"
-  echo -e "${GREEN} 4. 查看容器状态${NC}"
-  echo -e "${GREEN} 5. 查看容器日志${NC}"
+  echo -e "${GREEN} 4. 查看状态${NC}"
+  echo -e "${GREEN} 5. 查看日志${NC}"
   echo -e "${GREEN} 6. 卸载容器${NC}"
   echo -e "${GREEN} 7. 选择版本${NC}"
   echo -e "${GREEN} 8. 配置管理${NC}"
@@ -390,6 +386,13 @@ show_version_menu() {
 
     # 获取容器名称
     local container_name=$(get_container_name)
+    local opposite_name=$(get_opposite_container_name)
+
+    # 删除对立容器
+    if docker ps -a --format '{{.Names}}' | grep -q "^${opposite_name}\$"; then
+      echo -e "${YELLOW}正在移除对立容器 ${opposite_name}...${NC}"
+      docker rm -f "$opposite_name" >/dev/null
+    fi
 
     # 如果容器存在，则停止并删除
     if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
@@ -566,6 +569,60 @@ recreate_container_for_changes() {
     echo -e "${YELLOW}容器不存在，变更将在下次启动时生效${NC}"
   fi
   sleep 1
+}
+
+# 获取当前主机IP
+get_host_ip() {
+  local ip=$(hostname -I | awk '{print $1}')
+  if [[ -z "$ip" ]]; then
+    ip="localhost"
+  fi
+  echo "$ip"
+}
+
+# 检查 AList 运行状态
+check_alist_status() {
+  local ip=$(get_host_ip)
+  local port="${CONFIG[PORT1]}"
+  local api_url="http://$ip:$port/api/alist/status"
+
+  echo -e "${CYAN}正在检查 AList 状态...${NC}"
+
+  # 使用 curl 调用 API
+  local status_code
+  if status_code=$(curl -s --connect-timeout 3 "$api_url"); then
+    case "$status_code" in
+      0)
+        echo -e "AList 状态: ${RED}未启动${NC}"
+        ;;
+      1)
+        echo -e "AList 状态: ${YELLOW}启动中...${NC}"
+        ;;
+      2)
+        echo -e "AList 状态: ${GREEN}已启动${NC}"
+        ;;
+      *)
+        echo -e "AList 状态: ${RED}未知状态码: $status_code${NC}"
+        ;;
+    esac
+  else
+    echo -e "AList 状态: ${RED}无法连接到管理应用${NC}"
+  fi
+}
+
+check_status() {
+  echo -e "${CYAN}容器状态:${NC}"
+  docker ps -a --filter "name=$container_name"
+  echo -e "\n${CYAN}资源使用:${NC}"
+  docker stats --no-stream "$container_name" 2>/dev/null || echo -e "${YELLOW}容器未运行${NC}"
+
+  # 如果容器正在运行，检查 AList 状态
+  if [ "$status" == "running" ]; then
+    echo -e "\n${CYAN}AList 服务状态:${NC}"
+    check_alist_status
+  fi
+
+  read -n 1 -s -r -p "按任意键继续..."
 }
 
 # 显示网络模式菜单
@@ -771,6 +828,7 @@ interactive_mode() {
         ;;
       3)
         if [ "$status" != "not_exist" ]; then
+          echo "重启容器..."
           docker restart "$container_name"
           echo -e "${GREEN}容器已重启${NC}"
         else
@@ -779,11 +837,7 @@ interactive_mode() {
         sleep 1
         ;;
       4)
-        echo -e "${CYAN}容器状态:${NC}"
-        docker ps -a --filter "name=$container_name"
-        echo -e "\n${CYAN}资源使用:${NC}"
-        docker stats --no-stream "$container_name" 2>/dev/null || echo -e "${YELLOW}容器未运行${NC}"
-        read -n 1 -s -r -p "按任意键继续..."
+        check_status
         ;;
       5)
         if [ "$status" != "not_exist" ]; then
@@ -846,13 +900,15 @@ cli_mode() {
       }
       ;;
     restart)
+      echo "重启容器..."
       docker restart "$container_name" || {
         echo -e "${RED}重启失败，容器不存在${NC}"
         exit 1
       }
       ;;
     status)
-      docker ps -a --filter "name=$container_name"
+      local status=$(check_container_status)
+      check_status
       ;;
     logs)
       docker logs -f "$container_name" || {
