@@ -30,6 +30,7 @@ public class WebSecurityConfiguration {
                                 new AntPathRequestMatcher("/tg/**"),
                                 new AntPathRequestMatcher("/tgs/**"),
                                 new AntPathRequestMatcher("/tv/**"),
+                                new AntPathRequestMatcher("/dav/**"),
                                 new AntPathRequestMatcher("/ali/access_token"),
                                 new AntPathRequestMatcher("/api/alist/status"),
                                 new AntPathRequestMatcher("/api/profiles"),
