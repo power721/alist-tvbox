@@ -518,6 +518,7 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 ![WebDAV](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/webdav.jpg)
 
+4567端口代理了webdav请求。
 ### 电报搜索
 不登陆默认使用网页搜索公开频道资源。
 

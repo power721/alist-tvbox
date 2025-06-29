@@ -1,11 +1,10 @@
 package cn.har01d.alist_tvbox.config;
 
+import cn.har01d.alist_tvbox.util.Utils;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
-import cn.har01d.alist_tvbox.util.Utils;
 
 @Configuration
 public class MvcConfig implements WebMvcConfigurer {

@@ -254,7 +254,7 @@ show_menu() {
   local container_name=$(get_container_name)
 
   echo -e "${CYAN}==============================================${NC}"
-  echo -e "${GREEN}          AList TVBox 安装升级配置管理          ${NC}"
+  echo -e "${GREEN}          AList TvBox 安装升级配置管理          ${NC}"
   echo -e "${CYAN}==============================================${NC}"
   echo -e "${YELLOW} 当前版本: ${CONFIG[IMAGE_NAME]}${NC}"
   echo -e "${YELLOW} 容器名称: ${container_name}${NC}"

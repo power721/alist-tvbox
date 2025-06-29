@@ -69,7 +69,7 @@
           <el-table-column type="selection" width="55" v-if="isHistory"/>
           <el-table-column prop="vod_name" label="名称">
             <template #default="scope">
-              <el-popover :width="300" placement="left-start" v-if="scope.row.vod_tag=='folder'&&scope.row.vod_pic">
+              <el-popover :width="300" placement="left-start" v-if="scope.row.vod_pic">
                 <template #reference>
                   📺
                 </template>
@@ -1590,6 +1590,7 @@ const loadHistory = () => {
         id: e.id,
         vod_id: e.key,
         vod_name: e.vodName,
+        vod_pic: e.vodPic,
         vod_remarks: e.vodRemarks,
         index: e.episode + 1,
         progress: formatTime(e.position / 1000),
