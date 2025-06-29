@@ -416,13 +416,18 @@ show_version_menu() {
     echo -e "${CYAN}=============================================${NC}"
 
     local arch=$(uname -m)
+    local current_version="${CONFIG[IMAGE_ID]}"
 
     for key in {1..8}; do
       # 如果是 ARM64 并且是版本 2、5、6，则跳过
       if [[ "$arch" == "aarch64" && ("$key" == "2" || "$key" == "5" || "$key" == "6") ]]; then
         continue
       fi
-      echo -e "${YELLOW} $key. ${VERSIONS[$key]}${NC}"
+      if [[ "$key" == "$current_version" ]]; then
+        echo -e "${GREEN} $key. ${VERSIONS[$key]}${NC} (当前使用)"
+      else
+        echo -e "${YELLOW} $key. ${VERSIONS[$key]}${NC}"
+      fi
     done
 
     echo -e "${GREEN} 0. 返回主菜单${NC}"
@@ -738,7 +743,7 @@ show_network_menu() {
   echo -e "${CYAN}=============================================${NC}"
   echo -e "${GREEN}          网络模式设置          ${NC}"
   echo -e "${CYAN}=============================================${NC}"
-  echo -e " 当前网络模式: ${CONFIG[NETWORK]}"
+  echo -e " 当前网络模式: ${GREEN}${CONFIG[NETWORK]}${NC}"
   echo -e " 1. bridge模式 (默认)"
   echo -e " 2. host模式"
   echo -e " 0. 返回"
@@ -784,7 +789,7 @@ show_restart_menu() {
   echo -e "${CYAN}=============================================${NC}"
   echo -e "${GREEN}          重启策略设置          ${NC}"
   echo -e "${CYAN}=============================================${NC}"
-  echo -e " 当前重启策略: ${CONFIG[RESTART]}"
+  echo -e " 当前重启策略: ${GREEN}${CONFIG[RESTART]}${NC}"
   echo -e " 1. always (总是重启)"
   echo -e " 2. unless-stopped (除非手动停止)"
   echo -e " 3. no (不自动重启)"
