@@ -152,32 +152,11 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-python:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      # Native Image builds
       - name: Build native with Maven (AMD64)
         run: |
           mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
           chmod a+x target/atv
           ls -l target
-
-      - name: Build native for ARM64
-        run: |
-          # First build the JAR normally
-          mvn -B package --file pom.xml
- 
-          # Then use native-image to compile for ARM64
-          docker run --rm -v "$PWD":/project -w /project \
-            ghcr.io/graalvm/native-image:22.3.2 \
-            --static \
-            --libc=musl \
-            -H:BuildTarget=linux-aarch64 \
-            -jar target/alist-tvbox-1.0.jar \
-            target/atv-arm64
-  
-          chmod a+x target/atv-arm64
-          ls -l target
-
-      # Native Docker builds
       - name: Build alist native docker and push
         uses: docker/build-push-action@v6
         with:

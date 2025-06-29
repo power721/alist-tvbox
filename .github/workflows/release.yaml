@@ -1,4 +1,4 @@
-name: Release jar and native binary (multi-arch)
+name: Release jar and native binary
 
 on:
   push:
@@ -8,9 +8,6 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,10 +41,8 @@ jobs:
           native-image-musl: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
-          arch: ${{ matrix.arch == 'amd64' && 'x64' || 'aarch64' }}
 
       - name: Build native with Maven
-        if: matrix.arch == 'amd64'
         run: |
           mvn -B -Pnative \
               -Dnative.image.cache=true \
@@ -56,36 +51,16 @@ jobs:
               package
           chmod +x target/atv
           cd target
-          tar zcvf atv-amd64.tar.gz atv
+          tar zcvf atv.tar.gz atv
           ls -lh
 
-      - name: Cross-compile for ARM64
-        if: matrix.arch == 'arm64'
-        run: |
-          # First build the JAR normally
-          mvn -B -DskipTests package
-          
-          # Then use native-image to compile for ARM64
-          docker run --rm -v "$PWD":/project -w /project \
-            ghcr.io/graalvm/native-image:22.3.2 \
-            --static \
-            --libc=musl \
-            -H:BuildTarget=linux-aarch64 \
-            -jar target/alist-tvbox-1.0.jar \
-            atv
-          
-          chmod +x atv
-          tar zcvf target/atv-arm64.tar.gz atv
-          ls -lh target
-
-      - name: Create release and upload artifacts
+      - name: Create release and upload binary
         uses: softprops/action-gh-release@v2
         with:
           files: |
             target/alist-tvbox-1.0.jar
             target/alist-tvbox-1.0.jar.original
-            target/atv-amd64.tar.gz
-            target/atv-arm64.tar.gz
+            target/atv.tar.gz
 
       - name: Send version
         env:

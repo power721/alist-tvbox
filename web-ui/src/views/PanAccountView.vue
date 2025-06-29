@@ -121,6 +121,7 @@
 
           <span v-if="form.type=='CLOUD189'">
             <a href="https://cloud.189.cn/web/main/" target="_blank">天翼云盘</a>
+            <span class="hint">需要JSESSIONID和COOKIE_LOGIN_USER</span>
           </span>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
