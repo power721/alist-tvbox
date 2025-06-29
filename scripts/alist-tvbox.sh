@@ -143,7 +143,16 @@ check_image_update() {
   echo -e "${CYAN}正在检查镜像更新...${NC}"
 
   local current_id=$(docker images --quiet "$image")
-  docker pull "$image" >/dev/null
+  # 拉取适合当前架构的镜像
+  echo -e "${CYAN}正在拉取镜像 linux/$(check_architecture)...${NC}"
+  if ! docker pull --platform linux/$(check_architecture) "${CONFIG[IMAGE_NAME]}" >/dev/null; then
+    echo -e "${RED}镜像拉取失败!${NC}"
+    echo -e "${YELLOW}尝试不指定架构拉取...${NC}"
+    if ! docker pull "${CONFIG[IMAGE_NAME]}" >/dev/null; then
+      echo -e "${RED}镜像拉取彻底失败!${NC}"
+      return 1
+    fi
+  fi
   local new_id=$(docker images --quiet "$image")
 
   if [[ "$current_id" != "$new_id" ]]; then
@@ -274,8 +283,45 @@ show_menu() {
   read -p "请输入选项 [0-9]: " choice
 }
 
+# 检查系统架构
+check_architecture() {
+  local arch
+  arch=$(uname -m)
+  case "$arch" in
+    x86_64)    echo "amd64" ;;
+    aarch64)   echo "arm64" ;;
+    *)         echo "$arch" ;;
+  esac
+}
+
+# 检查系统架构支持
+check_architecture_support() {
+  local arch=$(uname -m)
+
+  case "$arch" in
+    x86_64)  return 0 ;;  # 支持amd64
+    aarch64) return 0 ;;  # 支持arm64
+    armv*)
+      echo -e "${RED}错误: 不支持 ARMv7 (32位) 架构${NC}"
+      echo -e "当前镜像仅支持:"
+      echo -e "  - linux/amd64 (x86_64)"
+      echo -e "  - linux/arm64 (aarch64)"
+      return 1
+      ;;
+    *)
+      echo -e "${RED}错误: 不支持的架构: $arch${NC}"
+      return 1
+      ;;
+  esac
+}
+
 # 安装/更新容器
 install_container() {
+  # 先检查架构支持
+  if ! check_architecture_support; then
+    return 1
+  fi
+
   local container_name=$(get_container_name)
   remove_opposite_container
 
@@ -314,7 +360,16 @@ check_update() {
   echo -e "${CYAN}正在检查镜像更新...${NC}"
 
   local current_id=$(docker images --quiet "$image")
-  docker pull "$image" >/dev/null
+  # 拉取适合当前架构的镜像
+  echo -e "${CYAN}正在拉取镜像...${NC}"
+  if ! docker pull --platform linux/$(check_architecture) "${CONFIG[IMAGE_NAME]}" >/dev/null; then
+    echo -e "${RED}镜像拉取失败!${NC}"
+    echo -e "${YELLOW}尝试不指定架构拉取...${NC}"
+    if ! docker pull "${CONFIG[IMAGE_NAME]}" >/dev/null; then
+      echo -e "${RED}镜像拉取彻底失败!${NC}"
+      return 1
+    fi
+  fi
   local new_id=$(docker images --quiet "$image")
 
   if [[ "$current_id" != "$new_id" ]]; then
