@@ -35,8 +35,8 @@ fi
 
 declare -A DEFAULT_CONFIG=(
   ["MODE"]="docker"
-  ["IMAGE_ID"]="5"
-  ["IMAGE_NAME"]="haroldli/xiaoya-tvbox:native"
+  ["IMAGE_ID"]="4"
+  ["IMAGE_NAME"]="haroldli/xiaoya-tvbox"
   ["BASE_DIR"]="$DEFAULT_BASE_DIR"
   ["PORT1"]="4567"
   ["PORT2"]="5344"

@@ -638,7 +638,7 @@ onMounted(() => {
     if (store.standalone) {
       tooltip.value = 'bash -c "$(curl -fsSL http://d.har01d.cn/install-service.sh)"'
     } else {
-      tooltip.value = 'sudo bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)"'
+      tooltip.value = 'sudo bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)" -s update'
     }
   })
   axios.get('/api/alist/status').then(({data}) => {
