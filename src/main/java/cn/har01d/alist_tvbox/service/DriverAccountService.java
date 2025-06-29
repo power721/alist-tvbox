@@ -615,6 +615,7 @@ public class DriverAccountService {
             case PAN115 -> get115UserInfo(account);
             case QUARK -> getQuarkUserInfo(account);
             case UC -> getUcUserInfo(account);
+            case CLOUD189 -> get189UserInfo(account);
             default -> null;
         };
     }
@@ -691,6 +692,18 @@ public class DriverAccountService {
         json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
         info.setId(String.valueOf(json.get("data").get("uid").asLong()));
         info.setName(json.get("data").get("nickname").asText());
+        return info;
+    }
+
+    private AccountInfo get189UserInfo(DriverAccount account) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.COOKIE, account.getCookie().trim());
+        headers.set(HttpHeaders.ACCEPT, "application/json;charset=UTF-8");
+        HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+        String url = "https://cloud.189.cn/api/open/user/getUserInfoForPortal.action?noCache=" + System.currentTimeMillis();
+        var json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        var info = new AccountInfo();
+        info.setName(json.get("userExtResp").get("nickName").asText());
         return info;
     }
 }

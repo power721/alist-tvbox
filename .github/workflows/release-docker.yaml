@@ -107,17 +107,30 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-python:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Build native with Maven
+
+      # Native Image builds (multi-arch)
+      - name: Build native with Maven (AMD64)
         run: |
           mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
           chmod a+x target/atv
           ls -l target
+      - name: Build native with Maven (ARM64)
+        if: runner.os == 'Linux'
+        run: |
+          # Cross-compile for ARM64
+          docker run --rm -v "$PWD":/project -w /project \
+            ghcr.io/graalvm/native-image:22.3.2 \
+            --platform linux/arm64 \
+            ./mvnw -Pnative -Dnative -DskipTests package
+          chmod a+x target/atv
+          ls -l target
+
       - name: Build alist native docker and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile-alist-native
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-native:${{ github.ref_name }}
           cache-from: type=gha
@@ -127,7 +140,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile-native
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native:${{ github.ref_name }}
           cache-from: type=gha
@@ -137,7 +150,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile-native-host
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native-host:${{ github.ref_name }}
           cache-from: type=gha
