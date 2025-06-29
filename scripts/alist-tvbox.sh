@@ -213,17 +213,10 @@ start_container() {
     done < "${CONFIG[BASE_DIR]}/mounts.conf"
   fi
 
-  # 只有版本6和7可以使用host模式
-  if [[ "${CONFIG[NETWORK]}" == "host" && ("${CONFIG[IMAGE_ID]}" == "6" || "${CONFIG[IMAGE_ID]}" == "7") ]]; then
+  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
     network_args="--network host"
     echo -e "${YELLOW}使用host网络模式${NC}"
   else
-    # 如果不是版本6或7，强制使用bridge模式
-    if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
-      CONFIG["NETWORK"]="bridge"
-      save_config
-      echo -e "${YELLOW}当前版本不支持host模式，已自动切换为bridge模式${NC}"
-    fi
     port_args="-p ${CONFIG[PORT1]}:4567 -p ${CONFIG[PORT2]}:${aList_port}"
   fi
 
@@ -689,9 +682,27 @@ check_status() {
   local container_name=$(get_container_name)
   local status=$(check_container_status)
 
-  echo -e "${CYAN}============== 容器状态 ==============${NC}"
+  echo -e "${CYAN}============== 容器基础信息 ==============${NC}"
   docker ps -a --filter "name=$container_name" --format \
-    "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}"
+    "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+
+  # 显示端口映射（支持host和bridge模式）
+  echo -e "\n${CYAN}============== 端口映射 ==============${NC}"
+  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
+    echo -e "${YELLOW}host模式使用主机网络，无独立端口映射${NC}"
+    echo -e "管理端口: ${GREEN}4567${NC}"
+    echo -e "AList端口: ${GREEN}5244${NC}"
+  else
+    docker inspect --format \
+      '{{range $p, $conf := .NetworkSettings.Ports}}{{$p}} -> {{(index $conf 0).HostPort}}{{"\n"}}{{end}}' \
+      "$container_name" 2>/dev/null || echo -e "${RED}无端口映射信息${NC}"
+  fi
+
+  # 显示挂载信息（包括自定义挂载）
+  echo -e "\n${CYAN}============== 挂载目录 ==============${NC}"
+  docker inspect --format \
+    '{{range $mount := .Mounts}}{{$mount.Source}}:{{$mount.Destination}} ({{$mount.Mode}})'$'\n''{{end}}' \
+    "$container_name" 2>/dev/null | column -t -s: | sed 's/^/ /'
 
   echo -e "\n${CYAN}============== 镜像信息 ==============${NC}"
   local image_id=$(docker inspect --format '{{.Image}}' "$container_name" 2>/dev/null | cut -d: -f2 | cut -c1-12)
@@ -726,19 +737,10 @@ show_network_menu() {
   echo -e "${CYAN}=============================================${NC}"
   echo -e " 当前网络模式: ${CONFIG[NETWORK]}"
   echo -e " 1. bridge模式 (默认)"
-
-  # 只有版本6和7显示host模式选项
-  if [[ "${CONFIG[IMAGE_ID]}" == "6" || "${CONFIG[IMAGE_ID]}" == "7" ]]; then
-    echo -e " 2. host模式"
-    echo -e " 0. 返回"
-    max_choice=2
-  else
-    echo -e " 0. 返回"
-    max_choice=1
-  fi
-
+  echo -e " 2. host模式"
+  echo -e " 0. 返回"
   echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请选择网络模式 [0-$max_choice]: " choice
+  read -p "请选择网络模式 [0-2]: " choice
 
   case $choice in
     1)
@@ -747,16 +749,30 @@ show_network_menu() {
       echo -e "${GREEN}已设置为bridge模式${NC}"
       ;;
     2)
-      if [[ "$max_choice" == "3" ]]; then
-        CONFIG["NETWORK"]="host"
-        save_config
-        echo -e "${GREEN}已设置为host模式${NC}"
-      fi
+      CONFIG["NETWORK"]="host"
+      save_config
+      echo -e "${GREEN}已设置为host模式${NC}"
       ;;
     0)
       return
       ;;
+    *)
+      echo -e "${RED}无效选择!${NC}"
+      ;;
   esac
+
+  # 如果变更了网络模式且容器存在，提示需要重建
+  if [[ "$choice" =~ ^[12]$ ]]; then
+    local container_name=$(get_container_name)
+    if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+      echo -e "${YELLOW}注意: 网络模式变更将在下次启动容器时生效${NC}"
+      read -p "是否立即重建容器？[Y/n] " yn
+      case "$yn" in
+        [Nn]*) ;;
+        *) recreate_container_for_changes ;;
+      esac
+    fi
+  fi
 }
 
 # 显示重启策略菜单

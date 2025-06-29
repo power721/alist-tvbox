@@ -11,8 +11,6 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 COPY --from=adoptopenjdk /opt/java/openjdk $JAVA_HOME
 
-VOLUME /opt/atv/data/
-
 WORKDIR /opt/atv/
 
 RUN apk add --update-cache gcompat
@@ -26,7 +24,7 @@ COPY target/snapshot-dependencies/ ./
 COPY target/spring-boot-loader/ ./
 COPY target/application/ ./
 
-COPY data/version data/app_version
+COPY data/version /app_version
 
 EXPOSE 4567 80
 

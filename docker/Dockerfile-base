@@ -13,8 +13,6 @@ COPY data/update.sql /
 
 COPY --from=corretto-jdk /jre $JAVA_HOME
 
-VOLUME /opt/atv/data/
-
 WORKDIR /opt/atv/
 
 COPY scripts/index.sh /
