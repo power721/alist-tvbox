@@ -13,6 +13,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -189,7 +191,7 @@ public class ProxyService {
         playUrlRepository.deleteAll();
     }
 
-    public List<PlayUrl> list() {
-        return playUrlRepository.findAll();
+    public Page<PlayUrl> list(Pageable pageable) {
+        return playUrlRepository.findAll(pageable);
     }
 }
