@@ -182,7 +182,9 @@ start_container() {
   local volume_args=""
 
   # 为alist-tvbox的三个版本添加特殊挂载
+  aList_port=80
   if [[ "${CONFIG[IMAGE_ID]}" =~ ^[123]$ ]]; then
+    aList_port=5244
     volume_args="-v ${CONFIG[BASE_DIR]}/alist:/opt/alist/data"
   fi
 
@@ -216,7 +218,7 @@ start_container() {
       save_config
       echo -e "${YELLOW}当前版本不支持host模式，已自动切换为bridge模式${NC}"
     fi
-    port_args="-p ${CONFIG[PORT1]}:4567 -p ${CONFIG[PORT2]}:80"
+    port_args="-p ${CONFIG[PORT1]}:4567 -p ${CONFIG[PORT2]}:${aList_port}"
   fi
 
   # 确保数据目录存在
