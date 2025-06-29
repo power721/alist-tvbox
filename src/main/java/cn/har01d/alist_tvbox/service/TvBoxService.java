@@ -2391,7 +2391,7 @@ public class TvBoxService {
 
     private static boolean isPortOpen(String ip) {
         try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(ip, 9978), 60);
+            socket.connect(new InetSocketAddress(ip, 9978), 20);
             return true;
         } catch (IOException e) {
             return false;
