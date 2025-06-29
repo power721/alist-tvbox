@@ -29,6 +29,7 @@ export default defineConfig({
       "/play": API,
       "/live": API,
       "/images": API,
+      "/history": API,
     }
   }
 })

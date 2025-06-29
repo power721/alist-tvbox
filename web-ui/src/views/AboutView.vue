@@ -32,30 +32,31 @@
       <code>bash -c "$(curl -fsSL http://d.har01d.cn/install-service.sh)"</code><br>
     </p>
     <p>
-      一键部署(纯净版)：
-      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)"</code><br>
+      一键部署（Docker版）：
+      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)"</code><br>
     </p>
 <!--    <p>-->
 <!--      一键部署(电报监控版)：-->
 <!--      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)" -s -t tg</code><br>-->
 <!--    </p>-->
-    <p>
-      一键部署(小雅版)：
-      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"</code><br>
-    </p>
-    <p>
-      一键部署(内存优化版)：
-      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_native.sh)"</code><br>
-      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_native_host.sh)"</code><br>
-    </p>
-    <p>
-      一键部署(host网络模式)：
-      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_hostmode.sh)"</code><br>
-    </p>
-    <p>
-      一键部署(开发版)：
-      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)" -s -t dev</code><br>
-    </p>
+<!--    <p>-->
+<!--      一键部署(小雅版)：-->
+<!--      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"</code><br>-->
+<!--    </p>-->
+<!--    <p>-->
+<!--      一键部署(内存优化版)：-->
+<!--      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)" -s -t native</code><br>-->
+<!--      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_native.sh)"</code><br>-->
+<!--      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_native_host.sh)"</code><br>-->
+<!--    </p>-->
+<!--    <p>-->
+<!--      一键部署(host网络模式)：-->
+<!--      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_hostmode.sh)"</code><br>-->
+<!--    </p>-->
+<!--    <p>-->
+<!--      一键部署(开发版)：-->
+<!--      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)" -s -t dev</code><br>-->
+<!--    </p>-->
     <p>
       一键部署(NAS)：
       <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)" -s /volume2/docker/xiaoya</code>

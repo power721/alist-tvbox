@@ -24,6 +24,7 @@ on:
       - 'docker/Dockerfile-jre'
       - 'scripts/install.sh'
       - 'scripts/install-service.sh'
+      - 'scripts/alist-tvbox.sh'
       - 'scripts/update_hostmode.sh'
       - 'scripts/update_native.sh'
       - 'scripts/update_native_host.sh'
@@ -99,18 +100,6 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Build xiaoya TG docker and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile-xiaoya-tg
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:tg
-            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-tg:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
       - name: Build xiaoya host mode docker and push
         uses: docker/build-push-action@v6
         with:
@@ -120,7 +109,9 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:hostmode
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:host
             ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-hostmode:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-host:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build alist docker and push
@@ -145,6 +136,20 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:python
             ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-tg:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-python:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build xiaoya TG docker and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile-xiaoya-tg
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:tg
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:python
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-tg:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-python:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

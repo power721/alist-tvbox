@@ -5,7 +5,7 @@ AList代理，支持xiaoya版AList界面管理。
 1. 准备工作：安装Docker
 2. 安装AList-TvBox：
     ```bash
-    sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"
+    sudo bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)"
     ```
 3. 打开管理界面：http://your-ip:4567/#/accounts
    默认用户名：admin 密码：admin
@@ -40,39 +40,17 @@ AList代理，支持xiaoya版AList界面管理。
 如果找不到sudo，就用root账号登录，去掉sudo后运行。
 
 ```bash
-sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"
+sudo bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)"
 ```
-使用其它配置目录：
-```bash
-wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/user/atv
-```
-挂载本地目录：
-```bash
-wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -v /home/user/Videos:/video
-```
-使用其它端口：
 
-- 第一个参数是挂载的数据目录，默认是/etc/xiaoya。
-- 第二个参数是管理界面端口，默认是4567。
-- 第三个参数是小雅AList端口，默认是5344。
-```bash
-wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/alist 8080
-wget http://d.har01d.cn/update_xiaoya.sh -O update_xiaoya.sh && bash ./update_xiaoya.sh -s /home/alist 8080 5544
-```
 OpenWrt去掉sudo，或者已经是root账号：
 ```bash
-bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)"
+bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)"
 ```
 
 如果没有安装curl:
 ```bash
-wget http://d.har01d.cn/update_xiaoya.sh; bash ./update_xiaoya.sh
-```
-
-#### 内存优化版
-目前仅支持Linux x86_64平台。
-```bash
-sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_native.sh)"
+wget http://d.har01d.cn/alist-tvbox.sh; bash ./alist-tvbox.sh
 ```
 
 #### host网络模式
@@ -92,12 +70,7 @@ sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_hostmode.sh)"
 
 #### 纯净版
 没有内置分享数据、可以直接访问AList管理界面。
-```bash
-sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)"
-```
 
-如果要保留AList数据，需要挂载/opt/alist目录。
-比如： -v /etc/xiaoya/alist:/opt/alist
 #### NAS
 对于群辉等NAS系统，请挂载Docker的/data目录到群辉文件系统，否则数据不会保留。
 #### 创建容器
@@ -112,9 +85,9 @@ sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_new.sh)"
 ### 定时更新
 使用root用户创建corntab定时任务
 ```bash
-wget http://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
-chmod a+x /opt/update_xiaoya.sh
-crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh -u"; } | crontab -
+wget http://d.har01d.cn/alist-tvbox.sh -O /opt/alist-tvbox.sh
+chmod a+x /opt/alist-tvbox.sh
+crontab -l | { cat; echo "0 2 * * * /opt/alist-tvbox.sh update -y"; } | crontab -
 ```
 每天凌晨2点检查更新并重启应用。
 
@@ -123,15 +96,15 @@ crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh -u"; } | crontab -
 
 每天凌晨2点重启应用：
 ```bash
-wget http://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
-chmod a+x /opt/update_xiaoya.sh
-crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh"; } | crontab -
+wget http://d.har01d.cn/alist-tvbox.sh -O /opt/alist-tvbox.sh
+chmod a+x /opt/alist-tvbox.sh
+crontab -l | { cat; echo "0 2 * * * /opt/alist-tvbox.sh restart"; } | crontab -
 ```
 每天凌晨2点检查更新：
 ```bash
-wget http://d.har01d.cn/update_xiaoya.sh -O /opt/update_xiaoya.sh
-chmod a+x /opt/update_xiaoya.sh
-crontab -l | { cat; echo "0 2 * * * /opt/update_xiaoya.sh -u"; } | crontab -
+wget http://d.har01d.cn/alist-tvbox.sh -O /opt/alist-tvbox.sh
+chmod a+x /opt/alist-tvbox.sh
+crontab -l | { cat; echo "0 2 * * * /opt/alist-tvbox.sh update -y"; } | crontab -
 ```
 ### 自动更新
 使用docker镜像watchtower实现自动更新。
@@ -148,7 +121,7 @@ docker run -d \
 ```
 
 ### 防火墙
-需要开放管理端口4567和Nginx端口5344（host网络模式是5678）。
+需要开放管理端口4567~~和Nginx端口5344（host网络模式是5678）~~。
 
 如果修改了默认端口，自行替换。
 

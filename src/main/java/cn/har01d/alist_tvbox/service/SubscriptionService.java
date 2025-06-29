@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -260,7 +261,7 @@ public class SubscriptionService {
     }
 
     public String getFirstToken() {
-        return appProperties.isEnabledToken() ? tokens.split(",")[0] : "";
+        return appProperties.isEnabledToken() ? tokens.split(",")[0] : "-";
     }
 
     public String getCurrentToken() {
@@ -938,18 +939,21 @@ public class SubscriptionService {
         }
     }
 
+    private String generateUid() {
+        return UUID.randomUUID().toString().replace("-", "");
+    }
+
     private void addSite(String token, Map<String, Object> config) {
         int id = 0;
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
 
+        String uid = generateUid();
         try {
-            for (Site site1 : siteRepository.findAll()) {
-                if (site1.isSearchable() && !site1.isDisabled()) {
-                    Map<String, Object> site = buildSite(token, "csp_XiaoYa", site1.getName());
-                    sites.add(id++, site);
-                    log.debug("add XiaoYa site: {}", site);
-                    break;
-                }
+            Site site1 = siteRepository.findById(1).orElse(null);
+            if (site1 != null) {
+                Map<String, Object> site = buildSite(token, uid, "csp_XiaoYa", site1.getName());
+                sites.add(id++, site);
+                log.debug("add XiaoYa site: {}", site);
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -957,7 +961,7 @@ public class SubscriptionService {
 
         try {
             String key = "Alist";
-            Map<String, Object> site = buildSite(token, "csp_AList", "AList");
+            Map<String, Object> site = buildSite(token, uid, "csp_AList", "AList");
             sites.removeIf(item -> key.equals(item.get("key")));
             sites.add(id++, site);
             log.debug("add AList site: {}", site);
@@ -966,24 +970,16 @@ public class SubscriptionService {
         }
 
         try {
-            Map<String, Object> site = buildSite(token, "csp_BiliBili", "BiliBili");
+            Map<String, Object> site = buildSite(token, uid, "csp_BiliBili", "BiliBili");
             sites.add(id++, site);
             log.debug("add BiliBili site: {}", site);
         } catch (Exception e) {
             log.warn("", e);
         }
 
-//        try {
-//            Map<String, Object> site = buildSite(token, "csp_Youtube", "YouTube");
-//            sites.add(id++, site);
-//            log.debug("add Youtube site: {}", site);
-//        } catch (Exception e) {
-//            log.warn("", e);
-//        }
-
         try {
             if (embyRepository.count() > 0) {
-                Map<String, Object> site = buildSite(token, "csp_Emby", "Emby");
+                Map<String, Object> site = buildSite(token, uid, "csp_Emby", "Emby");
                 sites.add(id++, site);
                 log.debug("add Emby site: {}", site);
             }
@@ -993,7 +989,7 @@ public class SubscriptionService {
 
         try {
             if (jellyfinRepository.count() > 0) {
-                Map<String, Object> site = buildSite(token, "csp_Jellyfin", "Jellyfin");
+                Map<String, Object> site = buildSite(token, uid, "csp_Jellyfin", "Jellyfin");
                 sites.add(id++, site);
                 log.debug("add Jellyfin site: {}", site);
             }
@@ -1002,7 +998,7 @@ public class SubscriptionService {
         }
 
         try {
-            Map<String, Object> site = buildSite(token, "csp_Live", "网络直播");
+            Map<String, Object> site = buildSite(token, uid, "csp_Live", "网络直播");
             sites.add(id++, site);
             log.debug("add Live site: {}", site);
         } catch (Exception e) {
@@ -1010,7 +1006,7 @@ public class SubscriptionService {
         }
 
         try {
-            Map<String, Object> site = buildSite(token, "csp_TgDouBan", "电报豆瓣");
+            Map<String, Object> site = buildSite(token, uid, "csp_TgDouBan", "电报豆瓣");
             site.put("searchable", 0);
             site.put("quickSearch", 0);
             sites.add(id++, site);
@@ -1020,7 +1016,7 @@ public class SubscriptionService {
         }
 
         try {
-            Map<String, Object> site = buildSite(token, "csp_TgSearch", "电报搜索");
+            Map<String, Object> site = buildSite(token, uid, "csp_TgSearch", "电报搜索");
             sites.add(id++, site);
             log.debug("add TG search: {}", site);
         } catch (Exception e) {
@@ -1028,7 +1024,7 @@ public class SubscriptionService {
         }
     }
 
-    private Map<String, Object> buildSite(String token, String key, String name) throws IOException {
+    private Map<String, Object> buildSite(String token, String uid, String key, String name) throws IOException {
         Map<String, Object> site = new HashMap<>();
         String url = readHostAddress("");
         site.put("key", key);
@@ -1037,7 +1033,8 @@ public class SubscriptionService {
         site.put("type", 3);
         Map<String, String> map = new HashMap<>();
         map.put("api", url);
-        map.put("token", token);
+        map.put("token", token.isBlank() ? "-" : token);
+        map.put("uid", uid);
         String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
@@ -1047,14 +1044,11 @@ public class SubscriptionService {
         site.put("searchable", 1);
         site.put("quickSearch", 1);
         site.put("filterable", 1);
-        if ("csp_BiliBili".equals(key) || "csp_Youtube".equals(key)) {
+        if ("csp_BiliBili".equals(key)) {
             Map<String, Object> style = new HashMap<>();
             style.put("type", "rect");
             style.put("ratio", 1.597);
             site.put("style", style);
-        }
-        if ("csp_Youtube".equals(key)) {
-            site.put("playerType", 2);
         }
         return site;
     }
