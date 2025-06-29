@@ -19,9 +19,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,13 +58,11 @@ public class HistoryService {
     }
 
     public History findById(String key) {
-        key = decode(key);
         return historyRepository.findByKey(key);
     }
 
     public void saveAll(List<History> histories) {
         for (var history : histories) {
-            history.setKey(decode(history.getKey()));
             var exist = findById(history.getKey());
             if (exist != null) {
                 history.setId(exist.getId());
@@ -76,7 +72,6 @@ public class HistoryService {
     }
 
     public History save(History history) {
-        history.setKey(decode(history.getKey()));
         var exist = findById(history.getKey());
         if (exist != null) {
             history.setId(exist.getId());
@@ -102,7 +97,7 @@ public class HistoryService {
 
         for (History history : histories) {
             String[] parts = history.getKey().split("@@@");
-            String key = decode(parts[1]);
+            String key = parts[1];
             map.put(key, history);
             if (!parts[0].equals("csp_AList")) {
                 continue;
@@ -225,7 +220,6 @@ public class HistoryService {
     }
 
     public void delete(String key) {
-        key = decode(key);
         historyRepository.deleteByKey(key);
     }
 
@@ -243,27 +237,6 @@ public class HistoryService {
 
     public void deleteById(Integer id) {
         historyRepository.deleteById(id);
-    }
-
-    private String base64Encode(String input) {
-        String encoded = Base64.getEncoder().encodeToString(input.getBytes(StandardCharsets.UTF_8))
-                .replace("+", "-")
-                .replace("/", "_");
-        if (encoded.endsWith("===")) {
-            encoded = encoded.substring(0, encoded.length() - 3);
-        }
-        if (encoded.endsWith("==")) {
-            encoded = encoded.substring(0, encoded.length() - 2);
-        }
-        if (encoded.endsWith("=")) {
-            encoded = encoded.substring(0, encoded.length() - 1);
-        }
-        return encoded;
-    }
-
-    private String decode(String str) {
-        return str;
-//        return URLDecoder.decode(str, StandardCharsets.UTF_8);
     }
 
     private String buildSubUrl() {
