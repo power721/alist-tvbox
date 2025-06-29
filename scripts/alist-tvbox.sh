@@ -55,28 +55,34 @@ done
 check_environment() {
   echo -e "${CYAN}正在检测运行环境...${NC}"
 
+  # 1. 检查Docker是否安装
   if ! command -v docker &>/dev/null; then
     echo -e "${RED}错误：Docker未安装！${NC}"
     exit 1
   fi
 
+  # 2. 检查Docker服务状态
   if ! docker info &>/dev/null; then
     echo -e "${RED}错误：Docker服务未运行！${NC}"
     exit 1
   fi
 
-  # 检查是否能访问 Docker Hub
-  if ! timeout 5 curl -s https://hub.docker.com/ >/dev/null; then
-    echo -e "${YELLOW}警告：无法访问 Docker Hub，拉取镜像可能失败！${NC}"
-    echo -e "${YELLOW}建议配置国内镜像加速：${NC}"
+  # 3. 检查镜像加速配置（不再强制检测Docker Hub连通性）
+  local using_mirror=false
+  if [[ -f "/etc/docker/daemon.json" ]] &&
+     grep -q "registry-mirrors" /etc/docker/daemon.json; then
+    using_mirror=true
+  fi
+
+  # 4. 仅提示未配置镜像加速的情况
+  if [[ "$using_mirror" == "false" ]]; then
+    echo -e "${YELLOW}建议：为提高拉取速度，可配置国内镜像加速：${NC}"
     echo -e "1. 编辑 /etc/docker/daemon.json"
-    echo -e "2. 添加镜像源，例如："
-    echo -e '   { "registry-mirrors": ["https://registry.aliyuncs.com"] }'
-    echo -e "3. 运行：sudo systemctl restart docker"
-    read -p "是否继续？[Y/n] " yn
-    case "$yn" in
-      [Nn]*) exit 1 ;;
-    esac
+    echo -e "2. 添加示例配置："
+    echo -e '   { "registry-mirrors": ["https://registry.mirror.aliyuncs.com"] }'
+    echo -e "3. 执行：sudo systemctl restart docker"
+  else
+    echo -e "${GREEN}检测到已配置镜像加速${NC}"
   fi
 }
 
@@ -680,14 +686,32 @@ check_alist_status() {
 }
 
 check_status() {
-  echo -e "${CYAN}容器状态:${NC}"
-  docker ps -a --filter "name=$container_name"
-  echo -e "\n${CYAN}资源使用:${NC}"
+  local container_name=$(get_container_name)
+  local status=$(check_container_status)
+
+  echo -e "${CYAN}============== 容器状态 ==============${NC}"
+  docker ps -a --filter "name=$container_name" --format \
+    "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}"
+
+  echo -e "\n${CYAN}============== 镜像信息 ==============${NC}"
+  local image_id=$(docker inspect --format '{{.Image}}' "$container_name" 2>/dev/null | cut -d: -f2 | cut -c1-12)
+  local image_name=$(docker inspect --format '{{.Config.Image}}' "$container_name" 2>/dev/null)
+
+  if [[ -n "$image_name" ]]; then
+    echo -e "镜像名称: ${GREEN}$image_name${NC}"
+    echo -e "镜像ID: ${YELLOW}$image_id${NC}"
+    echo -e "创建时间: $(docker inspect --format '{{.Created}}' "$image_name" 2>/dev/null)"
+    echo -e "镜像大小: $(docker inspect --format '{{.Size}}' "$image_name" 2>/dev/null | numfmt --to=iec)"
+  else
+    echo -e "${RED}容器不存在或未使用镜像${NC}"
+  fi
+
+  echo -e "\n${CYAN}============= 资源使用情况 ============${NC}"
   docker stats --no-stream "$container_name" 2>/dev/null || echo -e "${YELLOW}容器未运行${NC}"
 
-  # 如果容器正在运行，检查 AList 状态
-  if [ "$status" == "running" ]; then
-    echo -e "\n${CYAN}AList 服务状态:${NC}"
+  # 检查AList服务状态
+  if [[ "$status" == "running" ]]; then
+    echo -e "\n${CYAN}============ AList服务状态 ============${NC}"
     check_alist_status
   fi
 
@@ -935,7 +959,9 @@ interactive_mode() {
         show_config_menu
         ;;
       9)
-        check_update
+        if ! check_update; then
+          sleep 3
+        fi
         ;;
       0)
         echo -e "${GREEN}再见!${NC}"
