@@ -12,14 +12,14 @@ NC='\033[0m' # No Color
 
 # 版本定义
 declare -A VERSIONS=(
-  ["1"]="haroldli/alist-tvbox - 纯净版"
-  ["2"]="haroldli/alist-tvbox-native - 纯净原生版（推荐）"
-  ["3"]="haroldli/alist-tvbox-tg - 纯净TG版"
-  ["4"]="haroldli/xiaoya-tvbox - 小雅集成版"
-  ["5"]="haroldli/xiaoya-tvbox-native - 小雅原生版（推荐）"
-  ["6"]="haroldli/xiaoya-tvbox-native-host - 小雅原生主机版"
-  ["7"]="haroldli/xiaoya-tvbox-host - 小雅主机模式版"
-  ["8"]="haroldli/xiaoya-tvbox-tg - 小雅TG版"
+  ["1"]="haroldli/alist-tvbox              - 纯净版"
+  ["2"]="haroldli/alist-tvbox:native       - 纯净原生版（推荐）"
+  ["3"]="haroldli/alist-tvbox:python       - 纯净版（Python运行环境）"
+  ["4"]="haroldli/xiaoya-tvbox             - 小雅集成版"
+  ["5"]="haroldli/xiaoya-tvbox:native      - 小雅原生版（推荐）"
+  ["6"]="haroldli/xiaoya-tvbox:native-host - 小雅原生主机版"
+  ["7"]="haroldli/xiaoya-tvbox:host        - 小雅主机模式版"
+  ["8"]="haroldli/xiaoya-tvbox:python      - 小雅版（Python运行环境）"
 )
 
 # 默认配置
@@ -36,7 +36,7 @@ fi
 declare -A DEFAULT_CONFIG=(
   ["MODE"]="docker"
   ["IMAGE_ID"]="5"
-  ["IMAGE_NAME"]="haroldli/xiaoya-tvbox-native"
+  ["IMAGE_NAME"]="haroldli/xiaoya-tvbox:native"
   ["BASE_DIR"]="$DEFAULT_BASE_DIR"
   ["PORT1"]="4567"
   ["PORT2"]="5344"
@@ -144,8 +144,9 @@ check_image_update() {
 
   local current_id=$(docker images --quiet "$image")
   # 拉取适合当前架构的镜像
-  echo -e "${CYAN}正在拉取镜像 linux/$(check_architecture)...${NC}"
-  if ! docker pull --platform linux/$(check_architecture) "${CONFIG[IMAGE_NAME]}" >/dev/null; then
+  local arch=$(check_architecture)
+  echo -e "${CYAN}正在拉取镜像:${CONFIG[IMAGE_NAME]} linux/${arch}${NC}"
+  if ! docker pull --platform linux/${arch} "${CONFIG[IMAGE_NAME]}" >/dev/null; then
     echo -e "${RED}镜像拉取失败!${NC}"
     echo -e "${YELLOW}尝试不指定架构拉取...${NC}"
     if ! docker pull "${CONFIG[IMAGE_NAME]}" >/dev/null; then
@@ -361,8 +362,9 @@ check_update() {
 
   local current_id=$(docker images --quiet "$image")
   # 拉取适合当前架构的镜像
-  echo -e "${CYAN}正在拉取镜像...${NC}"
-  if ! docker pull --platform linux/$(check_architecture) "${CONFIG[IMAGE_NAME]}" >/dev/null; then
+  local arch=$(check_architecture)
+  echo -e "${CYAN}正在拉取镜像: ${CONFIG[IMAGE_NAME]} linux/${arch}${NC}"
+  if ! docker pull --platform linux/${arch} "${CONFIG[IMAGE_NAME]}" >/dev/null; then
     echo -e "${RED}镜像拉取失败!${NC}"
     echo -e "${YELLOW}尝试不指定架构拉取...${NC}"
     if ! docker pull "${CONFIG[IMAGE_NAME]}" >/dev/null; then
@@ -435,8 +437,10 @@ show_version_menu() {
     fi
 
     local old_version="${CONFIG[IMAGE_NAME]}"
+    local image="${VERSIONS[$version_choice]%% -*}"
+    image=$(echo "$image" | tr -d '[:space:]' | sed "s/^['\"]//;s/['\"]\$//")
     CONFIG["IMAGE_ID"]="$version_choice"
-    CONFIG["IMAGE_NAME"]="${VERSIONS[$version_choice]%% -*}"
+    CONFIG["IMAGE_NAME"]="${image}"
     save_config
 
     # 获取容器名称
@@ -459,7 +463,7 @@ show_version_menu() {
     echo -e "${YELLOW}正在启动新版本容器...${NC}"
     start_container
 
-    echo -e "${GREEN}版本已切换为: ${VERSIONS[$version_choice]}${NC}"
+    echo -e "${GREEN}版本已切换为: ${image}${NC}"
     show_access_info
     read -n 1 -s -r -p "按任意键继续..."
     return
@@ -863,10 +867,12 @@ interactive_mode() {
       2)
         case "$status" in
           "running")
+            echo "停止容器..."
             docker stop "$container_name"
             echo -e "${GREEN}容器已停止${NC}"
             ;;
           *)
+            echo "启动容器..."
             if docker start "$container_name" 2>/dev/null; then
               echo -e "${GREEN}容器已启动${NC}"
             else
@@ -903,6 +909,7 @@ interactive_mode() {
         fi
         ;;
       6)
+        echo "卸载容器..."
         if [ "$status" != "not_exist" ]; then
           docker rm -f "$container_name"
           echo -e "${GREEN}容器已卸载${NC}"
@@ -943,12 +950,14 @@ cli_mode() {
       install_container
       ;;
     start)
+      echo "启动容器..."
       docker start "$container_name" || {
         echo -e "${RED}启动失败，容器不存在${NC}"
         exit 1
       }
       ;;
     stop)
+      echo "停止容器..."
       docker stop "$container_name" || {
         echo -e "${RED}停止失败，容器不存在${NC}"
         exit 1

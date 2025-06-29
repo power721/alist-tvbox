@@ -147,7 +147,9 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:tg
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:python
             ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-tg:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-python:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
