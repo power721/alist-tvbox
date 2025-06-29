@@ -64,6 +64,20 @@ check_environment() {
     echo -e "${RED}错误：Docker服务未运行！${NC}"
     exit 1
   fi
+
+  # 检查是否能访问 Docker Hub
+  if ! timeout 5 curl -s https://hub.docker.com/ >/dev/null; then
+    echo -e "${YELLOW}警告：无法访问 Docker Hub，拉取镜像可能失败！${NC}"
+    echo -e "${YELLOW}建议配置国内镜像加速：${NC}"
+    echo -e "1. 编辑 /etc/docker/daemon.json"
+    echo -e "2. 添加镜像源，例如："
+    echo -e '   { "registry-mirrors": ["https://registry.aliyuncs.com"] }'
+    echo -e "3. 运行：sudo systemctl restart docker"
+    read -p "是否继续？[Y/n] " yn
+    case "$yn" in
+      [Nn]*) exit 1 ;;
+    esac
+  fi
 }
 
 # 加载配置
@@ -283,13 +297,17 @@ check_architecture_support() {
   local arch=$(uname -m)
 
   case "$arch" in
-    x86_64)  return 0 ;;  # 支持amd64
-    aarch64) return 0 ;;  # 支持arm64
+    x86_64)  return 0 ;;  # 支持 amd64
+    aarch64)
+      # ARM64 平台，检查是否选择了不支持的版本
+      if [[ "${CONFIG[IMAGE_ID]}" == "2" || "${CONFIG[IMAGE_ID]}" == "5" || "${CONFIG[IMAGE_ID]}" == "6" ]]; then
+        echo -e "${RED}错误: ARM64 不支持native版本${NC}"
+        echo -e "请选择其他版本（如 1、3、4、7、8）"
+        return 1
+      fi
+      return 0 ;;  # 支持 arm64
     armv*)
       echo -e "${RED}错误: 不支持 ARMv7 (32位) 架构${NC}"
-      echo -e "当前镜像仅支持:"
-      echo -e "  - linux/amd64 (x86_64)"
-      echo -e "  - linux/arm64 (aarch64)"
       return 1
       ;;
     *)
@@ -392,14 +410,27 @@ show_version_menu() {
     echo -e "${CYAN}=============================================${NC}"
     echo -e "${GREEN}          请选择要使用的版本          ${NC}"
     echo -e "${CYAN}=============================================${NC}"
+
+    local arch=$(uname -m)
+
     for key in {1..8}; do
+      # 如果是 ARM64 并且是版本 2、5、6，则跳过
+      if [[ "$arch" == "aarch64" && ("$key" == "2" || "$key" == "5" || "$key" == "6") ]]; then
+        continue
+      fi
       echo -e "${YELLOW} $key. ${VERSIONS[$key]}${NC}"
     done
+
     echo -e "${GREEN} 0. 返回主菜单${NC}"
     echo -e "${CYAN}---------------------------------------------${NC}"
 
     while true; do
       read -p "请输入版本编号 [0-8]: " version_choice
+      # 如果是 ARM64，不允许选择 2、5、6
+      if [[ "$arch" == "aarch64" && ("$version_choice" == "2" || "$version_choice" == "5" || "$version_choice" == "6") ]]; then
+        echo -e "${RED}ARM64 不支持该版本，请选择其他选项${NC}"
+        continue
+      fi
       # 验证输入是否为0-8的数字
       if [[ "$version_choice" =~ ^[0-8]$ ]]; then
         break
