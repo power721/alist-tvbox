@@ -94,7 +94,7 @@
             <el-radio label="BAIDU" size="large">百度网盘</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'||form.type=='BAIDU'">
+        <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'||form.type=='BAIDU'||form.type=='CLOUD189'">
           <el-input v-model="form.cookie" @change="getInfo" type="textarea" :rows="5"/>
           <span v-if="form.type=='QUARK'">
             <a href="https://pan.quark.cn/" target="_blank">夸克网盘</a>
@@ -117,6 +117,10 @@
           <span v-if="form.type=='BAIDU'">
             <a href="https://pan.baidu.com/disk/main" target="_blank">百度网盘</a>
             <span class="hint">只需要BDUSS</span>
+          </span>
+
+          <span v-if="form.type=='CLOUD189'">
+            <a href="https://cloud.189.cn/web/main/" target="_blank">天翼云盘</a>
           </span>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
@@ -174,7 +178,7 @@
           <span class="hint">服务端多线程加速，网页播放强制开启</span>
         </el-form-item>
         <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'||form.type=='PAN139'" label="代理线程数">
-          <el-input-number :min="1" :max="16" v-model="form.concurrency"/>
+          <el-input-number :min="1" :max="32" v-model="form.concurrency"/>
         </el-form-item>
         <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'||form.type=='PAN139'" label="分片大小">
           <el-input-number :min="64" :max="4096" v-model="form.addition.chunk_size"/>
