@@ -1,8 +1,11 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.PlayUrl;
+import cn.har01d.alist_tvbox.entity.PlayUrlRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.FsDetail;
 import cn.har01d.alist_tvbox.util.Constants;
 import jakarta.servlet.http.HttpServletRequest;
@@ -10,6 +13,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -19,7 +24,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -29,6 +37,7 @@ import java.util.concurrent.CancellationException;
 public class ProxyService {
     private static final int BUFFER_SIZE = 64 * 1024;
     private final AppProperties appProperties;
+    private final PlayUrlRepository playUrlRepository;
     private final SiteService siteService;
     private final AListService aListService;
     private final AListLocalService aListLocalService;
@@ -36,19 +45,53 @@ public class ProxyService {
             "Quark", "UC", "QuarkShare", "UCShare");
 
     public ProxyService(AppProperties appProperties,
+                        PlayUrlRepository playUrlRepository,
                         SiteService siteService,
                         AListService aListService,
                         AListLocalService aListLocalService) {
         this.appProperties = appProperties;
+        this.playUrlRepository = playUrlRepository;
         this.siteService = siteService;
         this.aListService = aListService;
         this.aListLocalService = aListLocalService;
     }
 
-    public void proxy(String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        String[] parts = path.split("\\$");
-        Site site = siteService.getById(Integer.parseInt(parts[0]));
-        path = parts[1];
+    @Scheduled(cron = "0 45 * * * *")
+    public void clean() {
+        List<PlayUrl> expired = playUrlRepository.findAllByTimeBefore(Instant.now());
+        if (!expired.isEmpty()) {
+            log.info("delete {} expired play urls", expired.size());
+        }
+        playUrlRepository.deleteAll(expired);
+    }
+
+    public int generateProxyUrl(Site site, String path) {
+        PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
+        if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
+            playUrl = playUrlRepository.save(new PlayUrl(site.getId(), path, Instant.now().plus(15, ChronoUnit.MINUTES)));
+        }
+        return playUrl.getId();
+    }
+
+    public int generatePath(Site site, String path) {
+        PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
+        if (playUrl == null) {
+            playUrl = playUrlRepository.save(new PlayUrl(site.getId(), path, Instant.now().plus(24, ChronoUnit.HOURS)));
+        }
+        return playUrl.getId();
+    }
+
+    public String getPath(int id) {
+        PlayUrl playUrl = playUrlRepository.findById(id).orElseThrow(() -> new NotFoundException("Not found"));
+        return playUrl.getPath();
+    }
+
+    public void proxy(String tid, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        String[] parts = tid.split("@");
+        int id = Integer.parseInt(parts[1]);
+        PlayUrl playUrl = playUrlRepository.findById(id).orElseThrow(() -> new NotFoundException("Not found: " + id));
+        String path = playUrl.getPath();
+        Site site = siteService.getById(playUrl.getSite());
         FsDetail fsDetail = aListService.getFile(site, path);
         if (fsDetail == null) {
             throw new BadRequestException("找不到文件 " + path);
@@ -140,5 +183,13 @@ public class ProxyService {
             }
         }
         return urlConnection;
+    }
+
+    public void deleteAll() {
+        playUrlRepository.deleteAll();
+    }
+
+    public List<PlayUrl> list() {
+        return playUrlRepository.findAll();
     }
 }

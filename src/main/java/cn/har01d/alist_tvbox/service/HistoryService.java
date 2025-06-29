@@ -19,7 +19,6 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -81,6 +80,18 @@ public class HistoryService {
         var exist = findById(history.getKey());
         if (exist != null) {
             history.setId(exist.getId());
+        }
+        String url = history.getEpisodeUrl();
+        if (url != null) {
+            int index = url.indexOf("?");
+            if (index > 0) {
+                url = url.substring(0, index);
+            }
+            index = url.lastIndexOf("/");
+            if (index > 0) {
+                url = url.substring(index + 1);
+            }
+            history.setEpisodeUrl(url);
         }
         return historyRepository.save(history);
     }
@@ -251,7 +262,8 @@ public class HistoryService {
     }
 
     private String decode(String str) {
-        return URLDecoder.decode(str, StandardCharsets.UTF_8);
+        return str;
+//        return URLDecoder.decode(str, StandardCharsets.UTF_8);
     }
 
     private String buildSubUrl() {
