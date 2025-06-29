@@ -21,6 +21,7 @@ public class MovieDetail {
     private String vod_director;
     private String vod_lang;
     private String vod_year;
+    private String path;
     private Integer dbid;
     private Integer type;
     private Long size;

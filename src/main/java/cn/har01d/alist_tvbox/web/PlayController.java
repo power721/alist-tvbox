@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.entity.PlayUrl;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
 import cn.har01d.alist_tvbox.service.ProxyService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
@@ -8,12 +9,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -35,16 +40,21 @@ public class PlayController {
         this.proxyService = proxyService;
     }
 
-    @RequestMapping(value = "/p")
-    public void proxy(String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        proxy("", path, request, response);
-    }
-
-    @RequestMapping(value = "/p/{token}")
-    public void proxy(@PathVariable String token, String path, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    @RequestMapping(value = "/p/{token}/{id}")
+    public void proxy(@PathVariable String token, @PathVariable String id, HttpServletRequest request, HttpServletResponse response) throws IOException {
         subscriptionService.checkToken(token);
 
-        proxyService.proxy(path, request, response);
+        proxyService.proxy(id, request, response);
+    }
+
+    @GetMapping("/play-urls")
+    public Page <PlayUrl> list(Pageable pageable) {
+        return proxyService.list(pageable);
+    }
+
+    @DeleteMapping("/play-urls")
+    public void delete() {
+        proxyService.deleteAll();
     }
 
     @GetMapping("/play")
@@ -70,10 +80,17 @@ public class PlayController {
         }
 
         if (StringUtils.isNotBlank(id)) {
-            String[] parts = id.split("\\~\\~\\~");
-            if (parts.length > 1) {
+            String[] parts = id.split("@");
+            if (parts.length == 2) {
                 site = Integer.parseInt(parts[0]);
                 path = parts[1];
+                try {
+                    path = proxyService.getPath(Integer.parseInt(path));
+                } catch (NumberFormatException e) {
+                    log.debug("", e);
+                } catch (Exception e) {
+                    log.warn("", e);
+                }
             } else {
                 path = id;
             }

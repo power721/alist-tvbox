@@ -265,7 +265,11 @@ public class SubscriptionService {
     }
 
     public String getCurrentToken() {
-        return currentToken.get();
+        String token = currentToken.get();
+        if (StringUtils.isBlank(token)) {
+            return "-";
+        }
+        return token;
     }
 
     public String getCurrentOrFirstToken() {

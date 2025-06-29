@@ -67,7 +67,7 @@
         <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" style="width: 100%"
                   @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
-          <el-table-column prop="vod_name" :label="isHistory?'路径':'名称'">
+          <el-table-column prop="vod_name" label="名称">
             <template #default="scope">
               <el-popover :width="300" placement="left-start" v-if="scope.row.vod_tag=='folder'&&scope.row.vod_pic">
                 <template #reference>
@@ -83,8 +83,7 @@
               <span v-else-if="scope.row.type==4">🖹</span>
               <span v-else-if="scope.row.type==5">📷</span>
               <span v-else-if="scope.row.type==9">▶️</span>
-              <span v-if="isHistory">{{ scope.row.path }}</span>
-              <span v-else>{{ scope.row.vod_name }}</span>
+              <span>{{ scope.row.vod_name }}</span>
             </template>
           </el-table-column>
           <el-table-column label="大小" width="120" v-if="!isHistory">
@@ -105,7 +104,7 @@
               {{ scope.row.vod_tag === 'folder' ? scope.row.vod_remarks : '' }}
             </template>
           </el-table-column>
-<!--          <el-table-column prop="index" label="集数" width="90" v-if="isHistory"/>-->
+          <!--          <el-table-column prop="index" label="集数" width="90" v-if="isHistory"/>-->
           <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
           <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
           <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="165"/>
@@ -296,7 +295,9 @@
                   </el-icon>
                 </el-button>
                 <el-button @click="showPush" title="推送" v-if="devices.length">
-                  <el-icon><Upload /></el-icon>
+                  <el-icon>
+                    <Upload/>
+                  </el-icon>
                 </el-button>
                 <el-popover placement="bottom" width="350px">
                   <template #reference>
@@ -507,11 +508,12 @@
           <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 200px;">
         </el-col>
         <el-col span="10">
-          <el-input v-model="device.ip" style="width: 200px" placeholder="输入影视IP或者URL" @keyup.enter="addDevice"></el-input>
+          <el-input v-model="device.ip" style="width: 200px" placeholder="输入影视IP或者URL"
+                    @keyup.enter="addDevice"></el-input>
           <el-button @click="addDevice">添加</el-button>
         </el-col>
         <el-col span="6">
-        <el-button @click="scanDevices">扫描设备</el-button>
+          <el-button @click="scanDevices">扫描设备</el-button>
         </el-col>
       </el-row>
 
@@ -586,13 +588,14 @@ import {
   Connection,
   Delete,
   Film,
-  HomeFilled,
   FullScreen,
+  HomeFilled,
   Menu,
   Plus,
   QuestionFilled,
   Search,
-  Setting, Upload
+  Setting,
+  Upload
 } from "@element-plus/icons-vue";
 import {VueDraggable} from "vue-draggable-plus";
 import type {Device} from "@/model/Device";
@@ -893,7 +896,7 @@ const updateOrder = () => {
 }
 
 const showScrape = () => {
-  meta.value.path = getParent(movies.value[0].vod_id)
+  meta.value.path = getParent(movies.value[0].path)
   meta.value.name = movies.value[0].vod_name
   meta.value.year = movies.value[0].vod_year
   addVisible.value = true
@@ -951,12 +954,8 @@ const loadResult = (row: any) => {
 }
 
 const load = (row: any) => {
-  if (isHistory.value) {
-    goParent(row.vod_id)
-  }
-
   if (row.type == 1) {
-    loadFolder(row.vod_id)
+    loadFolder(row.path)
   } else {
     loadDetail(row.vod_id)
   }
@@ -1052,6 +1051,9 @@ const extractPaths = (id: string) => {
 const loadDetail = (id: string) => {
   loading.value = true
   axios.get('/vod/' + token.value + '?ac=web&ids=' + id).then(({data}) => {
+    if (isHistory.value) {
+      goParent(data.list[0].path)
+    }
     if (data.list[0].type == 5) {
       let img = data.list[0]
       currentImageIndex.value = images.value.findIndex(e => e.vod_id == id)
@@ -1471,7 +1473,7 @@ const buildVlcUrl = (start: number) => {
 }
 
 const buildM3u8Url = (start: number) => {
-  const id = movies.value[0].vod_id
+  const id = movies.value[0].path
   let url = playUrl.value
   if (id.endsWith('playlist$1')) {
     const path = getPath(id)
@@ -1524,7 +1526,7 @@ const saveHistory = () => {
     vodPic: movie.vod_pic,
     vodRemarks: title.value,
     episode: currentVideoIndex.value,
-    episodeUrl: playUrl.value.split('path=')[1],
+    episodeUrl: playUrl.value,
     position: Math.round(videoPlayer.value.currentTime * 1000),
     opening: Math.round(skipStart.value * 1000),
     ending: Math.round(skipEnd.value * 1000),
@@ -1546,15 +1548,27 @@ const getHistory = (id: string) => {
 
   return axios.get('/history/' + token.value + "?key=" + id).then(({data}) => {
     if (data) {
-      let path = data.episodeUrl as string
-      if (path) {
-        if (path.startsWith('1%7E%7E%7E%')) {
-          path = '1%24%' + path.substring(11)
+      if (data.episode > -1) {
+        currentVideoIndex.value = data.episode
+      } else {
+        let path = data.episodeUrl as string
+        if (path) {
+          currentVideoIndex.value = playlist.value.findIndex(e => {
+            let u = e.path
+            let index = u.indexOf('?')
+            if (index > 0) {
+              u = u.substring(0, index)
+            }
+            index = u.lastIndexOf('/')
+            if (index > 0) {
+              u = u.substring(index + 1)
+            }
+            return u === path;
+          })
         }
-        currentVideoIndex.value = playlist.value.findIndex(e => e.path.split('path=')[1] === path)
-      }
-      if (currentVideoIndex.value < 0) {
-        currentVideoIndex.value = 0
+        if (currentVideoIndex.value < 0) {
+          currentVideoIndex.value = 0
+        }
       }
 
       currentTime.value = data.position / 1000
@@ -1577,7 +1591,6 @@ const loadHistory = () => {
         vod_id: e.key,
         vod_name: e.vodName,
         vod_remarks: e.vodRemarks,
-        path: getParent(e.key),
         index: e.episode + 1,
         progress: formatTime(e.position / 1000),
         vod_tag: 'file',
@@ -1610,6 +1623,7 @@ const deleteHistory = () => {
 
 const clearHistory = () => {
   axios.delete('/history/' + token.value).then(() => {
+    deleteVisible.value = false
     loadHistory()
   })
 }
