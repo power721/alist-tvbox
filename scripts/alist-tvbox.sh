@@ -126,7 +126,7 @@ save_config() {
 
 # Get container name
 get_container_name() {
-  case "${CONFIG_IMAGE_NAME}" in
+  case "${CONFIG[IMAGE_NAME]}" in
     *alist-tvbox*) echo "alist-tvbox" ;;
     *) echo "xiaoya-tvbox" ;;
   esac
@@ -134,7 +134,7 @@ get_container_name() {
 
 # Get opposite container name
 get_opposite_container_name() {
-  case "${CONFIG_IMAGE_NAME}" in
+  case "${CONFIG[IMAGE_NAME]}" in
     *alist-tvbox*) echo "xiaoya-tvbox" ;;
     *) echo "alist-tvbox" ;;
   esac
