@@ -53,6 +53,62 @@ for key in "${!DEFAULT_CONFIG[@]}"; do
   CONFIG["$key"]="${DEFAULT_CONFIG[$key]}"
 done
 
+is_nas() {
+    # 检查是否为群晖 DSM
+    if [[ -f "/proc/sys/kernel/syno_hw_version" ]]; then
+        echo -e "${GREEN}当前运行在群晖(Synology) NAS上${NC}"
+        return 0
+    fi
+
+    # 检查其他 NAS 系统（如 QNAP、TrueNAS 等）
+    if grep -q "Synology" /etc/os-release 2>/dev/null || \
+       grep -q "QNAP" /etc/os-release 2>/dev/null || \
+       grep -q "TrueNAS" /etc/os-release 2>/dev/null; then
+        local nas_type=$(grep -E "Synology|QNAP|TrueNAS" /etc/os-release | head -1 | cut -d'=' -f2 | tr -d '"')
+        echo -e "${GREEN}当前运行在 ${nas_type} NAS上${NC}"
+        return 0
+    fi
+
+    echo -e "${YELLOW}当前系统不是已知的 NAS 设备${NC}"
+    return 1
+}
+
+is_synology_nas() {
+    if uname -a | grep -iq "synology" || \
+       ps aux | grep -q "[s]ynoservice" || \
+       [[ -f "/etc.defaults/VERSION" ]]; then
+        echo -e "${GREEN}当前运行在群晖(Synology) NAS上${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}当前系统不是群晖 NAS${NC}"
+        return 1
+    fi
+}
+
+is_nas_storage() {
+    if lsblk -o NAME,FSTYPE | grep -q "btrfs" || \
+       [[ $(df -T / | awk 'NR==2 {print $2}') == "btrfs" ]] || \
+       [[ -f "/proc/mdstat" && $(grep -c "active raid" /proc/mdstat) -gt 0 ]]; then
+        echo -e "${GREEN}检测到 NAS 常用的存储管理方式（Btrfs/RAID）${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}未检测到典型的 NAS 存储配置${NC}"
+        return 1
+    fi
+}
+
+check_nas_environment() {
+    echo -e "${CYAN}正在检测系统是否为 NAS...${NC}"
+
+    if is_nas || is_synology_nas || is_nas_storage; then
+        echo -e "${GREEN}✓ 当前运行环境是 NAS${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}× 当前环境不是典型的 NAS 设备${NC}"
+        return 1
+    fi
+}
+
 # 检测运行环境
 check_environment() {
   echo -e "${CYAN}正在检测运行环境...${NC}"
@@ -91,6 +147,49 @@ check_environment() {
   fi
 }
 
+check_existing_container() {
+    local container_name=$(get_container_name)
+    local opposite_name=$(get_opposite_container_name)
+
+    # 检查当前容器是否存在
+    if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+        echo -e "${GREEN}检测到已存在的容器: ${container_name}${NC}"
+        return 0
+    # 检查对立容器是否存在（如从 alist-tvbox 切换到 xiaoya-tvbox）
+    elif docker ps -a --format '{{.Names}}' | grep -q "^${opposite_name}\$"; then
+        echo -e "${YELLOW}检测到对立容器: ${opposite_name}${NC}"
+        return 1
+    else
+        echo -e "${YELLOW}未找到现有容器${NC}"
+        return 2
+    fi
+}
+
+get_container_config() {
+    local container_name=$(get_container_name)
+
+    # 获取镜像名称
+    CONFIG["IMAGE_NAME"]=$(docker inspect --format '{{.Config.Image}}' "$container_name" 2>/dev/null)
+
+    # 获取网络模式
+    CONFIG["NETWORK"]=$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container_name" 2>/dev/null)
+
+    # 获取端口映射（非 host 网络时）
+    if [[ "${CONFIG[NETWORK]}" != "host" ]]; then
+        CONFIG["PORT1"]=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "4567/tcp") 0).HostPort}}' "$container_name" 2>/dev/null || echo "4567")
+        CONFIG["PORT2"]=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "80/tcp") 0).HostPort}}' "$container_name" 2>/dev/null || echo "5344")
+    fi
+
+    # 获取重启策略
+    CONFIG["RESTART"]=$(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "$container_name" 2>/dev/null || echo "always")
+
+    # 获取数据目录（从挂载点反推）
+    local mount_path=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' "$container_name" 2>/dev/null)
+    [[ -n "$mount_path" ]] && CONFIG["BASE_DIR"]="$mount_path"
+
+    echo -e "${CYAN}已从现有容器加载配置${NC}"
+}
+
 # 加载配置
 load_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -103,6 +202,18 @@ load_config() {
     for key in "${!DEFAULT_CONFIG[@]}"; do
       CONFIG["$key"]="${DEFAULT_CONFIG[$key]}"
     done
+
+    if check_nas_environment; then
+        # 如果是 NAS，调整配置（如改用 host 网络、优化存储路径等）
+        CONFIG["BASE_DIR"]="/volume1/docker/alist-tvbox"  # 群晖常用 Docker 数据目录
+        CONFIG["NETWORK"]="host"  # NAS 上推荐 host 网络模式
+    fi
+
+    echo -e "${CYAN}首次运行，正在检测现有容器...${NC}"
+    if check_existing_container; then
+       get_container_config
+    fi
+
     mkdir -p "$(dirname "$CONFIG_FILE")"
     save_config
 
@@ -111,6 +222,7 @@ load_config() {
       mkdir -p "${CONFIG[BASE_DIR]}"
       echo -e "${YELLOW}创建基础目录: ${CONFIG[BASE_DIR]}${NC}"
     fi
+    read -n 1 -s -r -p "按任意键继续..."
   fi
 }
 
@@ -331,6 +443,13 @@ install_container() {
     return 1
   fi
 
+  # 如果镜像名称包含host，自动切换网络模式
+  if [[ "${CONFIG[IMAGE_NAME]}" == *"host"* ]]; then
+    CONFIG["NETWORK"]="host"
+    echo -e "${YELLOW}检测到host版本，已自动切换网络模式为host${NC}"
+    save_config
+  fi
+
   local container_name=$(get_container_name)
   remove_opposite_container
 
@@ -461,6 +580,13 @@ show_version_menu() {
     image=$(echo "$image" | tr -d '[:space:]' | sed "s/^['\"]//;s/['\"]\$//")
     CONFIG["IMAGE_ID"]="$version_choice"
     CONFIG["IMAGE_NAME"]="${image}"
+
+    # 新增：如果镜像名称包含host，自动切换网络模式
+    if [[ "${image}" == *"host"* ]]; then
+      CONFIG["NETWORK"]="host"
+      echo -e "${YELLOW}检测到host版本，已自动切换网络模式为host${NC}"
+    fi
+
     save_config
 
     # 获取容器名称
@@ -652,8 +778,14 @@ recreate_container_for_changes() {
 
 # 获取当前主机IP
 get_host_ip() {
-  local ip=$(hostname -I | awk '{print $1}')
-  if [[ -z "$ip" ]]; then
+  local ip
+  if command -v ip &>/dev/null; then
+    ip=$(ip route get 1 | awk '{print $NF;exit}')
+  elif command -v hostname &>/dev/null; then
+    # 回退到 hostname -I 如果 ip 命令不可用
+    ip=$(hostname -I | awk '{print $1}')
+  else
+    # 最后回退到 localhost
     ip="localhost"
   fi
   echo "$ip"
@@ -712,8 +844,18 @@ check_status() {
   # 显示挂载信息（包括自定义挂载）
   echo -e "\n${CYAN}============== 挂载目录 ==============${NC}"
   docker inspect --format \
-    '{{range $mount := .Mounts}}{{$mount.Source}}:{{$mount.Destination}} ({{$mount.Mode}})'$'\n''{{end}}' \
-    "$container_name" 2>/dev/null | column -t -s: | sed 's/^/ /'
+    '{{range $mount := .Mounts}}{{.Source}}:{{.Destination}}:{{.Mode}}'$'\n''{{end}}' \
+    "$container_name" 2>/dev/null | \
+  awk -F: '{
+    max_source = (length($1) > max_source) ? length($1) : max_source;
+    max_dest = (length($2) > max_dest) ? length($2) : max_dest;
+    mounts[NR] = $0
+  } END {
+    for(i=1; i<=NR; i++) {
+      split(mounts[i], arr, ":");
+      printf "  %-*s -> %-*s (%s)\n", max_source, arr[1], max_dest, arr[2], arr[3]
+    }
+  }'
 
   echo -e "\n${CYAN}============== 镜像信息 ==============${NC}"
   local image_id=$(docker inspect --format '{{.Image}}' "$container_name" 2>/dev/null | cut -d: -f2 | cut -c1-12)
