@@ -4,6 +4,8 @@ import cn.har01d.alist_tvbox.entity.History;
 import cn.har01d.alist_tvbox.service.HistoryService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,8 +26,8 @@ public class HistoryController {
     }
 
     @GetMapping("/api/history")
-    public List<History> list() {
-        return historyService.findAll();
+    public Page<History> list(Pageable pageable) {
+        return historyService.list(pageable);
     }
 
     @PostMapping("/api/history")

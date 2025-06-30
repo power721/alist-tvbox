@@ -1815,6 +1815,7 @@ public class TvBoxService {
         if (files.isEmpty()) {
             List<String> folders = fsResponse.getFiles().stream().map(FsInfo::getName).filter(this::isFolder).collect(Collectors.toList());
             log.info("load media files from folders: {}", folders);
+            int source = 0;
             for (String folder : folders) {
                 fsResponse = aListService.listFiles(site, newPath + "/" + folder, 1, 0);
                 files = fsResponse.getFiles().stream()
@@ -1833,18 +1834,20 @@ public class TvBoxService {
                     fileNames.sort(Comparator.comparing(FileNameInfo::new));
                 }
 
+                int index = 0;
                 List<String> urls = new ArrayList<>();
                 for (String name : fileNames) {
                     String filepath = newPath + "/" + folder + "/" + name;
                     String newName = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
                     if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                        String url = buildProxyUrl(site, name, filepath);
+                        String url = buildProxyUrl(site, source, index++, name, filepath);
                         urls.add(newName + "$" + url);
                     } else {
-                        String url = buildPlayUrl(site, filepath);
+                        String url = buildPlayUrl(site, source, index++, filepath);
                         urls.add(newName + "$" + url);
                     }
                 }
+                source++;
                 list.add(String.join("#", urls));
             }
             String prefix = Utils.getCommonPrefix(folders);
@@ -1867,14 +1870,15 @@ public class TvBoxService {
                 fileNames.sort(Comparator.comparing(FileNameInfo::new));
             }
 
+            int index = 0;
             for (String name : fileNames) {
                 String filepath = newPath + "/" + name;
                 String newName = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
                 if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                    String url = buildProxyUrl(site, name, filepath);
+                    String url = buildProxyUrl(site, 0, index++, name, filepath);
                     list.add(newName + "$" + url);
                 } else {
-                    String url = buildPlayUrl(site, filepath);
+                    String url = buildPlayUrl(site, 0, index++, filepath);
                     list.add(newName + "$" + url);
                 }
             }
@@ -2327,9 +2331,24 @@ public class TvBoxService {
         return site.getId() + "@" + proxyService.generateProxyUrl(site, path);
     }
 
+    private String buildPlayUrl(Site site, int source, int index, String path) {
+        return site.getId() + "@" + proxyService.generateProxyUrl(site, path) + "@" + source + "@" + index;
+    }
+
     // AList-TvBox proxy
     private String buildProxyUrl(Site site, String name, String path) {
         String p = "/p/" + subscriptionService.getCurrentToken() + "/" + site.getId() + "@" + proxyService.generateProxyUrl(site, path);
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath(p)
+                .replaceQuery("name=" + name)
+                .build()
+                .toUriString();
+    }
+
+    // AList-TvBox proxy
+    private String buildProxyUrl(Site site, int source, int index, String name, String path) {
+        String p = "/p/" + subscriptionService.getCurrentToken() + "/" + site.getId() + "@" + proxyService.generateProxyUrl(site, path) + "@" + source + "@" + index;
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(p)

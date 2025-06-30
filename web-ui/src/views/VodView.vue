@@ -25,7 +25,7 @@
 
       <el-col :span="2">
         <el-button :icon="HomeFilled" circle @click="loadFolder('/')" v-if="isHistory"/>
-        <el-button :icon="Film" circle @click="loadHistory" v-else/>
+        <el-button :icon="Film" circle @click="goHistory" v-else/>
         <el-button :icon="Setting" circle @click="settingVisible=true"/>
         <el-button :icon="Plus" circle @click="handleAdd"/>
       </el-col>
@@ -104,7 +104,11 @@
               {{ scope.row.vod_tag === 'folder' ? scope.row.vod_remarks : '' }}
             </template>
           </el-table-column>
-          <!--          <el-table-column prop="index" label="集数" width="90" v-if="isHistory"/>-->
+          <el-table-column prop="index" label="集数" width="90" v-if="isHistory">
+            <template #default="scope">
+              {{ scope.row.index > 0 ? scope.row.index : '' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
           <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
           <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="165"/>
@@ -962,6 +966,11 @@ const load = (row: any) => {
   }
 }
 
+const goHistory = () => {
+  router.push('/vod/~history')
+  loadHistory()
+}
+
 const goParent = (path: string) => {
   path = getPath(path)
   const index = path.lastIndexOf('/')
@@ -973,17 +982,28 @@ const imageUrl = (url: string) => {
   if (url.endsWith("/folder.png")) {
     return url;
   }
+  if (url.endsWith("/list.png")) {
+    return url;
+  }
   return '/images?url=' + encodeURIComponent(url)
 }
 
 const handleSizeChange = (value: number) => {
   size.value = value
-  reload(1)
+  if (isHistory.value) {
+    loadHistory()
+  } else {
+    reload(1)
+  }
 }
 
 const reload = (value: number) => {
   page.value = value
-  loadFiles(paths.value[paths.value.length - 1].path)
+  if (isHistory.value) {
+    loadHistory()
+  } else {
+    loadFiles(paths.value[paths.value.length - 1].path)
+  }
 }
 
 const copy = (text: string) => {
@@ -1003,6 +1023,7 @@ const loadFolder = (path: string) => {
 
 const loadFiles = (path: string) => {
   if (path == '/~history') {
+    loadHistory()
     return
   }
   const id = extractPaths(path)
@@ -1585,8 +1606,9 @@ const getHistory = (id: string) => {
 }
 
 const loadHistory = () => {
-  axios.get('/history/' + token.value).then(({data}) => {
-    files.value = data.sort((a, b) => b.t - a.t).map(e => {
+  axios.get('/api/history?sort=createTime,desc&page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
+    total.value = data.totalElements
+    files.value = data.content.sort((a, b) => b.t - a.t).map(e => {
       return {
         id: e.id,
         vod_id: e.key,
@@ -1600,7 +1622,6 @@ const loadHistory = () => {
       }
     })
     isHistory.value = true
-    total.value = files.value.length
     paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
   })
 }

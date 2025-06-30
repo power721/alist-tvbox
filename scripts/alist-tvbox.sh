@@ -642,6 +642,7 @@ reset_admin_password() {
 
   sleep 3
 }
+
 # 管理自定义挂载目录
 manage_custom_mounts() {
   while true; do
@@ -834,7 +835,7 @@ check_status() {
   if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
     echo -e "${YELLOW}host模式使用主机网络，无独立端口映射${NC}"
     echo -e "管理端口: ${GREEN}4567${NC}"
-    echo -e "AList端口: ${GREEN}5244${NC}"
+    echo -e "AList端口: ${GREEN}5234${NC}"
   else
     docker inspect --format \
       '{{range $p, $conf := .NetworkSettings.Ports}}{{$p}} -> {{(index $conf 0).HostPort}}{{"\n"}}{{end}}' \
@@ -851,7 +852,7 @@ check_status() {
     max_dest = (length($2) > max_dest) ? length($2) : max_dest;
     mounts[NR] = $0
   } END {
-    for(i=1; i<=NR; i++) {
+    for(i=1; i<NR; i++) {
       split(mounts[i], arr, ":");
       printf "  %-*s -> %-*s (%s)\n", max_source, arr[1], max_dest, arr[2], arr[3]
     }
