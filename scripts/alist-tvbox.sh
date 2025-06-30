@@ -147,6 +147,49 @@ check_environment() {
   fi
 }
 
+check_existing_container() {
+    local container_name=$(get_container_name)
+    local opposite_name=$(get_opposite_container_name)
+
+    # 检查当前容器是否存在
+    if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+        echo -e "${GREEN}检测到已存在的容器: ${container_name}${NC}"
+        return 0
+    # 检查对立容器是否存在（如从 alist-tvbox 切换到 xiaoya-tvbox）
+    elif docker ps -a --format '{{.Names}}' | grep -q "^${opposite_name}\$"; then
+        echo -e "${YELLOW}检测到对立容器: ${opposite_name}${NC}"
+        return 1
+    else
+        echo -e "${YELLOW}未找到现有容器${NC}"
+        return 2
+    fi
+}
+
+get_container_config() {
+    local container_name=$(get_container_name)
+
+    # 获取镜像名称
+    CONFIG["IMAGE_NAME"]=$(docker inspect --format '{{.Config.Image}}' "$container_name" 2>/dev/null)
+
+    # 获取网络模式
+    CONFIG["NETWORK"]=$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container_name" 2>/dev/null)
+
+    # 获取端口映射（非 host 网络时）
+    if [[ "${CONFIG[NETWORK]}" != "host" ]]; then
+        CONFIG["PORT1"]=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "4567/tcp") 0).HostPort}}' "$container_name" 2>/dev/null || echo "4567")
+        CONFIG["PORT2"]=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "80/tcp") 0).HostPort}}' "$container_name" 2>/dev/null || echo "5344")
+    fi
+
+    # 获取重启策略
+    CONFIG["RESTART"]=$(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "$container_name" 2>/dev/null || echo "always")
+
+    # 获取数据目录（从挂载点反推）
+    local mount_path=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' "$container_name" 2>/dev/null)
+    [[ -n "$mount_path" ]] && CONFIG["BASE_DIR"]="$mount_path"
+
+    echo -e "${CYAN}已从现有容器加载配置${NC}"
+}
+
 # 加载配置
 load_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -166,6 +209,11 @@ load_config() {
         CONFIG["NETWORK"]="host"  # NAS 上推荐 host 网络模式
     fi
 
+    echo -e "${CYAN}首次运行，正在检测现有容器...${NC}"
+    if check_existing_container; then
+       get_container_config
+    fi
+
     mkdir -p "$(dirname "$CONFIG_FILE")"
     save_config
 
@@ -174,6 +222,7 @@ load_config() {
       mkdir -p "${CONFIG[BASE_DIR]}"
       echo -e "${YELLOW}创建基础目录: ${CONFIG[BASE_DIR]}${NC}"
     fi
+    read -n 1 -s -r -p "按任意键继续..."
   fi
 }
 
