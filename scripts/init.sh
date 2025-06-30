@@ -42,6 +42,7 @@ init() {
   unzip -q -o tvbox.zip
 
   rm -f mobi.tgz tvbox.zip index.zip index.txt version.txt update.zip
+  echo "1" > /data/.init
 }
 
 echo "Install mode: $INSTALL"
@@ -50,7 +51,7 @@ date
 uname -mor
 
 restore_database
-if [ -f /opt/alist/data/config.json ]; then
+if [ -f /data/.init ]; then
   echo "已经初始化成功"
 else
   init

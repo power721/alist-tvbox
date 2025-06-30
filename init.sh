@@ -1,6 +1,7 @@
 #!/bin/sh
 
 gh_proxy=$(head -n 1 "/data/github_proxy.txt" 2>/dev/null || echo "")
+init_version=$(head -n 1 "/data/.init" 2>/dev/null || echo "")
 
 update_movie() {
   LOCAL="0.0"
@@ -71,6 +72,7 @@ init() {
   rm -f tvbox.zip index.zip index.txt version.txt update.zip
 
   update_movie
+  echo "1" > /data/.init
 }
 
 echo "Install mode: $INSTALL"
@@ -81,7 +83,7 @@ uname -mor
 date
 
 restore_database
-if [ -f /opt/alist/data/config.json ]; then
+if [ "$init_version" = 1 ]; then
   update_movie
   echo "已经初始化成功"
 else
