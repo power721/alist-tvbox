@@ -12,6 +12,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -51,6 +53,10 @@ public class HistoryService {
 
     public History get(Integer id) {
         return historyRepository.findById(id).orElse(null);
+    }
+
+    public Page<History> list(Pageable pageable) {
+        return historyRepository.findAll(pageable);
     }
 
     public List<History> findAll() {

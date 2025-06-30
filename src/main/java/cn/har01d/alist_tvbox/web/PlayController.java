@@ -81,7 +81,7 @@ public class PlayController {
 
         if (StringUtils.isNotBlank(id)) {
             String[] parts = id.split("@");
-            if (parts.length == 2) {
+            if (parts.length > 1) {
                 site = Integer.parseInt(parts[0]);
                 path = parts[1];
                 try {
