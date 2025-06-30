@@ -2,12 +2,11 @@ package cn.har01d.alist_tvbox.service;
 
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,6 +14,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,7 +27,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 @Slf4j
 @Service
@@ -296,57 +295,90 @@ public class FileDownloader {
         }
     }
 
-    private void unzipFile(String zipFile, String destDir) throws IOException {
-        Path zipPath = Paths.get(zipFile);
-
-        // 验证ZIP文件是否存在且可读
-        if (!Files.exists(zipPath) || !Files.isReadable(zipPath)) {
-            throw new IOException("ZIP file does not exist or is not readable: " + zipFile);
+    public void unzipFile(String zipFile, String destDir) throws IOException {
+        // 1. 首先尝试用Java原生方式解压
+        try {
+            unzipWithJava(zipFile, destDir);
+            return;
+        } catch (Exception e) {
+            log.warn("Java zip failed, trying alternative methods: {}", e.getMessage());
         }
 
-        // 验证ZIP文件大小
-        long fileSize = Files.size(zipPath);
-        if (fileSize < 22) { // ZIP文件最小长度
-            throw new IOException("ZIP file is too small to be valid: " + zipFile);
+        // 2. 尝试用Apache Commons Compress
+        try {
+            unzipWithApacheCommons(zipFile, destDir);
+            return;
+        } catch (Exception e) {
+            log.warn("Apache Commons Compress failed: {}", e.getMessage());
         }
 
-        Files.createDirectories(Paths.get(destDir));
+        try {
+            unzipWithSystemCommand(zipFile, destDir);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 
-        try (ZipFile zip = new ZipFile(zipFile)) {
-            // 验证ZIP文件是否可以读取条目
+    private void unzipWithJava(String zipFile, String destDir) throws IOException {
+        try (var zip = new java.util.zip.ZipFile(zipFile)) {
             Enumeration<? extends ZipEntry> entries = zip.entries();
-            if (!entries.hasMoreElements()) {
-                throw new IOException("ZIP file contains no entries: " + zipFile);
-            }
-
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
-                File entryDestination = new File(destDir, entry.getName());
+                Path entryPath = Paths.get(destDir, entry.getName()).normalize();
+
+                if (!entryPath.startsWith(Paths.get(destDir).normalize())) {
+                    throw new IOException("Bad ZIP entry: " + entry.getName());
+                }
 
                 if (entry.isDirectory()) {
-                    entryDestination.mkdirs();
+                    Files.createDirectories(entryPath);
                 } else {
-                    File parent = entryDestination.getParentFile();
-                    if (parent != null) {
-                        parent.mkdirs();
-                    }
-
+                    Files.createDirectories(entryPath.getParent());
                     try (InputStream in = zip.getInputStream(entry);
-                         OutputStream out = new BufferedOutputStream(
-                                 new FileOutputStream(entryDestination))) {
-
-                        byte[] buffer = new byte[8192];
-                        int len;
-                        while ((len = in.read(buffer)) > 0) {
-                            out.write(buffer, 0, len);
-                        }
+                         OutputStream out = Files.newOutputStream(entryPath)) {
+                        in.transferTo(out);
                     }
                 }
             }
-        } catch (IOException e) {
-            // 删除可能已解压的部分文件
-            deleteDirectory(Paths.get(destDir));
-            throw new IOException("Failed to unzip file: " + zipFile, e);
+        }
+    }
+
+    private void unzipWithApacheCommons(String zipFile, String destDir) throws IOException {
+        log.info("unzip apache commons zip file: {}", zipFile);
+        try (var zip = new org.apache.commons.compress.archivers.zip.ZipFile(zipFile)) {
+            Enumeration<ZipArchiveEntry> entries = zip.getEntries();
+            while (entries.hasMoreElements()) {
+                ZipArchiveEntry entry = entries.nextElement();
+                Path entryPath = Paths.get(destDir, entry.getName()).normalize();
+
+                if (!entryPath.startsWith(Paths.get(destDir).normalize())) {
+                    throw new IOException("Bad ZIP entry: " + entry.getName());
+                }
+
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    Files.createDirectories(entryPath.getParent());
+                    try (InputStream in = zip.getInputStream(entry);
+                         OutputStream out = Files.newOutputStream(entryPath)) {
+                        in.transferTo(out);
+                    }
+                }
+            }
+        }
+    }
+
+    private void unzipWithSystemCommand(String zipFile, String destDir) throws IOException, InterruptedException {
+        log.info("Unzip command: {}", zipFile);
+        ProcessBuilder pb = new ProcessBuilder("unzip", "-o", zipFile, "-d", destDir);
+        Process process = pb.start();
+
+        // 读取错误流以防需要
+        String errorOutput = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new IOException("System unzip failed with code " + exitCode + ": " + errorOutput);
         }
     }
 
