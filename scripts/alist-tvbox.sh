@@ -781,12 +781,10 @@ recreate_container_for_changes() {
 get_host_ip() {
   local ip
   if command -v ip &>/dev/null; then
-    ip=$(ip route get 1 | awk '{print $NF;exit}')
+    ip=$(ip route get 1.1.1.1 2>/dev/null | awk '/src/ {for (i=1;i<=NF;i++) if ($i=="src") print $(i+1); exit}')
   elif command -v hostname &>/dev/null; then
-    # 回退到 hostname -I 如果 ip 命令不可用
-    ip=$(hostname -I | awk '{print $1}')
+    ip=$(hostname -I | tr ' ' '\n' | grep -v '^127\.' | head -n1)
   else
-    # 最后回退到 localhost
     ip="localhost"
   fi
   echo "$ip"
