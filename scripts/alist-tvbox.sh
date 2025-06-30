@@ -53,6 +53,62 @@ for key in "${!DEFAULT_CONFIG[@]}"; do
   CONFIG["$key"]="${DEFAULT_CONFIG[$key]}"
 done
 
+is_nas() {
+    # 检查是否为群晖 DSM
+    if [[ -f "/proc/sys/kernel/syno_hw_version" ]]; then
+        echo -e "${GREEN}当前运行在群晖(Synology) NAS上${NC}"
+        return 0
+    fi
+
+    # 检查其他 NAS 系统（如 QNAP、TrueNAS 等）
+    if grep -q "Synology" /etc/os-release 2>/dev/null || \
+       grep -q "QNAP" /etc/os-release 2>/dev/null || \
+       grep -q "TrueNAS" /etc/os-release 2>/dev/null; then
+        local nas_type=$(grep -E "Synology|QNAP|TrueNAS" /etc/os-release | head -1 | cut -d'=' -f2 | tr -d '"')
+        echo -e "${GREEN}当前运行在 ${nas_type} NAS上${NC}"
+        return 0
+    fi
+
+    echo -e "${YELLOW}当前系统不是已知的 NAS 设备${NC}"
+    return 1
+}
+
+is_synology_nas() {
+    if uname -a | grep -iq "synology" || \
+       ps aux | grep -q "[s]ynoservice" || \
+       [[ -f "/etc.defaults/VERSION" ]]; then
+        echo -e "${GREEN}当前运行在群晖(Synology) NAS上${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}当前系统不是群晖 NAS${NC}"
+        return 1
+    fi
+}
+
+is_nas_storage() {
+    if lsblk -o NAME,FSTYPE | grep -q "btrfs" || \
+       [[ $(df -T / | awk 'NR==2 {print $2}') == "btrfs" ]] || \
+       [[ -f "/proc/mdstat" && $(grep -c "active raid" /proc/mdstat) -gt 0 ]]; then
+        echo -e "${GREEN}检测到 NAS 常用的存储管理方式（Btrfs/RAID）${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}未检测到典型的 NAS 存储配置${NC}"
+        return 1
+    fi
+}
+
+check_nas_environment() {
+    echo -e "${CYAN}正在检测系统是否为 NAS...${NC}"
+
+    if is_nas || is_synology_nas || is_nas_storage; then
+        echo -e "${GREEN}✓ 当前运行环境是 NAS${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}× 当前环境不是典型的 NAS 设备${NC}"
+        return 1
+    fi
+}
+
 # 检测运行环境
 check_environment() {
   echo -e "${CYAN}正在检测运行环境...${NC}"
@@ -103,6 +159,13 @@ load_config() {
     for key in "${!DEFAULT_CONFIG[@]}"; do
       CONFIG["$key"]="${DEFAULT_CONFIG[$key]}"
     done
+
+    if check_nas_environment; then
+        # 如果是 NAS，调整配置（如改用 host 网络、优化存储路径等）
+        CONFIG["BASE_DIR"]="/volume1/docker/alist-tvbox"  # 群晖常用 Docker 数据目录
+        CONFIG["NETWORK"]="host"  # NAS 上推荐 host 网络模式
+    fi
+
     mkdir -p "$(dirname "$CONFIG_FILE")"
     save_config
 
