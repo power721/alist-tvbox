@@ -738,6 +738,7 @@ const syncHistory = (id: number, mode: number) => {
 const scanDevices = () => {
   axios.post(`/api/devices/-/scan`).then(({data}) => {
     ElMessage.success(`扫描完成，添加了${data}个设备`)
+    loadDevices()
   })
 }
 
