@@ -195,7 +195,6 @@ start_container() {
 
   [ "${CONFIG[GITHUB_PROXY]}" = "" ] || echo "${CONFIG[GITHUB_PROXY]}" > "${CONFIG[BASE_DIR]}/github_proxy.txt"
 
-  # 为alist-tvbox的三个版本添加特殊挂载
   if [[ "${CONFIG[IMAGE_NAME]}" == *"alist-tvbox"* ]]; then
     aList_port=5244
     volume_args="-v ${CONFIG[BASE_DIR]}/alist:/opt/alist/data"
