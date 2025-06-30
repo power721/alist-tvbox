@@ -331,6 +331,13 @@ install_container() {
     return 1
   fi
 
+  # 如果镜像名称包含host，自动切换网络模式
+  if [[ "${CONFIG[IMAGE_NAME]}" == *"host"* ]]; then
+    CONFIG["NETWORK"]="host"
+    echo -e "${YELLOW}检测到host版本，已自动切换网络模式为host${NC}"
+    save_config
+  fi
+
   local container_name=$(get_container_name)
   remove_opposite_container
 
@@ -461,6 +468,13 @@ show_version_menu() {
     image=$(echo "$image" | tr -d '[:space:]' | sed "s/^['\"]//;s/['\"]\$//")
     CONFIG["IMAGE_ID"]="$version_choice"
     CONFIG["IMAGE_NAME"]="${image}"
+
+    # 新增：如果镜像名称包含host，自动切换网络模式
+    if [[ "${image}" == *"host"* ]]; then
+      CONFIG["NETWORK"]="host"
+      echo -e "${YELLOW}检测到host版本，已自动切换网络模式为host${NC}"
+    fi
+
     save_config
 
     # 获取容器名称
@@ -652,8 +666,14 @@ recreate_container_for_changes() {
 
 # 获取当前主机IP
 get_host_ip() {
-  local ip=$(hostname -I | awk '{print $1}')
-  if [[ -z "$ip" ]]; then
+  local ip
+  if command -v ip &>/dev/null; then
+    ip=$(ip route get 1 | awk '{print $NF;exit}')
+  elif command -v hostname &>/dev/null; then
+    # 回退到 hostname -I 如果 ip 命令不可用
+    ip=$(hostname -I | awk '{print $1}')
+  else
+    # 最后回退到 localhost
     ip="localhost"
   fi
   echo "$ip"
@@ -712,8 +732,18 @@ check_status() {
   # 显示挂载信息（包括自定义挂载）
   echo -e "\n${CYAN}============== 挂载目录 ==============${NC}"
   docker inspect --format \
-    '{{range $mount := .Mounts}}{{$mount.Source}}:{{$mount.Destination}} ({{$mount.Mode}})'$'\n''{{end}}' \
-    "$container_name" 2>/dev/null | column -t -s: | sed 's/^/ /'
+    '{{range $mount := .Mounts}}{{.Source}}:{{.Destination}}:{{.Mode}}'$'\n''{{end}}' \
+    "$container_name" 2>/dev/null | \
+  awk -F: '{
+    max_source = (length($1) > max_source) ? length($1) : max_source;
+    max_dest = (length($2) > max_dest) ? length($2) : max_dest;
+    mounts[NR] = $0
+  } END {
+    for(i=1; i<=NR; i++) {
+      split(mounts[i], arr, ":");
+      printf "  %-*s -> %-*s (%s)\n", max_source, arr[1], max_dest, arr[2], arr[3]
+    }
+  }'
 
   echo -e "\n${CYAN}============== 镜像信息 ==============${NC}"
   local image_id=$(docker inspect --format '{{.Image}}' "$container_name" 2>/dev/null | cut -d: -f2 | cut -c1-12)
