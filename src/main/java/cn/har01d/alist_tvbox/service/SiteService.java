@@ -172,7 +172,7 @@ public class SiteService {
     }
 
     public void resetToken() {
-        String url = appProperties.isHostmode() ? "http://localhost:5234" : "http://localhost:5244";
+        String url = "http://localhost:" + aListLocalService.getInternalPort();
         String token = postRestToken(url + "/api/admin/setting/reset_token");
         log.info("new token {}", token);
         if (StringUtils.isBlank(token)) {

@@ -1,6 +1,5 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.dto.ValidateResult;
 import cn.har01d.alist_tvbox.entity.Site;
@@ -51,13 +50,13 @@ public class AListService {
 
     private final RestTemplate restTemplate;
     private final SiteService siteService;
-    private final AppProperties appProperties;
+    private final AListLocalService aListLocalService;
     private final Cache<String, VideoPreview> cache = Caffeine.newBuilder()
             .maximumSize(10)
             .expireAfterWrite(Duration.ofSeconds(895))
             .build();
 
-    public AListService(RestTemplateBuilder builder, SiteService siteService, AppProperties appProperties) {
+    public AListService(RestTemplateBuilder builder, SiteService siteService, AListLocalService aListLocalService) {
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
@@ -65,7 +64,7 @@ public class AListService {
                 .setReadTimeout(Duration.ofSeconds(60))
                 .build();
         this.siteService = siteService;
-        this.appProperties = appProperties;
+        this.aListLocalService = aListLocalService;
     }
 
     public List<SearchResult> search(Site site, String keyword) {
@@ -284,7 +283,7 @@ public class AListService {
 
     private String getUrl(Site site) {
         if (site.getId() == 1) {
-            return appProperties.isHostmode() ? "http://localhost:5234" : "http://localhost:5244";
+            return "http://localhost:" + aListLocalService.getInternalPort();
         }
         return site.getUrl();
     }
