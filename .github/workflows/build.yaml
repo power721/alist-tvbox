@@ -162,7 +162,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile-alist-native
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:native
@@ -174,7 +174,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile-native
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native
@@ -186,7 +186,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile-native-host
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native-host
