@@ -1,5 +1,7 @@
 #!/bin/sh
 
+init_version=$(head -n 1 "/opt/alist/data/.init" 2>/dev/null || echo "")
+
 restore_database() {
   if [ -f "/data/database.zip" ]; then
     echo "=== restore database ==="
@@ -42,7 +44,7 @@ init() {
   unzip -q -o tvbox.zip
 
   rm -f mobi.tgz tvbox.zip index.zip index.txt version.txt update.zip
-  echo "1" > /data/.init
+  echo "1" > /opt/alist/data/.init
 }
 
 echo "Install mode: $INSTALL"
@@ -51,7 +53,7 @@ date
 uname -mor
 
 restore_database
-if [ -f /data/.init ]; then
+if [ "$init_version" = "1" ]; then
   echo "已经初始化成功"
 else
   init
