@@ -46,7 +46,7 @@ init() {
 }
 
 echo "Install mode: $INSTALL"
-cat data/app_version
+cat /app_version
 date
 uname -mor
 

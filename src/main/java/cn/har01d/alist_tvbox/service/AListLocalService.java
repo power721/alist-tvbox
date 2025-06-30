@@ -54,7 +54,8 @@ public class AListLocalService {
     private final ObjectMapper objectMapper;
 
     private volatile int aListStatus;
-    private int aListPort = 5244;
+    private int internalPort = 5244;
+    private int externalPort = 5344;
     private String aListLogPath = "/opt/alist/log/alist.log";
 
     public AListLocalService(SettingRepository settingRepository,
@@ -68,14 +69,15 @@ public class AListLocalService {
         this.appProperties = appProperties;
         this.environment = environment;
         this.objectMapper = objectMapper;
-        this.restTemplate = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
+        externalPort = findPort();
+        this.restTemplate = builder.rootUri("http://localhost:" + getInternalPort()).build();
     }
 
     @PostConstruct
     public void setup() {
-        aListPort = findPort();
-        log.info("AList port: {}", aListPort);
-        setSetting("external_port", String.valueOf(aListPort), "number");
+        log.info("AList internal port: {}", internalPort);
+        log.info("AList external port: {}", externalPort);
+        setSetting("external_port", String.valueOf(externalPort), "number");
         String url = settingRepository.findById(Constants.OPEN_TOKEN_URL).map(Setting::getValue).orElse("");
         if (url.isEmpty() || url.equals("https://api.xhofe.top/alist/ali_open/token")) {
             url = "https://ali.har01d.org/access_token";
@@ -101,8 +103,12 @@ public class AListLocalService {
         setSetting("ali_lazy_load", lazy, "bool");
     }
 
-    public int getPort() {
-        return aListPort;
+    public int getInternalPort() {
+        return internalPort;
+    }
+
+    public int getExternalPort() {
+        return externalPort;
     }
 
     public String getLogPath() {
@@ -110,14 +116,11 @@ public class AListLocalService {
     }
 
     private int findPort() {
-        int port = readAListConf();
-        if (appProperties.isHostmode()) {
-            return 5234;
-        }
+        internalPort = readAListConf();
         if (environment.matchesProfiles("standalone")) {
-            return port;
+            return internalPort;
         }
-        return Integer.parseInt(environment.getProperty("ALIST_PORT", "5344"));
+        return Integer.parseInt(environment.getProperty("ALIST_PORT", String.valueOf(internalPort)));
     }
 
     public int readAListConf() {
@@ -137,6 +140,8 @@ public class AListLocalService {
             } catch (IOException e) {
                 log.warn("read AList config failed", e);
             }
+        } else {
+            log.warn("The AList config file not found: {}", path);
         }
         return port;
     }

@@ -130,7 +130,7 @@ public class ProxyService {
     private String buildAListProxyUrl(Site site, String path, String sign) {
         if (site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .port(aListLocalService.getPort())
+                    .port(aListLocalService.getExternalPort())
                     .replacePath("/p" + path)
                     .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()
