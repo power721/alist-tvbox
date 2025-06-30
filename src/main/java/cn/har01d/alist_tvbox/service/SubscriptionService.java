@@ -85,6 +85,7 @@ public class SubscriptionService {
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
     private final TenantService tenantService;
+    private final FileDownloader fileDownloader;
 
     private final ThreadLocal<String> currentToken = new ThreadLocal<>();
 
@@ -105,7 +106,8 @@ public class SubscriptionService {
                                JellyfinRepository jellyfinRepository,
                                AListLocalService aListLocalService,
                                ConfigFileService configFileService,
-                               TenantService tenantService) {
+                               TenantService tenantService,
+                               FileDownloader fileDownloader) {
         this.environment = environment;
         this.appProperties = appProperties;
         this.restTemplate = builder
@@ -125,6 +127,7 @@ public class SubscriptionService {
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
         this.tenantService = tenantService;
+        this.fileDownloader = fileDownloader;
     }
 
     @PostConstruct
@@ -338,7 +341,7 @@ public class SubscriptionService {
         // TODO:
         Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && [ -d /data/cat ] && cp -r /data/cat/* /www/cat/");
         Utils.execute("/downloadZx.sh");
-        Utils.execute("/downloadPg.sh");
+        fileDownloader.runTask("pg");
 
         var files = configFileService.list();
         for (var file : files) {

@@ -108,6 +108,17 @@ public class HistoryService {
             if (!parts[0].equals("csp_AList")) {
                 continue;
             }
+            try {
+                String episodeUrl = history.getEpisodeUrl();
+                if (episodeUrl != null) {
+                    parts = episodeUrl.split("@");
+                    if (parts.length == 4) {
+                        history.setEpisode(Integer.parseInt(parts[3]));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("", e);
+            }
             history.setCid(0);
             history.setKey(key);
             History exist = historyRepository.findByKey(key);

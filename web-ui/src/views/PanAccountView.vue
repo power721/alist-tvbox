@@ -123,6 +123,7 @@
             <a href="https://cloud.189.cn/web/main/" target="_blank">天翼云盘</a>
             <span class="hint">需要JSESSIONID和COOKIE_LOGIN_USER</span>
           </span>
+          <el-button class="hint" type="primary" @click="getInfo" v-if="form.cookie">校验Cookie</el-button>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>
           <el-input v-model="form.token" type="textarea" :rows="3"/>
@@ -142,8 +143,9 @@
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
         <el-form-item label="认证令牌" v-if="form.type=='BAIDU'" required>
-          <el-input v-model="form.addition.access_token"/>
+          <el-input v-model="form.addition.access_token" @change="fixBaiduToken"/>
           <el-button type="primary" @click="copyLink">获取认证令牌</el-button>
+          <div class="hint">通过认证后复制浏览器链接填入</div>
         </el-form-item>
         <el-form-item label="用户名" v-if="form.type=='THUNDER'||form.type=='CLOUD189'||form.type=='PAN123'" required>
           <el-input v-model="form.username" :placeholder="form.type=='THUNDER'?'+86 12345678900':''"/>
@@ -496,7 +498,7 @@ const getInfo = () => {
     return
   }
   const data = Object.assign({}, form.value, {addition: JSON.stringify(form.value.addition)})
-  axios.post('/api/pan/accounts/-/info', data).then(({data}) => {
+  axios.post('/api/pan/accounts/-/info?type=cookie', data).then(({data}) => {
     if (data && data.name) {
       ElMessage.success('Cookie有效：' + data.name)
       if (!form.value.name) {
@@ -513,6 +515,21 @@ const copyLink = () => {
   toClipboard(url).then(() => {
     ElMessage.success('链接已复制，在新页面打开')
   })
+}
+
+const fixBaiduToken = () => {
+  let token = form.value.addition.access_token
+  if (token) {
+    let index = token.indexOf('access_token=')
+    if (index > -1) {
+      token = token.substring(index + 13)
+      index = token.indexOf('&')
+      if (index > 0) {
+        token = token.substring(0, index)
+      }
+      form.value.addition.access_token = token
+    }
+  }
 }
 
 const getRefreshToken = () => {
