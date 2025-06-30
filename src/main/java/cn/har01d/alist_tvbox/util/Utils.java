@@ -1,23 +1,7 @@
 package cn.har01d.alist_tvbox.util;
 
-import cn.har01d.alist_tvbox.exception.BadRequestException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.WriterException;
-import com.google.zxing.client.j2se.MatrixToImageWriter;
-import com.google.zxing.common.BitMatrix;
-import com.google.zxing.qrcode.QRCodeWriter;
-
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.xml.bind.DatatypeConverter;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -25,7 +9,6 @@ import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -42,6 +25,24 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.xml.bind.DatatypeConverter;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class Utils {
@@ -478,26 +479,26 @@ public final class Utils {
 
     public static String getQrCode(String text) throws IOException {
         log.info("get qr code for text: {}", text);
-        generateQRCodeImage(text);
-        Path file = Utils.getWebPath("tvbox", "qr.png");
-        return Base64.getEncoder().encodeToString(Files.readAllBytes(file));
+        byte[] bytes = generateQRCodeImage(text);
+        return Base64.getEncoder().encodeToString(bytes);
     }
 
-    public static void generateQRCodeImage(String text) throws IOException {
+    public static byte[] generateQRCodeImage(String text) throws IOException {
         try {
-            generateQRCodeImage(text, 256, 256, "/www/tvbox/qr.png");
+            return generateQRCodeImage(text, 256, 256);
         } catch (WriterException e) {
             throw new IOException("Write qr file failed.", e);
         }
     }
 
-    public static void generateQRCodeImage(String text, int width, int height, String filePath)
+    public static byte[] generateQRCodeImage(String text, int width, int height)
             throws WriterException, IOException {
         QRCodeWriter qrCodeWriter = new QRCodeWriter();
         BitMatrix bitMatrix = qrCodeWriter.encode(text, BarcodeFormat.QR_CODE, width, height);
 
-        Path path = FileSystems.getDefault().getPath(filePath);
-        MatrixToImageWriter.writeToPath(bitMatrix, "PNG", path);
+        ByteArrayOutputStream pngOutputStream = new ByteArrayOutputStream();
+        MatrixToImageWriter.writeToStream(bitMatrix, "PNG", pngOutputStream);
+        return pngOutputStream.toByteArray();
     }
 
 }

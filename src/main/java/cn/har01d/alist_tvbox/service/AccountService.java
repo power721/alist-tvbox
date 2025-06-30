@@ -111,7 +111,7 @@ public class AccountService {
         this.scheduler = scheduler;
         this.objectMapper = objectMapper;
         this.jdbcTemplate = jdbcTemplate;
-        this.aListClient = builder.rootUri("http://localhost:" + (appProperties.isHostmode() ? "5234" : "5244")).build();
+        this.aListClient = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).build();
         this.restTemplate = builder.build();
     }
 

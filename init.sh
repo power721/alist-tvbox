@@ -76,7 +76,7 @@ init() {
 }
 
 echo "Install mode: $INSTALL"
-cat data/app_version
+cat /app_version
 version=$(head -n1 /docker.version)
 echo "xiaoya version: $version"
 uname -mor

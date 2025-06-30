@@ -40,7 +40,7 @@ public class SystemController {
                 props.getProperty("user.timezone"),
                 props.getProperty("user.dir"),
                 props.getProperty("PID"),
-                String.valueOf(aListLocalService.getPort())
+                String.valueOf(aListLocalService.getExternalPort())
         );
     }
 

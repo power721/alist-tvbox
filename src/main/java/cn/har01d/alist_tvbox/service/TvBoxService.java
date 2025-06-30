@@ -32,7 +32,6 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
-import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -2311,7 +2310,7 @@ public class TvBoxService {
         if (url.startsWith("http://localhost")) {
             String proxy = ServletUriComponentsBuilder.fromCurrentRequest()
                     .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                    .port(aListLocalService.getPort())
+                    .port(aListLocalService.getExternalPort())
                     .replacePath("/")
                     .replaceQuery("")
                     .build()
@@ -2343,7 +2342,7 @@ public class TvBoxService {
     private String buildAListProxyUrl(Site site, String path, String sign) {
         if (site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .port(aListLocalService.getPort())
+                    .port(aListLocalService.getExternalPort())
                     .replacePath("/p" + path)
                     .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()
@@ -2365,7 +2364,7 @@ public class TvBoxService {
     private String buildUrl(Site site, String path) {
         if (site == null || site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .port(aListLocalService.getPort())
+                    .port(aListLocalService.getExternalPort())
                     .replacePath(path)
                     .replaceQuery(null)
                     .build()

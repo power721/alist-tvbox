@@ -62,7 +62,7 @@ public class AListController {
 
     @GetMapping("/port")
     public int getPort() {
-        return aListLocalService.getPort();
+        return aListLocalService.getExternalPort();
     }
 
     @PostMapping("/reset_token")

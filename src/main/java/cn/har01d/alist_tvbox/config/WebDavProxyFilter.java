@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.config;
 
+import cn.har01d.alist_tvbox.service.AListLocalService;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -27,14 +28,15 @@ import java.util.concurrent.TimeUnit;
 public class WebDavProxyFilter implements Filter {
     private static final Logger logger = LoggerFactory.getLogger(WebDavProxyFilter.class);
     private final OkHttpClient okHttpClient;
-    private final String backendUrl = "http://127.0.0.1:5244";
+    private final String backendUrl;
 
-    public WebDavProxyFilter() {
+    public WebDavProxyFilter(AListLocalService aListLocalService) {
         okHttpClient = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
                 .writeTimeout(60, TimeUnit.SECONDS)
                 .build();
+        backendUrl = "http://127.0.0.1:" + aListLocalService.getInternalPort();
         logger.debug("WebDavProxyFilter {}", backendUrl);
     }
 

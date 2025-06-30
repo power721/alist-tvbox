@@ -1144,7 +1144,7 @@ public class SubscriptionService {
         Site site = siteRepository.findById(1).orElseThrow();
         if (site.getUrl().startsWith("http://localhost")) {
             return ServletUriComponentsBuilder.fromCurrentRequest()
-                    .port(aListLocalService.getPort())
+                    .port(aListLocalService.getExternalPort())
                     .replacePath("")
                     .replaceQuery(null)
                     .build()
