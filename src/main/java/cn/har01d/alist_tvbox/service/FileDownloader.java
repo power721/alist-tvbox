@@ -31,12 +31,31 @@ import java.util.zip.ZipFile;
 @Slf4j
 @Service
 public class FileDownloader {
-    private static final String VERSION_FILE = "/data/pg_version.txt";
+    // 版本文件路径
+    private static final String PG_VERSION_FILE = "/data/pg_version.txt";
+    private static final String ZX_BASE_VERSION_FILE = "/data/zx_base_version.txt";
+    private static final String ZX_VERSION_FILE = "/data/zx_version.txt";
+
+    // 压缩文件路径
     private static final String PG_ZIP = "/data/pg.zip";
+    private static final String ZX_BASE_ZIP = "/data/zx.base.zip";
+    private static final String ZX_ZIP = "/data/zx.zip";
+
+    // 目标目录
     private static final String PG_DIR = "/www/pg/";
+    private static final String ZX_DIR = "/www/zx/";
+
+    // 数据目录
     private static final String DATA_PG_DIR = "/data/pg/";
-    private static final String REMOTE_VERSION_URL = "http://har01d.org/pg.version";
-    private static final String REMOTE_ZIP_URL = "http://har01d.org/pg.zip";
+    private static final String DATA_ZX_DIR = "/data/zx/";
+
+    // 远程URL
+    private static final String REMOTE_PG_VERSION_URL = "http://har01d.org/pg.version";
+    private static final String REMOTE_PG_ZIP_URL = "http://har01d.org/pg.zip";
+    private static final String REMOTE_ZX_BASE_VERSION_URL = "http://har01d.org/zx.base.version";
+    private static final String REMOTE_ZX_BASE_ZIP_URL = "http://har01d.org/zx.base.zip";
+    private static final String REMOTE_ZX_VERSION_URL = "http://har01d.org/zx.version";
+    private static final String REMOTE_ZX_ZIP_URL = "http://har01d.org/zx.zip";
 
     private final ExecutorService executor = new ThreadPoolExecutor(
             1, 1,
@@ -52,6 +71,8 @@ public class FileDownloader {
     public void runTask(String type) {
         if ("pg".equals(type)) {
             executor.submit(this::downloadPgWithRetry);
+        } else if ("zx".equals(type)) {
+            executor.submit(this::downloadZxWithRetry);
         }
     }
 
@@ -76,48 +97,116 @@ public class FileDownloader {
         log.error("Download PG failed after 3 retries");
     }
 
-    public void downloadPg() throws IOException {
-        String localVersion = getLocalVersion();
-        String remoteVersion = getRemoteVersion();
+    private void downloadZxWithRetry() {
+        int retry = 3;
+        while (retry-- > 0) {
+            try {
+                downloadZx();
+                return;
+            } catch (Exception e) {
+                log.error("Download ZX failed, retries left: {}", retry, e);
+                if (retry > 0) {
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+            }
+        }
+        log.error("Download ZX failed after 3 retries");
+    }
 
-        log.info("Local PG version: {}, remote PG version: {}", localVersion, remoteVersion);
+    public void downloadPg() throws IOException {
+        String localVersion = getLocalVersion(PG_VERSION_FILE, "0.0");
+        String remoteVersion = getRemoteVersion(REMOTE_PG_VERSION_URL);
+
+        log.info("local PG: {}, remote PG: {}", localVersion, remoteVersion);
 
         if (localVersion.equals(remoteVersion)) {
-            log.info("Versions match, syncing files only");
-            syncFiles();
+            log.info("sync files");
+            syncFiles(PG_DIR, DATA_PG_DIR);
         } else {
-            log.info("New version available, downloading {}", remoteVersion);
-            downloadNewVersionWithProgress();
+            log.info("download {}", remoteVersion);
+            downloadFile(REMOTE_PG_ZIP_URL, PG_ZIP);
 
-            log.info("Unzipping file");
-            unzipFile();
+            log.info("unzip file");
+            unzipFile(PG_ZIP, PG_DIR);
 
-            log.info("Saving new version info");
-            saveVersion(remoteVersion);
+            log.info("save version");
+            saveVersion(PG_VERSION_FILE, remoteVersion);
 
-            log.info("Syncing additional files");
-            syncFiles();
+            log.info("sync files");
+            syncFiles(PG_DIR, DATA_PG_DIR);
 
             log.info("PG update completed successfully");
         }
     }
 
-    private String getLocalVersion() throws IOException {
-        Path versionFile = Paths.get(VERSION_FILE);
-        if (Files.exists(versionFile)) {
-            return Files.readAllLines(versionFile).get(0).trim();
-        } else {
-            Path sourceZip = Paths.get("/pg.zip");
-            if (Files.exists(sourceZip)) {
-                Files.copy(sourceZip, Paths.get(PG_ZIP), StandardCopyOption.REPLACE_EXISTING);
-            }
-            return "0.0";
+    public void downloadZx() throws IOException {
+        // 处理zx.base部分
+        String localBaseVersion = getLocalVersion(ZX_BASE_VERSION_FILE, "0.0");
+        String remoteBaseVersion = getRemoteVersion(REMOTE_ZX_BASE_VERSION_URL);
+
+        log.info("local zx base: {}, remote zx base: {}", localBaseVersion, remoteBaseVersion);
+
+        if (!localBaseVersion.equals(remoteBaseVersion)) {
+            log.info("download zx base {}", remoteBaseVersion);
+            downloadFile(REMOTE_ZX_BASE_ZIP_URL, ZX_BASE_ZIP);
+
+            log.info("save zx base version");
+            saveVersion(ZX_BASE_VERSION_FILE, remoteBaseVersion);
         }
+
+        // 处理zx部分
+        String localVersion = getLocalVersion(ZX_VERSION_FILE, "0.0");
+        if ("0.0".equals(localVersion) && Files.exists(Paths.get("/zx.zip"))) {
+            Files.copy(Paths.get("/zx.zip"), Paths.get(ZX_ZIP), StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        String remoteVersion = getRemoteVersion(REMOTE_ZX_VERSION_URL);
+
+        log.info("local zx diff: {}, remote zx diff: {}", localVersion, remoteVersion);
+
+        if (!localVersion.equals(remoteVersion)) {
+            log.info("download zx diff {}", remoteVersion);
+            downloadFile(REMOTE_ZX_ZIP_URL, ZX_ZIP);
+
+            log.info("save zx diff version");
+            saveVersion(ZX_VERSION_FILE, remoteVersion);
+        }
+
+        // 列出文件信息
+        logFileInfo(ZX_BASE_ZIP);
+        logFileInfo(ZX_ZIP);
+
+        // 同步文件
+        log.info("sync zx files");
+        deleteDirectory(Paths.get(ZX_DIR));
+
+        log.info("unzip zx.base.zip");
+        unzipFile(ZX_BASE_ZIP, ZX_DIR);
+
+        log.info("unzip zx.zip");
+        unzipFile(ZX_ZIP, ZX_DIR);
+
+        log.info("sync custom files");
+        syncFiles(ZX_DIR, DATA_ZX_DIR);
+
+        log.info("update zx completed");
     }
 
-    private String getRemoteVersion() throws IOException {
-        URL url = new URL(REMOTE_VERSION_URL);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    private String getLocalVersion(String versionFile, String defaultValue) throws IOException {
+        Path path = Paths.get(versionFile);
+        if (Files.exists(path)) {
+            return Files.readAllLines(path).get(0).trim();
+        }
+        return defaultValue;
+    }
+
+    private String getRemoteVersion(String url) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setConnectTimeout(10000);
         conn.setReadTimeout(10000);
 
@@ -129,14 +218,13 @@ public class FileDownloader {
         }
     }
 
-    private void downloadNewVersionWithProgress() throws IOException {
-        URL url = new URL(REMOTE_ZIP_URL);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    private void downloadFile(String fileUrl, String destination) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) new URL(fileUrl).openConnection();
         conn.setConnectTimeout(10000);
         conn.setReadTimeout(30000);
 
         try (InputStream in = new BufferedInputStream(conn.getInputStream());
-             FileOutputStream out = new FileOutputStream(PG_ZIP)) {
+             FileOutputStream out = new FileOutputStream(destination)) {
 
             long fileSize = conn.getContentLengthLong();
             byte[] buffer = new byte[8192];
@@ -147,7 +235,6 @@ public class FileDownloader {
                 out.write(buffer, 0, bytesRead);
                 downloaded += bytesRead;
 
-                // 每下载1MB或完成时打印进度
                 if (fileSize > 0 && (downloaded % (1024 * 1024) == 0 || downloaded == fileSize)) {
                     int progress = (int) (downloaded * 100 / fileSize);
                     log.info("Download progress: {}% ({} bytes/{} bytes)",
@@ -159,27 +246,26 @@ public class FileDownloader {
         }
     }
 
-    private void unzipFile() throws IOException {
-        deleteDirectory(Paths.get(PG_DIR));
-        Files.createDirectories(Paths.get(PG_DIR));
+    private void unzipFile(String zipFile, String destDir) throws IOException {
+        deleteDirectory(Paths.get(destDir));
+        Files.createDirectories(Paths.get(destDir));
 
-        try (ZipFile zipFile = new ZipFile(PG_ZIP)) {
-            Enumeration<? extends ZipEntry> entries = zipFile.entries();
+        try (ZipFile zip = new ZipFile(zipFile)) {
+            Enumeration<? extends ZipEntry> entries = zip.entries();
 
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
-                File entryDestination = new File(PG_DIR, entry.getName());
+                File entryDestination = new File(destDir, entry.getName());
 
                 if (entry.isDirectory()) {
                     entryDestination.mkdirs();
                 } else {
-                    // 确保父目录存在
                     File parent = entryDestination.getParentFile();
                     if (parent != null) {
                         parent.mkdirs();
                     }
 
-                    try (InputStream in = zipFile.getInputStream(entry);
+                    try (InputStream in = zip.getInputStream(entry);
                          OutputStream out = new BufferedOutputStream(
                                  new FileOutputStream(entryDestination))) {
 
@@ -194,16 +280,26 @@ public class FileDownloader {
         }
     }
 
-    private void saveVersion(String version) throws IOException {
-        Files.write(Paths.get(VERSION_FILE), version.getBytes(),
+    private void saveVersion(String versionFile, String version) throws IOException {
+        Files.write(Paths.get(versionFile), version.getBytes(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING);
     }
 
-    private void syncFiles() throws IOException {
-        Path sourceDir = Paths.get(DATA_PG_DIR);
-        if (Files.exists(sourceDir)) {
-            copyDirectory(sourceDir, Paths.get(PG_DIR));
+    private void syncFiles(String destDir, String sourceDir) throws IOException {
+        Path sourcePath = Paths.get(sourceDir);
+        if (Files.exists(sourcePath)) {
+            copyDirectory(sourcePath, Paths.get(destDir));
+        }
+    }
+
+    private void logFileInfo(String filePath) throws IOException {
+        Path path = Paths.get(filePath);
+        if (Files.exists(path)) {
+            log.info("File info: {} - Size: {} bytes",
+                    path, Files.size(path));
+        } else {
+            log.warn("File not found: {}", path);
         }
     }
 
