@@ -2,7 +2,7 @@
   "force": false,
   "site_url": "",
   "cdn": "",
-  "jwt_secret": "w0n8fDamFvcWdEth",
+  "jwt_secret": "Y3JIG4vxT22wn9cq",
   "token_expires_in": 4800,
   "database": {
     "type": "sqlite3",
@@ -23,7 +23,7 @@
   },
   "scheme": {
     "address": "0.0.0.0",
-    "http_port": 5244,
+    "http_port": 5234,
     "https_port": -1,
     "force_https": false,
     "cert_file": "",

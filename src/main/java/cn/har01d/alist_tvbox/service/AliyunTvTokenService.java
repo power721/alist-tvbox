@@ -3,6 +3,8 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
@@ -69,7 +71,7 @@ public class AliyunTvTokenService {
             String qrLink = "https://www.aliyundrive.com/o/oauth/authorize?sid=" + sid;
 
             Map<String, String> result = new HashMap<>();
-            result.put("img", BiliBiliUtils.getQrCode(qrLink));
+            result.put("img", Utils.getQrCode(qrLink));
             result.put("sid", sid);
             return result;
         } catch (Exception e) {

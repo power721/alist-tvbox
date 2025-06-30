@@ -1,20 +1,10 @@
-FROM golang:1.20 AS builder
-
-WORKDIR /app/
-
-COPY atv-cli ./
-
-RUN go build
-
 FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 
 ENV MEM_OPT="-Xmx512M" ALIST_PORT=5344 INSTALL=xiaoya
 
-COPY config/config.json /alist.json
-
-COPY --from=builder /app/atv-cli /
+COPY config/alist.json /
 
 COPY init.sh /
 COPY scripts/movie.sh /

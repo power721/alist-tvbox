@@ -2391,7 +2391,7 @@ public class TvBoxService {
     }
 
     public String getQrCode() throws IOException {
-        return BiliBiliUtils.getQrCode(buildTvUrl());
+        return Utils.getQrCode(buildTvUrl());
     }
 
     public int scanDevices(HttpServletRequest request) {

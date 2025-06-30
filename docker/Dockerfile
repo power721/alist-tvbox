@@ -1,20 +1,10 @@
-FROM golang:1.20 AS builder
-
-WORKDIR /app/
-
-COPY atv-cli ./
-
-RUN go build
-
 FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 
 ENV MEM_OPT="-Xmx512M" ALIST_PORT=5344 INSTALL=new
 
-COPY config/config.json /alist.json
-
-COPY --from=builder /app/atv-cli /
+COPY config/alist.json /
 
 COPY scripts/init.sh /
 COPY scripts/alist.sql /
@@ -23,7 +13,6 @@ COPY scripts/downloadZx.sh /
 COPY scripts/movie.sh /
 COPY scripts/entrypoint.sh /
 
-COPY data/alist.config.json /alist.json
 COPY data/tvbox.zip /
 COPY data/base_version /
 COPY data/cat.zip /
