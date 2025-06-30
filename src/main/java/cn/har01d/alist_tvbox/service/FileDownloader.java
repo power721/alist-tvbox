@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -35,15 +36,18 @@ public class FileDownloader {
     private static final String PG_VERSION_FILE = "/data/pg_version.txt";
     private static final String ZX_BASE_VERSION_FILE = "/data/zx_base_version.txt";
     private static final String ZX_VERSION_FILE = "/data/zx_version.txt";
+    private static final String MOVIE_VERSION_FILE = "/data/atv/movie_version";
 
     // 压缩文件路径
     private static final String PG_ZIP = "/data/pg.zip";
     private static final String ZX_BASE_ZIP = "/data/zx.base.zip";
     private static final String ZX_ZIP = "/data/zx.zip";
+    private static final String DIFF_ZIP = "/tmp/diff.zip";
 
     // 目标目录
     private static final String PG_DIR = "/www/pg/";
     private static final String ZX_DIR = "/www/zx/";
+    private static final String ATV_DIR = "/data/atv/";
 
     // 数据目录
     private static final String DATA_PG_DIR = "/data/pg/";
@@ -56,6 +60,7 @@ public class FileDownloader {
     private static final String REMOTE_ZX_BASE_ZIP_URL = "http://har01d.org/zx.base.zip";
     private static final String REMOTE_ZX_VERSION_URL = "http://har01d.org/zx.version";
     private static final String REMOTE_ZX_ZIP_URL = "http://har01d.org/zx.zip";
+    private static final String REMOTE_DIFF_ZIP_URL = "http://har01d.org/diff.zip";
 
     private final ExecutorService executor = new ThreadPoolExecutor(
             1, 1,
@@ -68,43 +73,55 @@ public class FileDownloader {
             }
     );
 
-    public void runTask(String type) {
+    public void runTask(String type, String... args) {
         if ("pg".equals(type)) {
             executor.submit(this::downloadPgWithRetry);
         } else if ("zx".equals(type)) {
             executor.submit(this::downloadZxWithRetry);
+        } else if ("movie".equals(type)) {
+            String remoteVersion = args.length > 0 ? args[0] : null;
+            executor.submit(() -> downloadMovieWithRetry(remoteVersion));
         }
     }
 
     private void downloadPgWithRetry() {
-        int retry = 3;
-        while (retry-- > 0) {
+        executeWithRetry(() -> {
             try {
                 downloadPg();
-                return;
-            } catch (Exception e) {
-                log.error("Download PG failed, retries left: {}", retry, e);
-                if (retry > 0) {
-                    try {
-                        Thread.sleep(5000);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                }
+            } catch (IOException e) {
+                log.error("PG task failed", e);
             }
-        }
-        log.error("Download PG failed after 3 retries");
+        }, "PG");
     }
 
     private void downloadZxWithRetry() {
+        executeWithRetry(() -> {
+            try {
+                downloadZx();
+            } catch (IOException e) {
+                log.error("ZX task failed", e);
+            }
+        }, "ZX");
+    }
+
+    private void downloadMovieWithRetry(String remoteVersion) {
+        executeWithRetry(() -> {
+            try {
+                downloadMovie(remoteVersion);
+            } catch (IOException e) {
+                log.error("Movie task failed", e);
+            }
+        }, "Movie");
+    }
+
+    private void executeWithRetry(Runnable task, String taskName) {
         int retry = 3;
         while (retry-- > 0) {
             try {
-                downloadZx();
+                task.run();
                 return;
             } catch (Exception e) {
-                log.error("Download ZX failed, retries left: {}", retry, e);
+                log.error("Download {} failed, retries left: {}", taskName, retry, e);
                 if (retry > 0) {
                     try {
                         Thread.sleep(5000);
@@ -115,7 +132,7 @@ public class FileDownloader {
                 }
             }
         }
-        log.error("Download ZX failed after 3 retries");
+        log.error("Download {} failed after 3 retries", taskName);
     }
 
     public void downloadPg() throws IOException {
@@ -125,19 +142,19 @@ public class FileDownloader {
         log.info("local PG: {}, remote PG: {}", localVersion, remoteVersion);
 
         if (localVersion.equals(remoteVersion)) {
-            log.info("sync files");
+            log.info("sync PG files");
             syncFiles(PG_DIR, DATA_PG_DIR);
         } else {
-            log.info("download {}", remoteVersion);
+            log.info("download PG {}", remoteVersion);
             downloadFile(REMOTE_PG_ZIP_URL, PG_ZIP);
 
-            log.info("unzip file");
+            log.info("unzip PG file");
             unzipFile(PG_ZIP, PG_DIR);
 
-            log.info("save version");
+            log.info("save PG version");
             saveVersion(PG_VERSION_FILE, remoteVersion);
 
-            log.info("sync files");
+            log.info("sync PG files");
             syncFiles(PG_DIR, DATA_PG_DIR);
 
             log.info("PG update completed successfully");
@@ -197,6 +214,34 @@ public class FileDownloader {
         log.info("update zx completed");
     }
 
+    public void downloadMovie(String remoteVersion) throws IOException {
+        if (remoteVersion == null || remoteVersion.isEmpty()) {
+            throw new IllegalArgumentException("Remote version is required for movie data update");
+        }
+
+        String localVersion = getLocalVersion(MOVIE_VERSION_FILE, "0.0");
+        log.info("local movie data version: {}, remote version: {}", localVersion, remoteVersion);
+
+        if (localVersion.equals(remoteVersion)) {
+            log.info("Movie data is up to date");
+            return;
+        }
+
+        log.info("download diff.zip");
+        downloadFile(REMOTE_DIFF_ZIP_URL, DIFF_ZIP);
+
+        log.info("unzip diff.zip");
+        unzipFile(DIFF_ZIP, ATV_DIR);
+
+        // 读取并记录新版本
+        String newVersion = getLocalVersion(MOVIE_VERSION_FILE, remoteVersion);
+        log.info("Current movie version: {}", newVersion);
+
+        // 清理临时文件
+        Files.deleteIfExists(Paths.get(DIFF_ZIP));
+        log.info("Movie data update completed");
+    }
+
     private String getLocalVersion(String versionFile, String defaultValue) throws IOException {
         Path path = Paths.get(versionFile);
         if (Files.exists(path)) {
@@ -241,17 +286,38 @@ public class FileDownloader {
                             progress, downloaded, fileSize);
                 }
             }
+
+            // 下载完成后校验文件大小
+            if (fileSize > 0 && Files.size(Paths.get(destination)) != fileSize) {
+                throw new IOException("Downloaded file size does not match expected size");
+            }
         } finally {
             conn.disconnect();
         }
     }
 
     private void unzipFile(String zipFile, String destDir) throws IOException {
-        deleteDirectory(Paths.get(destDir));
+        Path zipPath = Paths.get(zipFile);
+
+        // 验证ZIP文件是否存在且可读
+        if (!Files.exists(zipPath) || !Files.isReadable(zipPath)) {
+            throw new IOException("ZIP file does not exist or is not readable: " + zipFile);
+        }
+
+        // 验证ZIP文件大小
+        long fileSize = Files.size(zipPath);
+        if (fileSize < 22) { // ZIP文件最小长度
+            throw new IOException("ZIP file is too small to be valid: " + zipFile);
+        }
+
         Files.createDirectories(Paths.get(destDir));
 
         try (ZipFile zip = new ZipFile(zipFile)) {
+            // 验证ZIP文件是否可以读取条目
             Enumeration<? extends ZipEntry> entries = zip.entries();
+            if (!entries.hasMoreElements()) {
+                throw new IOException("ZIP file contains no entries: " + zipFile);
+            }
 
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
@@ -277,6 +343,10 @@ public class FileDownloader {
                     }
                 }
             }
+        } catch (IOException e) {
+            // 删除可能已解压的部分文件
+            deleteDirectory(Paths.get(destDir));
+            throw new IOException("Failed to unzip file: " + zipFile, e);
         }
     }
 
@@ -332,5 +402,18 @@ public class FileDownloader {
                         log.warn("Failed to copy file: {}", sourcePath, e);
                     }
                 });
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }
