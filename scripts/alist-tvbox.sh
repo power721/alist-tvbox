@@ -44,6 +44,7 @@ declare -A DEFAULT_CONFIG=(
   ["NETWORK"]="bridge"
   ["RESTART"]="always"
   ["MOUNT_WWW"]="false"
+  ["GITHUB_PROXY"]=""
 )
 
 # 初始化配置字典
@@ -123,19 +124,19 @@ save_config() {
   chmod 600 "$CONFIG_FILE"
 }
 
-# 获取容器名称
+# Get container name
 get_container_name() {
-  case "${CONFIG[IMAGE_ID]}" in
-    1|2|3) echo "alist-tvbox";;
-    *) echo "xiaoya-tvbox";;
+  case "${CONFIG_IMAGE_NAME}" in
+    *alist-tvbox*) echo "alist-tvbox" ;;
+    *) echo "xiaoya-tvbox" ;;
   esac
 }
 
-# 获取对立容器名称
+# Get opposite container name
 get_opposite_container_name() {
-  case "${CONFIG[IMAGE_ID]}" in
-    1|2|3) echo "xiaoya-tvbox";;
-    *) echo "alist-tvbox";;
+  case "${CONFIG_IMAGE_NAME}" in
+    *alist-tvbox*) echo "xiaoya-tvbox" ;;
+    *) echo "alist-tvbox" ;;
   esac
 }
 
@@ -190,10 +191,12 @@ start_container() {
   local network_args=""
   local port_args=""
   local volume_args=""
+  local aList_port=80
+
+  [ "${CONFIG[GITHUB_PROXY]}" = "" ] || echo "${CONFIG[GITHUB_PROXY]}" > "${CONFIG[BASE_DIR]}/github_proxy.txt"
 
   # 为alist-tvbox的三个版本添加特殊挂载
-  aList_port=80
-  if [[ "${CONFIG[IMAGE_ID]}" =~ ^[123]$ ]]; then
+  if [[ "${CONFIG[IMAGE_NAME]}" == *"alist-tvbox"* ]]; then
     aList_port=5244
     volume_args="-v ${CONFIG[BASE_DIR]}/alist:/opt/alist/data"
   fi
@@ -836,9 +839,10 @@ show_config_menu() {
     echo -e " 6. 网络模式设置"
     echo -e " 7. 重启策略设置"
     echo -e " 8. 重置管理员密码"
+    echo -e " 9. GitHub代理设置"
     echo -e " 0. 返回主菜单"
     echo -e "${CYAN}---------------------------------------------${NC}"
-    read -p "选择要修改的配置 [0-8]: " config_choice
+    read -p "选择要修改的配置 [0-9]: " config_choice
 
     local need_recreate=false
 
@@ -907,6 +911,14 @@ show_config_menu() {
         reset_admin_password
         # 密码重置已包含重启逻辑
         continue
+        ;;
+      9)
+        read -p "输入GitHub代理URL [${CONFIG[GITHUB_PROXY]}]: " url
+        if [[ "$url" != "${CONFIG[GITHUB_PROXY]}" ]]; then
+          CONFIG[GITHUB_PROXY]="$url"
+          save_config
+          need_recreate=true
+        fi
         ;;
       0)
         break
