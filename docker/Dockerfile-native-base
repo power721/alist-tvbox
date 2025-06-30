@@ -1,16 +1,6 @@
-FROM golang:1.20 AS builder
-
-WORKDIR /app/
-
-COPY atv-cli ./
-
-RUN go build
-
 FROM ubuntu:22.04
 
 WORKDIR /app/
-
-COPY --from=builder /app/atv-cli /opt/atv/
 
 COPY scripts/install.sh ./
 

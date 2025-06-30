@@ -382,7 +382,7 @@ public class BiliBiliService {
 
     public QrCode scanLogin() throws IOException {
         QrCode qrCode = restTemplate.getForObject("https://passport.bilibili.com/x/passport-login/web/qrcode/generate", BiliBiliQrCodeResponse.class).getData();
-        qrCode.setImage(BiliBiliUtils.getQrCode(qrCode.getUrl()));
+        qrCode.setImage(Utils.getQrCode(qrCode.getUrl()));
         log.debug("{}", qrCode);
         return qrCode;
     }

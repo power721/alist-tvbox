@@ -20,6 +20,7 @@ declare -A VERSIONS=(
   ["6"]="haroldli/xiaoya-tvbox:native-host - 小雅原生主机版"
   ["7"]="haroldli/xiaoya-tvbox:host        - 小雅主机模式版"
   ["8"]="haroldli/xiaoya-tvbox:python      - 小雅版（Python运行环境）"
+  ["9"]="haroldli/xiaoya-tvbox:dev         - 开发测试版"
 )
 
 # 默认配置
@@ -418,7 +419,7 @@ show_version_menu() {
     local arch=$(uname -m)
     local current_version="${CONFIG[IMAGE_ID]}"
 
-    for key in {1..8}; do
+    for key in {1..9}; do
       # 如果是 ARM64 并且是版本 2、5、6，则跳过
       if [[ "$arch" == "aarch64" && ("$key" == "2" || "$key" == "5" || "$key" == "6") ]]; then
         continue
@@ -434,17 +435,17 @@ show_version_menu() {
     echo -e "${CYAN}---------------------------------------------${NC}"
 
     while true; do
-      read -p "请输入版本编号 [0-8]: " version_choice
+      read -p "请输入版本编号 [0-9]: " version_choice
       # 如果是 ARM64，不允许选择 2、5、6
       if [[ "$arch" == "aarch64" && ("$version_choice" == "2" || "$version_choice" == "5" || "$version_choice" == "6") ]]; then
         echo -e "${RED}ARM64 不支持该版本，请选择其他选项${NC}"
         continue
       fi
-      # 验证输入是否为0-8的数字
-      if [[ "$version_choice" =~ ^[0-8]$ ]]; then
+      # 验证输入是否为0-9的数字
+      if [[ "$version_choice" =~ ^[0-9]$ ]]; then
         break
       else
-        echo -e "${RED}无效输入! 请输入0-8的数字${NC}"
+        echo -e "${RED}无效输入! 请输入0-9的数字${NC}"
       fi
     done
 

@@ -3,6 +3,12 @@ package cn.har01d.alist_tvbox.util;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
@@ -19,12 +25,14 @@ import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -467,4 +475,29 @@ public final class Utils {
 
         return ip;
     }
+
+    public static String getQrCode(String text) throws IOException {
+        log.info("get qr code for text: {}", text);
+        generateQRCodeImage(text);
+        Path file = Utils.getWebPath("tvbox", "qr.png");
+        return Base64.getEncoder().encodeToString(Files.readAllBytes(file));
+    }
+
+    public static void generateQRCodeImage(String text) throws IOException {
+        try {
+            generateQRCodeImage(text, 256, 256, "/www/tvbox/qr.png");
+        } catch (WriterException e) {
+            throw new IOException("Write qr file failed.", e);
+        }
+    }
+
+    public static void generateQRCodeImage(String text, int width, int height, String filePath)
+            throws WriterException, IOException {
+        QRCodeWriter qrCodeWriter = new QRCodeWriter();
+        BitMatrix bitMatrix = qrCodeWriter.encode(text, BarcodeFormat.QR_CODE, width, height);
+
+        Path path = FileSystems.getDefault().getPath(filePath);
+        MatrixToImageWriter.writeToPath(bitMatrix, "PNG", path);
+    }
+
 }

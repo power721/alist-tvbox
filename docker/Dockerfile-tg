@@ -1,11 +1,3 @@
-FROM golang:1.20 AS builder
-
-WORKDIR /app/
-
-COPY atv-cli ./
-
-RUN go build
-
 FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
@@ -18,9 +10,7 @@ RUN apk update && \
     rm -rf /var/cache/apk/*; \
     pip install telethon
 
-COPY config/config.json /alist.json
-
-COPY --from=builder /app/atv-cli /
+COPY config/alist.json /
 
 COPY scripts/init.sh /
 COPY scripts/alist.sql /
@@ -30,7 +20,6 @@ COPY scripts/movie.sh /
 COPY scripts/entrypoint.sh /
 COPY scripts/tg.py /
 
-COPY data/alist.config.json /alist.json
 COPY data/tvbox.zip /
 COPY data/base_version /
 COPY data/cat.zip /

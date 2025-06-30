@@ -267,7 +267,7 @@ public class TelegramService {
                         settingRepository.save(new Setting("tg_phase", "0"));
                         log.info("Scan QR {}, expired: {}.", ctx.loginUrl(), ctx.expiresIn());
                         try {
-                            String img = BiliBiliUtils.getQrCode(ctx.loginUrl());
+                            String img = Utils.getQrCode(ctx.loginUrl());
                             settingRepository.save(new Setting("tg_qr_img", img));
                         } catch (IOException e) {
                             return Mono.error(e);

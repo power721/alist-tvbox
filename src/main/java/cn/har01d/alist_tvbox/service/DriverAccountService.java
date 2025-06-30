@@ -488,7 +488,7 @@ public class DriverAccountService {
         long t = System.currentTimeMillis();
         var json = restTemplate.getForObject("https://uop.quark.cn/cas/ajax/getTokenForQrcodeLogin?client_id=532&v=1.2&request_id={t}", ObjectNode.class, t);
         String token = json.get("data").get("members").get("token").asText();
-        String qr = BiliBiliUtils.getQrCode("https://su.quark.cn/4_eMHBJ?token=" + token + "&client_id=532&ssb=weblogin&uc_param_str=&uc_biz_str=S%3Acustom%7COPT%3ASAREA%400%7COPT%3AIMMERSIVE%401%7COPT%3ABACK_BTN_STYLE%400");
+        String qr = Utils.getQrCode("https://su.quark.cn/4_eMHBJ?token=" + token + "&client_id=532&ssb=weblogin&uc_param_str=&uc_biz_str=S%3Acustom%7COPT%3ASAREA%400%7COPT%3AIMMERSIVE%401%7COPT%3ABACK_BTN_STYLE%400");
         var res = new QuarkUCTV.LoginResponse();
         res.setQueryToken(token);
         res.setQrData(qr);
@@ -499,7 +499,7 @@ public class DriverAccountService {
         long t = System.currentTimeMillis();
         var json = restTemplate.getForObject("https://api.open.uc.cn/cas/ajax/getTokenForQrcodeLogin?client_id=381&v=1.2&request_id={t}", ObjectNode.class, t);
         String token = json.get("data").get("members").get("token").asText();
-        String qr = BiliBiliUtils.getQrCode("https://su.uc.cn/1_n0ZCv?uc_param_str=dsdnfrpfbivesscpgimibtbmnijblauputogpintnwktprchmt&token=" + token + "&client_id=381&uc_biz_str=S%3Acustom%7CC%3Atitlebar_fix");
+        String qr = Utils.getQrCode("https://su.uc.cn/1_n0ZCv?uc_param_str=dsdnfrpfbivesscpgimibtbmnijblauputogpintnwktprchmt&token=" + token + "&client_id=381&uc_biz_str=S%3Acustom%7CC%3Atitlebar_fix");
         var res = new QuarkUCTV.LoginResponse();
         res.setQueryToken(token);
         res.setQrData(qr);

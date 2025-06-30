@@ -2,11 +2,7 @@ package cn.har01d.alist_tvbox.util;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.IOException;
 import java.math.BigInteger;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.Base64;
 
@@ -73,21 +69,6 @@ public final class BiliBiliUtils {
 
     public static String getCookie() {
         return new String(Base64.getDecoder().decode(COOKIE.substring(12).getBytes()));
-    }
-
-    public static String getQrCode(String text) throws IOException {
-        log.info("get qr code for text: {}", text);
-        try {
-            ProcessBuilder builder = new ProcessBuilder();
-            builder.command("/atv-cli", text);
-            builder.inheritIO();
-            Process process = builder.start();
-            process.waitFor();
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-        Path file = Utils.getWebPath("tvbox", "qr.png");
-        return Base64.getEncoder().encodeToString(Files.readAllBytes(file));
     }
 
     public static long getMid() {
