@@ -52,12 +52,12 @@ fi
 
 [ "$LOCAL_VERSION1" != "$VERSION1" ] && \
 echo "Upgrade AList TvBox from $LOCAL_VERSION1 to $VERSION1" && \
-wget https://github.com/power721/alist-tvbox/releases/download/$VERSION1/atv.tar.gz -O atv.tgz && \
+wget http://har01d.org/atv.tgz -O atv.tgz && \
 tar xf atv.tgz && rm -f atv.tgz
 
 [ "$LOCAL_VERSION2" != "$VERSION2" ] && \
 echo "Upgrade Power AList from $LOCAL_VERSION2 to $VERSION2" && \
-wget https://github.com/power721/alist/releases/download/$VERSION2/alist-linux-musl-amd64.tar.gz -O alist.tgz && \
+wget http://har01d.org/alist.tgz -O alist.tgz && \
 tar xf alist.tgz && rm -f alist.tgz
 
 cat <<EOF > ${APP}.service
