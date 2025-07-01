@@ -47,12 +47,33 @@ init() {
   echo "1" > /opt/alist/data/.init
 }
 
+upgrade_h2() {
+  if [ -f /data/h2.version.txt ]; then
+    return
+  fi
+  file=/opt/atv/data/data
+  [ -f /data/atv.mv.db ] && file=/data/atv
+  /jre/bin/java -cp h2-2.1.214.jar org.h2.tools.Script \
+  -url jdbc:h2:file:$file \
+  -user sa -password password \
+  -script backup.sql
+
+  /jre/bin/java -cp /opt/atv/BOOT-INF/lib/h2-*.jar org.h2.tools.RunScript \
+  -url jdbc:h2:file:$file \
+  -user sa -password password \
+  -script backup.sql
+
+  rm -f backup.sql
+  echo "2.3.232" > /data/h2.version.txt
+}
+
 echo "Install mode: $INSTALL"
 cat /app_version
 date
 uname -mor
 
 restore_database
+upgrade_h2
 if [ "$init_version" = "1" ]; then
   echo "已经初始化成功"
 else
