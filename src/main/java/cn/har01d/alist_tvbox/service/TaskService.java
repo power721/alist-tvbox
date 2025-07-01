@@ -80,6 +80,14 @@ public class TaskService {
         return taskRepository.save(task);
     }
 
+    public Task addDownloadTask(String name) {
+        Task task = new Task();
+        task.setType(TaskType.DOWNLOAD);
+        task.setName("下载文件 - " + name);
+        task.setCreatedTime(Instant.now());
+        return taskRepository.save(task);
+    }
+
     public Task addSyncMeta() {
         Task task = new Task();
         task.setType(TaskType.SYNC_META);
