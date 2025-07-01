@@ -11,6 +11,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -314,15 +315,17 @@ public class FileDownloader {
         try {
             unzipWithApacheCommons(zipFile, destDir);
             return;
+        } catch (NoSuchFileException e) {
+            throw new IllegalArgumentException("Zip file does not exist: " + zipFile);
         } catch (Exception e) {
-            log.warn("Apache Commons Compress failed: {}", e.getMessage());
+            log.warn("Apache Commons Compress failed", e);
         }
 
         try {
             unzipWithJava(zipFile, destDir);
             return;
         } catch (Exception e) {
-            log.warn("Java zip failed: {}", e.getMessage());
+            log.warn("Java zip failed", e);
         }
 
         try {
