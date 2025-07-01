@@ -161,7 +161,6 @@ public class FileDownloader {
     }
 
     public void downloadZx() throws IOException {
-        // 处理zx.base部分
         String localBaseVersion = getLocalVersion(ZX_BASE_VERSION_FILE, "0.0");
         String remoteBaseVersion = getRemoteVersion(REMOTE_ZX_BASE_VERSION_URL);
 
@@ -175,7 +174,6 @@ public class FileDownloader {
             saveVersion(ZX_BASE_VERSION_FILE, remoteBaseVersion);
         }
 
-        // 处理zx部分
         String localVersion = getLocalVersion(ZX_VERSION_FILE, "0.0");
         if ("0.0".equals(localVersion) && Files.exists(Paths.get("/zx.zip"))) {
             Files.copy(Paths.get("/zx.zip"), Paths.get(ZX_ZIP), StandardCopyOption.REPLACE_EXISTING);
@@ -193,11 +191,9 @@ public class FileDownloader {
             saveVersion(ZX_VERSION_FILE, remoteVersion);
         }
 
-        // 列出文件信息
         logFileInfo(ZX_BASE_ZIP);
         logFileInfo(ZX_ZIP);
 
-        // 同步文件
         log.info("sync zx files");
         deleteDirectory(Paths.get(ZX_DIR));
 
@@ -232,11 +228,9 @@ public class FileDownloader {
         log.info("unzip diff.zip");
         unzipFile(DIFF_ZIP, ATV_DIR);
 
-        // 读取并记录新版本
         String newVersion = getLocalVersion(MOVIE_VERSION_FILE, remoteVersion);
         log.info("Current movie version: {}", newVersion);
 
-        // 清理临时文件
         Files.deleteIfExists(Paths.get(DIFF_ZIP));
         log.info("Movie data update completed");
     }
@@ -286,7 +280,6 @@ public class FileDownloader {
                 }
             }
 
-            // 下载完成后校验文件大小
             if (fileSize > 0 && Files.size(Paths.get(destination)) != fileSize) {
                 throw new IOException("Downloaded file size does not match expected size");
             }
@@ -296,15 +289,6 @@ public class FileDownloader {
     }
 
     public void unzipFile(String zipFile, String destDir) throws IOException {
-        // 1. 首先尝试用Java原生方式解压
-        try {
-            unzipWithJava(zipFile, destDir);
-            return;
-        } catch (Exception e) {
-            log.warn("Java zip failed, trying alternative methods: {}", e.getMessage());
-        }
-
-        // 2. 尝试用Apache Commons Compress
         try {
             unzipWithApacheCommons(zipFile, destDir);
             return;
@@ -313,33 +297,16 @@ public class FileDownloader {
         }
 
         try {
+            unzipWithJava(zipFile, destDir);
+            return;
+        } catch (Exception e) {
+            log.warn("Java zip failed: {}", e.getMessage());
+        }
+
+        try {
             unzipWithSystemCommand(zipFile, destDir);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        }
-    }
-
-    private void unzipWithJava(String zipFile, String destDir) throws IOException {
-        try (var zip = new java.util.zip.ZipFile(zipFile)) {
-            Enumeration<? extends ZipEntry> entries = zip.entries();
-            while (entries.hasMoreElements()) {
-                ZipEntry entry = entries.nextElement();
-                Path entryPath = Paths.get(destDir, entry.getName()).normalize();
-
-                if (!entryPath.startsWith(Paths.get(destDir).normalize())) {
-                    throw new IOException("Bad ZIP entry: " + entry.getName());
-                }
-
-                if (entry.isDirectory()) {
-                    Files.createDirectories(entryPath);
-                } else {
-                    Files.createDirectories(entryPath.getParent());
-                    try (InputStream in = zip.getInputStream(entry);
-                         OutputStream out = Files.newOutputStream(entryPath)) {
-                        in.transferTo(out);
-                    }
-                }
-            }
         }
     }
 
@@ -368,12 +335,36 @@ public class FileDownloader {
         }
     }
 
+    private void unzipWithJava(String zipFile, String destDir) throws IOException {
+        log.info("unzip by Java: {}", zipFile);
+        try (var zip = new java.util.zip.ZipFile(zipFile)) {
+            Enumeration<? extends ZipEntry> entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                Path entryPath = Paths.get(destDir, entry.getName()).normalize();
+
+                if (!entryPath.startsWith(Paths.get(destDir).normalize())) {
+                    throw new IOException("Bad ZIP entry: " + entry.getName());
+                }
+
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    Files.createDirectories(entryPath.getParent());
+                    try (InputStream in = zip.getInputStream(entry);
+                         OutputStream out = Files.newOutputStream(entryPath)) {
+                        in.transferTo(out);
+                    }
+                }
+            }
+        }
+    }
+
     private void unzipWithSystemCommand(String zipFile, String destDir) throws IOException, InterruptedException {
-        log.info("Unzip command: {}", zipFile);
+        log.info("Unzip by linux command: {}", zipFile);
         ProcessBuilder pb = new ProcessBuilder("unzip", "-o", zipFile, "-d", destDir);
         Process process = pb.start();
 
-        // 读取错误流以防需要
         String errorOutput = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
 
         int exitCode = process.waitFor();
