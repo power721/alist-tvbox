@@ -1,6 +1,34 @@
 #!/usr/bin/env bash
 set -e
 
+check_and_install_sqlite3() {
+    if ! command -v sqlite3 &> /dev/null; then
+        echo -e "\e[31mSQLite3 未安装，正在自动安装...\e[0m"
+
+        if [ -f /etc/debian_version ]; then
+            sudo apt update && sudo apt install -y sqlite3
+        elif [ -f /etc/redhat-release ]; then
+            sudo yum install -y sqlite3
+        elif [ -f /etc/arch-release ]; then
+            sudo pacman -Sy --noconfirm sqlite
+        elif [ -f /etc/alpine-release ]; then
+            sudo apk add sqlite3
+        else
+            echo -e "\e[31m无法自动安装 SQLite3，请手动安装！\e[0m"
+            exit 1
+        fi
+
+        if ! command -v sqlite3 &> /dev/null; then
+            echo -e "\e[31mSQLite3 安装失败，请手动安装！\e[0m"
+            exit 1
+        else
+            echo -e "\e[32mSQLite3 安装成功！\e[0m"
+        fi
+    fi
+}
+
+check_and_install_sqlite3
+
 if docker ps | egrep 'xiaoya-tvbox|alit-tvbox'; then
   echo -e "\e[31m请停止Docker容器再运行！\e[0m"
   exit 1
