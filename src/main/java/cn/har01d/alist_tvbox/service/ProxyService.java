@@ -78,7 +78,7 @@ public class ProxyService {
     public int generatePath(Site site, String path) {
         PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
         if (playUrl == null) {
-            playUrl = playUrlRepository.save(new PlayUrl(site.getId(), path, Instant.now().plus(24, ChronoUnit.HOURS)));
+            playUrl = playUrlRepository.save(new PlayUrl(site.getId(), path, Instant.now().plus(30, ChronoUnit.DAYS)));
         }
         return playUrl.getId();
     }

@@ -6,12 +6,9 @@ ENV MEM_OPT="-Xmx512M" ALIST_PORT=5344 INSTALL=new
 
 COPY config/alist.json /
 
-COPY scripts/init.sh /
-COPY scripts/alist.sql /
-COPY scripts/downloadPg.sh /
-COPY scripts/downloadZx.sh /
-COPY scripts/movie.sh /
 COPY scripts/entrypoint.sh /
+COPY scripts/alist.sql /
+COPY scripts/init.sh /
 
 COPY data/tvbox.zip /
 COPY data/base_version /

@@ -10,11 +10,8 @@ COPY config/alist-host.json /alist.json
 
 COPY scripts/index.sh /
 
-COPY init.sh /
-COPY scripts/movie.sh /
-COPY scripts/downloadPg.sh /
-COPY scripts/downloadZx.sh /
 COPY entrypoint-native.sh /entrypoint.sh
+COPY init.sh /
 
 COPY data/update.sql /
 COPY data/tvbox.zip /

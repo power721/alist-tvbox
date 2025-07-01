@@ -22,6 +22,4 @@ ln -sf /data/log /opt/atv/log
 
 /init.sh 2>&1 | tee /opt/atv/log/init.log 2>&1
 
-#/downloadPg.sh 2>&1 | tee -a /opt/atv/log/init.log 2>&1
-
 /jre/bin/java "$MEM_OPT" -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication "$@"

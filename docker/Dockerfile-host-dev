@@ -6,11 +6,8 @@ ENV MEM_OPT="-Xmx512M"
 
 COPY config/alist-host.json /alist.json
 
-COPY init.sh /
-COPY scripts/movie.sh /
-COPY scripts/downloadPg.sh /
-COPY scripts/downloadZx.sh /
 COPY entrypoint.sh /
+COPY init.sh /
 
 COPY data/tvbox.zip /
 COPY data/index.share.zip /
