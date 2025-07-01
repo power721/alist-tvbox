@@ -26,6 +26,7 @@ import java.util.zip.ZipEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.springframework.stereotype.Service;
 
+import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -59,7 +60,10 @@ public class FileDownloader {
     private final Path pgDataDir;
     private final Path zxDataDir;
 
-    public FileDownloader() {
+    private final TaskService taskService;
+
+    public FileDownloader(TaskService taskService) {
+        this.taskService = taskService;
         pgVersionFile = Utils.getDataPath("pg_version.txt");
         zxBaseVersionFile = Utils.getDataPath("zx_base_version.txt");
         zxVersionFile = Utils.getDataPath("zx_version.txt");
@@ -98,9 +102,11 @@ public class FileDownloader {
     }
 
     private void downloadPgWithRetry() {
+        Task task = taskService.addDownloadTask("PG");
+        taskService.startTask(task.getId());
         executeWithRetry(() -> {
             try {
-                downloadPg();
+                downloadPg(task);
             } catch (IOException e) {
                 throw new IllegalStateException("PG task failed", e);
             }
@@ -108,9 +114,11 @@ public class FileDownloader {
     }
 
     private void downloadZxWithRetry() {
+        Task task = taskService.addDownloadTask("ZX");
+        taskService.startTask(task.getId());
         executeWithRetry(() -> {
             try {
-                downloadZx();
+                downloadZx(task);
             } catch (IOException e) {
                 throw new IllegalStateException("ZX task failed", e);
             }
@@ -148,7 +156,7 @@ public class FileDownloader {
         log.error("Download {} failed after 3 retries", taskName);
     }
 
-    public void downloadPg() throws IOException {
+    public void downloadPg(Task task) throws IOException {
         String localVersion = getLocalVersion(pgVersionFile, "0.0");
         String remoteVersion = getRemoteVersion(REMOTE_PG_VERSION_URL);
 
@@ -171,9 +179,10 @@ public class FileDownloader {
 
         log.info("sync PG files");
         syncFiles(pgWebDir, pgDataDir);
+        taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
     }
 
-    public void downloadZx() throws IOException {
+    public void downloadZx(Task task) throws IOException {
         String localBaseVersion = getLocalVersion(zxBaseVersionFile, "0.0");
         String remoteBaseVersion = getRemoteVersion(REMOTE_ZX_BASE_VERSION_URL);
 
@@ -219,7 +228,7 @@ public class FileDownloader {
         log.info("sync custom files");
         syncFiles(zxWebDir, zxDataDir);
 
-        log.info("update zx completed");
+        taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
     }
 
     public void downloadMovie(String remoteVersion) throws IOException {
