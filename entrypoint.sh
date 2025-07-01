@@ -22,8 +22,6 @@ ln -sf /data/log /opt/atv/log
 
 /init.sh 2>&1 | tee /opt/atv/log/init.log 2>&1
 
-#/downloadPg.sh 2>&1 | tee -a /opt/atv/log/init.log 2>&1
-
 /bin/busybox-extras httpd -p "$1" -h /www
 /usr/sbin/nginx
 shift

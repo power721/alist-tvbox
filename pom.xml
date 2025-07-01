@@ -209,7 +209,7 @@
                             <buildArgs>
                                 <buildArg>
                                     ${lib.static}
-                                    ${libc}
+                                    -H:+StaticExecutableWithDynamicLibC
                                     --enable-http
                                     --enable-https
                                     -march=compatibility

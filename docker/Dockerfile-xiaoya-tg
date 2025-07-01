@@ -12,11 +12,8 @@ RUN apk update && \
 
 COPY config/alist.json /
 
-COPY init.sh /
-COPY scripts/movie.sh /
-COPY scripts/downloadPg.sh /
-COPY scripts/downloadZx.sh /
 COPY entrypoint.sh /
+COPY init.sh /
 COPY scripts/tg.py /
 
 COPY data/tvbox.zip /
