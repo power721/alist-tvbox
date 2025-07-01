@@ -109,9 +109,9 @@ public class FileDownloader {
             try {
                 downloadPg(task);
             } catch (IOException e) {
-                throw new IllegalStateException("PG task failed", e);
+                throw new IllegalStateException(e);
             }
-        }, "PG");
+        }, task);
     }
 
     private void downloadZxWithRetry() {
@@ -121,29 +121,33 @@ public class FileDownloader {
             try {
                 downloadZx(task);
             } catch (IOException e) {
-                throw new IllegalStateException("ZX task failed", e);
+                throw new IllegalStateException(e);
             }
-        }, "ZX");
+        }, task);
     }
 
     private void downloadMovieWithRetry(String remoteVersion) {
+        Task task = taskService.addDownloadTask("Movie");
+        taskService.startTask(task.getId());
         executeWithRetry(() -> {
             try {
                 downloadMovie(remoteVersion);
             } catch (IOException e) {
-                throw new IllegalStateException("Movie task failed", e);
+                throw new IllegalStateException(e);
             }
-        }, "Movie");
+        }, task);
     }
 
-    private void executeWithRetry(Runnable task, String taskName) {
+    private void executeWithRetry(Runnable runnable, Task task) {
         int retry = 3;
+        Exception exception = null;
         while (retry-- > 0) {
             try {
-                task.run();
+                runnable.run();
                 return;
             } catch (Exception e) {
-                log.error("Download {} failed, retries left: {}", taskName, retry, e);
+                exception = e;
+                log.error("Download {} failed, retries left: {}", task.getName(), retry, e);
                 if (retry > 0) {
                     try {
                         Thread.sleep(5000);
@@ -154,7 +158,8 @@ public class FileDownloader {
                 }
             }
         }
-        log.error("Download {} failed after 3 retries", taskName);
+        taskService.failTask(task.getId(), exception.getMessage());
+        log.error("Download {} failed after 3 retries", task.getName());
     }
 
     public void downloadPg(Task task) throws IOException {
