@@ -169,21 +169,21 @@ public class FileDownloader {
         log.info("local PG: {}, remote PG: {}", localVersion, remoteVersion);
 
         if (!localVersion.equals(remoteVersion)) {
-            log.info("download PG file {}", remoteVersion);
+            log.debug("download PG file {}", remoteVersion);
             downloadFile(REMOTE_PG_ZIP_URL, pgZip);
 
             logFileInfo(pgZip);
 
             deleteDirectory(pgWebDir);
 
-            log.info("unzip PG file to {}", pgWebDir);
+            log.debug("unzip PG file to {}", pgWebDir);
             unzipFile(pgZip, pgWebDir);
 
-            log.info("save PG version: {}", remoteVersion);
+            log.debug("save PG version: {}", remoteVersion);
             saveVersion(pgVersionFile, remoteVersion);
         }
 
-        log.info("sync PG files");
+        log.debug("sync PG files");
         syncFiles(pgWebDir, pgDataDir);
         taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
     }
@@ -195,10 +195,10 @@ public class FileDownloader {
         log.info("local zx base: {}, remote zx base: {}", localBaseVersion, remoteBaseVersion);
 
         if (!localBaseVersion.equals(remoteBaseVersion)) {
-            log.info("download zx base {}", remoteBaseVersion);
+            log.debug("download zx base {}", remoteBaseVersion);
             downloadFile(REMOTE_ZX_BASE_ZIP_URL, zxBaseZip);
 
-            log.info("save zx base version");
+            log.debug("save zx base version");
             saveVersion(zxBaseVersionFile, remoteBaseVersion);
         }
 
@@ -212,26 +212,26 @@ public class FileDownloader {
         log.info("local zx diff: {}, remote zx diff: {}", localVersion, remoteVersion);
 
         if (!localVersion.equals(remoteVersion)) {
-            log.info("download zx diff {}", remoteVersion);
+            log.debug("download zx diff {}", remoteVersion);
             downloadFile(REMOTE_ZX_ZIP_URL, zxZip);
 
-            log.info("save zx diff version");
+            log.debug("save zx diff version");
             saveVersion(zxVersionFile, remoteVersion);
         }
 
         logFileInfo(zxBaseZip);
         logFileInfo(zxZip);
 
-        log.info("sync zx files");
+        log.debug("sync zx files");
         deleteDirectory(zxWebDir);
 
-        log.info("unzip zx.base.zip");
+        log.debug("unzip zx.base.zip");
         unzipFile(zxBaseZip, zxWebDir);
 
-        log.info("unzip zx.zip");
+        log.debug("unzip zx.zip");
         unzipFile(zxZip, zxWebDir);
 
-        log.info("sync custom files");
+        log.debug("sync custom files");
         syncFiles(zxWebDir, zxDataDir);
 
         taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
@@ -250,17 +250,17 @@ public class FileDownloader {
             return;
         }
 
-        log.info("download diff.zip");
+        log.debug("download diff.zip");
         downloadFile(REMOTE_DIFF_ZIP_URL, diffZip);
 
-        log.info("unzip diff.zip");
+        log.debug("unzip diff.zip");
         unzipFile(diffZip, atvDataDir);
 
         String newVersion = getLocalVersion(movieVersionFile, remoteVersion);
-        log.info("Current movie version: {}", newVersion);
+        log.debug("Current movie version: {}", newVersion);
 
         Files.deleteIfExists(diffZip);
-        log.info("Movie data update completed");
+        log.debug("Movie data update completed");
     }
 
     private String getLocalVersion(Path path, String defaultValue) throws IOException {
