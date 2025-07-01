@@ -90,7 +90,7 @@ sudo mv alist /opt/${APP}/alist/alist && \
 cd /opt/${APP}/alist/ && \
 sudo chown -R ${USER}:${GROUP} /opt/${APP}/alist  && \
 chmod +x alist && \
-./alist admin && \
+./alist admin > /opt/atv/log/init.log 2>&1 && \
 echo $VERSION2 > /opt/${APP}/alist/data/version
 
 sudo systemctl enable ${APP}.service
