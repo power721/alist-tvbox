@@ -409,7 +409,7 @@ public class DriverAccountService {
             }
         }
         if (dto.getCookie() != null) {
-            dto.setCookie(dto.getCookie().trim());
+            dto.setCookie(dto.getCookie().replace("\n", ";").trim());
         }
     }
 

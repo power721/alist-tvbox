@@ -24,7 +24,7 @@
       </el-col>
 
       <el-col :span="2">
-        <el-button :icon="HomeFilled" circle @click="loadFolder('/')" v-if="isHistory"/>
+        <el-button :icon="HomeFilled" circle @click="goBack" v-if="isHistory"/>
         <el-button :icon="Film" circle @click="goHistory" v-else/>
         <el-button :icon="Setting" circle @click="settingVisible=true"/>
         <el-button :icon="Plus" circle @click="handleAdd"/>
@@ -617,6 +617,7 @@ const router = useRouter()
 const videoPlayer = ref(null)
 const scrollbarRef = ref<ScrollbarInstance>()
 const token = ref('')
+const prev = ref('')
 const keyword = ref('')
 const tgChannels = ref('')
 const tgWebChannels = ref('')
@@ -967,8 +968,16 @@ const load = (row: any) => {
 }
 
 const goHistory = () => {
+  if (!isHistory.value) {
+    prev.value = route.path.substring(4)
+  }
   router.push('/vod/~history')
   loadHistory()
+}
+
+const goBack = () => {
+  router.push(prev.value)
+  loadFolder(prev.value)
 }
 
 const goParent = (path: string) => {
