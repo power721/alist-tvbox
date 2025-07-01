@@ -154,24 +154,23 @@ public class FileDownloader {
 
         log.info("local PG: {}, remote PG: {}", localVersion, remoteVersion);
 
-        if (localVersion.equals(remoteVersion)) {
-            log.info("sync PG files");
-            syncFiles(pgWebDir, pgDataDir);
-        } else {
-            log.info("download PG {}", remoteVersion);
+        if (!localVersion.equals(remoteVersion)) {
+            log.info("download PG file {}", remoteVersion);
             downloadFile(REMOTE_PG_ZIP_URL, pgZip);
 
-            log.info("unzip PG file");
+            logFileInfo(pgZip);
+
+            deleteDirectory(pgWebDir);
+
+            log.info("unzip PG file to {}", pgWebDir);
             unzipFile(pgZip, pgWebDir);
 
-            log.info("save PG version");
+            log.info("save PG version: {}", remoteVersion);
             saveVersion(pgVersionFile, remoteVersion);
-
-            log.info("sync PG files");
-            syncFiles(pgWebDir, pgDataDir);
-
-            log.info("PG update completed successfully");
         }
+
+        log.info("sync PG files");
+        syncFiles(pgWebDir, pgDataDir);
     }
 
     public void downloadZx() throws IOException {
