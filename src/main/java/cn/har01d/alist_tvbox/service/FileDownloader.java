@@ -282,11 +282,12 @@ public class FileDownloader {
             long downloaded = 0;
             int bytesRead;
 
+            int count = 0;
             while ((bytesRead = in.read(buffer)) != -1) {
                 out.write(buffer, 0, bytesRead);
                 downloaded += bytesRead;
 
-                if (fileSize > 0 && (downloaded % (1024 * 1024) == 0 || downloaded == fileSize)) {
+                if (fileSize > 0 && (count++ % 128 == 0 || downloaded == fileSize)) {
                     int progress = (int) (downloaded * 100 / fileSize);
                     log.info("Download progress: {}% ({} bytes/{} bytes)",
                             progress, downloaded, fileSize);
