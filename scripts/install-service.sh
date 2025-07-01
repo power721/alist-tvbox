@@ -80,12 +80,15 @@ sudo mv ${APP}.service /etc/systemd/system/${APP}.service
 sudo systemctl daemon-reload
 sudo systemctl stop ${APP}.service
 
-[ "$LOCAL_VERSION1" != "$VERSION1" ] && sudo mv atv /opt/${APP}/${APP} && \
+[ "$LOCAL_VERSION1" != "$VERSION1" ] && \
+sudo rm -f /opt/${APP}/${APP} && \
+sudo mv atv /opt/${APP}/${APP} && \
 sudo chown ${USER}:${GROUP} /opt/${APP}/${APP} && \
 chmod +x /opt/${APP}/${APP} && \
 echo $VERSION1 > /opt/${APP}/data/app_version
 
 [ "$LOCAL_VERSION2" != "$VERSION2" ] && \
+sudo rm -f /opt/${APP}/alist/alist && \
 sudo mv alist /opt/${APP}/alist/alist && \
 cd /opt/${APP}/alist/ && \
 sudo chown -R ${USER}:${GROUP} /opt/${APP}/alist  && \
