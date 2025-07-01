@@ -102,7 +102,7 @@ public class FileDownloader {
             try {
                 downloadPg();
             } catch (IOException e) {
-                log.error("PG task failed", e);
+                throw new IllegalStateException("PG task failed", e);
             }
         }, "PG");
     }
@@ -112,7 +112,7 @@ public class FileDownloader {
             try {
                 downloadZx();
             } catch (IOException e) {
-                log.error("ZX task failed", e);
+                throw new IllegalStateException("ZX task failed", e);
             }
         }, "ZX");
     }
@@ -122,7 +122,7 @@ public class FileDownloader {
             try {
                 downloadMovie(remoteVersion);
             } catch (IOException e) {
-                log.error("Movie task failed", e);
+                throw new IllegalStateException("Movie task failed", e);
             }
         }, "Movie");
     }
