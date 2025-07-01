@@ -157,6 +157,23 @@ public class TaskService {
         taskRepository.save(task);
     }
 
+    public boolean waitTaskFinish(Integer id, int timeout) {
+        int count = 0;
+        while (count++ < timeout) {
+            Task task = getById(id);
+            if (task.getStatus() == TaskStatus.COMPLETED) {
+                return true;
+            }
+
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
+        return false;
+    }
+
     public void cancelAll() {
         cancelAllByStatus(TaskStatus.READY);
         cancelAllByStatus(TaskStatus.RUNNING);

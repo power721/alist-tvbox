@@ -91,19 +91,20 @@ public class FileDownloader {
             }
     );
 
-    public void runTask(String type, String... args) {
+    public Task runTask(String type, String... args) {
+        Task task = taskService.addDownloadTask(type);
         if ("pg".equals(type)) {
-            executor.submit(this::downloadPgWithRetry);
+            executor.submit(() -> downloadPgWithRetry(task));
         } else if ("zx".equals(type)) {
-            executor.submit(this::downloadZxWithRetry);
+            executor.submit(() -> downloadZxWithRetry(task));
         } else if ("movie".equals(type)) {
             String remoteVersion = args.length > 0 ? args[0] : null;
-            executor.submit(() -> downloadMovieWithRetry(remoteVersion));
+            executor.submit(() -> downloadMovieWithRetry(task, remoteVersion));
         }
+        return task;
     }
 
-    private void downloadPgWithRetry() {
-        Task task = taskService.addDownloadTask("PG");
+    private Task downloadPgWithRetry(Task task) {
         taskService.startTask(task.getId());
         executeWithRetry(() -> {
             try {
@@ -112,10 +113,10 @@ public class FileDownloader {
                 throw new IllegalStateException(e);
             }
         }, task);
+        return task;
     }
 
-    private void downloadZxWithRetry() {
-        Task task = taskService.addDownloadTask("ZX");
+    private Task downloadZxWithRetry(Task task) {
         taskService.startTask(task.getId());
         executeWithRetry(() -> {
             try {
@@ -124,18 +125,19 @@ public class FileDownloader {
                 throw new IllegalStateException(e);
             }
         }, task);
+        return task;
     }
 
-    private void downloadMovieWithRetry(String remoteVersion) {
-        Task task = taskService.addDownloadTask("Movie");
+    private Task downloadMovieWithRetry(Task task, String remoteVersion) {
         taskService.startTask(task.getId());
         executeWithRetry(() -> {
             try {
-                downloadMovie(remoteVersion);
+                downloadMovie(task, remoteVersion);
             } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
         }, task);
+        return task;
     }
 
     private void executeWithRetry(Runnable runnable, Task task) {
@@ -237,7 +239,7 @@ public class FileDownloader {
         taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
     }
 
-    public void downloadMovie(String remoteVersion) throws IOException {
+    public void downloadMovie(Task task, String remoteVersion) throws IOException {
         if (remoteVersion == null || remoteVersion.isEmpty()) {
             throw new IllegalArgumentException("Remote version is required for movie data update");
         }
@@ -261,6 +263,8 @@ public class FileDownloader {
 
         Files.deleteIfExists(diffZip);
         log.debug("Movie data update completed");
+
+        taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
     }
 
     private String getLocalVersion(Path path, String defaultValue) throws IOException {

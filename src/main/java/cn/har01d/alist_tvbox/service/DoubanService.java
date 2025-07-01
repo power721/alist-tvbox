@@ -86,6 +86,7 @@ public class DoubanService {
     private final SettingRepository settingRepository;
     private final SiteService siteService;
     private final TaskService taskService;
+    private final FileDownloader fileDownloader;
 
     private final RestTemplate restTemplate;
     private final JdbcTemplate jdbcTemplate;
@@ -102,6 +103,7 @@ public class DoubanService {
                          SettingRepository settingRepository,
                          SiteService siteService,
                          TaskService taskService,
+                         FileDownloader fileDownloader,
                          RestTemplateBuilder builder,
                          JdbcTemplate jdbcTemplate,
                          Environment environment) {
@@ -112,6 +114,7 @@ public class DoubanService {
         this.settingRepository = settingRepository;
         this.siteService = siteService;
         this.taskService = taskService;
+        this.fileDownloader = fileDownloader;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
@@ -250,17 +253,12 @@ public class DoubanService {
         try {
             downloading = true;
             log.info("download movie data");
-            ProcessBuilder builder = new ProcessBuilder();
-            builder.command("sh", "-c", "/movie.sh", remote);
-            builder.inheritIO();
-            builder.directory(new File("/tmp"));
-            Process process = builder.start();
-            int code = process.waitFor();
-            if (code == 0) {
+            Task task = fileDownloader.runTask("movie", remote);
+            if (taskService.waitTaskFinish(task.getId(), 60)) {
                 log.info("movie data downloaded");
                 getSqlFiles(local).forEach(this::upgradeSqlFile);
             } else {
-                log.warn("download movie data failed: {}", code);
+                log.warn("download movie data failed");
             }
         } catch (Exception e) {
             log.warn("", e);
