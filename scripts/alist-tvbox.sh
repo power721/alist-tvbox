@@ -367,7 +367,7 @@ show_access_info() {
   if [[  "$#" -ge 1 && "$1" == "true" ]]; then
     sleep 5
     local credentials="${CONFIG[BASE_DIR]}/initial_admin_credentials.txt"
-    [[ -f "credentials" ]] && cat "credentials"
+    [[ -f "$credentials" ]] && cat "$credentials"
   fi
 }
 
