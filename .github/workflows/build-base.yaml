@@ -1,6 +1,11 @@
 name: 'release base'
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docker/Dockerfile-base'
   workflow_run:
     workflows: [ "release java" ]
     types:
