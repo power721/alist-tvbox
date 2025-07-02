@@ -37,7 +37,7 @@ public class NavigationService {
     @PostConstruct
     public void setup() {
         List<Navigation> list = navigationRepository.findAll();
-        fix(list);
+        //fix(list);
         if (navigationRepository.count() == 0) {
             loadBiliBiliCategory();
         } else {
