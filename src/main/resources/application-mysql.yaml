@@ -1,0 +1,14 @@
+spring:
+  config:
+    activate:
+      on-profile: mysql
+  datasource:
+    url: jdbc:mysql://localhost:3306/alist_tvbox
+    username: atv
+    password: AList_TvBox
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false

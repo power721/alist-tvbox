@@ -61,6 +61,11 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-text</artifactId>
             <version>1.10.0</version>
