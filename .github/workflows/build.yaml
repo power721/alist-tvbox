@@ -162,10 +162,10 @@ jobs:
           tar -xzvf musl-1.2.5.tar.gz
           pushd musl-1.2.5
           ./configure --prefix=$MUSL_HOME --static
-          sudo make && make install
+          sudo make && sudo make install
           popd
 
-          ls -l $MUSL_HOME/bin/
+          ls -l $MUSL_HOME/
           ln -s $MUSL_HOME/bin/musl-gcc $MUSL_HOME/bin/x86_64-linux-musl-gcc
 
           export PATH="$MUSL_HOME/bin:$PATH"
