@@ -517,4 +517,62 @@ public final class Utils {
         return pngOutputStream.toByteArray();
     }
 
+    public static String generateUsername() {
+        String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        String lower = "abcdefghijklmnopqrstuvwxyz";
+        String digits = "0123456789";
+
+        SecureRandom random = new SecureRandom();
+        StringBuilder password = new StringBuilder();
+
+        password.append(upper.charAt(random.nextInt(upper.length())));
+        password.append(lower.charAt(random.nextInt(lower.length())));
+        password.append(digits.charAt(random.nextInt(digits.length())));
+
+        String all = upper + lower + digits;
+        for (int i = 4; i < 8; i++) {
+            password.append(all.charAt(random.nextInt(all.length())));
+        }
+
+        char[] chars = password.toString().toCharArray();
+        for (int i = 0; i < chars.length; i++) {
+            int j = random.nextInt(chars.length);
+            char temp = chars[i];
+            chars[i] = chars[j];
+            chars[j] = temp;
+        }
+
+        return new String(chars);
+    }
+
+    public static String generateSecurePassword() {
+        String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        String lower = "abcdefghijklmnopqrstuvwxyz";
+        String digits = "0123456789";
+        String special = "!@#$%^&*";
+
+        SecureRandom random = new SecureRandom();
+        StringBuilder password = new StringBuilder();
+
+        password.append(upper.charAt(random.nextInt(upper.length())));
+        password.append(lower.charAt(random.nextInt(lower.length())));
+        password.append(digits.charAt(random.nextInt(digits.length())));
+        password.append(special.charAt(random.nextInt(special.length())));
+
+        String all = upper + lower + digits + special;
+        for (int i = 4; i < 12; i++) {
+            password.append(all.charAt(random.nextInt(all.length())));
+        }
+
+        char[] chars = password.toString().toCharArray();
+        for (int i = 0; i < chars.length; i++) {
+            int j = random.nextInt(chars.length);
+            char temp = chars[i];
+            chars[i] = chars[j];
+            chars[j] = temp;
+        }
+
+        return new String(chars);
+    }
+
 }

@@ -286,9 +286,6 @@ public class DriverAccountService {
         if (driverAccountRepository.existsByNameAndType(account.getName(), account.getType())) {
             throw new BadRequestException("账号名称已经存在");
         }
-        if (driverAccountRepository.count() == 0) {
-            aListLocalService.startAListServer();
-        }
         account.setId(null);
         if (driverAccountRepository.countByType(account.getType()) == 0) {
             account.setMaster(true);

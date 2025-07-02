@@ -30,6 +30,7 @@ public class TenantService {
     }
 
     public Tenant create(Tenant tenant) {
+        tenant.setId(null);
         if (tenantRepository.existsByName(tenant.getName())) {
             throw new BadRequestException("名称已经存在");
         }
