@@ -62,7 +62,7 @@ jobs:
       - name: setup graalvm
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '24'
+          java-version: '21'
           distribution: 'graalvm'
           components: 'native-image'
           native-image-musl: 'true'
