@@ -29,10 +29,10 @@ check_and_install_sqlite3() {
 
 check_and_install_sqlite3
 
-if docker ps | egrep 'xiaoya-tvbox|alit-tvbox'; then
+if docker ps | egrep 'xiaoya-tvbox|alist-tvbox'; then
   if [ $# -gt 0 ]; then
     echo "Stop docker container"
-    for name in xiaoya-tvbox alit-tvbox; do
+    for name in xiaoya-tvbox alist-tvbox; do
       if docker ps --format '{{.Names}}' | grep -q "^${name}$"; then
         echo "Stopping container: $name"
         docker stop "$name"
