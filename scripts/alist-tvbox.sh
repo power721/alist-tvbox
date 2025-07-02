@@ -365,7 +365,7 @@ show_access_info() {
   echo -e "${CYAN}=======================================${NC}"
   if [[  "$#" -ge 1 && "$1" == "true" ]]; then
     local credentials="${CONFIG[BASE_DIR]}/initial_admin_credentials.txt"
-    echo "${GREEN}帐号密码请查看文件：$credentials${NC}"
+    echo -e "${GREEN}帐号密码请查看文件：$credentials${NC}"
   fi
   echo -e "查看日志: ${YELLOW}docker logs -f $container_name${NC}"
 }
