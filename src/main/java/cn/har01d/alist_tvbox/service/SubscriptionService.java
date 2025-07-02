@@ -25,6 +25,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.Call;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
@@ -56,6 +60,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -87,6 +92,7 @@ public class SubscriptionService {
     private final TenantService tenantService;
     private final FileDownloader fileDownloader;
 
+    private final OkHttpClient okHttpClient = new OkHttpClient();
     private final ThreadLocal<String> currentToken = new ThreadLocal<>();
 
     private String tokens = "";
@@ -1084,7 +1090,19 @@ public class SubscriptionService {
 
         try {
             log.info("load json from {}", url);
-            return restTemplate.getForObject(url, String.class);
+            Request request = new Request.Builder()
+                    .url(url)
+                    .addHeader("Accept", Constants.ACCEPT)
+                    .addHeader("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5")
+                    .addHeader("User-Agent", Constants.OK_USER_AGENT)
+                    .build();
+
+            Call call = okHttpClient.newCall(request);
+            Response response = call.execute();
+            String html = response.body().string();
+            response.close();
+
+            return html;
         } catch (Exception e) {
             log.warn("load config json failed", e);
             return null;
