@@ -446,6 +446,15 @@
         <el-form-item>
           <el-button type="primary" @click="updateOrder">更新</el-button>
         </el-form-item>
+        <el-form-item label="电报下载封面">
+          <el-switch
+            v-model="enableTgImage"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateTgImage"
+          />
+        </el-form-item>
         <el-form-item label="默认视频壁纸">
           <el-input v-model="cover"/>
         </el-form-item>
@@ -646,6 +655,7 @@ const minute1 = ref(0)
 const second1 = ref(0)
 const minute2 = ref(0)
 const second2 = ref(0)
+const enableTgImage = ref(false)
 const loading = ref(false)
 const playing = ref(false)
 const isMuted = ref(false)
@@ -880,6 +890,13 @@ const updateTgSearch = () => {
 
 const updateCover = () => {
   axios.post('/api/settings', {name: 'video_cover', value: cover.value}).then(({data}) => {
+    cover.value = data.value
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateTgImage = () => {
+  axios.post('/api/settings', {name: 'enableTgImage', value: enableTgImage.value}).then(({data}) => {
     cover.value = data.value
     ElMessage.success('更新成功')
   })
@@ -1773,6 +1790,7 @@ onMounted(async () => {
     tgChannels.value = data.tg_channels
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
+    enableTgImage.value = data.enableTgImage === 'true'
     tgSortField.value = data.tg_sort_field || 'time'
     tgDriverOrder.value = data.tgDriverOrder.split(',').map(e => {
       return {

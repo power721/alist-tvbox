@@ -16,7 +16,6 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
-import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -50,6 +49,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import telegram4j.core.InitConnectionParams;
 import telegram4j.core.MTProtoTelegramClient;
@@ -57,20 +57,26 @@ import telegram4j.core.auth.AuthorizationHandler;
 import telegram4j.core.auth.CodeAuthorizationHandler;
 import telegram4j.core.auth.QRAuthorizationHandler;
 import telegram4j.core.auth.TwoFactorHandler;
+import telegram4j.mtproto.file.Context;
+import telegram4j.mtproto.file.FileReferenceId;
 import telegram4j.mtproto.store.FileStoreLayout;
 import telegram4j.mtproto.store.StoreLayout;
 import telegram4j.mtproto.store.StoreLayoutImpl;
 import telegram4j.tl.BaseChat;
 import telegram4j.tl.BaseMessage;
+import telegram4j.tl.BasePhoto;
 import telegram4j.tl.Channel;
 import telegram4j.tl.ImmutableInputClientProxy;
 import telegram4j.tl.ImmutableInputPeerChannel;
 import telegram4j.tl.ImmutableInputPeerChat;
+import telegram4j.tl.ImmutablePeerChannel;
 import telegram4j.tl.InputClientProxy;
 import telegram4j.tl.InputMessagesFilterEmpty;
 import telegram4j.tl.InputPeer;
 import telegram4j.tl.InputPeerSelf;
 import telegram4j.tl.InputUserSelf;
+import telegram4j.tl.MessageMediaPhoto;
+import telegram4j.tl.Peer;
 import telegram4j.tl.User;
 import telegram4j.tl.messages.ChannelMessages;
 import telegram4j.tl.messages.DialogsSlice;
@@ -82,9 +88,11 @@ import telegram4j.tl.request.messages.ImmutableSearch;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -128,6 +136,7 @@ public class TelegramService {
     private final LoadingCache<String, List<Message>> searchCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(15)).build(this::getFromChannel);
     private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private MTProtoTelegramClient client;
+    private final String baseImageFolder;
     private final List<String> fields = new ArrayList<>(List.of("id", "name", "genre", "description", "language", "country", "directors", "editors", "actors", "cover", "dbScore", "year"));
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -212,6 +221,7 @@ public class TelegramService {
         this.shareService = shareService;
         this.tvBoxService = tvBoxService;
         this.restTemplate = restTemplateBuilder.build();
+        baseImageFolder = Utils.getWebPath().toString();
     }
 
     @PostConstruct
@@ -559,7 +569,11 @@ public class TelegramService {
                 MovieDetail movieDetail = new MovieDetail();
                 movieDetail.setVod_id(encodeUrl(message.getLink()));
                 movieDetail.setVod_name(message.getName());
-                movieDetail.setVod_pic(getPic(message.getType()));
+                if (StringUtils.isBlank(message.getCover())) {
+                    movieDetail.setVod_pic(getPic(message.getType()));
+                } else {
+                    movieDetail.setVod_pic(fixCover(message.getCover()));
+                }
                 movieDetail.setVod_remarks(getTypeName(message.getType()));
                 list.add(movieDetail);
             }
@@ -583,7 +597,11 @@ public class TelegramService {
                 MovieDetail movieDetail = new MovieDetail();
                 movieDetail.setVod_id(encodeUrl(message.getLink()));
                 movieDetail.setVod_name(message.getName());
-                movieDetail.setVod_pic(getPic(message.getType()));
+                if (StringUtils.isBlank(message.getCover())) {
+                    movieDetail.setVod_pic(getPic(message.getType()));
+                } else {
+                    movieDetail.setVod_pic(fixCover(message.getCover()));
+                }
                 movieDetail.setVod_remarks(getTypeName(message.getType()));
                 list.add(movieDetail);
             }
@@ -605,7 +623,11 @@ public class TelegramService {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(encodeUrl(message.getLink()));
             movieDetail.setVod_name(message.getName());
-            movieDetail.setVod_pic(getPic(message.getType()));
+            if (StringUtils.isBlank(message.getCover())) {
+                movieDetail.setVod_pic(getPic(message.getType()));
+            } else {
+                movieDetail.setVod_pic(fixCover(message.getCover()));
+            }
             movieDetail.setVod_remarks(getTypeName(message.getType()));
             list.add(movieDetail);
         }
@@ -1108,7 +1130,8 @@ public class TelegramService {
         return switch (appProperties.getTgSortField()) {
             case "type" -> type.thenComparing(Comparator.comparing(Message::getTime).reversed());
             case "name" -> Comparator.comparing(Message::getName);
-            case "channel" -> Comparator.comparing(Message::getChannel).thenComparing(Comparator.comparing(Message::getTime).reversed());
+            case "channel" ->
+                    Comparator.comparing(Message::getChannel).thenComparing(Comparator.comparing(Message::getTime).reversed());
             default -> Comparator.comparing(Message::getTime).reversed();
         };
     }
@@ -1179,11 +1202,33 @@ public class TelegramService {
 
         try {
             InputPeer inputPeer = cache.get(username);
-            int minDate = (int) (Instant.now().minus(90, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toEpochMilli() / 1000);
-            Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, size, 0, 0, 0)).block();
-            if (messages instanceof ChannelMessages) {
-                result = ((ChannelMessages) messages).messages().stream().filter(e -> e instanceof BaseMessage).map(BaseMessage.class::cast).flatMap(e -> parseMessage(username, e)).toList();
+            long id = 0;
+            if (inputPeer instanceof ImmutableInputPeerChannel channel) {
+                id = channel.channelId();
+            } else if (inputPeer instanceof ImmutableInputPeerChat chat) {
+                id = chat.chatId();
             }
+            Peer chatPeer = ImmutablePeerChannel.of(id);
+            int minDate = (int) (Instant.now().minus(90, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toEpochMilli() / 1000);
+            result = client.getServiceHolder().getChatService()
+                    .search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, size, 0, 0, 0))
+                    .filter(x -> x instanceof ChannelMessages)
+                    .ofType(ChannelMessages.class)
+                    .map(ChannelMessages::messages)
+                    .flatMapMany(Flux::fromIterable)
+                    .filter(e -> e instanceof BaseMessage)
+                    .ofType(BaseMessage.class)
+                    .flatMap(message -> downloadImage(chatPeer, message)
+                            .flatMapMany(cover -> parseMessage(username, message, cover))
+                    )
+                    .collectList()
+                    .block();
+
+//
+//            if (messages instanceof ChannelMessages channelMessages) {
+//                boolean download = channelMessages.messages().size() <= 30;
+//                result = channelMessages.messages().stream().filter(e -> e instanceof BaseMessage).map(BaseMessage.class::cast).flatMap(e -> parseMessage(username, e, download ? downloadImage(chatPeer, e) : "")).toList();
+//            }
             log.info("Search {} from {} get {} results.", keyword, username, result.size());
         } catch (Exception e) {
             log.warn("search from channel {} failed", username, e);
@@ -1203,12 +1248,64 @@ public class TelegramService {
         return inputPeer;
     }
 
-    private Stream<Message> parseMessage(String channel, telegram4j.tl.BaseMessage message) {
+    private Flux<Message> parseMessage(String channel, telegram4j.tl.BaseMessage message, String cover) {
         List<Message> list = new ArrayList<>();
         for (String link : Message.parseLinks(message.message())) {
-            list.add(new Message(channel, message, link));
+            list.add(new Message(channel, message, link, cover));
         }
-        return list.stream();
+        return Flux.fromIterable(list);
+    }
+
+    private Mono<String> downloadImage(Peer chatPeer, telegram4j.tl.BaseMessage message) {
+        if (!appProperties.isEnableTgImage()) {
+            return Mono.just("");
+        }
+        if (message.media() instanceof MessageMediaPhoto mediaPhoto) {
+            var photo = mediaPhoto.photo();
+            if (photo instanceof BasePhoto basePhoto) {
+                var fs = FileReferenceId.ofPhoto(basePhoto, Context.createMediaContext(chatPeer, message.id()));
+                Path filePath = Utils.getWebPath("images", message.id() + ".png");
+                if (Files.exists(filePath)) {
+                    return Mono.just(getPic(filePath));
+                }
+                return Mono.usingWhen(Mono.fromCallable(() -> FileChannel.open(filePath, StandardOpenOption.WRITE, StandardOpenOption.CREATE)),
+                                fc -> client.downloadFile(fs)
+                                        .doOnNext(fp -> log.debug("download file: {}", filePath))
+                                        .flatMap(fp -> Mono.fromCallable(() -> fc.write(fp.getBytes().nioBuffer())))
+                                        .then(),
+                                fc -> Mono.fromCallable(() -> {
+                                    fc.close();
+                                    return fc;
+                                }))
+                        .doOnError(e -> {
+                            try {
+                                Files.deleteIfExists(filePath);
+                            } catch (IOException ex) {
+                                log.debug("Delete file error: {}", ex.getMessage());
+                            }
+                        })
+                        .then(Mono.just(getPic(filePath)))
+                        .onErrorReturn("");
+            }
+        }
+        return Mono.just("");
+    }
+
+    private String getPic(Path filePath) {
+        if (Files.exists(filePath)) {
+            return filePath.toString().replace(baseImageFolder, "");
+        } else {
+            return "";
+        }
+    }
+
+    private String fixCover(String cover) {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath(cover)
+                .replaceQuery("")
+                .build()
+                .toUriString();
     }
 
     private Stream<Message> parseMessage(SearchResult result) {

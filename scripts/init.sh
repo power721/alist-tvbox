@@ -12,7 +12,7 @@ restore_database() {
 }
 
 init() {
-  mkdir -p /var/lib/pxg /www/cgi-bin /data/atv /data/index /data/backup
+  mkdir -p /var/lib/pxg /www/cgi-bin /data/atv /data/index /data/backup /www/images
   if [ -d /index ]; then
     rm -rf /index
   fi

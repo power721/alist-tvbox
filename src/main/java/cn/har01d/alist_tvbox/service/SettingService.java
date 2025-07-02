@@ -74,6 +74,7 @@ public class SettingService {
         appProperties.setEnableHttps(settingRepository.findById("enable_https").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setCleanInvalidShares(settingRepository.findById("clean_invalid_shares").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setEnabledToken(settingRepository.findById(Constants.ENABLED_TOKEN).map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setEnableTgImage(settingRepository.findById("enableTgImage").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
@@ -234,6 +235,9 @@ public class SettingService {
         }
         if ("clean_invalid_shares".equals(setting.getName())) {
             appProperties.setCleanInvalidShares("true".equals(setting.getValue()));
+        }
+        if ("enableTgImage".equals(setting.getName())) {
+            appProperties.setEnableTgImage("true".equals(setting.getValue()));
         }
         if ("temp_share_expiration".equals(setting.getName())) {
             appProperties.setTempShareExpiration(Integer.parseInt(setting.getValue()));

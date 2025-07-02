@@ -88,7 +88,7 @@ docker build -f docker/Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest .
 echo "=== restart xiaoya-tvbox ==="
 sudo systemctl stop atv
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
-docker run -d -p $PORT1:4567 -p $PORT2:80 -p 5566:5244 -e ALIST_PORT=$PORT2 -e INSTALL=xiaoya -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+docker run -d -p $PORT1:4567 -p $PORT2:80 -p 5566:5244 -e ALIST_PORT=$PORT2 -e INSTALL=xiaoya -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data -v "$BASE_DIR/www":/www ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 
 sleep 1
 
