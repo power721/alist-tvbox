@@ -122,7 +122,7 @@ EOF
 
 sudo mv atv.service /etc/systemd/system/atv.service
 sudo systemctl daemon-reload
-sudo systemctl stop atv.service
+sudo systemctl stop atv.service || echo ""
 
 [ "$LOCAL_VERSION1" != "$VERSION1" ] && \
 echo "upgrade ATV" && \

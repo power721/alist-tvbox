@@ -472,7 +472,7 @@ public class AccountService {
         login.setPassword(settingRepository.findById(ALIST_PASSWORD).map(Setting::getValue).orElse(""));
 
         try {
-            String sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES (2,'guest','guest_Api789','/',1,256)";
+            String sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES (2,'guest','alist_tvbox','/',1,256)";
             Utils.executeUpdate(sql);
             if (login.isEnabled()) {
                 log.info("enable AList login: {}", login.getUsername());
@@ -491,7 +491,7 @@ public class AccountService {
                 }
             } else {
                 log.info("enable AList guest");
-                sql = "update x_users set disabled = 0, permission = 368, password = 'guest_Api789' where username = 'guest'";
+                sql = "update x_users set disabled = 0, permission = 368, password = 'alist_tvbox' where username = 'guest'";
                 Utils.executeUpdate(sql);
                 sql = "delete from x_users where id = 3";
                 Utils.executeUpdate(sql);
@@ -589,6 +589,7 @@ public class AccountService {
         String token = login();
         AListUser guest = getUser(2, token);
         if (guest != null) {
+            guest.setPassword("alist_tvbox");
             guest.setDisabled(login.isEnabled());
             updateUser(guest, token);
         }
