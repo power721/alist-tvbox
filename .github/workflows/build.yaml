@@ -165,6 +165,7 @@ jobs:
           sudo make && make install
           popd
 
+          ls -l $MUSL_HOME/bin/
           ln -s $MUSL_HOME/bin/musl-gcc $MUSL_HOME/bin/x86_64-linux-musl-gcc
 
           export PATH="$MUSL_HOME/bin:$PATH"
