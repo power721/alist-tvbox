@@ -34,6 +34,7 @@ public class AppProperties {
     private String tgWebChannels = Constants.TG_WEB_CHANNELS;
     private String tgSearch;
     private String tgSortField = "time";
+    private boolean enableTgImage = false;
     private String systemId;
     private int tgTimeout = 5000;
     private int tempShareExpiration = 24;

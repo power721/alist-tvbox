@@ -23,6 +23,7 @@ public class Message {
     private String name;
     private String type;
     private String link;
+    private String cover;
 
     public Message() {
     }
@@ -57,7 +58,7 @@ public class Message {
         this.channel = channel;
     }
 
-    public Message(String channel, telegram4j.tl.BaseMessage message, String link) {
+    public Message(String channel, telegram4j.tl.BaseMessage message, String link, String cover) {
         this.id = message.id();
         this.time = Instant.ofEpochSecond(message.date());
         this.content = message.message();
@@ -65,6 +66,7 @@ public class Message {
         this.type = parseType(link);
         this.name = parseName();
         this.channel = channel;
+        this.cover = cover;
     }
 
     public Message(SearchResult message, String link) {
