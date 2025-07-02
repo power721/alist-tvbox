@@ -1,5 +1,21 @@
 package cn.har01d.alist_tvbox.util;
 
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.xml.bind.DatatypeConverter;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -25,24 +41,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.WriterException;
-import com.google.zxing.client.j2se.MatrixToImageWriter;
-import com.google.zxing.common.BitMatrix;
-import com.google.zxing.qrcode.QRCodeWriter;
-
-import cn.har01d.alist_tvbox.exception.BadRequestException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.xml.bind.DatatypeConverter;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class Utils {
@@ -479,8 +477,26 @@ public final class Utils {
 
     public static String getQrCode(String text) throws IOException {
         log.info("get qr code for text: {}", text);
+        if ("true".equals(System.getenv("NATIVE"))) {
+            return getQrCodeByCli(text);
+        }
+
         byte[] bytes = generateQRCodeImage(text);
         return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    public static String getQrCodeByCli(String text) throws IOException {
+        try {
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.command("/atv-cli", text);
+            builder.inheritIO();
+            Process process = builder.start();
+            process.waitFor();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        Path file = Utils.getWebPath("tvbox", "qr.png");
+        return Base64.getEncoder().encodeToString(Files.readAllBytes(file));
     }
 
     public static byte[] generateQRCodeImage(String text) throws IOException {
