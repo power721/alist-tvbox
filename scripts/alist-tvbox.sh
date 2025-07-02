@@ -630,7 +630,6 @@ reset_admin_password() {
 
   echo "admin" > "$cmd_file"
   echo "$password" >> "$cmd_file"
-  echo "UPDATE users SET username='admin', password='\$2a\$10\$90MH0QCl098tffOA3ZBDwu0pm24xsVyJeQ41Tvj7N5bXspaqg8b2m' WHERE id=1;" > "$cmd_file"
 
   local status=$(check_container_status)
 
