@@ -40,7 +40,10 @@ public class SubscriptionController {
                 throw new BadRequestException("订阅ID重复");
             }
         }
-        subscription.setId(null);
+        if (subscription.getId() != null && subscription.getId() == 0) {
+            subscription.setId(null);
+        }
+
         subscription = subscriptionRepository.save(subscription);
         if (StringUtils.isBlank(subscription.getSid())) {
             subscription.setSid(String.valueOf(subscription.getId()));

@@ -168,6 +168,16 @@ public class SubscriptionService {
             fixSid(list);
             fixId(list);
         }
+        List<Subscription> duplicated = new ArrayList<>();
+        Map<String, Subscription> map = new HashMap<>();
+        for (Subscription sub : list) {
+            if (map.containsKey(sub.getSid())) {
+                duplicated.add(map.get(sub.getSid()));
+            }
+            map.put(sub.getSid(), sub);
+        }
+        subscriptionRepository.deleteAll(duplicated);
+
         if (subscriptionRepository.findBySid("pg").isEmpty()) {
             Subscription sub = new Subscription();
             sub.setSid("pg");

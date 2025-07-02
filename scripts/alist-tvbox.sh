@@ -12,11 +12,11 @@ NC='\033[0m' # No Color
 
 # 版本定义
 declare -A VERSIONS=(
-  ["1"]="haroldli/alist-tvbox              - 纯净版"
-  ["2"]="haroldli/alist-tvbox:native       - 纯净原生版（推荐）"
+  ["1"]="haroldli/alist-tvbox              - 纯净版（推荐）"
+  ["2"]="haroldli/alist-tvbox:native       - 纯净原生版"
   ["3"]="haroldli/alist-tvbox:python       - 纯净版（Python运行环境）"
-  ["4"]="haroldli/xiaoya-tvbox             - 小雅集成版"
-  ["5"]="haroldli/xiaoya-tvbox:native      - 小雅原生版（推荐）"
+  ["4"]="haroldli/xiaoya-tvbox             - 小雅集成版（推荐）"
+  ["5"]="haroldli/xiaoya-tvbox:native      - 小雅原生版"
   ["6"]="haroldli/xiaoya-tvbox:native-host - 小雅原生主机版"
   ["7"]="haroldli/xiaoya-tvbox:host        - 小雅主机模式版"
   ["8"]="haroldli/xiaoya-tvbox:python      - 小雅版（Python运行环境）"
@@ -640,16 +640,16 @@ reset_admin_password() {
   if [[ "$status" == "running" ]]; then
     echo -e "${YELLOW}正在重启容器使密码重置生效...${NC}"
     docker restart "$container_name"
-    echo -e "${GREEN}管理员账号已重置为：admin{NC}"
+    echo -e "${GREEN}管理员账号已重置为：admin${NC}"
     echo -e "${GREEN}管理员密码已重置为：$password${NC}"
     echo -e "${YELLOW}请尽快登录管理界面修改密码!${NC}"
   else
-    echo -e "${GREEN}管理员账号将在容器启动时重置为：admin{NC}"
+    echo -e "${GREEN}管理员账号将在容器启动时重置为：admin${NC}"
     echo -e "${GREEN}管理员密码将在容器启动时重置为：$password${NC}"
     echo -e "${YELLOW}请启动容器后尽快登录管理界面修改密码!${NC}"
   fi
 
-  sleep 3
+  read -n 1 -s -r -p "按任意键继续..."
 }
 
 # 管理自定义挂载目录
@@ -830,8 +830,13 @@ check_alist_status() {
 }
 
 check_status() {
-  local container_name=$(get_container_name)
   local status=$(check_container_status)
+  if [[ "$status" != "running" ]]; then
+    echo -e "${YELLOW}容器不存在${NC}"
+    sleep 1
+    return
+  fi
+  local container_name=$(get_container_name)
 
   echo -e "${CYAN}============== 容器基础信息 ==============${NC}"
   docker ps -a --filter "name=$container_name" --format \
