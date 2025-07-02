@@ -508,7 +508,9 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ![别名页面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/atv_alias.png)
 
 ### WebDAV
-用户名和密码在管理界面配置页面查看。
+默认用户名：guest 密码：alist_tvbox
+
+开启强制登录AList后，使用在管理界面配置的用户名和密码。
 
 ![WebDAV](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/webdav.jpg)
 
