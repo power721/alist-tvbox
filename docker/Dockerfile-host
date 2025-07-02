@@ -19,7 +19,7 @@ COPY data/data.zip /
 
 COPY target/application/ ./
 
-COPY data/version /app_version
+COPY data/version /opt/atv/data/app_version
 
 EXPOSE 4567 5678
 

@@ -70,7 +70,7 @@ upgrade_h2() {
 }
 
 echo "Install mode: $INSTALL"
-cat /app_version
+cat /opt/atv/data/app_version
 date
 uname -mor
 
