@@ -2,7 +2,7 @@ FROM haroldli/alist-base:hostmode
 
 LABEL MAINTAINER="Har01d"
 
-ENV INSTALL=native-host
+ENV INSTALL=native-host NATIVE=true
 
 WORKDIR /opt/atv/
 

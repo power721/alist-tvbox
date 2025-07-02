@@ -1,5 +1,13 @@
 ARG TAG=latest
 
+FROM golang:1.24 AS builder
+
+WORKDIR /app/
+
+COPY atv-cli ./
+
+RUN go build
+
 FROM haroldli/java:17 AS corretto-jdk
 
 FROM haroldli/alist:${TAG}
@@ -12,6 +20,8 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 COPY data/update.sql /
 
 COPY --from=corretto-jdk /jre $JAVA_HOME
+
+COPY --from=builder /app/atv-cli /
 
 WORKDIR /opt/atv/
 
