@@ -62,7 +62,7 @@ jobs:
       - name: setup graalvm
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '17'
+          java-version: '24'
           distribution: 'graalvm'
           components: 'native-image'
           native-image-musl: 'true'
@@ -154,29 +154,6 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Build native with Maven (AMD64)
         run: |
-          export MUSL_HOME=$PWD/musl-toolchain
-  
-          curl -O https://musl.libc.org/releases/musl-1.2.5.tar.gz
-          curl -O https://zlib.net/fossils/zlib-1.2.13.tar.gz
-
-          tar -xzvf musl-1.2.5.tar.gz
-          pushd musl-1.2.5
-          ./configure --prefix=$MUSL_HOME --static
-          make && make install
-          popd
-
-          ls -l $MUSL_HOME/
-          ln -s $MUSL_HOME/bin/musl-gcc $MUSL_HOME/bin/x86_64-linux-musl-gcc
-
-          export PATH="$MUSL_HOME/bin:$PATH"
-          x86_64-linux-musl-gcc --version
-
-          tar -xzvf zlib-1.2.13.tar.gz
-          pushd zlib-1.2.13
-          CC=musl-gcc ./configure --prefix=$MUSL_HOME --static
-          make && make install
-          popd
-  
           mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
           chmod a+x target/atv
           ls -l target
