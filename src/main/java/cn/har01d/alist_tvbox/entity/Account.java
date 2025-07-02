@@ -24,9 +24,6 @@ public class Account {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
-    @OneToOne
-    @JsonIgnore
-    private User user;
     private String nickname;
     private String refreshToken = "";
     private Instant refreshTokenTime;
