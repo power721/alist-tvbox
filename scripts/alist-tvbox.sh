@@ -362,7 +362,7 @@ show_access_info() {
   echo -e "容器名称: ${GREEN}${container_name}${NC}"
   echo -e "管理界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT1]}/${NC}"
   echo -e "AList界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT2]}/${NC}"
-  if [[ "$1" == "true" ]]; then
+  if [[  "$#" -ge 1 && "$1" == "true" ]]; then
     cat "${CONFIG[BASE_DIR]}/initial_admin_credentials.txt"
   fi
   echo -e "${CYAN}=======================================${NC}"
@@ -459,9 +459,12 @@ install_container() {
   INIT=false
   # 检查基础目录是否存在
   if [[ ! -d "${CONFIG[BASE_DIR]}" ]]; then
-    INIT=true
     echo -e "${YELLOW}基础目录不存在，正在创建: ${CONFIG[BASE_DIR]}${NC}"
     mkdir -p "${CONFIG[BASE_DIR]}"
+  fi
+
+  if [[ ! -f "${CONFIG[BASE_DIR]}/initial_admin_credentials.txt" ]]; then
+    INIT=true
   fi
 
   if check_image_update; then
