@@ -162,9 +162,13 @@ public class IndexService {
             Path path = Utils.getDataPath("app_version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
-                if (!lines.isEmpty()) {
+                if (lines.isEmpty()) {
+                    log.warn("App version not found: {}", path);
+                } else {
                     settingRepository.save(new Setting(APP_VERSION, lines.get(0).trim()));
                 }
+            } else {
+                log.warn("App version file not found: {}", path);
             }
         } catch (Exception e) {
             log.warn("", e);
