@@ -87,7 +87,7 @@
           </el-form>
         </el-card>
 
-        <el-card class="box-card" v-if="dockerVersion||appVersion">
+        <el-card class="box-card" v-if="dockerVersion||appVersion||aListVersion">
           <template #header>
             <div class="card-header">
               <span>应用数据</span>

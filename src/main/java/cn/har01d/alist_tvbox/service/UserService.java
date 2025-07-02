@@ -72,6 +72,7 @@ public class UserService {
 
     private void createNewAdmin() {
         try {
+            log.debug("delete .jwt");
             Path path = Utils.getDataPath(".jwt");
             Files.deleteIfExists(path);
         } catch (Exception e) {

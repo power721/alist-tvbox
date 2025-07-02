@@ -159,7 +159,7 @@ public class IndexService {
         }
 
         try {
-            Path path = Path.of("/app_version");
+            Path path = Utils.getDataPath("app_version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {
