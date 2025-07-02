@@ -24,6 +24,25 @@ while getopts ":d:p:P:v:" arg; do
     esac
 done
 
+shift $((OPTIND-1))
+
+if [ $# -gt 0 ]; then
+  BASE_DIR=$1
+fi
+
+if [ $# -gt 1 ]; then
+	PORT1=$2
+fi
+
+if [ $# -gt 2 ]; then
+	PORT2=$3
+fi
+
+if [ $# -gt 3 ]; then
+	MEM_OPT="-Xmx${4}M"
+	echo "Java Memory: ${MEM_OPT}"
+fi
+
 rm -rf src/main/resources/static/assets && \
 cd web-ui && \
 npm run build || exit 1

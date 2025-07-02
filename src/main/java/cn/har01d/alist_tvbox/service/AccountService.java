@@ -474,6 +474,8 @@ public class AccountService {
         try {
             String sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES (2,'guest','alist_tvbox','/',1,256)";
             Utils.executeUpdate(sql);
+            sql = "update x_users set disabled = 1 where username = 'admin'";
+            Utils.executeUpdate(sql);
             if (login.isEnabled()) {
                 log.info("enable AList login: {}", login.getUsername());
                 if (login.getUsername().equals("guest")) {

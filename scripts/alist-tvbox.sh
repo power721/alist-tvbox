@@ -850,6 +850,7 @@ check_status() {
     echo -e "${YELLOW}host模式使用主机网络，无独立端口映射${NC}"
     echo -e "管理端口: ${GREEN}4567${NC}"
     echo -e "AList端口: ${GREEN}5234${NC}"
+    echo -e "Nginx端口: ${GREEN}5678${NC}"
   else
     docker inspect --format \
       '{{range $p, $conf := .NetworkSettings.Ports}}{{$p}} -> {{(index $conf 0).HostPort}}{{"\n"}}{{end}}' \
