@@ -10,7 +10,6 @@ import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.AListUser;
@@ -81,7 +80,6 @@ public class AccountService {
     public static final int IDX = 4600;
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
-    private final UserRepository userRepository;
     private final AListLocalService aListLocalService;
     private final IndexService indexService;
     private final RestTemplate aListClient;
@@ -94,7 +92,6 @@ public class AccountService {
 
     public AccountService(AccountRepository accountRepository,
                           SettingRepository settingRepository,
-                          UserRepository userRepository,
                           AListLocalService aListLocalService,
                           IndexService indexService,
                           AppProperties appProperties,
@@ -104,7 +101,6 @@ public class AccountService {
                           JdbcTemplate jdbcTemplate) {
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
-        this.userRepository = userRepository;
         this.aListLocalService = aListLocalService;
         this.indexService = indexService;
         this.appProperties = appProperties;
@@ -153,7 +149,6 @@ public class AccountService {
             account.setRefreshToken(refreshToken);
             account.setOpenToken(openToken);
             account.setMaster(true);
-            account.setUser(userRepository.findById(1).orElse(null));
 
             if (!StringUtils.isAllBlank(refreshToken, openToken)) {
                 accountRepository.save(account);
