@@ -46,6 +46,8 @@ docker build -f docker/Dockerfile --tag=haroldli/alist-tvbox:latest .
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
 echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:5244"
 
+sudo systemctl stop atv
+
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
 docker run -d -p $PORT1:4567 -p $PORT2:5244 -e ALIST_PORT=$PORT2 -e INSTALL=new -v "$BASE_DIR":/data -v "$BASE_DIR/alist":/opt/alist/data ${MOUNT} --name=alist-tvbox haroldli/alist-tvbox:latest
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 check_and_install_sqlite3() {
     if ! command -v sqlite3 &> /dev/null; then
@@ -30,8 +30,18 @@ check_and_install_sqlite3() {
 check_and_install_sqlite3
 
 if docker ps | egrep 'xiaoya-tvbox|alit-tvbox'; then
-  echo -e "\e[31m请停止Docker容器再运行！\e[0m"
-  exit 1
+  if [ $# -gt 0 ]; then
+    echo "Stop docker container"
+    for name in xiaoya-tvbox alit-tvbox; do
+      if docker ps --format '{{.Names}}' | grep -q "^${name}$"; then
+        echo "Stopping container: $name"
+        docker stop "$name"
+      fi
+    done
+  else
+    echo -e "\e[31m请停止Docker容器再运行！\e[0m"
+    exit 1
+  fi
 fi
 
 VERSION1=$(curl -s http://d.har01d.cn/app.version.txt)
@@ -115,6 +125,7 @@ sudo systemctl daemon-reload
 sudo systemctl stop atv.service
 
 [ "$LOCAL_VERSION1" != "$VERSION1" ] && \
+echo "upgrade ATV" && \
 sudo rm -f /opt/atv/atv && \
 sudo mv atv /opt/atv/atv && \
 sudo chown ${USER}:${GROUP} /opt/atv/atv && \
@@ -122,6 +133,7 @@ chmod +x /opt/atv/atv && \
 echo $VERSION1 > /opt/atv/data/app_version
 
 [ "$LOCAL_VERSION2" != "$VERSION2" ] && \
+echo "upgrade AList" && \
 sudo rm -f /opt/atv/alist/alist && \
 sudo mv alist /opt/atv/alist/alist && \
 cd /opt/atv/alist/ && \
