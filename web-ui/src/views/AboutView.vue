@@ -57,10 +57,10 @@
 <!--      一键部署(开发版)：-->
 <!--      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)" -s -t dev</code><br>-->
 <!--    </p>-->
-    <p>
-      一键部署(NAS)：
-      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)" -s /volume2/docker/xiaoya</code>
-    </p>
+<!--    <p>-->
+<!--      一键部署(NAS)：-->
+<!--      <code>sudo bash -c "$(curl -fsSL http://d.har01d.cn/update_xiaoya.sh)" -s /volume2/docker/xiaoya</code>-->
+<!--    </p>-->
   </div>
 </template>
 <script setup lang="ts">
