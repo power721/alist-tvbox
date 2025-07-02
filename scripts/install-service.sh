@@ -43,37 +43,43 @@ LOCAL_VERSION2="0.0.0"
 GROUP=$(id -rgn $USER)
 APP=atv
 
-if [ -f /opt/${APP}/data/app_version ]; then
-  LOCAL_VERSION1=$(head -n 1 </opt/${APP}/data/app_version)
+if [ -f /opt/atv/data/app_version ]; then
+  LOCAL_VERSION1=$(head -n 1 </opt/atv/data/app_version)
 fi
 
-if [ -f /opt/${APP}/alist/data/version ]; then
-  LOCAL_VERSION2=$(head -n 1 </opt/${APP}/alist/data/version)
+if [ -f /opt/atv/alist/data/version ]; then
+  LOCAL_VERSION2=$(head -n 1 </opt/atv/alist/data/version)
 fi
 
 if [ "$LOCAL_VERSION1" = "$VERSION1" ] && [ "$LOCAL_VERSION2" = "$VERSION2" ] ; then
     echo "Already latest version"
     echo "Power AList: $VERSION2"
     echo "AList TvBox: $VERSION1"
+    if [ $# -gt 0 ]; then
+      echo "Restarting atv.service"
+      sudo systemctl restart atv.service
+      sleep 3
+      sudo systemctl status atv.service
+    fi
     exit 0
 fi
 
 echo "User: $USER:$GROUP"
 
-sudo mkdir -p /opt/${APP}/alist/{data,log}
-sudo mkdir -p /opt/${APP}/{config,scripts,index,log}
-sudo mkdir -p /opt/${APP}/data/{atv,backup}
-sudo mkdir -p /opt/${APP}/www/{cat,pg,zx,tvbox,files}
-sudo chown -R ${USER}:${GROUP} /opt/${APP}
+sudo mkdir -p /opt/atv/alist/{data,log}
+sudo mkdir -p /opt/atv/{config,scripts,index,log}
+sudo mkdir -p /opt/atv/data/{atv,backup}
+sudo mkdir -p /opt/atv/www/{cat,pg,zx,tvbox,files}
+sudo chown -R ${USER}:${GROUP} /opt/atv
 
-conf=/opt/${APP}/config/application-production.yaml
+conf=/opt/atv/config/application-production.yaml
 if [ ! -f $conf ]; then
-cat <<EOF >${APP}.yaml
+cat <<EOF >atv.yaml
 spring:
   datasource:
-    url: jdbc:h2:file:/opt/${APP}/data/data
+    url: jdbc:h2:file:/opt/atv/data/data
 EOF
-sudo mv ${APP}.yaml $conf
+sudo mv atv.yaml $conf
 fi
 
 # TODO: download scripts
@@ -88,43 +94,43 @@ echo "Upgrade Power AList from $LOCAL_VERSION2 to $VERSION2" && \
 wget http://har01d.org/alist.tgz -O alist.tgz && \
 tar xf alist.tgz && rm -f alist.tgz
 
-cat <<EOF > ${APP}.service
+cat <<EOF > atv.service
 [Unit]
-Description=${APP} API
+Description=atv API
 After=syslog.target
 
 [Service]
 User=${USER}
 Group=${GROUP}
-WorkingDirectory=/opt/${APP}
-ExecStart=/opt/${APP}/${APP} --spring.profiles.active=standalone,production
+WorkingDirectory=/opt/atv
+ExecStart=/opt/atv/atv --spring.profiles.active=standalone,production
 SuccessExitStatus=143
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-sudo mv ${APP}.service /etc/systemd/system/${APP}.service
+sudo mv atv.service /etc/systemd/system/atv.service
 sudo systemctl daemon-reload
-sudo systemctl stop ${APP}.service
+sudo systemctl stop atv.service
 
 [ "$LOCAL_VERSION1" != "$VERSION1" ] && \
-sudo rm -f /opt/${APP}/${APP} && \
-sudo mv atv /opt/${APP}/${APP} && \
-sudo chown ${USER}:${GROUP} /opt/${APP}/${APP} && \
-chmod +x /opt/${APP}/${APP} && \
-echo $VERSION1 > /opt/${APP}/data/app_version
+sudo rm -f /opt/atv/atv && \
+sudo mv atv /opt/atv/atv && \
+sudo chown ${USER}:${GROUP} /opt/atv/atv && \
+chmod +x /opt/atv/atv && \
+echo $VERSION1 > /opt/atv/data/app_version
 
 [ "$LOCAL_VERSION2" != "$VERSION2" ] && \
-sudo rm -f /opt/${APP}/alist/alist && \
-sudo mv alist /opt/${APP}/alist/alist && \
-cd /opt/${APP}/alist/ && \
-sudo chown -R ${USER}:${GROUP} /opt/${APP}/alist  && \
+sudo rm -f /opt/atv/alist/alist && \
+sudo mv alist /opt/atv/alist/alist && \
+cd /opt/atv/alist/ && \
+sudo chown -R ${USER}:${GROUP} /opt/atv/alist  && \
 chmod +x alist && \
 ./alist admin > /opt/atv/log/init.log 2>&1 && \
-echo $VERSION2 > /opt/${APP}/alist/data/version
+echo $VERSION2 > /opt/atv/alist/data/version
 
-sudo systemctl enable ${APP}.service
-sudo systemctl start ${APP}.service
+sudo systemctl enable atv.service
+sudo systemctl restart atv.service
 sleep 3
-sudo systemctl status ${APP}.service
+sudo systemctl status atv.service
