@@ -15,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.SecureRandom;
 import java.util.List;
 import java.util.Optional;
 
@@ -82,7 +81,7 @@ public class UserService {
         User adminUser = new User();
         adminUser.setUsername("admin");
 
-        String password = generateSecurePassword();
+        String password = Utils.generateSecurePassword();
         adminUser.setPassword(passwordEncoder.encode(password));
 
         userRepository.save(adminUser);
@@ -107,36 +106,6 @@ public class UserService {
         } catch (IOException e) {
             log.error("Failed to save initial admin credentials", e);
         }
-    }
-
-    private String generateSecurePassword() {
-        String upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-        String lower = "abcdefghijkmnpqrstuvwxyz";
-        String digits = "23456789";
-        String special = "!@#$%^&*";
-
-        SecureRandom random = new SecureRandom();
-        StringBuilder password = new StringBuilder();
-
-        password.append(upper.charAt(random.nextInt(upper.length())));
-        password.append(lower.charAt(random.nextInt(lower.length())));
-        password.append(digits.charAt(random.nextInt(digits.length())));
-        password.append(special.charAt(random.nextInt(special.length())));
-
-        String all = upper + lower + digits + special;
-        for (int i = 4; i < 12; i++) {
-            password.append(all.charAt(random.nextInt(all.length())));
-        }
-
-        char[] chars = password.toString().toCharArray();
-        for (int i = 0; i < chars.length; i++) {
-            int j = random.nextInt(chars.length);
-            char temp = chars[i];
-            chars[i] = chars[j];
-            chars[j] = temp;
-        }
-
-        return new String(chars);
     }
 
     public void update(User dto) {

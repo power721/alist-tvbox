@@ -90,7 +90,7 @@ public class ShareService {
     private final SiteRepository siteRepository;
     private final AccountRepository accountRepository;
     private final PikPakAccountRepository pikPakAccountRepository;
-    private final DriverAccountRepository panAccountRepository;
+    private final DriverAccountRepository driverAccountRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
     private final AListService aListService;
@@ -111,7 +111,7 @@ public class ShareService {
                         SiteRepository siteRepository,
                         AccountRepository accountRepository,
                         PikPakAccountRepository pikPakAccountRepository,
-                        DriverAccountRepository panAccountRepository,
+                        DriverAccountRepository driverAccountRepository,
                         AListService aListService,
                         DriverAccountService driverAccountService,
                         AppProperties appProperties,
@@ -129,7 +129,7 @@ public class ShareService {
         this.siteRepository = siteRepository;
         this.accountRepository = accountRepository;
         this.pikPakAccountRepository = pikPakAccountRepository;
-        this.panAccountRepository = panAccountRepository;
+        this.driverAccountRepository = driverAccountRepository;
         this.aListService = aListService;
         this.driverAccountService = driverAccountService;
         this.accountService = accountService;
@@ -169,14 +169,7 @@ public class ShareService {
         configFileService.writeFiles();
         readTvTxt();
 
-        if (environment.getProperty("INSTALL") == null
-                || "new".equals(environment.getProperty("INSTALL"))
-                || accountRepository.count() > 0
-                || pikPakAccountRepository.count() > 0
-                || panAccountRepository.count() > 0
-                || shareRepository.count() > add.size()) {
-            aListLocalService.startAListServer();
-        }
+        aListLocalService.startAListServer();
     }
 
     private void fixPath(List<Share> shares) {
@@ -630,7 +623,7 @@ public class ShareService {
     public String getQuarkCookie(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
-            return panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("").trim();
+            return driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("").trim();
         }
         return "";
     }
@@ -638,7 +631,7 @@ public class ShareService {
     public String getUcCookie(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
-            return panAccountRepository.findByTypeAndMasterTrue(DriverType.UC).map(DriverAccount::getCookie).orElse("").trim();
+            return driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).map(DriverAccount::getCookie).orElse("").trim();
         }
         return "";
     }
@@ -646,7 +639,7 @@ public class ShareService {
     public String get115Cookie(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
-            return panAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("").trim();
+            return driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("").trim();
         }
         return "";
     }
@@ -654,7 +647,7 @@ public class ShareService {
     public String getBaiduCookie(String id) {
         String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
         if (aliSecret.equals(id)) {
-            return panAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).map(DriverAccount::getCookie).orElse("").trim();
+            return driverAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).map(DriverAccount::getCookie).orElse("").trim();
         }
         return "";
     }

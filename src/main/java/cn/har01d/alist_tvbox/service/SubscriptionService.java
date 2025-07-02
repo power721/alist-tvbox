@@ -132,15 +132,20 @@ public class SubscriptionService {
 
     @PostConstruct
     public void init() {
-        tokens = settingRepository.findById(TOKEN)
-                .map(Setting::getValue)
-                .orElse("");
+        List<Subscription> list = subscriptionRepository.findAll();
+        if (list.isEmpty()) {
+            tokens = Utils.generateUsername();
+            settingRepository.save(new Setting(TOKEN, tokens));
+        } else {
+            tokens = settingRepository.findById(TOKEN)
+                    .map(Setting::getValue)
+                    .orElse("");
+        }
 
         if (!settingRepository.existsByName(ENABLED_TOKEN)) {
             settingRepository.save(new Setting(ENABLED_TOKEN, String.valueOf(!tokens.isEmpty())));
         }
 
-        List<Subscription> list = subscriptionRepository.findAll();
         if (list.isEmpty()) {
             Subscription sub = new Subscription();
             sub.setSid("0");

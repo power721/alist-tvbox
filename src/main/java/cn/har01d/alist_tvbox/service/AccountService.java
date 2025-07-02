@@ -122,6 +122,9 @@ public class AccountService {
         if (!settingRepository.existsByName("fix_ali_chunk_size")) {
             fixChunkSize();
         }
+        if (!settingRepository.existsByName("security_hardening")) {
+            securityHardening();
+        }
         scheduleAutoCheckinTime();
 
         if (accountRepository.count() == 0) {
@@ -449,6 +452,17 @@ public class AccountService {
         ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
         log.debug("get open token response: {}", response.getBody());
         return response.getBody();
+    }
+
+    private void securityHardening() {
+        String username = settingRepository.findById(ALIST_USERNAME).map(Setting::getValue).orElse("");
+        String password = settingRepository.findById(ALIST_PASSWORD).map(Setting::getValue).orElse("");
+        if (username.isEmpty() || password.isEmpty()) {
+            settingRepository.save(new Setting(ALIST_LOGIN, "true"));
+            settingRepository.save(new Setting(ALIST_USERNAME, Utils.generateUsername()));
+            settingRepository.save(new Setting(ALIST_PASSWORD, Utils.generateSecurePassword()));
+        }
+        settingRepository.save(new Setting("security_hardening", ""));
     }
 
     public void enableLogin() {
@@ -781,7 +795,6 @@ public class AccountService {
     public Account create(AccountDto dto) {
         long count = validateCreate(dto);
         Account account = new Account();
-        account.setId((int) count + 1);
         account.setRefreshToken(dto.getRefreshToken().trim());
         account.setOpenToken(dto.getOpenToken().trim());
         account.setAutoCheckin(dto.isAutoCheckin());
@@ -800,7 +813,6 @@ public class AccountService {
             updateTokens();
             int storageId = IDX + (account.getId() - 1) * 2;
             aListLocalService.setSetting("ali_account_id", String.valueOf(storageId), "number");
-            aListLocalService.startAListServer();
         } else if (account.isMaster()) {
             log.info("sync tokens for account {}", account);
             updateMaster(account);

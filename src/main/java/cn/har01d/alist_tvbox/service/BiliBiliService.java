@@ -324,7 +324,7 @@ public class BiliBiliService {
     @PostConstruct
     public void setup() {
         if (!settingRepository.existsById("api_key")) {
-            String apiKey = UUID.randomUUID().toString();
+            String apiKey = UUID.randomUUID().toString().replace("-", "");
             log.debug("generate api key: {}", apiKey);
             settingRepository.save(new Setting("api_key", apiKey));
         }

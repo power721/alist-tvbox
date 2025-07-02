@@ -160,10 +160,10 @@ public class PikPakService {
 
     public PikPakAccount create(PikPakAccount dto) {
         validate(dto);
+        dto.setId(null);
         if (pikPakAccountRepository.count() == 0) {
             dto.setMaster(true);
             updateIndexFile();
-            aListLocalService.startAListServer();
         } else {
             if (pikPakAccountRepository.existsByNickname(dto.getNickname())) {
                 throw new BadRequestException("账号昵称已经存在");
