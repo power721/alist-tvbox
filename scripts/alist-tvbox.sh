@@ -362,6 +362,9 @@ show_access_info() {
   echo -e "容器名称: ${GREEN}${container_name}${NC}"
   echo -e "管理界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT1]}/${NC}"
   echo -e "AList界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT2]}/${NC}"
+  if [[ "$1" == "true" ]]; then
+    cat "${CONFIG[BASE_DIR]}/initial_admin_credentials.txt"
+  fi
   echo -e "${CYAN}=======================================${NC}"
   echo -e "查看日志: ${YELLOW}docker logs -f $container_name${NC}"
 }
@@ -453,8 +456,10 @@ install_container() {
   local container_name=$(get_container_name)
   remove_opposite_container
 
+  INIT=false
   # 检查基础目录是否存在
   if [[ ! -d "${CONFIG[BASE_DIR]}" ]]; then
+    INIT=true
     echo -e "${YELLOW}基础目录不存在，正在创建: ${CONFIG[BASE_DIR]}${NC}"
     mkdir -p "${CONFIG[BASE_DIR]}"
   fi
@@ -472,7 +477,7 @@ install_container() {
 
   start_container
   echo -e "${GREEN}操作成功完成!${NC}"
-  show_access_info
+  show_access_info $INIT
   read -n 1 -s -r -p "按任意键继续..."
 }
 
@@ -616,27 +621,28 @@ show_version_menu() {
   done
 }
 
-# 添加重置密码函数
 reset_admin_password() {
   local container_name=$(get_container_name)
-  local cmd_file="${CONFIG[BASE_DIR]}/atv/cmd.sql"
+  local cmd_file="${CONFIG[BASE_DIR]}/atv/credentials.txt"
+  local password=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c16; echo)
 
-  # 确保目录存在
   mkdir -p "$(dirname "$cmd_file")"
 
-  # 创建密码重置命令文件
+  echo "admin" > "$cmd_file"
+  echo "$password" >> "$cmd_file"
   echo "UPDATE users SET username='admin', password='\$2a\$10\$90MH0QCl098tffOA3ZBDwu0pm24xsVyJeQ41Tvj7N5bXspaqg8b2m' WHERE id=1;" > "$cmd_file"
 
-  # 检查容器状态
   local status=$(check_container_status)
 
   if [[ "$status" == "running" ]]; then
     echo -e "${YELLOW}正在重启容器使密码重置生效...${NC}"
     docker restart "$container_name"
-    echo -e "${GREEN}管理员密码已重置为默认密码!${NC}"
+    echo -e "${GREEN}管理员账号已重置为：admin{NC}"
+    echo -e "${GREEN}管理员密码已重置为：$password${NC}"
     echo -e "${YELLOW}请尽快登录管理界面修改密码!${NC}"
   else
-    echo -e "${GREEN}管理员密码将在容器启动时重置为默认密码!${NC}"
+    echo -e "${GREEN}管理员账号将在容器启动时重置为：admin{NC}"
+    echo -e "${GREEN}管理员密码将在容器启动时重置为：$password${NC}"
     echo -e "${YELLOW}请启动容器后尽快登录管理界面修改密码!${NC}"
   fi
 

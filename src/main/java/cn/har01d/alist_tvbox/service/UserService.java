@@ -50,7 +50,7 @@ public class UserService {
     }
 
     private void updateExistingAdmin(User adminUser) throws IOException {
-        Path credentialsPath = Utils.getDataPath("credentials.txt");
+        Path credentialsPath = Utils.getDataPath("atv", "credentials.txt");
 
         if (Files.exists(credentialsPath)) {
             List<String> lines = Files.readAllLines(credentialsPath, StandardCharsets.UTF_8);
@@ -72,6 +72,13 @@ public class UserService {
     }
 
     private void createNewAdmin() {
+        try {
+            Path path = Utils.getDataPath(".jwt");
+            Files.deleteIfExists(path);
+        } catch (Exception e) {
+            // ignore
+        }
+
         User adminUser = new User();
         adminUser.setUsername("admin");
 
@@ -82,10 +89,10 @@ public class UserService {
 
         String message = String.format(
                 """
-                        ========= 管理员帐号 =========
+                        ============== 管理员帐号 ==============
                         用户名： admin
                         密码： %s
-                        =========================
+                        ======================================
                         警告： 登陆后立即更改密码！
                         """,
                 password

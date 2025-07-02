@@ -44,7 +44,7 @@ public class JwtTokenService implements TokenService {
             String secret = Files.readString(path);
             appProperties.setSecretKey(secret);
         } else {
-            String secret = UUID.randomUUID().toString();
+            String secret = "AList-TvBox:" +  UUID.randomUUID();
             Files.writeString(path, secret);
             appProperties.setSecretKey(secret);
         }
