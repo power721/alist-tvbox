@@ -618,7 +618,7 @@ show_version_menu() {
     start_container
 
     echo -e "${GREEN}版本已切换为: ${image}${NC}"
-    show_access_info
+    show_access_info false
     read -n 1 -s -r -p "按任意键继续..."
     return
   done
