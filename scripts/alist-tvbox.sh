@@ -363,12 +363,11 @@ show_access_info() {
   echo -e "管理界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT1]}/${NC}"
   echo -e "AList界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT2]}/${NC}"
   echo -e "${CYAN}=======================================${NC}"
-  echo -e "查看日志: ${YELLOW}docker logs -f $container_name${NC}"
   if [[  "$#" -ge 1 && "$1" == "true" ]]; then
-    sleep 5
     local credentials="${CONFIG[BASE_DIR]}/initial_admin_credentials.txt"
-    [[ -f "$credentials" ]] && cat "$credentials"
+    echo "${GREEN}帐号密码请查看文件：$credentials${NC}"
   fi
+  echo -e "查看日志: ${YELLOW}docker logs -f $container_name${NC}"
 }
 
 # 显示交互式菜单
