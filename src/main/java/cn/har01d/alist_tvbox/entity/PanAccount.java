@@ -12,6 +12,7 @@ import lombok.ToString;
 @ToString
 @RequiredArgsConstructor
 @Entity
+@Deprecated
 @TableGenerator(name = "tableGenerator", table = "id_generator", pkColumnName = "entity_name", valueColumnName = "next_id", allocationSize = 1)
 public class PanAccount {
     @Id

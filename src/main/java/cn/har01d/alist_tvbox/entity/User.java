@@ -18,8 +18,8 @@ import java.util.Objects;
 @Setter
 @ToString
 @RequiredArgsConstructor
-@Entity(name = "users")
-@Table(name = "users")
+@Entity
+@Table(name = "x_user")
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
