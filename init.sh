@@ -99,7 +99,7 @@ upgrade_h2() {
 
 echo "Install mode: $INSTALL"
 cat /opt/atv/data/app_version
-version=$(head -n1 /opt/atv/data/app_version)
+version=$(head -n1 /docker.version)
 echo "xiaoya version: $version"
 uname -mor
 date

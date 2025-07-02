@@ -375,6 +375,7 @@ show_menu() {
   clear
   local status=$(check_container_status)
   local container_name=$(get_container_name)
+  local sys=$(uname -mor)
 
   echo -e "${CYAN}==============================================${NC}"
   echo -e "${GREEN}          AList TvBox 安装升级配置管理          ${NC}"
@@ -390,6 +391,7 @@ show_menu() {
   )${NC}"
   echo -e "${YELLOW} 网络模式: ${CONFIG[NETWORK]}${NC}"
   echo -e "${YELLOW} 重启策略: ${CONFIG[RESTART]}${NC}"
+  echo -e "${YELLOW} 系统信息: ${sys}${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
   echo -e "${GREEN} 1. 安装/更新${NC}"
 
