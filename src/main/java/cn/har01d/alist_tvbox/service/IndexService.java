@@ -143,7 +143,7 @@ public class IndexService {
                 }
             }
         } catch (Exception e) {
-            log.warn("", e);
+            log.warn("Read index version failed", e);
         }
 
         try {
@@ -155,7 +155,7 @@ public class IndexService {
                 }
             }
         } catch (Exception e) {
-            log.warn("", e);
+            log.warn("Read Docker version failed", e);
         }
 
         try {
@@ -171,7 +171,7 @@ public class IndexService {
                 log.warn("App version file not found: {}", path);
             }
         } catch (Exception e) {
-            log.warn("", e);
+            log.warn("Read app version failed", e);
         }
 
         try {
@@ -183,7 +183,7 @@ public class IndexService {
                 }
             }
         } catch (Exception e) {
-            log.warn("", e);
+            log.warn("Read AList version failed", e);
         }
     }
 
