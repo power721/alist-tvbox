@@ -220,6 +220,7 @@
                                 <buildArg>--enable-http</buildArg>
                                 <buildArg>--enable-https</buildArg>
                                 <buildArg>-march=compatibility</buildArg>
+                                <buildArg>--trace-object-instantiation=org.sqlite.util.ProcessRunner</buildArg>
                                 <buildArg>
                                     -H:ResourceConfigurationFiles=resource-config.json
                                 </buildArg>
