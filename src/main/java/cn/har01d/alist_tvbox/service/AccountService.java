@@ -161,7 +161,6 @@ public class AccountService {
             readLogin();
         }
 
-        jdbcTemplate.execute("ALTER TABLE ACCOUNT ALTER COLUMN OPEN_ACCESS_TOKEN TEXT");
         if (accountRepository.count() > 0) {
             try {
                 updateAliAccountId();
