@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.util.Utils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -74,7 +75,7 @@ public class AListAliasService {
             shareService.deleteStorage(id, token);
 
             String sql = "DELETE FROM x_storages WHERE id = " + id;
-            alistJdbcTemplate.update(sql);
+            Utils.executeUpdate(sql);
 
             Alias storage = new Alias(alias);
             storage.setDisabled(true);

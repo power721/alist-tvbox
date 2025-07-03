@@ -1,9 +1,27 @@
 package cn.har01d.alist_tvbox.util;
 
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.xml.bind.DatatypeConverter;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -23,24 +41,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.WriterException;
-import com.google.zxing.client.j2se.MatrixToImageWriter;
-import com.google.zxing.common.BitMatrix;
-import com.google.zxing.qrcode.QRCodeWriter;
-
-import cn.har01d.alist_tvbox.exception.BadRequestException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.xml.bind.DatatypeConverter;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class Utils {
@@ -207,6 +207,42 @@ public final class Utils {
             result = result.substring(0, result.length() - 1);
         }
         return result + " " + unit;
+    }
+
+    public static int executeUpdate(String sql) {
+        int code = 1;
+        try {
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.inheritIO();
+            builder.command("sqlite3", Utils.getAListPath("data/data.db"), sql);
+            Process process = builder.start();
+            code = process.waitFor();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        log.debug("executeUpdate {} result: {}", sql, code);
+        return code;
+    }
+
+    public static String executeQuery(String sql) {
+        log.debug("executeQuery {}", sql);
+        try {
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.command("sqlite3", Utils.getAListPath("data/data.db"), sql);
+            Process process = builder.start();
+            BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+                sb.append(System.getProperty("line.separator"));
+            }
+            return sb.toString().trim();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return "";
     }
 
     public static int execute(String command) {

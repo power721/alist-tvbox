@@ -255,9 +255,9 @@ public class PikPakService {
             log.info("update AList PikPak credentials by account: {}", account.getId());
 
             String sql = "update x_storages set addition = json_replace(addition, '$.username', '" + account.getUsername() + "') where driver = 'PikPakShare';";
-            alistJdbcTemplate.update(String.format(sql));
+            Utils.executeUpdate(String.format(sql));
             sql = "update x_storages set addition = json_replace(addition, '$.password', '" + account.getPassword() + "') where driver = 'PikPakShare';";
-            alistJdbcTemplate.update(String.format(sql));
+            Utils.executeUpdate(String.format(sql));
         } catch (Exception e) {
             throw new BadRequestException(e);
         }

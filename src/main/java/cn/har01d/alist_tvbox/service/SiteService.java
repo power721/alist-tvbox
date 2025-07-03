@@ -87,7 +87,7 @@ public class SiteService {
             if (order == 1) {
                 aListToken = generateToken();
                 site.setToken(aListToken);
-                alistJdbcTemplate.update("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
+                Utils.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
             }
             site.setOrder(order++);
             siteRepository.save(site);
@@ -181,7 +181,7 @@ public class SiteService {
         log.info("new token {}", token);
         if (StringUtils.isBlank(token)) {
             token = generateToken();
-            alistJdbcTemplate.update("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");
+            Utils.executeUpdate("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");
         }
         for (Site site : siteRepository.findAll()) {
             if (aListToken.equals(site.getToken())) {

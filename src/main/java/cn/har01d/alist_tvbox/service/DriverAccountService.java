@@ -459,7 +459,7 @@ public class DriverAccountService {
             if (status >= 2) {
                 accountService.deleteStorage(id, token);
             } else {
-                alistJdbcTemplate.update("DELETE FROM x_storages WHERE id = " + id);
+                Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + id);
             }
             if (!account.isDisabled()) {
                 saveStorage(account, true);

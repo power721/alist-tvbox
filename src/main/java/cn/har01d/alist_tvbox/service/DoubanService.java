@@ -183,10 +183,7 @@ public class DoubanService {
             return;
         }
         log.info("fix meta id");
-        String table = "ID_GENERATOR";
-        if (environment.matchesProfiles("mysql")) {
-            table = "id_generator";
-        }
+        String table = "id_generator";
         try {
             jdbcTemplate.execute("UPDATE " + table + " SET NEXT_ID = 500000 WHERE ENTITY_NAME = 'meta'");
         } catch (Exception e) {

@@ -220,9 +220,9 @@ public class AccountService {
     private void addAdminUser() {
         try {
             String sql = "DELETE FROM x_users WHERE username = 'atv'";
-            alistJdbcTemplate.update(sql);
+            Utils.executeUpdate(sql);
             sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,16383)";
-            alistJdbcTemplate.update(sql);
+            Utils.executeUpdate(sql);
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -476,32 +476,32 @@ public class AccountService {
             String sql;
             if (!existsById("x_users", 2)) {
                 sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES (2,'guest','alist_tvbox','/',1,256)";
-                alistJdbcTemplate.update(sql);
+                Utils.executeUpdate(sql);
             }
 
             sql = "update x_users set disabled = 1 where username = 'admin'";
-            alistJdbcTemplate.update(sql);
+            Utils.executeUpdate(sql);
             if (login.isEnabled()) {
                 log.info("enable AList login: {}", login.getUsername());
                 if (login.getUsername().equals("guest")) {
                     sql = "delete from x_users where id = 3";
-                    alistJdbcTemplate.update(sql);
+                    Utils.executeUpdate(sql);
                     sql = "update x_users set disabled = 0 where username = 'guest'";
-                    alistJdbcTemplate.update(sql);
+                    Utils.executeUpdate(sql);
                 } else {
                     sql = "update x_users set disabled = 1 where username = 'guest'";
-                    alistJdbcTemplate.update(sql);
+                    Utils.executeUpdate(sql);
                     sql = "delete from x_users where id = 3";
-                    alistJdbcTemplate.update(sql);
+                    Utils.executeUpdate(sql);
                     sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES (3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,372)";
-                    alistJdbcTemplate.update(sql);
+                    Utils.executeUpdate(sql);
                 }
             } else {
                 log.info("enable AList guest");
                 sql = "update x_users set disabled = 0, permission = 368, password = 'alist_tvbox' where username = 'guest'";
-                alistJdbcTemplate.update(sql);
+                Utils.executeUpdate(sql);
                 sql = "delete from x_users where id = 3";
-                alistJdbcTemplate.update(sql);
+                Utils.executeUpdate(sql);
             }
         } catch (Exception e) {
             log.warn("", e);
@@ -510,10 +510,12 @@ public class AccountService {
     }
 
     public boolean existsById(String tableName, long id) {
-        String sql = "SELECT 1 FROM " + tableName + " WHERE id = ? LIMIT 1";
+        String sql = "SELECT 1 FROM " + tableName + " WHERE id = " + id + " LIMIT 1";
         try {
-            Integer result = alistJdbcTemplate.queryForObject(sql, new Object[]{id}, Integer.class);
-            return result != null;
+//            Integer result = alistJdbcTemplate.queryForObject(sql, new Object[]{id}, Integer.class);
+//            return result != null;
+            String result = Utils.executeQuery(sql);
+            return StringUtils.isNotBlank(result);
         } catch (EmptyResultDataAccessException e) {
             return false;
         }
@@ -538,10 +540,10 @@ public class AccountService {
                         aListLocalService.saveStorage(storage);
                     } else {
                         sql = "DELETE FROM x_storages WHERE id = " + id;
-                        alistJdbcTemplate.update(sql);
+                        Utils.executeUpdate(sql);
                         log.info("remove AList storage {} {}", id, name);
                         sql = "DELETE FROM x_storages WHERE id = " + (id + 1);
-                        alistJdbcTemplate.update(sql);
+                        Utils.executeUpdate(sql);
                         log.info("remove AList storage {} {}", id, name);
                     }
                     log.info("enableMyAli {}", account.isShowMyAli() || account.isMaster());
@@ -555,21 +557,21 @@ public class AccountService {
     }
 
     public void updateTokens() {
-        alistJdbcTemplate.update("CREATE TABLE IF NOT EXISTS \"x_tokens\" (`key` text,`value` text,`account_id` integer,`modified` datetime,PRIMARY KEY (`key`))");
+        Utils.executeUpdate("CREATE TABLE IF NOT EXISTS \"x_tokens\" (`key` text,`value` text,`account_id` integer,`modified` datetime,PRIMARY KEY (`key`))");
         List<Account> list = accountRepository.findAll();
         log.info("updateTokens {}", list.size());
         for (Account account : list) {
             String sql = "INSERT INTO x_tokens VALUES('RefreshToken-%d','%s',%d,'%s')";
-            alistJdbcTemplate.update(String.format(sql, account.getId(), account.getRefreshToken(), account.getId(), getTime(account.getRefreshTokenTime())));
+            Utils.executeUpdate(String.format(sql, account.getId(), account.getRefreshToken(), account.getId(), getTime(account.getRefreshTokenTime())));
             sql = "INSERT INTO x_tokens VALUES('RefreshTokenOpen-%d','%s',%d,'%s')";
-            alistJdbcTemplate.update(String.format(sql, account.getId(), account.getOpenToken(), account.getId(), getTime(account.getOpenTokenTime())));
+            Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenToken(), account.getId(), getTime(account.getOpenTokenTime())));
             if (StringUtils.isNotBlank(account.getAccessToken())) {
                 sql = "INSERT INTO x_tokens VALUES('AccessToken-%d','%s',%d,'%s')";
-                alistJdbcTemplate.update(String.format(sql, account.getId(), account.getAccessToken(), account.getId(), getTime(account.getAccessTokenTime())));
+                Utils.executeUpdate(String.format(sql, account.getId(), account.getAccessToken(), account.getId(), getTime(account.getAccessTokenTime())));
             }
             if (StringUtils.isNotBlank(account.getOpenAccessToken())) {
                 sql = "INSERT INTO x_tokens VALUES('AccessTokenOpen-%d','%s',%d,'%s')";
-                alistJdbcTemplate.update(String.format(sql, account.getId(), account.getOpenAccessToken(), account.getId(), getTime(account.getOpenAccessTokenTime())));
+                Utils.executeUpdate(String.format(sql, account.getId(), account.getOpenAccessToken(), account.getId(), getTime(account.getOpenAccessTokenTime())));
             }
         }
     }
@@ -956,7 +958,7 @@ public class AccountService {
         int storageId = IDX + (account.getId() - 1) * 2;
         int status = aListLocalService.checkStatus();
         if (status == 1) {
-            alistJdbcTemplate.update("UPDATE x_setting_items SET value=" + storageId + " WHERE key = 'ali_account_id'");
+            Utils.executeUpdate("UPDATE x_setting_items SET value=" + storageId + " WHERE key = 'ali_account_id'");
             throw new BadRequestException("AList服务启动中");
         }
 
@@ -1018,8 +1020,8 @@ public class AccountService {
         String token = status >= 2 ? login() : "";
         int storageId = IDX + (account.getId() - 1) * 2;
         if (status == 0) {
-            alistJdbcTemplate.update("DELETE FROM x_storages WHERE id = " + storageId);
-            alistJdbcTemplate.update("DELETE FROM x_storages WHERE id = " + (storageId + 1));
+            Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + storageId);
+            Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + (storageId + 1));
         } else {
             deleteStorage(storageId, token);
             deleteStorage(storageId + 1, token);

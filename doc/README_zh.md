@@ -602,12 +602,16 @@ Docker版在数据目录创建config目录，创建文件application-production.
 application-production.yaml文件内容示例：
 ```yaml
 spring:
-    profiles:
-      include: mysql
-    datasource:
-      jdbc-url: jdbc:mysql://localhost:3306/alist_tvbox?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+   datasource:
+      jdbc-url: jdbc:mysql://localhost:3306/alist_tvbox?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
       username: username
       password: password
+      driver-class-name: com.mysql.cj.jdbc.Driver
+   jpa:
+      database-platform: org.hibernate.dialect.MySQL8Dialect
+      hibernate:
+         ddl-auto: update
+      show-sql: false
 ```
 
 独立服务版编辑配置文件/opt/atv/alist/data/config.json
