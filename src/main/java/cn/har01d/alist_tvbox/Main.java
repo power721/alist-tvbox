@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.BufferedReader;
@@ -50,6 +51,10 @@ public class Main {
         result.add(addCustom("com.github.benmanes.caffeine.cache.SSMSA"));
         result.add(addCustom("com.github.benmanes.caffeine.cache.SSSW"));
         result.add(addCustom("com.github.benmanes.caffeine.cache.PSAMS"));
+        result.add(addCustom("com.zaxxer.hikari.HikariConfig"));
+        result.add(addCustom("org.sqlite.JDBC"));
+        result.add(addCustom("org.sqlite.SQLiteConfig"));
+        result.add(addCustom("org.sqlite.SQLiteConnection"));
         ObjectMapper objectMapper = new ObjectMapper();
         String json = objectMapper.writeValueAsString(result);
         System.out.println("Working Directory = " + System.getProperty("user.dir"));

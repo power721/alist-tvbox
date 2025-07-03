@@ -68,7 +68,7 @@
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
-            <version>3.42.0.0</version>
+            <version>3.50.2.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>
@@ -220,10 +220,7 @@
                                 <buildArg>--enable-http</buildArg>
                                 <buildArg>--enable-https</buildArg>
                                 <buildArg>-march=compatibility</buildArg>
-                                <buildArg>--trace-object-instantiation=org.sqlite.util.ProcessRunner</buildArg>
-                                <buildArg>
-                                    -H:ResourceConfigurationFiles=resource-config.json
-                                </buildArg>
+                                <buildArg>-Dorg.sqlite.lib.exportPath=${project.build.directory}</buildArg>
                             </buildArgs>
                         </configuration>
                     </plugin>

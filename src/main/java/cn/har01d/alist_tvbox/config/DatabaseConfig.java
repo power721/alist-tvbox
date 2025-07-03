@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 import javax.sql.DataSource;
 
@@ -21,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 @Slf4j
 @Configuration
@@ -54,10 +56,15 @@ public class DatabaseConfig {
         if ("sqlite3".equals(type)) {
             String dbFile = Utils.getAListPath(database.get("db_file").asText());
             log.info("AList use sqlite3 database file: {}", dbFile);
-            return DataSourceBuilder.create()
-                    .url("jdbc:sqlite:" + dbFile)
-                    .driverClassName("org.sqlite.JDBC")
-                    .build();
+
+            Properties props = new Properties();
+            props.setProperty("org.sqlite.usePureJava", "true");
+
+            var dataSource = new DriverManagerDataSource();
+            dataSource.setDriverClassName("org.sqlite.JDBC");
+            dataSource.setUrl("jdbc:sqlite:" + dbFile);
+            dataSource.setConnectionProperties(props);
+            return dataSource;
         } else if ("mysql".equals(type)) {
             String url = generateMysqlJdbcUrl(database);
             log.info("AList use mysql database url: {}", url);
