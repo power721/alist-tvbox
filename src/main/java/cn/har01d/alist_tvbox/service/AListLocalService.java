@@ -17,12 +17,14 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -52,6 +54,7 @@ public class AListLocalService {
     private final RestTemplate restTemplate;
     private final Environment environment;
     private final ObjectMapper objectMapper;
+    private final JdbcTemplate alistJdbcTemplate;
 
     private volatile int aListStatus;
     private int internalPort = 5244;
@@ -63,12 +66,14 @@ public class AListLocalService {
                              AppProperties appProperties,
                              RestTemplateBuilder builder,
                              Environment environment,
-                             ObjectMapper objectMapper) {
+                             ObjectMapper objectMapper,
+                             @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
         this.settingRepository = settingRepository;
         this.siteRepository = siteRepository;
         this.appProperties = appProperties;
         this.environment = environment;
         this.objectMapper = objectMapper;
+        this.alistJdbcTemplate = alistJdbcTemplate;
         externalPort = findPort();
         this.restTemplate = builder.rootUri("http://localhost:" + getInternalPort()).build();
     }
@@ -92,7 +97,7 @@ public class AListLocalService {
         setSetting("open_api_client_secret", clientSecret, "string");
         appProperties.setEnabledToken(settingRepository.findById(Constants.ENABLED_TOKEN).map(Setting::getValue).orElse("").equals("true"));
         boolean sign = appProperties.isEnabledToken();
-        Utils.executeUpdate("UPDATE x_setting_items SET value = '" + sign + "' WHERE key = 'sign_all'");
+        alistJdbcTemplate.update("UPDATE x_setting_items SET value = '" + sign + "' WHERE key = 'sign_all'");
         String time = settingRepository.findById("delete_delay_time").map(Setting::getValue).orElse("900");
         setSetting("delete_delay_time", time, "number");
         String aliTo115 = settingRepository.findById("ali_to_115").map(Setting::getValue).orElse("false");
@@ -148,9 +153,9 @@ public class AListLocalService {
 
     public void setSetting(String key, String value, String type) {
         log.debug("set setting {}={}", key, value);
-        Utils.executeUpdate(String.format("DELETE FROM x_setting_items WHERE key = '%s'", key));
-        int code = Utils.executeUpdate(String.format("INSERT INTO x_setting_items (key,value,type,flag,\"group\") VALUES('%s','%s','%s',1,0)", key, value, type));
-        log.info("update setting by SQL: {} result: {}", key, code);
+        alistJdbcTemplate.update(String.format("DELETE FROM x_setting_items WHERE key = '%s'", key));
+        alistJdbcTemplate.update(String.format("INSERT INTO x_setting_items (key,value,type,flag,\"group\") VALUES('%s','%s','%s',1,0)", key, value, type));
+        log.info("update setting by SQL: {}", key);
     }
 
     public void updateSetting(String key, String value, String type) {
@@ -186,14 +191,14 @@ public class AListLocalService {
     }
 
     public void saveStorage(Storage storage) {
-        Utils.executeUpdate("DELETE FROM x_storages WHERE id = " + storage.getId());
+        alistJdbcTemplate.update("DELETE FROM x_storages WHERE id = " + storage.getId());
         String time = storage.getTime().truncatedTo(ChronoUnit.SECONDS).atZone(ZoneId.systemDefault()).toLocalDateTime().toString();
         String sql = "INSERT INTO x_storages " +
                 "(id,mount_path,\"order\",driver,cache_expiration,status,addition,modified,disabled,order_by,order_direction,extract_folder,web_proxy,webdav_policy) " +
                 "VALUES (%d,'%s',0,'%s',%d,'work','%s','%s',%d,'name','asc','front',%d,'%s');";
-        int code = Utils.executeUpdate(String.format(sql, storage.getId(), storage.getPath(), storage.getDriver(),
+        alistJdbcTemplate.update(String.format(sql, storage.getId(), storage.getPath(), storage.getDriver(),
                 storage.getCacheExpiration(), storage.getAddition(), time, storage.isDisabled() ? 1 : 0, storage.isWebProxy() ? 1 : 0, storage.getWebdavPolicy()));
-        log.info("[{}] insert {} storage : {} result: {}", storage.getId(), storage.getDriver(), storage.getPath(), code);
+        log.info("[{}] insert {} storage : {}", storage.getId(), storage.getDriver(), storage.getPath());
     }
 
     public void setToken(Integer accountId, String key, String value) {
@@ -202,7 +207,7 @@ public class AListLocalService {
             return;
         }
         String sql = "INSERT INTO x_tokens VALUES('%s','%s',%d,'%s')";
-        Utils.executeUpdate(String.format(sql, key, value, accountId, OffsetDateTime.now()));
+        alistJdbcTemplate.update(String.format(sql, key, value, accountId, OffsetDateTime.now()));
     }
 
     public void updateToken(Integer accountId, String key, String value) {
@@ -225,7 +230,7 @@ public class AListLocalService {
             log.debug("updateTokenToAList {} response: {}", key, response.getBody());
         } else {
             String sql = "INSERT INTO x_tokens VALUES('%s','%s',%d,'%s')";
-            Utils.executeUpdate(String.format(sql, key, value, accountId, OffsetDateTime.now()));
+            alistJdbcTemplate.update(String.format(sql, key, value, accountId, OffsetDateTime.now()));
         }
     }
 

@@ -11,6 +11,8 @@ import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Files;
@@ -26,12 +28,18 @@ public class PikPakService {
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
     private final SettingRepository settingRepository;
+    private final JdbcTemplate alistJdbcTemplate;
 
-    public PikPakService(PikPakAccountRepository pikPakAccountRepository, AccountService accountService, AListLocalService aListLocalService, SettingRepository settingRepository) {
+    public PikPakService(PikPakAccountRepository pikPakAccountRepository,
+                         AccountService accountService,
+                         AListLocalService aListLocalService,
+                         SettingRepository settingRepository,
+                         @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
         this.settingRepository = settingRepository;
+        this.alistJdbcTemplate = alistJdbcTemplate;
     }
 
     @PostConstruct
@@ -247,9 +255,9 @@ public class PikPakService {
             log.info("update AList PikPak credentials by account: {}", account.getId());
 
             String sql = "update x_storages set addition = json_replace(addition, '$.username', '" + account.getUsername() + "') where driver = 'PikPakShare';";
-            Utils.executeUpdate(String.format(sql));
+            alistJdbcTemplate.update(String.format(sql));
             sql = "update x_storages set addition = json_replace(addition, '$.password', '" + account.getPassword() + "') where driver = 'PikPakShare';";
-            Utils.executeUpdate(String.format(sql));
+            alistJdbcTemplate.update(String.format(sql));
         } catch (Exception e) {
             throw new BadRequestException(e);
         }

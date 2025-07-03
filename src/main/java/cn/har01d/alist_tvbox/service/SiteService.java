@@ -15,6 +15,7 @@ import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.Sort;
@@ -43,6 +44,7 @@ public class SiteService {
     private final AListLocalService aListLocalService;
     private final JdbcTemplate jdbcTemplate;
     private final RestTemplate restTemplate;
+    private final JdbcTemplate alistJdbcTemplate;
     private String aListToken = "";
 
     public SiteService(AppProperties appProperties,
@@ -50,12 +52,14 @@ public class SiteService {
                        SettingRepository settingRepository,
                        AListLocalService aListLocalService,
                        JdbcTemplate jdbcTemplate,
-                       RestTemplateBuilder builder) {
+                       RestTemplateBuilder builder,
+                       @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
         this.appProperties = appProperties;
         this.siteRepository = siteRepository;
         this.settingRepository = settingRepository;
         this.aListLocalService = aListLocalService;
         this.jdbcTemplate = jdbcTemplate;
+        this.alistJdbcTemplate = alistJdbcTemplate;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, appProperties.getUserAgent())
@@ -83,7 +87,7 @@ public class SiteService {
             if (order == 1) {
                 aListToken = generateToken();
                 site.setToken(aListToken);
-                Utils.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
+                alistJdbcTemplate.update("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
             }
             site.setOrder(order++);
             siteRepository.save(site);
@@ -177,7 +181,7 @@ public class SiteService {
         log.info("new token {}", token);
         if (StringUtils.isBlank(token)) {
             token = generateToken();
-            Utils.executeUpdate("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");
+            alistJdbcTemplate.update("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");
         }
         for (Site site : siteRepository.findAll()) {
             if (aListToken.equals(site.getToken())) {
