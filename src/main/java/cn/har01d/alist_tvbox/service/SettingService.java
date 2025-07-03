@@ -1,27 +1,5 @@
 package cn.har01d.alist_tvbox.service;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.LoggerContext;
-import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.domain.DriverType;
-import cn.har01d.alist_tvbox.dto.SearchSetting;
-import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.exception.BadRequestException;
-import cn.har01d.alist_tvbox.util.Constants;
-import cn.har01d.alist_tvbox.util.Utils;
-import jakarta.annotation.PostConstruct;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.LoggerFactory;
-import org.springframework.core.env.Environment;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -35,6 +13,29 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.zip.ZipOutputStream;
+
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
+import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.SearchSetting;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -130,8 +131,18 @@ public class SettingService {
             value = UUID.randomUUID().toString();
             settingRepository.save(new Setting("system_id", value));
         }
+        if (!settingRepository.existsById("api_key")) {
+            generateApiKey();
+        }
         appProperties.setSystemId(value);
         log.info("system id: {}", value);
+    }
+
+    public String generateApiKey() {
+        String apiKey = UUID.randomUUID().toString().replace("-", "");
+        log.debug("generate api key: {}", apiKey);
+        settingRepository.save(new Setting("api_key", apiKey));
+        return apiKey;
     }
 
     public FileSystemResource exportDatabase() throws IOException {
