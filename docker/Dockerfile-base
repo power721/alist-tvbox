@@ -14,7 +14,7 @@ FROM haroldli/alist:${TAG}
 
 LABEL MAINTAINER="Har01d"
 
-ENV JAVA_HOME=/jre
+ENV JAVA_HOME=/jre DOCKER=true
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 COPY data/update.sql /
