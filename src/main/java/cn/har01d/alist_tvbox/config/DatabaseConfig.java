@@ -3,6 +3,8 @@ package cn.har01d.alist_tvbox.config;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.sql.DataSource;
 
@@ -16,7 +18,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
@@ -50,15 +51,15 @@ public class DatabaseConfig {
         var json = objectMapper.readTree(text);
         var database = json.get("database");
         String type = database.get("type").asText();
-        if (type.equals("sqlite3")) {
+        if ("sqlite3".equals(type)) {
             String dbFile = Utils.getAListPath(database.get("db_file").asText());
             log.info("use sqlite3 database file: {}", dbFile);
             return DataSourceBuilder.create()
                     .url("jdbc:sqlite:" + dbFile)
                     .driverClassName("org.sqlite.JDBC")
                     .build();
-        } else if (type.equals("mysql")) {
-            String url = generateJdbcUrl(database);
+        } else if ("mysql".equals(type)) {
+            String url = generateMysqlJdbcUrl(database);
             log.info("use mysql database url: {}", url);
             return DataSourceBuilder.create()
                     .url(url)
@@ -71,7 +72,7 @@ public class DatabaseConfig {
         }
     }
 
-    private static String generateJdbcUrl(JsonNode databaseConfig) {
+    private static String generateMysqlJdbcUrl(JsonNode databaseConfig) {
         if (databaseConfig == null || !databaseConfig.has("type") ||
                 !"mysql".equalsIgnoreCase(databaseConfig.get("type").asText())) {
             throw new IllegalArgumentException("Database configuration is not for MySQL");
@@ -115,6 +116,35 @@ public class DatabaseConfig {
         url.append("?").append(params);
 
         return url.toString();
+    }
+
+    public static String generatePostgresJdbcUrl(JsonNode databaseConfig) {
+        String host = databaseConfig.path("host").asText("localhost");
+        int port = databaseConfig.path("port").asInt(5432);
+        String database = databaseConfig.path("name").asText();
+
+        if (database.isEmpty()) {
+            throw new IllegalArgumentException("Database name is required for PostgreSQL");
+        }
+
+        String url = String.format("jdbc:postgresql://%s:%d/%s", host, port, database);
+
+        List<String> params = new ArrayList<>();
+
+        String sslMode = databaseConfig.path("ssl_mode").asText().toLowerCase();
+        if (!sslMode.isEmpty()) {
+            params.add("sslmode=" + sslMode);
+        } else {
+            params.add("sslmode=disable");
+        }
+
+        params.add("ApplicationName=Alist");
+
+        if (!params.isEmpty()) {
+            url += "?" + String.join("&", params);
+        }
+
+        return url;
     }
 
     @Bean
