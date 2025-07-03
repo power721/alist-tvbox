@@ -25,7 +25,7 @@ COPY data/zx.zip /
 
 COPY target/application/ ./
 
-COPY data/version /opt/atv/data/app_version
+COPY data/version /app_version
 
 EXPOSE 4567 5244
 
