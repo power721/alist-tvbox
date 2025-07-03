@@ -1,8 +1,5 @@
 package cn.har01d.alist_tvbox.config;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import javax.sql.DataSource;
 
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -16,7 +13,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 
-
 @Slf4j
 @Configuration
 public class DatabaseConfig {
@@ -29,6 +25,12 @@ public class DatabaseConfig {
     }
 
     @Bean
+    @Primary
+    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
+
+    @Bean
     public DataSource alistDataSource() {
         String path = Utils.getAListPath("data/data.db");
         log.info("use AList database path: {}", path);
@@ -36,12 +38,6 @@ public class DatabaseConfig {
                 .url("jdbc:sqlite:" + path)
                 .driverClassName("org.sqlite.JDBC")
                 .build();
-    }
-
-    @Bean
-    @Primary
-    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
-        return new JdbcTemplate(dataSource);
     }
 
     @Bean

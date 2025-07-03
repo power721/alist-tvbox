@@ -167,7 +167,7 @@ public final class Utils {
         }
 
         try {
-            return URLEncoder.encode(value, StandardCharsets.UTF_8.toString());
+            return URLEncoder.encode(value, StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
@@ -207,64 +207,6 @@ public final class Utils {
             result = result.substring(0, result.length() - 1);
         }
         return result + " " + unit;
-    }
-
-    public static String getPaths(String content) {
-        StringBuilder sb = new StringBuilder();
-        for (String line : content.split("\\n")) {
-            if (line.split(":").length == 2) {
-                sb.append(line).append("\\n");
-            } else {
-                sb.append("本地:").append(line).append("\\n");
-            }
-        }
-        return sb.toString();
-    }
-
-    public static int executeUpdate(String sql) {
-        int code = 1;
-        try {
-            ProcessBuilder builder = new ProcessBuilder();
-            builder.inheritIO();
-            builder.command("sqlite3", Utils.getAListPath("data/data.db"), sql);
-            Process process = builder.start();
-            code = process.waitFor();
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-        log.debug("executeUpdate {} result: {}", sql, code);
-        return code;
-    }
-
-    private static String secure(String text) {
-        return text
-                .replaceAll("\"refresh_token\":\".+?\"", "\"refresh_token\":\"******\"")
-                .replaceAll("\"RefreshToken\":\".+?\"", "\"RefreshToken\":\"*********\"")
-                .replaceAll("\"RefreshTokenOpen\":\".+?\"", "\"RefreshTokenOpen\":\"*********\"")
-                .replaceAll("\"password\":\".+?\"", "\"password\":\"***\"")
-                .replaceAll("'$.password', '.+?'", "'$.password', '***'")
-                ;
-    }
-
-    public static String executeQuery(String sql) {
-        log.debug("executeQuery {}", sql);
-        try {
-            ProcessBuilder builder = new ProcessBuilder();
-            builder.command("sqlite3", Utils.getAListPath("data/data.db"), sql);
-            Process process = builder.start();
-            BufferedReader reader =
-                    new BufferedReader(new InputStreamReader(process.getInputStream()));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line);
-                sb.append(System.getProperty("line.separator"));
-            }
-            return sb.toString().trim();
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-        return "";
     }
 
     public static int execute(String command) {
@@ -316,11 +258,14 @@ public final class Utils {
     }
 
     public static String getAListPath(String name) {
+        if (name.startsWith("/")) {
+            return name;
+        }
         String base = inDocker ? "/opt/alist/" : "/opt/atv/alist/";
         return base + name;
     }
 
-    public static long durationToSeconds(String duration) {
+    public static int durationToSeconds(String duration) {
         if (StringUtils.isBlank(duration)) {
             return 0;
         }
