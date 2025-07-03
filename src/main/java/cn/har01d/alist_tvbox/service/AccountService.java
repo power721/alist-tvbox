@@ -221,16 +221,14 @@ public class AccountService {
         try {
             String sql = "DELETE FROM x_users WHERE username = 'atv'";
             alistJdbcTemplate.update(sql);
-            //Utils.executeUpdate(sql);
             sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,16383)";
-            //Utils.executeUpdate(sql);
             alistJdbcTemplate.update(sql);
         } catch (Exception e) {
             log.warn("", e);
         }
     }
 
-    private String generatePassword() {
+    public String generatePassword() {
         Setting setting = settingRepository.findById(ATV_PASSWORD).orElse(null);
         if (setting == null) {
             log.info("generate new password");
