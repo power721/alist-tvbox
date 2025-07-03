@@ -62,7 +62,6 @@ public class AListLocalService {
     private int internalPort = 5244;
     private int externalPort = 5344;
     private String aListLogPath = "/opt/alist/log/alist.log";
-    private ObjectNode configuration;
 
     public AListLocalService(SettingRepository settingRepository,
                              SiteRepository siteRepository,
@@ -123,10 +122,6 @@ public class AListLocalService {
         return aListLogPath;
     }
 
-    public ObjectNode getConfiguration() {
-        return configuration;
-    }
-
     private int findPort() {
         internalPort = readAListConf();
         if (environment.matchesProfiles("standalone")) {
@@ -142,12 +137,8 @@ public class AListLocalService {
             try {
                 log.info("read alist log path from {}", path);
                 String text = Files.readString(path);
-                ObjectNode json = objectMapper.readValue(text, ObjectNode.class);
-                configuration = json;
-                aListLogPath = json.get("log").get("name").asText();
-                if (!aListLogPath.startsWith("/")) {
-                    aListLogPath = Utils.getAListPath(aListLogPath);
-                }
+                var json = objectMapper.readTree(text);
+                aListLogPath = Utils.getAListPath(json.get("log").get("name").asText());
                 log.info("AList log path: {}", aListLogPath);
                 port = json.get("scheme").get("http_port").asInt();
             } catch (IOException e) {
