@@ -1,5 +1,9 @@
 package cn.har01d.alist_tvbox.config;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import javax.sql.DataSource;
 
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -10,12 +14,21 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Configuration
 public class DatabaseConfig {
+    private final ObjectMapper objectMapper;
+
+    public DatabaseConfig(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     @Bean
     @Primary
@@ -31,13 +44,77 @@ public class DatabaseConfig {
     }
 
     @Bean
-    public DataSource alistDataSource() {
-        String path = Utils.getAListPath("data/data.db");
-        log.info("use AList database path: {}", path);
-        return DataSourceBuilder.create()
-                .url("jdbc:sqlite:" + path)
-                .driverClassName("org.sqlite.JDBC")
-                .build();
+    public DataSource alistDataSource() throws IOException {
+        Path path = Path.of(Utils.getAListPath("data/config.json"));
+        String text = Files.readString(path);
+        var json = objectMapper.readTree(text);
+        var database = json.get("database");
+        String type = database.get("type").asText();
+        if (type.equals("sqlite3")) {
+            String dbFile = Utils.getAListPath(database.get("db_file").asText());
+            log.info("use sqlite3 database file: {}", dbFile);
+            return DataSourceBuilder.create()
+                    .url("jdbc:sqlite:" + dbFile)
+                    .driverClassName("org.sqlite.JDBC")
+                    .build();
+        } else if (type.equals("mysql")) {
+            String url = generateJdbcUrl(database);
+            log.info("use mysql database url: {}", url);
+            return DataSourceBuilder.create()
+                    .url(url)
+                    .username(database.get("user").asText())
+                    .password(database.get("password").asText())
+                    .driverClassName("com.mysql.cj.jdbc.Driver")
+                    .build();
+        } else {
+            throw new IllegalArgumentException("unknown database type: " + type);
+        }
+    }
+
+    private static String generateJdbcUrl(JsonNode databaseConfig) {
+        if (databaseConfig == null || !databaseConfig.has("type") ||
+                !"mysql".equalsIgnoreCase(databaseConfig.get("type").asText())) {
+            throw new IllegalArgumentException("Database configuration is not for MySQL");
+        }
+
+        StringBuilder url = new StringBuilder("jdbc:mysql://");
+
+        String host = databaseConfig.has("host") ? databaseConfig.get("host").asText() : "";
+        if (host.isEmpty()) {
+            host = "localhost";
+        }
+        url.append(host);
+
+        int port = databaseConfig.has("port") ? databaseConfig.get("port").asInt() : 0;
+        if (port <= 0) {
+            port = 3306;
+        }
+        url.append(":").append(port);
+
+        if (databaseConfig.has("name")) {
+            String dbName = databaseConfig.get("name").asText();
+            if (!dbName.isEmpty()) {
+                url.append("/").append(dbName);
+            }
+        }
+
+        StringBuilder params = new StringBuilder();
+
+        if (databaseConfig.has("ssl_mode")) {
+            String sslMode = databaseConfig.get("ssl_mode").asText();
+            if (!sslMode.isEmpty()) {
+                params.append("useSSL=").append("require".equalsIgnoreCase(sslMode));
+            }
+        }
+
+        if (params.isEmpty()) {
+            params.append("useSSL=false");
+        }
+
+        params.append("&serverTimezone=Asia/Shanghai").append("&characterEncoding=UTF-8");
+        url.append("?").append(params);
+
+        return url.toString();
     }
 
     @Bean

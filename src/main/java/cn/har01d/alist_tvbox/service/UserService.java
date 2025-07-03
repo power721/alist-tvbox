@@ -1,15 +1,5 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.entity.User;
-import cn.har01d.alist_tvbox.entity.UserRepository;
-import cn.har01d.alist_tvbox.exception.NotFoundException;
-import cn.har01d.alist_tvbox.util.Utils;
-import jakarta.annotation.PostConstruct;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,6 +7,17 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import cn.har01d.alist_tvbox.entity.User;
+import cn.har01d.alist_tvbox.entity.UserRepository;
+import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -63,6 +64,14 @@ public class UserService {
                     userRepository.save(adminUser);
                     log.info("帐号重置成功！");
                     Files.deleteIfExists(credentialsPath);
+
+                    try {
+                        log.debug("reset .jwt");
+                        Path path = Utils.getDataPath(".jwt");
+                        Files.deleteIfExists(path);
+                    } catch (Exception e) {
+                        // ignore
+                    }
                     return;
                 }
             }
@@ -71,14 +80,6 @@ public class UserService {
     }
 
     private void createNewAdmin() {
-        try {
-            log.debug("delete .jwt");
-            Path path = Utils.getDataPath(".jwt");
-            Files.deleteIfExists(path);
-        } catch (Exception e) {
-            // ignore
-        }
-
         User adminUser = new User();
         adminUser.setUsername("admin");
 

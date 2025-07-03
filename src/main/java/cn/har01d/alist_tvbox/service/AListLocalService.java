@@ -13,6 +13,8 @@ import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -60,6 +62,7 @@ public class AListLocalService {
     private int internalPort = 5244;
     private int externalPort = 5344;
     private String aListLogPath = "/opt/alist/log/alist.log";
+    private ObjectNode configuration;
 
     public AListLocalService(SettingRepository settingRepository,
                              SiteRepository siteRepository,
@@ -97,7 +100,7 @@ public class AListLocalService {
         setSetting("open_api_client_secret", clientSecret, "string");
         appProperties.setEnabledToken(settingRepository.findById(Constants.ENABLED_TOKEN).map(Setting::getValue).orElse("").equals("true"));
         boolean sign = appProperties.isEnabledToken();
-        alistJdbcTemplate.update("UPDATE x_setting_items SET value = '" + sign + "' WHERE key = 'sign_all'");
+        alistJdbcTemplate.update("UPDATE x_setting_items SET value = '" + sign + "' WHERE `key` = 'sign_all'");
         String time = settingRepository.findById("delete_delay_time").map(Setting::getValue).orElse("900");
         setSetting("delete_delay_time", time, "number");
         String aliTo115 = settingRepository.findById("ali_to_115").map(Setting::getValue).orElse("false");
@@ -120,6 +123,10 @@ public class AListLocalService {
         return aListLogPath;
     }
 
+    public ObjectNode getConfiguration() {
+        return configuration;
+    }
+
     private int findPort() {
         internalPort = readAListConf();
         if (environment.matchesProfiles("standalone")) {
@@ -135,7 +142,8 @@ public class AListLocalService {
             try {
                 log.info("read alist log path from {}", path);
                 String text = Files.readString(path);
-                JsonNode json = objectMapper.readTree(text);
+                ObjectNode json = objectMapper.readValue(text, ObjectNode.class);
+                configuration = json;
                 aListLogPath = json.get("log").get("name").asText();
                 if (!aListLogPath.startsWith("/")) {
                     aListLogPath = Utils.getAListPath(aListLogPath);
@@ -153,8 +161,8 @@ public class AListLocalService {
 
     public void setSetting(String key, String value, String type) {
         log.debug("set setting {}={}", key, value);
-        alistJdbcTemplate.update(String.format("DELETE FROM x_setting_items WHERE key = '%s'", key));
-        alistJdbcTemplate.update(String.format("INSERT INTO x_setting_items (key,value,type,flag,\"group\") VALUES('%s','%s','%s',1,0)", key, value, type));
+        alistJdbcTemplate.update(String.format("DELETE FROM x_setting_items WHERE `key` = '%s'", key));
+        alistJdbcTemplate.update(String.format("INSERT INTO x_setting_items (`key`,value,type,flag,`group`) VALUES('%s','%s','%s',1,0)", key, value, type));
         log.info("update setting by SQL: {}", key);
     }
 
