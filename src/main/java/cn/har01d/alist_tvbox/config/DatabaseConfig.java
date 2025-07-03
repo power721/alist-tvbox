@@ -1,14 +1,9 @@
 package cn.har01d.alist_tvbox.config;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-
-import javax.sql.DataSource;
-
+import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.jdbc.DataSourceBuilder;
@@ -17,12 +12,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import cn.har01d.alist_tvbox.util.Utils;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import javax.sql.DataSource;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Configuration
@@ -57,14 +52,10 @@ public class DatabaseConfig {
             String dbFile = Utils.getAListPath(database.get("db_file").asText());
             log.info("AList use sqlite3 database file: {}", dbFile);
 
-            Properties props = new Properties();
-            props.setProperty("org.sqlite.usePureJava", "true");
-
-            var dataSource = new DriverManagerDataSource();
-            dataSource.setDriverClassName("org.sqlite.JDBC");
-            dataSource.setUrl("jdbc:sqlite:" + dbFile);
-            dataSource.setConnectionProperties(props);
-            return dataSource;
+            return DataSourceBuilder.create()
+                    .url("jdbc:sqlite:" + dbFile)
+                    .driverClassName("org.sqlite.JDBC")
+                    .build();
         } else if ("mysql".equals(type)) {
             String url = generateMysqlJdbcUrl(database);
             log.info("AList use mysql database url: {}", url);
