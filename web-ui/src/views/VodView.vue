@@ -120,7 +120,7 @@
         </el-table>
         <el-pagination layout="total, prev, pager, next, jumper, sizes"
                        :current-page="page" :page-size="size" :total="total"
-                       @current-change="reload" @size-change="handleSizeChange"/>
+                       @current-change="handlePageChange" @size-change="handleSizeChange"/>
       </el-col>
     </el-row>
 
@@ -586,6 +586,7 @@ import {ElMessage, type ScrollbarInstance} from "element-plus";
 import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
+import { debounce } from 'lodash-es'
 import {
   CircleCloseFilled,
   Connection,
@@ -968,11 +969,7 @@ const load = (row: any) => {
 }
 
 const goHistory = () => {
-  if (!isHistory.value) {
-    prev.value = route.path.substring(4)
-  }
   router.push('/vod/~history')
-  loadHistory()
 }
 
 const goBack = () => {
@@ -996,13 +993,12 @@ const imageUrl = (url: string) => {
   return '/images?url=' + encodeURIComponent(url)
 }
 
+const handlePageChange = (value: number) => {
+  page.value = value
+}
+
 const handleSizeChange = (value: number) => {
   size.value = value
-  if (isHistory.value) {
-    loadHistory()
-  } else {
-    reload(1)
-  }
 }
 
 const reload = (value: number) => {
@@ -1031,6 +1027,8 @@ const loadFolder = (path: string) => {
 const fetchData = () => {
   loadFiles(filePath.value)
 }
+
+const debouncedFetch = debounce(fetchData, 50)
 
 const loadFiles = (path: string) => {
   if (path == '/~history') {
@@ -1816,8 +1814,8 @@ watch(
   ([newPage, newSize], [oldPage, oldSize]) => {
     if (newPage !== oldPage || newSize !== oldSize) {
       if (newPage) page.value = parseInt(newPage) || 1
-      if (newSize) size.value = parseInt(newSize) || 10
-      fetchData()
+      if (newSize) size.value = parseInt(newSize) || 40
+      debouncedFetch()
     }
   },
   { immediate: true }
@@ -1826,7 +1824,7 @@ watch(
 watch(
   () => route.params.path,
   (newPath, oldPath) => {
-    if (newPath === oldPath) {
+    if (newPath.join('/') === oldPath.join('/')) {
       return
     }
     if (Array.isArray(newPath)) {
@@ -1834,7 +1832,8 @@ watch(
     } else {
       filePath.value = '/'
     }
-    fetchData()
+    page.value = 1
+    debouncedFetch()
   }
 )
 
