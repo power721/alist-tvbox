@@ -3,7 +3,7 @@
   "site_url": "",
   "cdn": "",
   "jwt_secret": "Y3JIG4vxT22wn9cq",
-  "token_expires_in": 48,
+  "token_expires_in": 4800,
   "database": {
     "type": "mysql",
     "host": "localhost",
@@ -32,13 +32,13 @@
     "unix_file_perm": "",
     "enable_h2c": false
   },
-  "opentoken_auth_url": "https://api.xhofe.top/alist/ali_open/token",
+  "opentoken_auth_url": "https://ali.har01d.org/access_token",
   "temp_dir": "data/temp",
   "bleve_dir": "data/bleve",
   "dist_dir": "",
   "log": {
     "enable": true,
-    "name": "data/log/log.log",
+    "name": "/opt/alist/log/alist.log",
     "max_size": 50,
     "max_backups": 30,
     "max_age": 28,

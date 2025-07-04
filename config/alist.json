@@ -11,7 +11,7 @@
     "user": "",
     "password": "",
     "name": "",
-    "db_file": "/opt/alist/data/data.db",
+    "db_file": "data/data.db",
     "table_prefix": "x_",
     "ssl_mode": "",
     "dsn": ""
