@@ -2,13 +2,13 @@ FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 
-ENV INSTALL=native NATIVE=true
+ENV ALIST_PORT=5344 INSTALL=native NATIVE=true
 
 WORKDIR /opt/atv/
 
 COPY config/alist.json /
 
-COPY entrypoint-native.sh /entrypoint.sh
+COPY scripts/entrypoint-native.sh /entrypoint.sh
 COPY scripts/index.sh /
 COPY scripts/init.sh /
 
@@ -26,4 +26,4 @@ EXPOSE 4567 5244
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-CMD ["81", "--spring.profiles.active=production,docker"]
+CMD ["81", "--spring.profiles.active=production,docker,native"]

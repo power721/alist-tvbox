@@ -32,4 +32,4 @@ EXPOSE 4567 80
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-CMD ["81", "--spring.profiles.active=production,xiaoya"]
+CMD ["81", "--spring.profiles.active=production,xiaoya,python"]
