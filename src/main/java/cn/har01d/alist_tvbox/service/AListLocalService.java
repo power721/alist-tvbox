@@ -206,7 +206,12 @@ public class AListLocalService {
         if (System.getenv("NATIVE") != null && "sqlite3".equals(database)) {
             return Utils.executeUpdate(sql);
         }
-        return alistJdbcTemplate.update(sql);
+        try {
+            return alistJdbcTemplate.update(sql);
+        } catch (Exception e) {
+            log.warn("execute update failed", e);
+            return 0;
+        }
     }
 
     public void setToken(Integer accountId, String key, String value) {
