@@ -34,8 +34,8 @@ public class UserController {
     }
 
     @PostMapping("/logout")
-    public void logout(@RequestHeader("Authorization") String token) {
-        userService.logout(token);
+    public void logout() {
+        userService.logout();
     }
 
     @GetMapping("/principal")

@@ -109,8 +109,11 @@ public class UserService {
         return userRepository.findByUsername(username);
     }
 
-    public void logout(String token) {
-        sessionRepository.findByToken(token).ifPresent(sessionRepository::delete);
+    public void logout() {
+        String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
+        if (token != null) {
+            sessionRepository.findByToken(token).ifPresent(sessionRepository::delete);
+        }
     }
 
     public UserToken generateToken(User user) {

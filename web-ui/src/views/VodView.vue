@@ -616,6 +616,7 @@ const router = useRouter()
 const videoPlayer = ref(null)
 const scrollbarRef = ref<ScrollbarInstance>()
 const token = ref('')
+const filePath = ref('/')
 const prev = ref('')
 const keyword = ref('')
 const tgChannels = ref('')
@@ -664,7 +665,7 @@ const isHistory = ref(false)
 const searching = ref(false)
 const page = ref(parseInt(route.query.page) || 1)
 const size = ref(parseInt(route.query.size) || 40)
-const total = ref(parseInt(route.query.total) || 0)
+const total = ref(0)
 const files = ref<VodItem[]>([])
 const images = ref<VodItem[]>([])
 const results = ref<VodItem[]>([])
@@ -975,8 +976,7 @@ const goHistory = () => {
 }
 
 const goBack = () => {
-  router.push(prev.value)
-  loadFolder(prev.value)
+  router.back()
 }
 
 const goParent = (path: string) => {
@@ -1025,8 +1025,11 @@ const loadFolder = (path: string) => {
     return
   }
   router.push('/vod' + getPath(path).replace('\t', '%09'))
-  page.value = 1
-  loadFiles(path)
+  filePath.value = path
+}
+
+const fetchData = () => {
+  loadFiles(filePath.value)
 }
 
 const loadFiles = (path: string) => {
@@ -1768,11 +1771,11 @@ onMounted(async () => {
   axios.get('/api/token').then(({data}) => {
     token.value = data.enabledToken ? data.token.split(",")[0] : "-"
     if (Array.isArray(route.params.path)) {
-      const path = route.params.path.join('/')
-      loadFiles('/' + path)
+      filePath.value = '/' + route.params.path.join('/')
     } else {
-      loadFiles('/')
+      filePath.value = '/'
     }
+    fetchData()
   })
   axios.get('/api/settings').then(({data}) => {
     tgChannels.value = data.tg_channels
@@ -1798,16 +1801,42 @@ onMounted(async () => {
   document.addEventListener('fullscreenchange', handleFullscreenChange);
 })
 
-watch([page, size, total], ([newPage, newSize, newTotal]) => {
+watch([page, size], ([newPage, newSize]) => {
   router.push({
     query: {
       ...route.query,
       page: newPage,
       size: newSize,
-      total: newTotal,
     }
   })
 })
+
+watch(
+  [() => route.query.page, () => route.query.size],
+  ([newPage, newSize], [oldPage, oldSize]) => {
+    if (newPage !== oldPage || newSize !== oldSize) {
+      if (newPage) page.value = parseInt(newPage) || 1
+      if (newSize) size.value = parseInt(newSize) || 10
+      fetchData()
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => route.params.path,
+  (newPath, oldPath) => {
+    if (newPath === oldPath) {
+      return
+    }
+    if (Array.isArray(newPath)) {
+      filePath.value = '/' + newPath.join('/')
+    } else {
+      filePath.value = '/'
+    }
+    fetchData()
+  }
+)
 
 onUnmounted(() => {
   clearInterval(timer)
