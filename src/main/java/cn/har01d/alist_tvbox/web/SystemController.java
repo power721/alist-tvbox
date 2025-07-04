@@ -18,13 +18,21 @@ public class SystemController {
     }
 
     @GetMapping("/api/system")
-    public SystemInfo getSystemInfo() throws UnknownHostException {
+    public SystemInfo getSystemInfo() {
         Runtime runtime = Runtime.getRuntime();
         Properties props = System.getProperties();
-        InetAddress addr = InetAddress.getLocalHost();
+        String ip = "127.0.0.1";
+        String hostname = "localhost";
+        try {
+            InetAddress addr = InetAddress.getLocalHost();
+            ip = addr.getHostAddress();
+            hostname = addr.getHostName();
+        } catch (UnknownHostException e) {
+            // ignore
+        }
         return new SystemInfo(
-                addr.getHostAddress(),
-                addr.getHostName(),
+                ip,
+                hostname,
                 runtime.totalMemory(),
                 runtime.totalMemory() - runtime.freeMemory(),
                 runtime.availableProcessors(),
