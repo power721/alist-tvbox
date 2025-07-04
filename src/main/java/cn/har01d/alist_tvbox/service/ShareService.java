@@ -538,7 +538,7 @@ public class ShareService {
     private void updateAListDriverType() {
         try {
             log.info("update storage driver type");
-            alistJdbcTemplate.execute("update x_storages set driver = 'AliyunShare' where driver = 'AliyundriveShare'");
+            aListLocalService.executeUpdate("update x_storages set driver = 'AliyunShare' where driver = 'AliyundriveShare'");
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
