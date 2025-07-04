@@ -15,17 +15,14 @@ import cn.har01d.alist_tvbox.auth.UserToken;
 import cn.har01d.alist_tvbox.entity.User;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
 import cn.har01d.alist_tvbox.service.UserService;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/accounts")
+@RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
-
-    public UserController(UserService userService, PasswordEncoder passwordEncoder) {
-        this.userService = userService;
-        this.passwordEncoder = passwordEncoder;
-    }
 
     @PostMapping("/login")
     public UserToken login(@RequestBody LoginDto account) {

@@ -11,16 +11,14 @@ import org.springframework.stereotype.Service;
 import cn.har01d.alist_tvbox.entity.Session;
 import cn.har01d.alist_tvbox.entity.SessionRepository;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class SessionTokenService implements TokenService {
     private final SessionRepository sessionRepository;
-
-    public SessionTokenService(SessionRepository sessionRepository) {
-        this.sessionRepository = sessionRepository;
-    }
 
     @Override
     public UserToken extractToken(String token) {

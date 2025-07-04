@@ -21,25 +21,17 @@ import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
     private final SessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
-
-    public UserService(UserRepository userRepository,
-                       SessionRepository sessionRepository,
-                       PasswordEncoder passwordEncoder,
-                       TokenService tokenService) {
-        this.userRepository = userRepository;
-        this.sessionRepository = sessionRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.tokenService = tokenService;
-    }
 
     @PostConstruct
     public void init() {
@@ -75,22 +67,10 @@ public class UserService {
                     userRepository.save(adminUser);
                     log.info("帐号重置成功！");
                     Files.deleteIfExists(credentialsPath);
-
-                    resetJwt();
                     return;
                 }
             }
             log.warn("credentials.txt exists but doesn't contain valid username/password");
-        }
-    }
-
-    private static void resetJwt() {
-        try {
-            log.debug("reset .jwt");
-            Path path = Utils.getDataPath(".jwt");
-            Files.deleteIfExists(path);
-        } catch (Exception e) {
-            // ignore
         }
     }
 
