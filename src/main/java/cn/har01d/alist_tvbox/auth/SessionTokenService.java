@@ -5,7 +5,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.Set;
 import java.util.UUID;
 
-import org.springframework.context.annotation.Primary;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-@Primary
 public class SessionTokenService implements TokenService {
     private final SessionRepository sessionRepository;
 
