@@ -593,7 +593,33 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 🎎:我的套娃
 ```
 
-### 数据备份与恢复
+### 使用MySql数据库
+独立服务版编辑配置文件/opt/atv/config/application-production.yaml
+
+Docker版在数据目录创建config目录，创建文件application-production.yaml，
+比如/etc/xiaoya/config/application-production.yaml。
+
+application-production.yaml文件内容示例：
+```yaml
+spring:
+   datasource:
+      jdbc-url: jdbc:mysql://localhost:3306/alist_tvbox?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+      username: username
+      password: password
+      driver-class-name: com.mysql.cj.jdbc.Driver
+   jpa:
+      database-platform: org.hibernate.dialect.MySQL8Dialect
+      hibernate:
+         ddl-auto: update
+      show-sql: false
+```
+
+独立服务版编辑配置文件/opt/atv/alist/data/config.json
+Docker版挂载/opt/alist/data/config.json
+
+AList配置参考[alist-mysql.json](../config/alist-mysql.json)
+
+### h2数据备份与恢复
 每天6点自动备份数据库，保存在/etc/xiaoya/backup/目录。
 
 如何恢复？

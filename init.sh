@@ -45,6 +45,8 @@ init() {
   mv header.html /www/cgi-bin/header.html
 
   [ -f /opt/alist/data/config.json ] || cp /alist.json /opt/alist/data/config.json
+  NEW_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 16)
+  sed -i "s/Y3JIG4vxT22wn9cq/${NEW_SECRET}/" /opt/alist/data/config.json
   sed -i "s/127.0.0.1/0.0.0.0/" /opt/alist/data/config.json
   sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf >/etc/nginx/http.d/default.conf
 

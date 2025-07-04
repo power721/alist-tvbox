@@ -11,6 +11,8 @@ import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Files;
@@ -26,12 +28,18 @@ public class PikPakService {
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
     private final SettingRepository settingRepository;
+    private final JdbcTemplate alistJdbcTemplate;
 
-    public PikPakService(PikPakAccountRepository pikPakAccountRepository, AccountService accountService, AListLocalService aListLocalService, SettingRepository settingRepository) {
+    public PikPakService(PikPakAccountRepository pikPakAccountRepository,
+                         AccountService accountService,
+                         AListLocalService aListLocalService,
+                         SettingRepository settingRepository,
+                         @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
         this.pikPakAccountRepository = pikPakAccountRepository;
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
         this.settingRepository = settingRepository;
+        this.alistJdbcTemplate = alistJdbcTemplate;
     }
 
     @PostConstruct

@@ -87,6 +87,11 @@ public class AccountController {
         return accountService.getAListLoginInfo();
     }
 
+    @PostMapping("/api/alist/password")
+    public String resetPassword() {
+        return accountService.resetPassword();
+    }
+
     @PostMapping("/api/schedule")
     public Instant updateScheduleTime(@RequestBody Instant time) {
         return accountService.updateScheduleTime(time);

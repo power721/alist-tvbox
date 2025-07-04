@@ -1,15 +1,18 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.util.Utils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+
 import cn.har01d.alist_tvbox.dto.AListAliasDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.storage.Alias;
-import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
@@ -19,17 +22,20 @@ public class AListAliasService {
     private final AccountService accountService;
     private final ShareService shareService;
     private final AListLocalService aListLocalService;
+    private final JdbcTemplate alistJdbcTemplate;
 
     private int shareId = 6000;
 
     public AListAliasService(AListAliasRepository aliasRepository,
                              AccountService accountService,
                              ShareService shareService,
-                             AListLocalService aListLocalService) {
+                             AListLocalService aListLocalService,
+                             @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
         this.aliasRepository = aliasRepository;
         this.accountService = accountService;
         this.shareService = shareService;
         this.aListLocalService = aListLocalService;
+        this.alistJdbcTemplate = alistJdbcTemplate;
     }
 
     @PostConstruct

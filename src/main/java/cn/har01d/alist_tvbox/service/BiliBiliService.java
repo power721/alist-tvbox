@@ -321,15 +321,6 @@ public class BiliBiliService {
         this.objectMapper = objectMapper;
     }
 
-    @PostConstruct
-    public void setup() {
-        if (!settingRepository.existsById("api_key")) {
-            String apiKey = UUID.randomUUID().toString().replace("-", "");
-            log.debug("generate api key: {}", apiKey);
-            settingRepository.save(new Setting("api_key", apiKey));
-        }
-    }
-
     public Map<String, Object> updateCookie(CookieData cookieData) {
         settingRepository.save(new Setting(BILIBILI_COOKIE, cookieData.getCookie()));
         return getLoginStatus();

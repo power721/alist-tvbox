@@ -167,7 +167,7 @@ public final class Utils {
         }
 
         try {
-            return URLEncoder.encode(value, StandardCharsets.UTF_8.toString());
+            return URLEncoder.encode(value, StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new BadRequestException(e);
         }
@@ -209,18 +209,6 @@ public final class Utils {
         return result + " " + unit;
     }
 
-    public static String getPaths(String content) {
-        StringBuilder sb = new StringBuilder();
-        for (String line : content.split("\\n")) {
-            if (line.split(":").length == 2) {
-                sb.append(line).append("\\n");
-            } else {
-                sb.append("本地:").append(line).append("\\n");
-            }
-        }
-        return sb.toString();
-    }
-
     public static int executeUpdate(String sql) {
         int code = 1;
         try {
@@ -234,16 +222,6 @@ public final class Utils {
         }
         log.debug("executeUpdate {} result: {}", sql, code);
         return code;
-    }
-
-    private static String secure(String text) {
-        return text
-                .replaceAll("\"refresh_token\":\".+?\"", "\"refresh_token\":\"******\"")
-                .replaceAll("\"RefreshToken\":\".+?\"", "\"RefreshToken\":\"*********\"")
-                .replaceAll("\"RefreshTokenOpen\":\".+?\"", "\"RefreshTokenOpen\":\"*********\"")
-                .replaceAll("\"password\":\".+?\"", "\"password\":\"***\"")
-                .replaceAll("'$.password', '.+?'", "'$.password', '***'")
-                ;
     }
 
     public static String executeQuery(String sql) {
@@ -316,11 +294,14 @@ public final class Utils {
     }
 
     public static String getAListPath(String name) {
+        if (name.startsWith("/")) {
+            return name;
+        }
         String base = inDocker ? "/opt/alist/" : "/opt/atv/alist/";
         return base + name;
     }
 
-    public static long durationToSeconds(String duration) {
+    public static int durationToSeconds(String duration) {
         if (StringUtils.isBlank(duration)) {
             return 0;
         }

@@ -45,6 +45,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.ClassPathResource;
@@ -55,6 +56,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -99,6 +101,7 @@ public class ShareService {
     private final DriverAccountService driverAccountService;
     private final RestTemplate restTemplate;
     private final Environment environment;
+    private final JdbcTemplate alistJdbcTemplate;
 
     private final int offset = 99900;
     private int shareId = 20000;
@@ -120,7 +123,8 @@ public class ShareService {
                         ConfigFileService configFileService,
                         PikPakService pikPakService,
                         RestTemplateBuilder builder,
-                        Environment environment) {
+                        Environment environment,
+                        @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
         this.appProperties = appProperties1;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
@@ -137,6 +141,7 @@ public class ShareService {
         this.configFileService = configFileService;
         this.pikPakService = pikPakService;
         this.environment = environment;
+        this.alistJdbcTemplate = alistJdbcTemplate;
         this.restTemplate = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).build();
     }
 

@@ -15,6 +15,7 @@ import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.Sort;
@@ -43,6 +44,7 @@ public class SiteService {
     private final AListLocalService aListLocalService;
     private final JdbcTemplate jdbcTemplate;
     private final RestTemplate restTemplate;
+    private final JdbcTemplate alistJdbcTemplate;
     private String aListToken = "";
 
     public SiteService(AppProperties appProperties,
@@ -50,12 +52,14 @@ public class SiteService {
                        SettingRepository settingRepository,
                        AListLocalService aListLocalService,
                        JdbcTemplate jdbcTemplate,
-                       RestTemplateBuilder builder) {
+                       RestTemplateBuilder builder,
+                       @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
         this.appProperties = appProperties;
         this.siteRepository = siteRepository;
         this.settingRepository = settingRepository;
         this.aListLocalService = aListLocalService;
         this.jdbcTemplate = jdbcTemplate;
+        this.alistJdbcTemplate = alistJdbcTemplate;
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, appProperties.getUserAgent())

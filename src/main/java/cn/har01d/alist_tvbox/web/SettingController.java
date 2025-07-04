@@ -39,6 +39,11 @@ public class SettingController {
         return service.get(name);
     }
 
+    @PostMapping("/apikey")
+    public String generateApiKey() {
+        return service.generateApiKey();
+    }
+
     @PostMapping
     public Setting update(@RequestBody Setting setting, HttpServletRequest request) {
         if ("user_agent".equals(setting.getName())) {

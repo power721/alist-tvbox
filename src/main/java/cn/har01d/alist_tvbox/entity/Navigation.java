@@ -28,7 +28,7 @@ public class Navigation {
     @Column(name = "`value`")
     private String value;
     private int type;
-    @Column(columnDefinition = "boolean default true")
+    @Column(name = "visible", columnDefinition = "boolean default true")
     private boolean show;
     @Column(columnDefinition = "boolean default false")
     private boolean reserved;

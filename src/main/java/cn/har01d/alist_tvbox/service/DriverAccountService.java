@@ -30,10 +30,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -60,6 +62,7 @@ public class DriverAccountService {
     private final AListLocalService aListLocalService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final JdbcTemplate alistJdbcTemplate;
     private final Map<String, QuarkUCTV> drivers = new HashMap<>();
 
     public DriverAccountService(PanAccountRepository panAccountRepository,
@@ -69,7 +72,8 @@ public class DriverAccountService {
                                 AccountService accountService,
                                 AListLocalService aListLocalService,
                                 RestTemplateBuilder builder,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper,
+                                @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
         this.panAccountRepository = panAccountRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.settingRepository = settingRepository;
@@ -78,6 +82,7 @@ public class DriverAccountService {
         this.aListLocalService = aListLocalService;
         this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
+        this.alistJdbcTemplate = alistJdbcTemplate;
     }
 
     @PostConstruct
