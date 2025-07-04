@@ -30,11 +30,10 @@ public class UserController {
     @PostMapping("/login")
     public UserToken login(@RequestBody LoginDto account) {
         User user = userService.findByUsername(account.getUsername());
-        if (user != null && passwordEncoder.matches(account.getPassword(), user.getPassword())) {
-            return userService.generateToken(user);
-        } else {
+        if (user == null || !passwordEncoder.matches(account.getPassword(), user.getPassword())) {
             throw new UserUnauthorizedException("用户或密码错误", 40001);
         }
+        return userService.generateToken(user);
     }
 
     @PostMapping("/logout")
