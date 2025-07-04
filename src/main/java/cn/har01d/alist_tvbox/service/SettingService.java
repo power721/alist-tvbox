@@ -160,7 +160,7 @@ public class SettingService {
         }
 
         try {
-            jdbcTemplate.execute("SCRIPT TO '/tmp/script.sql' TABLE ACCOUNT, ALIST_ALIAS, CONFIG_FILE, ID_GENERATOR, INDEX_TEMPLATE, NAVIGATION, PIK_PAK_ACCOUNT, SETTING, SHARE, SITE, SUBSCRIPTION, TASK, x_user, TMDB, TMDB_META, DEVICE, DRIVER_ACCOUNT, EMBY, HISTORY, JELLYFIN, PLAY_URL, TENANT");
+            jdbcTemplate.execute("SCRIPT TO '/tmp/script.sql' TABLE ACCOUNT, ALIST_ALIAS, CONFIG_FILE, ID_GENERATOR, INDEX_TEMPLATE, NAVIGATION, PIK_PAK_ACCOUNT, SETTING, SHARE, SITE, SUBSCRIPTION, TASK, x_user, TMDB, TMDB_META, DEVICE, DRIVER_ACCOUNT, EMBY, HISTORY, JELLYFIN, PLAY_URL, TENANT, SESSION");
             File out = Utils.getDataPath("backup", "database-" + LocalDate.now() + ".zip").toFile();
             out.createNewFile();
             try (FileOutputStream fos = new FileOutputStream(out);

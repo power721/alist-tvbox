@@ -13,7 +13,6 @@ RUN apk update && \
 COPY config/alist.json /
 
 COPY scripts/entrypoint.sh /
-COPY scripts/alist.sql /
 COPY scripts/init.sh /
 COPY scripts/tg.py /
 
@@ -31,4 +30,4 @@ EXPOSE 4567 5244
 
 ENTRYPOINT ["/entrypoint.sh"]
 
-CMD ["81", "--spring.profiles.active=production,docker"]
+CMD ["81", "--spring.profiles.active=production,docker,python"]

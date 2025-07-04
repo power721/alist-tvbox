@@ -8,27 +8,30 @@ import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import cn.har01d.alist_tvbox.auth.TokenService;
+import cn.har01d.alist_tvbox.auth.UserToken;
+import cn.har01d.alist_tvbox.entity.SessionRepository;
 import cn.har01d.alist_tvbox.entity.User;
 import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
+    private final SessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
-
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
+    private final TokenService tokenService;
 
     @PostConstruct
     public void init() {
@@ -36,7 +39,7 @@ public class UserService {
             initializeAdminUser();
         } catch (Exception e) {
             log.error("Failed to initialize admin user", e);
-            throw new RuntimeException("Critical failure - admin user initialization failed", e);
+            throw new IllegalStateException("Critical failure - admin user initialization failed", e);
         }
     }
 
@@ -64,14 +67,6 @@ public class UserService {
                     userRepository.save(adminUser);
                     log.info("帐号重置成功！");
                     Files.deleteIfExists(credentialsPath);
-
-                    try {
-                        log.debug("reset .jwt");
-                        Path path = Utils.getDataPath(".jwt");
-                        Files.deleteIfExists(path);
-                    } catch (Exception e) {
-                        // ignore
-                    }
                     return;
                 }
             }
@@ -110,11 +105,35 @@ public class UserService {
         }
     }
 
-    public void update(User dto) {
-        String id = SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString();
-        User user = userRepository.findById(Integer.parseInt(id)).orElseThrow(() -> new NotFoundException("用户不存在"));
+    public User findByUsername(String username) {
+        return userRepository.findByUsername(username);
+    }
+
+    public void logout() {
+        String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
+        if (token != null) {
+            sessionRepository.findByToken(token).ifPresent(sessionRepository::delete);
+        }
+    }
+
+    public UserToken generateToken(User user) {
+        var authorities = List.of(new SimpleGrantedAuthority("ADMIN"));
+        String token = tokenService.encodeToken(user.getUsername(), "ADMIN", true);
+        return new UserToken(user.getUsername(), authorities, token);
+    }
+
+    public UserToken update(User dto) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString();
+        User user = userRepository.findByUsername(username);
+        if (user == null) {
+            throw new NotFoundException("用户不存在");
+        }
+        var sessions = sessionRepository.findAllByUsername(user.getUsername());
+        sessionRepository.deleteAll(sessions);
+
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         userRepository.save(user);
+        return generateToken(user);
     }
 }

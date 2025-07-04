@@ -120,7 +120,7 @@
         </el-table>
         <el-pagination layout="total, prev, pager, next, jumper, sizes"
                        :current-page="page" :page-size="size" :total="total"
-                       @current-change="reload" @size-change="handleSizeChange"/>
+                       @current-change="handlePageChange" @size-change="handleSizeChange"/>
       </el-col>
     </el-row>
 
@@ -580,13 +580,13 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import {onMounted, ref} from 'vue'
+import {onMounted, ref, watch, onUnmounted} from 'vue'
 import axios from "axios"
 import {ElMessage, type ScrollbarInstance} from "element-plus";
 import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
-import {onUnmounted} from "@vue/runtime-core";
+import { debounce } from 'lodash-es'
 import {
   CircleCloseFilled,
   Connection,
@@ -617,7 +617,7 @@ const router = useRouter()
 const videoPlayer = ref(null)
 const scrollbarRef = ref<ScrollbarInstance>()
 const token = ref('')
-const prev = ref('')
+const filePath = ref('/')
 const keyword = ref('')
 const tgChannels = ref('')
 const tgWebChannels = ref('')
@@ -663,8 +663,8 @@ const settingVisible = ref(false)
 const addVisible = ref(false)
 const isHistory = ref(false)
 const searching = ref(false)
-const page = ref(1)
-const size = ref(40)
+const page = ref(parseInt(route.query.page) || 1)
+const size = ref(parseInt(route.query.size) || 40)
 const total = ref(0)
 const files = ref<VodItem[]>([])
 const images = ref<VodItem[]>([])
@@ -968,16 +968,11 @@ const load = (row: any) => {
 }
 
 const goHistory = () => {
-  if (!isHistory.value) {
-    prev.value = route.path.substring(4)
-  }
   router.push('/vod/~history')
-  loadHistory()
 }
 
 const goBack = () => {
-  router.push(prev.value)
-  loadFolder(prev.value)
+  router.back()
 }
 
 const goParent = (path: string) => {
@@ -997,13 +992,12 @@ const imageUrl = (url: string) => {
   return '/images?url=' + encodeURIComponent(url)
 }
 
+const handlePageChange = (value: number) => {
+  page.value = value
+}
+
 const handleSizeChange = (value: number) => {
   size.value = value
-  if (isHistory.value) {
-    loadHistory()
-  } else {
-    reload(1)
-  }
 }
 
 const reload = (value: number) => {
@@ -1026,9 +1020,14 @@ const loadFolder = (path: string) => {
     return
   }
   router.push('/vod' + getPath(path).replace('\t', '%09'))
-  page.value = 1
-  loadFiles(path)
+  filePath.value = path
 }
+
+const fetchData = () => {
+  loadFiles(filePath.value)
+}
+
+const debouncedFetch = debounce(fetchData, 50)
 
 const loadFiles = (path: string) => {
   if (path == '/~history') {
@@ -1768,12 +1767,9 @@ const showPrevImage = () => {
 onMounted(async () => {
   axios.get('/api/token').then(({data}) => {
     token.value = data.enabledToken ? data.token.split(",")[0] : "-"
-    if (Array.isArray(route.params.path)) {
-      const path = route.params.path.join('/')
-      loadFiles('/' + path)
-    } else {
-      loadFiles('/')
-    }
+    const newPath = route.params.path
+    filePath.value = newPath ? '/' + newPath.join('/') : '/'
+    fetchData()
   })
   axios.get('/api/settings').then(({data}) => {
     tgChannels.value = data.tg_channels
@@ -1798,6 +1794,46 @@ onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
 })
+
+watch([page, size], ([newPage, newSize]) => {
+  router.push({
+    query: {
+      ...route.query,
+      page: newPage,
+      size: newSize,
+    }
+  })
+})
+
+watch(
+  [() => route.query.page, () => route.query.size],
+  ([newPage, newSize], [oldPage, oldSize]) => {
+    if (newPage !== oldPage || newSize !== oldSize) {
+      if (newPage) page.value = parseInt(newPage) || 1
+      if (newSize) size.value = parseInt(newSize) || 40
+      if (token.value) {
+        debouncedFetch()
+      }
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => route.params.path,
+  (newPath, oldPath) => {
+    const newFilePath = newPath ? '/' + newPath.join('/') : '/'
+    const oldFilePath = oldPath ? '/' + oldPath.join('/') : '/'
+    if (newFilePath === oldFilePath) {
+      return
+    }
+    if (token.value) {
+      filePath.value = newFilePath
+      page.value = 1
+      debouncedFetch()
+    }
+  }
+)
 
 onUnmounted(() => {
   clearInterval(timer)

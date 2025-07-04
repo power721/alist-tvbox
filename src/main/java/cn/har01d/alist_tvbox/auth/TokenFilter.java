@@ -74,7 +74,7 @@ public class TokenFilter extends OncePerRequestFilter {
     }
 
     private String getToken(HttpServletRequest request) {
-        var token = request.getHeader("X-ACCESS-TOKEN");
+        var token = request.getHeader("Authorization");
         if (token == null || token.isEmpty()) {
             token = request.getParameter("X-ACCESS-TOKEN");
         }
@@ -87,7 +87,7 @@ public class TokenFilter extends OncePerRequestFilter {
             if (userToken == null) {
                 return null;
             }
-            return new UsernamePasswordAuthenticationToken(userToken.getName(), "", userToken.getAuthorities());
+            return new UsernamePasswordAuthenticationToken(userToken.getPrincipal(), userToken.getToken(), userToken.getAuthorities());
         } catch (UserUnauthorizedException e) {
             throw e;
         } catch (Exception e) {

@@ -7,7 +7,7 @@ axios.interceptors.request.use(function (config) {
   const token = accountService.getToken()
   if (config.headers && token) {
     const headers = config.headers as AxiosHeaders
-    headers.set('X-ACCESS-TOKEN', token)
+    headers.set('Authorization', token)
   }
   return config
 }, function (error) {
