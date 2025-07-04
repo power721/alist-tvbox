@@ -44,7 +44,7 @@ public class ProxyService {
     private final AListService aListService;
     private final AListLocalService aListLocalService;
     private final Set<String> proxyDrivers = Set.of("AliyundriveOpen", "AliyunShare", "BaiduNetdisk", "BaiduShare2",
-            "Quark", "UC", "QuarkShare", "UCShare");
+            "Quark", "UC", "QuarkShare", "UCShare", "115 Cloud", "115 Share");
 
     public ProxyService(AppProperties appProperties,
                         PlayUrlRepository playUrlRepository,
@@ -103,7 +103,8 @@ public class ProxyService {
         String driver = fsDetail.getProvider();
         // check url for Alias
         if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive")
-                || url.contains("baidu.com") || url.contains("quark.cn") || url.contains("uc.cn")) {
+                || url.contains("baidu.com") || url.contains("quark.cn") || url.contains("uc.cn")
+                || url.startsWith("http://localhost")) {
             log.debug("{} {}", driver, url);
             url = buildAListProxyUrl(site, path, fsDetail.getSign());
         } else {
