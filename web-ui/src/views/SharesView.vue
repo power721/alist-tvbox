@@ -256,7 +256,7 @@
           :on-exceed="handleExceed"
           :on-success="onUploadSuccess"
           :on-error="onUploadError"
-          :headers="{'x-access-token': token}"
+          :headers="{'authorization': token}"
           :data="{type: sharesDto.type}"
           :auto-upload="false"
         >
