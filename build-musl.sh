@@ -1,10 +1,6 @@
 export MUSL_HOME=$PWD/musl-toolchain
 
-if [ -f $MUSL_HOME/bin/x86_64-linux-musl-gcc ]; then
-  export PATH="$MUSL_HOME/bin:$PATH"
-  x86_64-linux-musl-gcc --version
-  exit
-fi
+sudo rm -rf musl-* zlib-*
 
 curl -O https://musl.libc.org/releases/musl-1.2.5.tar.gz
 curl -O https://zlib.net/fossils/zlib-1.2.13.tar.gz
