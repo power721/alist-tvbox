@@ -18,9 +18,11 @@ class AccountService {
   }
 
   update(account: Account) {
-    axios.post("/api/accounts/update", account).then(() => {
+    axios.post("/api/accounts/update", account).then(({data}) => {
       this.account.username = account.username
       localStorage.setItem('username', account.username)
+      this.account.authenticated = true
+      localStorage.setItem("token", data.token)
       ElMessage.success('账号更新成功')
     }, ({response}) => {
       ElMessage.error(response.data.message)
@@ -41,6 +43,7 @@ class AccountService {
   logout() {
     this.account.authenticated = false
     localStorage.removeItem("token")
+    return axios.post("/api/accounts/logout").then()
   }
 }
 
