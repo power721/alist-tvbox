@@ -618,7 +618,6 @@ const videoPlayer = ref(null)
 const scrollbarRef = ref<ScrollbarInstance>()
 const token = ref('')
 const filePath = ref('/')
-const prev = ref('')
 const keyword = ref('')
 const tgChannels = ref('')
 const tgWebChannels = ref('')
@@ -1768,11 +1767,8 @@ const showPrevImage = () => {
 onMounted(async () => {
   axios.get('/api/token').then(({data}) => {
     token.value = data.enabledToken ? data.token.split(",")[0] : "-"
-    if (Array.isArray(route.params.path)) {
-      filePath.value = '/' + route.params.path.join('/')
-    } else {
-      filePath.value = '/'
-    }
+    const newPath = route.params.path
+    filePath.value = newPath ? '/' + newPath.join('/') : '/'
     fetchData()
   })
   axios.get('/api/settings').then(({data}) => {
@@ -1815,7 +1811,9 @@ watch(
     if (newPage !== oldPage || newSize !== oldSize) {
       if (newPage) page.value = parseInt(newPage) || 1
       if (newSize) size.value = parseInt(newSize) || 40
-      debouncedFetch()
+      if (token.value) {
+        debouncedFetch()
+      }
     }
   },
   { immediate: true }
@@ -1824,16 +1822,16 @@ watch(
 watch(
   () => route.params.path,
   (newPath, oldPath) => {
-    if (newPath.join('/') === oldPath.join('/')) {
+    const newFilePath = newPath ? '/' + newPath.join('/') : '/'
+    const oldFilePath = oldPath ? '/' + oldPath.join('/') : '/'
+    if (newFilePath === oldFilePath) {
       return
     }
-    if (Array.isArray(newPath)) {
-      filePath.value = '/' + newPath.join('/')
-    } else {
-      filePath.value = '/'
+    if (token.value) {
+      filePath.value = newFilePath
+      page.value = 1
+      debouncedFetch()
     }
-    page.value = 1
-    debouncedFetch()
   }
 )
 
