@@ -99,15 +99,15 @@ if [ "$LOCAL_VERSION1" = "$VERSION1" ] && [ "$LOCAL_VERSION2" = "$VERSION2" ]; t
   log "$BLUE" "   AList TvBox: $VERSION1"
   log "$BLUE" "   Power AList: $VERSION2"
   if [ "$FORCE" = true ]; then
-    log "$CYAN" "启动服务 atv.service..."
-    nohup sudo systemctl restart atv.service > /opt/atv/log/systemctl-restart.log 2>&1 &
-    sleep 5
-    sudo systemctl status atv.service -n 20 --no-pager | tee -a "$LOG_FILE"
-    if ! sudo systemctl is-active --quiet atv.service; then
-      log "$RED" "❌ atv.service 启动失败！请查看日志：sudo journalctl -u atv.service -n 50 --no-pager"
+    log "$CYAN" "准备启动服务 atv.service..."
+    sudo systemctl daemon-reload
+    sudo systemctl enable atv.service
+    if ! sudo systemctl restart atv.service; then
+      log "$RED" "❌ atv.service 启动失败！"
+      log "$YELLOW" "查看日志：sudo journalctl -u atv.service -n 50 --no-pager"
       exit 1
     fi
-    log "$GREEN" "✅ 服务启动成功。"
+    log "$GREEN" "✅ 服务启动成功"
   fi
   exit 0
 fi
@@ -188,15 +188,11 @@ sudo systemctl enable atv.service
 sudo systemctl restart atv.service &
 sleep 2
 
-log "$CYAN" "启动服务 atv.service..."
-nohup sudo systemctl restart atv.service > /opt/atv/log/systemctl-restart.log 2>&1 &
-sleep 5
-sudo systemctl status atv.service -n 20 --no-pager | tee -a "$LOG_FILE"
 if ! sudo systemctl is-active --quiet atv.service; then
-  log "$RED" "❌ atv.service 启动失败！请查看日志：sudo journalctl -u atv.service -n 50 --no-pager"
+  log "$RED" "❌ atv.service 启动失败！"
+  log "$YELLOW" "查看日志： sudo journalctl -u atv.service -n 50 --no-pager"
   exit 1
 fi
-log "$GREEN" "✅ 服务启动成功。"
 
 log "$GREEN" "✅ 升级完成！服务已启动。"
 log "$CYAN" "👉 请访问：http://localhost:4567"

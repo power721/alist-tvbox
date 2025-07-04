@@ -12,7 +12,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 @EnableWebSecurity
@@ -26,20 +25,20 @@ public class WebSecurityConfiguration {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .authorizeRequests(requests -> requests.requestMatchers(
-                                new AntPathRequestMatcher("/tg/**"),
-                                new AntPathRequestMatcher("/tgs/**"),
-                                new AntPathRequestMatcher("/tv/**"),
-                                new AntPathRequestMatcher("/dav/**"),
-                                new AntPathRequestMatcher("/ali/access_token"),
-                                new AntPathRequestMatcher("/api/alist/status"),
-                                new AntPathRequestMatcher("/api/profiles"),
-                                new AntPathRequestMatcher("/api/accounts/login"),
-                                new AntPathRequestMatcher("/api/accounts/logout"),
-                                new AntPathRequestMatcher("/api/accounts/principal")
+                .authorizeHttpRequests(requests -> requests.requestMatchers(
+                                "/tg/**",
+                                "/tgs/**",
+                                "/tv/**",
+                                "/dav/**",
+                                "/ali/access_token",
+                                "/api/alist/status",
+                                "/api/profiles",
+                                "/api/accounts/login",
+                                "/api/accounts/logout",
+                                "/api/accounts/principal"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
-                        .requestMatchers(new AntPathRequestMatcher("/api/**")).authenticated()
+                        .requestMatchers("/api/**").authenticated()
                         .requestMatchers(HttpMethod.POST).authenticated()
                         .requestMatchers(HttpMethod.PUT).authenticated()
                         .requestMatchers(HttpMethod.PATCH).authenticated()
