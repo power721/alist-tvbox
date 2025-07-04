@@ -580,13 +580,12 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import {onMounted, ref} from 'vue'
+import {onMounted, ref, watch, onUnmounted} from 'vue'
 import axios from "axios"
 import {ElMessage, type ScrollbarInstance} from "element-plus";
 import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
-import {onUnmounted} from "@vue/runtime-core";
 import {
   CircleCloseFilled,
   Connection,
@@ -663,9 +662,9 @@ const settingVisible = ref(false)
 const addVisible = ref(false)
 const isHistory = ref(false)
 const searching = ref(false)
-const page = ref(1)
-const size = ref(40)
-const total = ref(0)
+const page = ref(parseInt(route.query.page) || 1)
+const size = ref(parseInt(route.query.size) || 40)
+const total = ref(parseInt(route.query.total) || 0)
 const files = ref<VodItem[]>([])
 const images = ref<VodItem[]>([])
 const results = ref<VodItem[]>([])
@@ -1797,6 +1796,17 @@ onMounted(async () => {
   timer = setInterval(save, 5000)
   window.addEventListener('keydown', handleKeyDown);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
+})
+
+watch([page, size, total], ([newPage, newSize, newTotal]) => {
+  router.push({
+    query: {
+      ...route.query,
+      page: newPage,
+      size: newSize,
+      total: newTotal,
+    }
+  })
 })
 
 onUnmounted(() => {

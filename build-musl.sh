@@ -11,6 +11,8 @@ pushd musl-1.2.5
 sudo make && make install
 popd
 
+rm -rf musl-1.2.5
+
 ln -s $MUSL_HOME/bin/musl-gcc $MUSL_HOME/bin/x86_64-linux-musl-gcc
 
 export PATH="$MUSL_HOME/bin:$PATH"
@@ -21,3 +23,5 @@ pushd zlib-1.2.13
 CC=musl-gcc ./configure --prefix=$MUSL_HOME --static
 make && make install
 popd
+
+rm -rf zlib-1.2.13
