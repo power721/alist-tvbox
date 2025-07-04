@@ -238,6 +238,15 @@ public class AccountService {
         return setting.getValue();
     }
 
+    public String resetPassword() {
+        log.info("generate new password");
+        String password = IdUtils.generate(12);
+        settingRepository.save(new Setting(ATV_PASSWORD, password));
+        String sql = "UPDATE x_users SET password = '" + password + "' WHERE username = 'atv'";
+        Utils.executeUpdate(sql);
+        return password;
+    }
+
     private String readRefreshToken() {
         Path path = Utils.getDataPath("mytoken.txt");
         if (Files.exists(path)) {

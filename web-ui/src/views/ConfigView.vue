@@ -211,9 +211,11 @@
         </el-form-item>
         <el-form-item label="AList管理密码" v-if="!store.xiaoya">
           <el-input v-model="atvPass" style="width: 160px" type="password" show-password/>
+          <el-button type="primary" class="hint" @click="resetAListPassword">重置</el-button>
         </el-form-item>
         <el-form-item label="AList TvBox API Key">
           <el-input v-model="apiKey" style="width: 300px" type="password" readonly show-password/>
+          <el-button type="primary" class="hint" @click="resetApiKey">重置</el-button>
         </el-form-item>
         <el-form-item label="Cookie地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
@@ -491,6 +493,20 @@ const updateUserAgent = (value: string) => {
   axios.post('/api/settings', {name: 'user_agent', value: value}).then(({data}) => {
     userAgent.value = data.value
     ElMessage.success('更新成功')
+  })
+}
+
+const resetApiKey = () => {
+  axios.post('/api/settings/apikey').then(({data}) => {
+    apiKey.value = data
+    ElMessage.success('重置成功')
+  })
+}
+
+const resetAListPassword = () => {
+  axios.post('/api/alist/password').then(({data}) => {
+    atvPass.value = data
+    ElMessage.success('重置成功，重启生效')
   })
 }
 

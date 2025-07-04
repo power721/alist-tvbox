@@ -88,8 +88,8 @@ public class AccountController {
     }
 
     @PostMapping("/api/alist/password")
-    public String generatePassword() {
-        return accountService.generatePassword();
+    public String resetPassword() {
+        return accountService.resetPassword();
     }
 
     @PostMapping("/api/schedule")
