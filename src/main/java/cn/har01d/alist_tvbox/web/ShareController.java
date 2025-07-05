@@ -58,6 +58,11 @@ public class ShareController {
         shareService.deleteShare(id);
     }
 
+    @DeleteMapping("/api/shares")
+    public int deleteShares(Integer type) {
+        return shareService.deleteShares(type);
+    }
+
     @PostMapping("/api/delete-shares")
     public void deleteShares(@RequestBody List<Integer> ids) {
         shareService.deleteShares(ids);

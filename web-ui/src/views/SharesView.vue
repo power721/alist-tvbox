@@ -19,6 +19,11 @@
     <el-button type="success" @click="showUpload">导入</el-button>
     <el-button type="success" @click="exportVisible=true">导出</el-button>
     <!--    <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>-->
+    <el-popconfirm @confirm="deleteShares" title="是否清空全部资源？">
+      <template #reference>
+        <el-button type="danger">清空</el-button>
+      </template>
+    </el-popconfirm>
     <el-button @click="refreshShares">刷新</el-button>
     <el-button type="primary" @click="handleAdd">添加</el-button>
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
@@ -391,7 +396,7 @@ const form = ref({
   folderId: '',
   password: '',
   cookie: '',
-  type: 0
+  type: -1
 })
 const sharesDto = ref({
   content: '',
@@ -581,6 +586,13 @@ const cleanStorages = () => {
 const validateStorages = () => {
   axios.post('/api/storages').then(() => {
     ElMessage.success('开始校验')
+  })
+}
+
+const deleteShares = () => {
+  axios.delete('/api/shares').then(({data}) => {
+    ElMessage.success(`成功删除${data}个资源`)
+    loadShares(1)
   })
 }
 

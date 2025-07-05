@@ -1503,13 +1503,11 @@ const buildVlcUrl = (start: number) => {
 }
 
 const buildM3u8Url = (start: number) => {
-  const id = movies.value[0].path
+  const movie = movies.value[0]
+  const id = movie.vod_id
   let url = playUrl.value
-  if (id.endsWith('playlist$1')) {
-    const path = getPath(id)
-    const index = path.lastIndexOf('/')
-    const parent = path.substring(0, index)
-    url = window.location.origin + '/m3u8/' + token.value + '?path=' + encodeURIComponent(parent + '$' + start)
+  if (movie.type === 9) {
+    url = window.location.origin + '/m3u8/' + token.value + '?id=' + id + '$' + start
   }
   return url
 }

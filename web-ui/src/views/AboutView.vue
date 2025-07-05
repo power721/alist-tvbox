@@ -24,12 +24,20 @@
       <a href="https://t.me/alist_tvbox_group" target="_blank">https://t.me/alist_tvbox_group</a>
     </p>
     <p>
-      使用方式：
+      手动部署Docker版：
       <code>docker run -d -p 4567:4567 -p 5344:80 -e ALIST_PORT=5344 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox</code>
     </p>
     <p>
-      一键部署(独立服务版)：
-      <code>bash -c "$(curl -fsSL http://d.har01d.cn/install-service.sh)"</code><br>
+      手动部署Docker版：
+      <code>docker run -d -p 4567:4567 -p 5344:5244 -e ALIST_PORT=5344 -v /etc/atv:/data --restart=always --name=alist-tvbox haroldli/alist-tvbox</code>
+    </p>
+    <p>
+      一键部署(系统服务版)：
+      <code>curl -fsSL http://d.har01d.cn/install-service.sh -o install-atv.sh && sudo bash ./install-atv.sh</code><br>
+    </p>
+    <p>
+      一键部署(系统服务版)：
+      <code>wget -q http://d.har01d.cn/install-service.sh -O install-atv.sh && sudo bash ./install-atv.sh</code><br>
     </p>
     <p>
       一键部署（Docker版）：
