@@ -105,10 +105,10 @@ public class TvBoxController {
     }
 
     @GetMapping("/m3u8/{token}")
-    public String m3u8(@PathVariable String token, String path, HttpServletResponse response) {
+    public String m3u8(@PathVariable String token, String id, HttpServletResponse response) {
         subscriptionService.checkToken(token);
         response.setContentType("text/plain");
-        return tvBoxService.m3u8(path);
+        return tvBoxService.m3u8(id);
     }
 
     @GetMapping("/api/qr-code")

@@ -1014,12 +1014,14 @@ public class TvBoxService {
     public MovieList getMovieList(String client, String ac, String tid, String filter, String sort, int page, int size) {
         String[] parts = tid.split("\\$");
         String path = parts[1];
-        try {
-            path = proxyService.getPath(Integer.parseInt(path));
-        } catch (NumberFormatException e) {
-            log.debug("", e);
-        } catch (Exception e) {
-            log.warn("", e);
+        if (!path.contains("/")) {
+            try {
+                path = proxyService.getPath(Integer.parseInt(path));
+            } catch (NumberFormatException e) {
+                log.debug("", e);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
         }
         int type = 1;
         if (parts.length > 2) {
@@ -1753,15 +1755,15 @@ public class TvBoxService {
 
     public String m3u8(String tid) {
         String[] parts = tid.split("\\$");
-        String path = parts[0];
+        String path = proxyService.getPath(Integer.parseInt(parts[1]));
         int start = 0;
-        if (parts.length > 1) {
-            start = Integer.parseInt(parts[1]);
+        if (parts.length > 3) {
+            start = Integer.parseInt(parts[3]);
         }
-        Site site = siteService.getById(1);
+        Site site = siteService.getById(Integer.parseInt(parts[0]));
         List<String> list = new ArrayList<>();
         list.add("#EXTM3U");
-        MovieList movieList = getPlaylist("detail", site, path + PLAYLIST);
+        MovieList movieList = getPlaylist("detail", site, path);
         MovieDetail detail = movieList.getList().get(0);
         String[] folders = detail.getVod_play_from().split("\\$\\$\\$");
         int i = 0;
@@ -2331,8 +2333,8 @@ public class TvBoxService {
         return site.getId() + "@" + proxyService.generateProxyUrl(site, path);
     }
 
-    private String buildPlayUrl(Site site, int source, int index, String path) {
-        return site.getId() + "@" + proxyService.generateProxyUrl(site, path) + "@" + source + "@" + index;
+    private String buildPlayUrl(Site site, int folderId, int fileId, String path) {
+        return site.getId() + "@" + proxyService.generateProxyUrl(site, path) + "@" + folderId + "@" + fileId;
     }
 
     // AList-TvBox proxy
@@ -2347,8 +2349,8 @@ public class TvBoxService {
     }
 
     // AList-TvBox proxy
-    private String buildProxyUrl(Site site, int source, int index, String name, String path) {
-        String p = "/p/" + subscriptionService.getCurrentToken() + "/" + site.getId() + "@" + proxyService.generateProxyUrl(site, path) + "@" + source + "@" + index;
+    private String buildProxyUrl(Site site, int folderId, int fileId, String name, String path) {
+        String p = "/p/" + subscriptionService.getCurrentToken() + "/" + site.getId() + "@" + proxyService.generateProxyUrl(site, path) + "@" + folderId + "@" + fileId;
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(p)

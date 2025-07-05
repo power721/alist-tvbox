@@ -207,6 +207,7 @@ public class AListLocalService {
             return Utils.executeUpdate(sql);
         }
         try {
+            log.debug("executeUpdate: {}", sql);
             return alistJdbcTemplate.update(sql);
         } catch (Exception e) {
             log.warn("execute update failed", e);

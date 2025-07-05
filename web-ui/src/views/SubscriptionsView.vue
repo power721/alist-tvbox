@@ -587,7 +587,7 @@ const syncCat = () => {
     if (data) {
       ElMessage.warning('同步失败')
     } else {
-      ElMessage.success('同步成功')
+      ElMessage.success('同步任务开始执行')
       setTimeout(loadVersion, 1000)
     }
   })

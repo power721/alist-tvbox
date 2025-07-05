@@ -1060,6 +1060,19 @@ public class ShareService {
         deleteStorage(id, token);
     }
 
+    public int deleteShares(Integer type) {
+        List<Share> shares = type != null ? shareRepository.findByType(type) : shareRepository.findAll();
+        shareRepository.deleteAll(shares);
+        log.info("delete {} shares type: {}", shares.size(), type);
+        if (aListLocalService.getStatus() != 0) {
+            String token = accountService.login();
+            for (Share share : shares) {
+                deleteStorage(share.getId(), token);
+            }
+        }
+        return shares.size();
+    }
+
     public void deleteStorage(Integer id, String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, token);
