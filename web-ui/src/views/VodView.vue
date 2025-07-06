@@ -395,64 +395,8 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="settingVisible" title="播放配置">
-      <el-form label-width="140">
-        <el-form-item label="电报频道群组">
-          <el-input v-model="tgChannels" :rows="3" type="textarea" placeholder="逗号分割，留空使用默认值"/>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateTgChannels">更新</el-button>
-          <span class="hint">登陆后使用此频道列表搜索。</span>
-        </el-form-item>
-        <el-form-item label="电报频道列表">
-          <el-input v-model="tgWebChannels" :rows="3" type="textarea" placeholder="逗号分割，留空使用默认值"/>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateTgWebChannels">更新</el-button>
-          <span class="hint">未登陆使用此频道列表搜索。</span>
-        </el-form-item>
-        <el-form-item label="远程搜索地址">
-          <el-input v-model="tgSearch" placeholder="http://IP:7856"/>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateTgSearch">更新</el-button>
-          <a class="hint" target="_blank" href="https://t.me/alist_tvbox/711">部署</a>
-        </el-form-item>
-        <el-form-item label="搜索超时时间">
-          <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateTgTimeout">更新</el-button>
-        </el-form-item>
-        <el-form-item label="网盘顺序">
-          <el-checkbox-group v-model="tgDrivers">
-            <VueDraggable ref="el" v-model="tgDriverOrder">
-              <el-checkbox v-for="item in tgDriverOrder" :label="item.name" :value="item.id" :key="item.id">
-              </el-checkbox>
-            </VueDraggable>
-          </el-checkbox-group>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateDrivers">更新</el-button>
-          <span class="hint">拖动网盘设置顺序</span>
-        </el-form-item>
-        <el-form-item label="排序字段">
-          <el-radio-group v-model="tgSortField" class="ml-4">
-            <el-radio size="large" v-for="item in orders" :key="item.value" :value="item.value">
-              {{ item.label }}
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateOrder">更新</el-button>
-        </el-form-item>
-        <el-form-item label="默认视频壁纸">
-          <el-input v-model="cover"/>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateCover">更新</el-button>
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="settingVisible" title="播放配置" fullscreen>
+      <PlayConfig/>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="settingVisible=false">取消</el-button>
@@ -601,8 +545,8 @@ import {
   Setting,
   Upload
 } from "@element-plus/icons-vue";
-import {VueDraggable} from "vue-draggable-plus";
 import type {Device} from "@/model/Device";
+import PlayConfig from "@/components/PlayConfig.vue";
 
 let {toClipboard} = clipBorad();
 
@@ -619,11 +563,6 @@ const scrollbarRef = ref<ScrollbarInstance>()
 const token = ref('')
 const filePath = ref('/')
 const keyword = ref('')
-const tgChannels = ref('')
-const tgWebChannels = ref('')
-const tgSearch = ref('')
-const tgSortField = ref('time')
-const tgTimeout = ref(3000)
 const shareType = ref('ALL')
 const title = ref('')
 const playUrl = ref('')
@@ -694,8 +633,6 @@ const meta = ref({
   year: null,
   path: '',
 })
-const tgDrivers = ref('9,10,5,7,8,3,2,0,6,1'.split(','))
-const tgDriverOrder = ref('9,10,5,7,8,3,2,0,6,1'.split(','))
 const options = [
   {label: '全部', value: 'ALL'},
   {label: '百度', value: '10'},
@@ -708,13 +645,6 @@ const options = [
   {label: '迅雷', value: '2'},
   {label: '移动', value: '6'},
   {label: 'PikPak', value: '1'},
-]
-
-const orders = [
-  {label: '时间', value: 'time'},
-  {label: '网盘', value: 'type'},
-  {label: '名称', value: 'name'},
-  {label: '频道', value: 'channel'},
 ]
 
 const showScan = () => {
@@ -857,50 +787,6 @@ const handleSelectionChange = (val: ShareInfo[]) => {
   selected.value = val
 }
 
-const updateTgChannels = () => {
-  axios.post('/api/settings', {name: 'tg_channels', value: tgChannels.value}).then(({data}) => {
-    tgChannels.value = data.value
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateTgWebChannels = () => {
-  axios.post('/api/settings', {name: 'tg_web_channels', value: tgWebChannels.value}).then(({data}) => {
-    tgWebChannels.value = data.value
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateTgSearch = () => {
-  axios.post('/api/settings', {name: 'tg_search', value: tgSearch.value}).then(({data}) => {
-    tgSearch.value = data.value
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateCover = () => {
-  axios.post('/api/settings', {name: 'video_cover', value: cover.value}).then(({data}) => {
-    cover.value = data.value
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateDrivers = () => {
-  const order = tgDriverOrder.value.map(e => e.id).join(',')
-  axios.post('/api/settings', {name: 'tgDriverOrder', value: order}).then()
-  const value = tgDriverOrder.value.map(e => e.id).filter(e => tgDrivers.value.includes(e)).join(',')
-  axios.post('/api/settings', {name: 'tg_drivers', value: value}).then(({data}) => {
-    tgDrivers.value = data.value.split(',')
-    ElMessage.success('更新成功')
-  })
-}
-
-const updateOrder = () => {
-  axios.post('/api/settings', {name: 'tg_sort_field', value: tgSortField.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
-
 const showScrape = () => {
   meta.value.path = getParent(movies.value[0].path)
   meta.value.name = movies.value[0].vod_name
@@ -927,12 +813,6 @@ const scrape = () => {
     } else {
       ElMessage.warning('刮削失败')
     }
-  })
-}
-
-const updateTgTimeout = () => {
-  axios.post('/api/settings', {name: 'tg_timeout', value: tgTimeout.value + ''}).then(() => {
-    ElMessage.success('更新成功')
   })
 }
 
@@ -1768,23 +1648,6 @@ onMounted(async () => {
     const newPath = route.params.path
     filePath.value = newPath ? '/' + newPath.join('/') : '/'
     fetchData()
-  })
-  axios.get('/api/settings').then(({data}) => {
-    tgChannels.value = data.tg_channels
-    tgWebChannels.value = data.tg_web_channels
-    tgSearch.value = data.tg_search
-    tgSortField.value = data.tg_sort_field || 'time'
-    tgDriverOrder.value = data.tgDriverOrder.split(',').map(e => {
-      return {
-        id: e,
-        name: options.find(o => o.value === e)?.label
-      }
-    })
-    if (data.tg_drivers && data.tg_drivers.length) {
-      tgDrivers.value = data.tg_drivers.split(',')
-    }
-    cover.value = data.video_cover
-    tgTimeout.value = +data.tg_timeout
   })
   loadDevices()
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
