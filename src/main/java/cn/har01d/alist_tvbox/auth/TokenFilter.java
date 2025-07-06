@@ -44,16 +44,18 @@ public class TokenFilter extends OncePerRequestFilter {
                 }
             }
 
-            String token = getToken(request);
-            if (token != null) {
-                Authentication authentication = buildAuthentication(token);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-            } else if (request.getRequestURI().startsWith("/open") || request.getRequestURI().startsWith("/node") || request.getRequestURI().startsWith("/cat")) {
+            if (request.getRequestURI().startsWith("/open") || request.getRequestURI().startsWith("/node") || request.getRequestURI().startsWith("/cat")) {
                 String auth = request.getHeader("Authorization");
                 if (StringUtils.isBlank(auth) || !"Basic YWxpc3Q6YWxpc3Q=".equals(auth)) {
                     response.setHeader("Www-Authenticate", "Basic realm=\"alist\"");
                     response.sendError(401);
                     return;
+                }
+            } else {
+                String token = getToken(request);
+                if (StringUtils.isNotBlank(token)) {
+                    Authentication authentication = buildAuthentication(token);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             }
             filterChain.doFilter(request, response);

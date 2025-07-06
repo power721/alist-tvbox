@@ -78,10 +78,10 @@ if command -v docker &>/dev/null; then
 fi
 
 # ========== 获取远程版本 ==========
-VERSION1=$(curl -sf http://d.har01d.cn/app.version.txt)
+VERSION1=$(curl -fsSL http://d.har01d.cn/app.version.txt)
 [ -z "$VERSION1" ] && log "$RED" "获取 AList TvBox 版本失败！" && exit 1
 
-VERSION2=$(curl -sf http://d.har01d.cn/alist.version.txt)
+VERSION2=$(curl -fsSL http://d.har01d.cn/alist.version.txt)
 [ -z "$VERSION2" ] && log "$RED" "获取 Power AList 版本失败！" && exit 1
 
 # ========== 获取本地版本 ==========

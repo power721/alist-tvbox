@@ -50,7 +50,7 @@ public class DatabaseConfig {
         String type = database.get("type").asText();
         if ("sqlite3".equals(type)) {
             String dbFile = Utils.getAListPath(database.get("db_file").asText());
-            log.info("AList use sqlite3 database file: {}", dbFile);
+            log.info("===> AList use sqlite3 database file: {}", dbFile);
 
             return DataSourceBuilder.create()
                     .url("jdbc:sqlite:" + dbFile)
@@ -58,7 +58,7 @@ public class DatabaseConfig {
                     .build();
         } else if ("mysql".equals(type)) {
             String url = generateMysqlJdbcUrl(database);
-            log.info("AList use mysql database url: {}", url);
+            log.info("===> AList use mysql database url: {}", url);
             return DataSourceBuilder.create()
                     .url(url)
                     .username(database.get("user").asText())
