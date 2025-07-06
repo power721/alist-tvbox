@@ -110,7 +110,7 @@ public class DatabaseConfig {
             params.append("useSSL=false");
         }
 
-        params.append("&serverTimezone=Asia/Shanghai").append("&characterEncoding=UTF-8");
+        params.append("&allowPublicKeyRetrieval=true").append("&serverTimezone=Asia/Shanghai").append("&characterEncoding=UTF-8");
         url.append("?").append(params);
 
         return url.toString();
