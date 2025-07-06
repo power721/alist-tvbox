@@ -373,7 +373,7 @@ const handleLogin = () => {
     user.value = data
   })
   axios.get('/api/settings/tg_auth_type').then(({data}) => {
-    tgAuthType.value = data.value
+    tgAuthType.value = data.value || 'qr'
   })
   tgVisible.value = true
 }

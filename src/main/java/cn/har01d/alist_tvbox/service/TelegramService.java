@@ -2,7 +2,6 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.ShareLink;
-import cn.har01d.alist_tvbox.dto.tg.Chat;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.SearchResponse;
 import cn.har01d.alist_tvbox.dto.tg.SearchResult;
@@ -10,16 +9,20 @@ import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.entity.MovieRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.TelegramChannel;
+import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
-import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -38,6 +41,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.ExampleMatcher;
 import org.springframework.data.domain.Page;
@@ -100,6 +104,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -117,11 +122,13 @@ import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 @Service
 public class TelegramService {
     private final AppProperties appProperties;
+    private final TelegramChannelRepository telegramChannelRepository;
     private final SettingRepository settingRepository;
     private final MovieRepository movieRepository;
     private final ShareService shareService;
     private final TvBoxService tvBoxService;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Math.min(10, Runtime.getRuntime().availableProcessors() * 2));
     private final OkHttpClient httpClient = new OkHttpClient();
     private final LoadingCache<String, InputPeer> cache = Caffeine.newBuilder().build(this::resolveUsername);
@@ -201,17 +208,21 @@ public class TelegramService {
     );
 
     public TelegramService(AppProperties appProperties,
+                           TelegramChannelRepository telegramChannelRepository,
                            SettingRepository settingRepository,
                            MovieRepository movieRepository,
                            ShareService shareService,
                            TvBoxService tvBoxService,
-                           RestTemplateBuilder restTemplateBuilder) {
+                           RestTemplateBuilder restTemplateBuilder,
+                           ObjectMapper objectMapper) {
         this.appProperties = appProperties;
+        this.telegramChannelRepository = telegramChannelRepository;
         this.settingRepository = settingRepository;
         this.movieRepository = movieRepository;
         this.shareService = shareService;
         this.tvBoxService = tvBoxService;
         this.restTemplate = restTemplateBuilder.build();
+        this.objectMapper = objectMapper;
     }
 
     @PostConstruct
@@ -220,6 +231,74 @@ public class TelegramService {
         if ("9".equals(tgPhase)) {
             connect();
         }
+        if (telegramChannelRepository.count() == 0) {
+            try {
+                var channels = loadChannels();
+                telegramChannelRepository.saveAll(channels);
+            } catch (Exception e) {
+                log.warn("read channels error", e);
+            }
+        }
+    }
+
+    public List<TelegramChannel> reloadChannels() throws IOException {
+        telegramChannelRepository.deleteAll();
+        var channels = loadChannels();
+        for (var channel : channels) {
+            validateWebAccess(channel);
+        }
+        telegramChannelRepository.saveAll(channels);
+        log.info("reload channels success");
+        return channels;
+    }
+
+    private List<TelegramChannel> loadChannels() throws IOException {
+        var resource = new ClassPathResource("channels.json");
+        return objectMapper.readValue(resource.getInputStream(), new TypeReference<List<TelegramChannel>>() {
+        });
+    }
+
+    public List<TelegramChannel> validateChannels() {
+        var channels = list();
+        for (var channel : channels) {
+            try {
+                resolveUsername(channel.getUsername());
+                channel.setValid(true);
+            } catch (Exception e) {
+                log.warn("Access channel failed: {} {}", channel.getTitle(), e.getMessage());
+                channel.setValid(false);
+            }
+
+            validateWebAccess(channel);
+        }
+        telegramChannelRepository.saveAll(channels);
+        log.info("validate channels success");
+        return channels;
+    }
+
+    private void validateWebAccess(TelegramChannel channel) {
+        try {
+            List<String> items = searchWeb(channel.getUsername(), "");
+            channel.setWebAccess(!items.isEmpty());
+        } catch (Exception e) {
+            log.warn("Access channel by web failed: {} {}", channel.getTitle(), e.getMessage());
+        }
+    }
+
+    public TelegramChannel create(TelegramChannel channel) {
+        var chat = getChannelByName(channel.getUsername());
+        if (chat != null) {
+            chat.setEnabled(channel.isEnabled());
+            chat.setOrder(channel.getOrder());
+            chat.setType(channel.getType());
+            validateWebAccess(chat);
+            telegramChannelRepository.save(chat);
+        }
+        return chat;
+    }
+
+    public List<TelegramChannel> list() {
+        return telegramChannelRepository.findAll(Sort.by("order"));
     }
 
     public void reset() {
@@ -393,12 +472,22 @@ public class TelegramService {
         return client.getServiceHolder().getUserService().getUser(InputUserSelf.instance()).block();
     }
 
-    public List<Chat> getAllChats() {
+    public List<TelegramChannel> getAllChats() {
         if (client == null) {
             return List.of();
         }
         DialogsSlice dialogs = (DialogsSlice) client.getServiceHolder().getChatService().getDialogs(ImmutableGetDialogs.of(0, 0, 0, InputPeerSelf.instance(), 100, 0)).block();
-        return dialogs.chats().stream().filter(e -> e instanceof Channel).map(Channel.class::cast).map(Chat::new).toList();
+        return dialogs.chats().stream().map(this::parseChat).filter(Objects::nonNull).toList();
+    }
+
+    private TelegramChannel parseChat(telegram4j.tl.Chat chat) {
+        if (chat instanceof Channel) {
+            return new TelegramChannel((Channel) chat);
+        }
+        if (chat instanceof BaseChat) {
+            return new TelegramChannel((BaseChat) chat);
+        }
+        return null;
     }
 
     public List<Message> getHistory(String id) {
@@ -508,13 +597,6 @@ public class TelegramService {
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
 
-        String[] channels;
-        if (client == null && StringUtils.isBlank(appProperties.getTgSearch())) {
-            channels = appProperties.getTgWebChannels().split(",");
-        } else {
-            channels = appProperties.getTgChannels().split(",");
-        }
-
         for (String type : appProperties.getTgDrivers()) {
             var category = new Category();
             category.setType_id("type:" + type);
@@ -523,10 +605,20 @@ public class TelegramService {
             list.add(category);
         }
 
-        for (String channel : channels) {
+        List<TelegramChannel> channels;
+        if (client == null && StringUtils.isBlank(appProperties.getTgSearch())) {
+            channels = telegramChannelRepository.findByWebAccessTrue(Sort.by("order"));
+        } else {
+            channels = list();
+        }
+
+        for (var channel : channels) {
+            if (!channel.isValid()) {
+                continue;
+            }
             var category = new Category();
-            category.setType_id(channel);
-            category.setType_name(channel);
+            category.setType_id(channel.getUsername());
+            category.setType_name(channel.getTitle());
             category.setType_flag(0);
             list.add(category);
         }
@@ -1064,19 +1156,20 @@ public class TelegramService {
 
     public List<Message> search(String keyword, int size, boolean cached) {
         List<Message> results = List.of();
-        String[] channels = appProperties.getTgChannels().split(",");
+        List<TelegramChannel> channels = list().stream().filter(TelegramChannel::isValid).filter(TelegramChannel::isEnabled).toList();
         if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
-            results = searchRemote(appProperties.getTgChannels(), keyword, size);
+            String search = channels.stream().map(TelegramChannel::getUsername).collect(Collectors.joining(","));
+            results = searchRemote(search, keyword, size);
         }
 
         if (results.isEmpty()) {
             if (client == null) {
-                channels = appProperties.getTgWebChannels().split(",");
+                channels = channels.stream().filter(TelegramChannel::isWebAccess).toList();
             }
 
             List<Future<List<Message>>> futures = new ArrayList<>();
-            for (String channel : channels) {
-                String name = channel.split("\\|")[0];
+            for (var channel : channels) {
+                String name = channel.getUsername();
                 Future<List<Message>> future = executorService.submit(() -> cached ? searchCache.get(name) : searchFromChannel(name, keyword, size));
                 futures.add(future);
             }
@@ -1099,7 +1192,7 @@ public class TelegramService {
                 .sorted(comparator())
                 .distinct()
                 .toList();
-        log.info("Search {} get {} results from {} channels.", keyword, list.size(), channels.length);
+        log.info("Search {} get {} results from {} channels.", keyword, list.size(), channels.size());
         return list;
     }
 
@@ -1108,7 +1201,8 @@ public class TelegramService {
         return switch (appProperties.getTgSortField()) {
             case "type" -> type.thenComparing(Comparator.comparing(Message::getTime).reversed());
             case "name" -> Comparator.comparing(Message::getName);
-            case "channel" -> Comparator.comparing(Message::getChannel).thenComparing(Comparator.comparing(Message::getTime).reversed());
+            case "channel" ->
+                    Comparator.comparing(Message::getChannel).thenComparing(Comparator.comparing(Message::getTime).reversed());
             default -> Comparator.comparing(Message::getTime).reversed();
         };
     }
@@ -1191,12 +1285,28 @@ public class TelegramService {
         return result;
     }
 
+    public TelegramChannel getChannelByName(String username) {
+        try {
+            var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
+            var chat = resolvedPeer.chats().get(0);
+            TelegramChannel channel = null;
+            if (chat instanceof Channel) {
+                channel = new TelegramChannel((Channel) chat);
+            } else if (chat instanceof BaseChat) {
+                channel = new TelegramChannel((BaseChat) chat);
+            }
+            return channel;
+        } catch (Exception e) {
+            throw new BadRequestException("用户名无效", e);
+        }
+    }
+
     private InputPeer resolveUsername(String username) {
         var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
         var chat = resolvedPeer.chats().get(0);
         InputPeer inputPeer = null;
-        if (chat instanceof Channel) {
-            inputPeer = ImmutableInputPeerChannel.of(chat.id(), ((Channel) chat).accessHash());
+        if (chat instanceof Channel channel) {
+            inputPeer = ImmutableInputPeerChannel.of(chat.id(), channel.accessHash());
         } else if (chat instanceof BaseChat) {
             inputPeer = ImmutableInputPeerChat.of(chat.id());
         }
@@ -1318,5 +1428,13 @@ public class TelegramService {
     @PreDestroy
     public void disconnect() {
         client.disconnect().block();
+    }
+
+    public List<TelegramChannel> updateAll(List<TelegramChannel> channels) {
+        int order = 1;
+        for (var channel : channels) {
+            channel.setOrder(order++);
+        }
+        return telegramChannelRepository.saveAll(channels);
     }
 }

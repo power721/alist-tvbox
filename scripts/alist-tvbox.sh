@@ -277,12 +277,19 @@ check_container_status() {
 # 检查镜像更新
 check_image_update() {
   local image="${CONFIG[IMAGE_NAME]}"
-  echo -e "${CYAN}正在检查镜像更新...${NC}"
+  local platform=""
 
-  local current_id=$(docker images --quiet "$image")
-  echo -e "${CYAN}正在拉取镜像：${CONFIG[IMAGE_NAME]}${NC}"
-  if ! docker pull "${CONFIG[IMAGE_NAME]}" >/dev/null; then
-    echo -e "${RED}镜像拉取失败!${NC}"
+  # 检测当前平台
+  if [[ $(uname -m) == "aarch64" || $(uname -m) == "arm64" ]]; then
+    platform="--platform=linux/arm64"
+    echo -e "${CYAN}检测到 ARM64 平台，强制使用 arm64 镜像${NC}"
+  fi
+
+  echo -e "${CYAN}正在拉取镜像：${image}${NC}"
+  if ! docker pull $platform "$image" >/dev/null; then
+    echo -e "${RED}镜像拉取失败! 可能原因：${NC}"
+    echo -e "1. 镜像未提供 ARM64 版本"
+    echo -e "2. 镜像名称错误"
     return 1
   fi
   local new_id=$(docker images --quiet "$image")

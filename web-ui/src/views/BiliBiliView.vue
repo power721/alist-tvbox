@@ -16,6 +16,7 @@
 
     <h1>分类列表</h1>
     <el-row justify="end">
+      <span style="margin-right: 16px">可以拖动行排序</span>
       <el-button @click="load">刷新</el-button>
       <el-button type="primary" :disabled="!changed" @click="handleSave">保存</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>

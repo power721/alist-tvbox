@@ -1,8 +1,9 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.dto.tg.Chat;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
+import cn.har01d.alist_tvbox.entity.TelegramChannel;
+import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TelegramService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -10,9 +11,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,11 +29,16 @@ import java.util.Map;
 @Slf4j
 @RestController
 public class TelegramController {
+    private final TelegramChannelRepository telegramChannelRepository;
     private final TelegramService telegramService;
     private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
 
-    public TelegramController(TelegramService telegramService, SubscriptionService subscriptionService, ObjectMapper objectMapper) {
+    public TelegramController(TelegramChannelRepository telegramChannelRepository,
+                              TelegramService telegramService,
+                              SubscriptionService subscriptionService,
+                              ObjectMapper objectMapper) {
+        this.telegramChannelRepository = telegramChannelRepository;
         this.telegramService = telegramService;
         this.subscriptionService = subscriptionService;
         this.objectMapper = objectMapper;
@@ -145,8 +153,43 @@ public class TelegramController {
     }
 
     @GetMapping("/api/telegram/chats")
-    public List<Chat> getAllChats() {
+    public List<TelegramChannel> getAllChats() {
         return telegramService.getAllChats();
+    }
+
+    @GetMapping("/api/telegram/channels")
+    public List<TelegramChannel> list() {
+        return telegramService.list();
+    }
+
+    @PostMapping("/api/telegram/resolveUsername")
+    public TelegramChannel create(@RequestBody TelegramChannel channel) {
+        return telegramService.create(channel);
+    }
+
+    @PostMapping("/api/telegram/channels")
+    public TelegramChannel save(@RequestBody TelegramChannel channel) {
+        return telegramChannelRepository.save(channel);
+    }
+
+    @PutMapping("/api/telegram/channels")
+    public List<TelegramChannel> updateAll(@RequestBody List<TelegramChannel> channels) {
+        return telegramService.updateAll(channels);
+    }
+
+    @DeleteMapping("/api/telegram/channels/{id}")
+    public void delete(@PathVariable Long id) {
+        telegramChannelRepository.deleteById(id);
+    }
+
+    @PostMapping("/api/telegram/reloadChannels")
+    public List<TelegramChannel> reloadChannels() throws IOException {
+        return telegramService.reloadChannels();
+    }
+
+    @PostMapping("/api/telegram/validateChannels")
+    public List<TelegramChannel> validateChannels() {
+        return telegramService.validateChannels();
     }
 
     @GetMapping("/api/telegram/history")
