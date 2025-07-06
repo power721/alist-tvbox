@@ -30,8 +30,6 @@ public class AppProperties {
     private List<String> tgDrivers = Arrays.asList(Constants.TG_DRIVERS.split(","));
     private List<String> tgDriverOrder = Arrays.asList(Constants.TG_DRIVERS.split(","));
     private String userAgent = Constants.USER_AGENT;
-    private String tgChannels = Constants.TG_CHANNELS;
-    private String tgWebChannels = Constants.TG_WEB_CHANNELS;
     private String tgSearch;
     private String tgSortField = "time";
     private String systemId;

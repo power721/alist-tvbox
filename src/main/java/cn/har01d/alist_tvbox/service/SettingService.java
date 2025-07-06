@@ -82,19 +82,7 @@ public class SettingService {
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));
-        String value = settingRepository.findById("tg_channels").map(Setting::getValue).orElse("");
-        if (StringUtils.isBlank(value)) {
-            settingRepository.save(new Setting("tg_channels", appProperties.getTgChannels()));
-        } else {
-            appProperties.setTgChannels(value);
-        }
-        value = settingRepository.findById("tg_web_channels").map(Setting::getValue).orElse("");
-        if (StringUtils.isBlank(value)) {
-            settingRepository.save(new Setting("tg_web_channels", appProperties.getTgWebChannels()));
-        } else {
-            appProperties.setTgWebChannels(value);
-        }
-        value = settingRepository.findById("tg_drivers").map(Setting::getValue).orElse("");
+        String value = settingRepository.findById("tg_drivers").map(Setting::getValue).orElse("");
         if (StringUtils.isBlank(value)) {
             settingRepository.save(new Setting("tg_drivers", String.join(",", appProperties.getTgDrivers())));
         } else {
@@ -247,16 +235,6 @@ public class SettingService {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_DRIVERS : setting.getValue();
             setting.setValue(value);
             appProperties.setTgDriverOrder(Arrays.stream(value.split(",")).toList());
-        }
-        if ("tg_channels".equals(setting.getName())) {
-            String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_CHANNELS : setting.getValue();
-            setting.setValue(value);
-            appProperties.setTgChannels(value);
-        }
-        if ("tg_web_channels".equals(setting.getName())) {
-            String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_WEB_CHANNELS : setting.getValue();
-            setting.setValue(value);
-            appProperties.setTgWebChannels(value);
         }
         if ("tg_timeout".equals(setting.getName())) {
             appProperties.setTgTimeout(Integer.parseInt(setting.getValue()));
