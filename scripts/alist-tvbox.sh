@@ -1225,7 +1225,11 @@ cli_mode() {
       check_status
       ;;
     logs)
-      docker logs -f "$container_name" || {
+      local param=""
+      if [[ "$#" -ge 2 && "$2" == "-f" ]]; then
+       param="-f"
+      fi
+      docker logs $param "$container_name" || {
         echo -e "${RED}容器不存在${NC}"
         exit 1
       }
@@ -1233,8 +1237,11 @@ cli_mode() {
     uninstall)
       docker rm -f "$container_name" || {
         echo -e "${RED}容器不存在${NC}"
-        exit 1
       }
+      if [[ "$#" -ge 2 && "$2" == "-f" ]]; then
+       echo -e "${RED}删除安装目录：${CONFIG[BASE_DIR]}${NC}"
+       rm -rf "${CONFIG[BASE_DIR]}"
+      fi
       ;;
     update)
       if [[ "$#" -ge 2 && "$2" == "-y" ]]; then
