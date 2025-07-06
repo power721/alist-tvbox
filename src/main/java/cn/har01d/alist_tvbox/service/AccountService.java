@@ -483,7 +483,7 @@ public class AccountService {
 
         try {
             String sql;
-            if (!existsById("x_users", 2)) {
+            if (!aListLocalService.existsById("x_users", 2)) {
                 sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES (2,'guest','alist_tvbox','/',1,256)";
                 aListLocalService.executeUpdate(sql);
             }
@@ -516,16 +516,6 @@ public class AccountService {
             log.warn("", e);
         }
         log.info("{} AList user {}", login.isEnabled() ? "enable" : "disable", login.getUsername());
-    }
-
-    public boolean existsById(String tableName, long id) {
-        String sql = "SELECT 1 FROM " + tableName + " WHERE id = ? LIMIT 1";
-        try {
-            Integer result = alistJdbcTemplate.queryForObject(sql, new Object[]{id}, Integer.class);
-            return result != null;
-        } catch (EmptyResultDataAccessException e) {
-            return false;
-        }
     }
 
     public void enableMyAli() {
