@@ -1,6 +1,5 @@
 package cn.har01d.alist_tvbox;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.BufferedReader;
