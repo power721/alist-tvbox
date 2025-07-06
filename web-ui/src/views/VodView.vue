@@ -399,7 +399,7 @@
       <PlayConfig/>
       <template #footer>
       <span class="dialog-footer">
-        <el-button @click="settingVisible=false">取消</el-button>
+        <el-button @click="settingVisible=false">关闭</el-button>
       </span>
       </template>
     </el-dialog>
