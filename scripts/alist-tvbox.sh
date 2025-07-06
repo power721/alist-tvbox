@@ -384,11 +384,12 @@ show_menu() {
   local status=$(check_container_status)
   local container_name=$(get_container_name)
   local sys=$(uname -mor)
+  local docker_version=$(docker version --format '{{.Server.Version}}')
 
   echo -e "${CYAN}==============================================${NC}"
   echo -e "${GREEN}          AList TvBox 安装升级配置管理          ${NC}"
   echo -e "${CYAN}==============================================${NC}"
-  echo -e "${YELLOW} 当前版本: ${CONFIG[IMAGE_NAME]}${NC}"
+  echo -e "${YELLOW} 镜像版本: ${CONFIG[IMAGE_NAME]}${NC}"
   echo -e "${YELLOW} 容器名称: ${container_name}${NC}"
   echo -e "${YELLOW} 容器状态: $(
     case "$status" in
@@ -400,6 +401,7 @@ show_menu() {
   echo -e "${YELLOW} 网络模式: ${CONFIG[NETWORK]}${NC}"
   echo -e "${YELLOW} 重启策略: ${CONFIG[RESTART]}${NC}"
   echo -e "${YELLOW} 系统信息: ${sys}${NC}"
+  echo -e "${YELLOW} Docker Server: ${docker_version}${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
   echo -e "${GREEN} 1. 安装/更新${NC}"
 
