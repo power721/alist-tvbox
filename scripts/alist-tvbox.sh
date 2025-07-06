@@ -285,7 +285,6 @@ check_image_update() {
     echo -e "${CYAN}检测到 ARM64 平台，强制使用 arm64 镜像${NC}"
   fi
 
-  echo -e "${CYAN}正在检查镜像更新...${NC}"
   local current_id=$(docker images --quiet "$image")
   echo -e "${CYAN}正在拉取镜像：${image}${NC}"
   if ! docker pull $platform "$image" >/dev/null; then
