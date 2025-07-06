@@ -22,6 +22,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -212,6 +213,20 @@ public class AListLocalService {
         } catch (Exception e) {
             log.warn("execute update failed", e);
             return 0;
+        }
+    }
+
+    public boolean existsById(String tableName, long id) {
+        String sql = "SELECT 1 FROM " + tableName + " WHERE id = ? LIMIT 1";
+        if (System.getenv("NATIVE") != null && "sqlite3".equals(database)) {
+            return StringUtils.isNotBlank(Utils.executeQuery(sql));
+        }
+
+        try {
+            Integer result = alistJdbcTemplate.queryForObject(sql, new Object[]{id}, Integer.class);
+            return result != null;
+        } catch (EmptyResultDataAccessException e) {
+            return false;
         }
     }
 
