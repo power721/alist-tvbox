@@ -260,7 +260,7 @@ public class TelegramService {
 
     public List<TelegramChannel> validateChannels() {
         var channels = list();
-        if  (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+        if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
             try {
                 remoteValidate(channels);
             } catch (Exception e) {
@@ -269,7 +269,7 @@ public class TelegramService {
         }
 
         for (var channel : channels) {
-            if (client != null) {
+            if (client != null && StringUtils.isBlank(appProperties.getTgSearch())) {
                 try {
                     resolveUsername(channel.getUsername());
                     channel.setValid(true);
