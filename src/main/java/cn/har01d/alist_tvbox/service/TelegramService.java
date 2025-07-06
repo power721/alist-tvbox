@@ -260,6 +260,14 @@ public class TelegramService {
 
     public List<TelegramChannel> validateChannels() {
         var channels = list();
+        if  (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+            try {
+                remoteValidate(channels);
+            } catch (Exception e) {
+                log.warn("validate channels error", e);
+            }
+        }
+
         for (var channel : channels) {
             if (client != null) {
                 try {
@@ -276,6 +284,19 @@ public class TelegramService {
         telegramChannelRepository.saveAll(channels);
         log.info("validate channels success");
         return channels;
+    }
+
+    private void remoteValidate(List<TelegramChannel> channels) throws IOException {
+        String api = appProperties.getTgSearch() + "/validate";
+        api = api.replaceAll("//", "/");
+        String url = api + "?channels=" + channels.stream().map(TelegramChannel::getUsername).collect(Collectors.joining(","));
+        String json = getHtml(url);
+        if (StringUtils.isNotBlank(json)) {
+            Map<String, Boolean> results = objectMapper.readValue(json, Map.class);
+            for (var channel : channels) {
+                channel.setValid(results.get(channel.getUsername()));
+            }
+        }
     }
 
     private void validateWebAccess(TelegramChannel channel) {
