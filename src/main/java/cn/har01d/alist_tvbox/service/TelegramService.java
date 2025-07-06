@@ -261,12 +261,14 @@ public class TelegramService {
     public List<TelegramChannel> validateChannels() {
         var channels = list();
         for (var channel : channels) {
-            try {
-                resolveUsername(channel.getUsername());
-                channel.setValid(true);
-            } catch (Exception e) {
-                log.warn("Access channel failed: {} {}", channel.getTitle(), e.getMessage());
-                channel.setValid(false);
+            if (client != null) {
+                try {
+                    resolveUsername(channel.getUsername());
+                    channel.setValid(true);
+                } catch (Exception e) {
+                    log.warn("Access channel failed: {} {}", channel.getTitle(), e.getMessage());
+                    channel.setValid(false);
+                }
             }
 
             validateWebAccess(channel);

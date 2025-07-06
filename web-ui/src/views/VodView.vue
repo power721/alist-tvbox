@@ -67,7 +67,7 @@
         <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" style="width: 100%"
                   @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
-          <el-table-column prop="vod_name" label="名称">
+          <el-table-column prop="vod_name" label="名称" sortable>
             <template #default="scope">
               <el-popover :width="300" placement="left-start" v-if="scope.row.vod_pic">
                 <template #reference>
@@ -86,7 +86,8 @@
               <span>{{ scope.row.vod_name }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="大小" width="120" v-if="!isHistory">
+          <el-table-column prop="vod_remarks" label="大小" width="120"
+                           sortable :sort-method="sortFileSizes" v-if="!isHistory">
             <template #default="scope">
               {{ scope.row.vod_tag === 'file' ? scope.row.vod_remarks : '-' }}
             </template>
@@ -99,7 +100,7 @@
               </a>
             </template>
           </el-table-column>
-          <el-table-column label="评分" width="90" v-if="!isHistory">
+          <el-table-column prop="vod_remarks" label="评分" width="90" sortable v-if="!isHistory">
             <template #default="scope">
               {{ scope.row.vod_tag === 'folder' ? scope.row.vod_remarks : '' }}
             </template>
@@ -111,7 +112,7 @@
           </el-table-column>
           <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
           <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
-          <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="165"/>
+          <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="165" sortable/>
           <el-table-column width="90" v-if="isHistory">
             <template #default="scope">
               <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
@@ -603,7 +604,7 @@ const addVisible = ref(false)
 const isHistory = ref(false)
 const searching = ref(false)
 const page = ref(parseInt(route.query.page) || 1)
-const size = ref(parseInt(route.query.size) || 40)
+const size = ref(parseInt(route.query.size) || 50)
 const total = ref(0)
 const files = ref<VodItem[]>([])
 const images = ref<VodItem[]>([])
@@ -646,6 +647,34 @@ const options = [
   {label: '移动', value: '6'},
   {label: 'PikPak', value: '1'},
 ]
+
+const sortFileSizes = (a, b) => {
+  const sizeA = parseFileSize(a.vod_remarks);
+  const sizeB = parseFileSize(b.vod_remarks);
+  return sizeA - sizeB;
+};
+
+const parseFileSize = (sizeStr) => {
+  const units = {
+    B: 1,
+    KB: 1024,
+    MB: 1024 * 1024,
+    GB: 1024 * 1024 * 1024,
+    TB: 1024 * 1024 * 1024 * 1024,
+  };
+
+  const match = sizeStr.match(/^(\d+\.?\d*)\s*([A-Za-z]+)/);
+  if (!match) return 0;
+
+  const value = parseFloat(match[1]);
+  const unit = match[2].toUpperCase();
+
+  const unitKey = Object.keys(units).find(
+    key => key.toUpperCase() === unit
+  );
+
+  return value * (units[unitKey] || 1);
+};
 
 const showScan = () => {
   axios.get('/api/qr-code').then(({data}) => {
@@ -1671,7 +1700,7 @@ watch(
   ([newPage, newSize], [oldPage, oldSize]) => {
     if (newPage !== oldPage || newSize !== oldSize) {
       if (newPage) page.value = parseInt(newPage) || 1
-      if (newSize) size.value = parseInt(newSize) || 40
+      if (newSize) size.value = parseInt(newSize) || 50
       if (token.value) {
         debouncedFetch()
       }
