@@ -7,4 +7,7 @@ cd .. && \
 echo "=== build maven ===" && \
 mvn clean package
 
+docker stop alist-tvbox
+docker stop xiaoya-tvbox
+
 java -jar target/alist-tvbox-1.0.jar --spring.profiles.active=mysql,standalone,production
