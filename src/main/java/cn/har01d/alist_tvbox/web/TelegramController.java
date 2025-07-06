@@ -56,6 +56,19 @@ public class TelegramController {
         return telegramService.search(wd, 100, false);
     }
 
+    @GetMapping("/telegram/image")
+    public void downloadImage(int messageId, String fileRefId, HttpServletResponse response) throws IOException {
+        byte[] data = telegramService.downloadImage(messageId, fileRefId).block();
+        response.setContentType("image/jpeg");
+        response.setContentLength(data.length);
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setHeader("Expires", "0");
+
+        response.getOutputStream().write(data);
+        response.getOutputStream().flush();
+    }
+
     @GetMapping("/tg-search")
     public Object browse(String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         return browse("", id, t, wd, pg);

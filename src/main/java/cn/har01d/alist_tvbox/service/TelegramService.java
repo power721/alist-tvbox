@@ -65,6 +65,7 @@ import telegram4j.mtproto.store.StoreLayoutImpl;
 import telegram4j.tl.BaseChat;
 import telegram4j.tl.BaseMessage;
 import telegram4j.tl.BasePhoto;
+import telegram4j.tl.BasePhotoSize;
 import telegram4j.tl.Channel;
 import telegram4j.tl.ImmutableInputClientProxy;
 import telegram4j.tl.ImmutableInputPeerChannel;
@@ -572,7 +573,7 @@ public class TelegramService {
                 if (StringUtils.isBlank(message.getCover())) {
                     movieDetail.setVod_pic(getPic(message.getType()));
                 } else {
-                    movieDetail.setVod_pic(fixCover(message.getCover()));
+                    movieDetail.setVod_pic(fixCover(message));
                 }
                 movieDetail.setVod_remarks(getTypeName(message.getType()));
                 list.add(movieDetail);
@@ -600,7 +601,7 @@ public class TelegramService {
                 if (StringUtils.isBlank(message.getCover())) {
                     movieDetail.setVod_pic(getPic(message.getType()));
                 } else {
-                    movieDetail.setVod_pic(fixCover(message.getCover()));
+                    movieDetail.setVod_pic(fixCover(message));
                 }
                 movieDetail.setVod_remarks(getTypeName(message.getType()));
                 list.add(movieDetail);
@@ -626,7 +627,7 @@ public class TelegramService {
             if (StringUtils.isBlank(message.getCover())) {
                 movieDetail.setVod_pic(getPic(message.getType()));
             } else {
-                movieDetail.setVod_pic(fixCover(message.getCover()));
+                movieDetail.setVod_pic(fixCover(message));
             }
             movieDetail.setVod_remarks(getTypeName(message.getType()));
             list.add(movieDetail);
@@ -1218,9 +1219,7 @@ public class TelegramService {
                     .flatMapMany(Flux::fromIterable)
                     .filter(e -> e instanceof BaseMessage)
                     .ofType(BaseMessage.class)
-                    .flatMap(message -> downloadImage(chatPeer, message)
-                            .flatMapMany(cover -> parseMessage(username, message, cover))
-                    )
+                    .flatMap(message -> parseMessage(username, message, getImage(chatPeer, message)))
                     .collectList()
                     .block();
 
@@ -1256,54 +1255,81 @@ public class TelegramService {
         return Flux.fromIterable(list);
     }
 
-    private Mono<String> downloadImage(Peer chatPeer, telegram4j.tl.BaseMessage message) {
+    private String getImage(Peer chatPeer, telegram4j.tl.BaseMessage message) {
         if (!appProperties.isEnableTgImage()) {
-            return Mono.just("");
+            return "";
         }
         if (message.media() instanceof MessageMediaPhoto mediaPhoto) {
             var photo = mediaPhoto.photo();
             if (photo instanceof BasePhoto basePhoto) {
-                var fs = FileReferenceId.ofPhoto(basePhoto, Context.createMediaContext(chatPeer, message.id()));
-                Path filePath = Utils.getWebPath("images", message.id() + ".png");
-                if (Files.exists(filePath)) {
-                    return Mono.just(getPic(filePath));
+                String type = "";
+                int filesize = Integer.MAX_VALUE;
+                for (var size : basePhoto.sizes()) {
+                    log.debug("{} size {}", message.id(), size);
+                    if (size instanceof BasePhotoSize photoSize) {
+                        if (photoSize.size() < filesize) {
+                            filesize = photoSize.size();
+                            type = photoSize.type();
+                        }
+                    }
                 }
-                return Mono.usingWhen(Mono.fromCallable(() -> FileChannel.open(filePath, StandardOpenOption.WRITE, StandardOpenOption.CREATE)),
-                                fc -> client.downloadFile(fs)
-                                        .doOnNext(fp -> log.debug("download file: {}", filePath))
-                                        .flatMap(fp -> Mono.fromCallable(() -> fc.write(fp.getBytes().nioBuffer())))
-                                        .then(),
-                                fc -> Mono.fromCallable(() -> {
-                                    fc.close();
-                                    return fc;
-                                }))
-                        .doOnError(e -> {
-                            try {
-                                Files.deleteIfExists(filePath);
-                            } catch (IOException ex) {
-                                log.debug("Delete file error: {}", ex.getMessage());
-                            }
-                        })
-                        .then(Mono.just(getPic(filePath)))
-                        .onErrorReturn("");
+                if (type.isEmpty()) {
+                    return type;
+                }
+
+                log.debug("{} type {}", message.id(), type);
+                var fs = FileReferenceId.ofPhoto(basePhoto, type.charAt(0), Context.createMediaContext(chatPeer, message.id()));
+                return fs.serialize();
             }
         }
-        return Mono.just("");
+        return "";
     }
 
-    private String getPic(Path filePath) {
+    public Mono<byte[]> downloadImage(int messageId, String fileRefId) {
+        Path filePath = Utils.getWebPath("images", messageId + ".jpg");
         if (Files.exists(filePath)) {
-            return filePath.toString().replace(baseImageFolder, "");
+            log.debug("use existing image {}", filePath);
+            return Mono.just(getPic(filePath));
+        }
+        log.debug("download image {} from {}", fileRefId, filePath);
+        return Mono.usingWhen(Mono.fromCallable(() -> FileChannel.open(filePath, StandardOpenOption.WRITE, StandardOpenOption.CREATE)),
+                        fc -> client.downloadFile(fileRefId)
+                                .doOnNext(fp -> log.debug("download file: {}", filePath))
+                                .flatMap(fp -> Mono.fromCallable(() -> fc.write(fp.getBytes().nioBuffer())))
+                                .then(),
+                        fc -> Mono.fromCallable(() -> {
+                            fc.close();
+                            return fc;
+                        }))
+                .doOnError(e -> {
+                    log.warn("download image failed", e);
+                    try {
+                        Files.deleteIfExists(filePath);
+                    } catch (IOException ex) {
+                        log.debug("Delete file error: {}", ex.getMessage());
+                    }
+                })
+                .then(Mono.just(getPic(filePath)))
+                .onErrorReturn(new byte[0]);
+    }
+
+    private byte[] getPic(Path filePath) {
+        if (Files.exists(filePath)) {
+            try {
+                return Files.readAllBytes(filePath);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         } else {
-            return "";
+            return new byte[0];
         }
     }
 
-    private String fixCover(String cover) {
+    private String fixCover(Message message) {
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                .replacePath(cover)
-                .replaceQuery("")
+                .replacePath("/telegram/image")
+                .replaceQuery("messageId=" + message.getId() + "&fileRefId=" + message.getCover())
                 .build()
                 .toUriString();
     }
