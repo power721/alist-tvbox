@@ -13,13 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.branch }}
+        uses: actions/checkout@v4
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18.16.x
+          node-version: 22
           cache: npm
           cache-dependency-path: ./web-ui
       - name: Install npm
@@ -28,10 +26,14 @@ jobs:
       - name: Build web UI
         working-directory: ./web-ui
         run: npm run build
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+      - name: setup graalvm
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          native-image-musl: 'true'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'maven'
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -39,22 +41,47 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set APP version
         run: |
-          mkdir data
+          [ -d data ] || mkdir data
           export TZ=Asia/Shanghai
-          num1=$(date +%Y)
-          num2=$(date +%j)
-          sum=$((($num1 - 2023) * 366 + $num2))
-          echo $sum.$(date +%H%M)-dev > data/version
-          echo ${{ github.event.head_commit.message }} >> data/version
+          echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
+          echo "${{ github.event.head_commit.message }}" >> data/version
           cp data/version data/app_version
           cat data/version
-      - name: Build docker and push
+      - name: Build native with Maven (AMD64)
+        run: |
+          mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
+          chmod a+x target/atv
+          ls -l target
+      - name: Build alist native docker and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile-alist-native
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-native:dev
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build xiaoya native docker and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile-native
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:native-dev
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native:dev
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build xiaoya host native docker and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile-native-host
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native-host:dev
           cache-from: type=gha
           cache-to: type=gha,mode=max
