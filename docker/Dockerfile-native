@@ -6,6 +6,7 @@ ENV INSTALL=native NATIVE=true
 
 WORKDIR /opt/atv/
 
+COPY target/libsqlitejdbc.so ./
 COPY config/alist.json /
 
 COPY scripts/index.sh /
