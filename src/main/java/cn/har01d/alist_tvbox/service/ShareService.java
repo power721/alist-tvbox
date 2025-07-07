@@ -7,11 +7,9 @@ import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
-import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
-import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Share;
@@ -45,7 +43,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.ClassPathResource;
@@ -56,7 +53,6 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -90,8 +86,6 @@ public class ShareService {
     private final AListAliasRepository aliasRepository;
     private final SettingRepository settingRepository;
     private final SiteRepository siteRepository;
-    private final AccountRepository accountRepository;
-    private final PikPakAccountRepository pikPakAccountRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
@@ -101,7 +95,6 @@ public class ShareService {
     private final DriverAccountService driverAccountService;
     private final RestTemplate restTemplate;
     private final Environment environment;
-    private final JdbcTemplate alistJdbcTemplate;
 
     private final int offset = 99900;
     private int shareId = 20000;
@@ -112,27 +105,21 @@ public class ShareService {
                         AListAliasRepository aliasRepository,
                         SettingRepository settingRepository,
                         SiteRepository siteRepository,
-                        AccountRepository accountRepository,
-                        PikPakAccountRepository pikPakAccountRepository,
                         DriverAccountRepository driverAccountRepository,
                         AListService aListService,
                         DriverAccountService driverAccountService,
-                        AppProperties appProperties,
                         AccountService accountService,
                         AListLocalService aListLocalService,
                         ConfigFileService configFileService,
                         PikPakService pikPakService,
                         RestTemplateBuilder builder,
-                        Environment environment,
-                        @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
+                        Environment environment) {
         this.appProperties = appProperties1;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
         this.aliasRepository = aliasRepository;
         this.settingRepository = settingRepository;
         this.siteRepository = siteRepository;
-        this.accountRepository = accountRepository;
-        this.pikPakAccountRepository = pikPakAccountRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.aListService = aListService;
         this.driverAccountService = driverAccountService;
@@ -141,7 +128,6 @@ public class ShareService {
         this.configFileService = configFileService;
         this.pikPakService = pikPakService;
         this.environment = environment;
-        this.alistJdbcTemplate = alistJdbcTemplate;
         this.restTemplate = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).build();
     }
 
@@ -1168,21 +1154,6 @@ public class ShareService {
             return shares;
         }
 
-        if (!settingRepository.existsByName("fix_share_id")) {
-            shareRepository.deleteById(7000);
-            shareRepository.deleteById(7001);
-            shareRepository.deleteById(7002);
-            shareRepository.deleteById(7003);
-            settingRepository.save(new Setting("fix_share_id", ""));
-        }
-
-        if (!settingRepository.existsByName("fix_share_id1")) {
-            shareRepository.deleteById(9900);
-            shareRepository.deleteById(9901);
-            shareRepository.deleteById(9902);
-            settingRepository.save(new Setting("fix_share_id1", ""));
-        }
-
         int id = offset;
         try {
             var resource = new ClassPathResource("shares.txt");
@@ -1198,6 +1169,7 @@ public class ShareService {
         }
 
         if (driverAccountService.countByType(DriverType.PAN115) > 0) {
+            log.debug("load 115_shares.txt");
             try {
                 var resource = new ClassPathResource("115_shares.txt");
                 String lines = resource.getContentAsString(StandardCharsets.UTF_8);

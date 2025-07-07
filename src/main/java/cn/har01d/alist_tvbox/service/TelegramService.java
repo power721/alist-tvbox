@@ -1313,6 +1313,13 @@ public class TelegramService {
     }
 
     public TelegramChannel getChannelByName(String username) {
+        if (client == null) {
+            TelegramChannel channel = new TelegramChannel();
+            channel.setUsername(username);
+            channel.setTitle(username);
+            return channel;
+        }
+
         try {
             var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
             var chat = resolvedPeer.chats().get(0);
