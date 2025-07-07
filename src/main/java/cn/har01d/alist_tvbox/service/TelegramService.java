@@ -75,6 +75,7 @@ import telegram4j.tl.InputMessagesFilterEmpty;
 import telegram4j.tl.InputPeer;
 import telegram4j.tl.InputPeerSelf;
 import telegram4j.tl.InputUserSelf;
+import telegram4j.tl.MessageEntityTextUrl;
 import telegram4j.tl.User;
 import telegram4j.tl.messages.ChannelMessages;
 import telegram4j.tl.messages.DialogsSlice;
@@ -309,6 +310,9 @@ public class TelegramService {
     }
 
     public TelegramChannel create(TelegramChannel channel) {
+        if (channel.getUsername().startsWith("https://t.me/")) {
+            channel.setUsername(channel.getUsername().substring(13));
+        }
         var chat = getChannelByName(channel.getUsername());
         if (chat != null) {
             chat.setEnabled(channel.isEnabled());
@@ -1341,6 +1345,19 @@ public class TelegramService {
         for (String link : Message.parseLinks(message.message())) {
             list.add(new Message(channel, message, link));
         }
+
+        if (message.entities() != null) {
+            List<String> urls = message.entities()
+                    .stream()
+                    .filter(e -> e instanceof MessageEntityTextUrl)
+                    .map(e -> (MessageEntityTextUrl) e)
+                    .map(MessageEntityTextUrl::url)
+                    .toList();
+            for (String link : Message.parseLinks(urls)) {
+                list.add(new Message(channel, message, link));
+            }
+        }
+
         return list.stream();
     }
 

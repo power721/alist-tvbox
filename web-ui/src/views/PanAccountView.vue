@@ -181,7 +181,7 @@
           <span class="hint">服务端多线程加速，网页播放强制开启</span>
         </el-form-item>
         <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'||form.type=='PAN139'" label="代理线程数">
-          <el-input-number :min="1" :max="32" v-model="form.concurrency"/>
+          <el-input-number :min="1" :max="64" v-model="form.concurrency"/>
         </el-form-item>
         <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'||form.type=='PAN139'" label="分片大小">
           <el-input-number :min="64" :max="4096" v-model="form.addition.chunk_size"/>

@@ -131,6 +131,18 @@ public class Message {
         return links;
     }
 
+    public static List<String> parseLinks(List<String> urls) {
+        List<String> links = new ArrayList<>();
+        for (String url : urls) {
+            String link = fixLink(url);
+            String type = parseType(link);
+            if (type != null) {
+                links.add(link);
+            }
+        }
+        return links;
+    }
+
     private static String fixLink(String link) {
         if (link.endsWith("**")) {
             return link.substring(0, link.length() - 2);
