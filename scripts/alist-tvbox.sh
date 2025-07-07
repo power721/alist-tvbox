@@ -597,8 +597,8 @@ show_version_menu() {
     fi
 
     local old_version="${CONFIG[IMAGE_NAME]}"
-    local image="${VERSIONS[$version_choice]%% -*}"
-    image=$(echo "$image" | tr -d '[:space:]')
+    local image="${VERSIONS[$version_choice]}"
+    image=$(echo "$image" | awk -F' - ' '{print $1}' | tr -d ' ')
     CONFIG["IMAGE_ID"]="$version_choice"
     CONFIG["IMAGE_NAME"]="${image}"
 
