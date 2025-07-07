@@ -204,9 +204,6 @@ public class AListLocalService {
     }
 
     public int executeUpdate(String sql) {
-        if (System.getenv("NATIVE") != null && "sqlite3".equals(database)) {
-            return Utils.executeUpdate(sql);
-        }
         try {
             log.debug("executeUpdate: {}", sql);
             return alistJdbcTemplate.update(sql);
@@ -218,10 +215,6 @@ public class AListLocalService {
 
     public boolean existsById(String tableName, long id) {
         String sql = "SELECT 1 FROM " + tableName + " WHERE id = ? LIMIT 1";
-        if (System.getenv("NATIVE") != null && "sqlite3".equals(database)) {
-            return StringUtils.isNotBlank(Utils.executeQuery(sql));
-        }
-
         try {
             Integer result = alistJdbcTemplate.queryForObject(sql, new Object[]{id}, Integer.class);
             return result != null;

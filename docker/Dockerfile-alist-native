@@ -6,6 +6,7 @@ ENV ALIST_PORT=5344 INSTALL=native NATIVE=true
 
 WORKDIR /opt/atv/
 
+COPY target/libsqlitejdbc.so ./
 COPY config/alist.json /
 
 COPY scripts/entrypoint-native.sh /entrypoint.sh
