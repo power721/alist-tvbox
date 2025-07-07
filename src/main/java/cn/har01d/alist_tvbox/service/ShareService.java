@@ -891,7 +891,6 @@ public class ShareService {
         } else {
             share.setShareId(parts[0]);
         }
-        share.setPath(Storage.getMountPath(share));
     }
 
     public String add(ShareLink dto) {
@@ -946,6 +945,7 @@ public class ShareService {
                 share.setId(shareId++);
             }
 
+            share.setPath(Storage.getMountPath(share));
             saveStorage(share, true);
 
             shareRepository.save(share);
@@ -968,6 +968,8 @@ public class ShareService {
         validate(share);
         parseShare(share);
         fixFolderId(share);
+
+        share.setPath(Storage.getMountPath(share));
 
         share.setId(id);
         share.setTemp(false);
