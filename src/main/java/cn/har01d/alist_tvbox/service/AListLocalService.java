@@ -1,35 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.entity.Setting;
-import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.entity.SiteRepository;
-import cn.har01d.alist_tvbox.exception.BadRequestException;
-import cn.har01d.alist_tvbox.model.AliTokensResponse;
-import cn.har01d.alist_tvbox.model.SettingResponse;
-import cn.har01d.alist_tvbox.storage.Storage;
-import cn.har01d.alist_tvbox.util.Constants;
-import cn.har01d.alist_tvbox.util.Utils;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.env.Environment;
-import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_RESTART_REQUIRED;
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_START_TIME;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,8 +15,35 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static cn.har01d.alist_tvbox.util.Constants.ALIST_RESTART_REQUIRED;
-import static cn.har01d.alist_tvbox.util.Constants.ALIST_START_TIME;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.env.Environment;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.entity.Site;
+import cn.har01d.alist_tvbox.entity.SiteRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.AliTokensResponse;
+import cn.har01d.alist_tvbox.model.SettingResponse;
+import cn.har01d.alist_tvbox.storage.Storage;
+import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -217,12 +216,13 @@ public class AListLocalService {
     }
 
     public boolean existsById(String tableName, long id) {
-        String sql = "SELECT 1 FROM " + tableName + " WHERE id = ? LIMIT 1";
         if (System.getenv("NATIVE") != null && "sqlite3".equals(database)) {
+            String sql = "SELECT 1 FROM " + tableName + " WHERE id = " + id + " LIMIT 1";
             return StringUtils.isNotBlank(Utils.executeQuery(sql));
         }
 
         try {
+            String sql = "SELECT 1 FROM " + tableName + " WHERE id = ? LIMIT 1";
             Integer result = alistJdbcTemplate.queryForObject(sql, new Object[]{id}, Integer.class);
             return result != null;
         } catch (EmptyResultDataAccessException e) {
