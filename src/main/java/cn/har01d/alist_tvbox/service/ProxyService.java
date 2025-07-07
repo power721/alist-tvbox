@@ -113,7 +113,7 @@ public class ProxyService {
             response.sendRedirect(url);
             return;
         }
-        log.debug("proxy url: {}", url);
+        log.debug("proxy url: {} {}", driver, url);
 
         Map<String, String> headers = new HashMap<>();
         var it = request.getHeaderNames().asIterator();

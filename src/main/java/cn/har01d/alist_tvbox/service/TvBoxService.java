@@ -2343,7 +2343,7 @@ public class TvBoxService {
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(p)
-                .replaceQuery("name=" + name)
+                .replaceQuery("name=" + encodeUrl(name))
                 .build()
                 .toUriString();
     }
@@ -2354,7 +2354,7 @@ public class TvBoxService {
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(p)
-                .replaceQuery("name=" + name)
+                .replaceQuery("name=" + encodeUrl(name))
                 .build()
                 .toUriString();
     }
