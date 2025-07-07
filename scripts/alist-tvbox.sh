@@ -598,7 +598,7 @@ show_version_menu() {
 
     local old_version="${CONFIG[IMAGE_NAME]}"
     local image="${VERSIONS[$version_choice]%% -*}"
-    image=$(echo "$image" | tr -d '[:space:]' | sed "s/^['\"]//;s/['\"]\$//")
+    image=$(echo "$image" | tr -d '[:space:]')
     CONFIG["IMAGE_ID"]="$version_choice"
     CONFIG["IMAGE_NAME"]="${image}"
 
