@@ -94,7 +94,7 @@
             <el-radio label="BAIDU" size="large">百度网盘</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'||form.type=='BAIDU'||form.type=='CLOUD189'">
+        <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'||form.type=='BAIDU'">
           <el-input v-model="form.cookie" @change="getInfo" type="textarea" :rows="5"/>
           <span v-if="form.type=='QUARK'">
             <a href="https://pan.quark.cn/" target="_blank">夸克网盘</a>
@@ -119,10 +119,10 @@
             <span class="hint">只需要BDUSS</span>
           </span>
 
-          <span v-if="form.type=='CLOUD189'">
-            <a href="https://cloud.189.cn/web/main/" target="_blank">天翼云盘</a>
-            <span class="hint">需要JSESSIONID和COOKIE_LOGIN_USER</span>
-          </span>
+<!--          <span v-if="form.type=='CLOUD189'">-->
+<!--            <a href="https://cloud.189.cn/web/main/" target="_blank">天翼云盘</a>-->
+<!--            <span class="hint">需要JSESSIONID和COOKIE_LOGIN_USER</span>-->
+<!--          </span>-->
           <el-button class="hint" type="primary" @click="getInfo" v-if="form.cookie">校验Cookie</el-button>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='PAN139'" required>

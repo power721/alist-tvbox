@@ -82,6 +82,9 @@ public class HistoryService {
         if (exist != null) {
             history.setId(exist.getId());
         }
+        if (history.getVodPic() != null && history.getVodPic().length() >= 255) {
+            history.setVodPic(null);
+        }
         String url = history.getEpisodeUrl();
         if (url != null) {
             int index = url.indexOf("?");

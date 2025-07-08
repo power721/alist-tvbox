@@ -56,6 +56,7 @@ public class UserService {
         Path credentialsPath = Utils.getDataPath("atv", "credentials.txt");
 
         if (Files.exists(credentialsPath)) {
+            log.debug("Updating existing admin user credentials from {}", credentialsPath);
             List<String> lines = Files.readAllLines(credentialsPath, StandardCharsets.UTF_8);
             if (lines.size() >= 2) {
                 String username = lines.get(0).trim();
@@ -65,7 +66,7 @@ public class UserService {
                     adminUser.setUsername(username);
                     adminUser.setPassword(passwordEncoder.encode(password));
                     userRepository.save(adminUser);
-                    log.info("帐号重置成功！");
+                    log.info("管理员帐号重置成功！");
                     Files.deleteIfExists(credentialsPath);
                     return;
                 }

@@ -86,7 +86,7 @@ echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M)
 echo "=== build haroldli/xiaoya-tvbox ==="
 docker build -f docker/Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest .
 echo "=== restart xiaoya-tvbox ==="
-sudo systemctl stop atv
+systemctl is-active atv && sudo systemctl stop atv
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
 docker run -d -p $PORT1:4567 -p $PORT2:80 -p 5566:5244 -e ALIST_PORT=$PORT2 -e INSTALL=xiaoya -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 
