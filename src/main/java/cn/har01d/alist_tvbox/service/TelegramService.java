@@ -1315,6 +1315,7 @@ public class TelegramService {
     public TelegramChannel getChannelByName(String username) {
         if (client == null) {
             TelegramChannel channel = new TelegramChannel();
+            channel.setId(telegramChannelRepository.count());
             channel.setUsername(username);
             channel.setTitle(username);
             return channel;
