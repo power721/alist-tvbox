@@ -207,6 +207,8 @@ load_config() {
         # 如果是 NAS，调整配置（如改用 host 网络、优化存储路径等）
         CONFIG["BASE_DIR"]="/volume1/docker/alist-tvbox"  # 群晖常用 Docker 数据目录
         CONFIG["NETWORK"]="host"  # NAS 上推荐 host 网络模式
+        CONFIG["IMAGE_ID"]="7"
+        CONFIG["IMAGE_NAME"]="haroldli/xiaoya-tvbox:host"
     fi
 
     echo -e "${CYAN}首次运行，正在检测现有容器...${NC}"
