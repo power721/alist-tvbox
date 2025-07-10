@@ -1357,7 +1357,38 @@ public class TvBoxService {
                 .toUriString();
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub, String client) {
+    public Map<String, Object> getVideoInfo(String id) {
+        int siteId = 1;
+        String path = id;
+        String[] parts = id.split("@");
+        if (parts.length > 1) {
+            siteId = Integer.parseInt(parts[0]);
+            path = parts[1];
+            try {
+                path = proxyService.getPath(Integer.parseInt(path));
+            } catch (NumberFormatException e) {
+                log.debug("", e);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+        Site site = siteService.getById(siteId);
+        FsDetail fsDetail = aListService.getFile(site, path);
+        if (fsDetail == null) {
+            throw new BadRequestException("找不到文件 " + path);
+        }
+        String url = fixHttp(fsDetail.getRawUrl());
+        int concurrency = getConcurrency(url);
+        int chunkSize = 256 * 1024;
+        Map<String, Object> result = new HashMap<>();
+        result.put("url", url);
+        result.put("concurrency", concurrency);
+        result.put("chunkSize", chunkSize);
+        log.debug("result: {}", result);
+        return result;
+    }
+
+    public Map<String, Object> getPlayUrl(Integer siteId, String id, String path, boolean getSub, boolean proxy, String client) {
         Site site = siteService.getById(siteId);
         String url = null;
         String name = getNameFromPath(path);
@@ -1378,7 +1409,6 @@ public class TvBoxService {
 
         Map<String, Object> result = new HashMap<>();
         result.put("parse", 0);
-        result.put("playUrl", "");
 
         FsDetail fsDetail = aListService.getFile(site, path);
         if (fsDetail == null) {
@@ -1396,7 +1426,13 @@ public class TvBoxService {
 
         result.put("url", url);
 
-        if (isUseProxy(url)) {
+        if (proxy) {
+            int concurrency = getConcurrency(url);
+            int chunkSize = 256 * 1024;
+            result.put("url", "http://127.0.0.1:5000/proxy/" + id + "?concurrency=" + concurrency + "&chunkSize=" + chunkSize + "&url=" + encodeUrl(url));
+        }
+
+        if (!proxy && isUseProxy(url)) {
             url = buildProxyUrl(site, name, path);
             result.put("url", url);
         } else if (fsDetail.getProvider().equals("QuarkShare") || fsDetail.getProvider().equals("Quark")) {
@@ -1436,7 +1472,9 @@ public class TvBoxService {
             result.put("subt", subtitles.get(0).getUrl());
         }
 
-        result.put("subs", subtitles);
+        if (!subtitles.isEmpty()) {
+            result.put("subs", subtitles);
+        }
 
         log.debug("[{}] getPlayUrl result: {}", fsDetail.getProvider(), result);
         return result;
@@ -1464,6 +1502,18 @@ public class TvBoxService {
         return false;
     }
 
+    private int getConcurrency(String url) {
+        var driverAccount = getDriverAccount(url);
+        if (driverAccount != null) {
+            return driverAccount.getConcurrency();
+        }
+        var account = getAliAccount(url);
+        if (account != null) {
+            return account.getConcurrency();
+        }
+        return 1;
+    }
+
     private DriverAccount getDriverAccount(String url) {
         int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
         if (index > 0) {
@@ -1482,15 +1532,15 @@ public class TvBoxService {
         return null;
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, Integer index, boolean getSub, String client) {
-        return getPlayUrl(siteId, id, cache.getIfPresent(id).get(index - 1), getSub, client);
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, Integer index, boolean getSub, boolean proxy, String client) {
+        return getPlayUrl(siteId, id, cache.getIfPresent(id).get(index - 1), getSub, proxy, client);
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, boolean getSub, String client) {
-        return getPlayUrl(siteId, id, "", getSub, client);
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, boolean getSub, boolean proxy, String client) {
+        return getPlayUrl(siteId, id, "", getSub, proxy, client);
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path, boolean getSub, String client) {
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path, boolean getSub, boolean proxy, String client) {
         Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
         if (siteId == null) {
             siteId = meta.getSiteId();
@@ -1499,7 +1549,7 @@ public class TvBoxService {
             siteId = 1;
         }
         log.debug("getPlayUrl: {} {} {}", siteId, id, path);
-        return getPlayUrl(siteId, meta.getPath() + path, getSub, client);
+        return getPlayUrl(siteId, "", meta.getPath() + path, getSub, proxy, client);
     }
 
     private String findBestSubtitle(List<String> subtitles, String name) {

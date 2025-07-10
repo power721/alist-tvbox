@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -57,13 +56,19 @@ public class PlayController {
         proxyService.deleteAll();
     }
 
+    @GetMapping("/video/{token}/{id}")
+    public Map<String, Object> getVideoInfo(@PathVariable String token, @PathVariable String id) {
+        subscriptionService.checkToken(token);
+        return tvBoxService.getVideoInfo(id);
+    }
+
     @GetMapping("/play")
-    public Object play(Integer site, String path, String id, String bvid, String type, boolean dash, HttpServletRequest request) throws IOException {
-        return play("", site, path, id, bvid, type, dash, request);
+    public Object play(Integer site, String path, String id, String bvid, String type, boolean dash, boolean proxy, HttpServletRequest request) throws IOException {
+        return play("", site, path, id, bvid, type, dash, proxy, request);
     }
 
     @GetMapping("/play/{token}")
-    public Object play(@PathVariable String token, Integer site, String path, String id, String bvid, String type, boolean dash, HttpServletRequest request) throws IOException {
+    public Object play(@PathVariable String token, Integer site, String path, String id, String bvid, String type, boolean dash, boolean proxy, HttpServletRequest request) throws IOException {
         subscriptionService.checkToken(token);
 
         String client = request.getHeader("X-CLIENT");
@@ -79,6 +84,7 @@ public class PlayController {
             return biliBiliService.getPlayUrl(bvid, dash, client);
         }
 
+        boolean getSub = true;
         if (StringUtils.isNotBlank(id)) {
             String[] parts = id.split("@");
             if (parts.length > 1) {
@@ -86,6 +92,7 @@ public class PlayController {
                 path = parts[1];
                 try {
                     path = proxyService.getPath(Integer.parseInt(path));
+                    return tvBoxService.getPlayUrl(site, id, path, getSub, proxy, client);
                 } catch (NumberFormatException e) {
                     log.debug("", e);
                 } catch (Exception e) {
@@ -96,24 +103,23 @@ public class PlayController {
             }
         }
 
-        boolean getSub = true;
         Map<String, Object> result;
         if (path.contains("/")) {
             if (path.startsWith("/")) {
-                result = tvBoxService.getPlayUrl(site, path, getSub, client);
+                result = tvBoxService.getPlayUrl(site, "", path, getSub, proxy, client);
             } else {
                 int index = path.indexOf('/');
                 id = path.substring(0, index);
                 path = path.substring(index);
-                result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path, getSub, client);
+                result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path, getSub, proxy, client);
             }
         } else if (path.contains("-")) {
             String[] parts = path.split("-");
             id = parts[0];
             int index = Integer.parseInt(parts[1]);
-            result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), index, getSub, client);
+            result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), index, getSub, proxy, client);
         } else {
-            result = tvBoxService.getPlayUrl(site, Integer.parseInt(path), getSub, client);
+            result = tvBoxService.getPlayUrl(site, Integer.parseInt(path), getSub, proxy, client);
         }
 
 //        String url = (String) result.get("url");
