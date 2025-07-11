@@ -1149,12 +1149,15 @@ public class ShareService {
     }
 
     private List<Share> loadLatestShare() {
-        List<Share> shares = new ArrayList<>();
         if (!environment.matchesProfiles("xiaoya")) {
-            return shares;
+            return List.of();
         }
 
         int id = offset;
+        List<Share> shares = shareRepository.findByIdAfter(id - 1);
+        shareRepository.deleteAll(shares);
+
+        shares = new ArrayList<>();
         try {
             var resource = new ClassPathResource("shares.txt");
             String lines = resource.getContentAsString(StandardCharsets.UTF_8);
