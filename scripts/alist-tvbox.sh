@@ -476,9 +476,6 @@ install_container() {
   if [[ ! -d "${CONFIG[BASE_DIR]}" ]]; then
     echo -e "${YELLOW}基础目录不存在，正在创建: ${CONFIG[BASE_DIR]}${NC}"
     mkdir -p "${CONFIG[BASE_DIR]}"
-  fi
-
-  if [[ ! -f "${CONFIG[BASE_DIR]}/initial_admin_credentials.txt" ]]; then
     INIT=true
   fi
 
