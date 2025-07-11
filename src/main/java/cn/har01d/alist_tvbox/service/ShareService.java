@@ -149,6 +149,10 @@ public class ShareService {
             list = loadSharesFromFile();
         }
 
+        List<Share> shares = list.stream().filter(e -> e.getId() >= offset).collect(Collectors.toList());
+        log.debug("delete {} shares", shares.size());
+        shareRepository.deleteAll(shares);
+
         list = list.stream().filter(e -> e.getId() < offset).collect(Collectors.toList());
         var add = loadLatestShare();
         list.addAll(add);
@@ -1149,15 +1153,12 @@ public class ShareService {
     }
 
     private List<Share> loadLatestShare() {
+        List<Share> shares = new ArrayList<>();
         if (!environment.matchesProfiles("xiaoya")) {
-            return List.of();
+            return shares;
         }
 
         int id = offset;
-        List<Share> shares = shareRepository.findByIdAfter(id - 1);
-        shareRepository.deleteAll(shares);
-
-        shares = new ArrayList<>();
         try {
             var resource = new ClassPathResource("shares.txt");
             String lines = resource.getContentAsString(StandardCharsets.UTF_8);
