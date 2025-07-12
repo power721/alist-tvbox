@@ -1,5 +1,6 @@
 export interface VodItem {
   "vod_id": string,
+  "path": string,
   "vod_name": string,
   "vod_pic": string,
   "vod_tag": string,

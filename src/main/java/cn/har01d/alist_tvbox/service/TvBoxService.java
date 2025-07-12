@@ -1678,6 +1678,7 @@ public class TvBoxService {
             }
             FsDetail fsDetail = aListService.getFile(site, path);
             MovieDetail movieDetail = new MovieDetail();
+            movieDetail.setPath(path);
             movieDetail.setVod_id(encodeUrl(tid));
             movieDetail.setVod_name(fsDetail.getName());
             movieDetail.setVod_tag(fsDetail.getType() == 1 ? FOLDER : FILE);
