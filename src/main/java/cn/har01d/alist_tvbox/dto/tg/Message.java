@@ -28,8 +28,9 @@ public class Message {
     public Message() {
     }
 
-    public Message(String channel, String content, String time, String cover) {
+    public Message(int id, String channel, String content, String time, String cover) {
         parseTime(time);
+        this.id = id;
         this.content = content;
         this.link = parseLink();
         this.name = parseName();

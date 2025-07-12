@@ -78,7 +78,7 @@ public class TelegramController {
             if (t.equals("0")) {
                 return telegramService.searchMovies("", web, 5);
             }
-            return telegramService.list(t, web);
+            return telegramService.list(t, web, pg);
         } else if (StringUtils.isNotBlank(wd)) {
             return telegramService.searchMovies(wd, web, 20);
         }
