@@ -60,7 +60,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -1047,6 +1046,14 @@ public class SubscriptionService {
             Map<String, Object> site = buildSite(token, uid, "csp_TgSearch", "电报搜索");
             sites.add(id++, site);
             log.debug("add TG search: {}", site);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        try {
+            Map<String, Object> site = buildSite(token, uid, "csp_TgWeb", "电报网页");
+            sites.add(id++, site);
+            log.debug("add TG web: {}", site);
         } catch (Exception e) {
             log.warn("", e);
         }

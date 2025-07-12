@@ -23,16 +23,18 @@ public class Message {
     private String name;
     private String type;
     private String link;
+    private String cover;
 
     public Message() {
     }
 
-    public Message(String channel, String content, String time) {
+    public Message(String channel, String content, String time, String cover) {
         parseTime(time);
         this.content = content;
         this.link = parseLink();
         this.name = parseName();
         this.channel = channel;
+        this.cover = cover;
     }
 
     private void parseTime(String time) {

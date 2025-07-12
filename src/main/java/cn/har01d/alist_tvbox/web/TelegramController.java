@@ -61,28 +61,28 @@ public class TelegramController {
 
     @GetMapping("/api/telegram/search")
     public List<Message> searchByKeyword(String wd) {
-        return telegramService.search(wd, 100, false);
+        return telegramService.search(wd, 100, false, false);
     }
 
     @GetMapping("/tg-search")
-    public Object browse(String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
-        return browse("", id, t, wd, pg);
+    public Object browse(String id, String t, String wd, boolean web, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+        return browse("", id, t, wd, web, pg);
     }
 
     @GetMapping("/tg-search/{token}")
-    public Object browse(@PathVariable String token, String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+    public Object browse(@PathVariable String token, String id, String t, String wd, boolean web, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
             return telegramService.detail(id);
         } else if (StringUtils.isNotBlank(t)) {
             if (t.equals("0")) {
-                return telegramService.searchMovies("", 5);
+                return telegramService.searchMovies("", web, 5);
             }
-            return telegramService.list(t);
+            return telegramService.list(t, web);
         } else if (StringUtils.isNotBlank(wd)) {
-            return telegramService.searchMovies(wd, 20);
+            return telegramService.searchMovies(wd, web, 20);
         }
-        return telegramService.category();
+        return telegramService.category(web);
     }
 
     @GetMapping("/tg-db")
