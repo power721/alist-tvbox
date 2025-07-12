@@ -334,6 +334,7 @@ public class TelegramService {
         settingRepository.deleteById("tg_password");
         settingRepository.deleteById("tg_qr_img");
         settingRepository.deleteById("tg_scanned");
+        appProperties.setTgLogin(false);
     }
 
     public void logout() {
@@ -354,6 +355,7 @@ public class TelegramService {
     }
 
     public void connect() {
+        appProperties.setTgLogin(false);
         if (client != null) {
             client.disconnect().block();
         }
@@ -442,6 +444,7 @@ public class TelegramService {
             }
 
             settingRepository.save(new Setting("tg_phase", "9"));
+            appProperties.setTgLogin(true);
             log.info("Telegram连接成功");
             client.onDisconnect().block();
             client = null;
@@ -551,7 +554,7 @@ public class TelegramService {
         String[] channels = username.split(",");
         List<Future<List<Message>>> futures = new ArrayList<>();
         for (String channel : channels) {
-            Future<List<Message>> future = executorService.submit(() -> searchFromChannel(channel, keyword, 100));
+            Future<List<Message>> future = executorService.submit(() -> searchFromChannel(channel, keyword, false, 100));
             futures.add(future);
         }
         long startTime = System.currentTimeMillis();
@@ -589,7 +592,7 @@ public class TelegramService {
             List<Future<List<Message>>> futures = new ArrayList<>();
             for (String channel : channels) {
                 String name = channel.split("\\|")[0];
-                Future<List<Message>> future = executorService.submit(() -> searchFromChannel(name, keyword, 100));
+                Future<List<Message>> future = executorService.submit(() -> searchFromChannel(name, keyword, false, 100));
                 futures.add(future);
             }
 
@@ -620,7 +623,7 @@ public class TelegramService {
         return URLEncoder.encode(url, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
-    public CategoryList category() {
+    public CategoryList category(boolean web) {
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
 
@@ -633,7 +636,7 @@ public class TelegramService {
         }
 
         List<TelegramChannel> channels;
-        if (client == null && StringUtils.isBlank(appProperties.getTgSearch())) {
+        if (web || (client == null && StringUtils.isBlank(appProperties.getTgSearch()))) {
             channels = telegramChannelRepository.findByWebAccessTrue(Sort.by("order"));
         } else {
             channels = list();
@@ -658,19 +661,21 @@ public class TelegramService {
         return result;
     }
 
-    public MovieList list(String channel) throws IOException {
+    public MovieList list(String channel, boolean web) throws IOException {
         if (channel.startsWith("type:")) {
-            return loadMovies(channel.substring(5));
+            return loadMovies(channel.substring(5), web);
         }
 
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
         List<Message> messages;
-        if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+        if (web) {
+            messages = searchFromChannel(channel, "", true, 100);
+        } else if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
             messages = searchRemote(channel, "", 100);
         } else {
-            messages = searchFromChannel(channel, "", 100);
+            messages = searchFromChannel(channel, "", false, 100);
         }
 
         for (Message message : messages) {
@@ -678,7 +683,11 @@ public class TelegramService {
                 MovieDetail movieDetail = new MovieDetail();
                 movieDetail.setVod_id(encodeUrl(message.getLink()));
                 movieDetail.setVod_name(message.getName());
-                movieDetail.setVod_pic(getPic(message.getType()));
+                if (StringUtils.isBlank(message.getCover())) {
+                    movieDetail.setVod_pic(getPic(message.getType()));
+                } else {
+                    movieDetail.setVod_pic(message.getCover());
+                }
                 movieDetail.setVod_remarks(getTypeName(message.getType()));
                 list.add(movieDetail);
             }
@@ -692,17 +701,21 @@ public class TelegramService {
         return result;
     }
 
-    public MovieList loadMovies(String type) {
+    public MovieList loadMovies(String type, boolean web) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        List<Message> messages = search("", 100, true);
+        List<Message> messages = search("", 100, web, true);
         for (Message message : messages) {
             if (type.equals(message.getType())) {
                 MovieDetail movieDetail = new MovieDetail();
                 movieDetail.setVod_id(encodeUrl(message.getLink()));
                 movieDetail.setVod_name(message.getName());
-                movieDetail.setVod_pic(getPic(message.getType()));
+                if (StringUtils.isBlank(message.getCover())) {
+                    movieDetail.setVod_pic(getPic(message.getType()));
+                } else {
+                    movieDetail.setVod_pic(message.getCover());
+                }
                 movieDetail.setVod_remarks(getTypeName(message.getType()));
                 list.add(movieDetail);
             }
@@ -715,16 +728,20 @@ public class TelegramService {
         return result;
     }
 
-    public MovieList searchMovies(String keyword, int size) {
+    public MovieList searchMovies(String keyword, boolean web, int size) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        List<Message> messages = search(keyword, size, false);
+        List<Message> messages = search(keyword, size, web, false);
         for (Message message : messages) {
             MovieDetail movieDetail = new MovieDetail();
             movieDetail.setVod_id(encodeUrl(message.getLink()));
             movieDetail.setVod_name(message.getName());
-            movieDetail.setVod_pic(getPic(message.getType()));
+            if (StringUtils.isBlank(message.getCover())) {
+                movieDetail.setVod_pic(getPic(message.getType()));
+            } else {
+                movieDetail.setVod_pic(message.getCover());
+            }
             movieDetail.setVod_remarks(getTypeName(message.getType()));
             list.add(movieDetail);
         }
@@ -917,7 +934,7 @@ public class TelegramService {
 
     public MovieList listDouban(String type, String sort, Integer year, String genre, String region, int page) {
         if (type.startsWith("s:")) {
-            return searchMovies(type.substring(2), 30);
+            return searchMovies(type.substring(2), false, 30);
         }
 
         return getDoubanList(type, sort, year, genre, region, page);
@@ -1181,12 +1198,16 @@ public class TelegramService {
                 .toUriString();
     }
 
-    public List<Message> search(String keyword, int size, boolean cached) {
+    public List<Message> search(String keyword, int size, boolean web, boolean cached) {
         List<Message> results = List.of();
         List<TelegramChannel> channels = list().stream().filter(TelegramChannel::isValid).filter(TelegramChannel::isEnabled).toList();
-        if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
-            String search = channels.stream().map(TelegramChannel::getUsername).collect(Collectors.joining(","));
-            results = searchRemote(search, keyword, size);
+        if (web) {
+            channels = channels.stream().filter(TelegramChannel::isWebAccess).toList();
+        } else {
+            if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+                String search = channels.stream().map(TelegramChannel::getUsername).collect(Collectors.joining(","));
+                results = searchRemote(search, keyword, size);
+            }
         }
 
         if (results.isEmpty()) {
@@ -1197,7 +1218,7 @@ public class TelegramService {
             List<Future<List<Message>>> futures = new ArrayList<>();
             for (var channel : channels) {
                 String name = channel.getUsername();
-                Future<List<Message>> future = executorService.submit(() -> cached ? searchCache.get(name) : searchFromChannel(name, keyword, size));
+                Future<List<Message>> future = executorService.submit(() -> cached ? searchCache.get(name + "-" + web) : searchFromChannel(name, keyword, web, size));
                 futures.add(future);
             }
 
@@ -1285,12 +1306,14 @@ public class TelegramService {
         return results;
     }
 
-    private List<Message> getFromChannel(String username) throws IOException {
-        return searchFromChannel(username, "", 100);
+    private List<Message> getFromChannel(String key) throws IOException {
+        String[] parts = key.split("-");
+        String username = parts[0];
+        return searchFromChannel(username, "", "true".equals(parts[1]), 100);
     }
 
-    public List<Message> searchFromChannel(String username, String keyword, int size) throws IOException {
-        if (client == null) {
+    public List<Message> searchFromChannel(String username, String keyword, boolean web, int size) throws IOException {
+        if (web || client == null) {
             List<Message> list = searchFromWeb(username, keyword);
             List<Message> result = list.stream().filter(e -> e.getType() != null).toList();
             log.info("Search {} from web {} get {} results.", keyword, username, result.size());
@@ -1386,9 +1409,15 @@ public class TelegramService {
         Document doc = Jsoup.parse(html);
         Elements elements = doc.select("div.tgme_container div.tgme_widget_message_wrap");
         for (Element element : elements) {
+            Element photo = element.selectFirst("a.tgme_widget_message_photo_wrap");
+            String cover = "";
+            if (photo != null) {
+                String style = photo.attr("style");
+                cover = style.replaceAll(".*background-image:url\\('(.*?)'\\).*", "$1");
+            }
             Element elTime = element.selectFirst("time");
             String time = elTime != null ? elTime.attr("datetime") : null;
-            list.add(new Message(username, getTextWithNewlines(element.select(".tgme_widget_message_text").first()), time));
+            list.add(new Message(username, getTextWithNewlines(element.select(".tgme_widget_message_text").first()), time, cover));
         }
         return list;
     }
