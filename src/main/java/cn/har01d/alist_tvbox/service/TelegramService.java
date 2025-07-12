@@ -136,7 +136,7 @@ public class TelegramService {
     private final LoadingCache<String, InputPeer> cache = Caffeine.newBuilder().build(this::resolveUsername);
     private final LoadingCache<String, List<Message>> searchCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(15)).build(this::getFromChannel);
     private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
-    private final Map<String, String> lastId = new HashMap<>();
+    private final Cache<String, String> lastId = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private MTProtoTelegramClient client;
     private final List<String> fields = new ArrayList<>(List.of("id", "name", "genre", "description", "language", "country", "directors", "editors", "actors", "cover", "dbScore", "year"));
     private final List<FilterValue> filters = Arrays.asList(
@@ -1322,7 +1322,7 @@ public class TelegramService {
     public List<Message> loadFromWeb(String username, int page) throws IOException {
         String before = "";
         if (page > 1) {
-            before = lastId.getOrDefault(username + "-" + (page - 1), "");
+            before = lastId.get(username + "-" + (page - 1), key -> "");
         }
         List<Message> list = searchFromWeb(username, "", before);
         if (!list.isEmpty()) {
