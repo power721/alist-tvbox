@@ -334,6 +334,7 @@ public class TelegramService {
         settingRepository.deleteById("tg_password");
         settingRepository.deleteById("tg_qr_img");
         settingRepository.deleteById("tg_scanned");
+        appProperties.setTgLogin(false);
     }
 
     public void logout() {
@@ -354,6 +355,7 @@ public class TelegramService {
     }
 
     public void connect() {
+        appProperties.setTgLogin(false);
         if (client != null) {
             client.disconnect().block();
         }
@@ -442,6 +444,7 @@ public class TelegramService {
             }
 
             settingRepository.save(new Setting("tg_phase", "9"));
+            appProperties.setTgLogin(true);
             log.info("Telegram连接成功");
             client.onDisconnect().block();
             client = null;

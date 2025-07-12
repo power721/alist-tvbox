@@ -32,6 +32,7 @@ public class AppProperties {
     private String userAgent = Constants.USER_AGENT;
     private String tgSearch;
     private String tgSortField = "time";
+    private boolean tgLogin;
     private String systemId;
     private int tgTimeout = 5000;
     private int tempShareExpiration = 24;

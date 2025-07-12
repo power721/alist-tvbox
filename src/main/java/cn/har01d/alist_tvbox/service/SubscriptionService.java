@@ -1042,12 +1042,14 @@ public class SubscriptionService {
             log.warn("", e);
         }
 
-        try {
-            Map<String, Object> site = buildSite(token, uid, "csp_TgSearch", "电报搜索");
-            sites.add(id++, site);
-            log.debug("add TG search: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
+        if (appProperties.isTgLogin() || StringUtils.isNotBlank(appProperties.getTgSearch())) {
+            try {
+                Map<String, Object> site = buildSite(token, uid, "csp_TgSearch", "电报搜索");
+                sites.add(id++, site);
+                log.debug("add TG search: {}", site);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
         }
 
         try {
