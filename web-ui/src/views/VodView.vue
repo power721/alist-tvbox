@@ -420,7 +420,7 @@
           <el-input-number v-model="meta.year" :min="1900" :max="2099" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="路径">
-          <el-input v-model="meta.path" readonly autocomplete="off"/>
+          <el-input v-model="meta.path" autocomplete="off"/>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -817,9 +817,10 @@ const handleSelectionChange = (val: ShareInfo[]) => {
 }
 
 const showScrape = () => {
-  meta.value.path = getParent(movies.value[0].path)
-  meta.value.name = movies.value[0].vod_name
-  meta.value.year = movies.value[0].vod_year
+  const movie = movies.value[0]
+  meta.value.path = movie.type == 9 ? getParent(movie.path) : movie.path
+  meta.value.name = movie.vod_name
+  meta.value.year = movie.vod_year
   addVisible.value = true
   setTimeout(() => document.getElementById('meta-name').focus(), 500)
 }
