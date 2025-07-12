@@ -101,6 +101,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -135,6 +136,7 @@ public class TelegramService {
     private final LoadingCache<String, InputPeer> cache = Caffeine.newBuilder().build(this::resolveUsername);
     private final LoadingCache<String, List<Message>> searchCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(15)).build(this::getFromChannel);
     private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
+    private final Map<String, String> lastId = new HashMap<>();
     private MTProtoTelegramClient client;
     private final List<String> fields = new ArrayList<>(List.of("id", "name", "genre", "description", "language", "country", "directors", "editors", "actors", "cover", "dbScore", "year"));
     private final List<FilterValue> filters = Arrays.asList(
@@ -661,7 +663,7 @@ public class TelegramService {
         return result;
     }
 
-    public MovieList list(String channel, boolean web) throws IOException {
+    public MovieList list(String channel, boolean web, int pg) throws IOException {
         if (channel.startsWith("type:")) {
             return loadMovies(channel.substring(5), web);
         }
@@ -671,7 +673,7 @@ public class TelegramService {
 
         List<Message> messages;
         if (web) {
-            messages = searchFromChannel(channel, "", true, 100);
+            messages = loadFromWeb(channel, pg);
         } else if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
             messages = searchRemote(channel, "", 100);
         } else {
@@ -694,7 +696,12 @@ public class TelegramService {
         }
 
         result.setList(list);
-        result.setTotal(list.size());
+        if (web) {
+            result.setTotal(999);
+            result.setPagecount(100);
+        } else {
+            result.setTotal(list.size());
+        }
         result.setLimit(list.size());
 
         log.debug("list result: {}", result);
@@ -1312,9 +1319,24 @@ public class TelegramService {
         return searchFromChannel(username, "", "true".equals(parts[1]), 100);
     }
 
+    public List<Message> loadFromWeb(String username, int page) throws IOException {
+        String before = "";
+        if (page > 1) {
+            before = lastId.getOrDefault(username + "-" + (page - 1), "");
+        }
+        List<Message> list = searchFromWeb(username, "", before);
+        if (!list.isEmpty()) {
+            int id = list.get(0).getId();
+            lastId.put(username + "-" + page, String.valueOf(id));
+        }
+        List<Message> result = list.stream().filter(e -> e.getType() != null).sorted(Comparator.comparingInt(Message::getId).reversed()).toList();
+        log.info("Load from web {} get {} results.", username, result.size());
+        return result;
+    }
+
     public List<Message> searchFromChannel(String username, String keyword, boolean web, int size) throws IOException {
         if (web || client == null) {
-            List<Message> list = searchFromWeb(username, keyword);
+            List<Message> list = searchFromWeb(username, keyword, "");
             List<Message> result = list.stream().filter(e -> e.getType() != null).toList();
             log.info("Search {} from web {} get {} results.", keyword, username, result.size());
             return result;
@@ -1400,8 +1422,8 @@ public class TelegramService {
         return list.stream();
     }
 
-    public List<Message> searchFromWeb(String username, String keyword) throws IOException {
-        String url = "https://t.me/s/" + username + "?q=" + keyword;
+    public List<Message> searchFromWeb(String username, String keyword, String before) throws IOException {
+        String url = "https://t.me/s/" + username + "?q=" + keyword + "&before=" + before;
 
         String html = getHtml(url);
 
@@ -1415,9 +1437,10 @@ public class TelegramService {
                 String style = photo.attr("style");
                 cover = style.replaceAll(".*background-image:url\\('(.*?)'\\).*", "$1");
             }
+            String id = element.selectFirst(".tgme_widget_message").attr("data-post").split("/")[1];
             Element elTime = element.selectFirst("time");
             String time = elTime != null ? elTime.attr("datetime") : null;
-            list.add(new Message(username, getTextWithNewlines(element.select(".tgme_widget_message_text").first()), time, cover));
+            list.add(new Message(Integer.parseInt(id), username, getTextWithNewlines(element.select(".tgme_widget_message_text").first()), time, cover));
         }
         return list;
     }
