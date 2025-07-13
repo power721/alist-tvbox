@@ -502,6 +502,15 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 比如`https://gh-proxy.net/`
 
+### HTTP代理
+创建文件/etc/xiaoya/proxy.txt， 内容为代理地址。
+
+比如`http://192.168.0.1:8080`
+
+比如`http://user:pass@proxy.example.com:8080`
+
+比如`socks5://proxy.example.com:1080`
+
 ### 别名
 把一些路径合并成一个路径。
 
