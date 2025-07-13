@@ -53,7 +53,7 @@ import java.util.regex.Pattern;
 public class DriverAccountService {
     public static final int IDX = 4000;
     private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139, DriverType.BAIDU);
-    private static final Set<DriverType> COOKIE_TYPES = Set.of(DriverType.PAN115, DriverType.QUARK, DriverType.UC);
+    private static final Set<DriverType> COOKIE_TYPES = Set.of(DriverType.PAN115, DriverType.QUARK, DriverType.UC, DriverType.CLOUD189);
     private final PanAccountRepository panAccountRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final SettingRepository settingRepository;
