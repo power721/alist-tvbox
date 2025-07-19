@@ -220,6 +220,13 @@ public class ShareService {
             if (share.isTemp() && share.getTime() != null && share.getTime().isBefore(time)) {
                 log.info("Delete temp share: {} {}", share.getId(), share.getPath());
                 shareRepository.delete(share);
+
+                try {
+                    String token = accountService.login();
+                    deleteStorage(share.getId(), token);
+                } catch (Exception e) {
+                    log.warn("cleanTempShare error", e);
+                }
             }
         }
     }
