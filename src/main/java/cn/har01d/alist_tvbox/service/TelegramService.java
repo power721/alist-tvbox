@@ -241,6 +241,8 @@ public class TelegramService {
             } catch (Exception e) {
                 log.warn("read channels error", e);
             }
+        } else {
+            telegramChannelRepository.deleteById(1618421074L);
         }
     }
 
