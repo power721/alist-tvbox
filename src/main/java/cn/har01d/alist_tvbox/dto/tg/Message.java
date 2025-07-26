@@ -119,7 +119,7 @@ public class Message {
             type = parseType(link);
             if (type != null) {
                 return link;
-            } else {
+            } else if (!link.startsWith("https://t.me/")) {
                 LOGGER.debug("ignore link: {}", link);
             }
         }
@@ -134,7 +134,7 @@ public class Message {
             String type = parseType(link);
             if (type != null) {
                 links.add(link);
-            } else {
+            } else if (!link.startsWith("https://t.me/")) {
                 LOGGER.debug("ignore link: {}", link);
             }
         }
@@ -148,7 +148,7 @@ public class Message {
             String type = parseType(link);
             if (type != null) {
                 links.add(link);
-            } else {
+            } else if (!link.startsWith("https://t.me/")) {
                 LOGGER.debug("ignore link: {}", link);
             }
         }

@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Utils;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 public class RemoteSearchService {
     private final AppProperties appProperties;
@@ -44,9 +46,8 @@ public class RemoteSearchService {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        List<String> channels = telegramChannelRepository.findAll(Sort.by("order")).stream()
+        List<String> channels = telegramChannelRepository.findByEnabledTrue(Sort.by("order")).stream()
                 .filter(TelegramChannel::isValid)
-                .filter(TelegramChannel::isEnabled)
                 .map(TelegramChannel::getUsername)
                 .toList();
 
@@ -71,6 +72,7 @@ public class RemoteSearchService {
         result.setTotal(list.size());
         result.setLimit(list.size());
 
+        log.info("Search {} get {} results from PanSou.", keyword, result.getTotal());
         return result;
     }
 

@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface TelegramChannelRepository extends JpaRepository<TelegramChannel, Long> {
     List<TelegramChannel> findByWebAccessTrue(Sort sort);
+
+    List<TelegramChannel> findByEnabledTrue(Sort sort);
 }
