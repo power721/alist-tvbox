@@ -130,13 +130,13 @@ public class TelegramController {
         return telegramService.searchPg(request.getKeyword(), request.getChannelUsername(), request.getEncode());
     }
 
-    @GetMapping(value = "/tg/s/{id}", produces = "text/plain;charset=UTF-8")
+    @GetMapping(value = "/tgs/s/{id}", produces = "text/plain;charset=UTF-8")
     public String searchWeb(@PathVariable String id, String keyword, String encode, HttpServletResponse response) {
         response.setHeader("server", "hypercorn-h11");
         return telegramService.searchWeb(keyword, id, encode);
     }
 
-    @PostMapping(value = "/tg/s/{id}", produces = "text/plain;charset=UTF-8")
+    @PostMapping(value = "/tgs/s/{id}", produces = "text/plain;charset=UTF-8")
     public String searchWebPost(@PathVariable String id, @RequestBody String body, HttpServletResponse response) throws JsonProcessingException {
         String json = new String(Base64.getDecoder().decode(body));
         SearchRequest request = objectMapper.readValue(json, SearchRequest.class);
