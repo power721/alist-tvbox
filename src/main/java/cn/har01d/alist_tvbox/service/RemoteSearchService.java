@@ -2,7 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.ShareLink;
-import cn.har01d.alist_tvbox.dto.pansou.PansouSearchResponse;
+import cn.har01d.alist_tvbox.dto.pansou.PanSouSearchResponse;
 import cn.har01d.alist_tvbox.dto.pansou.SearchRequest;
 import cn.har01d.alist_tvbox.entity.TelegramChannel;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
@@ -52,7 +52,7 @@ public class RemoteSearchService {
                 .toList();
 
         var request = new SearchRequest(keyword, channels, appProperties.getPanSouSource());
-        var response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, PansouSearchResponse.class);
+        var response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, PanSouSearchResponse.class);
         for (var message : response.getData().getResults()) {
             for (var link : message.getLinks()) {
                 String type = getTypeName(link.getType());
