@@ -1,6 +1,10 @@
 package cn.har01d.alist_tvbox.dto.pansou;
 
-import cn.har01d.alist_tvbox.model.Response;
+import lombok.Data;
 
-public class PansouSearchResponse extends Response<SearchResponse> {
+@Data
+public class PansouSearchResponse {
+    private Integer code;
+    private String message;
+    private SearchResponse data;
 }
