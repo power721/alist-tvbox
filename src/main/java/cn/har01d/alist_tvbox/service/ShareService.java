@@ -665,7 +665,7 @@ public class ShareService {
         return "";
     }
 
-    private static final Pattern SHARE_115_LINK = Pattern.compile("https://(?:115|115cdn).com/s/([\\w-]+)(?:\\?password=([\\w-]+))?");
+    private static final Pattern SHARE_115_LINK = Pattern.compile("https://(?:115|115cdn|anxia).com/s/([\\w-]+)(?:\\?password=([\\w-]+))?");
     private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
     private static final Pattern SHARE_BD_LINK1 = Pattern.compile("https://pan.baidu.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
     private static final Pattern SHARE_BD_LINK2 = Pattern.compile("https://pan.baidu.com/share/init\\?surl=([\\w-]+)(?:&pwd=([\\w-]+))?");
@@ -680,8 +680,17 @@ public class ShareService {
     private static final Pattern SHARE_UC_LINK = Pattern.compile("https://(?:drive|fast).uc.cn/s/([\\w-]+)(?:\\?password=(\\w+))?");
     private static final Pattern SHARE_ALI_LINK1 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([\\w-]+)/folder/([\\w-]+)(?:\\?password=(\\w+))?");
     private static final Pattern SHARE_ALI_LINK2 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([\\w-]+)(?:\\?password=(\\w+))?");
-    private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([\\w-]+)提取码[:：](\\w+)");
-    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://www.(?:123pan|123684|123865|123912).com/s/([\\w-]+)(?:\\.html)?(?:\\??提取码[:：](\\w+))?");
+    private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)提取码[:：](\\w+)");
+    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)(?:\\.html)?(?:\\??提取码[:：](\\w+))?");
+    public static final Pattern PASSWORD = Pattern.compile("(?:密码|提取码|验证码|访问码|分享密码|密钥|pwd|password|share_pwd|pass_code|#)[=:：\\s]*([a-zA-Z0-9]+)");
+
+    private String parsePassword(String url) {
+        var m = PASSWORD.matcher(url);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return "";
+    }
 
     public boolean parseLink(Share share) {
         String url = share.getShareId();
@@ -702,7 +711,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(8);
             share.setShareId(m.group(1));
-            share.setPassword(m.group(2));
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -710,7 +719,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(2);
             share.setShareId(m.group(1));
-            share.setPassword(m.group(2));
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -718,6 +727,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(9);
             share.setShareId(m.group(1));
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -725,10 +735,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(9);
             share.setShareId(m.group(1));
-            String code = m.group(2);
-            if (code != null) {
-                share.setPassword(code);
-            }
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -736,6 +743,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(9);
             share.setShareId(m.group(1));
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -743,6 +751,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(6);
             share.setShareId(m.group(1));
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -750,6 +759,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(6);
             share.setShareId(m.group(1));
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -757,6 +767,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(6);
             share.setShareId(m.group(1));
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -764,10 +775,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(3);
             share.setShareId(m.group(1));
-            String code = m.group(2);
-            if (code != null) {
-                share.setPassword(code);
-            }
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -775,10 +783,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(3);
             share.setShareId(m.group(1));
-            String code = m.group(2);
-            if (code != null) {
-                share.setPassword(code);
-            }
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -786,6 +791,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(5);
             share.setShareId(m.group(1));
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -793,10 +799,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(7);
             share.setShareId(m.group(1));
-            String code = m.group(2);
-            if (code != null) {
-                share.setPassword(code);
-            }
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -805,10 +808,7 @@ public class ShareService {
             share.setType(0);
             share.setShareId(m.group(1));
             share.setFolderId(m.group(2));
-            String code = m.group(3);
-            if (code != null) {
-                share.setPassword(code);
-            }
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -816,10 +816,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(0);
             share.setShareId(m.group(1));
-            String code = m.group(2);
-            if (code != null) {
-                share.setPassword(code);
-            }
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -827,10 +824,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(10);
             share.setShareId(m.group(1));
-            String code = m.group(2);
-            if (code != null) {
-                share.setPassword(code);
-            }
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -838,10 +832,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(10);
             share.setShareId(m.group(1));
-            String code = m.group(2);
-            if (code != null) {
-                share.setPassword(code);
-            }
+            share.setPassword(parsePassword(url));
             return true;
         }
 
@@ -849,10 +840,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(1);
             share.setShareId(m.group(1));
-            String code = m.group(2);
-            if (code != null) {
-                share.setPassword(code);
-            }
+            share.setPassword(parsePassword(url));
             return true;
         }
         return false;

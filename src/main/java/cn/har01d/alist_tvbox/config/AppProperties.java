@@ -33,6 +33,8 @@ public class AppProperties {
     private String tgSearch;
     private String tgSortField = "time";
     private boolean tgLogin;
+    private String panSouUrl;
+    private String panSouSource = "all";
     private String systemId;
     private int tgTimeout = 5000;
     private int tempShareExpiration = 24;

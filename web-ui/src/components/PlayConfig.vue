@@ -24,6 +24,8 @@ const cover = ref('')
 const tgChannels = ref('')
 const tgWebChannels = ref('')
 const tgSearch = ref('')
+const panSouUrl = ref('')
+const panSouSource = ref('all')
 const tgSortField = ref('time')
 const tgTimeout = ref(3000)
 const channels = ref<Channel[]>([])
@@ -80,6 +82,12 @@ const orders = [
   {label: '频道', value: 'channel'},
 ]
 
+const sources = [
+  {label: '全部', value: 'all'},
+  {label: '电报', value: 'tg'},
+  {label: '插件', value: 'plugin'},
+]
+
 const activeName = ref('basic')
 
 const getTypeName = (id: number) => {
@@ -95,6 +103,19 @@ const updateTgTimeout = () => {
 const updateTgSearch = () => {
   axios.post('/api/settings', {name: 'tg_search', value: tgSearch.value}).then(({data}) => {
     tgSearch.value = data.value
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePanSouUrl = () => {
+  axios.post('/api/settings', {name: 'pan_sou_url', value: panSouUrl.value}).then(({data}) => {
+    panSouUrl.value = data.value
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePanSouSource = () => {
+  axios.post('/api/settings', {name: 'pan_sou_source', value: panSouSource.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -267,6 +288,8 @@ onMounted(() => {
     tgChannels.value = data.tg_channels
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
+    panSouUrl.value = data.pan_sou_url
+    panSouSource.value = data.pan_sou_source || 'all'
     tgSortField.value = data.tg_sort_field || 'time'
     tgDriverOrder.value = data.tgDriverOrder.split(',').map(e => {
       return {
@@ -293,6 +316,22 @@ onMounted(() => {
         <el-form-item>
           <el-button type="primary" @click="updateTgSearch">更新</el-button>
           <a class="hint" target="_blank" href="https://t.me/alist_tvbox/711">部署</a>
+        </el-form-item>
+        <el-form-item label="PanSou地址">
+          <el-input v-model="panSouUrl" placeholder="http://IP:8888"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updatePanSouUrl">更新</el-button>
+        </el-form-item>
+        <el-form-item label="PanSou数据源" v-if="panSouUrl">
+          <el-radio-group v-model="panSouSource" class="ml-4">
+            <el-radio size="large" v-for="item in sources" :key="item.value" :value="item.value">
+              {{ item.label }}
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updatePanSouSource" v-if="panSouUrl">更新</el-button>
         </el-form-item>
         <el-form-item label="搜索超时时间">
           <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒

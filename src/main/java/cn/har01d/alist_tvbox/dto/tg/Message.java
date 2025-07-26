@@ -2,6 +2,8 @@ package cn.har01d.alist_tvbox.dto.tg;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -14,7 +16,8 @@ import java.util.regex.Pattern;
 
 @Data
 public class Message {
-    private static final Pattern LINK = Pattern.compile("(https?:\\/\\/\\S+)");
+    private static final Logger LOGGER = LoggerFactory.getLogger(Message.class);
+    private static final Pattern LINK = Pattern.compile("(https?://\\S+)");
     private int id;
     private Instant time;
     @JsonIgnore
@@ -116,6 +119,8 @@ public class Message {
             type = parseType(link);
             if (type != null) {
                 return link;
+            } else if (!link.startsWith("https://t.me/")) {
+                LOGGER.debug("ignore link: {}", link);
             }
         }
         return null;
@@ -129,6 +134,8 @@ public class Message {
             String type = parseType(link);
             if (type != null) {
                 links.add(link);
+            } else if (!link.startsWith("https://t.me/")) {
+                LOGGER.debug("ignore link: {}", link);
             }
         }
         return links;
@@ -141,6 +148,8 @@ public class Message {
             String type = parseType(link);
             if (type != null) {
                 links.add(link);
+            } else if (!link.startsWith("https://t.me/")) {
+                LOGGER.debug("ignore link: {}", link);
             }
         }
         return links;
@@ -163,7 +172,7 @@ public class Message {
         if (link.contains("xunlei.com")) {
             return "2";
         }
-        if (link.contains("123pan.com") || link.contains("123684.com") || link.contains("123865.com") || link.contains("123912.com")) {
+        if (link.contains("123pan.com") || link.contains("123pan.cn") || link.contains("123684.com") || link.contains("123865.com") || link.contains("123912.com") || link.contains("123592.com")) {
             return "3";
         }
         if (link.contains("quark.cn")) {
@@ -175,7 +184,7 @@ public class Message {
         if (link.contains("uc.cn")) {
             return "7";
         }
-        if (link.contains("115.com") || link.contains("115cdn.com")) {
+        if (link.contains("115.com") || link.contains("115cdn.com") || link.contains("anxia.com")) {
             return "8";
         }
         if (link.contains("189.cn")) {

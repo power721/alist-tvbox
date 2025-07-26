@@ -1059,6 +1059,16 @@ public class SubscriptionService {
         } catch (Exception e) {
             log.warn("", e);
         }
+
+        if (StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
+            try {
+                Map<String, Object> site = buildSite(token, uid, "csp_FishPanSou", "鱼佬盘搜");
+                sites.add(id++, site);
+                log.debug("add Pansou: {}", site);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
     }
 
     private Map<String, Object> buildSite(String token, String uid, String key, String name) throws IOException {
