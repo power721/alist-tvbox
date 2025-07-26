@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.pansou.PanSouSearchResponse;
 import cn.har01d.alist_tvbox.dto.pansou.SearchRequest;
+import cn.har01d.alist_tvbox.dto.pansou.SearchResult;
 import cn.har01d.alist_tvbox.entity.TelegramChannel;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -19,7 +20,10 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -82,6 +86,25 @@ public class RemoteSearchService {
         String path = shareService.add(share);
 
         return tvBoxService.getDetail("", "1$" + path + "/~playlist");
+    }
+
+    public String searchPg(String keyword, String username, String encode) {
+        log.info("[PanSou] search {} from channels {}", keyword, username);
+
+        List<String> channels = Arrays.stream(username.split(",")).map(e -> e.split("\\|")[0]).toList();
+
+        var request = new SearchRequest(keyword, channels, appProperties.getPanSouSource());
+        var response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, PanSouSearchResponse.class);
+
+        return response.getData().getResults().stream()
+                .map(SearchResult::toPgString)
+                .map(e -> {
+                    if ("1".equals(encode)) {
+                        return Base64.getEncoder().encodeToString(e.getBytes());
+                    }
+                    return e;
+                })
+                .collect(Collectors.joining("\n"));
     }
 
     private String encodeUrl(String url) {

@@ -129,6 +129,7 @@ public class TelegramService {
     private final MovieRepository movieRepository;
     private final ShareService shareService;
     private final TvBoxService tvBoxService;
+    private final RemoteSearchService remoteSearchService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Math.min(10, Runtime.getRuntime().availableProcessors() * 2));
@@ -216,6 +217,7 @@ public class TelegramService {
                            MovieRepository movieRepository,
                            ShareService shareService,
                            TvBoxService tvBoxService,
+                           RemoteSearchService remoteSearchService,
                            RestTemplateBuilder restTemplateBuilder,
                            ObjectMapper objectMapper) {
         this.appProperties = appProperties;
@@ -224,6 +226,7 @@ public class TelegramService {
         this.movieRepository = movieRepository;
         this.shareService = shareService;
         this.tvBoxService = tvBoxService;
+        this.remoteSearchService = remoteSearchService;
         this.restTemplate = restTemplateBuilder.build();
         this.objectMapper = objectMapper;
     }
@@ -585,6 +588,10 @@ public class TelegramService {
     }
 
     public String searchPg(String keyword, String username, String encode) {
+        if (StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
+            return remoteSearchService.searchPg(keyword, username, encode);
+        }
+
         log.info("search {} from channels {}", keyword, username);
         List<Message> results = List.of();
         if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
