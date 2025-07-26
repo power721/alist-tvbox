@@ -6,17 +6,8 @@ import java.util.List;
 
 @Data
 public class SearchRequest {
-    private String kw;
-    private List<String> channels;
-    private String src;
+    private final String kw;
+    private final List<String> channels;
+    private final String src;
     private String res = "results";
-
-    public SearchRequest() {
-    }
-
-    public SearchRequest(String kw, List<String> channels, String src) {
-        this.kw = kw;
-        this.channels = channels;
-        this.src = src;
-    }
 }
