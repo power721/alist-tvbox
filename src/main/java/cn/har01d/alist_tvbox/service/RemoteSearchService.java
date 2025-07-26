@@ -54,11 +54,15 @@ public class RemoteSearchService {
         var response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, PansouSearchResponse.class);
         for (var message : response.getData().getResults()) {
             for (var link : message.getLinks()) {
+                String type = getTypeName(link.getType());
+                if (type == null) {
+                    continue;
+                }
                 MovieDetail movieDetail = new MovieDetail();
                 movieDetail.setVod_id(encodeUrl(link.getUrl()));
                 movieDetail.setVod_name(message.getTitle());
                 movieDetail.setVod_pic(getPic(link.getType()));
-                movieDetail.setVod_remarks(getTypeName(link.getType()));
+                movieDetail.setVod_remarks(type);
                 list.add(movieDetail);
             }
         }
