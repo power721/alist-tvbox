@@ -77,6 +77,8 @@ public class SettingService {
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
+        appProperties.setPanSouUrl(settingRepository.findById("pan_sou_url").map(Setting::getValue).orElse(""));
+        appProperties.setPanSouSource(settingRepository.findById("pan_sou_source").map(Setting::getValue).orElse("all"));
         appProperties.setTgSortField(settingRepository.findById("tg_sort_field").map(Setting::getValue).orElse("time"));
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(24));
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
@@ -240,7 +242,19 @@ public class SettingService {
             appProperties.setTgTimeout(Integer.parseInt(setting.getValue()));
         }
         if ("tg_search".equals(setting.getName())) {
+            if (setting.getValue().endsWith("/")) {
+                setting.setValue(setting.getValue().substring(0, setting.getValue().length() - 1));
+            }
             appProperties.setTgSearch(setting.getValue());
+        }
+        if ("pan_sou_url".equals(setting.getName())) {
+            if (setting.getValue().endsWith("/")) {
+                setting.setValue(setting.getValue().substring(0, setting.getValue().length() - 1));
+            }
+            appProperties.setPanSouUrl(setting.getValue());
+        }
+        if ("pan_sou_source".equals(setting.getName())) {
+            appProperties.setPanSouSource(setting.getValue());
         }
         if ("tg_sort_field".equals(setting.getName())) {
             appProperties.setTgSortField(setting.getValue());
