@@ -1328,9 +1328,21 @@ public class TvBoxService {
                 return;
             }
         }
-        folders.sort(comparator);
-        files.sort(comparator);
-        images.sort(comparator);
+        try {
+            folders.sort(comparator);
+        } catch (Exception e) {
+            log.warn("sort folders failed: {} {}", sort, e.getMessage());
+        }
+        try {
+            files.sort(comparator);
+        } catch (Exception e) {
+            log.warn("sort files failed: {} {}", sort, e.getMessage());
+        }
+        try {
+            images.sort(comparator);
+        } catch (Exception e) {
+            log.warn("sort images failed: {} {}", sort, e.getMessage());
+        }
     }
 
     private MovieDetail generatePlaylist(Site site, String path, int total, List<MovieDetail> files) {
