@@ -16,6 +16,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -90,6 +91,9 @@ public class RemoteSearchService {
 
     public List<Message> search(String keyword, List<String> channels) {
         var request = new SearchRequest(keyword, channels, appProperties.getPanSouSource());
+        if (!CollectionUtils.isEmpty(appProperties.getPanSouPlugins())) {
+            request.setPlugins(appProperties.getPanSouPlugins());
+        }
         var response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, PanSouSearchResponse.class);
         List<SearchResult> results = response.getData().getResults();
         List<String> tgDrivers = appProperties.getTgDrivers();

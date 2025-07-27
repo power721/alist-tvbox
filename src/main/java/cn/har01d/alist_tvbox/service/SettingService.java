@@ -84,6 +84,7 @@ public class SettingService {
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));
+        settingRepository.findById("panSouPlugins").ifPresent(e -> appProperties.setPanSouPlugins(Arrays.asList(e.getValue().split(","))));
         String value = settingRepository.findById("tg_drivers").map(Setting::getValue).orElse("");
         if (StringUtils.isBlank(value)) {
             settingRepository.save(new Setting("tg_drivers", String.join(",", appProperties.getTgDrivers())));
@@ -258,6 +259,9 @@ public class SettingService {
         }
         if ("pan_sou_source".equals(setting.getName())) {
             appProperties.setPanSouSource(setting.getValue());
+        }
+        if ("panSouPlugins".equals(setting.getName())) {
+            appProperties.setPanSouPlugins(Arrays.stream(setting.getValue().split(",")).toList());
         }
         if ("tg_sort_field".equals(setting.getName())) {
             appProperties.setTgSortField(setting.getValue());

@@ -26,6 +26,8 @@ const tgWebChannels = ref('')
 const tgSearch = ref('')
 const panSouUrl = ref('')
 const panSouSource = ref('all')
+const panSouPlugins = ref([])
+const plugins = ref([])
 const tgSortField = ref('time')
 const tgTimeout = ref(3000)
 const channels = ref<Channel[]>([])
@@ -110,6 +112,9 @@ const updateTgSearch = () => {
 const updatePanSouUrl = () => {
   axios.post('/api/settings', {name: 'pan_sou_url', value: panSouUrl.value}).then(({data}) => {
     panSouUrl.value = data.value
+    axios.get(data.value + '/api/health').then(({data}) => {
+      plugins.value = data.plugins
+    })
     ElMessage.success('更新成功')
   })
 }
@@ -133,6 +138,14 @@ const updateDrivers = () => {
   const value = tgDriverOrder.value.map(e => e.id).filter(e => tgDrivers.value.includes(e)).join(',')
   axios.post('/api/settings', {name: 'tg_drivers', value: value}).then(({data}) => {
     tgDrivers.value = data.value.split(',')
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePlugins = () => {
+  const value = panSouPlugins.value.join(',')
+  axios.post('/api/settings', {name: 'panSouPlugins', value: value}).then(({data}) => {
+    panSouPlugins.value = data.value.split(',')
     ElMessage.success('更新成功')
   })
 }
@@ -289,6 +302,14 @@ onMounted(() => {
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
     panSouUrl.value = data.pan_sou_url
+    if (panSouUrl.value) {
+      axios.get(panSouUrl.value + '/api/health').then(({data}) => {
+        plugins.value = data.plugins
+      })
+    }
+    if (data.panSouPlugins && data.panSouPlugins.length) {
+      panSouPlugins.value = data.panSouPlugins.split(',')
+    }
     panSouSource.value = data.pan_sou_source || 'all'
     tgSortField.value = data.tg_sort_field || 'time'
     tgDriverOrder.value = data.tgDriverOrder.split(',').map(e => {
@@ -317,6 +338,12 @@ onMounted(() => {
           <el-button type="primary" @click="updateTgSearch">更新</el-button>
           <a class="hint" target="_blank" href="https://t.me/alist_tvbox/711">部署</a>
         </el-form-item>
+        <el-form-item label="搜索超时时间">
+          <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateTgTimeout">更新</el-button>
+        </el-form-item>
         <el-form-item label="PanSou地址">
           <el-input v-model="panSouUrl" placeholder="http://IP:8888"/>
         </el-form-item>
@@ -333,11 +360,14 @@ onMounted(() => {
         <el-form-item>
           <el-button type="primary" @click="updatePanSouSource" v-if="panSouUrl">更新</el-button>
         </el-form-item>
-        <el-form-item label="搜索超时时间">
-          <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒
+        <el-form-item label="PanSou插件" v-if="panSouUrl">
+          <el-checkbox-group v-model="panSouPlugins">
+            <el-checkbox v-for="item in plugins" :label="item" :value="item" :key="item"/>
+          </el-checkbox-group>
         </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateTgTimeout">更新</el-button>
+        <el-form-item v-if="panSouUrl">
+          <el-button type="primary" @click="updatePlugins">更新</el-button>
+          <span class="hint">留空使用全部插件搜索</span>
         </el-form-item>
         <el-form-item label="网盘顺序">
           <el-checkbox-group v-model="tgDrivers">
