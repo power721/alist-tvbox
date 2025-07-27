@@ -589,7 +589,12 @@ public class TelegramService {
 
     public String searchPg(String keyword, String username, String encode) {
         if (StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
-            return remoteSearchService.searchPg(keyword, username, encode);
+            List<String> channels = list().stream()
+                    .filter(TelegramChannel::isValid)
+                    .filter(TelegramChannel::isEnabled)
+                    .map(TelegramChannel::getUsername)
+                    .toList();
+            return remoteSearchService.searchPg(keyword, channels, encode);
         }
 
         log.info("search {} from channels {}", keyword, username);

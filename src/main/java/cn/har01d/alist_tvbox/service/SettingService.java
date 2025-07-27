@@ -251,6 +251,9 @@ public class SettingService {
             if (setting.getValue().endsWith("/")) {
                 setting.setValue(setting.getValue().substring(0, setting.getValue().length() - 1));
             }
+            if (setting.getValue().endsWith("/api/search")) {
+                setting.setValue(setting.getValue().substring(0, setting.getValue().length() - 11));
+            }
             appProperties.setPanSouUrl(setting.getValue());
         }
         if ("pan_sou_source".equals(setting.getName())) {

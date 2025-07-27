@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.dto.tg;
 
+import cn.har01d.alist_tvbox.dto.pansou.Link;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 import org.slf4j.Logger;
@@ -19,6 +20,7 @@ public class Message {
     private static final Logger LOGGER = LoggerFactory.getLogger(Message.class);
     private static final Pattern LINK = Pattern.compile("(https?://\\S+)");
     private int id;
+    private String mid;
     private Instant time;
     @JsonIgnore
     private String content;
@@ -83,8 +85,18 @@ public class Message {
         this.channel = message.getChannel();
     }
 
+    public Message(cn.har01d.alist_tvbox.dto.pansou.SearchResult message, Link link) {
+        this.mid = message.getMessageId();
+        this.time = message.getDatetime();
+        this.content = message.getContent();
+        this.link = link.getUrl();
+        this.type = parseType(link.getUrl());
+        this.name = message.getTitle();
+        this.channel = message.getChannel();
+    }
+
     public String toPgString() {
-        return time.atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + "\t" + channel + "\t" + content.replace('\n', ' ') + "\t" + id;
+        return time.atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + "\t" + channel + "\t" + content.replace('\n', ' ') + "\t" + (mid == null ? id : mid);
     }
 
     public String toZxString() {
