@@ -5,12 +5,14 @@ import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.pansou.PanSouSearchResponse;
 import cn.har01d.alist_tvbox.dto.pansou.SearchRequest;
 import cn.har01d.alist_tvbox.dto.pansou.SearchResult;
+import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.TelegramChannel;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -47,7 +50,7 @@ public class RemoteSearchService {
     }
 
     public MovieList pansou(String keyword) {
-        MovieList result = new MovieList();
+        var result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
         List<String> channels = telegramChannelRepository.findByEnabledTrue(Sort.by("order")).stream()
@@ -55,21 +58,18 @@ public class RemoteSearchService {
                 .map(TelegramChannel::getUsername)
                 .toList();
 
-        var request = new SearchRequest(keyword, channels, appProperties.getPanSouSource());
-        var response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, PanSouSearchResponse.class);
-        for (var message : response.getData().getResults()) {
-            for (var link : message.getLinks()) {
-                String type = getTypeName(link.getType());
-                if (type == null) {
-                    continue;
-                }
-                MovieDetail movieDetail = new MovieDetail();
-                movieDetail.setVod_id(encodeUrl(link.getUrl()));
-                movieDetail.setVod_name(message.getTitle());
-                movieDetail.setVod_pic(getPic(link.getType()));
-                movieDetail.setVod_remarks(type);
-                list.add(movieDetail);
+        var messages = search(keyword, channels);
+        for (var message : messages) {
+            var movieDetail = new MovieDetail();
+            movieDetail.setVod_id(encodeUrl(message.getLink()));
+            movieDetail.setVod_name(message.getName());
+            if (StringUtils.isBlank(message.getCover())) {
+                movieDetail.setVod_pic(getPic(message.getType()));
+            } else {
+                movieDetail.setVod_pic(message.getCover());
             }
+            movieDetail.setVod_remarks(getTypeName(message.getType()));
+            list.add(movieDetail);
         }
 
         result.setList(list);
@@ -81,23 +81,58 @@ public class RemoteSearchService {
     }
 
     public MovieList detail(String tid) {
-        ShareLink share = new ShareLink();
+        var share = new ShareLink();
         share.setLink(tid);
         String path = shareService.add(share);
 
         return tvBoxService.getDetail("", "1$" + path + "/~playlist");
     }
 
-    public String searchPg(String keyword, String username, String encode) {
-        log.info("[PanSou] search {} from channels {}", keyword, username);
-
-        List<String> channels = Arrays.stream(username.split(",")).map(e -> e.split("\\|")[0]).toList();
-
+    public List<Message> search(String keyword, List<String> channels) {
         var request = new SearchRequest(keyword, channels, appProperties.getPanSouSource());
         var response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, PanSouSearchResponse.class);
+        List<SearchResult> results = response.getData().getResults();
+        List<String> tgDrivers = appProperties.getTgDrivers();
+        List<Message> messages = new ArrayList<>();
+        for (var result : results) {
+            for (var link : result.getLinks()) {
+                String type = getTypeName(link.getType());
+                if (type == null) {
+                    continue;
+                }
+                var message = new Message(result, link);
+                if (tgDrivers.isEmpty() || tgDrivers.contains(message.getType())) {
+                    messages.add(message);
+                }
+            }
+        }
+        return messages.stream().sorted(comparator()).distinct().toList();
+    }
 
-        return response.getData().getResults().stream()
-                .map(SearchResult::toPgString)
+    private Comparator<Message> comparator() {
+        Comparator<Message> type = Comparator.comparing(a -> appProperties.getTgDriverOrder().indexOf(a.getType()));
+        return switch (appProperties.getTgSortField()) {
+            case "type" -> type.thenComparing(Comparator.comparing(Message::getTime).reversed());
+            case "name" -> Comparator.comparing(Message::getName);
+            case "channel" ->
+                    Comparator.comparing(Message::getChannel).thenComparing(Comparator.comparing(Message::getTime).reversed());
+            default -> Comparator.comparing(Message::getTime).reversed();
+        };
+    }
+
+    public String searchPg(String keyword, String username, String encode) {
+        List<String> channels = Arrays.stream(username.split(",")).map(e -> e.split("\\|")[0]).toList();
+        return searchPg(keyword, channels, encode);
+    }
+
+    public String searchPg(String keyword, List<String> channels, String encode) {
+        log.info("[PanSou] search {} from channels {}", keyword, channels);
+
+        var result = search(keyword, channels);
+
+        log.info("[PanSou] get {} results", result.size());
+        return result.stream()
+                .map(Message::toPgString)
                 .map(e -> {
                     if ("1".equals(encode)) {
                         return Base64.getEncoder().encodeToString(e.getBytes());
@@ -116,6 +151,16 @@ public class RemoteSearchService {
             return null;
         }
         return switch (type) {
+            case "0" -> "阿里";
+            case "1" -> "PikPak";
+            case "2" -> "迅雷";
+            case "3" -> "123";
+            case "5" -> "夸克";
+            case "6" -> "移动";
+            case "7" -> "UC";
+            case "8" -> "115";
+            case "9" -> "天翼";
+            case "10" -> "百度";
             case "aliyun" -> "阿里";
             case "pikpak" -> "PikPak";
             case "xunlei" -> "迅雷";
@@ -135,16 +180,16 @@ public class RemoteSearchService {
             return null;
         }
         return switch (type) {
-            case "aliyun" -> getUrl("/ali.jpg");
-            case "pikpak" -> getUrl("/pikpak.jpg");
-            case "xunlei" -> getUrl("/thunder.png");
-            case "123" -> getUrl("/123.png");
-            case "quark" -> getUrl("/quark.png");
-            case "uc" -> getUrl("/uc.png");
-            case "115" -> getUrl("/115.jpg");
-            case "tianyi" -> getUrl("/189.png");
-            case "mobile" -> getUrl("/139.jpg");
-            case "baidu" -> getUrl("/baidu.jpg");
+            case "0" -> getUrl("/ali.jpg");
+            case "1" -> getUrl("/pikpak.jpg");
+            case "2" -> getUrl("/thunder.png");
+            case "3" -> getUrl("/123.png");
+            case "5" -> getUrl("/quark.png");
+            case "7" -> getUrl("/uc.png");
+            case "8" -> getUrl("/115.jpg");
+            case "9" -> getUrl("/189.png");
+            case "6" -> getUrl("/139.jpg");
+            case "10" -> getUrl("/baidu.jpg");
             default -> null;
         };
     }
