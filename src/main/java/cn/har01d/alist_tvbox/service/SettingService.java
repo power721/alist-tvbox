@@ -261,7 +261,7 @@ public class SettingService {
             appProperties.setPanSouSource(setting.getValue());
         }
         if ("panSouPlugins".equals(setting.getName())) {
-            appProperties.setPanSouPlugins(Arrays.stream(setting.getValue().split(",")).toList());
+            appProperties.setPanSouPlugins(Arrays.asList(setting.getValue().split(",")));
         }
         if ("tg_sort_field".equals(setting.getName())) {
             appProperties.setTgSortField(setting.getValue());
