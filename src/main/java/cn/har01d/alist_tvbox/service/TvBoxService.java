@@ -1846,7 +1846,7 @@ public class TvBoxService {
                 log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
 
                 if (appProperties.isSort()) {
-                    fileNames.sort(Comparator.comparing(FileNameInfo::new));
+                    sort(fileNames);
                 }
 
                 int index = 0;
@@ -1882,7 +1882,7 @@ public class TvBoxService {
             log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
 
             if (appProperties.isSort()) {
-                fileNames.sort(Comparator.comparing(FileNameInfo::new));
+                sort(fileNames);
             }
 
             int index = 0;
@@ -1906,6 +1906,14 @@ public class TvBoxService {
         result.setTotal(result.getList().size());
         log.debug("playlist: {}", result);
         return result;
+    }
+
+    private static void sort(List<String> fileNames) {
+        try {
+            fileNames.sort(Comparator.comparing(FileNameInfo::new));
+        } catch (Exception e) {
+            log.warn("sort error: {}", e.getMessage());
+        }
     }
 
     public MovieDetail getMovieDetail(Site site, Meta meta) {
@@ -1946,7 +1954,7 @@ public class TvBoxService {
             log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
 
             if (appProperties.isSort()) {
-                fileNames.sort(Comparator.comparing(FileNameInfo::new));
+                sort(fileNames);
             }
 
             List<String> urls = new ArrayList<>();
@@ -1991,7 +1999,7 @@ public class TvBoxService {
                 log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
 
                 if (appProperties.isSort()) {
-                    fileNames.sort(Comparator.comparing(FileNameInfo::new));
+                    sort(fileNames);
                 }
 
                 List<String> urls = new ArrayList<>();
@@ -2029,7 +2037,7 @@ public class TvBoxService {
                     log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
 
                     if (appProperties.isSort()) {
-                        fileNames.sort(Comparator.comparing(FileNameInfo::new));
+                        sort(fileNames);
                     }
 
                     List<String> urls = new ArrayList<>();

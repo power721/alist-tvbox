@@ -23,7 +23,12 @@ public class FileNameInfo implements Comparable<FileNameInfo> {
     private final List<Double> numbers = new ArrayList<>();
 
     public FileNameInfo(String name) {
+        name = name.replaceAll(" ", "");
         this.name = name;
+        int index = name.lastIndexOf('.');
+        if (index != -1) {
+            name = name.substring(0, index);
+        }
         Matcher matcher = SEASON.matcher(name);
         if (matcher.find()) {
             this.prefixes.add("");
