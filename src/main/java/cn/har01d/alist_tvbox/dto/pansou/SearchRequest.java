@@ -10,4 +10,5 @@ public class SearchRequest {
     private final List<String> channels;
     private final String src;
     private String res = "results";
+    private List<String> plugins;
 }
