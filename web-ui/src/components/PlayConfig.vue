@@ -112,7 +112,7 @@ const updateTgSearch = () => {
 const updatePanSouUrl = () => {
   axios.post('/api/settings', {name: 'pan_sou_url', value: panSouUrl.value}).then(({data}) => {
     panSouUrl.value = data.value
-    axios.get(data.value + '/api/health').then(({data}) => {
+    axios.get('/api/pansou').then(({data}) => {
       plugins.value = data.plugins
     })
     ElMessage.success('更新成功')
@@ -303,7 +303,7 @@ onMounted(() => {
     tgSearch.value = data.tg_search
     panSouUrl.value = data.pan_sou_url
     if (panSouUrl.value) {
-      axios.get(panSouUrl.value + '/api/health').then(({data}) => {
+      axios.get('/api/pansou').then(({data}) => {
         plugins.value = data.plugins
       })
     }

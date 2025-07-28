@@ -29,6 +29,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 @Slf4j
 @Service
 public class RemoteSearchService {
@@ -48,6 +50,10 @@ public class RemoteSearchService {
         this.telegramChannelRepository = telegramChannelRepository;
         this.shareService = shareService;
         this.tvBoxService = tvBoxService;
+    }
+
+    public ObjectNode getPanSouInfo() {
+        return restTemplate.getForObject(appProperties.getPanSouUrl() + "/api/health", ObjectNode.class);
     }
 
     public MovieList pansou(String keyword) {
