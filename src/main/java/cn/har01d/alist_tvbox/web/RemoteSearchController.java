@@ -3,9 +3,13 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
 import cn.har01d.alist_tvbox.service.RemoteSearchService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import jakarta.servlet.http.HttpServletResponse;
+
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,6 +30,11 @@ public class RemoteSearchController {
         this.subscriptionService = subscriptionService;
         this.remoteSearchService = remoteSearchService;
         this.objectMapper = objectMapper;
+    }
+
+    @GetMapping("/api/pansou")
+    public ObjectNode getPanSouInfo() {
+        return remoteSearchService.getPanSouInfo();
     }
 
     @GetMapping("/pansou")
