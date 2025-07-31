@@ -100,11 +100,15 @@ public class RemoteSearchService {
         if (!CollectionUtils.isEmpty(appProperties.getPanSouPlugins())) {
             request.setPlugins(appProperties.getPanSouPlugins());
         }
+        log.debug("search request: {}", request);
         var response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, PanSouSearchResponse.class);
         List<SearchResult> results = response.getData().getResults();
         List<String> tgDrivers = appProperties.getTgDrivers();
         List<Message> messages = new ArrayList<>();
         for (var result : results) {
+            if (result.getLinks() == null) {
+                continue;
+            }
             for (var link : result.getLinks()) {
                 String type = getTypeName(link.getType());
                 if (type == null) {
