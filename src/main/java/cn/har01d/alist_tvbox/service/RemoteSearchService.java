@@ -11,6 +11,7 @@ import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -36,17 +37,20 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public class RemoteSearchService {
     private final AppProperties appProperties;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
     private final TelegramChannelRepository telegramChannelRepository;
     private final ShareService shareService;
     private final TvBoxService tvBoxService;
 
     public RemoteSearchService(AppProperties appProperties,
                                RestTemplateBuilder restTemplateBuilder,
+                               ObjectMapper objectMapper,
                                TelegramChannelRepository telegramChannelRepository,
                                ShareService shareService,
                                TvBoxService tvBoxService) {
         this.appProperties = appProperties;
         this.restTemplate = restTemplateBuilder.build();
+        this.objectMapper = objectMapper;
         this.telegramChannelRepository = telegramChannelRepository;
         this.shareService = shareService;
         this.tvBoxService = tvBoxService;
@@ -101,26 +105,31 @@ public class RemoteSearchService {
             request.setPlugins(appProperties.getPanSouPlugins());
         }
         log.debug("search request: {}", request);
-        var response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, PanSouSearchResponse.class);
-        List<SearchResult> results = response.getData().getResults();
-        List<String> tgDrivers = appProperties.getTgDrivers();
-        List<Message> messages = new ArrayList<>();
-        for (var result : results) {
-            if (result.getLinks() == null) {
-                continue;
-            }
-            for (var link : result.getLinks()) {
-                String type = getTypeName(link.getType());
-                if (type == null) {
+        try {
+            var json = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, String.class);
+            var response = objectMapper.readValue(json, PanSouSearchResponse.class);
+            List<SearchResult> results = response.getData().getResults();
+            List<String> tgDrivers = appProperties.getTgDrivers();
+            List<Message> messages = new ArrayList<>();
+            for (var result : results) {
+                if (result.getLinks() == null) {
                     continue;
                 }
-                var message = new Message(result, link);
-                if (tgDrivers.isEmpty() || tgDrivers.contains(message.getType())) {
-                    messages.add(message);
+                for (var link : result.getLinks()) {
+                    String type = getTypeName(link.getType());
+                    if (type == null) {
+                        continue;
+                    }
+                    var message = new Message(result, link);
+                    if (tgDrivers.isEmpty() || tgDrivers.contains(message.getType())) {
+                        messages.add(message);
+                    }
                 }
             }
+            return messages.stream().sorted(comparator()).distinct().toList();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
         }
-        return messages.stream().sorted(comparator()).distinct().toList();
     }
 
     private Comparator<Message> comparator() {
