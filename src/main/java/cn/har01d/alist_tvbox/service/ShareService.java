@@ -989,9 +989,9 @@ public class ShareService {
         if (share.getPath().equals("/")) {
             throw new BadRequestException("挂载路径不能为/");
         }
-        if (share.getPath().contains(" ")) {
-            throw new BadRequestException("挂载路径不能包含空格");
-        }
+//        if (share.getPath().contains(" ")) {
+//            throw new BadRequestException("挂载路径不能包含空格");
+//        }
 
         if (share.getType() != 4) {
             if (StringUtils.isBlank(share.getShareId())) {
