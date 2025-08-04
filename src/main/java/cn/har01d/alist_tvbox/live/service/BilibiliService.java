@@ -145,7 +145,7 @@ public class BilibiliService implements LivePlatform {
             map.put("platform", "web");
             map.put("sort_type", "");
             map.put("vajra_business_key", "");
-            map.put("web_location", "444.43");
+            map.put("web_location", "444.253");
             map.put("parent_area_id", pid);
             map.put("area_id", id);
             map.put("page", pg);
