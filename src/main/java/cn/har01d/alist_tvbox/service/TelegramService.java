@@ -1228,6 +1228,11 @@ public class TelegramService {
             if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
                 String search = channels.stream().map(TelegramChannel::getUsername).collect(Collectors.joining(","));
                 results = searchRemote(search, keyword, size);
+            } else if (StringUtils.isNotBlank(keyword) && StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
+                List<String> ids = channels.stream()
+                        .map(TelegramChannel::getUsername)
+                        .toList();
+                results = remoteSearchService.search(keyword, ids);
             }
         }
 
