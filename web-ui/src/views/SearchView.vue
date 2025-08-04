@@ -19,6 +19,7 @@
         <el-radio label="2" size="large">BiliBili</el-radio>
         <el-radio label="4" size="large">Emby</el-radio>
         <el-radio label="5" size="large">Jellyfin</el-radio>
+        <el-radio label="6" size="large">鱼佬盘搜</el-radio>
       </el-radio-group>
     </el-form-item>
 
@@ -44,6 +45,19 @@
       <el-table-column prop="vod_year" label="年份" width="90"/>
       <el-table-column prop="vod_remarks" label="评分" width="100"/>
     </el-table>
+
+<!--    <el-table v-if="(type=='6')&&config" :data="config.list" border style="width: 100%">-->
+<!--      <el-table-column prop="vod_name" label="名称" width="300">-->
+<!--        <template #default="scope">-->
+<!--          <a :href="'/#/vod'+scope.row.vod_id" target="_blank">-->
+<!--            {{ scope.row.vod_name }}-->
+<!--          </a>-->
+<!--        </template>-->
+<!--      </el-table-column>-->
+<!--      <el-table-column prop="vod_remarks" label="类型"/>-->
+<!--      <el-table-column prop="vod_year" label="年份" width="90"/>-->
+<!--      <el-table-column prop="vod_remarks" label="评分" width="100"/>-->
+<!--    </el-table>-->
 
     <h2>API返回数据</h2>
     <div class="data">
@@ -103,6 +117,8 @@ const getPath = (type: string) => {
     return '/emby'
   } else if (type == '5') {
     return '/jellyfin'
+  } else if (type == '6') {
+    return '/pansou'
   } else {
     return '/vod'
   }

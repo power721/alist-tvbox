@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.live.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.live.model.BilibiliCategoriesResponse;
 import cn.har01d.alist_tvbox.live.model.BilibiliCategory;
 import cn.har01d.alist_tvbox.live.model.BilibiliRoomPlayInfo;
@@ -11,7 +13,6 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
-import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -33,7 +34,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 
 @Slf4j
@@ -43,15 +47,17 @@ public class BilibiliService implements LivePlatform {
     private final Map<String, List<BilibiliCategory>> categoryMap = new HashMap<>();
     private final RestTemplate restTemplate;
     private final AppProperties appProperties;
+    private final SettingRepository settingRepository;
     private String imgKey;
     private String subKey;
     private LocalDate keyTime;
 
-    public BilibiliService(RestTemplateBuilder builder, AppProperties appProperties) {
+    public BilibiliService(RestTemplateBuilder builder, AppProperties appProperties, SettingRepository settingRepository) {
         this.restTemplate = builder
-                .defaultHeader("User-Agent", Constants.MOBILE_USER_AGENT)
+                .defaultHeader(HttpHeaders.USER_AGENT, appProperties.getUserAgent())
                 .build();
         this.appProperties = appProperties;
+        this.settingRepository = settingRepository;
     }
 
     @Override
@@ -115,6 +121,8 @@ public class BilibiliService implements LivePlatform {
         return result;
     }
 
+    private final Pattern pattern = Pattern.compile("\"access_id\"\\s*:\\s*\"([^\"]+)\"");
+
     @Override
     public MovieList list(String tid, String sort, Integer pg) throws IOException {
         String[] parts = tid.split("-");
@@ -146,14 +154,25 @@ public class BilibiliService implements LivePlatform {
             map.put("sort_type", "");
             map.put("vajra_business_key", "");
             map.put("web_location", "444.253");
+            map.put("wts", System.currentTimeMillis() / 1000);
             map.put("parent_area_id", pid);
             map.put("area_id", id);
             map.put("page", pg);
 
             getKeys();
-            String url = "https://api.live.bilibili.com/xlive/web-interface/v1/second/getList?" + Utils.encryptWbi(map, imgKey, subKey);
-            log.debug("list url: {}", url);
-            var response = restTemplate.exchange(url, HttpMethod.GET, buildHttpEntity(null), BilibiliRoomsResponse.class);
+            var entity = buildHttpEntity(null);
+            String url = "https://live.bilibili.com/p/eden/area-tags?parentAreaId=" + pid + "&areaId=" + id;
+            log.debug("area page url: {}", url);
+            var html = restTemplate.exchange(url, HttpMethod.GET, entity, String.class, pid, id);
+            Matcher matcher = pattern.matcher(html.getBody());
+            if (matcher.find()) {
+                String accessId = matcher.group(1);
+                map.put("w_webid", accessId);
+            }
+
+            url = "https://api.live.bilibili.com/xlive/web-interface/v1/second/getList?" + Utils.encryptWbi(map, imgKey, subKey);
+            log.debug("list url: {} {}", url, entity);
+            var response = restTemplate.exchange(url, HttpMethod.GET, entity, BilibiliRoomsResponse.class);
             log.debug("list response: {} {}", response.getBody().getCode(), response.getBody().getMessage());
             for (var room : response.getBody().getData().getList()) {
                 MovieDetail detail = new MovieDetail();
@@ -184,7 +203,8 @@ public class BilibiliService implements LivePlatform {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.REFERER, "https://live.bilibili.com/");
         headers.set(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
-        headers.set(HttpHeaders.COOKIE, "buvid3=" + UUID.randomUUID() + ThreadLocalRandom.current().nextInt(10000, 99999) + "infoc");
+        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("buvid3=" + UUID.randomUUID() + ThreadLocalRandom.current().nextInt(10000, 99999) + "infoc");
+        headers.set(HttpHeaders.COOKIE, cookie);
         return new HttpEntity<>(data, headers);
     }
 
