@@ -162,6 +162,19 @@
         <el-form-item label="文件夹ID">
           <el-input v-model="form.folder"/>
         </el-form-item>
+        <el-form-item label="类型" v-if="form.type=='PAN139'">
+          <el-select v-model="form.addition.type">
+            <el-option
+              v-for="item in pan139Typess"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="家庭云ID" v-if="form.type=='PAN139'">
+          <el-input v-model="form.addition.cloud_id"/>
+        </el-form-item>
         <el-form-item label="删除码" v-if="form.type=='PAN115'">
           <el-input type="password" show-password v-model="form.addition.delete_code"/>
         </el-form-item>
@@ -249,7 +262,7 @@
           <el-option
             v-for="item in apps"
             :key="item.value"
-            :label="item.value"
+            :label="item.label"
             :value="item.value"
           />
         </el-select>
@@ -297,6 +310,8 @@ const form = ref({
     limit_rate: 2,
     access_token: '',
     delete_code: '',
+    cloud_id: '',
+    type: 'personal_new',
     auto_checkin: false,
   },
   username: '',
@@ -350,6 +365,16 @@ const apps = [
     "label": "网页版"
   },
 ]
+const pan139Typess = [
+  {
+    "value": "personal_new",
+    "label": "个人"
+  },
+  {
+    "value": "family",
+    "label": "家庭"
+  },
+]
 
 const handleAdd = () => {
   dialogTitle.value = '添加网盘账号'
@@ -366,6 +391,8 @@ const handleAdd = () => {
       limit_rate: 2,
       access_token: '',
       delete_code: '',
+      cloud_id: '',
+      type: 'personal_new',
       auto_checkin: false,
     },
     username: '',

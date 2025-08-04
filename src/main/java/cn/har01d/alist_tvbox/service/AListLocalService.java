@@ -125,7 +125,7 @@ public class AListLocalService {
 
     private int findPort() {
         internalPort = readAListConf();
-        if (environment.matchesProfiles("standalone")) {
+        if (environment.matchesProfiles("standalone") || environment.matchesProfiles("host")) {
             return internalPort;
         }
         return Integer.parseInt(environment.getProperty("ALIST_PORT", String.valueOf(internalPort)));

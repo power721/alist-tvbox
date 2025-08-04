@@ -294,13 +294,13 @@ public class HuyaService implements LivePlatform {
         } catch (Exception e) {
             log.warn("", e);
         }
-        q.put("t", "102");
-        q.put("ctype", "tars_mp");
+        q.put("t", "103");
+        q.put("ctype", "tars_mobile");
 
         long seqid = System.currentTimeMillis() + Long.parseLong(uid);
 
         // wsTime
-        String wsTime = Long.toHexString(Instant.now().toEpochMilli() / 1000 + 21600);
+        String wsTime = q.get("wsTime");
 
         // wsSecret
         String fm = new String(Base64.getDecoder().decode(URLDecoder.decode(q.get("fm"), StandardCharsets.UTF_8)), StandardCharsets.UTF_8);
@@ -309,6 +309,19 @@ public class HuyaService implements LivePlatform {
         String wsSecretHash = Utils.md5(String.format("%s|%s|%s", seqid, q.get("ctype"), q.get("t")));
         String wsSecret = Utils.md5(String.format("%s_%s_%s_%s_%s", wsSecretPrefix, uid, streamname, wsSecretHash, wsTime));
 
+        /*
+        # &codec=av1
+        # &codec=264
+        # &codec=265
+        # dMod: wcs-25 / mesh-0 DecodeMod-SupportMod
+        # chrome > 104 or safari = mseh, chrome = mses
+        # sdkPcdn: 1_1 第一个1连接次数 第二个1是因为什么连接
+        # t: 平台信息 100 web(ctype=huya_live/huya_webh5) 102 小程序(ctype=tars_mp) 103 tars_mobile
+        # PLATFORM_TYPE = {'adr': 2, 'huya_liveshareh5': 104, 'ios': 3, 'mini_app': 102, 'wap': 103, 'web': 100}
+        # sv: 2401090219 版本
+        # sdk_sid:  _sessionId sdkInRoomTs 当前毫秒时间
+        # return f"wsSecret={ws_secret}&wsTime={ws_time}&seqid={seq_id}&ctype={url_query['ctype'][0]}&ver=1&fs={url_query['fs'][0]}&u={convert_uid}&t={platform_id}&sv=2401090219&sdk_sid={int(time.time() * 1000)}&codec=264"
+         */
         LinkedHashMap<String, String> resultParamMap = new LinkedHashMap<>();
         resultParamMap.put("wsSecret", wsSecret);
         resultParamMap.put("wsTime", wsTime);
@@ -319,10 +332,10 @@ public class HuyaService implements LivePlatform {
         resultParamMap.put("uid", uid);
         resultParamMap.put("uuid", getUUid());
         resultParamMap.put("t", q.get("t"));
-        resultParamMap.put("sv", "2401310321");
+        resultParamMap.put("sv", "2401090219");
         resultParamMap.put("dMod", "mseh-0");
         resultParamMap.put("sdkPcdn", "2_1");
-        resultParamMap.put("sdk_sid", "1733532984780");
+        resultParamMap.put("sdk_sid", String.valueOf(System.currentTimeMillis()));
         resultParamMap.put("a_block", "0");
         resultParamMap.put("codec", "264");
         return buildQueryString(resultParamMap);
