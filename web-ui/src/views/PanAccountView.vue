@@ -365,14 +365,19 @@ const apps = [
     "label": "网页版"
   },
 ]
+
 const pan139Typess = [
   {
     "value": "personal_new",
-    "label": "个人"
+    "label": "个人盘"
   },
   {
     "value": "family",
-    "label": "家庭"
+    "label": "家庭云"
+  },
+  {
+    "value": "group",
+    "label": "共享群"
   },
 ]
 
