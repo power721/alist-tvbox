@@ -403,11 +403,11 @@ public class ShareService {
                     share.setType(dto.getType());
                     share.setPath(parts[0]);
                     String[] id = parts[1].split(":", 2);
-                    if (id.length > 1) {
+                    if (!parts[1].contains("http") && id.length > 1) {
                         share.setType(Integer.parseInt(id[0]));
                         share.setShareId(id[1]);
                     } else {
-                        share.setShareId(id[0]);
+                        share.setShareId(parts[1]);
                     }
                     if (parts.length > 2) {
                         share.setFolderId(parts[2]);
@@ -422,7 +422,7 @@ public class ShareService {
                     create(share);
                     count++;
                 } catch (Exception e) {
-                    log.warn("{}", e.getMessage());
+                    log.warn("import share failed", e);
                 }
             }
         }
