@@ -99,7 +99,7 @@ public class ShareService {
     private final int offset = 99900;
     private int shareId = 20000;
 
-    public ShareService(AppProperties appProperties1,
+    public ShareService(AppProperties appProperties,
                         ShareRepository shareRepository,
                         MetaRepository metaRepository,
                         AListAliasRepository aliasRepository,
@@ -114,7 +114,7 @@ public class ShareService {
                         PikPakService pikPakService,
                         RestTemplateBuilder builder,
                         Environment environment) {
-        this.appProperties = appProperties1;
+        this.appProperties = appProperties;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
         this.aliasRepository = aliasRepository;
@@ -682,7 +682,7 @@ public class ShareService {
     private static final Pattern SHARE_ALI_LINK2 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([\\w-]+)(?:\\?password=(\\w+))?");
     private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)提取码[:：](\\w+)");
     private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)(?:\\.html)?(?:\\??提取码[:：](\\w+))?");
-    public static final Pattern PASSWORD = Pattern.compile("(?:密码|提取码|验证码|访问码|分享密码|密钥|pwd|password|share_pwd|pass_code|#)[=:：\\s]*([a-zA-Z0-9]+)");
+    public static final Pattern PASSWORD = Pattern.compile("(?:密码|提取码|验证码|访问码|分享密码|密钥|pwd|password|share_pwd|pass_code|#)[=:：\\s]*([a-zA-Z0-9]{1,4})");
 
     private String parsePassword(String url) {
         var m = PASSWORD.matcher(url);

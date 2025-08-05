@@ -161,7 +161,7 @@ public class CcService implements LivePlatform {
     }
 
     @Override
-    public MovieList detail(String tid) throws IOException {
+    public MovieList detail(String tid, String client) throws IOException {
         MovieList result = cache.getIfPresent(tid);
         if (result != null) {
             return result;

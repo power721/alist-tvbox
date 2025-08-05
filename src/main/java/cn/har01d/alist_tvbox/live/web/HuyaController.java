@@ -31,7 +31,7 @@ public class HuyaController {
             if (ids.equals("recommend")) {
                 return huyaService.home();
             }
-            return huyaService.detail(ids);
+            return huyaService.detail(ids, "");
         } else if (wd != null && !wd.isEmpty()) {
             return huyaService.search(wd);
         } else if (t != null && !t.isEmpty()) {

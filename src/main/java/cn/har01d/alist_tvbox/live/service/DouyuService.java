@@ -174,7 +174,7 @@ public class DouyuService implements LivePlatform {
     }
 
     @Override
-    public MovieList detail(String tid) throws IOException {
+    public MovieList detail(String tid, String client) throws IOException {
         String[] parts = tid.split("\\$");
         String id = parts[1];
         MovieList result = new MovieList();
