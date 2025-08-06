@@ -103,7 +103,7 @@ public class LiveService {
         return result;
     }
 
-    public MovieList detail(String tid) throws IOException {
+    public MovieList detail(String tid, String client) throws IOException {
         MovieList result = cache.getIfPresent(tid);
         if (result != null) {
             return result;
@@ -112,7 +112,7 @@ public class LiveService {
         String[] parts = tid.split("\\$");
         for (LivePlatform platform : platforms) {
             if (platform.getType().equals(parts[0])) {
-                result = platform.detail(tid);
+                result = platform.detail(tid, client);
                 if (!result.getList().isEmpty()) {
                     result.getList().get(0).setVod_director(platform.getName());
                 }

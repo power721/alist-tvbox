@@ -101,7 +101,6 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -1225,14 +1224,14 @@ public class TelegramService {
         if (web) {
             channels = channels.stream().filter(TelegramChannel::isWebAccess).toList();
         } else {
-            if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
-                String search = channels.stream().map(TelegramChannel::getUsername).collect(Collectors.joining(","));
-                results = searchRemote(search, keyword, size);
-            } else if (StringUtils.isNotBlank(keyword) && StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
+            if (StringUtils.isNotBlank(keyword) && StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
                 List<String> ids = channels.stream()
                         .map(TelegramChannel::getUsername)
                         .toList();
                 results = remoteSearchService.search(keyword, ids);
+            } else if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+                String search = channels.stream().map(TelegramChannel::getUsername).collect(Collectors.joining(","));
+                results = searchRemote(search, keyword, size);
             }
         }
 

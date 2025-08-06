@@ -18,7 +18,7 @@ public interface LivePlatform {
 
     MovieList search(String wd) throws IOException;
 
-    MovieList detail(String tid) throws IOException;
+    MovieList detail(String tid, String client) throws IOException;
 
     default String playCount(int view) {
         if (view >= 10000) {

@@ -1,8 +1,11 @@
 package cn.har01d.alist_tvbox.live.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.live.model.HuyaCategoryList;
-import cn.har01d.alist_tvbox.live.model.HuyaLiveRoomInfoListResponse;
 import cn.har01d.alist_tvbox.live.model.HuyaLiveRoom;
+import cn.har01d.alist_tvbox.live.model.HuyaLiveRoomInfoListResponse;
+import cn.har01d.alist_tvbox.service.ProxyService;
+import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -17,12 +20,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -50,12 +53,18 @@ public class HuyaService implements LivePlatform {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final AppProperties appProperties;
+    private final ProxyService proxyService;
+    private final SubscriptionService subscriptionService;
 
-    public HuyaService(RestTemplateBuilder builder, ObjectMapper objectMapper) {
+    public HuyaService(RestTemplateBuilder builder, ObjectMapper objectMapper, AppProperties appProperties, ProxyService proxyService, SubscriptionService subscriptionService) {
         this.restTemplate = builder
                 .defaultHeader("User-Agent", Constants.MOBILE_USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
+        this.appProperties = appProperties;
+        this.proxyService = proxyService;
+        this.subscriptionService = subscriptionService;
     }
 
     @Override
@@ -179,7 +188,7 @@ public class HuyaService implements LivePlatform {
     }
 
     @Override
-    public MovieList detail(String tid) throws IOException {
+    public MovieList detail(String tid, String client) throws IOException {
         String[] parts = tid.split("\\$");
         String id = parts[1];
         MovieList result = new MovieList();
@@ -214,7 +223,7 @@ public class HuyaService implements LivePlatform {
         if (!count.isEmpty()) {
             detail.setVod_remarks(playCount(count));
         }
-        parseUrls(detail, response);
+        parseUrls(detail, response, client);
         result.getList().add(detail);
 
         result.setTotal(result.getList().size());
@@ -223,7 +232,18 @@ public class HuyaService implements LivePlatform {
         return result;
     }
 
-    private void parseUrls(MovieDetail movieDetail, String html) throws IOException {
+    // AList-TvBox proxy
+    private String buildProxyUrl(String url) {
+        String p = "/p/" + subscriptionService.getCurrentToken() + "/0@" + proxyService.generateProxyUrl(url);
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath(p)
+                .replaceQuery("")
+                .build()
+                .toUriString();
+    }
+
+    private void parseUrls(MovieDetail movieDetail, String html, String client) throws IOException {
         int start = html.indexOf("window.HNF_GLOBAL_INIT = ") + 25;
         int end = html.indexOf("</script>", start);
         List<String> playFrom = new ArrayList<>();
@@ -257,7 +277,7 @@ public class HuyaService implements LivePlatform {
                     }
                     String qualityName = bitRateInfo.getSDisplayName();
                     if (!qualityName.contains("HDR")) {
-                        urls.add(qualityName + "$" + url);
+                        urls.add(qualityName + "$" + ("web".equals(client) ? buildProxyUrl(url) : url));
                     }
                 }
                 playUrl.add(String.join("#", urls));

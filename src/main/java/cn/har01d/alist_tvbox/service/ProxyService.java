@@ -67,6 +67,14 @@ public class ProxyService {
         playUrlRepository.deleteAll(expired);
     }
 
+    public int generateProxyUrl(String path) {
+        PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(0, path, Sort.by("id").descending());
+        if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
+            playUrl = playUrlRepository.save(new PlayUrl(0, path, Instant.now().plus(1, ChronoUnit.DAYS)));
+        }
+        return playUrl.getId();
+    }
+
     public int generateProxyUrl(Site site, String path) {
         PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
         if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
@@ -93,27 +101,7 @@ public class ProxyService {
         int id = Integer.parseInt(parts[1]);
         PlayUrl playUrl = playUrlRepository.findById(id).orElseThrow(() -> new NotFoundException("Not found: " + id));
         String path = playUrl.getPath();
-        Site site = siteService.getById(playUrl.getSite());
-        FsDetail fsDetail = aListService.getFile(site, path);
-        if (fsDetail == null) {
-            throw new BadRequestException("找不到文件 " + path);
-        }
-
-        String url = fsDetail.getRawUrl();
-        String driver = fsDetail.getProvider();
-        // check url for Alias
-        if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive")
-                || url.contains("baidu.com") || url.contains("quark.cn") || url.contains("uc.cn")
-                || url.startsWith("http://localhost")) {
-            log.debug("{} {}", driver, url);
-            url = buildAListProxyUrl(site, path, fsDetail.getSign());
-        } else {
-            // 302
-            log.debug("302 {} {}", driver, url);
-            response.sendRedirect(url);
-            return;
-        }
-        log.debug("proxy url: {} {}", driver, url);
+        String url;
 
         Map<String, String> headers = new HashMap<>();
         var it = request.getHeaderNames().asIterator();
@@ -121,8 +109,36 @@ public class ProxyService {
             String name = it.next();
             headers.put(name, request.getHeader(name));
         }
-        headers.put("user-agent", appProperties.getUserAgent());
-        headers.put("referer", Constants.ALIPAN);
+        headers.put("user-agent", Constants.MOBILE_USER_AGENT);
+
+        if (playUrl.getSite() == 0) {
+            url = playUrl.getPath();
+            headers.put("referer", "https://m.huya.com/");
+        } else {
+            Site site = siteService.getById(playUrl.getSite());
+            FsDetail fsDetail = aListService.getFile(site, path);
+            if (fsDetail == null) {
+                throw new BadRequestException("找不到文件 " + path);
+            }
+
+            url = fsDetail.getRawUrl();
+            String driver = fsDetail.getProvider();
+            // check url for Alias
+            if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive")
+                    || url.contains("baidu.com") || url.contains("quark.cn") || url.contains("uc.cn")
+                    || url.startsWith("http://localhost")) {
+                log.debug("{} {}", driver, url);
+                url = buildAListProxyUrl(site, path, fsDetail.getSign());
+            } else {
+                // 302
+                log.debug("302 {} {}", driver, url);
+                response.sendRedirect(url);
+                return;
+            }
+            log.debug("proxy url: {} {}", driver, url);
+            headers.put("referer", Constants.ALIPAN);
+        }
+
         log.trace("headers: {}", headers);
 
         downloadStraight(url, request, response, headers);
