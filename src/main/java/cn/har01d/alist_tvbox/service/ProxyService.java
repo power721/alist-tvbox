@@ -70,7 +70,7 @@ public class ProxyService {
     public int generateProxyUrl(String path) {
         PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(0, path, Sort.by("id").descending());
         if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
-            playUrl = playUrlRepository.save(new PlayUrl(0, path, Instant.now().plus(1, ChronoUnit.HOURS)));
+            playUrl = playUrlRepository.save(new PlayUrl(0, path, Instant.now().plus(1, ChronoUnit.DAYS)));
         }
         return playUrl.getId();
     }
