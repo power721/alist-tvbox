@@ -46,21 +46,26 @@
       <el-table-column prop="vod_remarks" label="评分" width="100"/>
     </el-table>
 
-<!--    <el-table v-if="(type=='6')&&config" :data="config.list" border style="width: 100%">-->
-<!--      <el-table-column prop="vod_name" label="名称" width="300">-->
-<!--        <template #default="scope">-->
-<!--          <a :href="'/#/vod'+scope.row.vod_id" target="_blank">-->
-<!--            {{ scope.row.vod_name }}-->
-<!--          </a>-->
-<!--        </template>-->
-<!--      </el-table-column>-->
-<!--      <el-table-column prop="vod_remarks" label="类型"/>-->
-<!--      <el-table-column prop="vod_year" label="年份" width="90"/>-->
-<!--      <el-table-column prop="vod_remarks" label="评分" width="100"/>-->
-<!--    </el-table>-->
+    <el-table v-if="(type=='6')&&config" :data="config.list" border style="width: 100%">
+      <el-table-column prop="vod_name" label="名称">
+        <template #default="scope">
+          <a :href="'/#/vod?link='+scope.row.vod_id" target="_blank">
+            {{ scope.row.vod_name }}
+          </a>
+        </template>
+      </el-table-column>
+      <el-table-column prop="vod_id" label="链接" width="350">
+        <template #default="scope">
+          <a :href="decodeURIComponent(scope.row.vod_id)" target="_blank">
+            {{ decodeURIComponent(scope.row.vod_id) }}
+          </a>
+        </template>
+      </el-table-column>
+      <el-table-column prop="vod_remarks" label="类型" width="100"/>
+    </el-table>
 
-    <h2>API返回数据</h2>
-    <div class="data">
+    <h2 v-if="type!='6'">API返回数据</h2>
+    <div class="data" v-if="type!='6'">
       <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=3>
       </json-viewer>
     </div>
@@ -93,7 +98,9 @@
 import {onMounted, ref} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
+import {useRouter} from "vue-router";
 
+const router = useRouter()
 const token = ref('')
 const type = ref('1')
 const keyword = ref('')

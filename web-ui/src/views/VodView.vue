@@ -869,6 +869,17 @@ const loadResult = (row: any) => {
   })
 }
 
+const loadShare = (link: string) => {
+  form.value = {
+    link: link,
+    path: '',
+    code: '',
+  }
+  axios.post('/api/share-link', form.value).then(({data}) => {
+    loadFolder(data)
+  })
+}
+
 const load = (row: any) => {
   if (row.type == 1) {
     loadFolder(row.path)
@@ -1675,9 +1686,14 @@ const showPrevImage = () => {
 onMounted(async () => {
   axios.get('/api/token').then(({data}) => {
     token.value = data.enabledToken ? data.token.split(",")[0] : "-"
-    const newPath = route.params.path
-    filePath.value = newPath ? '/' + newPath.join('/') : '/'
-    fetchData()
+    const link = route.query.link
+    if (link) {
+      loadShare(link)
+    } else {
+      const newPath = route.params.path
+      filePath.value = newPath ? '/' + newPath.join('/') : '/'
+      fetchData()
+    }
   })
   loadDevices()
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
