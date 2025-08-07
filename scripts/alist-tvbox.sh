@@ -522,7 +522,7 @@ check_update() {
       if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
         echo -e "${YELLOW}正在重启容器...${NC}"
         docker rm -f "$container_name" >/dev/null
-        docker restart "$container_name"
+        start_container
       else
         echo -e "${GREEN}正在启动容器...${NC}"
         docker start "$container_name"
@@ -537,7 +537,7 @@ check_update() {
           if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
             echo -e "${YELLOW}正在重启容器...${NC}"
             docker rm -f "$container_name" >/dev/null
-            docker restart "$container_name"
+            start_container
           else
             echo -e "${GREEN}正在启动容器...${NC}"
             docker start "$container_name"
