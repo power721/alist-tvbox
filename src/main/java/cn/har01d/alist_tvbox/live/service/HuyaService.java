@@ -223,13 +223,54 @@ public class HuyaService implements LivePlatform {
         if (!count.isEmpty()) {
             detail.setVod_remarks(playCount(count));
         }
-        parseUrls(detail, response, client);
+        parseUrls(detail, id, response, client);
         result.getList().add(detail);
 
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
         log.debug("detail: {}", result);
         return result;
+    }
+
+    public String getPlayUrl(String tid) throws IOException {
+        String[] parts = tid.split("-");
+        String id = parts[0];
+        int i = Integer.valueOf(parts[1]);
+        int j = Integer.valueOf(parts[2]);
+
+        String url = "https://m.huya.com/" + id;
+        var html = restTemplate.getForObject(url, String.class);
+        int start = html.indexOf("window.HNF_GLOBAL_INIT = ") + 25;
+        int end = html.indexOf("</script>", start);
+        if (start > 0 && end > start) {
+            String uid = getUid(13, 10);
+            String json = html.substring(start, end);
+            start = json.indexOf("vBitRateInfo");
+            start = json.indexOf("\"value\":", start);
+            end = json.indexOf("],", start) + 1;
+            log.trace("vBitRateInfo: {}", "{" + json.substring(start, end) + "}");
+            HuyaLiveRoom.BitRateInfoList vBitRateInfo = objectMapper.readValue("{" + json.substring(start, end) + "}", HuyaLiveRoom.BitRateInfoList.class);
+
+            List<String> sStreamNames = findAll(json, S_STREAM_NAME);
+            List<String> sFlvUrl = findAll(json, S_FLV_URL);
+            List<String> sFlvUrlSuffix = findAll(json, S_FLV_URL_SUFFIX);
+            List<String> sFlvAntiCode = findAll(json, S_FLV_ANTI_CODE);
+
+            String streamName = sStreamNames.get(i);
+            String streamUrl = sFlvUrl.get(i).replace("\\u002F", "/") + "/" + streamName + "." + sFlvUrlSuffix.get(i);
+            streamUrl = streamUrl.replace("http://", "https://");
+            streamUrl += "?" + processAnticode(sFlvAntiCode.get(i), uid, streamName);
+            List<HuyaLiveRoom.LiveBitRateInfo> value = vBitRateInfo.getValue();
+            var bitRateInfo = value.get(j);
+            url = streamUrl;
+            int bitRate = bitRateInfo.getIBitRate();
+            if (bitRate > 0) {
+                url += "&ratio=" + bitRate;
+            }
+            log.debug("play url: {}", url);
+            return url;
+        }
+        return null;
     }
 
     // AList-TvBox proxy
@@ -243,7 +284,17 @@ public class HuyaService implements LivePlatform {
                 .toUriString();
     }
 
-    private void parseUrls(MovieDetail movieDetail, String html, String client) throws IOException {
+    private String buildPlayUrl(String id) {
+        String p = "/live-play/" + subscriptionService.getCurrentToken();
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath(p)
+                .replaceQuery("id=" + id)
+                .build()
+                .toUriString();
+    }
+
+    private void parseUrls(MovieDetail movieDetail, String id, String html, String client) throws IOException {
         int start = html.indexOf("window.HNF_GLOBAL_INIT = ") + 25;
         int end = html.indexOf("</script>", start);
         List<String> playFrom = new ArrayList<>();
@@ -269,7 +320,9 @@ public class HuyaService implements LivePlatform {
                 streamUrl = streamUrl.replace("http://", "https://");
                 streamUrl += "?" + processAnticode(sFlvAntiCode.get(i), uid, streamName);
                 List<String> urls = new ArrayList<>();
-                for (var bitRateInfo : vBitRateInfo.getValue()) {
+                List<HuyaLiveRoom.LiveBitRateInfo> value = vBitRateInfo.getValue();
+                for (int j = 0; j < value.size(); j++) {
+                    var bitRateInfo = value.get(j);
                     String url = streamUrl;
                     int bitRate = bitRateInfo.getIBitRate();
                     if (bitRate > 0) {
@@ -277,7 +330,11 @@ public class HuyaService implements LivePlatform {
                     }
                     String qualityName = bitRateInfo.getSDisplayName();
                     if (!qualityName.contains("HDR")) {
-                        urls.add(qualityName + "$" + ("web".equals(client) ? buildProxyUrl(url) : url));
+                        if ("一起看".equals(movieDetail.getType_name())) {
+                            urls.add(qualityName + "$" + buildPlayUrl(id + "-" + i + "-" + j));
+                        } else {
+                            urls.add(qualityName + "$" + (appProperties.isHuyaProxy() || "web".equals(client) ? buildProxyUrl(url) : url));
+                        }
                     }
                 }
                 playUrl.add(String.join("#", urls));

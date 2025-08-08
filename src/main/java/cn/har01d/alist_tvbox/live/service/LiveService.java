@@ -123,12 +123,7 @@ public class LiveService {
         return result;
     }
 
-    public Object play(String id) {
-        Map<String, Object> result = new HashMap<>();
-        //result.put("url", urls);
-        //result.put("header", "{\"User-Agent\": \"" + Constants.USER_AGENT + "\"}");
-        result.put("parse", 0);
-        log.debug("{}", result);
-        return result;
+    public String play(String id) throws IOException {
+       return huyaService.getPlayUrl(id);
     }
 }

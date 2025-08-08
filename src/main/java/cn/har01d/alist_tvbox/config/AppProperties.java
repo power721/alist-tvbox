@@ -23,6 +23,7 @@ public class AppProperties {
     private boolean enableHttps;
     private boolean cleanInvalidShares;
     private boolean enabledToken;
+    private boolean huyaProxy;
     private int pageSize = 100;
     private int maxSearchResult = 60;
     private String secretKey;

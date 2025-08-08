@@ -2,7 +2,7 @@ package cn.har01d.alist_tvbox.live.web;
 
 import cn.har01d.alist_tvbox.live.service.LiveService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
-import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -45,14 +45,15 @@ public class LiveController {
     }
 
     @GetMapping("/live-play")
-    public Object play(String id, HttpServletRequest request) throws IOException {
-        return play("", id, request);
+    public void play(String id, HttpServletResponse response) throws IOException {
+        play("", id, response);
     }
 
     @GetMapping("/live-play/{token}")
-    public Object play(@PathVariable String token, String id, HttpServletRequest request) throws IOException {
+    public void play(@PathVariable String token, String id, HttpServletResponse response) throws IOException {
         subscriptionService.checkToken(token);
 
-        return liveService.play(id);
+        String url = liveService.play(id);
+        response.sendRedirect(url);
     }
 }
