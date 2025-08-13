@@ -80,7 +80,7 @@ public class SettingService {
         appProperties.setPanSouUrl(settingRepository.findById("pan_sou_url").map(Setting::getValue).orElse(""));
         appProperties.setPanSouSource(settingRepository.findById("pan_sou_source").map(Setting::getValue).orElse("all"));
         appProperties.setTgSortField(settingRepository.findById("tg_sort_field").map(Setting::getValue).orElse("time"));
-        appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(24));
+        appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(48));
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));

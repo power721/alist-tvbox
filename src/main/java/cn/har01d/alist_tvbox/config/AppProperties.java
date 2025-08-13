@@ -38,7 +38,7 @@ public class AppProperties {
     private List<String> panSouPlugins;
     private String systemId;
     private int tgTimeout = 5000;
-    private int tempShareExpiration = 24;
+    private int tempShareExpiration = 48;
     private Set<String> formats;
     private Set<String> subtitles;
     private List<Site> sites;
