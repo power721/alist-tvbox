@@ -525,7 +525,7 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import {onMounted, ref, watch, onUnmounted} from 'vue'
+import {onMounted, ref, reactive, watch, onUnmounted} from 'vue'
 import axios from "axios"
 import {ElMessage, type ScrollbarInstance} from "element-plus";
 import type {VodItem} from "@/model/VodItem";
@@ -619,6 +619,7 @@ const device = ref<Device>({
   id: 0,
   ip: ''
 })
+const pageInfo = reactive({})
 const history = ref({
   id: 0,
   vod_name: ''
@@ -915,10 +916,14 @@ const imageUrl = (url: string) => {
 
 const handlePageChange = (value: number) => {
   page.value = value
+  if (!pageInfo[filePath.value]) pageInfo[filePath.value] = { page: value, pageSize: size.value }
+  pageInfo[filePath.value].page = value
 }
 
 const handleSizeChange = (value: number) => {
   size.value = value
+  if (!pageInfo[filePath.value]) pageInfo[filePath.value] = { page: page.value, pageSize: value }
+  pageInfo[filePath.value].size = value
 }
 
 const reload = (value: number) => {
@@ -940,7 +945,7 @@ const loadFolder = (path: string) => {
   if (path == '/~history') {
     return
   }
-  router.push('/vod' + getPath(path).replace('\t', '%09'))
+  router.push('/vod' + getPath(path).replace('\t', '%09') + '?page=1&size=' + size.value)
   filePath.value = path
 }
 
@@ -1736,7 +1741,7 @@ watch(
     }
     if (token.value) {
       filePath.value = newFilePath
-      page.value = 1
+      page.value = pageInfo[filePath.value]?.page || 1
       debouncedFetch()
     }
   }
