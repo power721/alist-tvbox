@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,8 +36,6 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
 
-    private final List<String> usernames = new ArrayList<>();
-
     @PostConstruct
     public void init() {
         try {
@@ -49,7 +46,6 @@ public class UserService {
         }
 
         fixUserRole();
-        loadUsernames();
     }
 
     private void fixUserRole() {
@@ -59,14 +55,6 @@ public class UserService {
                 userRepository.save(user);
             }
         });
-    }
-
-    public boolean isUsernameExist(String username) {
-        return usernames.contains(username);
-    }
-
-    private void loadUsernames() {
-        userRepository.findAll().forEach(user -> usernames.add(user.getUsername()));
     }
 
     private void initializeAdminUser() throws IOException {
@@ -159,7 +147,6 @@ public class UserService {
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         userRepository.save(user);
-        usernames.add(user.getUsername());
         return user;
     }
 
@@ -175,14 +162,11 @@ public class UserService {
             user.setPassword(passwordEncoder.encode(dto.getPassword()));
         }
         userRepository.save(user);
-        usernames.remove(username);
-        usernames.add(user.getUsername());
         return user;
     }
 
     public void delete(int id) {
         userRepository.deleteById(id);
-        loadUsernames();
     }
 
     public UserToken updateAccount(User dto) {
@@ -204,8 +188,6 @@ public class UserService {
 
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         userRepository.save(user);
-        usernames.remove(username);
-        usernames.add(user.getUsername());
         return generateToken(user);
     }
 }

@@ -34,6 +34,9 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -58,6 +61,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -89,7 +93,6 @@ public class SubscriptionService {
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
     private final TenantService tenantService;
-    private final UserService userService;
     private final FileDownloader fileDownloader;
 
     private final OkHttpClient okHttpClient = new OkHttpClient();
@@ -113,7 +116,6 @@ public class SubscriptionService {
                                AListLocalService aListLocalService,
                                ConfigFileService configFileService,
                                TenantService tenantService,
-                               UserService userService,
                                FileDownloader fileDownloader) {
         this.environment = environment;
         this.appProperties = appProperties;
@@ -134,7 +136,6 @@ public class SubscriptionService {
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
         this.tenantService = tenantService;
-        this.userService = userService;
         this.fileDownloader = fileDownloader;
     }
 
@@ -270,7 +271,12 @@ public class SubscriptionService {
             return;
         }
 
-        if (userService.isUsernameExist(rawToken)) {
+        String username = Optional.of(SecurityContextHolder.getContext())
+                .map(SecurityContext::getAuthentication)
+                .map(Authentication::getPrincipal)
+                .map(Object::toString)
+                .orElse("");
+        if (rawToken.equals(username)) {
             return;
         }
 
