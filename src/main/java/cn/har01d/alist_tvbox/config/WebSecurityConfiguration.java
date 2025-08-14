@@ -40,8 +40,8 @@ public class WebSecurityConfiguration {
                                 "/api/accounts/principal"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
-                        .requestMatchers("/api/**").authenticated()
-                        .requestMatchers("/api/users/**").hasAnyAuthority(Role.ADMIN.name())
+                        .requestMatchers("/api/token", "/api/settings", "/api/history").authenticated()
+                        .requestMatchers("/api/**").hasAnyAuthority(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST).authenticated()
                         .requestMatchers(HttpMethod.PUT).authenticated()
                         .requestMatchers(HttpMethod.PATCH).authenticated()

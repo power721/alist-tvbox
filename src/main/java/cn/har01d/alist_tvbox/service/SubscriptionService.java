@@ -89,6 +89,7 @@ public class SubscriptionService {
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
     private final TenantService tenantService;
+    private final UserService userService;
     private final FileDownloader fileDownloader;
 
     private final OkHttpClient okHttpClient = new OkHttpClient();
@@ -112,6 +113,7 @@ public class SubscriptionService {
                                AListLocalService aListLocalService,
                                ConfigFileService configFileService,
                                TenantService tenantService,
+                               UserService userService,
                                FileDownloader fileDownloader) {
         this.environment = environment;
         this.appProperties = appProperties;
@@ -132,6 +134,7 @@ public class SubscriptionService {
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
         this.tenantService = tenantService;
+        this.userService = userService;
         this.fileDownloader = fileDownloader;
     }
 
@@ -264,6 +267,10 @@ public class SubscriptionService {
         currentToken.set(rawToken);
         tenantService.setTenant(rawToken);
         if (!appProperties.isEnabledToken()) {
+            return;
+        }
+
+        if (userService.isUsernameExist(rawToken)) {
             return;
         }
 
