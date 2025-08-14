@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
@@ -34,6 +35,9 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -58,6 +62,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -89,6 +94,7 @@ public class SubscriptionService {
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
     private final TenantService tenantService;
+    private final UserService userService;
     private final FileDownloader fileDownloader;
 
     private final OkHttpClient okHttpClient = new OkHttpClient();
@@ -112,6 +118,7 @@ public class SubscriptionService {
                                AListLocalService aListLocalService,
                                ConfigFileService configFileService,
                                TenantService tenantService,
+                               UserService userService,
                                FileDownloader fileDownloader) {
         this.environment = environment;
         this.appProperties = appProperties;
@@ -132,6 +139,7 @@ public class SubscriptionService {
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
         this.tenantService = tenantService;
+        this.userService = userService;
         this.fileDownloader = fileDownloader;
     }
 
@@ -267,6 +275,10 @@ public class SubscriptionService {
             return;
         }
 
+        if (userService.isUsernameExist(rawToken)) {
+            return;
+        }
+
         for (String t : tokens.split(",")) {
             if (t.equals(rawToken)) {
                 return;
@@ -279,7 +291,24 @@ public class SubscriptionService {
     public TokenDto getTokens() {
         TokenDto tokenDto = new TokenDto();
         tokenDto.setEnabledToken(appProperties.isEnabledToken());
-        tokenDto.setToken(tokens);
+
+        String role = Optional.of(SecurityContextHolder.getContext())
+                .map(SecurityContext::getAuthentication)
+                .map(Authentication::getAuthorities)
+                .map(e -> e.iterator().next().getAuthority())
+                .orElse(Role.USER.name());
+        tokenDto.setRole(role);
+        if (role.equals(Role.ADMIN.name())) {
+            tokenDto.setToken(tokens);
+        } else {
+            String username = Optional.of(SecurityContextHolder.getContext())
+                    .map(SecurityContext::getAuthentication)
+                    .map(Authentication::getPrincipal)
+                    .map(Object::toString)
+                    .orElse("");
+            tokenDto.setToken(username);
+        }
+
         return tokenDto;
     }
 

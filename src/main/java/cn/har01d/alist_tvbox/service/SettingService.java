@@ -8,8 +8,10 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.zip.ZipOutputStream;
@@ -20,6 +22,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -27,6 +30,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.SearchSetting;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
@@ -191,6 +195,16 @@ public class SettingService {
                 .collect(Collectors.toMap(Setting::getName, Setting::getValue));
         //map.remove("api_key");
         map.remove("bilibili_cookie");
+        var authorities = SecurityContextHolder.getContext().getAuthentication().getAuthorities();
+        if (!authorities.isEmpty() && authorities.iterator().next().getAuthority().equals(Role.USER.name())) {
+            Map<String, String> settings = new HashMap<>();
+            Set<String> keys = Set.of("alist_version", "app_version", "enabled_token", "search_excluded_paths");
+            for (String key : keys) {
+                settings.put(key, map.get(key));
+            }
+            settings.put("token", SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString());
+            return settings;
+        }
         return map;
     }
 

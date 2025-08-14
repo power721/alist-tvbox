@@ -25,7 +25,11 @@ public class Session {
     @Column(unique = true)
     private String token;
 
+    private Integer userId;
+
     private String username;
+
+    private String role;
 
     private Instant expireTime;
 

@@ -5,7 +5,11 @@ import cn.har01d.alist_tvbox.entity.Device;
 import cn.har01d.alist_tvbox.entity.DeviceRepository;
 import cn.har01d.alist_tvbox.entity.History;
 import cn.har01d.alist_tvbox.entity.HistoryRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PostConstruct;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -15,6 +19,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -32,6 +37,7 @@ public class HistoryService {
 
     private final HistoryRepository historyRepository;
     private final DeviceRepository deviceRepository;
+    private final SettingRepository settingRepository;
     private final AppProperties appProperties;
     private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
@@ -39,16 +45,28 @@ public class HistoryService {
 
     public HistoryService(HistoryRepository historyRepository,
                           DeviceRepository deviceRepository,
+                          SettingRepository settingRepository,
                           AppProperties appProperties,
                           SubscriptionService subscriptionService,
                           ObjectMapper objectMapper,
                           RestTemplateBuilder builder) {
         this.historyRepository = historyRepository;
         this.deviceRepository = deviceRepository;
+        this.settingRepository = settingRepository;
         this.appProperties = appProperties;
         this.subscriptionService = subscriptionService;
         this.objectMapper = objectMapper;
         this.restTemplate = builder.build();
+    }
+
+    @PostConstruct
+    public void init() {
+        if (!settingRepository.existsByName("fix_history_uid")) {
+            List<History> list = historyRepository.findAll();
+            list.forEach(history -> history.setUid(1));
+            historyRepository.saveAll(list);
+            settingRepository.save(new Setting("fix_history_uid", ""));
+        }
     }
 
     public History get(Integer id) {
@@ -56,11 +74,13 @@ public class HistoryService {
     }
 
     public Page<History> list(Pageable pageable) {
-        return historyRepository.findAll(pageable);
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        return historyRepository.findByUid(uid, pageable);
     }
 
     public List<History> findAll() {
-        return historyRepository.findAll(Sort.by("createTime").descending());
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        return historyRepository.findAllByUid(uid, Sort.by("createTime").descending());
     }
 
     public History findById(String key) {
@@ -97,6 +117,8 @@ public class HistoryService {
             }
             history.setEpisodeUrl(url);
         }
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        history.setUid(uid);
         return historyRepository.save(history);
     }
 
@@ -244,7 +266,7 @@ public class HistoryService {
     }
 
     public void deleteAll() {
-        List<History> list = historyRepository.findAll();
+        List<History> list = findAll();
         log.info("deleteAll: {}", list.size());
         historyRepository.deleteAll(list);
     }
@@ -256,7 +278,12 @@ public class HistoryService {
     }
 
     public void deleteById(Integer id) {
-        historyRepository.deleteById(id);
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        historyRepository.findById(id).ifPresent(history -> {
+            if (history.getUid() == uid) {
+                historyRepository.delete(history);
+            }
+        });
     }
 
     private String buildSubUrl() {

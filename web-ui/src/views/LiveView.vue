@@ -3,7 +3,7 @@ import {onMounted, ref, watch} from "vue";
 import axios from "axios";
 import mpegts from "mpegts.js";
 import {onUnmounted} from "@vue/runtime-core";
-import {Search, Refresh} from "@element-plus/icons-vue";
+import {Search, Refresh, FullScreen, CircleCloseFilled} from "@element-plus/icons-vue";
 import {ElMessage, type TabsPaneContext} from "element-plus";
 import {useRoute, useRouter} from "vue-router";
 
@@ -403,7 +403,26 @@ onUnmounted(() => {
 <!--      </el-tab-pane>-->
     </el-tabs>
 
-    <el-dialog v-model="dialogVisible" :fullscreen="true" @open="start" @close="destory">
+    <el-dialog v-model="dialogVisible" :fullscreen="true" :show-close="false" @open="start" @close="destory">
+      <template #header="{ close }">
+        <div class="my-header">
+          <div></div>
+          <div class="buttons">
+            <el-button @click="toggleFullscreen">
+              <el-icon class="el-icon--left">
+                <FullScreen/>
+              </el-icon>
+              全屏
+            </el-button>
+            <el-button @click="close">
+              <el-icon class="el-icon--left">
+                <CircleCloseFilled/>
+              </el-icon>
+              关闭
+            </el-button>
+          </div>
+        </div>
+      </template>
       <el-row>
         <el-col :span="16">
           <div class="video-container">
@@ -470,6 +489,13 @@ onUnmounted(() => {
 .video-container video {
   width: 100%;
   height: 100%;
+}
+
+.my-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .controls {

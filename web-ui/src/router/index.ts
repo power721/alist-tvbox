@@ -25,6 +25,7 @@ import EmbyView from "@/views/EmbyView.vue";
 import LiveView from "@/views/LiveView.vue";
 import VodApiView from "@/views/VodApiView.vue";
 import AclView from "@/views/AclView.vue";
+import UsersView from "@/views/UsersView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -130,6 +131,12 @@ const router = createRouter({
       path: '/user',
       name: 'user',
       component: UserView,
+      meta: {auth: true}
+    },
+    {
+      path: '/users',
+      name: 'users',
+      component: UsersView,
       meta: {auth: true}
     },
     {

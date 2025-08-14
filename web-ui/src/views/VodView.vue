@@ -26,7 +26,7 @@
       <el-col :span="2">
         <el-button :icon="HomeFilled" circle @click="goBack" v-if="isHistory"/>
         <el-button :icon="Film" circle @click="goHistory" v-else/>
-        <el-button :icon="Setting" circle @click="settingVisible=true"/>
+        <el-button :icon="Setting" circle @click="settingVisible=true" v-if="store.admin"/>
         <el-button :icon="Plus" circle @click="handleAdd"/>
       </el-col>
     </el-row>
@@ -61,7 +61,7 @@
         <el-row justify="end">
           <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
           <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
-          <el-button @click="showScan">同步影视</el-button>
+          <el-button @click="showScan" v-if="store.admin">同步影视</el-button>
           <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
         </el-row>
         <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" style="width: 100%"
@@ -548,6 +548,7 @@ import {
 } from "@element-plus/icons-vue";
 import type {Device} from "@/model/Device";
 import PlayConfig from "@/components/PlayConfig.vue";
+import {store} from "@/services/store";
 
 let {toClipboard} = clipBorad();
 
@@ -1700,7 +1701,9 @@ onMounted(async () => {
       fetchData()
     }
   })
-  loadDevices()
+  if (store.admin) {
+    loadDevices()
+  }
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
   timer = setInterval(save, 5000)
   window.addEventListener('keydown', handleKeyDown);

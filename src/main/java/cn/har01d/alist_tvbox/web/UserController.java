@@ -1,13 +1,16 @@
 package cn.har01d.alist_tvbox.web;
 
+import java.util.List;
+
+import cn.har01d.alist_tvbox.dto.UserDto;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import cn.har01d.alist_tvbox.auth.LoginDto;
@@ -18,13 +21,32 @@ import cn.har01d.alist_tvbox.service.UserService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/accounts")
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
 
-    @PostMapping("/login")
+    @GetMapping("/api/users")
+    public List<User> list() {
+        return userService.list();
+    }
+
+    @PostMapping("/api/users")
+    public User create(@RequestBody UserDto user) {
+        return userService.create(user);
+    }
+
+    @PostMapping("/api/users/{id}")
+    public User update(@PathVariable int id, @RequestBody UserDto user) {
+        return userService.update(id, user);
+    }
+
+    @DeleteMapping("/api/users/{id}")
+    public void delete(@PathVariable int id) {
+        userService.delete(id);
+    }
+
+    @PostMapping("/api/accounts/login")
     public UserToken login(@RequestBody LoginDto account) {
         User user = userService.findByUsername(account.getUsername());
         if (user == null || !passwordEncoder.matches(account.getPassword(), user.getPassword())) {
@@ -33,18 +55,18 @@ public class UserController {
         return userService.generateToken(user);
     }
 
-    @PostMapping("/logout")
+    @PostMapping("/api/accounts/logout")
     public void logout() {
         userService.logout();
     }
 
-    @GetMapping("/principal")
+    @GetMapping("/api/accounts/principal")
     public Authentication principal() {
         return SecurityContextHolder.getContext().getAuthentication();
     }
 
-    @PostMapping("/update")
-    public UserToken update(@RequestBody User user) {
-        return userService.update(user);
+    @PostMapping("/api/accounts/update")
+    public UserToken updateAccount(@RequestBody UserDto user) {
+        return userService.updateAccount(user);
     }
 }

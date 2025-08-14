@@ -1,6 +1,9 @@
 package cn.har01d.alist_tvbox.entity;
 
+import cn.har01d.alist_tvbox.domain.Role;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -14,6 +17,8 @@ import org.hibernate.Hibernate;
 import java.time.Instant;
 import java.util.Objects;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 @Getter
 @Setter
 @ToString
@@ -25,7 +30,10 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
     private String username;
+    @JsonIgnore
     private String password;
+    @Enumerated(EnumType.STRING)
+    private Role role = Role.USER;
     private final Instant createdTime = Instant.now();
 
     @Override

@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -89,7 +90,9 @@ public class TokenFilter extends OncePerRequestFilter {
             if (userToken == null) {
                 return null;
             }
-            return new UsernamePasswordAuthenticationToken(userToken.getPrincipal(), userToken.getToken(), userToken.getAuthorities());
+            AbstractAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userToken.getUsername(), userToken.getToken(), userToken.getAuthorities());
+            authToken.setDetails(userToken.getUserId());
+            return authToken;
         } catch (UserUnauthorizedException e) {
             throw e;
         } catch (Exception e) {

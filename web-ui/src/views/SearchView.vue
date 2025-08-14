@@ -9,7 +9,7 @@
     <div>
       <el-input v-model="keyword" @change="search"/>
       <el-button type="primary" @click="search" :disabled="!keyword">搜索</el-button>
-      <el-button type="primary" @click="showDialog">设置</el-button>
+      <el-button type="primary" @click="showDialog" v-if="store.admin">设置</el-button>
     </div>
 
     <el-form-item label="类型" label-width="140">
@@ -99,6 +99,7 @@ import {onMounted, ref} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
 import {useRouter} from "vue-router";
+import {store} from "@/services/store";
 
 const router = useRouter()
 const token = ref('')

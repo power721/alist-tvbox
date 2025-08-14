@@ -6,4 +6,5 @@ import lombok.Data;
 public class TokenDto {
     private boolean enabledToken;
     private String token;
+    private String role;
 }

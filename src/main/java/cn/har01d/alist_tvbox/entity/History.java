@@ -42,4 +42,5 @@ public class History {
     private int cid;
 
     private int episode = -1;
+    private Integer uid = 1;
 }

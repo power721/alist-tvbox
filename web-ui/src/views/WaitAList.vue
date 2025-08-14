@@ -46,7 +46,7 @@ onMounted(() => {
       percentage.value = 0
       intervalId = setInterval(getAListStatus, 1000)
     } else {
-      const back = (route.query.redirect as string) || '/'
+      const back = (route.query.redirect as string) || (store.admin ? '/' : '/vod')
       router.push(back)
     }
   })
