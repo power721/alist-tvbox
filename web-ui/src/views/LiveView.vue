@@ -408,12 +408,6 @@ onUnmounted(() => {
         <div class="my-header">
           <div></div>
           <div class="buttons">
-            <el-button @click="toggleFullscreen">
-              <el-icon class="el-icon--left">
-                <FullScreen/>
-              </el-icon>
-              全屏
-            </el-button>
             <el-button @click="close">
               <el-icon class="el-icon--left">
                 <CircleCloseFilled/>
