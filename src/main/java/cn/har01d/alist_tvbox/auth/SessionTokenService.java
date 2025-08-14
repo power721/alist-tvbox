@@ -32,17 +32,22 @@ public class SessionTokenService implements TokenService {
         if (role == null) {
             role = Role.ADMIN.name();
         }
-        return new UserToken(session.getUsername(), Set.of(new SimpleGrantedAuthority(role)), token);
+        Integer uid = session.getUserId();
+        if (uid == null) {
+            uid = 1;
+        }
+        return new UserToken(uid, session.getUsername(), Set.of(new SimpleGrantedAuthority(role)), token);
     }
 
     @Override
-    public String encodeToken(String username, String authority, boolean rememberMe) {
+    public String encodeToken(int userId, String username, String authority) {
         if (sessionRepository.countByUsername(username) >= 5) {
             var session = sessionRepository.findFirstByUsername(username);
             sessionRepository.delete(session);
         }
         var session = new Session();
         session.setToken(UUID.randomUUID().toString().replace("-", ""));
+        session.setUserId(userId);
         session.setUsername(username);
         session.setRole(authority);
         session.setExpireTime(Instant.now().plus(30, ChronoUnit.DAYS));

@@ -11,7 +11,8 @@ import java.util.Collection;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserToken {
-    private Object principal;
+    private int userId;
+    private String username;
     private Collection<? extends GrantedAuthority> authorities;
     private String token;
 }

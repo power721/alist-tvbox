@@ -19,6 +19,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -73,11 +74,13 @@ public class HistoryService {
     }
 
     public Page<History> list(Pageable pageable) {
-        return historyRepository.findAll(pageable);
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        return historyRepository.findByUid(uid, pageable);
     }
 
     public List<History> findAll() {
-        return historyRepository.findAll(Sort.by("createTime").descending());
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        return historyRepository.findAllByUid(uid, Sort.by("createTime").descending());
     }
 
     public History findById(String key) {
@@ -114,6 +117,8 @@ public class HistoryService {
             }
             history.setEpisodeUrl(url);
         }
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        history.setUid(uid);
         return historyRepository.save(history);
     }
 
@@ -261,7 +266,7 @@ public class HistoryService {
     }
 
     public void deleteAll() {
-        List<History> list = historyRepository.findAll();
+        List<History> list = findAll();
         log.info("deleteAll: {}", list.size());
         historyRepository.deleteAll(list);
     }
@@ -273,7 +278,12 @@ public class HistoryService {
     }
 
     public void deleteById(Integer id) {
-        historyRepository.deleteById(id);
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        historyRepository.findById(id).ifPresent(history -> {
+            if (history.getUid() == uid) {
+                historyRepository.delete(history);
+            }
+        });
     }
 
     private String buildSubUrl() {

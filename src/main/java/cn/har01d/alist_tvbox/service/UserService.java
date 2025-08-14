@@ -134,8 +134,8 @@ public class UserService {
 
     public UserToken generateToken(User user) {
         var authorities = List.of(new SimpleGrantedAuthority(user.getRole().name()));
-        String token = tokenService.encodeToken(user.getUsername(), user.getRole().name(), true);
-        return new UserToken(user.getUsername(), authorities, token);
+        String token = tokenService.encodeToken(user.getId(), user.getUsername(), user.getRole().name());
+        return new UserToken(user.getId(), user.getUsername(), authorities, token);
     }
 
     public List<User> list() {
