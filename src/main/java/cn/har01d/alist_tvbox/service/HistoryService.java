@@ -5,7 +5,11 @@ import cn.har01d.alist_tvbox.entity.Device;
 import cn.har01d.alist_tvbox.entity.DeviceRepository;
 import cn.har01d.alist_tvbox.entity.History;
 import cn.har01d.alist_tvbox.entity.HistoryRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PostConstruct;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -32,6 +36,7 @@ public class HistoryService {
 
     private final HistoryRepository historyRepository;
     private final DeviceRepository deviceRepository;
+    private final SettingRepository settingRepository;
     private final AppProperties appProperties;
     private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
@@ -39,16 +44,28 @@ public class HistoryService {
 
     public HistoryService(HistoryRepository historyRepository,
                           DeviceRepository deviceRepository,
+                          SettingRepository settingRepository,
                           AppProperties appProperties,
                           SubscriptionService subscriptionService,
                           ObjectMapper objectMapper,
                           RestTemplateBuilder builder) {
         this.historyRepository = historyRepository;
         this.deviceRepository = deviceRepository;
+        this.settingRepository = settingRepository;
         this.appProperties = appProperties;
         this.subscriptionService = subscriptionService;
         this.objectMapper = objectMapper;
         this.restTemplate = builder.build();
+    }
+
+    @PostConstruct
+    public void init() {
+        if (!settingRepository.existsByName("fix_history_uid")) {
+            List<History> list = historyRepository.findAll();
+            list.forEach(history -> history.setUid(1));
+            historyRepository.saveAll(list);
+            settingRepository.save(new Setting("fix_history_uid", ""));
+        }
     }
 
     public History get(Integer id) {

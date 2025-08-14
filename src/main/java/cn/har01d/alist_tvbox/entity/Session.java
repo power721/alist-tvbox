@@ -27,6 +27,8 @@ public class Session {
 
     private String username;
 
+    private String role;
+
     private Instant expireTime;
 
     private Instant createTime = Instant.now();

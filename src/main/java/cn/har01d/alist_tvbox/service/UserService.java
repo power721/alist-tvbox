@@ -8,6 +8,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Optional;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,9 +16,11 @@ import org.springframework.stereotype.Service;
 
 import cn.har01d.alist_tvbox.auth.TokenService;
 import cn.har01d.alist_tvbox.auth.UserToken;
+import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.entity.SessionRepository;
 import cn.har01d.alist_tvbox.entity.User;
 import cn.har01d.alist_tvbox.entity.UserRepository;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
@@ -41,6 +44,17 @@ public class UserService {
             log.error("Failed to initialize admin user", e);
             throw new IllegalStateException("Critical failure - admin user initialization failed", e);
         }
+
+        fixUserRole();
+    }
+
+    private void fixUserRole() {
+        userRepository.findById(1).ifPresent(user -> {
+            if (user.getRole() == null) {
+                user.setRole(Role.ADMIN);
+                userRepository.save(user);
+            }
+        });
     }
 
     private void initializeAdminUser() throws IOException {
@@ -77,6 +91,7 @@ public class UserService {
 
     private void createNewAdmin() {
         User adminUser = new User();
+        adminUser.setRole(Role.ADMIN);
         adminUser.setUsername("admin");
 
         String password = Utils.generateSecurePassword();
@@ -118,21 +133,56 @@ public class UserService {
     }
 
     public UserToken generateToken(User user) {
-        var authorities = List.of(new SimpleGrantedAuthority("ADMIN"));
-        String token = tokenService.encodeToken(user.getUsername(), "ADMIN", true);
+        var authorities = List.of(new SimpleGrantedAuthority(user.getRole().name()));
+        String token = tokenService.encodeToken(user.getUsername(), user.getRole().name(), true);
         return new UserToken(user.getUsername(), authorities, token);
     }
 
-    public UserToken update(User dto) {
+    public List<User> list() {
+        return userRepository.findAll();
+    }
+
+    public User create(User dto) {
+        var user = new User();
+        user.setUsername(dto.getUsername());
+        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        return userRepository.save(user);
+    }
+
+    public User update(int id, User dto) {
+        var user = userRepository.findById(id).orElseThrow(() -> new NotFoundException("用户不存在"));
+        var sessions = sessionRepository.findAllByUsername(user.getUsername());
+        sessionRepository.deleteAll(sessions);
+        if (StringUtils.isNotEmpty(dto.getUsername())) {
+            user.setUsername(dto.getUsername());
+        }
+        if (StringUtils.isNotEmpty(dto.getPassword())) {
+            user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        }
+        return userRepository.save(user);
+    }
+
+    public void delete(int id) {
+        userRepository.deleteById(id);
+    }
+
+    public UserToken updateAccount(User dto) {
         String username = SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString();
         User user = userRepository.findByUsername(username);
         if (user == null) {
             throw new NotFoundException("用户不存在");
         }
-        var sessions = sessionRepository.findAllByUsername(user.getUsername());
+        var sessions = sessionRepository.findAllByUsername(username);
         sessionRepository.deleteAll(sessions);
 
-        user.setUsername(dto.getUsername());
+        if (user.getRole() == Role.ADMIN && !username.equals(dto.getUsername())) {
+            User other = userRepository.findByUsername(dto.getUsername());
+            if (other != null && !other.getId().equals(user.getId())) {
+                throw new BadRequestException("用户名已经存在");
+            }
+            user.setUsername(dto.getUsername());
+        }
+
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         userRepository.save(user);
         return generateToken(user);

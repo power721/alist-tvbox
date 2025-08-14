@@ -28,7 +28,7 @@ public class MyUserDetailsService implements UserDetailsService {
         if (u == null) {
             return new User(username, UUID.randomUUID().toString(), authorities);
         }
-        authorities.add(new SimpleGrantedAuthority("ADMIN"));
+        authorities.add(new SimpleGrantedAuthority(u.getRole().name()));
         return new User(String.valueOf(u.getId()), u.getPassword(), authorities);
     }
 }

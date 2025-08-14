@@ -40,6 +40,7 @@ public class History {
     private float speed = 1;
     private int scale = -1;
     private int cid;
+    private int uid;
 
     private int episode = -1;
 }

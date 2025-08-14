@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.config;
 
 import cn.har01d.alist_tvbox.auth.TokenFilter;
+import cn.har01d.alist_tvbox.domain.Role;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -39,6 +41,7 @@ public class WebSecurityConfiguration {
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers("/api/**").authenticated()
+                        .requestMatchers("/api/users/**").hasAnyAuthority(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.POST).authenticated()
                         .requestMatchers(HttpMethod.PUT).authenticated()
                         .requestMatchers(HttpMethod.PATCH).authenticated()
