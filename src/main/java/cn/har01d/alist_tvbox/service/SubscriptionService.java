@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.TokenDto;
 import cn.har01d.alist_tvbox.entity.Account;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
@@ -93,6 +94,7 @@ public class SubscriptionService {
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
     private final TenantService tenantService;
+    private final UserService userService;
     private final FileDownloader fileDownloader;
 
     private final OkHttpClient okHttpClient = new OkHttpClient();
@@ -116,6 +118,7 @@ public class SubscriptionService {
                                AListLocalService aListLocalService,
                                ConfigFileService configFileService,
                                TenantService tenantService,
+                               UserService userService,
                                FileDownloader fileDownloader) {
         this.environment = environment;
         this.appProperties = appProperties;
@@ -136,6 +139,7 @@ public class SubscriptionService {
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
         this.tenantService = tenantService;
+        this.userService = userService;
         this.fileDownloader = fileDownloader;
     }
 
@@ -271,12 +275,7 @@ public class SubscriptionService {
             return;
         }
 
-        String username = Optional.of(SecurityContextHolder.getContext())
-                .map(SecurityContext::getAuthentication)
-                .map(Authentication::getPrincipal)
-                .map(Object::toString)
-                .orElse("");
-        if (rawToken.equals(username)) {
+        if (userService.isUsernameExist(rawToken)) {
             return;
         }
 
@@ -292,7 +291,24 @@ public class SubscriptionService {
     public TokenDto getTokens() {
         TokenDto tokenDto = new TokenDto();
         tokenDto.setEnabledToken(appProperties.isEnabledToken());
-        tokenDto.setToken(tokens);
+
+        String role = Optional.of(SecurityContextHolder.getContext())
+                .map(SecurityContext::getAuthentication)
+                .map(Authentication::getAuthorities)
+                .map(e -> e.iterator().next().getAuthority())
+                .orElse(Role.USER.name());
+        tokenDto.setRole(role);
+        if (role.equals(Role.ADMIN.name())) {
+            tokenDto.setToken(tokens);
+        } else {
+            String username = Optional.of(SecurityContextHolder.getContext())
+                    .map(SecurityContext::getAuthentication)
+                    .map(Authentication::getPrincipal)
+                    .map(Object::toString)
+                    .orElse("");
+            tokenDto.setToken(username);
+        }
+
         return tokenDto;
     }
 

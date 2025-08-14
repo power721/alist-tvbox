@@ -1,22 +1,9 @@
 package cn.har01d.alist_tvbox.service;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.util.List;
-import java.util.Optional;
-
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-
 import cn.har01d.alist_tvbox.auth.TokenService;
 import cn.har01d.alist_tvbox.auth.UserToken;
 import cn.har01d.alist_tvbox.domain.Role;
+import cn.har01d.alist_tvbox.dto.UserDto;
 import cn.har01d.alist_tvbox.entity.SessionRepository;
 import cn.har01d.alist_tvbox.entity.User;
 import cn.har01d.alist_tvbox.entity.UserRepository;
@@ -26,6 +13,21 @@ import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -35,6 +37,8 @@ public class UserService {
     private final SessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
+
+    private final Set<String> usernames = new HashSet<>();
 
     @PostConstruct
     public void init() {
@@ -46,6 +50,7 @@ public class UserService {
         }
 
         fixUserRole();
+        loadUsernames();
     }
 
     private void fixUserRole() {
@@ -55,6 +60,14 @@ public class UserService {
                 userRepository.save(user);
             }
         });
+    }
+
+    public boolean isUsernameExist(String username) {
+        return usernames.contains(username);
+    }
+
+    private void loadUsernames() {
+        userRepository.findAll().forEach(user -> usernames.add(user.getUsername()));
     }
 
     private void initializeAdminUser() throws IOException {
@@ -142,34 +155,45 @@ public class UserService {
         return userRepository.findAll();
     }
 
-    public User create(User dto) {
+    public User create(UserDto dto) {
+        if (userRepository.findByUsername(dto.getUsername()) != null) {
+            throw new BadRequestException("用户名已经存在");
+        }
         var user = new User();
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         userRepository.save(user);
+        usernames.add(user.getUsername());
         return user;
     }
 
-    public User update(int id, User dto) {
+    public User update(int id, UserDto dto) {
         var user = userRepository.findById(id).orElseThrow(() -> new NotFoundException("用户不存在"));
         String username = user.getUsername();
         var sessions = sessionRepository.findAllByUsername(username);
         sessionRepository.deleteAll(sessions);
         if (StringUtils.isNotEmpty(dto.getUsername())) {
+            User other = userRepository.findByUsername(dto.getUsername());
+            if (other != null && !other.getId().equals(user.getId())) {
+                throw new BadRequestException("用户名已经存在");
+            }
             user.setUsername(dto.getUsername());
         }
         if (StringUtils.isNotEmpty(dto.getPassword())) {
             user.setPassword(passwordEncoder.encode(dto.getPassword()));
         }
         userRepository.save(user);
+        usernames.remove(username);
+        usernames.add(user.getUsername());
         return user;
     }
 
     public void delete(int id) {
         userRepository.deleteById(id);
+        loadUsernames();
     }
 
-    public UserToken updateAccount(User dto) {
+    public UserToken updateAccount(UserDto dto) {
         String username = SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString();
         User user = userRepository.findByUsername(username);
         if (user == null) {
@@ -188,6 +212,8 @@ public class UserService {
 
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         userRepository.save(user);
+        usernames.remove(username);
+        usernames.add(user.getUsername());
         return generateToken(user);
     }
 }

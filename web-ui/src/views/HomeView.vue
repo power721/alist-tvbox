@@ -19,6 +19,10 @@ const loadBaseUrl = () => {
     return
   }
 
+  if (!store.admin) {
+    return
+  }
+
   axios.get('/api/sites/1').then(({data}) => {
     url.value = data.url
     const re = /http:\/\/localhost:(\d+)/.exec(data.url)

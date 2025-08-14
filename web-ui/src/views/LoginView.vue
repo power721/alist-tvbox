@@ -29,6 +29,7 @@
 import {onMounted, reactive, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import accountService from "@/services/account.service";
+import {store} from "@/services/store";
 
 const showAlert = ref(true)
 const route = useRoute()
@@ -50,7 +51,7 @@ const rules = reactive({
 
 const login = () => {
   accountService.login(account.value).then(() => {
-    const back = (route.query.redirect as string) || '/'
+    const back = (route.query.redirect as string) || (store.admin ? '/' : '/vod')
     setTimeout(() => router.push(back), 500)
   })
 }

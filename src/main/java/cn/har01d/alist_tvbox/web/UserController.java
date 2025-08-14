@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import java.util.List;
 
+import cn.har01d.alist_tvbox.dto.UserDto;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,12 +32,12 @@ public class UserController {
     }
 
     @PostMapping("/api/users")
-    public User create(@RequestBody User user) {
+    public User create(@RequestBody UserDto user) {
         return userService.create(user);
     }
 
     @PostMapping("/api/users/{id}")
-    public User update(@PathVariable int id, @RequestBody User user) {
+    public User update(@PathVariable int id, @RequestBody UserDto user) {
         return userService.update(id, user);
     }
 
@@ -65,7 +66,7 @@ public class UserController {
     }
 
     @PostMapping("/api/accounts/update")
-    public UserToken updateAccount(@RequestBody User user) {
+    public UserToken updateAccount(@RequestBody UserDto user) {
         return userService.updateAccount(user);
     }
 }

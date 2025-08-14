@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -196,13 +197,13 @@ public class SettingService {
         map.remove("bilibili_cookie");
         var authorities = SecurityContextHolder.getContext().getAuthentication().getAuthorities();
         if (!authorities.isEmpty() && authorities.iterator().next().getAuthority().equals(Role.USER.name())) {
+            Map<String, String> settings = new HashMap<>();
             Set<String> keys = Set.of("alist_version", "app_version", "enabled_token", "search_excluded_paths");
-            for (String key : map.keySet()) {
-                if (!keys.contains(key)) {
-                    map.remove(key);
-                }
+            for (String key : keys) {
+                settings.put(key, map.get(key));
             }
-            map.put("token", SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString());
+            settings.put("token", SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString());
+            return settings;
         }
         return map;
     }
