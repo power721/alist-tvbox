@@ -156,9 +156,16 @@ public class UserService {
     }
 
     public User create(UserDto dto) {
+        if (StringUtils.isEmpty(dto.getUsername())) {
+            throw new BadRequestException("用户名不能为空");
+        }
+        if (StringUtils.isEmpty(dto.getPassword())) {
+            throw new BadRequestException("密码不能为空");
+        }
         if (userRepository.findByUsername(dto.getUsername()) != null) {
             throw new BadRequestException("用户名已经存在");
         }
+
         var user = new User();
         user.setUsername(dto.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));

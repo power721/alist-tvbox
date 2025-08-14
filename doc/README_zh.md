@@ -134,6 +134,13 @@ docker run -d \
 #### 播放界面
 ![播放界面](https://raw.githubusercontent.com/power721/alist-tvbox/master/doc/poster3.jpg)
 
+## 多用户
+在用户页面创建普通用户。
+
+普通用户只能在网页搜索、播放和观看网络直播。
+
+网页播放使用用户名作为安全订阅Token，也就是说用户名在ACL页面可以当作Token使用。
+
 ## 管理
 打开管理网页：http://your-ip:4567/ 
 
