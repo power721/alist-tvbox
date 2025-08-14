@@ -408,12 +408,6 @@ onUnmounted(() => {
         <div class="my-header">
           <div></div>
           <div class="buttons">
-            <el-button @click="toggleFullscreen">
-              <el-icon class="el-icon--left">
-                <FullScreen/>
-              </el-icon>
-              全屏
-            </el-button>
             <el-button @click="close">
               <el-icon class="el-icon--left">
                 <CircleCloseFilled/>
@@ -455,11 +449,11 @@ onUnmounted(() => {
           </el-descriptions>
         </el-col>
       </el-row>
-      <template #footer>
-      <span class="dialog-footer">
-        <el-button type="primary" @click="dialogVisible=false">关闭</el-button>
-      </span>
-      </template>
+<!--      <template #footer>-->
+<!--      <span class="dialog-footer">-->
+<!--        <el-button type="primary" @click="dialogVisible=false">关闭</el-button>-->
+<!--      </span>-->
+<!--      </template>-->
     </el-dialog>
 
   </div>
