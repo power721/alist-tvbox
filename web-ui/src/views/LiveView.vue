@@ -449,11 +449,11 @@ onUnmounted(() => {
           </el-descriptions>
         </el-col>
       </el-row>
-      <template #footer>
-      <span class="dialog-footer">
-        <el-button type="primary" @click="dialogVisible=false">关闭</el-button>
-      </span>
-      </template>
+<!--      <template #footer>-->
+<!--      <span class="dialog-footer">-->
+<!--        <el-button type="primary" @click="dialogVisible=false">关闭</el-button>-->
+<!--      </span>-->
+<!--      </template>-->
     </el-dialog>
 
   </div>
