@@ -18,7 +18,7 @@ const showNotification = ref(true)
 
 const logout = () => {
   accountService.logout()
-  router.push('/')
+  router.push(store.admin ? '/' : '/vod')
 }
 
 const close = () => {
