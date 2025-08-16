@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.EmbyPlayInfo;
 import cn.har01d.alist_tvbox.dto.bili.Sub;
 import cn.har01d.alist_tvbox.dto.emby.EmbyInfo;
 import cn.har01d.alist_tvbox.dto.emby.EmbyItem;
@@ -25,6 +26,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
+import okhttp3.Headers;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -52,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 
@@ -77,7 +80,8 @@ public class EmbyService {
             new FilterValue("时长⬆️", "Runtime,SortName:Ascending"),
             new FilterValue("时长⬇️", "Runtime,SortName:Descending")
     );
-    private String last;
+    private String deviceId = UUID.randomUUID().toString();
+    private EmbyPlayInfo last;
 
     public EmbyService(EmbyRepository embyRepository, RestTemplateBuilder builder, ObjectMapper objectMapper, SettingRepository settingRepository) {
         this.embyRepository = embyRepository;
@@ -92,6 +96,10 @@ public class EmbyService {
     public void init() {
         fixOrder();
         fixMetadata();
+        settingRepository.findById("system_id").ifPresent(setting -> {
+            deviceId = setting.getValue();
+        });
+        fixDeviceId();
     }
 
     private void fixOrder() {
@@ -119,6 +127,19 @@ public class EmbyService {
         }
         embyRepository.saveAll(list);
         settingRepository.save(new Setting("fix_emby_metadata", "true"));
+    }
+
+    private void fixDeviceId() {
+        if (settingRepository.existsByName("fix_emby_device_id")) {
+            return;
+        }
+        log.info("Fix Emby device id.");
+        List<Emby> list = embyRepository.findAll();
+        for (Emby emby : list) {
+            emby.setDeviceId(deviceId);
+        }
+        embyRepository.saveAll(list);
+        settingRepository.save(new Setting("fix_emby_device_id", "true"));
     }
 
     public List<Emby> findAll() {
@@ -191,7 +212,7 @@ public class EmbyService {
             dto.setClientVersion("3.4.66");
         }
         if (StringUtils.isBlank(dto.getDeviceId())) {
-            dto.setDeviceId("b098f2002a65f589");
+            dto.setDeviceId(deviceId);
         }
         if (StringUtils.isBlank(dto.getDeviceName())) {
             dto.setDeviceName("AList TvBox");
@@ -478,45 +499,34 @@ public class EmbyService {
         return result;
     }
 
-    private final String playing = """
-            {
-              "VolumeLevel": 100,
-              "IsMuted": false,
-              "IsPaused": false,
-              "RepeatMode": "RepeatNone",
-              "Shuffle": false,
-              "PlaybackRate": 1,
-              "MaxStreamingBitrate": 200000000,
-              "PositionTicks": %d,
-              "PlaybackStartTimeTicks": %d,
-              "PlayMethod": "DirectStream",
-              "PlaySessionId": "%s",
-              "MediaSourceId": "%s",
-              "CanSeek": true,
-              "ItemId": "%s"
+    public void updateProgress(String id, long progress) {
+        if (last != null) {
+            var emby = last.getEmby();
+            if (id.equals(emby.getId() + "-" + last.getItemId())) {
+                var info = last.getInfo();
+                Headers headers = getHeaders(emby, info);
+                MultiValueMap<String, String> query = getQueryParams(emby, info);
+                try {
+                    String baseUrl;
+                    String json;
+                    if (progress > 0) {
+                        baseUrl = emby.getUrl() + "/emby/Sessions/Playing/Progress";
+                        json = last.getProgress(progress);
+                    } else {
+                        baseUrl = emby.getUrl() + "/emby/Sessions/Playing/Stopped";
+                        json = last.getStopped();
+                        log.debug("stop emby: {}", emby.getId() + "-" + last.getItemId());
+                        last = null;
+                    }
+                    var builder = UriComponentsBuilder.fromUriString(baseUrl).queryParams(query);
+                    String url = builder.build().encode().toUriString();
+                    postJson(url, json, headers);
+                } catch (Exception e) {
+                    log.warn("update progress failed", e);
+                }
             }
-            """;
-
-    private final String progress = """
-            {
-              "VolumeLevel": 100,
-              "IsMuted": false,
-              "IsPaused": false,
-              "RepeatMode": "RepeatNone",
-              "Shuffle": false,
-              "SubtitleOffset": 0,
-              "PlaybackRate": 1,
-              "MaxStreamingBitrate": 200000000,
-              "PositionTicks": %d,
-              "PlaybackStartTimeTicks": %d,
-              "PlayMethod": "DirectStream",
-              "PlaySessionId": "%s",
-              "MediaSourceId": "%s",
-              "CanSeek": true,
-              "ItemId": "%s",
-              "EventName": "timeupdate"
-            }
-            """;
+        }
+    }
 
     public Object play(String id) throws JsonProcessingException {
         String[] parts = id.split("-");
@@ -526,47 +536,47 @@ public class EmbyService {
         if (StringUtils.isNotBlank(emby.getUserAgent())) {
             ua = emby.getUserAgent();
         }
+        Headers headers = getHeaders(emby, info);
         MultiValueMap<String, String> query = getQueryParams(emby, info);
         String baseUrl = emby.getUrl() + "/emby/Items/" + parts[1] + "/PlaybackInfo";
         MultiValueMap<String, String> query2 = new LinkedMultiValueMap<>(query);
-        query2.add("IsPlayback", "false");
-        query2.add("AutoOpenLiveStream", "false");
+        query2.add("IsPlayback", "true");
+        query2.add("AutoOpenLiveStream", "true");
         query2.add("StartTimeTicks", "0");
         query2.add("MaxStreamingBitrate", "2147483647");
         query2.add("UserId", info.getUser().getId());
         var builder = UriComponentsBuilder.fromUriString(baseUrl).queryParams(query2);
         String url = builder.build().encode().toUriString();
         String body = "{\"DeviceProfile\":{\"SubtitleProfiles\":[{\"Method\":\"Embed\",\"Format\":\"ass\"},{\"Format\":\"ssa\",\"Method\":\"Embed\"},{\"Format\":\"subrip\",\"Method\":\"Embed\"},{\"Format\":\"sub\",\"Method\":\"Embed\"},{\"Method\":\"Embed\",\"Format\":\"pgssub\"},{\"Format\":\"subrip\",\"Method\":\"External\"},{\"Method\":\"External\",\"Format\":\"sub\"},{\"Method\":\"External\",\"Format\":\"ass\"},{\"Format\":\"ssa\",\"Method\":\"External\"},{\"Method\":\"External\",\"Format\":\"vtt\"},{\"Method\":\"External\",\"Format\":\"ass\"},{\"Format\":\"ssa\",\"Method\":\"External\"}],\"CodecProfiles\":[{\"Codec\":\"h264\",\"Type\":\"Video\",\"ApplyConditions\":[{\"Property\":\"IsAnamorphic\",\"Value\":\"true\",\"Condition\":\"NotEquals\",\"IsRequired\":false},{\"IsRequired\":false,\"Value\":\"high|main|baseline|constrained baseline\",\"Condition\":\"EqualsAny\",\"Property\":\"VideoProfile\"},{\"IsRequired\":false,\"Value\":\"80\",\"Condition\":\"LessThanEqual\",\"Property\":\"VideoLevel\"},{\"IsRequired\":false,\"Value\":\"true\",\"Condition\":\"NotEquals\",\"Property\":\"IsInterlaced\"}]},{\"Codec\":\"hevc\",\"ApplyConditions\":[{\"Property\":\"IsAnamorphic\",\"Value\":\"true\",\"Condition\":\"NotEquals\",\"IsRequired\":false},{\"IsRequired\":false,\"Value\":\"high|main|main 10\",\"Condition\":\"EqualsAny\",\"Property\":\"VideoProfile\"},{\"Property\":\"VideoLevel\",\"Value\":\"175\",\"Condition\":\"LessThanEqual\",\"IsRequired\":false},{\"IsRequired\":false,\"Value\":\"true\",\"Condition\":\"NotEquals\",\"Property\":\"IsInterlaced\"}],\"Type\":\"Video\"}],\"MaxStreamingBitrate\":40000000,\"TranscodingProfiles\":[{\"Container\":\"ts\",\"AudioCodec\":\"aac,mp3,wav,ac3,eac3,flac,opus\",\"VideoCodec\":\"hevc,h264,mpeg4\",\"BreakOnNonKeyFrames\":true,\"Type\":\"Video\",\"MaxAudioChannels\":\"6\",\"Protocol\":\"hls\",\"Context\":\"Streaming\",\"MinSegments\":2}],\"DirectPlayProfiles\":[{\"Container\":\"mov,mp4,mkv,hls,webm\",\"Type\":\"Video\",\"VideoCodec\":\"h264,hevc,dvhe,dvh1,h264,hevc,hev1,mpeg4,vp9\",\"AudioCodec\":\"aac,mp3,wav,ac3,eac3,flac,truehd,dts,dca,opus,pcm,pcm_s24le\"}],\"ResponseProfiles\":[{\"MimeType\":\"video/mp4\",\"Type\":\"Video\",\"Container\":\"m4v\"}],\"ContainerProfiles\":[],\"MusicStreamingTranscodingBitrate\":40000000,\"MaxStaticBitrate\":40000000}}";
-        String json = postJson(url, body, ua);
+        String json = postJson(url, body, headers);
         var media = objectMapper.readValue(json, EmbyMediaSources.class);
         log.debug("{}", media);
+        var embyPlayInfo = new EmbyPlayInfo(emby, info, parts[1], media.getSessionId(), media.getItems().get(0).getId(), media.getItems().get(0).getRunTimeTicks());
 
         if (last != null) {
             try {
                 baseUrl = emby.getUrl() + "/emby/Sessions/Playing/Stopped";
                 builder = UriComponentsBuilder.fromUriString(baseUrl).queryParams(query);
                 url = builder.build().encode().toUriString();
-                postJson(url, last, ua);
+                postJson(url, last.getStopped(), headers);
             } catch (Exception e) {
                 log.warn("stop playing", e);
             }
         }
+        last = embyPlayInfo;
 
         try {
-            long time = media.getItems().get(0).getRunTimeTicks() * 2 / 3;
-            baseUrl = emby.getUrl() + "/emby/Sessions/Playing/Playing";
+            baseUrl = emby.getUrl() + "/emby/Sessions/Playing";
             builder = UriComponentsBuilder.fromUriString(baseUrl).queryParams(query);
             url = builder.build().encode().toUriString();
-            json = playing.formatted(time, System.currentTimeMillis() * 10000, media.getSessionId(), media.getItems().get(0).getId(), parts[1]);
-            postJson(url, json, ua);
-            last = json;
+            json = embyPlayInfo.getPlaying();
+            postJson(url, json, headers);
 
-            time += 1000000;
             baseUrl = emby.getUrl() + "/emby/Sessions/Playing/Progress";
             builder = UriComponentsBuilder.fromUriString(baseUrl).queryParams(query);
             url = builder.build().encode().toUriString();
-            json = progress.formatted(time, System.currentTimeMillis() * 10000, media.getSessionId(), media.getItems().get(0).getId(), parts[1]);
-            postJson(url, json, ua);
+            json = embyPlayInfo.getProgress();
+            postJson(url, json, headers);
         } catch (Exception e) {
             log.warn("start playing", e);
         }
@@ -632,13 +642,13 @@ public class EmbyService {
         return null;
     }
 
-    private String postJson(String url, String json, String userAgent) {
+    private String postJson(String url, String json, Headers headers) {
         Request request = new Request.Builder()
                 .url(url)
                 .post(RequestBody.create(MediaType.parse("application/json"), json))
+                .headers(headers)
                 .addHeader("Accept", Constants.ACCEPT)
                 .addHeader("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,ja;q=0.6,zh-TW;q=0.5")
-                .addHeader("User-Agent", userAgent)
                 .build();
 
         try {
@@ -650,6 +660,19 @@ public class EmbyService {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private Headers getHeaders(Emby emby, EmbyInfo info) {
+        HttpHeaders httpHeaders = setHeaders(emby, info);
+        Headers.Builder okHttpHeadersBuilder = new Headers.Builder();
+
+        httpHeaders.forEach((headerName, headerValues) -> {
+            for (String headerValue : headerValues) {
+                okHttpHeadersBuilder.add(headerName, headerValue);
+            }
+        });
+
+        return okHttpHeadersBuilder.build();
     }
 
     private HttpHeaders setHeaders(Emby emby, EmbyInfo info) {
