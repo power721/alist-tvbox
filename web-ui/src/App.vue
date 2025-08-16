@@ -42,9 +42,6 @@ onMounted(() => {
       store.token = data.token
       store.role = data.role
       store.admin = data.role === 'ADMIN'
-      if (!store.admin) {
-        full.value = true
-      }
     })
     mounted.value = true
     if (show.value) {
@@ -80,9 +77,9 @@ onMounted(() => {
           <el-menu-item index="/files" v-if="account.authenticated&&show&&full&&store.admin">文件</el-menu-item>
           <el-menu-item index="/alias" v-if="account.authenticated&&show&&full&&store.admin">别名</el-menu-item>
           <el-menu-item index="/users" v-if="account.authenticated&&show&&full&&store.admin">用户</el-menu-item>
-          <el-menu-item index="/search" v-if="account.authenticated&&full">搜索</el-menu-item>
-          <el-menu-item index="/vod" v-if="account.authenticated&&show&&full">播放</el-menu-item>
-          <el-menu-item index="/live" v-if="account.authenticated&&full">直播</el-menu-item>
+          <el-menu-item index="/search" v-if="account.authenticated&&(full||!store.admin)">搜索</el-menu-item>
+          <el-menu-item index="/vod" v-if="account.authenticated&&show&&(full||!store.admin)">播放</el-menu-item>
+          <el-menu-item index="/live" v-if="account.authenticated&&(full||!store.admin)">直播</el-menu-item>
           <el-menu-item index="/about" v-if="account.authenticated&&store.admin">关于</el-menu-item>
           <div class="flex-grow"/>
           <span id="mode" v-if="account.authenticated&&store.admin">
@@ -96,7 +93,7 @@ onMounted(() => {
           <el-sub-menu v-if="account.authenticated">
             <template #title>{{ account.username }}</template>
             <el-menu-item index="/user">用户</el-menu-item>
-            <el-menu-item index="/system">系统</el-menu-item>
+            <el-menu-item index="/system" v-if="store.admin">系统</el-menu-item>
             <el-menu-item index="/logout" @click="logout">退出</el-menu-item>
           </el-sub-menu>
           <el-menu-item index="/login" v-else>登录</el-menu-item>
