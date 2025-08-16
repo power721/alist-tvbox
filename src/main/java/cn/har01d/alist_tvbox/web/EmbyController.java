@@ -75,15 +75,19 @@ public class EmbyController {
     }
 
     @GetMapping("/emby-play")
-    public Object play(String id, HttpServletRequest request) throws IOException {
-        return play("", id, request);
+    public Object play(String id, long t, HttpServletRequest request) throws IOException {
+        return play("", id, t, request);
     }
 
     @GetMapping("/emby-play/{token}")
-    public Object play(@PathVariable String token, String id, HttpServletRequest request) throws IOException {
+    public Object play(@PathVariable String token, String id, long t, HttpServletRequest request) throws IOException {
         subscriptionService.checkToken(token);
 
-        String client = request.getHeader("X-CLIENT");
-        return embyService.play(id);
+        if (t == 0) {
+            return embyService.play(id);
+        } else {
+            embyService.updateProgress(id, t);
+        }
+        return "";
     }
 }
