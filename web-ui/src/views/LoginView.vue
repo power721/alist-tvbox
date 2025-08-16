@@ -50,7 +50,9 @@ const rules = reactive({
 })
 
 const login = () => {
-  accountService.login(account.value).then(() => {
+  accountService.login(account.value).then((data) => {
+    store.role = data.authorities[0].authority
+    store.admin = store.role === 'ADMIN'
     const back = (route.query.redirect as string) || (store.admin ? '/' : '/vod')
     setTimeout(() => router.push(back), 500)
   })

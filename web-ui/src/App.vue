@@ -11,14 +11,13 @@ const account = accountService.account
 const route = useRoute()
 const router = useRouter()
 const show = ref(true)
-const admin = ref(false)
 const full = ref(localStorage.getItem('full_view') == 'true')
 const mounted = ref(false)
 const showNotification = ref(true)
 
 const logout = () => {
   accountService.logout()
-  router.push(store.admin ? '/' : '/vod')
+  router.push('/login')
 }
 
 const close = () => {
@@ -42,8 +41,7 @@ onMounted(() => {
     axios.get('/api/token').then(({data}) => {
       store.token = data.token
       store.role = data.role
-      admin.value = data.role === 'ADMIN'
-      store.admin = admin.value
+      store.admin = data.role === 'ADMIN'
       if (!store.admin) {
         full.value = true
       }
@@ -55,7 +53,7 @@ onMounted(() => {
         show.value = show.value && data != 1
         if (data === 1) {
          router.push('/wait?redirect=' + route.path)
-        } else if (!admin.value && route.path === '/') {
+        } else if (!store.admin && route.path === '/') {
           router.push('/vod')
         }
       })
@@ -69,25 +67,25 @@ onMounted(() => {
     <el-container>
       <el-header>
         <el-menu mode="horizontal" :ellipsis="false" :router="true">
-          <el-menu-item index="/" v-if="admin">首页</el-menu-item>
-          <el-menu-item index="/sites" v-if="account.authenticated&&admin">站点</el-menu-item>
-          <el-menu-item index="/accounts" v-if="account.authenticated&&show&&admin">账号</el-menu-item>
-          <el-menu-item index="/bilibili" v-if="account.authenticated&&full&&admin">BiliBili</el-menu-item>
-          <el-menu-item index="/subscriptions" v-if="account.authenticated&&admin">订阅</el-menu-item>
-          <el-menu-item index="/shares" v-if="account.authenticated&&show&&full&&admin">资源</el-menu-item>
-          <el-menu-item index="/config" v-if="account.authenticated&&admin">配置</el-menu-item>
-          <el-menu-item index="/acl" v-if="account.authenticated&&full&&admin">ACL</el-menu-item>
-          <el-menu-item index="/index" v-if="account.authenticated&&show&&full&&admin">索引</el-menu-item>
-          <el-menu-item index="/logs" v-if="account.authenticated&&admin">日志</el-menu-item>
-          <el-menu-item index="/files" v-if="account.authenticated&&show&&full&&admin">文件</el-menu-item>
-          <el-menu-item index="/alias" v-if="account.authenticated&&show&&full&&admin">别名</el-menu-item>
-          <el-menu-item index="/users" v-if="account.authenticated&&show&&full&&admin">用户</el-menu-item>
+          <el-menu-item index="/" v-if="store.admin">首页</el-menu-item>
+          <el-menu-item index="/sites" v-if="account.authenticated&&store.admin">站点</el-menu-item>
+          <el-menu-item index="/accounts" v-if="account.authenticated&&show&&store.admin">账号</el-menu-item>
+          <el-menu-item index="/bilibili" v-if="account.authenticated&&full&&store.admin">BiliBili</el-menu-item>
+          <el-menu-item index="/subscriptions" v-if="account.authenticated&&store.admin">订阅</el-menu-item>
+          <el-menu-item index="/shares" v-if="account.authenticated&&show&&full&&store.admin">资源</el-menu-item>
+          <el-menu-item index="/config" v-if="account.authenticated&&store.admin">配置</el-menu-item>
+          <el-menu-item index="/acl" v-if="account.authenticated&&full&&store.admin">ACL</el-menu-item>
+          <el-menu-item index="/index" v-if="account.authenticated&&show&&full&&store.admin">索引</el-menu-item>
+          <el-menu-item index="/logs" v-if="account.authenticated&&store.admin">日志</el-menu-item>
+          <el-menu-item index="/files" v-if="account.authenticated&&show&&full&&store.admin">文件</el-menu-item>
+          <el-menu-item index="/alias" v-if="account.authenticated&&show&&full&&store.admin">别名</el-menu-item>
+          <el-menu-item index="/users" v-if="account.authenticated&&show&&full&&store.admin">用户</el-menu-item>
           <el-menu-item index="/search" v-if="account.authenticated&&full">搜索</el-menu-item>
           <el-menu-item index="/vod" v-if="account.authenticated&&show&&full">播放</el-menu-item>
           <el-menu-item index="/live" v-if="account.authenticated&&full">直播</el-menu-item>
-          <el-menu-item index="/about" v-if="account.authenticated&&admin">关于</el-menu-item>
+          <el-menu-item index="/about" v-if="account.authenticated&&store.admin">关于</el-menu-item>
           <div class="flex-grow"/>
-          <span id="mode" v-if="account.authenticated&&admin">
+          <span id="mode" v-if="account.authenticated&&store.admin">
             <el-switch v-model="full"
                        inline-prompt
                        active-text="高级模式"
