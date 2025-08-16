@@ -2,7 +2,7 @@
   <div class="vod">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="url" target="_blank">{{ currentUrl }}{{ getPath(type) }}{{ token }}</a>
+      <a :href="url" target="_blank">{{ currentUrl }}{{ getPath(type) }}/{{ store.token }}</a>
     </div>
 
     <div>
@@ -42,7 +42,6 @@ import {onMounted, ref} from 'vue'
 import axios from "axios"
 import {store} from "@/services/store";
 
-const token = ref('')
 const type = ref('1')
 const id = ref('')
 const path = ref('')
@@ -67,25 +66,27 @@ const getPath = (type: string) => {
 }
 
 const getDetail = function () {
-  url.value = currentUrl + getPath(type.value) + token.value + '?ids=' + id.value
-  axios.get(getPath(type.value) + token.value + '?ids=' + id.value).then(({data}) => {
+  url.value = currentUrl + getPath(type.value) + '/' + store.token + '?ids=' + id.value
+  axios.get(getPath(type.value) + '/' + store.token + '?ids=' + id.value).then(({data}) => {
     config.value = data
   })
 }
 
 const load = function () {
-  url.value = currentUrl + getPath(type.value) + token.value + '?t=' + path.value
-  axios.get(getPath(type.value) + token.value + '?t=' + path.value ).then(({data}) => {
+  url.value = currentUrl + getPath(type.value) + '/' + store.token + '?t=' + path.value
+  axios.get(getPath(type.value) + '/' + store.token + '?t=' + path.value ).then(({data}) => {
     config.value = data
   })
 }
 
 onMounted(async () => {
-  token.value = await axios.get('/api/token').then(({data}) => {
-    return data.enabledToken ? "/" + data.token.split(",")[0] : ""
-  })
-  url.value = currentUrl + getPath(type.value) + token.value
-  axios.get(getPath(type.value) + token.value).then(({data}) => {
+  if (!store.token) {
+    store.token = await axios.get("/api/token").then(({data}) => {
+      return data.token ? data.token.split(",")[0] : "-"
+    });
+  }
+  url.value = currentUrl + getPath(type.value) + '/' + store.token
+  axios.get(getPath(type.value) + '/' + store.token).then(({data}) => {
     config.value = data
   })
 })

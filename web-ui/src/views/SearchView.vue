@@ -2,8 +2,8 @@
   <div class="search">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="currentUrl+getPath(type)+token+'?wd=' + keyword"
-         target="_blank">{{ currentUrl }}{{ getPath(type) }}{{ token }}?wd={{ keyword }}</a>
+      <a :href="currentUrl+getPath(type)+'/'+store.token+'?wd=' + keyword"
+         target="_blank">{{ currentUrl }}{{ getPath(type) }}/{{ store.token }}?wd={{ keyword }}</a>
     </div>
 
     <div>
@@ -95,14 +95,11 @@
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
+import {ref} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
-import {useRouter} from "vue-router";
 import {store} from "@/services/store";
 
-const router = useRouter()
-const token = ref('')
 const type = ref('1')
 const keyword = ref('')
 const config = ref<any>('')
@@ -137,7 +134,7 @@ const search = function () {
     return
   }
   config.value = ''
-  axios.get(getPath(type.value) + token.value + '?ac=web&wd=' + keyword.value.trim()).then(({data}) => {
+  axios.get(getPath(type.value) + '/' + store.token + '?ac=web&wd=' + keyword.value.trim()).then(({data}) => {
     config.value = data
   })
 }
@@ -157,10 +154,6 @@ const update = () => {
     ElMessage.success('更新成功')
   })
 }
-
-onMounted(() => {
-  token.value = store.token
-})
 </script>
 
 <style scoped>
