@@ -30,6 +30,12 @@ const onModeChange = (value: boolean) => {
 
 onMounted(() => {
   showNotification.value = localStorage.getItem('notification2') != 'true'
+  axios.get('/api/token').then(({data}) => {
+    store.token = data.token ? data.token.split(',')[0] : '-'
+    store.role = data.role
+    store.admin = data.role === 'ADMIN'
+  })
+
   axios.get("/api/profiles").then(({data}) => {
     store.xiaoya = data.includes('xiaoya')
     store.docker = data.includes('docker')
@@ -37,11 +43,6 @@ onMounted(() => {
     store.hostmode = data.includes('host')
     axios.get('/api/settings/install_mode').then(({data}) => {
       store.installMode = data.value
-    })
-    axios.get('/api/token').then(({data}) => {
-      store.token = data.token
-      store.role = data.role
-      store.admin = data.role === 'ADMIN'
     })
     mounted.value = true
     if (show.value) {

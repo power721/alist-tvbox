@@ -229,6 +229,7 @@ import type {VodList} from "@/model/VodList";
 import type {Meta} from "@/model/Meta";
 import EmbyView from "@/views/EmbyView.vue";
 import JellyfinView from "@/views/JellyfinView.vue";
+import {store} from "@/services/store";
 
 const upload = ref<UploadInstance>()
 const headers = {
@@ -247,7 +248,6 @@ interface IndexLine {
 
 const indexName = ref('custom_index')
 const index = ref<Meta[]>([])
-const token = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const ids = ref('')
@@ -323,7 +323,7 @@ const loadFiles = (id: string) => {
   if (!id.startsWith(form.value.id + '$')) {
     id = form.value.id + '$' + id
   }
-  axios.get('/vod' + token.value + '?ac=web&pg=' + page.value + '&t=' + id).then(({data}) => {
+  axios.get('/vod/' + store.token + '?ac=web&pg=' + page.value + '&t=' + id).then(({data}) => {
     jsonData.value = data
     total.value = data.total
     siteVisible.value = true
@@ -466,11 +466,13 @@ const handleExceed: UploadProps['onExceed'] = (files: File[]) => {
   upload.value!.handleStart(file)
 }
 
-onMounted(() => {
+onMounted(async () => {
   load()
-  axios.get('/api/token').then(({data}) => {
-    token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
-  })
+  if (!store.token) {
+    store.token = await axios.get("/api/token").then(({data}) => {
+      return data.token ? data.token.split(",")[0] : "-"
+    });
+  }
 })
 </script>
 

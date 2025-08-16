@@ -525,13 +525,13 @@
 
 <script setup lang="ts">
 // @ts-nocheck
-import {onMounted, ref, reactive, watch, onUnmounted} from 'vue'
+import {onMounted, onUnmounted, reactive, ref, watch} from 'vue'
 import axios from "axios"
 import {ElMessage, type ScrollbarInstance} from "element-plus";
 import type {VodItem} from "@/model/VodItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
-import { debounce } from 'lodash-es'
+import {debounce} from 'lodash-es'
 import {
   CircleCloseFilled,
   Connection,
@@ -562,7 +562,6 @@ const route = useRoute()
 const router = useRouter()
 const videoPlayer = ref(null)
 const scrollbarRef = ref<ScrollbarInstance>()
-const token = ref('')
 const filePath = ref('/')
 const keyword = ref('')
 const shareType = ref('ALL')
@@ -693,7 +692,7 @@ const loadDevices = () => {
 }
 
 const syncHistory = (id: number, mode: number) => {
-  axios.post(`/devices/${token.value}/${id}/sync?mode=${mode}`).then(() => {
+  axios.post(`/devices/${store.token}/${id}/sync?mode=${mode}`).then(() => {
     ElMessage.success('同步成功')
     if (isHistory.value) {
       loadHistory()
@@ -917,13 +916,13 @@ const imageUrl = (url: string) => {
 
 const handlePageChange = (value: number) => {
   page.value = value
-  if (!pageInfo[filePath.value]) pageInfo[filePath.value] = { page: value, pageSize: size.value }
+  if (!pageInfo[filePath.value]) pageInfo[filePath.value] = {page: value, pageSize: size.value}
   pageInfo[filePath.value].page = value
 }
 
 const handleSizeChange = (value: number) => {
   size.value = value
-  if (!pageInfo[filePath.value]) pageInfo[filePath.value] = { page: page.value, pageSize: value }
+  if (!pageInfo[filePath.value]) pageInfo[filePath.value] = {page: page.value, pageSize: value}
   pageInfo[filePath.value].size = value
 }
 
@@ -965,7 +964,7 @@ const loadFiles = (path: string) => {
   isHistory.value = false
   loading.value = true
   files.value = []
-  axios.get('/vod/' + token.value + '?ac=web&pg=' + page.value + '&size=' + size.value + '&t=' + id).then(({data}) => {
+  axios.get('/vod/' + store.token + '?ac=web&pg=' + page.value + '&size=' + size.value + '&t=' + id).then(({data}) => {
     files.value = data.list
     images.value = data.list.filter(e => e.type == 5)
     total.value = data.total
@@ -1007,7 +1006,7 @@ const extractPaths = (id: string) => {
 
 const loadDetail = (id: string) => {
   loading.value = true
-  axios.get('/vod/' + token.value + '?ac=web&ids=' + id).then(({data}) => {
+  axios.get('/vod/' + store.token + '?ac=web&ids=' + id).then(({data}) => {
     if (isHistory.value) {
       goParent(data.list[0].path)
     }
@@ -1434,7 +1433,7 @@ const buildM3u8Url = (start: number) => {
   const id = movie.vod_id
   let url = playUrl.value
   if (movie.type === 9) {
-    url = window.location.origin + '/m3u8/' + token.value + '?id=' + id + '$' + start
+    url = window.location.origin + '/m3u8/' + store.token + '?id=' + id + '$' + start
   }
   return url
 }
@@ -1501,7 +1500,7 @@ const getHistory = (id: string) => {
   minute2.value = 0
   second2.value = 0
 
-  return axios.get('/history/' + token.value + "?key=" + id).then(({data}) => {
+  return axios.get('/history/' + store.token + "?key=" + id).then(({data}) => {
     if (data) {
       if (data.episode > -1) {
         currentVideoIndex.value = data.episode
@@ -1578,7 +1577,7 @@ const deleteHistory = () => {
 }
 
 const clearHistory = () => {
-  axios.delete('/history/' + token.value).then(() => {
+  axios.delete('/history/' + store.token).then(() => {
     deleteVisible.value = false
     loadHistory()
   })
@@ -1690,17 +1689,21 @@ const showPrevImage = () => {
 }
 
 onMounted(async () => {
-  axios.get('/api/token').then(({data}) => {
-    token.value = data.enabledToken ? data.token.split(",")[0] : "-"
-    const link = route.query.link
-    if (link) {
-      loadShare(link)
-    } else {
-      const newPath = route.params.path
-      filePath.value = newPath ? '/' + newPath.join('/') : '/'
-      fetchData()
-    }
-  })
+  if (!store.token) {
+    store.token = await axios.get("/api/token").then(({data}) => {
+      return data.token ? data.token.split(",")[0] : "-"
+    });
+  }
+
+  const link = route.query.link
+  if (link) {
+    loadShare(link)
+  } else {
+    const newPath = route.params.path
+    filePath.value = newPath ? '/' + newPath.join('/') : '/'
+    fetchData()
+  }
+
   if (store.admin) {
     loadDevices()
   }
@@ -1726,12 +1729,12 @@ watch(
     if (newPage !== oldPage || newSize !== oldSize) {
       if (newPage) page.value = parseInt(newPage) || 1
       if (newSize) size.value = parseInt(newSize) || 50
-      if (token.value) {
+      if (store.token) {
         debouncedFetch()
       }
     }
   },
-  { immediate: true }
+  {immediate: true}
 )
 
 watch(
@@ -1742,7 +1745,7 @@ watch(
     if (newFilePath === oldFilePath) {
       return
     }
-    if (token.value) {
+    if (store.token) {
       filePath.value = newFilePath
       page.value = pageInfo[filePath.value]?.page || 1
       debouncedFetch()
