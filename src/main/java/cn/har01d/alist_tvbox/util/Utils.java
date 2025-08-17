@@ -91,6 +91,9 @@ public final class Utils {
     }
 
     public static String getCommonPrefix(List<String> names, boolean pretty) {
+        if (names.size() > 1 && names.get(0).isEmpty()) {
+            names = names.subList(1, names.size());
+        }
         int n = names.size();
         if (n <= 1) return "";
         String ans = names.get(0);
