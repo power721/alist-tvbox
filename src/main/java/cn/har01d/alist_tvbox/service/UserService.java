@@ -196,6 +196,9 @@ public class UserService {
     }
 
     public void delete(int id) {
+        if (id == 1) {
+            throw new BadRequestException("不能删除管理员");
+        }
         userRepository.deleteById(id);
         loadUsernames();
     }
