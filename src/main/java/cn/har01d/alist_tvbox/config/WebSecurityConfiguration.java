@@ -48,7 +48,7 @@ public class WebSecurityConfiguration {
                                 "/api/alist/start/status",
                                 "/api/share-link"
                         ).authenticated()
-                        .requestMatchers("/api/**").hasAnyAuthority(Role.ADMIN.name())
+                        .requestMatchers("/api/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())
                         .requestMatchers(HttpMethod.POST).authenticated()
                         .requestMatchers(HttpMethod.PUT).authenticated()
                         .requestMatchers(HttpMethod.PATCH).authenticated()

@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.auth;
 
+import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
@@ -38,7 +39,7 @@ public class TokenFilter extends OncePerRequestFilter {
             if (StringUtils.isNotBlank(apiKey)) {
                 String key = request.getHeader("X-API-KEY");
                 if (apiKey.equals(key)) {
-                    Authentication authentication = new UsernamePasswordAuthenticationToken("client", key, Set.of(new SimpleGrantedAuthority("client")));
+                    Authentication authentication = new UsernamePasswordAuthenticationToken("client", key, Set.of(new SimpleGrantedAuthority(Role.CLIENT.name())));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                     filterChain.doFilter(request, response);
                     return;
