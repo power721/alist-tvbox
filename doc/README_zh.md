@@ -549,6 +549,11 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 4. 然后使用nohup后台运行： `nohup ./tgs-amd64 &`
 5. 环境变量`TGS_PORT`，设置端口，默认为`7856`
 
+建议部署盘搜，不需要在订阅页面登陆电报，也不需要配置远程搜索。
+```bash
+docker run -d --name pansou -p 8888:8888 -v pansou-cache:/app/cache --restart=always ghcr.io/fish2018/pansou
+```
+
 ### 猫影视
 不再提供支持！
 #### 自定义猫影视配置
