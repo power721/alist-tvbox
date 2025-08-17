@@ -23,9 +23,9 @@
       </el-radio-group>
     </el-form-item>
 
-    <a href="/#/meta">豆瓣电影数据列表</a>
-    <span class="divider"></span>
-    <a href="/#/tmdb">TMDB电影数据列表</a>
+    <a href="/#/meta" v-if="store.admin">豆瓣电影数据列表</a>
+    <span class="divider" v-if="store.admin"></span>
+    <a href="/#/tmdb" v-if="store.admin">TMDB电影数据列表</a>
 
     <el-table v-if="(type==''||type=='1')&&config" :data="config.list" border style="width: 100%">
       <el-table-column prop="vod_name" label="名称" width="300">
