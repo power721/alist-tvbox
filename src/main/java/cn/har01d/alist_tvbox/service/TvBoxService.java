@@ -1827,51 +1827,20 @@ public class TvBoxService {
                 .collect(Collectors.toList());
         List<String> list = new ArrayList<>();
 
-        if (files.isEmpty()) {
-            List<String> folders = fsResponse.getFiles().stream().map(FsInfo::getName).filter(this::isFolder).collect(Collectors.toList());
-            log.info("load media files from folders: {}", folders);
-            int source = 0;
-            for (String folder : folders) {
+        List<String> folders = new ArrayList<>();
+        if (!files.isEmpty()) {
+            folders.add("");
+        }
+        folders.addAll(fsResponse.getFiles().stream().map(FsInfo::getName).filter(this::isFolder).toList());
+        log.info("load media files from folders: {}", folders);
+        int source = 0;
+        for (String folder : folders) {
+            if (!folder.isEmpty()) {
                 fsResponse = aListService.listFiles(site, newPath + "/" + folder, 1, 0);
                 files = fsResponse.getFiles().stream()
                         .filter(e -> isMediaFormat(e.getName()))
                         .collect(Collectors.toList());
-                Map<String, Long> size = new HashMap<>();
-                for (var file : files) {
-                    size.put(file.getName(), file.getSize());
-                }
-                List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
-                String prefix = Utils.getCommonPrefix(fileNames);
-                String suffix = Utils.getCommonSuffix(fileNames);
-                log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
-
-                if (appProperties.isSort()) {
-                    sort(fileNames);
-                }
-
-                int index = 0;
-                List<String> urls = new ArrayList<>();
-                for (String name : fileNames) {
-                    String filepath = newPath + "/" + folder + "/" + name;
-                    String newName = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
-                    if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                        String url = buildProxyUrl(site, source, index++, name, filepath);
-                        urls.add(newName + "$" + url);
-                    } else {
-                        String url = buildPlayUrl(site, source, index++, filepath);
-                        urls.add(newName + "$" + url);
-                    }
-                }
-                source++;
-                list.add(String.join("#", urls));
             }
-            String prefix = Utils.getCommonPrefix(folders);
-            String suffix = Utils.getCommonSuffix(folders);
-            log.debug("folders common prefix: '{}'  common suffix: '{}'", prefix, suffix);
-            String folderNames = folders.stream().map(e -> fixName(e, prefix, suffix)).collect(Collectors.joining("$$$"));
-            movieDetail.setVod_play_from(folderNames);
-            movieDetail.setVod_play_url(String.join("$$$", list));
-        } else {
             Map<String, Long> size = new HashMap<>();
             for (var file : files) {
                 size.put(file.getName(), file.getSize());
@@ -1886,19 +1855,29 @@ public class TvBoxService {
             }
 
             int index = 0;
+            List<String> urls = new ArrayList<>();
             for (String name : fileNames) {
-                String filepath = newPath + "/" + name;
+                String filepath = fixPath(newPath + "/" + folder + "/" + name);
                 String newName = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
                 if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                    String url = buildProxyUrl(site, 0, index++, name, filepath);
-                    list.add(newName + "$" + url);
+                    String url = buildProxyUrl(site, source, index++, name, filepath);
+                    urls.add(newName + "$" + url);
                 } else {
-                    String url = buildPlayUrl(site, 0, index++, filepath);
-                    list.add(newName + "$" + url);
+                    String url = buildPlayUrl(site, source, index++, filepath);
+                    urls.add(newName + "$" + url);
                 }
             }
-            movieDetail.setVod_play_url(String.join("#", list));
+            source++;
+            list.add(String.join("#", urls));
         }
+        if (folders.size() > 1) {
+            String prefix = Utils.getCommonPrefix(folders);
+            String suffix = Utils.getCommonSuffix(folders);
+            log.debug("folders common prefix: '{}'  common suffix: '{}'", prefix, suffix);
+            String folderNames = folders.stream().map(e -> fixName(e, prefix, suffix)).collect(Collectors.joining("$$$"));
+            movieDetail.setVod_play_from(folderNames);
+        }
+        movieDetail.setVod_play_url(String.join("$$$", list));
 
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
@@ -2062,6 +2041,9 @@ public class TvBoxService {
     }
 
     private static String fixName(String name, String prefix, String suffix) {
+        if (name.isEmpty()) {
+            return "视频";
+        }
         String text = name.replace(prefix, "").replace(suffix, "");
         if (text.isEmpty()) {
             return name;
