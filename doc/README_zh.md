@@ -585,6 +585,8 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 ```
 
 ### 自定义路径label
+作用：TvBox首页和搜索显示，用来区分同一资源不同的路径。
+
 在文件界面新建一个文件/data/label.txt
 ```text
 🎞:/电影  #匹配以/电影 开头的路径
