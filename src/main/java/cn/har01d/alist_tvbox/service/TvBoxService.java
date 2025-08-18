@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.FileItem;
+import cn.har01d.alist_tvbox.dto.FilesList;
 import cn.har01d.alist_tvbox.dto.Subtitle;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
@@ -967,15 +968,6 @@ public class TvBoxService {
         return list;
     }
 
-    private boolean isFolder(String name) {
-        int index = name.lastIndexOf('.');
-        if (index > 0) {
-            String suffix = name.substring(index + 1);
-            return suffix.length() > 4;
-        }
-        return true;
-    }
-
     private boolean isMediaFile(String path) {
         String name = path;
         int index = path.lastIndexOf('/');
@@ -1821,63 +1813,16 @@ public class TvBoxService {
 
         setMovieInfo(site, movieDetail, fsDetail.getName(), newPath, true);
 
-        FsResponse fsResponse = aListService.listFiles(site, newPath, 1, 0);
-        List<FsInfo> files = fsResponse.getFiles().stream()
-                .filter(e -> isMediaFormat(e.getName()))
-                .collect(Collectors.toList());
-        List<String> list = new ArrayList<>();
-
-        List<String> folders = new ArrayList<>();
-        if (!files.isEmpty()) {
-            folders.add("");
-        }
-        folders.addAll(fsResponse.getFiles().stream().map(FsInfo::getName).filter(this::isFolder).toList());
-        log.info("load media files from folders: {}", folders);
-        int source = 0;
-        for (String folder : folders) {
-            if (!folder.isEmpty()) {
-                fsResponse = aListService.listFiles(site, newPath + "/" + folder, 1, 0);
-                files = fsResponse.getFiles().stream()
-                        .filter(e -> isMediaFormat(e.getName()))
-                        .collect(Collectors.toList());
-            }
-            Map<String, Long> size = new HashMap<>();
-            for (var file : files) {
-                size.put(file.getName(), file.getSize());
-            }
-            List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
-            String prefix = Utils.getCommonPrefix(fileNames);
-            String suffix = Utils.getCommonSuffix(fileNames);
-            log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
-
-            if (appProperties.isSort()) {
-                sort(fileNames);
-            }
-
-            int index = 0;
-            List<String> urls = new ArrayList<>();
-            for (String name : fileNames) {
-                String filepath = fixPath(newPath + "/" + folder + "/" + name);
-                String newName = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
-                if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                    String url = buildProxyUrl(site, source, index++, name, filepath);
-                    urls.add(newName + "$" + url);
-                } else {
-                    String url = buildPlayUrl(site, source, index++, filepath);
-                    urls.add(newName + "$" + url);
-                }
-            }
-            source++;
-            list.add(String.join("#", urls));
-        }
-        if (folders.size() > 1) {
-            String prefix = Utils.getCommonPrefix(folders);
-            String suffix = Utils.getCommonSuffix(folders);
+        FilesList filesList = dfs(site, newPath, ac, "", 0);
+        List<String> sources = filesList.getFolders();
+        if (sources.size() > 1) {
+            String prefix = Utils.getCommonPrefix(sources);
+            String suffix = Utils.getCommonSuffix(sources);
             log.debug("folders common prefix: '{}'  common suffix: '{}'", prefix, suffix);
-            String folderNames = folders.stream().map(e -> fixName(e, prefix, suffix)).collect(Collectors.joining("$$$"));
+            String folderNames = sources.stream().map(e -> fixName(e, prefix, suffix)).collect(Collectors.joining("$$$"));
             movieDetail.setVod_play_from(folderNames);
         }
-        movieDetail.setVod_play_url(String.join("$$$", list));
+        movieDetail.setVod_play_url(String.join("$$$", filesList.getFiles()));
 
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
@@ -1885,6 +1830,114 @@ public class TvBoxService {
         result.setTotal(result.getList().size());
         log.debug("playlist: {}", result);
         return result;
+    }
+
+    private FilesList dfs(Site site, String path, String ac, String parent, int depth) {
+        FilesList result = new FilesList();
+        if (depth == 3) {
+            return result;
+        }
+
+        FsResponse fsResponse = aListService.listFiles(site, path, 1, 0);
+        List<FsInfo> files = fsResponse.getFiles().stream()
+                .filter(e -> e.getType() == 2)
+                .filter(e -> isMediaFormat(e.getName()))
+                .collect(Collectors.toList());
+
+        List<String> folders = new ArrayList<>();
+        if (!files.isEmpty()) {
+            folders.add("");
+        }
+        folders.addAll(fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList());
+        log.info("load media files from folders: {}", folders);
+        int source = 0;
+        for (String folder : folders) {
+            try {
+                List<String> subfolders = new ArrayList<>();
+                if (!folder.isEmpty()) {
+                    fsResponse = aListService.listFiles(site, path + "/" + folder, 1, 0);
+                    files = fsResponse.getFiles().stream()
+                            .filter(e -> e.getType() == 2)
+                            .filter(e -> isMediaFormat(e.getName()))
+                            .toList();
+                    subfolders = fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList();
+                }
+                Map<String, Long> size = new HashMap<>();
+                for (var file : files) {
+                    size.put(file.getName(), file.getSize());
+                }
+                List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
+                String prefix = Utils.getCommonPrefix(fileNames);
+                String suffix = Utils.getCommonSuffix(fileNames);
+                log.debug("files common prefix: '{}'  common suffix: '{}'", prefix, suffix);
+
+                if (appProperties.isSort()) {
+                    sort(fileNames);
+                }
+
+                int index = 0;
+                List<String> urls = new ArrayList<>();
+                for (String name : fileNames) {
+                    String filepath = fixPath(path + "/" + folder + "/" + name);
+                    String newName = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
+                    if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
+                        String url = buildProxyUrl(site, source, index++, name, filepath);
+                        urls.add(newName + "$" + url);
+                    } else {
+                        String url = buildPlayUrl(site, source, index++, filepath);
+                        urls.add(newName + "$" + url);
+                    }
+                }
+                source++;
+
+                if (!urls.isEmpty()) {
+                    result.getFiles().add(String.join("#", urls));
+                    result.getFolders().add(fixSourceName(parent + "/" + folder));
+                }
+
+                for (String name : subfolders) {
+                    try {
+                        var sub = dfs(site, path + "/" + folder + "/" + name, ac, folder + "/" + name, depth + 1);
+                        result.getFiles().addAll(sub.getFiles());
+                        result.getFolders().addAll(sub.getFolders());
+                    } catch (Exception e) {
+                        log.warn("failed load media files from folder {}", path + "/" + folder + "/" + name, e);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("failed load media files from folder {}", path + "/" + folder, e);
+            }
+        }
+
+        return result;
+    }
+
+    private static String fixSourceName(String name) {
+        if ("/".equals(name)) {
+            return "视频";
+        }
+        if (name.startsWith("/")) {
+            name = name.substring(1);
+        }
+        if (name.endsWith("/")) {
+            name = name.substring(0, name.length() - 1);
+        }
+
+        int max = 15;
+        if (name.length() > max) {
+            String[] parts = name.split("/");
+            List<String> list = new ArrayList<>();
+            int limit = max / parts.length;
+            for (String part : parts) {
+                if (part.length() > limit) {
+                    part = part.substring(0, limit);
+                }
+                list.add(part);
+            }
+            return String.join("/", list);
+        }
+
+        return name;
     }
 
     private static void sort(List<String> fileNames) {
@@ -1947,7 +2000,7 @@ public class TvBoxService {
             playUrl.add(String.join("#", urls));
         }
 
-        List<String> folders = fsResponse.getFiles().stream().map(FsInfo::getName).filter(this::isFolder).toList();
+        List<String> folders = fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList();
         if (!folders.isEmpty()) {
             log.info("load media files from folders: {}", folders);
             String fprefix = Utils.getCommonPrefix(folders);
