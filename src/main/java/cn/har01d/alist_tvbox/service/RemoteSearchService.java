@@ -104,9 +104,10 @@ public class RemoteSearchService {
         if (!CollectionUtils.isEmpty(appProperties.getPanSouPlugins())) {
             request.setPlugins(appProperties.getPanSouPlugins());
         }
-        log.debug("search request: {}", request);
+        String url = appProperties.getPanSouUrl() + "/api/search";
+        log.debug("search request: {} {}", url, request);
         try {
-            var json = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/search", request, String.class);
+            var json = restTemplate.postForObject(url, request, String.class);
             var response = objectMapper.readValue(json, PanSouSearchResponse.class);
             List<SearchResult> results = response.getData().getResults();
             List<String> tgDrivers = appProperties.getTgDrivers();
