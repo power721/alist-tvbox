@@ -8,7 +8,7 @@ RUN apk update && \
     apk upgrade --no-cache && \
     apk add --no-cache python3 py3-pip; \
     rm -rf /var/cache/apk/*; \
-    pip install telethon
+    pip install --break-system-packages telethon
 
 COPY config/alist.json /
 
