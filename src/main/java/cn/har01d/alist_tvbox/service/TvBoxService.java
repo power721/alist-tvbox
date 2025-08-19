@@ -1922,21 +1922,6 @@ public class TvBoxService {
         if (name.endsWith("/")) {
             name = name.substring(0, name.length() - 1);
         }
-
-        int max = 15;
-        if (name.length() > max) {
-            String[] parts = name.split("/");
-            List<String> list = new ArrayList<>();
-            int limit = max / parts.length;
-            for (String part : parts) {
-                if (part.length() > limit) {
-                    part = part.substring(0, limit);
-                }
-                list.add(part);
-            }
-            return String.join("/", list);
-        }
-
         return name;
     }
 
