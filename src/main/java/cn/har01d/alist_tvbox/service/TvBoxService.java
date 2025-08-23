@@ -1796,6 +1796,7 @@ public class TvBoxService {
             throw new BadRequestException("加载文件失败: " + newPath);
         }
 
+        int depth = 3;
         int pid = proxyService.generatePath(site, path);
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setPath(path);
@@ -1806,6 +1807,7 @@ public class TvBoxService {
         if (!"web".equals(ac) && !"gui".equals(ac)) {
             movieDetail.setVod_content(site.getName() + ":" + newPath);
         } else {
+            depth = 1;
             movieDetail.setType(9);
         }
         movieDetail.setVod_tag(FILE);
@@ -1813,7 +1815,7 @@ public class TvBoxService {
 
         setMovieInfo(site, movieDetail, fsDetail.getName(), newPath, true);
 
-        FilesList filesList = dfs(site, newPath, ac, "", 0);
+        FilesList filesList = dfs(site, newPath, ac, "", depth);
         List<String> sources = filesList.getFolders();
         if (sources.size() > 1) {
             String prefix = Utils.getCommonPrefix(sources);
@@ -1834,7 +1836,7 @@ public class TvBoxService {
 
     private FilesList dfs(Site site, String path, String ac, String parent, int depth) {
         FilesList result = new FilesList();
-        if (depth == 3) {
+        if (depth == 0) {
             return result;
         }
 
@@ -1897,7 +1899,7 @@ public class TvBoxService {
 
                 for (String name : subfolders) {
                     try {
-                        var sub = dfs(site, path + "/" + folder + "/" + name, ac, folder + "/" + name, depth + 1);
+                        var sub = dfs(site, path + "/" + folder + "/" + name, ac, folder + "/" + name, depth - 1);
                         result.getFiles().addAll(sub.getFiles());
                         result.getFolders().addAll(sub.getFolders());
                     } catch (Exception e) {
