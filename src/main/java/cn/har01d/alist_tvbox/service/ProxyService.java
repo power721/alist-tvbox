@@ -124,7 +124,11 @@ public class ProxyService {
             url = fsDetail.getRawUrl();
             String driver = fsDetail.getProvider();
             // check url for Alias
-            if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive")
+            if (url.contains(".m3u8")) {
+                log.debug("302 {} {}", driver, url);
+                response.sendRedirect(url);
+                return;
+            } else if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive")
                     || url.contains("baidu.com") || url.contains("quark.cn") || url.contains("uc.cn")
                     || url.startsWith("http://localhost")) {
                 log.debug("{} {}", driver, url);
