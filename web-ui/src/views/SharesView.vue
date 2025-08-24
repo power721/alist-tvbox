@@ -89,7 +89,7 @@
         <span v-else>阿里分享</span>
       </template>
     </el-table-column>
-    <el-table-column prop="time" label="时间" width="175" sortable="custom">
+    <el-table-column prop="time" label="创建时间" width="175" sortable="custom">
       <template #default="scope">
         {{new Date(scope.row.time).toLocaleString()}}
       </template>
