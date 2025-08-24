@@ -10,6 +10,8 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.storage.AList;
+import cn.har01d.alist_tvbox.storage.OpenList;
+import cn.har01d.alist_tvbox.storage.Storage;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -238,7 +240,7 @@ public class SiteService {
         siteRepository.save(site);
 
         try {
-            AList storage = new AList(site);
+            Storage storage = site.getVersion() == 4 ? new OpenList(site) : new AList(site);
             aListLocalService.saveStorage(storage);
         } catch (Exception e) {
             log.warn("{}", e.getMessage());
@@ -292,7 +294,7 @@ public class SiteService {
         siteRepository.save(site);
 
         try {
-            AList storage = new AList(site);
+            Storage storage = site.getVersion() == 4 ? new OpenList(site) : new AList(site);
             aListLocalService.saveStorage(storage);
         } catch (Exception e) {
             log.warn("{}", e.getMessage());
