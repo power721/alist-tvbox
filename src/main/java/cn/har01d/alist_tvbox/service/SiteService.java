@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.model.Response;
+import cn.har01d.alist_tvbox.storage.AList;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
@@ -170,7 +171,7 @@ public class SiteService {
     }
 
     public String generateToken() {
-        String token = "alist-" + UUID.randomUUID() + IdUtils.generate(64);
+        String token = "openlist-" + UUID.randomUUID() + IdUtils.generate(64);
         log.info("generate token {}", token);
         return token;
     }
@@ -234,7 +235,15 @@ public class SiteService {
 
         Site site = new Site();
         syncSite(dto, site);
-        return siteRepository.save(site);
+        siteRepository.save(site);
+
+        try {
+            AList storage = new AList(site);
+            aListLocalService.saveStorage(storage);
+        } catch (Exception e) {
+            log.warn("{}", e.getMessage());
+        }
+        return site;
     }
 
     private void syncSite(SiteDto dto, Site site) {
@@ -280,7 +289,15 @@ public class SiteService {
         }
 
         syncSite(dto, site);
-        return siteRepository.save(site);
+        siteRepository.save(site);
+
+        try {
+            AList storage = new AList(site);
+            aListLocalService.saveStorage(storage);
+        } catch (Exception e) {
+            log.warn("{}", e.getMessage());
+        }
+        return site;
     }
 
     private void validate(SiteDto dto) {

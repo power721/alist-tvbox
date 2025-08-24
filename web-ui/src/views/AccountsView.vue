@@ -285,7 +285,7 @@
 
     <div class="divider"></div>
 
-    <pan-account-view></pan-account-view>
+    <driver-account-view></driver-account-view>
   </div>
 </template>
 
@@ -297,7 +297,7 @@ import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 import router from "@/router";
 import PikPakView from '@/views/PikPakView.vue'
-import PanAccountView from "@/views/PanAccountView.vue";
+import DriverAccountView from "@/views/DriverAccountView.vue";
 
 const iat = ref([0])
 const exp = ref([0])

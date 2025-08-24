@@ -26,6 +26,7 @@ import cn.har01d.alist_tvbox.storage.Alias;
 import cn.har01d.alist_tvbox.storage.AliyunShare;
 import cn.har01d.alist_tvbox.storage.BaiduShare;
 import cn.har01d.alist_tvbox.storage.Local;
+import cn.har01d.alist_tvbox.storage.OpenList;
 import cn.har01d.alist_tvbox.storage.Pan115Share;
 import cn.har01d.alist_tvbox.storage.Pan123Share;
 import cn.har01d.alist_tvbox.storage.Pan139Share;
@@ -281,7 +282,7 @@ public class ShareService {
                 continue;
             }
             try {
-                AList storage = new AList(site);
+                Storage storage = site.getVersion() == 4 ? new OpenList(site) : new AList(site);
                 aListLocalService.saveStorage(storage);
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());
