@@ -32,7 +32,7 @@ public class Storage {
 
     public Storage(Site site) {
         this.id = 8000 + site.getId();
-        this.driver = "AList V" + site.getVersion();
+        this.driver = site.getVersion() == 4 ? "OpenList" : "AList V" + site.getVersion();
         this.path = "/\uD83C\uDF8E我的套娃/" + site.getName();
     }
 

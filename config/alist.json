@@ -3,7 +3,7 @@
   "site_url": "",
   "cdn": "",
   "jwt_secret": "Y3JIG4vxT22wn9cq",
-  "token_expires_in": 4800,
+  "token_expires_in": 48,
   "database": {
     "type": "sqlite3",
     "host": "",
@@ -19,7 +19,7 @@
   "meilisearch": {
     "host": "http://localhost:7700",
     "api_key": "",
-    "index_prefix": ""
+    "index": "openlist"
   },
   "scheme": {
     "address": "0.0.0.0",
@@ -32,19 +32,40 @@
     "unix_file_perm": "",
     "enable_h2c": false
   },
-  "opentoken_auth_url": "https://ali.har01d.org/access_token",
-  "temp_dir": "/opt/alist/data/temp",
+  "temp_dir": "data/temp",
   "bleve_dir": "data/bleve",
   "dist_dir": "",
   "log": {
     "enable": true,
-    "name": "/opt/alist/log/alist.log",
-    "max_size": 10,
-    "max_backups": 5,
+    "name": "data/log/log.log",
+    "max_size": 50,
+    "max_backups": 30,
     "max_age": 28,
-    "compress": false
+    "compress": false,
+    "filter": {
+      "enable": false,
+      "filters": [
+        {
+          "cidr": "",
+          "path": "/ping",
+          "method": ""
+        },
+        {
+          "cidr": "",
+          "path": "",
+          "method": "HEAD"
+        },
+        {
+          "cidr": "",
+          "path": "/dav/",
+          "method": "PROPFIND"
+        }
+      ]
+    }
   },
   "delayed_start": 0,
+  "max_buffer_limitMB": -1,
+  "mmap_thresholdMB": 4,
   "max_connections": 0,
   "max_concurrency": 64,
   "tls_insecure_skip_verify": true,
@@ -65,6 +86,11 @@
       "task_persistant": false
     },
     "copy": {
+      "workers": 5,
+      "max_retry": 2,
+      "task_persistant": false
+    },
+    "move": {
       "workers": 5,
       "max_retry": 2,
       "task_persistant": false
@@ -113,5 +139,5 @@
     "enable": false,
     "listen": ":5222"
   },
-  "last_launched_version": "3.44.0"
+  "last_launched_version": "v4.1.1"
 }

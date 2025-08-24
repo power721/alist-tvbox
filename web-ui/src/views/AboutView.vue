@@ -12,8 +12,8 @@
       <a href="https://github.com/power721/alist-tvbox/blob/master/doc/README_zh.md" target="_blank">https://github.com/power721/alist-tvbox/blob/master/doc/README_zh.md</a>
     </p>
     <p>
-      AList：
-      <a href="https://alist.nn.ci/zh/guide/" target="_blank">https://alist.nn.ci/</a>
+      OpenList：
+      <a href="https://doc.oplist.org/guide/drivers/common" target="_blank">https://doc.oplist.org/</a>
     </p>
     <p>
       Docker：

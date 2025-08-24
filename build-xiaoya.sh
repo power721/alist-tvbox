@@ -77,7 +77,7 @@ pwd
 export TZ=Asia/Shanghai
 
 echo -e "\e[36m使用配置目录：\e[0m $BASE_DIR"
-echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:80"
+echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:5244"
 
 [ "$PULL" = "true" ] && echo "=== pull haroldli/alist-base ===" && docker pull haroldli/alist-base
 
@@ -88,7 +88,7 @@ docker build -f docker/Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest .
 echo "=== restart xiaoya-tvbox ==="
 systemctl is-active atv && sudo systemctl stop atv
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
-docker run -d -p $PORT1:4567 -p $PORT2:80 -p 5566:5244 -e ALIST_PORT=$PORT2 -e INSTALL=xiaoya -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+docker run -d -p $PORT1:4567 -p $PORT2:5244 -p 5566:5244 -e ALIST_PORT=$PORT2 -e INSTALL=xiaoya -e MEM_OPT="$MEM_OPT" -v "$BASE_DIR":/data ${MOUNT} --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 
 sleep 1
 

@@ -86,6 +86,7 @@ public class AListLocalService {
         log.info("AList internal port: {}", internalPort);
         log.info("AList external port: {}", externalPort);
         setSetting("external_port", String.valueOf(externalPort), "number");
+        setSetting("default_page_size", "50", "number");
         String url = settingRepository.findById(Constants.OPEN_TOKEN_URL).map(Setting::getValue).orElse("");
         if (url.isEmpty() || url.equals("https://api.xhofe.top/alist/ali_open/token")) {
             url = "https://ali.har01d.org/access_token";

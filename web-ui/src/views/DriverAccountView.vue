@@ -94,7 +94,7 @@
             <el-radio label="BAIDU" size="large">百度网盘</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="Cookie" required v-if="form.type=='QUARK'||form.type=='UC'||form.type=='PAN115'||form.type=='BAIDU'||form.type=='CLOUD189'">
+        <el-form-item label="Cookie" required v-if="supportCookie(form.type)">
           <el-input v-model="form.cookie" @change="getInfo" type="textarea" :rows="5"/>
           <span v-if="form.type=='QUARK'">
             <a href="https://pan.quark.cn/" target="_blank">夸克网盘</a>
@@ -131,10 +131,10 @@
           <div class="hint"></div>
           <a href="https://alist.nn.ci/zh/guide/drivers/139.html" target="_blank">使用说明</a>
         </el-form-item>
-<!--        <el-form-item label="Refresh Token" required v-if="form.type=='OPEN115'">-->
-<!--          <el-input v-model="form.token"/>-->
-<!--          <a href="https://alist.nn.ci/zh/tool/115/token" target="_blank">获取刷新令牌</a>-->
-<!--        </el-form-item>-->
+        <!--        <el-form-item label="Refresh Token" required v-if="form.type=='OPEN115'">-->
+        <!--          <el-input v-model="form.token"/>-->
+        <!--          <a href="https://alist.nn.ci/zh/tool/115/token" target="_blank">获取刷新令牌</a>-->
+        <!--        </el-form-item>-->
         <el-form-item label="Token" v-if="form.type=='PAN115'">
           <el-input v-model="form.token"/>
         </el-form-item>
@@ -172,6 +172,16 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="视频类型" v-if="form.type=='QUARK_TV'||form.type=='UC_TV'">
+          <el-select v-model="form.addition.link_method">
+            <el-option
+              v-for="item in tvLinkMethod"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="家庭云ID" v-if="form.type=='PAN139'">
           <el-input v-model="form.addition.cloud_id"/>
         </el-form-item>
@@ -184,7 +194,7 @@
         <el-form-item v-if="form.type=='PAN115'" label="请求限速">
           <el-input-number :min="1" :max="4" v-model="form.addition.limit_rate"/>
         </el-form-item>
-        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'||form.type=='PAN139'" label="加速代理">
+        <el-form-item v-if="supportProxy(form.type)" label="加速代理">
           <el-switch
             v-model="form.useProxy"
             inline-prompt
@@ -193,10 +203,10 @@
           />
           <span class="hint">服务端多线程加速，网页播放强制开启</span>
         </el-form-item>
-        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'||form.type=='PAN139'" label="代理线程数">
+        <el-form-item v-if="supportProxy(form.type)" label="代理线程数">
           <el-input-number :min="1" :max="64" v-model="form.concurrency"/>
         </el-form-item>
-        <el-form-item v-if="form.type=='PAN115'||form.type=='QUARK'||form.type=='UC'||form.type=='BAIDU'||form.type=='PAN139'" label="分片大小">
+        <el-form-item v-if="supportProxy(form.type)" label="分片大小">
           <el-input-number :min="64" :max="4096" v-model="form.addition.chunk_size"/>
         </el-form-item>
         <el-form-item label="主账号" v-if="!driverRoundRobin&&form.type!='OPEN115'&&form.type!='QUARK_TV'&&form.type!='UC_TV'">
@@ -311,6 +321,7 @@ const form = ref({
     access_token: '',
     delete_code: '',
     cloud_id: '',
+    link_method: 'download',
     type: 'personal_new',
     auto_checkin: false,
   },
@@ -381,6 +392,35 @@ const pan139Typess = [
   },
 ]
 
+const tvLinkMethod = [
+  {
+    "value": "download",
+    "label": "原画"
+  },
+  {
+    "value": "streaming",
+    "label": "转码"
+  },
+]
+
+const supportCookie = (type: string) => {
+  return type == 'PAN115'
+    || type == 'QUARK'
+    || type == 'UC'
+    || type == 'BAIDU'
+    || type == 'CLOUD189'
+}
+
+const supportProxy = (type: string) => {
+  return type == 'PAN115'
+    || type == 'QUARK'
+    || type == 'QUARK_TV'
+    || type == 'UC'
+    || type == 'UC_TV'
+    || type == 'BAIDU'
+    || type == 'PAN139'
+}
+
 const handleAdd = () => {
   dialogTitle.value = '添加网盘账号'
   updateAction.value = false
@@ -397,6 +437,7 @@ const handleAdd = () => {
       access_token: '',
       delete_code: '',
       cloud_id: '',
+      link_method: 'download',
       type: 'personal_new',
       auto_checkin: false,
     },
