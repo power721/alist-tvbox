@@ -29,10 +29,10 @@
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
   </el-row>
 
-  <el-table :data="shares" border @selection-change="handleSelectionChange" style="width: 100%">
+  <el-table :data="shares" border @selection-change="handleSelection" @sort-change="handleSort" style="width: 100%">
     <el-table-column type="selection" width="55"/>
-    <el-table-column prop="id" label="ID" width="70" sortable/>
-    <el-table-column prop="path" label="路径" sortable>
+    <el-table-column prop="id" label="ID" width="70" sortable="custom"/>
+    <el-table-column prop="path" label="路径" sortable="custom">
       <template #default="scope">
         <router-link :to="'/vod' + scope.row.path">
           {{ scope.row.path }}
@@ -74,7 +74,7 @@
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="120"/>
-    <el-table-column prop="type" label="类型" width="120" sortable>
+    <el-table-column prop="type" label="类型" width="120" sortable="custom">
       <template #default="scope">
         <span v-if="scope.row.type==1">PikPak分享</span>
         <span v-else-if="scope.row.type==4">本地存储</span>
@@ -87,6 +87,11 @@
         <span v-else-if="scope.row.type==3">123分享</span>
         <span v-else-if="scope.row.type==10">百度分享</span>
         <span v-else>阿里分享</span>
+      </template>
+    </el-table-column>
+    <el-table-column prop="time" label="时间" width="175" sortable="custom">
+      <template #default="scope">
+        {{new Date(scope.row.time).toLocaleString()}}
       </template>
     </el-table-column>
     <el-table-column fixed="right" label="操作" width="120">
@@ -318,7 +323,7 @@
 <script setup lang="ts">
 import {onMounted, ref} from "vue";
 import axios from "axios";
-import {ElMessage} from 'element-plus'
+import {ElMessage, type TableColumnCtx} from 'element-plus'
 import { genFileId } from 'element-plus'
 import type { UploadInstance, UploadProps, UploadRawFile } from 'element-plus'
 const upload = ref<UploadInstance>()
@@ -371,6 +376,7 @@ const storage = ref<Storage>({
   status: '',
   addition: ''
 })
+const sort = ref('')
 const page = ref(1)
 const page1 = ref(1)
 const size = ref(20)
@@ -562,7 +568,7 @@ const search = () => {
 
 const loadShares = (value: number) => {
   page.value = value
-  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value + '&type=' + type.value + '&keyword=' + keyword.value).then(({data}) => {
+  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value + '&sort=' + sort.value + '&type=' + type.value + '&keyword=' + keyword.value).then(({data}) => {
     shares.value = data.content
     total.value = data.totalElements
   })
@@ -689,7 +695,16 @@ const uploadError = (error: Error) => {
   ElMessage.error('导入失败：' + error)
 }
 
-const handleSelectionChange = (val: ShareInfo[]) => {
+const handleSort = (data: {prop: string, order: any }) => {
+  if (data.order) {
+    sort.value = data.prop + ',' + (data.order === 'ascending' ? 'asc' : 'desc')
+  } else {
+    sort.value = data.prop
+  }
+  loadShares(page.value)
+}
+
+const handleSelection = (val: ShareInfo[]) => {
   multipleSelection.value = val
 }
 
