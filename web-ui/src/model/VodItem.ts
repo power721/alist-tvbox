@@ -1,3 +1,5 @@
+import type {PlayItem} from "@/model/PlayItem";
+
 export interface VodItem {
   "vod_id": string,
   "path": string,
@@ -20,4 +22,5 @@ export interface VodItem {
   "type": number
   "progress": string
   "size": number
+  "items": PlayItem[]
 }

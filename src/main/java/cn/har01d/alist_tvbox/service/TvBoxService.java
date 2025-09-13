@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.dto.FilesList;
+import cn.har01d.alist_tvbox.dto.PlayItem;
 import cn.har01d.alist_tvbox.dto.Subtitle;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
@@ -1825,6 +1826,9 @@ public class TvBoxService {
             movieDetail.setVod_play_from(folderNames);
         }
         movieDetail.setVod_play_url(String.join("$$$", filesList.getFiles()));
+        if ("web".equals(ac) || "gui".equals(ac)) {
+            movieDetail.setItems(filesList.getItems());
+        }
 
         MovieList result = new MovieList();
         result.getList().add(movieDetail);
@@ -1850,7 +1854,9 @@ public class TvBoxService {
         if (!files.isEmpty()) {
             folders.add("");
         }
-        folders.addAll(fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList());
+        if (depth > 1) {
+            folders.addAll(fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList());
+        }
         log.info("load media files from folders: {}", folders);
         int source = 0;
         for (String folder : folders) {
@@ -1865,8 +1871,10 @@ public class TvBoxService {
                     subfolders = fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList();
                 }
                 Map<String, Long> size = new HashMap<>();
+                Map<String, String> time = new HashMap<>();
                 for (var file : files) {
                     size.put(file.getName(), file.getSize());
+                    time.put(file.getName(), file.getModified());
                 }
                 List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
                 String prefix = Utils.getCommonPrefix(fileNames);
@@ -1881,13 +1889,24 @@ public class TvBoxService {
                 List<String> urls = new ArrayList<>();
                 for (String name : fileNames) {
                     String filepath = fixPath(path + "/" + folder + "/" + name);
-                    String newName = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
+                    String title = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
                     if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                        String url = buildProxyUrl(site, source, index++, name, filepath);
-                        urls.add(newName + "$" + url);
+                        PlayItem item = new PlayItem();
+                        item.setName(name);
+                        item.setTitle(title);
+                        item.setPath(filepath);
+                        item.setTime(time.get(name));
+                        item.setSize(size.get(name));
+                        String url = buildProxyUrl(site, filepath, item);
+                        item.setUrl(url);
+                        if ("detail".equals(ac)) {
+                            urls.add(title + "$" + url);
+                        } else {
+                            result.getItems().add(item);
+                        }
                     } else {
                         String url = buildPlayUrl(site, source, index++, filepath);
-                        urls.add(newName + "$" + url);
+                        urls.add(title + "$" + url);
                     }
                 }
                 source++;
@@ -1900,6 +1919,7 @@ public class TvBoxService {
                 for (String name : subfolders) {
                     try {
                         var sub = dfs(site, path + "/" + folder + "/" + name, ac, folder + "/" + name, depth - 1);
+                        result.getItems().addAll(sub.getItems());
                         result.getFiles().addAll(sub.getFiles());
                         result.getFolders().addAll(sub.getFolders());
                     } catch (Exception e) {
@@ -2392,12 +2412,11 @@ public class TvBoxService {
     }
 
     // AList-TvBox proxy
-    private String buildProxyUrl(Site site, int folderId, int fileId, String name, String path) {
-        String p = "/p/" + subscriptionService.getCurrentToken() + "/" + site.getId() + "@" + proxyService.generateProxyUrl(site, path) + "@" + folderId + "@" + fileId;
+    private String buildProxyUrl(Site site, String path, PlayItem item) {
+        String p = "/p/" + subscriptionService.getCurrentToken() + "/" + site.getId() + "@" + proxyService.generateProxyUrl(site, path, item);
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(p)
-                .replaceQuery("name=" + encodeUrl(name))
                 .build()
                 .toUriString();
     }

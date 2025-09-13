@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.PlayItem;
 import cn.har01d.alist_tvbox.entity.PlayUrl;
 import cn.har01d.alist_tvbox.entity.PlayUrlRepository;
 import cn.har01d.alist_tvbox.entity.Site;
@@ -60,7 +61,7 @@ public class ProxyService {
 
     @Scheduled(cron = "0 45 * * * *")
     public void clean() {
-        List<PlayUrl> expired = playUrlRepository.findByTimeBefore(Instant.now());
+        List<PlayUrl> expired = playUrlRepository.findByTimeBeforeAndRatingIsNull(Instant.now());
         if (!expired.isEmpty()) {
             log.info("delete {} expired play urls", expired.size());
         }
@@ -72,6 +73,16 @@ public class ProxyService {
         if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
             playUrl = playUrlRepository.save(new PlayUrl(0, path, Instant.now().plus(1, ChronoUnit.DAYS)));
         }
+        return playUrl.getId();
+    }
+
+    public int generateProxyUrl(Site site, String path, PlayItem playItem) {
+        PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
+        if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
+            playUrl = playUrlRepository.save(new PlayUrl(site.getId(), path, Instant.now().plus(7, ChronoUnit.DAYS)));
+        }
+        playItem.setId(playUrl.getId());
+        playItem.setRating(playUrl.getRating());
         return playUrl.getId();
     }
 

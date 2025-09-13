@@ -7,6 +7,7 @@ import java.util.List;
 
 @Data
 public class FilesList {
+    private List<PlayItem> items = new ArrayList<>();
     private List<String> files = new ArrayList<>();
     private List<String> folders = new ArrayList<>();
 }

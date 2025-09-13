@@ -192,14 +192,23 @@
                 </el-link>
                 /
                 <el-link :href="buildVlcUrl(0)" target="_blank">总共{{ playlist.length }}集</el-link>
+                <el-select v-model="order" @change="sort" placeholder="排序" style="width: 110px; margin-left: 10px">
+                  <el-option
+                    v-for="item in sortOrders"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
               </div>
               <el-scrollbar ref="scrollbarRef" height="1050px">
                 <ul>
                   <li v-for="(video, index) in playlist" :key="index" @click="playVideo(index)">
                     <el-link type="primary" v-if="currentVideoIndex==index">
-                      {{ video.text }}
+                      {{ video.title }}
                     </el-link>
-                    <el-link v-else>{{ video.text }}</el-link>
+                    <el-link v-else>{{ video.title }}</el-link>
+                    <span v-if="video.rating"> [评分：{{ video.rating }}]</span>
                   </li>
                 </ul>
               </el-scrollbar>
@@ -299,6 +308,22 @@
                     <Connection/>
                   </el-icon>
                 </el-button>
+                <el-popover placement="bottom" width="100px" v-if="playItem.rating">
+                  <template #reference>
+                    <el-button :icon="StarFilled"></el-button>
+                  </template>
+                  <template #default>
+                    <el-rate v-model="rating" @change="updateRating" clearable/>
+                  </template>
+                </el-popover>
+                <el-popover placement="bottom" width="100px">
+                  <template #reference>
+                    <el-button :icon="Star"></el-button>
+                  </template>
+                  <template #default>
+                    <el-rate v-model="rating" @change="updateRating" clearable/>
+                  </template>
+                </el-popover>
                 <el-button @click="showPush" title="推送" v-if="devices.length">
                   <el-icon>
                     <Upload/>
@@ -529,6 +554,7 @@ import {onMounted, onUnmounted, reactive, ref, watch} from 'vue'
 import axios from "axios"
 import {ElMessage, type ScrollbarInstance} from "element-plus";
 import type {VodItem} from "@/model/VodItem";
+import type {PlayItem} from "@/model/PlayItem";
 import {useRoute, useRouter} from "vue-router";
 import clipBorad from "vue-clipboard3";
 import {debounce} from 'lodash-es'
@@ -544,6 +570,8 @@ import {
   QuestionFilled,
   Search,
   Setting,
+  Star,
+  StarFilled,
   Upload
 } from "@element-plus/icons-vue";
 import type {Device} from "@/model/Device";
@@ -552,11 +580,6 @@ import {store} from "@/services/store";
 
 let {toClipboard} = clipBorad();
 
-interface Item {
-  path: string
-  text: string
-}
-
 let timer = 0
 const route = useRoute()
 const router = useRouter()
@@ -564,6 +587,7 @@ const videoPlayer = ref(null)
 const scrollbarRef = ref<ScrollbarInstance>()
 const filePath = ref('/')
 const keyword = ref('')
+const order = ref('index')
 const shareType = ref('ALL')
 const title = ref('')
 const playUrl = ref('')
@@ -573,9 +597,11 @@ const base64QrCode = ref('')
 const devices = ref<Device[]>([])
 const movies = ref<VodItem[]>([])
 const playFrom = ref<string[]>([])
-const playlist = ref<Item[]>([])
+const playlist = ref<PlayItem[]>([])
+const playItem = ref<PlayItem>({})
 const currentVideoIndex = ref(0)
 const currentImageIndex = ref(0)
+const rating = ref(0)
 const duration = ref(0)
 const currentTime = ref(0)
 const currentSpeed = ref(1)
@@ -647,6 +673,52 @@ const options = [
   {label: '迅雷', value: '2'},
   {label: '移动', value: '6'},
   {label: 'PikPak', value: '1'},
+]
+const sortOrders = [
+  {
+    value: 'index',
+    label: '原始顺序',
+  },
+  // {
+  //   value: 'id,asc',
+  //   label: 'ID升序',
+  // },
+  // {
+  //   value: 'id,desc',
+  //   label: 'ID降序',
+  // },
+  {
+    value: 'name,asc',
+    label: '名称升序',
+  },
+  {
+    value: 'name,desc',
+    label: '名称降序',
+  },
+  {
+    value: 'rating,asc',
+    label: '评分升序',
+  },
+  {
+    value: 'rating,desc',
+    label: '评分降序',
+  },
+  {
+    value: 'time,asc',
+    label: '时间升序',
+  },
+  {
+    value: 'time,desc',
+    label: '时间降序',
+  },
+  {
+    value: 'size,asc',
+    label: '大小升序',
+  },
+  {
+    value: 'size,desc',
+    label: '大小降序',
+  },
 ]
 
 const sortFileSizes = (a, b) => {
@@ -815,6 +887,14 @@ const clearSearch = () => {
 
 const handleSelectionChange = (val: ShareInfo[]) => {
   selected.value = val
+}
+
+const updateRating = () => {
+  const id = playItem.value.id;
+  axios.post(`/api/favorites/${id}/rate?rating=` + rating.value).then(() => {
+    playItem.value.rating = rating.value
+    ElMessage.success('更新成功')
+  })
 }
 
 const showScrape = () => {
@@ -1028,21 +1108,20 @@ const loadDetail = (id: string) => {
     } else {
       poster.value = cover.value ? '/images?url=' + cover.value : ''
     }
-    playFrom.value = movies.value[0].vod_play_from.split("$$$");
-    playlist.value = movies.value[0].vod_play_url.split("$$$")[0].split("#").map(e => {
-      let u = e.split('$')
-      if (u.length == 1) {
-        return {
-          path: e,
-          text: movies.value[0].vod_name
-        }
-      } else {
-        return {
-          path: u[1],
-          text: u[0]
-        }
+    playlist.value = movies.value[0].items
+    let index = 0
+    for (const item of playlist.value) {
+      item.index = index++
+      if (!item.rating) {
+        item.rating = 0
       }
-    })
+      if (item.time) {
+        item.time = new Date(item.time)
+      } else {
+        item.time = new Date()
+      }
+    }
+    playFrom.value = movies.value[0].vod_play_from.split("$$$");
     getHistory(movies.value[0].vod_id).then(() => {
       getPlayUrl()
       loading.value = false
@@ -1409,10 +1488,52 @@ const updateMuteState = () => {
   }
 }
 
+const sort = () => {
+  switch (order.value) {
+    case "index":
+      playlist.value.sort((a, b) => a.index - b.index);
+      break
+    case "id,asc":
+      playlist.value.sort((a, b) => a.id - b.id);
+      break
+    case "id,desc":
+      playlist.value.sort((a, b) => b.id - a.id);
+      break
+    case "name,asc":
+      playlist.value.sort((a, b) => a.name.localeCompare(b.name));
+      break
+    case "name,desc":
+      playlist.value.sort((a, b) => b.name.localeCompare(a.name));
+      break
+    case "size,asc":
+      playlist.value.sort((a, b) => a.size - b.size);
+      break
+    case "size,desc":
+      playlist.value.sort((a, b) => b.size - a.size);
+      break
+    case "rating,asc":
+      playlist.value.sort((a, b) => a.rating - b.rating);
+      break
+    case "rating,desc":
+      playlist.value.sort((a, b) => b.rating - a.rating);
+      break
+    case "time,asc":
+      playlist.value.sort((a, b) => a.time - b.time);
+      break
+    case "time,desc":
+      playlist.value.sort((a, b) => b.time - a.time);
+      break
+  }
+  currentVideoIndex.value = playlist.value.findIndex(e => e === playItem.value)
+}
+
 const getPlayUrl = () => {
   const index = currentVideoIndex.value
-  playUrl.value = playlist.value[index].path
-  title.value = playlist.value[index].text
+  const item = playlist.value[index]
+  playItem.value = item
+  playUrl.value = item.url
+  title.value = item.title
+  rating.value = item.rating
   document.title = title.value
   saveHistory()
 }
@@ -1439,7 +1560,7 @@ const buildM3u8Url = (start: number) => {
 }
 
 const openInVLC = () => {
-  const url = playUrl.value
+  const url = playUrl.value + '?name=' + playItem.value.title
   const vlcAttempt = window.open(`vlc://${url}`, '_blank')
 
   setTimeout(() => {
@@ -1508,7 +1629,7 @@ const getHistory = (id: string) => {
         let path = data.episodeUrl as string
         if (path) {
           currentVideoIndex.value = playlist.value.findIndex(e => {
-            let u = e.path
+            let u = e.url
             let index = u.indexOf('?')
             if (index > 0) {
               u = u.substring(0, index)
