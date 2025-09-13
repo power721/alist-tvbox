@@ -2,6 +2,8 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.dto.ValidateResult;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.FsDetail;
@@ -13,6 +15,8 @@ import cn.har01d.alist_tvbox.model.FsListResponseV2;
 import cn.har01d.alist_tvbox.model.FsRequest;
 import cn.har01d.alist_tvbox.model.FsResponse;
 import cn.har01d.alist_tvbox.model.FsResponseV2;
+import cn.har01d.alist_tvbox.model.LoginRequest;
+import cn.har01d.alist_tvbox.model.LoginResponse;
 import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.model.SearchListResponse;
 import cn.har01d.alist_tvbox.model.SearchRequest;
@@ -38,10 +42,14 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
 
 @Slf4j
 @Service
@@ -49,6 +57,7 @@ public class AListService {
     private static final Pattern VERSION = Pattern.compile("\"version\":\"v\\d+\\.\\d+\\.\\d+\"");
 
     private final RestTemplate restTemplate;
+    private final SettingRepository settingRepository;
     private final SiteService siteService;
     private final AListLocalService aListLocalService;
     private final Cache<String, VideoPreview> cache = Caffeine.newBuilder()
@@ -56,13 +65,17 @@ public class AListService {
             .expireAfterWrite(Duration.ofSeconds(895))
             .build();
 
-    public AListService(RestTemplateBuilder builder, SiteService siteService, AListLocalService aListLocalService) {
+    public AListService(RestTemplateBuilder builder,
+                        SettingRepository settingRepository,
+                        SiteService siteService,
+                        AListLocalService aListLocalService) {
         this.restTemplate = builder
                 .defaultHeader(HttpHeaders.ACCEPT, Constants.ACCEPT)
                 .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
-                .setConnectTimeout(Duration.ofSeconds(60))
-                .setReadTimeout(Duration.ofSeconds(60))
+                .connectTimeout(Duration.ofSeconds(60))
+                .readTimeout(Duration.ofSeconds(60))
                 .build();
+        this.settingRepository = settingRepository;
         this.siteService = siteService;
         this.aListLocalService = aListLocalService;
     }
@@ -205,6 +218,30 @@ public class AListService {
         return response.getData();
     }
 
+    public void rename(Site site, String path, String newName) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", newName);
+        data.put("overwrite", false);
+        data.put("path", path);
+        String url = getUrl(site) + "/api/fs/rename";
+        log.debug("call api: {} request: {}", url, data);
+        LoginResponse response = postAdmin(site, url, data, LoginResponse.class);
+        logError(response);
+    }
+
+    public void remove(Site site, String path) {
+        int index = path.lastIndexOf("/");
+        String dir = path.substring(0, index);
+        String name = path.substring(index + 1);
+        Map<String, Object> data = new HashMap<>();
+        data.put("dir", dir);
+        data.put("names", List.of(name));
+        String url = getUrl(site) + "/api/fs/remove";
+        log.debug("call api: {} request: {}", url, data);
+        LoginResponse response = postAdmin(site, url, data, LoginResponse.class);
+        logError(response);
+    }
+
     public FsDetail getFile(Site site, String path) {
         int version = getVersion(site);
         if (version == 2) {
@@ -306,6 +343,26 @@ public class AListService {
         HttpEntity<R> entity = new HttpEntity<>(request, headers);
         ResponseEntity<T> response = restTemplate.exchange(url, HttpMethod.POST, entity, responseType);
         return response.getBody();
+    }
+
+    private <T, R> T postAdmin(Site site, String url, R request, Class<T> responseType) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, login(site));
+        HttpEntity<R> entity = new HttpEntity<>(request, headers);
+        ResponseEntity<T> response = restTemplate.exchange(url, HttpMethod.POST, entity, responseType);
+        return response.getBody();
+    }
+
+    private String login(Site site) {
+        String username = "atv";
+        String password = settingRepository.findById(ATV_PASSWORD).map(Setting::getValue).orElseThrow(BadRequestException::new);
+        LoginRequest request = new LoginRequest();
+        request.setUsername(username);
+        request.setPassword(password);
+        String url = getUrl(site) + "/api/auth/login";
+        LoginResponse response = restTemplate.postForObject(url, request, LoginResponse.class);
+        log.debug("AList login response: {}", response);
+        return response.getData().getToken();
     }
 
     private void logError(Response<?> response) {

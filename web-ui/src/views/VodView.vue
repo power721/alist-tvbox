@@ -125,11 +125,11 @@
       </el-col>
     </el-row>
 
-    <el-dialog v-model="imageVisible" :title="title" :fullscreen="true">
+    <el-dialog v-model="imageVisible" :title="playItem.title" :fullscreen="true">
       <el-row>
         <el-col :span="18">
-          <el-image style="height:1080px;width:100%" fit="contain" :src="playUrl"
-                    :preview-src-list="[playUrl]" :hide-on-click-modal="true"/>
+          <el-image style="height:1080px;width:100%" fit="contain" :src="playItem.url"
+                    :preview-src-list="[playItem.url]" :hide-on-click-modal="true"/>
         </el-col>
         <el-col :span="5">
           <el-scrollbar ref="scrollbarRef" height="1050px">
@@ -151,7 +151,7 @@
                @close="stop">
       <template #header="{ close, titleId, titleClass }">
         <div class="my-header">
-          <h5 :id="titleId" :class="titleClass">{{ title }}</h5>
+          <h5 :id="titleId" :class="titleClass">{{ playItem.title }}</h5>
           <div class="buttons">
             <el-button @click="toggleFullscreen">
               <el-icon class="el-icon--left">
@@ -173,7 +173,7 @@
           <el-col :span="18">
             <video
               ref="videoPlayer"
-              :src="playUrl"
+              :src="playItem.url"
               :poster="poster"
               :autoplay="true"
               @ended="playNextVideo"
@@ -203,12 +203,26 @@
               </div>
               <el-scrollbar ref="scrollbarRef" height="1050px">
                 <ul>
-                  <li v-for="(video, index) in playlist" :key="index" @click="playVideo(index)">
-                    <el-link type="primary" v-if="currentVideoIndex==index">
-                      {{ video.title }}
-                    </el-link>
-                    <el-link v-else>{{ video.title }}</el-link>
-                    <span v-if="video.rating"> [评分：{{ video.rating }}]</span>
+                  <li v-for="(video, index) in playlist" :key="index">
+                    <el-popover placement="right">
+                      <template #reference>
+                        <div>
+                          <el-link type="primary" v-if="currentVideoIndex==index">
+                            {{ video.title }}
+                          </el-link>
+                          <el-link @click="playVideo(index)" v-else>
+                            {{ video.title }}
+                          </el-link>
+                          <span v-if="video.rating"> [{{ video.rating }}]</span>
+                        </div>
+                      </template>
+                      <template #default>
+                        <el-button-group class="ml-4">
+                          <el-button type="primary" :icon="Edit" @click="showRename(video)" />
+                          <el-button type="danger" :icon="Delete" @click="showRemove(video)" v-if="video!=playItem" />
+                        </el-button-group>
+                      </template>
+                    </el-popover>
                   </li>
                 </ul>
               </el-scrollbar>
@@ -313,7 +327,7 @@
                     <el-button :icon="StarFilled"></el-button>
                   </template>
                   <template #default>
-                    <el-rate v-model="rating" @change="updateRating" clearable/>
+                    <el-rate v-model="playItem.rating" @change="updateRating" clearable/>
                   </template>
                 </el-popover>
                 <el-popover placement="bottom" width="100px">
@@ -321,7 +335,7 @@
                     <el-button :icon="Star"></el-button>
                   </template>
                   <template #default>
-                    <el-rate v-model="rating" @change="updateRating" clearable/>
+                    <el-rate v-model="playItem.rating" @change="updateRating" clearable/>
                   </template>
                 </el-popover>
                 <el-button @click="showPush" title="推送" v-if="devices.length">
@@ -335,15 +349,15 @@
                   </template>
                   <template #default>
                     <div class="players">
-                      <a :href="'iina://weblink?url='+playUrl"><img alt="iina" src="/iina.webp"></a>
-                      <a :href="'potplayer://'+playUrl"><img alt="potplayer" src="/potplayer.webp"></a>
-                      <a :href="'vlc://'+playUrl"><img alt="vlc" src="/vlc.webp"></a>
-                      <a :href="'nplayer-'+playUrl"><img alt="nplayer" src="/nplayer.webp"></a>
-                      <a :href="'omniplayer://weblink?url='+playUrl"><img alt="omniplayer" src="/omniplayer.webp"></a>
-                      <a :href="'figplayer://weblink?url='+playUrl"><img alt="figplayer" src="/figplayer.webp"></a>
-                      <a :href="'infuse://x-callback-url/play?url='+playUrl"><img alt="infuse" src="/infuse.webp"></a>
-                      <a :href="'filebox://play?url='+playUrl"><img alt="fileball" src="/fileball.webp"></a>
-                      <!--                      <a :href="'iplay://play/any?type=url&url='+playUrl"><img alt="iPlay" src="/iPlay.webp"></a>-->
+                      <a :href="'iina://weblink?url='+playItem.url"><img alt="iina" src="/iina.webp"></a>
+                      <a :href="'potplayer://'+playItem.url"><img alt="potplayer" src="/potplayer.webp"></a>
+                      <a :href="'vlc://'+playItem.url"><img alt="vlc" src="/vlc.webp"></a>
+                      <a :href="'nplayer-'+playItem.url"><img alt="nplayer" src="/nplayer.webp"></a>
+                      <a :href="'omniplayer://weblink?url='+playItem.url"><img alt="omniplayer" src="/omniplayer.webp"></a>
+                      <a :href="'figplayer://weblink?url='+playItem.url"><img alt="figplayer" src="/figplayer.webp"></a>
+                      <a :href="'infuse://x-callback-url/play?url='+playItem.url"><img alt="infuse" src="/infuse.webp"></a>
+                      <a :href="'filebox://play?url='+playItem.url"><img alt="fileball" src="/fileball.webp"></a>
+                      <!--<a :href="'iplay://play/any?type=url&url='+video.url"><img alt="iPlay" src="/iPlay.webp"></a>-->
                     </div>
                   </template>
                 </el-popover>
@@ -521,6 +535,29 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="renameVisible" title="重命名文件" width="60%">
+      <p>是否重命名文件？</p>
+      <p> {{ editing.path }}</p>
+      <el-input v-model="name"/>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="renameVisible = false">取消</el-button>
+        <el-button type="primary" @click="rename">更新</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="removeVisible" title="删除文件" width="60%">
+      <p>是否删除文件？</p>
+      <p> {{ editing.path }}</p>
+      <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="removeVisible = false">取消</el-button>
+        <el-button type="danger" @click="remove">删除</el-button>
+      </span>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="pushVisible" title="推送播放地址" width="30%">
       <el-form label-width="auto">
         <el-form-item label="影视设备" required>
@@ -562,6 +599,7 @@ import {
   CircleCloseFilled,
   Connection,
   Delete,
+  Edit,
   Film,
   FullScreen,
   HomeFilled,
@@ -572,7 +610,7 @@ import {
   Setting,
   Star,
   StarFilled,
-  Upload
+  Upload, VideoPlay
 } from "@element-plus/icons-vue";
 import type {Device} from "@/model/Device";
 import PlayConfig from "@/components/PlayConfig.vue";
@@ -589,8 +627,7 @@ const filePath = ref('/')
 const keyword = ref('')
 const order = ref('index')
 const shareType = ref('ALL')
-const title = ref('')
-const playUrl = ref('')
+const name = ref('')
 const poster = ref('')
 const cover = ref('')
 const base64QrCode = ref('')
@@ -599,9 +636,9 @@ const movies = ref<VodItem[]>([])
 const playFrom = ref<string[]>([])
 const playlist = ref<PlayItem[]>([])
 const playItem = ref<PlayItem>({})
+const editing = ref<PlayItem>({})
 const currentVideoIndex = ref(0)
 const currentImageIndex = ref(0)
-const rating = ref(0)
 const duration = ref(0)
 const currentTime = ref(0)
 const currentSpeed = ref(1)
@@ -621,6 +658,8 @@ const imageVisible = ref(false)
 const formVisible = ref(false)
 const scanVisible = ref(false)
 const confirm = ref(false)
+const renameVisible = ref(false)
+const removeVisible = ref(false)
 const pushVisible = ref(false)
 const batch = ref(false)
 const clean = ref(false)
@@ -891,9 +930,40 @@ const handleSelectionChange = (val: ShareInfo[]) => {
 
 const updateRating = () => {
   const id = playItem.value.id;
-  axios.post(`/api/favorites/${id}/rate?rating=` + rating.value).then(() => {
-    playItem.value.rating = rating.value
+  axios.post(`/api/videos/${id}/rate`, {rating: playItem.value.rating}).then(() => {
     ElMessage.success('更新成功')
+  })
+}
+
+const showRename = (video: PlayItem) => {
+  editing.value = video
+  name.value = video.name
+  renameVisible.value = true
+}
+
+const rename = () => {
+  const id = editing.value.id;
+  axios.post(`/api/videos/${id}/rename`, {name: name.value}).then(() => {
+    renameVisible.value = false
+    const index = editing.value.title.lastIndexOf('(')
+    const size = editing.value.title.substring(index)
+    editing.value.title = name.value + size
+    editing.value.name = name.value
+    ElMessage.success('重命名成功')
+  })
+}
+
+const showRemove = (video: PlayItem) => {
+  editing.value = video
+  removeVisible.value = true
+}
+
+const remove = () => {
+  const id = editing.value.id;
+  axios.delete(`/api/videos/${id}`).then(() => {
+    removeVisible.value = false
+    playlist.value = playlist.value.filter(e => e != editing.value)
+    ElMessage.success('删除成功')
   })
 }
 
@@ -1093,8 +1163,8 @@ const loadDetail = (id: string) => {
     if (data.list[0].type == 5) {
       let img = data.list[0]
       currentImageIndex.value = images.value.findIndex(e => e.vod_id == id)
-      playUrl.value = img.vod_play_url
-      title.value = img.vod_name
+      playItem.value.url = img.vod_play_url
+      playItem.value.title = img.vod_name
       loading.value = false
       imageVisible.value = true
       return
@@ -1135,7 +1205,7 @@ const loadDetail = (id: string) => {
 }
 
 const handleKeyDown = (event: KeyboardEvent) => {
-  if (formVisible.value || addVisible.value) {
+  if (formVisible.value || addVisible.value || renameVisible.value || removeVisible.value) {
     return;
   }
   if (imageVisible.value) {
@@ -1529,17 +1599,13 @@ const sort = () => {
 
 const getPlayUrl = () => {
   const index = currentVideoIndex.value
-  const item = playlist.value[index]
-  playItem.value = item
-  playUrl.value = item.url
-  title.value = item.title
-  rating.value = item.rating
-  document.title = title.value
+  playItem.value = playlist.value[index]
+  document.title = playItem.value.title
   saveHistory()
 }
 
 const copyPlayUrl = () => {
-  toClipboard(playUrl.value).then(() => {
+  toClipboard(playItem.value.url).then(() => {
     ElMessage.success('播放地址复制成功')
   })
 }
@@ -1552,7 +1618,7 @@ const buildVlcUrl = (start: number) => {
 const buildM3u8Url = (start: number) => {
   const movie = movies.value[0]
   const id = movie.vod_id
-  let url = playUrl.value
+  let url = playItem.value.url
   if (movie.type === 9) {
     url = window.location.origin + '/m3u8/' + store.token + '?id=' + id + '$' + start
   }
@@ -1560,7 +1626,7 @@ const buildM3u8Url = (start: number) => {
 }
 
 const openInVLC = () => {
-  const url = playUrl.value + '?name=' + playItem.value.title
+  const url = playItem.value.url + '?name=' + playItem.value.title
   const vlcAttempt = window.open(`vlc://${url}`, '_blank')
 
   setTimeout(() => {
@@ -1599,9 +1665,9 @@ const saveHistory = () => {
     key: movie.vod_id,
     vodName: movie.vod_name,
     vodPic: movie.vod_pic,
-    vodRemarks: title.value,
+    vodRemarks: playItem.value.title,
     episode: currentVideoIndex.value,
-    episodeUrl: playUrl.value,
+    episodeUrl: playItem.value.url,
     position: Math.round(videoPlayer.value.currentTime * 1000),
     opening: Math.round(skipStart.value * 1000),
     ending: Math.round(skipEnd.value * 1000),
@@ -1733,7 +1799,7 @@ const showPush = () => {
 }
 
 const doPush = () => {
-  const url = playUrl.value
+  const url = playItem.value.url
   axios.post(`/api/devices/${device.value.id}/push?type=push&url=${url}`).then(() => {
     ElMessage.success('推送成功')
     pushVisible.value = false

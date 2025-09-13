@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.dto.FilesList;
-import cn.har01d.alist_tvbox.dto.PlayItem;
+import cn.har01d.alist_tvbox.dto.Video;
 import cn.har01d.alist_tvbox.dto.Subtitle;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
@@ -1891,7 +1891,7 @@ public class TvBoxService {
                     String filepath = fixPath(path + "/" + folder + "/" + name);
                     String title = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
                     if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                        PlayItem item = new PlayItem();
+                        Video item = new Video();
                         item.setName(name);
                         item.setTitle(title);
                         item.setPath(filepath);
@@ -2412,7 +2412,7 @@ public class TvBoxService {
     }
 
     // AList-TvBox proxy
-    private String buildProxyUrl(Site site, String path, PlayItem item) {
+    private String buildProxyUrl(Site site, String path, Video item) {
         String p = "/p/" + subscriptionService.getCurrentToken() + "/" + site.getId() + "@" + proxyService.generateProxyUrl(site, path, item);
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https

@@ -1,6 +1,6 @@
 package cn.har01d.alist_tvbox.tvbox;
 
-import cn.har01d.alist_tvbox.dto.PlayItem;
+import cn.har01d.alist_tvbox.dto.Video;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ public class MovieDetail {
     private Integer type;
     private Long size;
     private CategoryList cate;
-    private List<PlayItem> items = new ArrayList<>();
+    private List<Video> items = new ArrayList<>();
 
     @Override
     public boolean equals(Object o) {

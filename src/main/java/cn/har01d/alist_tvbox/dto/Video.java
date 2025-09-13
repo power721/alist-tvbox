@@ -3,7 +3,7 @@ package cn.har01d.alist_tvbox.dto;
 import lombok.Data;
 
 @Data
-public class PlayItem {
+public class Video {
     private int id;
     private String name;
     private String title;

@@ -1,7 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.dto.PlayItem;
+import cn.har01d.alist_tvbox.dto.Video;
 import cn.har01d.alist_tvbox.entity.PlayUrl;
 import cn.har01d.alist_tvbox.entity.PlayUrlRepository;
 import cn.har01d.alist_tvbox.entity.Site;
@@ -76,13 +76,13 @@ public class ProxyService {
         return playUrl.getId();
     }
 
-    public int generateProxyUrl(Site site, String path, PlayItem playItem) {
+    public int generateProxyUrl(Site site, String path, Video video) {
         PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
         if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
             playUrl = playUrlRepository.save(new PlayUrl(site.getId(), path, Instant.now().plus(7, ChronoUnit.DAYS)));
         }
-        playItem.setId(playUrl.getId());
-        playItem.setRating(playUrl.getRating());
+        video.setId(playUrl.getId());
+        video.setRating(playUrl.getRating());
         return playUrl.getId();
     }
 
