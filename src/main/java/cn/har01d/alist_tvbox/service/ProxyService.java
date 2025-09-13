@@ -70,15 +70,19 @@ public class ProxyService {
     public int generateProxyUrl(String path) {
         PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(0, path, Sort.by("id").descending());
         if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
-            playUrl = playUrlRepository.save(new PlayUrl(0, path, Instant.now().plus(1, ChronoUnit.DAYS)));
+            playUrl = playUrlRepository.save(new PlayUrl(0, path, false, Instant.now().plus(1, ChronoUnit.DAYS)));
         }
         return playUrl.getId();
     }
 
     public int generateProxyUrl(Site site, String path) {
+        return generateProxyUrl(site, path, false);
+    }
+
+    public int generateProxyUrl(Site site, String path, boolean concurrency) {
         PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
         if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
-            playUrl = playUrlRepository.save(new PlayUrl(site.getId(), path, Instant.now().plus(7, ChronoUnit.DAYS)));
+            playUrl = playUrlRepository.save(new PlayUrl(site.getId(), path, concurrency, Instant.now().plus(7, ChronoUnit.DAYS)));
         }
         return playUrl.getId();
     }
@@ -86,7 +90,7 @@ public class ProxyService {
     public int generatePath(Site site, String path) {
         PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(site.getId(), path, Sort.by("id").descending());
         if (playUrl == null) {
-            playUrl = playUrlRepository.save(new PlayUrl(site.getId(), path, Instant.now().plus(30, ChronoUnit.DAYS)));
+            playUrl = playUrlRepository.save(new PlayUrl(site.getId(), path, false, Instant.now().plus(30, ChronoUnit.DAYS)));
         }
         return playUrl.getId();
     }
@@ -128,7 +132,8 @@ public class ProxyService {
                 log.debug("302 {} {}", driver, url);
                 response.sendRedirect(url);
                 return;
-            } else if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive")
+            } else if (playUrl.isConcurrency()
+                    || proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive")
                     || url.contains("baidu.com") || url.contains("quark.cn") || url.contains("uc.cn")
                     || url.startsWith("http://localhost")) {
                 log.debug("{} {}", driver, url);

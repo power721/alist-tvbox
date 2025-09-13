@@ -1394,14 +1394,14 @@ public class TvBoxService {
             // ignore
         } else if ((fsDetail.getProvider().contains("Aliyundrive") && !fsDetail.getRawUrl().contains("115cdn.net"))
                 || (("open".equals(client) || "node".equals(client)) && fsDetail.getProvider().contains("115"))) {
-            url = buildProxyUrl(site, name, path);
+            url = buildProxyUrl(site, name, path, false);
             log.info("play url: {}", url);
         }
 
         result.put("url", url);
 
         if (isUseProxy(url)) {
-            url = buildProxyUrl(site, name, path);
+            url = buildProxyUrl(site, name, path, true);
             result.put("url", url);
         } else if (fsDetail.getProvider().equals("QuarkShare") || fsDetail.getProvider().equals("Quark")) {
             var account = getDriverAccount(url, DriverType.QUARK);
@@ -1691,7 +1691,7 @@ public class TvBoxService {
             movieDetail.setVod_play_from(site.getName());
             String sign = fsDetail.getSign();
             if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                movieDetail.setVod_play_url(buildProxyUrl(site, fsDetail.getName(), path));
+                movieDetail.setVod_play_url(buildProxyUrl(site, fsDetail.getName(), path, false));
                 movieDetail.setType(fsDetail.getType());
             } else {
                 movieDetail.setVod_play_url(getFilename(fsDetail) + "$" + buildPlayUrl(site, path));
@@ -2381,8 +2381,8 @@ public class TvBoxService {
     }
 
     // AList-TvBox proxy
-    private String buildProxyUrl(Site site, String name, String path) {
-        String p = "/p/" + subscriptionService.getCurrentToken() + "/" + site.getId() + "@" + proxyService.generateProxyUrl(site, path);
+    private String buildProxyUrl(Site site, String name, String path, boolean concurrency) {
+        String p = "/p/" + subscriptionService.getCurrentToken() + "/" + site.getId() + "@" + proxyService.generateProxyUrl(site, path, concurrency);
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(p)

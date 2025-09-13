@@ -27,11 +27,14 @@ public class PlayUrl {
     private int site = 1;
     @Column(nullable = false, columnDefinition = "TEXT")
     private String path;
+    @Column(columnDefinition = "BOOLEAN DEFAULT false")
+    private boolean concurrency;
     private Instant time;
 
-    public PlayUrl(int site, String path, Instant time) {
+    public PlayUrl(int site, String path, boolean concurrency, Instant time) {
         this.site = site;
         this.path = path;
+        this.concurrency = concurrency;
         this.time = time;
     }
 }

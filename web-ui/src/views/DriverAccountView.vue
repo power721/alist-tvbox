@@ -419,6 +419,7 @@ const supportProxy = (type: string) => {
     || type == 'UC_TV'
     || type == 'BAIDU'
     || type == 'PAN139'
+    || type == 'CLOUD189'
 }
 
 const handleAdd = () => {
