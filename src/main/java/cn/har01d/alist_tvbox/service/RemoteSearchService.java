@@ -110,8 +110,11 @@ public class RemoteSearchService {
             var json = restTemplate.postForObject(url, request, String.class);
             var response = objectMapper.readValue(json, PanSouSearchResponse.class);
             List<SearchResult> results = response.getData().getResults();
-            List<String> tgDrivers = appProperties.getTgDrivers();
             List<Message> messages = new ArrayList<>();
+            if (results == null) {
+                return messages;
+            }
+            List<String> tgDrivers = appProperties.getTgDrivers();
             for (var result : results) {
                 if (result.getLinks() == null) {
                     continue;
