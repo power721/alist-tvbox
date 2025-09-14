@@ -1690,9 +1690,13 @@ public class TvBoxService {
             movieDetail.setVod_time(fsDetail.getModified());
             movieDetail.setVod_pic(getCover(ac, fsDetail.getThumb(), fsDetail.getType()));
             movieDetail.setVod_play_from(site.getName());
-            String sign = fsDetail.getSign();
             if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
-                movieDetail.setVod_play_url(buildProxyUrl(site, fsDetail.getName(), path));
+                Video video = new Video(fsDetail);
+                video.setPath(path);
+                String url = buildProxyUrl(site, path, video);
+                video.setUrl(url);
+                movieDetail.getItems().add(video);
+                movieDetail.setVod_play_url(url);
                 movieDetail.setType(fsDetail.getType());
             } else {
                 movieDetail.setVod_play_url(getFilename(fsDetail) + "$" + buildPlayUrl(site, path));
@@ -1805,11 +1809,11 @@ public class TvBoxService {
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(site.getName());
-        if (!"web".equals(ac) && !"gui".equals(ac)) {
-            movieDetail.setVod_content(site.getName() + ":" + newPath);
-        } else {
+        if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
             depth = 1;
             movieDetail.setType(9);
+        } else {
+            movieDetail.setVod_content(site.getName() + ":" + newPath);
         }
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(getListPic());

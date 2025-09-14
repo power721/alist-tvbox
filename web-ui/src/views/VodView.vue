@@ -186,12 +186,12 @@
           <el-col :span="5">
             <div v-if="playlist.length>1">
               <div style="margin-left: 30px; margin-bottom: 10px;">
-                <el-link :href="buildVlcUrl(currentVideoIndex)" target="_blank">第{{
+                <el-link @click="openListInVLC(currentVideoIndex)">第{{
                     currentVideoIndex + 1
                   }}集
                 </el-link>
                 /
-                <el-link :href="buildVlcUrl(0)" target="_blank">总共{{ playlist.length }}集</el-link>
+                <el-link @click="openListInVLC(0)">总共{{ playlist.length }}集</el-link>
                 <el-select v-model="order" @change="sort" placeholder="排序" style="width: 110px; margin-left: 10px">
                   <el-option
                     v-for="item in sortOrders"
@@ -1610,9 +1610,9 @@ const copyPlayUrl = () => {
   })
 }
 
-const buildVlcUrl = (start: number) => {
+const openListInVLC = (start: number) => {
   const url = buildM3u8Url(start)
-  return `vlc://${url}`
+  openUrlInVLC(url)
 }
 
 const buildM3u8Url = (start: number) => {
@@ -1627,6 +1627,10 @@ const buildM3u8Url = (start: number) => {
 
 const openInVLC = () => {
   const url = playItem.value.url + '?name=' + playItem.value.title
+  openUrlInVLC(url)
+}
+
+const openUrlInVLC = (url: string) => {
   const vlcAttempt = window.open(`vlc://${url}`, '_blank')
 
   setTimeout(() => {
