@@ -1850,7 +1850,7 @@ public class TvBoxService {
 
         FsResponse fsResponse = aListService.listFiles(site, path, 1, 0);
         List<FsInfo> files = fsResponse.getFiles().stream()
-                .filter(e -> e.getType() == 2)
+                .filter(e -> e.getType() != 1)
                 .filter(e -> isMediaFormat(e.getName()))
                 .collect(Collectors.toList());
 
@@ -1869,7 +1869,7 @@ public class TvBoxService {
                 if (!folder.isEmpty()) {
                     fsResponse = aListService.listFiles(site, path + "/" + folder, 1, 0);
                     files = fsResponse.getFiles().stream()
-                            .filter(e -> e.getType() == 2)
+                            .filter(e -> e.getType() != 1)
                             .filter(e -> isMediaFormat(e.getName()))
                             .toList();
                     subfolders = fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList();
