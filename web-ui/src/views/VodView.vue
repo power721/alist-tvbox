@@ -230,6 +230,7 @@
                         <el-button-group class="ml-4">
                           <el-button type="primary" :icon="Edit" @click="showRename(video)"/>
                           <el-button type="danger" :icon="Delete" @click="showRemove(video)" v-if="video!=playItem"/>
+                          <el-rate v-model="video.rating" @change="updateRating(video)" clearable/>
                         </el-button-group>
                       </template>
                     </el-popover>
@@ -332,22 +333,22 @@
                     <Connection/>
                   </el-icon>
                 </el-button>
-                <el-popover placement="bottom" width="100px" v-if="playItem.rating">
-                  <template #reference>
-                    <el-button :icon="StarFilled"></el-button>
-                  </template>
-                  <template #default>
-                    <el-rate v-model="playItem.rating" @change="updateRating" clearable/>
-                  </template>
-                </el-popover>
-                <el-popover placement="bottom" width="100px">
-                  <template #reference>
-                    <el-button :icon="Star"></el-button>
-                  </template>
-                  <template #default>
-                    <el-rate v-model="playItem.rating" @change="updateRating" clearable/>
-                  </template>
-                </el-popover>
+<!--                <el-popover placement="bottom" width="100px" v-if="playItem.rating">-->
+<!--                  <template #reference>-->
+<!--                    <el-button :icon="StarFilled"></el-button>-->
+<!--                  </template>-->
+<!--                  <template #default>-->
+<!--                    <el-rate v-model="playItem.rating" @change="updateRating(playItem)" clearable/>-->
+<!--                  </template>-->
+<!--                </el-popover>-->
+<!--                <el-popover placement="bottom" width="100px">-->
+<!--                  <template #reference>-->
+<!--                    <el-button :icon="Star"></el-button>-->
+<!--                  </template>-->
+<!--                  <template #default>-->
+<!--                    <el-rate v-model="playItem.rating" @change="updateRating(playItem)" clearable/>-->
+<!--                  </template>-->
+<!--                </el-popover>-->
                 <el-button @click="showPush" title="推送" v-if="devices.length">
                   <el-icon>
                     <Upload/>
@@ -939,9 +940,9 @@ const handleSelectionChange = (val: ShareInfo[]) => {
   selected.value = val
 }
 
-const updateRating = () => {
-  const id = playItem.value.id;
-  axios.post(`/api/videos/${id}/rate`, {rating: playItem.value.rating}).then(() => {
+const updateRating = (item: PlayItem) => {
+  const id = item.id;
+  axios.post(`/api/videos/${id}/rate`, {rating: item.rating}).then(() => {
     ElMessage.success('更新成功')
   })
 }
