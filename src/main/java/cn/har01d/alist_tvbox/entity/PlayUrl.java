@@ -28,6 +28,7 @@ public class PlayUrl {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String path;
     private Instant time;
+    private Integer rating;
 
     public PlayUrl(int site, String path, Instant time) {
         this.site = site;

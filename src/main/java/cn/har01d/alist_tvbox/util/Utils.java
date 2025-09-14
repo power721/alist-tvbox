@@ -94,7 +94,7 @@ public final class Utils {
             names = names.subList(1, names.size());
         }
         int n = names.size();
-        if (n <= 1) return "";
+        if (n < 5) return "";
         String ans = names.get(0);
         for (int i = 1; i < n; i++) {
             int j = 0;
@@ -130,7 +130,7 @@ public final class Utils {
 
     public static String getCommonSuffix(List<String> names, boolean pretty) {
         int n = names.size();
-        if (n <= 1) return "";
+        if (n < 5) return "";
         names = names.stream().map(e -> new StringBuilder(e).reverse().toString()).collect(Collectors.toList());
         String text = new StringBuilder(getCommonPrefix(names)).reverse().toString();
         if (pretty && text.startsWith("集")) {
