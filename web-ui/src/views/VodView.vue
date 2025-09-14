@@ -118,6 +118,16 @@
               <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
             </template>
           </el-table-column>
+          <el-table-column width="120">
+            <template #default="scope">
+              <el-button link type="primary" @click.stop="showRenameFile(scope.row)" v-if="scope.row.type!=9">
+                重命名
+              </el-button>
+              <el-button link type="danger" @click.stop="showRemoveFile(scope.row)" v-if="scope.row.type!=9">
+                删除
+              </el-button>
+            </template>
+          </el-table-column>
         </el-table>
         <el-pagination layout="total, prev, pager, next, jumper, sizes"
                        :current-page="page" :page-size="size" :total="total"
@@ -218,8 +228,8 @@
                       </template>
                       <template #default>
                         <el-button-group class="ml-4">
-                          <el-button type="primary" :icon="Edit" @click="showRename(video)" />
-                          <el-button type="danger" :icon="Delete" @click="showRemove(video)" v-if="video!=playItem" />
+                          <el-button type="primary" :icon="Edit" @click="showRename(video)"/>
+                          <el-button type="danger" :icon="Delete" @click="showRemove(video)" v-if="video!=playItem"/>
                         </el-button-group>
                       </template>
                     </el-popover>
@@ -535,7 +545,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="renameVisible" title="重命名文件" width="60%">
+    <el-dialog v-model="renameVisible" title="重命名文件" width="70%">
       <p>是否重命名文件？</p>
       <p> {{ editing.path }}</p>
       <el-input v-model="name"/>
@@ -547,7 +557,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="removeVisible" title="删除文件" width="60%">
+    <el-dialog v-model="removeVisible" title="删除文件" width="70%">
       <p>是否删除文件？</p>
       <p> {{ editing.path }}</p>
       <template #footer>
@@ -610,7 +620,7 @@ import {
   Setting,
   Star,
   StarFilled,
-  Upload, VideoPlay
+  Upload,
 } from "@element-plus/icons-vue";
 import type {Device} from "@/model/Device";
 import PlayConfig from "@/components/PlayConfig.vue";
@@ -658,6 +668,7 @@ const imageVisible = ref(false)
 const formVisible = ref(false)
 const scanVisible = ref(false)
 const confirm = ref(false)
+const needRefresh = ref(false)
 const renameVisible = ref(false)
 const removeVisible = ref(false)
 const pushVisible = ref(false)
@@ -935,6 +946,15 @@ const updateRating = () => {
   })
 }
 
+const showRenameFile = (video: VodItem) => {
+  editing.value.title = video.vod_name
+  editing.value.path = video.path
+  editing.value.id = video.vod_id.split('$')[1]
+  name.value = video.vod_name
+  renameVisible.value = true
+  needRefresh.value = true
+}
+
 const showRename = (video: PlayItem) => {
   editing.value = video
   name.value = video.name
@@ -946,11 +966,23 @@ const rename = () => {
   axios.post(`/api/videos/${id}/rename`, {name: name.value}).then(() => {
     renameVisible.value = false
     const index = editing.value.title.lastIndexOf('(')
-    const size = editing.value.title.substring(index)
-    editing.value.title = name.value + size
+    if (index > -1) {
+      const size = editing.value.title.substring(index)
+      editing.value.title = name.value + size
+    }
     editing.value.name = name.value
     ElMessage.success('重命名成功')
+    if (needRefresh.value) {
+      refresh()
+    }
   })
+}
+
+const showRemoveFile = (video: VodItem) => {
+  editing.value.path = video.path
+  editing.value.id = video.vod_id.split('$')[1]
+  removeVisible.value = true
+  needRefresh.value = true
 }
 
 const showRemove = (video: PlayItem) => {
@@ -964,6 +996,9 @@ const remove = () => {
     removeVisible.value = false
     playlist.value = playlist.value.filter(e => e != editing.value)
     ElMessage.success('删除成功')
+    if (needRefresh.value) {
+      refresh()
+    }
   })
 }
 
@@ -1646,6 +1681,7 @@ const openUrlInVLC = (url: string) => {
 }
 
 const refresh = () => {
+  needRefresh.value = false
   if (isHistory.value) {
     loadHistory()
   } else {
