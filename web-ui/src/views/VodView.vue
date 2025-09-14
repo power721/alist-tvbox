@@ -1243,6 +1243,9 @@ const handleKeyDown = (event: KeyboardEvent) => {
   if (formVisible.value || addVisible.value || renameVisible.value || removeVisible.value) {
     return;
   }
+  if (document.activeElement === videoPlayer.value && event.code === 'Space') {
+    return;
+  }
   if (imageVisible.value) {
     if (event.code === 'ArrowRight') {
       event.preventDefault()
