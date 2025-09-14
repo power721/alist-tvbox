@@ -229,6 +229,21 @@ public class AListService {
         logError(response);
     }
 
+    public void move(Site site, String path, String newFolder) {
+        int index = path.lastIndexOf("/");
+        String dir = path.substring(0, index);
+        String name = path.substring(index + 1);
+        Map<String, Object> data = new HashMap<>();
+        data.put("src_dir", dir);
+        data.put("dst_dir", newFolder);
+        data.put("names", List.of(name));
+        data.put("overwrite", false);
+        String url = getUrl(site) + "/api/fs/move";
+        log.debug("call api: {} request: {}", url, data);
+        LoginResponse response = postAdmin(site, url, data, LoginResponse.class);
+        logError(response);
+    }
+
     public void remove(Site site, String path) {
         int index = path.lastIndexOf("/");
         String dir = path.substring(0, index);

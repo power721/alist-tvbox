@@ -35,6 +35,11 @@ public class VideoController {
         return videoService.rename(id, request.getName());
     }
 
+    @PostMapping("/{id}/move")
+    public PlayUrl move(@PathVariable Integer id, @RequestBody Video request) {
+        return videoService.move(id, request.getPath());
+    }
+
     @DeleteMapping("/{id}")
     public void remove(@PathVariable Integer id) {
         videoService.remove(id);

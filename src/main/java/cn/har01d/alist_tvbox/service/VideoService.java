@@ -40,9 +40,22 @@ public class VideoService {
         Site site = siteService.getById(playUrl.getSite());
         String path = playUrl.getPath();
         aListService.rename(site, path, name);
+
         int index = path.lastIndexOf("/");
         String dir = path.substring(0, index);
         playUrl.setPath(dir + "/" + name);
+        return playUrlRepository.save(playUrl);
+    }
+
+    public PlayUrl move(int id, String folder) {
+        PlayUrl playUrl = playUrlRepository.findById(id).orElseThrow(() -> new NotFoundException("Play url not found"));
+        Site site = siteService.getById(playUrl.getSite());
+        String path = playUrl.getPath();
+        aListService.move(site, path, folder);
+
+        int index = path.lastIndexOf("/");
+        String name = path.substring(index + 1);
+        playUrl.setPath(folder + "/" + name);
         return playUrlRepository.save(playUrl);
     }
 
