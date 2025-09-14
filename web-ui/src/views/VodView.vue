@@ -333,22 +333,22 @@
                     <Connection/>
                   </el-icon>
                 </el-button>
-<!--                <el-popover placement="bottom" width="100px" v-if="playItem.rating">-->
-<!--                  <template #reference>-->
-<!--                    <el-button :icon="StarFilled"></el-button>-->
-<!--                  </template>-->
-<!--                  <template #default>-->
-<!--                    <el-rate v-model="playItem.rating" @change="updateRating(playItem)" clearable/>-->
-<!--                  </template>-->
-<!--                </el-popover>-->
-<!--                <el-popover placement="bottom" width="100px">-->
-<!--                  <template #reference>-->
-<!--                    <el-button :icon="Star"></el-button>-->
-<!--                  </template>-->
-<!--                  <template #default>-->
-<!--                    <el-rate v-model="playItem.rating" @change="updateRating(playItem)" clearable/>-->
-<!--                  </template>-->
-<!--                </el-popover>-->
+                <!--                <el-popover placement="bottom" width="100px" v-if="playItem.rating">-->
+                <!--                  <template #reference>-->
+                <!--                    <el-button :icon="StarFilled"></el-button>-->
+                <!--                  </template>-->
+                <!--                  <template #default>-->
+                <!--                    <el-rate v-model="playItem.rating" @change="updateRating(playItem)" clearable/>-->
+                <!--                  </template>-->
+                <!--                </el-popover>-->
+                <!--                <el-popover placement="bottom" width="100px">-->
+                <!--                  <template #reference>-->
+                <!--                    <el-button :icon="Star"></el-button>-->
+                <!--                  </template>-->
+                <!--                  <template #default>-->
+                <!--                    <el-rate v-model="playItem.rating" @change="updateRating(playItem)" clearable/>-->
+                <!--                  </template>-->
+                <!--                </el-popover>-->
                 <el-button @click="showPush" title="推送" v-if="devices.length">
                   <el-icon>
                     <Upload/>
@@ -619,8 +619,6 @@ import {
   QuestionFilled,
   Search,
   Setting,
-  Star,
-  StarFilled,
   Upload,
 } from "@element-plus/icons-vue";
 import type {Device} from "@/model/Device";
@@ -1600,37 +1598,51 @@ const updateMuteState = () => {
 const sort = () => {
   switch (order.value) {
     case "index":
-      playlist.value.sort((a, b) => a.index - b.index);
-      break
-    case "id,asc":
-      playlist.value.sort((a, b) => a.id - b.id);
-      break
-    case "id,desc":
-      playlist.value.sort((a, b) => b.id - a.id);
+      playlist.value.sort((a, b) => a.index - b.index)
       break
     case "name,asc":
-      playlist.value.sort((a, b) => a.name.localeCompare(b.name));
+      playlist.value.sort((a, b) => a.name.localeCompare(b.name))
       break
     case "name,desc":
-      playlist.value.sort((a, b) => b.name.localeCompare(a.name));
+      playlist.value.sort((a, b) => b.name.localeCompare(a.name))
       break
     case "size,asc":
-      playlist.value.sort((a, b) => a.size - b.size);
+      playlist.value.sort((a, b) => a.size - b.size)
       break
     case "size,desc":
-      playlist.value.sort((a, b) => b.size - a.size);
+      playlist.value.sort((a, b) => b.size - a.size)
       break
     case "rating,asc":
-      playlist.value.sort((a, b) => a.rating - b.rating);
+      playlist.value.sort((a, b) => {
+        if (a.rating === b.rating) {
+          return a.index - b.index
+        }
+        return a.rating - b.rating
+      })
       break
     case "rating,desc":
-      playlist.value.sort((a, b) => b.rating - a.rating);
+      playlist.value.sort((a, b) => {
+        if (a.rating === b.rating) {
+          return a.index - b.index
+        }
+        return b.rating - a.rating
+      })
       break
     case "time,asc":
-      playlist.value.sort((a, b) => a.time - b.time);
+      playlist.value.sort((a, b) => {
+        if (a.time === b.time) {
+          return a.index - b.index
+        }
+        return a.time - b.time
+      })
       break
     case "time,desc":
-      playlist.value.sort((a, b) => b.time - a.time);
+      playlist.value.sort((a, b) => {
+        if (a.time === b.time) {
+          return a.index - b.index
+        }
+        return b.time - a.time
+      })
       break
   }
   currentVideoIndex.value = playlist.value.findIndex(e => e === playItem.value)
