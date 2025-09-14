@@ -994,6 +994,7 @@ const remove = () => {
   axios.delete(`/api/videos/${id}`).then(() => {
     removeVisible.value = false
     playlist.value = playlist.value.filter(e => e != editing.value)
+    currentVideoIndex.value = playlist.value.findIndex(e => e === playItem.value)
     ElMessage.success('删除成功')
     if (needRefresh.value) {
       refresh()
