@@ -118,7 +118,7 @@
               <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
             </template>
           </el-table-column>
-          <el-table-column width="120">
+          <el-table-column width="120" v-else>
             <template #default="scope">
               <el-button link type="primary" @click.stop="showRenameFile(scope.row)" v-if="scope.row.type!=9">
                 重命名
