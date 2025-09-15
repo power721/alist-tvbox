@@ -120,10 +120,10 @@
           </el-table-column>
           <el-table-column width="120" v-else>
             <template #default="scope">
-              <el-button link type="primary" @click.stop="showRenameFile(scope.row)" v-if="scope.row.type!=9">
+              <el-button link type="primary" @click.stop="showRenameFile(scope.row)" v-if="store.admin&&scope.row.type!=9">
                 重命名
               </el-button>
-              <el-button link type="danger" @click.stop="showRemoveFile(scope.row)" v-if="scope.row.type!=9">
+              <el-button link type="danger" @click.stop="showRemoveFile(scope.row)" v-if="store.admin&&scope.row.type!=9">
                 删除
               </el-button>
             </template>
@@ -214,7 +214,7 @@
               <el-scrollbar ref="scrollbarRef" height="1050px">
                 <ul>
                   <li v-for="(video, index) in playlist" :key="index">
-                    <el-popover placement="right">
+                    <el-popover placement="right" v-if="store.admin">
                       <template #reference>
                         <div>
                           <el-link type="primary" v-if="currentVideoIndex==index">
@@ -234,6 +234,15 @@
                         </el-button-group>
                       </template>
                     </el-popover>
+                    <div v-else>
+                      <el-link type="primary" v-if="currentVideoIndex==index">
+                        {{ video.title }}
+                      </el-link>
+                      <el-link @click="playVideo(index)" v-else>
+                        {{ video.title }}
+                      </el-link>
+                      <span v-if="video.rating"> [{{ video.rating }}]</span>
+                    </div>
                   </li>
                 </ul>
               </el-scrollbar>
