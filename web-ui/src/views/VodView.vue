@@ -180,74 +180,76 @@
       </template>
       <div class="video-container">
         <el-row>
-          <el-col :span="18">
-            <video
-              ref="videoPlayer"
-              :src="playItem.url"
-              :poster="poster"
-              :autoplay="true"
-              @ended="playNextVideo"
-              @play="updatePlayState"
-              @pause="updatePlayState"
-              @volumechange="updateMuteState"
-              controls>
-            </video>
-          </el-col>
-          <el-col :span="5">
-            <div v-if="playlist.length>1">
-              <div style="margin-left: 30px; margin-bottom: 10px;">
-                <el-link @click="openListInVLC(currentVideoIndex)">第{{
-                    currentVideoIndex + 1
-                  }}集
-                </el-link>
-                /
-                <el-link @click="openListInVLC(0)">总共{{ playlist.length }}集</el-link>
-                <el-select v-model="order" @change="sort" placeholder="排序" style="width: 110px; margin-left: 10px">
-                  <el-option
-                    v-for="item in sortOrders"
-                    :key="item.value"
-                    :label="item.label"
-                    :value="item.value"
-                  />
-                </el-select>
+          <el-splitter :collapsible="true">
+            <el-splitter-panel size="80%">
+              <video
+                ref="videoPlayer"
+                :src="playItem.url"
+                :poster="poster"
+                :autoplay="true"
+                @ended="playNextVideo"
+                @play="updatePlayState"
+                @pause="updatePlayState"
+                @volumechange="updateMuteState"
+                controls>
+              </video>
+            </el-splitter-panel>
+            <el-splitter-panel size="20%" max="50%" :min="150">
+              <div v-if="playlist.length>1">
+                <div style="margin-left: 30px; margin-bottom: 10px;">
+                  <el-link @click="openListInVLC(currentVideoIndex)">第{{
+                      currentVideoIndex + 1
+                    }}集
+                  </el-link>
+                  /
+                  <el-link @click="openListInVLC(0)">总共{{ playlist.length }}集</el-link>
+                  <el-select v-model="order" @change="sort" placeholder="排序" style="width: 110px; margin-left: 10px">
+                    <el-option
+                      v-for="item in sortOrders"
+                      :key="item.value"
+                      :label="item.label"
+                      :value="item.value"
+                    />
+                  </el-select>
+                </div>
+                <el-scrollbar ref="scrollbarRef" height="1050px">
+                  <ul>
+                    <li v-for="(video, index) in playlist" :key="index">
+                      <el-popover placement="right" v-if="store.admin">
+                        <template #reference>
+                          <div>
+                            <el-link type="primary" v-if="currentVideoIndex==index">
+                              {{ video.title }}
+                            </el-link>
+                            <el-link @click="playVideo(index)" v-else>
+                              {{ video.title }}
+                            </el-link>
+                            <span v-if="video.rating"> [{{ video.rating }}]</span>
+                          </div>
+                        </template>
+                        <template #default>
+                          <el-button-group class="ml-4">
+                            <el-button type="primary" :icon="Edit" @click="showRename(video)"/>
+                            <el-button type="danger" :icon="Delete" @click="showRemove(video)" v-if="video!=playItem"/>
+                            <el-rate v-model="video.rating" @change="updateRating(video)" clearable/>
+                          </el-button-group>
+                        </template>
+                      </el-popover>
+                      <div v-else>
+                        <el-link type="primary" v-if="currentVideoIndex==index">
+                          {{ video.title }}
+                        </el-link>
+                        <el-link @click="playVideo(index)" v-else>
+                          {{ video.title }}
+                        </el-link>
+                        <span v-if="video.rating"> [{{ video.rating }}]</span>
+                      </div>
+                    </li>
+                  </ul>
+                </el-scrollbar>
               </div>
-              <el-scrollbar ref="scrollbarRef" height="1050px">
-                <ul>
-                  <li v-for="(video, index) in playlist" :key="index">
-                    <el-popover placement="right" v-if="store.admin">
-                      <template #reference>
-                        <div>
-                          <el-link type="primary" v-if="currentVideoIndex==index">
-                            {{ video.title }}
-                          </el-link>
-                          <el-link @click="playVideo(index)" v-else>
-                            {{ video.title }}
-                          </el-link>
-                          <span v-if="video.rating"> [{{ video.rating }}]</span>
-                        </div>
-                      </template>
-                      <template #default>
-                        <el-button-group class="ml-4">
-                          <el-button type="primary" :icon="Edit" @click="showRename(video)"/>
-                          <el-button type="danger" :icon="Delete" @click="showRemove(video)" v-if="video!=playItem"/>
-                          <el-rate v-model="video.rating" @change="updateRating(video)" clearable/>
-                        </el-button-group>
-                      </template>
-                    </el-popover>
-                    <div v-else>
-                      <el-link type="primary" v-if="currentVideoIndex==index">
-                        {{ video.title }}
-                      </el-link>
-                      <el-link @click="playVideo(index)" v-else>
-                        {{ video.title }}
-                      </el-link>
-                      <span v-if="video.rating"> [{{ video.rating }}]</span>
-                    </div>
-                  </li>
-                </ul>
-              </el-scrollbar>
-            </div>
-          </el-col>
+            </el-splitter-panel>
+          </el-splitter>
         </el-row>
 
         <el-row>
