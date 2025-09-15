@@ -84,7 +84,8 @@ public class HistoryService {
     }
 
     public History findById(String key) {
-        return historyRepository.findByKey(key);
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        return historyRepository.findByUidAndKey(uid, key);
     }
 
     public void saveAll(List<History> histories) {
@@ -144,9 +145,11 @@ public class HistoryService {
             } catch (Exception e) {
                 log.warn("", e);
             }
+            int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
             history.setCid(0);
             history.setKey(key);
-            History exist = historyRepository.findByKey(key);
+            history.setUid(uid);
+            History exist = historyRepository.findByUidAndKey(uid, key);
             if (exist != null) {
                 if (history.getCreateTime() > exist.getCreateTime() || history.getPosition() > exist.getPosition()) {
                     if ("0".equals(mode) || "2".equals(mode)) {
@@ -262,7 +265,8 @@ public class HistoryService {
     }
 
     public void delete(String key) {
-        historyRepository.deleteByKey(key);
+        int uid = (int) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        historyRepository.deleteByUidAndKey(uid, key);
     }
 
     public void deleteAll() {
