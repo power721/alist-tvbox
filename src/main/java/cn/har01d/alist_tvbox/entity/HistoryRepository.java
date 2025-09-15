@@ -8,9 +8,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface HistoryRepository extends JpaRepository<History, Integer> {
-    History findByKey(String key);
+    History findByUidAndKey(int uid, String key);
 
-    void deleteByKey(String key);
+    void deleteByUidAndKey(int uid, String key);
 
     Page<History> findByUid(int uid, Pageable pageable);
 
