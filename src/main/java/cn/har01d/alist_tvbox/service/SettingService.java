@@ -85,6 +85,7 @@ public class SettingService {
         appProperties.setPanSouSource(settingRepository.findById("pan_sou_source").map(Setting::getValue).orElse("all"));
         appProperties.setTgSortField(settingRepository.findById("tg_sort_field").map(Setting::getValue).orElse("time"));
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(48));
+        appProperties.setValidateSharesInterval(settingRepository.findById("validateSharesInterval").map(Setting::getValue).map(Integer::parseInt).orElse(4));
         appProperties.setQns(settingRepository.findById("bilibili_qn").map(Setting::getValue).map(e -> e.split(",")).map(Arrays::asList).orElse(List.of()));
         settingRepository.findById("debug_log").ifPresent(this::setLogLevel);
         settingRepository.findById("user_agent").ifPresent(e -> appProperties.setUserAgent(e.getValue()));
@@ -242,6 +243,9 @@ public class SettingService {
         }
         if ("temp_share_expiration".equals(setting.getName())) {
             appProperties.setTempShareExpiration(Integer.parseInt(setting.getValue()));
+        }
+        if ("validateSharesInterval".equals(setting.getName())) {
+            appProperties.setValidateSharesInterval(Integer.parseInt(setting.getValue()));
         }
         if ("tg_drivers".equals(setting.getName())) {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_DRIVERS : setting.getValue();

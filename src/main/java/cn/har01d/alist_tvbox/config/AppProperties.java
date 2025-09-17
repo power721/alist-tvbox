@@ -39,6 +39,7 @@ public class AppProperties {
     private String systemId;
     private int tgTimeout = 5000;
     private int tempShareExpiration = 48;
+    private int validateSharesInterval = 4;
     private Set<String> formats;
     private Set<String> subtitles;
     private List<Site> sites;

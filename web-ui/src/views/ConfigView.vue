@@ -299,6 +299,12 @@
               @change="updateCleanInvalidShares"
             />
           </el-form-item>
+          <el-form-item label="网盘分享校验间隔">
+            <el-input-number v-model="validateSharesInterval" min="1"></el-input-number>
+            &nbsp;&nbsp;小时
+            <span class="hint"></span>
+            <el-button type="primary" @click="updateValidateSharesInterval">更新</el-button>
+          </el-form-item>
           <el-form-item label="网盘帐号负载均衡">
             <el-switch
               v-model="driverRoundRobin"
@@ -418,6 +424,7 @@ const movieRemoteVersion = ref(0)
 const cachedMovieVersion = ref(0)
 const deleteDelayTime = ref(900)
 const tempShareExpiration = ref(24)
+const validateSharesInterval = ref(44)
 const aListStartTime = ref('')
 const openTokenUrl = ref('')
 const dockerAddress = ref('')
@@ -518,6 +525,12 @@ const updateDeleteDelayTime = () => {
 
 const updateTempShareExpiration = () => {
   axios.post('/api/settings', {name: 'temp_share_expiration', value: tempShareExpiration.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateValidateSharesInterval = () => {
+  axios.post('/api/settings', {name: 'validateSharesInterval', value: validateSharesInterval.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -623,6 +636,7 @@ onMounted(() => {
     aListStartTime.value = data.alist_start_time
     deleteDelayTime.value = +data.delete_delay_time || 900
     tempShareExpiration.value = +data.temp_share_expiration || 24
+    validateSharesInterval.value = +data.validateSharesInterval || 4
     movieVersion.value = data.movie_version
     indexVersion.value = data.index_version
     dockerVersion.value = data.docker_version

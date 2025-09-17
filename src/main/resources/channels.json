@@ -304,7 +304,7 @@
     "order": 28,
     "type": 8,
     "valid": true,
-    "enabled": false,
+    "enabled": true,
     "webAccess": true
   },
   {
@@ -381,7 +381,7 @@
     "order": 35,
     "type": 8,
     "valid": true,
-    "enabled": false,
+    "enabled": true,
     "webAccess": true
   },
   {
@@ -568,7 +568,7 @@
     "order": 52,
     "type": 8,
     "valid": true,
-    "enabled": false,
+    "enabled": true,
     "webAccess": true
   },
   {
@@ -579,7 +579,7 @@
     "order": 53,
     "type": 8,
     "valid": true,
-    "enabled": false,
+    "enabled": true,
     "webAccess": true
   },
   {

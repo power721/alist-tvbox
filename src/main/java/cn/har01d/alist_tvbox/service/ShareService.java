@@ -64,6 +64,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -249,10 +251,13 @@ public class ShareService {
         }
     }
 
-    @Scheduled(cron = "0 0 */4 * * *")
+    @Scheduled(cron = "0 0 * * * *")
     public void validateShares() {
         if (appProperties.isCleanInvalidShares()) {
-            validateStorages();
+            int hour = LocalDateTime.now().getHour();
+            if (hour % appProperties.getValidateSharesInterval() == 0) {
+                validateStorages();
+            }
         }
     }
 
