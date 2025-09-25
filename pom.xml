@@ -108,6 +108,12 @@
         </dependency>
 
         <dependency>
+            <groupId>com.tencent.tars</groupId>
+            <artifactId>tars-core</artifactId>
+            <version>1.7.4</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>

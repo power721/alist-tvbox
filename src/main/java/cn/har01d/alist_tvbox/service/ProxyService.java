@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.entity.PlayUrlRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.live.service.HuyaParseService;
 import cn.har01d.alist_tvbox.model.FsDetail;
 import cn.har01d.alist_tvbox.util.Constants;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,6 +45,7 @@ public class ProxyService {
     private final SiteService siteService;
     private final AListService aListService;
     private final AListLocalService aListLocalService;
+    private final HuyaParseService huyaParseService;
     private final Set<String> proxyDrivers = Set.of("AliyundriveOpen", "AliyunShare", "BaiduNetdisk", "BaiduShare2",
             "Quark", "UC", "QuarkShare", "UCShare", "115 Cloud", "115 Share");
 
@@ -51,12 +53,14 @@ public class ProxyService {
                         PlayUrlRepository playUrlRepository,
                         SiteService siteService,
                         AListService aListService,
-                        AListLocalService aListLocalService) {
+                        AListLocalService aListLocalService,
+                        HuyaParseService huyaParseService) {
         this.appProperties = appProperties;
         this.playUrlRepository = playUrlRepository;
         this.siteService = siteService;
         this.aListService = aListService;
         this.aListLocalService = aListLocalService;
+        this.huyaParseService = huyaParseService;
     }
 
     @Scheduled(cron = "0 45 * * * *")
@@ -123,8 +127,9 @@ public class ProxyService {
         headers.put("user-agent", Constants.MOBILE_USER_AGENT);
 
         if (playUrl.getSite() == 0) {
-            url = playUrl.getPath();
-            headers.put("referer", "https://m.huya.com/");
+            url = huyaParseService.getTrueUrl(playUrl.getPath());
+            headers.put("user-agent", huyaParseService.getUa());
+            headers.put("referer", "https://www.huya.com/");
         } else {
             Site site = siteService.getById(playUrl.getSite());
             FsDetail fsDetail = aListService.getFile(site, path);

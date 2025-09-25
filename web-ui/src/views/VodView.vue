@@ -16,7 +16,7 @@
       </el-col>
 
       <el-col :span="2">
-        <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" placeholder="搜索电报资源">
+        <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源">
           <template #append>
             <el-button :icon="Search" :disabled="searching" @click="search"/>
           </template>
