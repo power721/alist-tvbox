@@ -13,6 +13,7 @@ import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -46,10 +47,6 @@ public class HuyaService implements LivePlatform {
     private static final Pattern AREA = Pattern.compile("\"sGameFullName\":\"([\\s\\S]*?)\",");
     private static final Pattern Num = Pattern.compile("\"lTotalCount\":([\\s\\S]*?),");
     private static final Pattern ISLIVE = Pattern.compile("\"eLiveStatus\":([\\s\\S]*?),");
-    private static final Pattern S_STREAM_NAME = Pattern.compile("\"sStreamName\":\"([\\s\\S]*?)\",");
-    private static final Pattern S_FLV_URL = Pattern.compile("\"sFlvUrl\":\"([\\s\\S]*?)\",");
-    private static final Pattern S_FLV_URL_SUFFIX = Pattern.compile("\"sFlvUrlSuffix\":\"([\\s\\S]*?)\",");
-    private static final Pattern S_FLV_ANTI_CODE = Pattern.compile("\"sFlvAntiCode\":\"([\\s\\S]*?)\",");
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -138,7 +135,7 @@ public class HuyaService implements LivePlatform {
         String url = "https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&gameId=" + gid + "&tagAll=0&page=" + pg;
         var json = restTemplate.getForObject(url, String.class);
         log.trace("list json: {}", json);
-        var response = objectMapper.readValue(json, HuyaLiveRoomInfoListResponse.class);
+        var response = objectMapper.readValue(json.replaceAll("\\p{Cntrl}", ""), HuyaLiveRoomInfoListResponse.class);
         for (var room : response.getData().getDatas()) {
             MovieDetail detail = new MovieDetail();
             detail.setVod_id(getType() + "$" + room.getProfileRoom());
@@ -257,27 +254,28 @@ public class HuyaService implements LivePlatform {
             log.trace("vBitRateInfo: {}", "{" + json.substring(start, end) + "}");
             HuyaLiveRoom.BitRateInfoList vBitRateInfo = objectMapper.readValue("{" + json.substring(start, end) + "}", HuyaLiveRoom.BitRateInfoList.class);
 
-            List<String> sStreamNames = findAll(json, S_STREAM_NAME);
-            List<String> sFlvUrl = findAll(json, S_FLV_URL);
-            List<String> sFlvUrlSuffix = findAll(json, S_FLV_URL_SUFFIX);
-            List<String> sFlvAntiCode = findAll(json, S_FLV_ANTI_CODE);
-
-            for (int i = 0; i < sStreamNames.size(); i++) {
-                playFrom.add("线路" + (i + 1));
-                String streamName = sStreamNames.get(i);
-                String streamUrl = sFlvUrl.get(i).replace("\\u002F", "/") + "/" + streamName + "." + sFlvUrlSuffix.get(i);
+            JsonNode streams = objectMapper.readTree(json).get("roomInfo").get("tLiveInfo").get("tLiveStreamInfo").get("vStreamInfo").get("value");
+            int i = 1;
+            for (JsonNode stream : streams) {
+                String cdn = stream.get("sCdnType").asText();
+                long puid = stream.get("lPresenterUid").asLong();
+                playFrom.add("线路" + i++);
+                String streamName = stream.get("sStreamName").asText();
+                String streamUrl = stream.get("sFlvUrl").asText().replace("\\u002F", "/") + "/" + streamName + "." + stream.get("sFlvUrlSuffix").asText();
                 streamUrl = streamUrl.replace("http://", "https://");
-                streamUrl += "?" + processAnticode(sFlvAntiCode.get(i), uid, streamName);
                 List<String> urls = new ArrayList<>();
                 for (var bitRateInfo : vBitRateInfo.getValue()) {
                     String url = streamUrl;
                     int bitRate = bitRateInfo.getIBitRate();
                     if (bitRate > 0) {
-                        url += "&ratio=" + bitRate;
+                        url += "?ratio=" + bitRate;
+                    } else {
+                        url += "?ratio=";
                     }
+                    url += "&cdn=" + cdn + "&name=" + streamName + "&uid=" + puid;
                     String qualityName = bitRateInfo.getSDisplayName();
                     if (!qualityName.contains("HDR")) {
-                        urls.add(qualityName + "$" + ("web".equals(client) ? buildProxyUrl(url) : url));
+                        urls.add(qualityName + "$" + buildProxyUrl(url));
                     }
                 }
                 playUrl.add(String.join("#", urls));
@@ -314,8 +312,6 @@ public class HuyaService implements LivePlatform {
         } catch (Exception e) {
             log.warn("", e);
         }
-        q.put("t", "103");
-        q.put("ctype", "tars_mobile");
 
         long seqid = System.currentTimeMillis() + Long.parseLong(uid);
 
