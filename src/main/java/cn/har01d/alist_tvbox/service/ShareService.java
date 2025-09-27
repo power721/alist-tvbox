@@ -64,7 +64,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -689,6 +688,30 @@ public class ShareService {
     private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)提取码[:：](\\w+)");
     private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)(?:\\.html)?(?:\\??提取码[:：](\\w+))?");
     public static final Pattern PASSWORD = Pattern.compile("(?:密码|提取码|验证码|访问码|分享密码|密钥|pwd|password|share_pwd|pass_code|#)[=:：\\s]*([a-zA-Z0-9]{1,4})");
+
+    public String getLinkByPath(String path) {
+        String tid = path.split("/temp/")[1];
+        tid = tid.split("/")[0];
+        String[] parts = tid.split("@");
+        String id = parts[1];
+        String url = switch (parts[0]) {
+            case "0" -> "https://www.alipan.com/s/" + id;
+            case "1" -> "https://mypikpak.com/s/" + id;
+            case "2" -> "https://pan.xunlei.com/s/" + id;
+            case "3" -> "https://123pan.com/s/" + id;
+            case "5" -> "https://pan.quark.cn/s/" + id;
+            case "6" -> "https://caiyun.139.com/w/i/" + id;
+            case "7" -> "https://drive.uc.cn/s/" + id;
+            case "8" -> "https://115.com/s/" + id;
+            case "9" -> "https://cloud.189.cn/t/" + id;
+            case "10" -> "https://pan.baidu.com/s/" + id;
+            default -> throw new IllegalArgumentException("Unexpected type: " + parts[0]);
+        };
+        if (parts.length > 2) {
+            url += "?password=" + parts[2];
+        }
+        return url;
+    }
 
     private String parsePassword(String url) {
         var m = PASSWORD.matcher(url);
