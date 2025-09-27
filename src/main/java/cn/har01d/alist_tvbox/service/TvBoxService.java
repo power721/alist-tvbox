@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.dto.FilesList;
+import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.Video;
 import cn.har01d.alist_tvbox.dto.Subtitle;
 import cn.har01d.alist_tvbox.entity.AListAlias;
@@ -119,6 +120,7 @@ public class TvBoxService {
     private final SettingService settingService;
     private final AListLocalService aListLocalService;
     private final ProxyService proxyService;
+    private final ShareService shareService;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
 
@@ -176,6 +178,7 @@ public class TvBoxService {
                         TenantService tenantService,
                         SettingService settingService,
                         AListLocalService aListLocalService,
+                        ShareService shareService,
                         ObjectMapper objectMapper,
                         DriverAccountRepository driverAccountRepository,
                         ProxyService proxyService,
@@ -197,6 +200,7 @@ public class TvBoxService {
         this.tenantService = tenantService;
         this.settingService = settingService;
         this.aListLocalService = aListLocalService;
+        this.shareService = shareService;
         this.objectMapper = objectMapper;
         this.driverAccountRepository = driverAccountRepository;
         this.proxyService = proxyService;
@@ -1796,7 +1800,19 @@ public class TvBoxService {
         if (!tenantService.valid(newPath)) {
             return null;
         }
-        FsDetail fsDetail = aListService.getFile(site, newPath);
+        FsDetail fsDetail;
+        try {
+            fsDetail = aListService.getFile(site, newPath);
+        } catch (BadRequestException e) {
+            if (e.getMessage().contains("failed get dir: object not found") && newPath.contains("/temp/") && newPath.contains("@")) {
+                ShareLink share = new ShareLink();
+                share.setLink(shareService.getLinkByPath(newPath));
+                shareService.add(share);
+                fsDetail = aListService.getFile(site, newPath);
+            } else {
+                throw e;
+            }
+        }
         if (fsDetail == null) {
             throw new BadRequestException("加载文件失败: " + newPath);
         }
