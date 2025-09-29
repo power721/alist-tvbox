@@ -2350,7 +2350,7 @@ public class TvBoxService {
         int index = name.lastIndexOf('.');
         if (index > 0) {
             String suffix = name.substring(index + 1).toLowerCase();
-            return appProperties.getFormats().contains(suffix);
+            return appProperties.getFormats().contains(suffix) || "strm".equals(suffix);
         }
         return false;
     }
