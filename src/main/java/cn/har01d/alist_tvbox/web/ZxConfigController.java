@@ -1,14 +1,12 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,21 +30,18 @@ public class ZxConfigController {
     private final DriverAccountRepository driverAccountRepository;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
-    private final AppProperties appProperties;
 
     public ZxConfigController(SubscriptionService subscriptionService,
                               AccountRepository accountRepository,
                               DriverAccountRepository driverAccountRepository,
                               ObjectMapper objectMapper,
-                              RestTemplateBuilder builder,
-                              AppProperties appProperties
+                              RestTemplateBuilder builder
     ) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.objectMapper = objectMapper;
         this.restTemplate = builder.build();
-        this.appProperties = appProperties;
     }
 
     @GetMapping("/version")
@@ -58,13 +53,7 @@ public class ZxConfigController {
             local = Files.readString(path);
         }
 
-        String remote2 = restTemplate.getForObject("http://har01d.org/zx.base.version?system=" + appProperties.getSystemId(), String.class);
-        String local2 = "";
-        path = Utils.getDataPath("zx_base_version.txt");
-        if (Files.exists(path)) {
-            local2 = Files.readString(path);
-        }
-        return Map.of("local", local, "remote", remote, "local2", local2, "remote2", remote2);
+        return Map.of("local", local, "remote", remote);
     }
 
     private String getZxVersion() throws IOException {
