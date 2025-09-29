@@ -16,32 +16,36 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 
 import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.client.RestTemplate;
 
 @Slf4j
 @Service
 public class FileDownloader {
-    private static final String BASE_URL = "http://har01d.org/";
-    private static final String REMOTE_PG_VERSION_URL = BASE_URL + "pg.version";
-    private static final String REMOTE_PG_ZIP_URL = BASE_URL + "pg.zip";
-    private static final String REMOTE_ZX_BASE_VERSION_URL = BASE_URL + "zx.base.version";
-    private static final String REMOTE_ZX_BASE_ZIP_URL = BASE_URL + "zx.base.zip";
-    private static final String REMOTE_ZX_VERSION_URL = BASE_URL + "zx.version";
-    private static final String REMOTE_ZX_ZIP_URL = BASE_URL + "zx.zip";
+    private static final Pattern PG_PATTERN = Pattern.compile("https://raw.githubusercontent.com/fish2018/PG/main/pg\\.(\\d+-\\d+)\\.zip");
+    private static final Pattern ZX_PATTERN = Pattern.compile("https://raw.githubusercontent.com/fish2018/ZX/main/真心(\\d+)-增量包\\.zip");
+
+    private static final String BASE_URL = "http://d.har01d.cn/";
     private static final String REMOTE_DIFF_ZIP_URL = BASE_URL + "diff.zip";
 
     private final Path pgVersionFile;
@@ -62,9 +66,14 @@ public class FileDownloader {
     private final Path zxDataDir;
 
     private final TaskService taskService;
+    private final RestTemplate restTemplate;
 
-    public FileDownloader(TaskService taskService) {
+    private String pgHtml = "";
+    private String zxHtml = "";
+
+    public FileDownloader(TaskService taskService, RestTemplateBuilder builder) {
         this.taskService = taskService;
+        this.restTemplate = builder.build();
         pgVersionFile = Utils.getDataPath("pg_version.txt");
         zxBaseVersionFile = Utils.getDataPath("zx_base_version.txt");
         zxVersionFile = Utils.getDataPath("zx_version.txt");
@@ -166,13 +175,21 @@ public class FileDownloader {
 
     public void downloadPg(Task task) throws IOException {
         String localVersion = getLocalVersion(pgVersionFile, "0.0");
-        String remoteVersion = getRemoteVersion(REMOTE_PG_VERSION_URL);
+        String remoteVersion = getPgVersion();
 
         log.info("local PG: {}, remote PG: {}", localVersion, remoteVersion);
 
         if (!localVersion.equals(remoteVersion)) {
             log.debug("download PG file {}", remoteVersion);
-            downloadFile(REMOTE_PG_ZIP_URL, pgZip);
+            List<String> urls = getPgUrls();
+            for (String url : urls) {
+                try {
+                    downloadFile(url, pgZip);
+                    break;
+                } catch (Exception e) {
+                    log.warn("download pg {} failed", url, e);
+                }
+            }
 
             logFileInfo(pgZip);
 
@@ -191,31 +208,39 @@ public class FileDownloader {
     }
 
     public void downloadZx(Task task) throws IOException {
-        String localBaseVersion = getLocalVersion(zxBaseVersionFile, "0.0");
-        String remoteBaseVersion = getRemoteVersion(REMOTE_ZX_BASE_VERSION_URL);
-
-        log.info("local zx base: {}, remote zx base: {}", localBaseVersion, remoteBaseVersion);
-
-        if (!localBaseVersion.equals(remoteBaseVersion)) {
-            log.debug("download zx base {}", remoteBaseVersion);
-            downloadFile(REMOTE_ZX_BASE_ZIP_URL, zxBaseZip);
-
-            log.debug("save zx base version");
-            saveVersion(zxBaseVersionFile, remoteBaseVersion);
-        }
+//        String localBaseVersion = getLocalVersion(zxBaseVersionFile, "0.0");
+//        String remoteBaseVersion = getRemoteVersion(REMOTE_ZX_BASE_VERSION_URL);
+//
+//        log.info("local zx base: {}, remote zx base: {}", localBaseVersion, remoteBaseVersion);
+//
+//        if (!localBaseVersion.equals(remoteBaseVersion)) {
+//            log.debug("download zx base {}", remoteBaseVersion);
+//            downloadFile(REMOTE_ZX_BASE_ZIP_URL, zxBaseZip);
+//
+//            log.debug("save zx base version");
+//            saveVersion(zxBaseVersionFile, remoteBaseVersion);
+//        }
 
         String localVersion = getLocalVersion(zxVersionFile, "0.0");
         if ("0.0".equals(localVersion) && Files.exists(Paths.get("/zx.zip"))) {
             Files.copy(Paths.get("/zx.zip"), zxZip, StandardCopyOption.REPLACE_EXISTING);
         }
 
-        String remoteVersion = getRemoteVersion(REMOTE_ZX_VERSION_URL);
+        String remoteVersion = getZxVersion();
 
         log.info("local zx diff: {}, remote zx diff: {}", localVersion, remoteVersion);
 
         if (!localVersion.equals(remoteVersion)) {
             log.debug("download zx diff {}", remoteVersion);
-            downloadFile(REMOTE_ZX_ZIP_URL, zxZip);
+            List<String> urls = getZxUrls();
+            for (String url : urls) {
+                try {
+                    downloadFile(url, zxZip);
+                    break;
+                } catch (Exception e) {
+                    log.warn("download zx {} failed", url, e);
+                }
+            }
 
             log.debug("save zx diff version");
             saveVersion(zxVersionFile, remoteVersion);
@@ -237,6 +262,56 @@ public class FileDownloader {
         syncFiles(zxWebDir, zxDataDir);
 
         taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
+    }
+
+    private String getPgVersion() {
+        String html = restTemplate.getForObject("https://github.com/fish2018/PG", String.class);
+        int index = html.indexOf("PG包下载地址");
+        if (index > 0) {
+            html = html.substring(index);
+        }
+        pgHtml = html;
+        var m = PG_PATTERN.matcher(html);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return "";
+    }
+
+    private List<String> getPgUrls() {
+        Set<String> urls = new HashSet<>();
+        String[] lines = pgHtml.split("\n");
+        for (String line : lines) {
+            if (line.contains("https://raw.githubusercontent.com/fish2018/PG/main/pg.")) {
+                urls.add(line);
+            }
+        }
+        return new ArrayList<>(urls );
+    }
+
+    private String getZxVersion() {
+        String html = restTemplate.getForObject("https://github.com/fish2018/ZX", String.class);
+        int index = html.indexOf("真心本地包下载地址");
+        if (index > 0) {
+            html = html.substring(index);
+        }
+        zxHtml = html;
+        var m = ZX_PATTERN.matcher(html);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return "";
+    }
+
+    private List<String> getZxUrls() {
+        Set<String> urls = new HashSet<>();
+        String[] lines = zxHtml.split("\n");
+        for (String line : lines) {
+            if (line.contains("https://raw.githubusercontent.com/fish2018/ZX/main/真心")) {
+                urls.add(line);
+            }
+        }
+        return new ArrayList<>(urls );
     }
 
     public void downloadMovie(Task task, String remoteVersion) throws IOException {
@@ -288,6 +363,7 @@ public class FileDownloader {
     }
 
     private void downloadFile(String fileUrl, Path destination) throws IOException {
+        log.info("download file: {}", fileUrl);
         HttpURLConnection conn = (HttpURLConnection) new URL(fileUrl).openConnection();
         conn.setConnectTimeout(10000);
         conn.setReadTimeout(30000);

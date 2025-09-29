@@ -5,7 +5,6 @@ import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -21,11 +20,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 @Slf4j
 @RestController
 @RequestMapping("/zx")
 public class ZxConfigController {
+    private static final Pattern ZX_PATTERN = Pattern.compile("https://raw.githubusercontent.com/fish2018/ZX/main/真心(\\d+)-增量包\\.zip");
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final DriverAccountRepository driverAccountRepository;
@@ -50,7 +51,7 @@ public class ZxConfigController {
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = restTemplate.getForObject("http://har01d.org/zx.version?system=" + appProperties.getSystemId(), String.class);
+        String remote = getZxVersion();
         String local = "";
         Path path = Utils.getDataPath("zx_version.txt");
         if (Files.exists(path)) {
@@ -64,6 +65,19 @@ public class ZxConfigController {
             local2 = Files.readString(path);
         }
         return Map.of("local", local, "remote", remote, "local2", local2, "remote2", remote2);
+    }
+
+    private String getZxVersion() throws IOException {
+        String html = restTemplate.getForObject("https://github.com/fish2018/ZX", String.class);
+        int index = html.indexOf("真心本地包下载地址");
+        if (index > 0) {
+            html = html.substring(index);
+        }
+        var m = ZX_PATTERN.matcher(html);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return "";
     }
 
     @GetMapping("/config")
