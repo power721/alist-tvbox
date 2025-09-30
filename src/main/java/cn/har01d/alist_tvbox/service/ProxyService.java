@@ -82,10 +82,6 @@ public class ProxyService {
         if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
             playUrl = playUrlRepository.save(new PlayUrl(url, referer, Instant.now().plus(3, ChronoUnit.DAYS)));
         }
-        if (playUrl.getReferer() == null) {
-            playUrl.setReferer(referer);
-            playUrlRepository.save(playUrl);
-        }
         return playUrl.getId();
     }
 
