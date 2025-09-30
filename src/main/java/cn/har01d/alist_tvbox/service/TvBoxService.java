@@ -44,6 +44,10 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -161,6 +165,7 @@ public class TvBoxService {
     );
     private final PikPakAccountRepository pikPakAccountRepository;
     private List<Site> sites = new ArrayList<>();
+    private final OkHttpClient okHttpClient = new OkHttpClient();
 
     public TvBoxService(AccountRepository accountRepository,
                         AListAliasRepository aliasRepository,
@@ -1125,7 +1130,7 @@ public class TvBoxService {
         if ("gui".equals(ac)) {
             return fsInfo.getType() == 1 || fsInfo.getType() == 2;
         }
-        if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3) {
+        if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3|| (fsInfo.getType() == 0 && fsInfo.getName().endsWith(".strm"))) {
             return true;
         }
         if ("web".equals(ac)) {
@@ -2345,7 +2350,7 @@ public class TvBoxService {
         int index = name.lastIndexOf('.');
         if (index > 0) {
             String suffix = name.substring(index + 1).toLowerCase();
-            return appProperties.getFormats().contains(suffix);
+            return appProperties.getFormats().contains(suffix) || "strm".equals(suffix);
         }
         return false;
     }
@@ -2407,6 +2412,16 @@ public class TvBoxService {
             int index = url.indexOf('/', 16);
             url = proxy + url.substring(index + 1);
             log.debug("fixHttp: {}", url);
+        }
+
+        if (url.endsWith(".strm")){
+            try {
+                Request request = new Request.Builder().url(url).get().build();
+                try (Response response = okHttpClient.newCall(request).execute(); ResponseBody body = response.body()){
+                    url = body != null ? body.string() : url;
+                }
+            }catch (Exception ignored){
+            }
         }
 
         return url;
