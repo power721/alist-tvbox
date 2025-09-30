@@ -13,6 +13,10 @@ import cn.har01d.alist_tvbox.util.Constants;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
@@ -48,6 +52,7 @@ public class ProxyService {
     private final HuyaParseService huyaParseService;
     private final Set<String> proxyDrivers = Set.of("AliyundriveOpen", "AliyunShare", "BaiduNetdisk", "BaiduShare2",
             "Quark", "UC", "QuarkShare", "UCShare", "115 Cloud", "115 Share");
+    private final OkHttpClient okHttpClient = new OkHttpClient();
 
     public ProxyService(AppProperties appProperties,
                         PlayUrlRepository playUrlRepository,
@@ -140,7 +145,15 @@ public class ProxyService {
             url = fsDetail.getRawUrl();
             String driver = fsDetail.getProvider();
             // check url for Alias
-            if (url.contains(".m3u8")) {
+            if (url.contains(".strm")) {
+                Request rq = new Request.Builder().url(url).get().build();
+                try (Response rp = okHttpClient.newCall(rq).execute(); ResponseBody body = rp.body()){
+                    url = body != null ? body.string() : url;
+                }
+                log.debug("302 {} {}", driver, url);
+                response.sendRedirect(url);
+                return;
+            } if (url.contains(".m3u8")) {
                 log.debug("302 {} {}", driver, url);
                 response.sendRedirect(url);
                 return;
