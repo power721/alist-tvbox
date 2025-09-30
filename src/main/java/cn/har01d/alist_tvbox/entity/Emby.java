@@ -28,4 +28,7 @@ public class Emby {
     private String clientVersion;
     private String deviceId;
     private String deviceName;
+
+    @Column(columnDefinition = "BOOLEAN DEFAULT false")
+    private boolean enableImageProxy;
 }
