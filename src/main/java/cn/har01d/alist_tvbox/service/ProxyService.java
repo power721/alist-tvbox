@@ -153,7 +153,7 @@ public class ProxyService {
                 log.debug("302 {} {}", driver, url);
                 response.sendRedirect(url);
                 return;
-            } if (url.contains(".m3u8")) {
+            } else if (url.contains(".m3u8")) {
                 log.debug("302 {} {}", driver, url);
                 response.sendRedirect(url);
                 return;
