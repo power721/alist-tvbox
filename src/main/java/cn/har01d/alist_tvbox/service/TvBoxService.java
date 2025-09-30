@@ -67,7 +67,10 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.*;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -2373,8 +2376,6 @@ public class TvBoxService {
         int index = path.lastIndexOf('/');
         if (index > 0) {
             return path.substring(0, index);
-        } else if (index == 0) {
-            return "/";
         }
         return path;
     }
@@ -2413,14 +2414,14 @@ public class TvBoxService {
             log.debug("fixHttp: {}", url);
         }
 
-        try {
-            if (new URL(url).getPath().endsWith(".strm")){
+        if (url.endsWith(".strm")){
+            try {
                 Request request = new Request.Builder().url(url).get().build();
                 try (Response response = okHttpClient.newCall(request).execute(); ResponseBody body = response.body()){
                     url = body != null ? body.string() : url;
                 }
+            }catch (Exception ignored){
             }
-        }catch (Exception ignored){
         }
 
         return url;

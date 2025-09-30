@@ -1,4 +1,12 @@
-# alist-tvbox
+![GitHub Repo stars](https://img.shields.io/github/stars/power721/alist-tvbox?style=for-the-badge)
+![GitHub forks](https://img.shields.io/github/forks/power721/alist-tvbox?style=for-the-badge)
+![GitHub contributors](https://img.shields.io/github/contributors/power721/alist-tvbox?style=for-the-badge)
+![GitHub repo size](https://img.shields.io/github/repo-size/power721/alist-tvbox?style=for-the-badge)
+![GitHub issues](https://img.shields.io/github/issues/power721/alist-tvbox?style=for-the-badge)
+![Docker Pulls - xiaoya-tvbox](https://img.shields.io/docker/pulls/haroldli/xiaoya-tvbox?style=for-the-badge)
+![Docker Pulls - alist-tvbox](https://img.shields.io/docker/pulls/haroldli/alist-tvbox?style=for-the-badge)
+
+# AList-TvBox
 AList proxy server for TvBox, support playlist and search.
 
 [中文文档](doc/README_zh.md)
