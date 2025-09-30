@@ -27,12 +27,20 @@ public class PlayUrl {
     private int site = 1;
     @Column(nullable = false, columnDefinition = "TEXT")
     private String path;
+    private String referer;
     private Instant time;
     private Integer rating;
 
     public PlayUrl(int site, String path, Instant time) {
         this.site = site;
         this.path = path;
+        this.time = time;
+    }
+
+    public PlayUrl(String url, String referer, Instant time) {
+        this.site = 0;
+        this.path = url;
+        this.referer = referer;
         this.time = time;
     }
 }

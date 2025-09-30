@@ -57,6 +57,14 @@
         <el-form-item label="顺序">
           <el-input-number v-model="form.order" :min="0"/>
         </el-form-item>
+        <el-form-item label="开启图片代理">
+          <el-switch
+            v-model="form.enableImageProxy"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
       <span class="dialog-footer">
@@ -101,6 +109,7 @@ const form = ref({
   deviceId: '',
   deviceName: '',
   order: 0,
+  enableImageProxy: false,
 })
 
 const handleAdd = () => {
@@ -118,6 +127,7 @@ const handleAdd = () => {
     deviceId: '',
     deviceName: '',
     order: 0,
+    enableImageProxy: false,
   }
   formVisible.value = true
 }

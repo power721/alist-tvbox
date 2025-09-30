@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.EmbyPlayInfo;
 import cn.har01d.alist_tvbox.dto.bili.Sub;
 import cn.har01d.alist_tvbox.dto.emby.EmbyInfo;
@@ -19,6 +20,7 @@ import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -42,6 +44,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URL;
@@ -65,6 +68,8 @@ public class EmbyService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final SettingRepository settingRepository;
+    private final AppProperties appProperties;
+    private final ProxyService proxyService;
     private final Cache<Integer, EmbyInfo> cache = Caffeine.newBuilder().build();
     private final OkHttpClient okHttpClient = new OkHttpClient();
 
@@ -83,13 +88,20 @@ public class EmbyService {
     private String deviceId = UUID.randomUUID().toString();
     private EmbyPlayInfo last;
 
-    public EmbyService(EmbyRepository embyRepository, RestTemplateBuilder builder, ObjectMapper objectMapper, SettingRepository settingRepository) {
+    public EmbyService(EmbyRepository embyRepository,
+                       RestTemplateBuilder builder,
+                       ObjectMapper objectMapper,
+                       SettingRepository settingRepository,
+                       AppProperties appProperties,
+                       ProxyService proxyService) {
         this.embyRepository = embyRepository;
         restTemplate = builder
                 .defaultHeader("User-Agent", Constants.EMBY_USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
         this.settingRepository = settingRepository;
+        this.appProperties = appProperties;
+        this.proxyService = proxyService;
     }
 
     @PostConstruct
@@ -206,10 +218,10 @@ public class EmbyService {
         }
 
         if (StringUtils.isBlank(dto.getClientName())) {
-            dto.setClientName("Emby for Android");
+            dto.setClientName("Yamby");
         }
         if (StringUtils.isBlank(dto.getClientVersion())) {
-            dto.setClientVersion("3.4.66");
+            dto.setClientVersion("1.5.7.18");
         }
         if (StringUtils.isBlank(dto.getDeviceId())) {
             dto.setDeviceId(deviceId);
@@ -257,7 +269,7 @@ public class EmbyService {
         return result;
     }
 
-    private static MovieDetail getMovieDetail(EmbyItem item, Emby emby) {
+    private MovieDetail getMovieDetail(EmbyItem item, Emby emby) {
         var movie = new MovieDetail();
         movie.setVod_id(emby.getId() + "-" + item.getId());
         if ("Episode".equals(item.getType())) {
@@ -267,7 +279,11 @@ public class EmbyService {
         }
 
         if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
-            movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
+            String cover = emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90";
+            if (emby.isEnableImageProxy()) {
+                cover = fixCover(cover, emby.getUrl());
+            }
+            movie.setVod_pic(cover);
         }
         if ("BoxSet".equals(item.getType())) {
             movie.setVod_id(emby.getId() + "-" + item.getId() + "-0");
@@ -330,6 +346,20 @@ public class EmbyService {
         return result;
     }
 
+    private String fixCover(String url, String referer) {
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        int id = proxyService.generateImageUrl(url, referer);
+        // nginx https
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/images/" + id)
+                .replaceQuery("")
+                .build()
+                .toUriString();
+    }
+
     private List<EmbyItem> getAll(Emby emby, EmbyInfo info, String sid) {
         HttpHeaders headers = setHeaders(emby, info);
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
@@ -360,18 +390,22 @@ public class EmbyService {
 
     private List<MovieDetail> search(Emby emby, EmbyInfo info, String wd, String type) {
         List<MovieDetail> list = new ArrayList<>();
-        HttpHeaders headers = setHeaders(emby, info);
-        HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?IncludePeople=false&IncludeMedia=true&IncludeGenres=false&IncludeStudios=false&IncludeArtists=false&IncludeItemTypes=" + type + "&Limit=30&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating&Recursive=true&EnableTotalRecordCount=false&ImageTypeLimit=1&searchTerm=" + wd;
-        var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
-        for (var item : response.getItems()) {
-            var movie = getSearchDetail(item, emby);
-            list.add(movie);
+        try {
+            HttpHeaders headers = setHeaders(emby, info);
+            HttpEntity<Object> entity = new HttpEntity<>(null, headers);
+            String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?IncludePeople=false&IncludeMedia=true&IncludeGenres=false&IncludeStudios=false&IncludeArtists=false&IncludeItemTypes=" + type + "&Limit=30&Fields=PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,CommunityRating&Recursive=true&EnableTotalRecordCount=false&ImageTypeLimit=1&searchTerm=" + wd;
+            var response = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
+            for (var item : response.getItems()) {
+                var movie = getSearchDetail(item, emby);
+                list.add(movie);
+            }
+        } catch (Exception e) {
+            log.warn("search emby failed {}", emby.getName(), e);
         }
         return list;
     }
 
-    private static MovieDetail getSearchDetail(EmbyItem item, Emby emby) {
+    private MovieDetail getSearchDetail(EmbyItem item, Emby emby) {
         var movie = new MovieDetail();
         movie.setVod_id(emby.getId() + "-" + item.getId());
         if ("Episode".equals(item.getType())) {
@@ -381,7 +415,11 @@ public class EmbyService {
         }
 
         if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
-            movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
+            String cover = emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90";
+            if (emby.isEnableImageProxy()) {
+                cover = fixCover(cover, emby.getUrl());
+            }
+            movie.setVod_pic(cover);
         }
         movie.setVod_remarks(emby.getName() + " " + Objects.toString(item.getRating(), ""));
         movie.setVod_year(Objects.toString(item.getYear(), null));
@@ -442,7 +480,11 @@ public class EmbyService {
                 movie.setVod_id(emby.getId() + "-" + i++);
                 movie.setVod_name(item.getName());
                 if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
-                    movie.setVod_pic(emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
+                    String cover = emby.getUrl() + "/emby/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90";
+                    if (emby.isEnableImageProxy()) {
+                        cover = fixCover(cover, emby.getUrl());
+                    }
+                    movie.setVod_pic(cover);
                 }
                 movie.setVod_tag(FOLDER);
                 list.add(movie);

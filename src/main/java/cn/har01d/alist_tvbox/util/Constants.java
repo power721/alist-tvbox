@@ -8,7 +8,7 @@ public final class Constants {
     public static final String ACCEPT = "application/json, text/plain, */*";
     public static final String OK_USER_AGENT = "okhttp/3.15";
     public static final String USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
-    public static final String EMBY_USER_AGENT = "Emby/3.4.66 (Linux;Android 13) AndroidXMedia3/1.5.1";
+    public static final String EMBY_USER_AGENT = "Yamby/1.5.7.18(Android";
     public static final String JELLYFIN_USER_AGENT = "Jellyfin/2.6.2 (Linux;Android 13) AndroidXMedia3/1.5.1";
     public static final String USER_AGENT1 = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppelWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36";
     public static final String MOBILE_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1";

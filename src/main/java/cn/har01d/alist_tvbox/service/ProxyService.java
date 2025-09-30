@@ -77,6 +77,14 @@ public class ProxyService {
         playUrlRepository.deleteAll(expired);
     }
 
+    public int generateImageUrl(String url, String referer) {
+        PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(0, url, Sort.by("id").descending());
+        if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
+            playUrl = playUrlRepository.save(new PlayUrl(url, referer, Instant.now().plus(3, ChronoUnit.DAYS)));
+        }
+        return playUrl.getId();
+    }
+
     public int generateProxyUrl(String path) {
         PlayUrl playUrl = playUrlRepository.findFirstBySiteAndPath(0, path, Sort.by("id").descending());
         if (playUrl == null || playUrl.getTime().isBefore(Instant.now())) {
@@ -116,6 +124,10 @@ public class ProxyService {
         return playUrl.getPath();
     }
 
+    public PlayUrl getPlayUrl(int id) {
+        return playUrlRepository.findById(id).orElseThrow(() -> new NotFoundException("Not found: " + id));
+    }
+
     public void proxy(String tid, HttpServletRequest request, HttpServletResponse response) throws IOException {
         String[] parts = tid.split("@");
         int id = Integer.parseInt(parts[1]);
@@ -147,7 +159,7 @@ public class ProxyService {
             // check url for Alias
             if (url.contains(".strm")) {
                 Request rq = new Request.Builder().url(url).get().build();
-                try (Response rp = okHttpClient.newCall(rq).execute(); ResponseBody body = rp.body()){
+                try (Response rp = okHttpClient.newCall(rq).execute(); ResponseBody body = rp.body()) {
                     url = body != null ? body.string() : url;
                 }
                 log.debug("302 {} {}", driver, url);
