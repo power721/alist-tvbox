@@ -1,5 +1,14 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.entity.Task;
+import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.FileOutputStream;
@@ -28,16 +37,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
-
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.stereotype.Service;
-
-import cn.har01d.alist_tvbox.entity.Task;
-import cn.har01d.alist_tvbox.util.Utils;
-import jakarta.annotation.PreDestroy;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.client.RestTemplate;
 
 @Slf4j
 @Service
@@ -185,21 +184,21 @@ public class FileDownloader {
             for (String url : urls) {
                 try {
                     downloadFile(url, pgZip);
+
+                    logFileInfo(pgZip);
+
+                    deleteDirectory(pgWebDir);
+
+                    log.debug("unzip PG file to {}", pgWebDir);
+                    unzipFile(pgZip, pgWebDir);
+
+                    log.debug("save PG version: {}", remoteVersion);
+                    saveVersion(pgVersionFile, remoteVersion);
                     break;
                 } catch (Exception e) {
                     log.warn("download pg {} failed", url, e);
                 }
             }
-
-            logFileInfo(pgZip);
-
-            deleteDirectory(pgWebDir);
-
-            log.debug("unzip PG file to {}", pgWebDir);
-            unzipFile(pgZip, pgWebDir);
-
-            log.debug("save PG version: {}", remoteVersion);
-            saveVersion(pgVersionFile, remoteVersion);
         }
 
         log.debug("sync PG files");
@@ -208,19 +207,6 @@ public class FileDownloader {
     }
 
     public void downloadZx(Task task) throws IOException {
-//        String localBaseVersion = getLocalVersion(zxBaseVersionFile, "0.0");
-//        String remoteBaseVersion = getRemoteVersion(REMOTE_ZX_BASE_VERSION_URL);
-//
-//        log.info("local zx base: {}, remote zx base: {}", localBaseVersion, remoteBaseVersion);
-//
-//        if (!localBaseVersion.equals(remoteBaseVersion)) {
-//            log.debug("download zx base {}", remoteBaseVersion);
-//            downloadFile(REMOTE_ZX_BASE_ZIP_URL, zxBaseZip);
-//
-//            log.debug("save zx base version");
-//            saveVersion(zxBaseVersionFile, remoteBaseVersion);
-//        }
-
         String localVersion = getLocalVersion(zxVersionFile, "0.0");
         if ("0.0".equals(localVersion) && Files.exists(Paths.get("/zx.zip"))) {
             Files.copy(Paths.get("/zx.zip"), zxZip, StandardCopyOption.REPLACE_EXISTING);
@@ -236,27 +222,21 @@ public class FileDownloader {
             for (String url : urls) {
                 try {
                     downloadFile(url, zxZip);
+
+                    logFileInfo(zxZip);
+
+                    deleteDirectory(zxWebDir);
+
+                    unzipFile(zxZip, zxWebDir);
+
+                    saveVersion(zxVersionFile, remoteVersion);
                     break;
                 } catch (Exception e) {
                     log.warn("download zx {} failed", url, e);
                 }
             }
 
-            log.debug("save zx diff version");
-            saveVersion(zxVersionFile, remoteVersion);
         }
-
-        logFileInfo(zxBaseZip);
-        logFileInfo(zxZip);
-
-        log.debug("sync zx files");
-        deleteDirectory(zxWebDir);
-
-        log.debug("unzip zx.base.zip");
-        unzipFile(zxBaseZip, zxWebDir);
-
-        log.debug("unzip zx.zip");
-        unzipFile(zxZip, zxWebDir);
 
         log.debug("sync custom files");
         syncFiles(zxWebDir, zxDataDir);
@@ -286,7 +266,7 @@ public class FileDownloader {
                 urls.add(line);
             }
         }
-        return new ArrayList<>(urls );
+        return new ArrayList<>(urls);
     }
 
     private String getZxVersion() {
@@ -311,7 +291,7 @@ public class FileDownloader {
                 urls.add(line);
             }
         }
-        return new ArrayList<>(urls );
+        return new ArrayList<>(urls);
     }
 
     public void downloadMovie(Task task, String remoteVersion) throws IOException {

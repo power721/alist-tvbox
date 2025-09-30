@@ -70,7 +70,8 @@
     </el-row>
     <el-row>
       PG包本地： {{ pgLocal }}
-      PG包远程： {{ pgRemote }}
+      &nbsp;&nbsp;
+      <a href="https://github.com/fish2018/PG" target="_blank">PG包远程</a>： {{ pgRemote }}
       <span class="hint"></span>
       <span v-if="pgLocal==pgRemote"><el-icon color="green"><Check/></el-icon></span>
       <span v-else><el-icon color="orange"><Warning/></el-icon></span>
@@ -83,8 +84,9 @@
 <!--      <span v-else><el-icon color="orange"><Warning/></el-icon></span>-->
 <!--    </el-row>-->
     <el-row>
-      真心增量包本地： {{ zxLocal }}
-      真心增量包远程： {{ zxRemote }}
+      真心包本地： {{ zxLocal }}
+      &nbsp;&nbsp;
+      <a href="https://github.com/fish2018/ZX" target="_blank">真心包远程</a>： {{ zxRemote }}
       <span class="hint"></span>
       <span v-if="zxLocal==zxRemote"><el-icon color="green"><Check/></el-icon></span>
       <span v-else><el-icon color="orange"><Warning/></el-icon></span>
