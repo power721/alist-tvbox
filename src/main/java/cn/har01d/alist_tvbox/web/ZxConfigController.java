@@ -1,15 +1,12 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,49 +18,55 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 @Slf4j
 @RestController
 @RequestMapping("/zx")
 public class ZxConfigController {
+    private static final Pattern ZX_PATTERN = Pattern.compile("https://raw.githubusercontent.com/fish2018/ZX/main/真心(\\d+)-增量包\\.zip");
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
-    private final AppProperties appProperties;
 
     public ZxConfigController(SubscriptionService subscriptionService,
                               AccountRepository accountRepository,
                               DriverAccountRepository driverAccountRepository,
                               ObjectMapper objectMapper,
-                              RestTemplateBuilder builder,
-                              AppProperties appProperties
+                              RestTemplateBuilder builder
     ) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.objectMapper = objectMapper;
         this.restTemplate = builder.build();
-        this.appProperties = appProperties;
     }
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = restTemplate.getForObject("http://har01d.org/zx.version?system=" + appProperties.getSystemId(), String.class);
+        String remote = getZxVersion();
         String local = "";
         Path path = Utils.getDataPath("zx_version.txt");
         if (Files.exists(path)) {
             local = Files.readString(path);
         }
 
-        String remote2 = restTemplate.getForObject("http://har01d.org/zx.base.version?system=" + appProperties.getSystemId(), String.class);
-        String local2 = "";
-        path = Utils.getDataPath("zx_base_version.txt");
-        if (Files.exists(path)) {
-            local2 = Files.readString(path);
+        return Map.of("local", local, "remote", remote);
+    }
+
+    private String getZxVersion() throws IOException {
+        String html = restTemplate.getForObject("https://github.com/fish2018/ZX", String.class);
+        int index = html.indexOf("真心本地包下载地址");
+        if (index > 0) {
+            html = html.substring(index);
         }
-        return Map.of("local", local, "remote", remote, "local2", local2, "remote2", remote2);
+        var m = ZX_PATTERN.matcher(html);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return "";
     }
 
     @GetMapping("/config")

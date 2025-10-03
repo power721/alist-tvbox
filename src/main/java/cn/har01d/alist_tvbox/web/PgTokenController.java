@@ -5,7 +5,6 @@ import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.util.Constants;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -21,11 +20,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 @Slf4j
 @RestController
 @RequestMapping("/pg")
 public class PgTokenController {
+    private static final Pattern PG_PATTERN = Pattern.compile("https://raw.githubusercontent.com/fish2018/PG/main/pg.(\\d+-\\d+).zip");
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
@@ -55,13 +56,26 @@ public class PgTokenController {
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = restTemplate.getForObject("http://har01d.org/pg.version?system=" + appProperties.getSystemId(), String.class);
+        String remote = getPgVersion();
         String local = "";
         Path path = Utils.getDataPath("pg_version.txt");
         if (Files.exists(path)) {
             local = Files.readString(path);
         }
         return Map.of("local", local, "remote", remote);
+    }
+
+    private String getPgVersion() throws IOException {
+        String html = restTemplate.getForObject("https://github.com/fish2018/PG", String.class);
+        int index = html.indexOf("PG包下载地址");
+        if (index > 0) {
+            html = html.substring(index);
+        }
+        var m = PG_PATTERN.matcher(html);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return "";
     }
 
     @GetMapping("/lib/tokenm")
