@@ -3,50 +3,46 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.service.FileDownloader;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 @Slf4j
 @RestController
 @RequestMapping("/zx")
 public class ZxConfigController {
-    private static final Pattern ZX_PATTERN = Pattern.compile("/power721/ZX/releases/tag/(\\d+-\\d+)");
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final DriverAccountRepository driverAccountRepository;
+    private final FileDownloader fileDownloader;
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate;
 
     public ZxConfigController(SubscriptionService subscriptionService,
                               AccountRepository accountRepository,
                               DriverAccountRepository driverAccountRepository,
-                              ObjectMapper objectMapper,
-                              RestTemplateBuilder builder
-    ) {
+                              FileDownloader fileDownloader,
+                              ObjectMapper objectMapper) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.driverAccountRepository = driverAccountRepository;
+        this.fileDownloader = fileDownloader;
         this.objectMapper = objectMapper;
-        this.restTemplate = builder.build();
     }
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = getZxVersion();
+        String remote = fileDownloader.getZxVersion();
         String local = "";
         Path path = Utils.getDataPath("zx_version.txt");
         if (Files.exists(path)) {
@@ -54,15 +50,6 @@ public class ZxConfigController {
         }
 
         return Map.of("local", local, "remote", remote);
-    }
-
-    private String getZxVersion() {
-        String html = restTemplate.getForObject("https://github.com/power721/ZX/releases/latest", String.class);
-        var m = ZX_PATTERN.matcher(html);
-        if (m.find()) {
-            return m.group(1);
-        }
-        return "";
     }
 
     @GetMapping("/config")

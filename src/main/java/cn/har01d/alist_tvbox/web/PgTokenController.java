@@ -1,81 +1,64 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
-import cn.har01d.alist_tvbox.entity.*;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.service.FileDownloader;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 @Slf4j
 @RestController
 @RequestMapping("/pg")
 public class PgTokenController {
-    private static final Pattern PG_PATTERN = Pattern.compile("https://raw.githubusercontent.com/fish2018/PG/main/pg.(\\d+-\\d+).zip");
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final PikPakAccountRepository pikPakAccountRepository;
+    private final FileDownloader fileDownloader;
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate;
-    private final AppProperties appProperties;
 
     public PgTokenController(SubscriptionService subscriptionService,
                              AccountRepository accountRepository,
                              SettingRepository settingRepository,
                              DriverAccountRepository driverAccountRepository,
                              PikPakAccountRepository pikPakAccountRepository,
-                             ObjectMapper objectMapper,
-                             RestTemplateBuilder builder,
-                             AppProperties appProperties) {
+                             FileDownloader fileDownloader,
+                             ObjectMapper objectMapper) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.pikPakAccountRepository = pikPakAccountRepository;
+        this.fileDownloader = fileDownloader;
         this.objectMapper = objectMapper;
-        this.restTemplate = builder.build();
-        this.appProperties = appProperties;
     }
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = getPgVersion();
+        String remote = fileDownloader.getPgVersion();
         String local = "";
         Path path = Utils.getDataPath("pg_version.txt");
         if (Files.exists(path)) {
             local = Files.readString(path);
         }
         return Map.of("local", local, "remote", remote);
-    }
-
-    private String getPgVersion() throws IOException {
-        String html = restTemplate.getForObject("https://github.com/fish2018/PG", String.class);
-        int index = html.indexOf("PG包下载地址");
-        if (index > 0) {
-            html = html.substring(index);
-        }
-        var m = PG_PATTERN.matcher(html);
-        if (m.find()) {
-            return m.group(1);
-        }
-        return "";
     }
 
     @GetMapping("/lib/tokenm")

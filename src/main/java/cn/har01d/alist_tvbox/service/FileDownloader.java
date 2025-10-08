@@ -47,6 +47,8 @@ public class FileDownloader {
     private static final String BASE_URL = "http://d.har01d.cn/";
     private static final String REMOTE_DIFF_ZIP_URL = BASE_URL + "diff.zip";
 
+    private static final Set<String> GITHUB_PROXY = Set.of("https://slink.ltd/", "https://cors.zme.ink/", "https://git.886.be/", "https://gitdl.cn/", "https://ghfast.top/", "https://ghproxy.net/", "https://github.moeyy.xyz/", "https://gh-proxy.com/", "https://ghproxy.cc/", "https://gh.llkk.cc/", "https://gh.ddlc.top/", "https://gh-proxy.llyke.com/");
+
     private final Path pgVersionFile;
     private final Path zxBaseVersionFile;
     private final Path zxVersionFile;
@@ -68,7 +70,6 @@ public class FileDownloader {
     private final RestTemplate restTemplate;
 
     private String pgHtml = "";
-    private String zxHtml = "";
 
     public FileDownloader(TaskService taskService, RestTemplateBuilder builder) {
         this.taskService = taskService;
@@ -218,19 +219,23 @@ public class FileDownloader {
 
         if (!localVersion.equals(remoteVersion)) {
             log.debug("download zx diff {}", remoteVersion);
-            String url = "https://github.com/power721/ZX/releases/download/" + remoteVersion + "/zx" + remoteVersion + ".zip";
-            try {
-                downloadFile(url, zxZip);
+            String baseUrl = "https://github.com/power721/ZX/releases/download/" + remoteVersion + "/zx" + remoteVersion + ".zip";
+            List<String> urls = getZxUrls(baseUrl);
+            for (String url : urls) {
+                try {
+                    downloadFile(url, zxZip);
 
-                logFileInfo(zxZip);
+                    logFileInfo(zxZip);
 
-                deleteDirectory(zxWebDir);
+                    deleteDirectory(zxWebDir);
 
-                unzipFile(zxZip, zxWebDir);
+                    unzipFile(zxZip, zxWebDir);
 
-                saveVersion(zxVersionFile, remoteVersion);
-            } catch (Exception e) {
-                log.warn("download zx {} failed", url, e);
+                    saveVersion(zxVersionFile, remoteVersion);
+                    break;
+                } catch (Exception e) {
+                    log.warn("download zx {} failed", url, e);
+                }
             }
         }
 
@@ -240,7 +245,7 @@ public class FileDownloader {
         taskService.completeTask(task.getId(), "文件下载成功", remoteVersion);
     }
 
-    private String getPgVersion() {
+    public String getPgVersion() {
         String html = restTemplate.getForObject("https://github.com/fish2018/PG", String.class);
         int index = html.indexOf("PG包下载地址");
         if (index > 0) {
@@ -265,8 +270,7 @@ public class FileDownloader {
         return new ArrayList<>(urls);
     }
 
-
-    private String getZxVersion() {
+    public String getZxVersion() {
         String html = restTemplate.getForObject("https://github.com/power721/ZX/releases/latest", String.class);
         var m = ZX_PATTERN.matcher(html);
         if (m.find()) {
@@ -275,14 +279,12 @@ public class FileDownloader {
         return "";
     }
 
-    private List<String> getZxUrls() {
+    private List<String> getZxUrls(String url) {
         Set<String> urls = new HashSet<>();
-        String[] lines = zxHtml.split("\n");
-        for (String line : lines) {
-            if (line.contains("https://raw.githubusercontent.com/fish2018/ZX/main/真心")) {
-                urls.add(line);
-            }
+        for (String proxy : GITHUB_PROXY) {
+            urls.add(proxy + url);
         }
+        urls.add(url);
         return new ArrayList<>(urls);
     }
 
