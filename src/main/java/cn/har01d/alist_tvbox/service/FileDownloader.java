@@ -41,7 +41,7 @@ import java.util.zip.ZipEntry;
 @Slf4j
 @Service
 public class FileDownloader {
-    private static final Pattern PG_PATTERN = Pattern.compile("https://raw.githubusercontent.com/fish2018/PG/main/pg\\.(\\d+-\\d+)\\.zip");
+    private static final Pattern PG_PATTERN = Pattern.compile("/power721/pg/releases/tag/(\\d+-\\d+)");
     private static final Pattern ZX_PATTERN = Pattern.compile("/power721/ZX/releases/tag/(\\d+-\\d+)");
 
     private static final String BASE_URL = "http://d.har01d.cn/";
@@ -68,8 +68,6 @@ public class FileDownloader {
 
     private final TaskService taskService;
     private final RestTemplate restTemplate;
-
-    private String pgHtml = "";
 
     public FileDownloader(TaskService taskService, RestTemplateBuilder builder) {
         this.taskService = taskService;
@@ -181,7 +179,8 @@ public class FileDownloader {
 
         if (!localVersion.equals(remoteVersion)) {
             log.debug("download PG file {}", remoteVersion);
-            List<String> urls = getPgUrls();
+            String baseUrl = "https://github.com/power721/pg/releases/download/" + remoteVersion + "/pg." + remoteVersion + ".zip";
+            List<String> urls = getZxUrls(baseUrl);
             for (String url : urls) {
                 try {
                     downloadFile(url, pgZip);
@@ -246,28 +245,12 @@ public class FileDownloader {
     }
 
     public String getPgVersion() {
-        String html = restTemplate.getForObject("https://github.com/fish2018/PG", String.class);
-        int index = html.indexOf("PG包下载地址");
-        if (index > 0) {
-            html = html.substring(index);
-        }
-        pgHtml = html;
+        String html = restTemplate.getForObject("https://github.com/power721/PG/releases/latest", String.class);
         var m = PG_PATTERN.matcher(html);
         if (m.find()) {
             return m.group(1);
         }
         return "";
-    }
-
-    private List<String> getPgUrls() {
-        Set<String> urls = new HashSet<>();
-        String[] lines = pgHtml.split("\n");
-        for (String line : lines) {
-            if (line.contains("https://raw.githubusercontent.com/fish2018/PG/main/pg.")) {
-                urls.add(line);
-            }
-        }
-        return new ArrayList<>(urls);
     }
 
     public String getZxVersion() {
