@@ -28,7 +28,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Enumeration;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -180,7 +179,7 @@ public class FileDownloader {
         if (!localVersion.equals(remoteVersion)) {
             log.debug("download PG file {}", remoteVersion);
             String baseUrl = "https://github.com/power721/pg/releases/download/" + remoteVersion + "/pg." + remoteVersion + ".zip";
-            List<String> urls = getZxUrls(baseUrl);
+            List<String> urls = getDownloadUrls(baseUrl);
             for (String url : urls) {
                 try {
                     downloadFile(url, pgZip);
@@ -219,7 +218,7 @@ public class FileDownloader {
         if (!localVersion.equals(remoteVersion)) {
             log.debug("download zx diff {}", remoteVersion);
             String baseUrl = "https://github.com/power721/ZX/releases/download/" + remoteVersion + "/zx" + remoteVersion + ".zip";
-            List<String> urls = getZxUrls(baseUrl);
+            List<String> urls = getDownloadUrls(baseUrl);
             for (String url : urls) {
                 try {
                     downloadFile(url, zxZip);
@@ -262,13 +261,13 @@ public class FileDownloader {
         return "";
     }
 
-    private List<String> getZxUrls(String url) {
-        Set<String> urls = new HashSet<>();
+    private List<String> getDownloadUrls(String url) {
+        List<String> urls = new ArrayList<>();
         for (String proxy : GITHUB_PROXY) {
             urls.add(proxy + url);
         }
         urls.add(url);
-        return new ArrayList<>(urls);
+        return urls;
     }
 
     public void downloadMovie(Task task, String remoteVersion) throws IOException {
