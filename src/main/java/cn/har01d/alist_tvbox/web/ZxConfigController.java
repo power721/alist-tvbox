@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 @RestController
 @RequestMapping("/zx")
 public class ZxConfigController {
-    private static final Pattern ZX_PATTERN = Pattern.compile("https://raw.githubusercontent.com/fish2018/ZX/main/真心(\\d+)-增量包\\.zip");
+    private static final Pattern ZX_PATTERN = Pattern.compile("/power721/ZX/releases/tag/(\\d+-\\d+)");
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final DriverAccountRepository driverAccountRepository;
@@ -56,12 +56,8 @@ public class ZxConfigController {
         return Map.of("local", local, "remote", remote);
     }
 
-    private String getZxVersion() throws IOException {
-        String html = restTemplate.getForObject("https://github.com/fish2018/ZX", String.class);
-        int index = html.indexOf("真心本地包下载地址");
-        if (index > 0) {
-            html = html.substring(index);
-        }
+    private String getZxVersion() {
+        String html = restTemplate.getForObject("https://github.com/power721/ZX/releases/latest", String.class);
         var m = ZX_PATTERN.matcher(html);
         if (m.find()) {
             return m.group(1);

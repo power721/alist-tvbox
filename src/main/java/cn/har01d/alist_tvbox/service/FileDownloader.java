@@ -42,7 +42,7 @@ import java.util.zip.ZipEntry;
 @Service
 public class FileDownloader {
     private static final Pattern PG_PATTERN = Pattern.compile("https://raw.githubusercontent.com/fish2018/PG/main/pg\\.(\\d+-\\d+)\\.zip");
-    private static final Pattern ZX_PATTERN = Pattern.compile("https://raw.githubusercontent.com/fish2018/ZX/main/真心(\\d+)-增量包\\.zip");
+    private static final Pattern ZX_PATTERN = Pattern.compile("/power721/ZX/releases/tag/(\\d+-\\d+)");
 
     private static final String BASE_URL = "http://d.har01d.cn/";
     private static final String REMOTE_DIFF_ZIP_URL = BASE_URL + "diff.zip";
@@ -218,24 +218,20 @@ public class FileDownloader {
 
         if (!localVersion.equals(remoteVersion)) {
             log.debug("download zx diff {}", remoteVersion);
-            List<String> urls = getZxUrls();
-            for (String url : urls) {
-                try {
-                    downloadFile(url, zxZip);
+            String url = "https://github.com/power721/ZX/releases/download/" + remoteVersion + "/zx" + remoteVersion + ".zip";
+            try {
+                downloadFile(url, zxZip);
 
-                    logFileInfo(zxZip);
+                logFileInfo(zxZip);
 
-                    deleteDirectory(zxWebDir);
+                deleteDirectory(zxWebDir);
 
-                    unzipFile(zxZip, zxWebDir);
+                unzipFile(zxZip, zxWebDir);
 
-                    saveVersion(zxVersionFile, remoteVersion);
-                    break;
-                } catch (Exception e) {
-                    log.warn("download zx {} failed", url, e);
-                }
+                saveVersion(zxVersionFile, remoteVersion);
+            } catch (Exception e) {
+                log.warn("download zx {} failed", url, e);
             }
-
         }
 
         log.debug("sync custom files");
@@ -269,13 +265,9 @@ public class FileDownloader {
         return new ArrayList<>(urls);
     }
 
+
     private String getZxVersion() {
-        String html = restTemplate.getForObject("https://github.com/fish2018/ZX", String.class);
-        int index = html.indexOf("真心本地包下载地址");
-        if (index > 0) {
-            html = html.substring(index);
-        }
-        zxHtml = html;
+        String html = restTemplate.getForObject("https://github.com/power721/ZX/releases/latest", String.class);
         var m = ZX_PATTERN.matcher(html);
         if (m.find()) {
             return m.group(1);
