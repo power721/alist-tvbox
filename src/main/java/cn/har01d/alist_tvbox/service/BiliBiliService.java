@@ -1659,6 +1659,7 @@ public class BiliBiliService {
     }
 
     private List<Sub> getSubtitles(String aid, String cid) {
+        boolean allAi = true;
         List<Sub> list = new ArrayList<>();
         try {
             Map<String, Object> map = new HashMap<>();
@@ -1684,6 +1685,9 @@ public class BiliBiliService {
                 if (subtitle.getLan_doc().contains("中文") && (subtitle.getLan_doc().contains("自动生成") || subtitle.getLan_doc().contains("自动翻译"))) {
                     continue;
                 }
+                if (!subtitle.getLan().startsWith("ai-")) {
+                    allAi = false;
+                }
                 Sub sub = new Sub();
                 sub.setName(subtitle.getLan_doc());
                 sub.setLang(subtitle.getLan());
@@ -1693,6 +1697,14 @@ public class BiliBiliService {
             }
         } catch (Exception e) {
             log.warn("", e);
+        }
+        if (!list.isEmpty() && allAi) {
+            Sub sub = new Sub();
+            sub.setName("关闭");
+            sub.setLang("");
+            sub.setFormat("application/x-subrip");
+            sub.setUrl("");
+            list.add(0, sub);
         }
         log.debug("subtitles: {}", list);
         return list;

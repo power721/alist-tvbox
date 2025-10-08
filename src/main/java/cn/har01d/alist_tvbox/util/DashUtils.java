@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.dto.bili.Data;
 import cn.har01d.alist_tvbox.dto.bili.Media;
 import cn.har01d.alist_tvbox.dto.bili.Resp;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Base64;
@@ -46,9 +47,20 @@ public final class DashUtils {
 
     public static Map<String, Object> convert(Resp resp, List<String> qns, String client) {
         Data data = resp.getData() == null ? resp.getResult() : resp.getData();
-        Dash dash = data.getDash() == null ? data.getVideoInfo().getDash() : data.getDash();
+        Dash dash = data.getDash() == null ? (data.getVideoInfo() != null ? data.getVideoInfo().getDash() : null) : data.getDash();
         if (dash == null) {
-            String url = data.getDurls().isEmpty() ? data.getVideoInfo().getDurls().get(0).getDurl().get(0).getUrl() : data.getDurls().get(0).getDurl().get(0).getUrl();
+            String url = "";
+            if (!data.getDurl().isEmpty()) {
+                url = data.getDurl().get(0).getUrl();
+            } else if (!data.getDurls().isEmpty()) {
+                url = data.getDurls().get(0).getDurl().get(0).getUrl();
+            } else if (data.getVideoInfo() != null) {
+                if (!data.getVideoInfo().getDurl().isEmpty()) {
+                    url = data.getVideoInfo().getDurl().get(0).getUrl();
+                } else {
+                    url = data.getVideoInfo().getDurls().get(0).getDurl().get(0).getUrl();
+                }
+            }
             Map<String, Object> map = new HashMap<>();
             map.put("url", url);
             return map;
