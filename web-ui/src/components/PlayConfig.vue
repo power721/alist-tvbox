@@ -349,6 +349,7 @@ onMounted(() => {
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updatePanSouUrl">更新</el-button>
+          <a class="hint" target="_blank" href="https://github.com/fish2018/pansou">部署</a>
         </el-form-item>
         <el-form-item label="PanSou数据源" v-if="panSouUrl">
           <el-radio-group v-model="panSouSource" class="ml-4">
