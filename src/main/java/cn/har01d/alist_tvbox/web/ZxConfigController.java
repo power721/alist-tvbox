@@ -1,21 +1,17 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.service.FileDownloader;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,41 +25,31 @@ public class ZxConfigController {
     private final SubscriptionService subscriptionService;
     private final AccountRepository accountRepository;
     private final DriverAccountRepository driverAccountRepository;
+    private final FileDownloader fileDownloader;
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate;
-    private final AppProperties appProperties;
 
     public ZxConfigController(SubscriptionService subscriptionService,
                               AccountRepository accountRepository,
                               DriverAccountRepository driverAccountRepository,
-                              ObjectMapper objectMapper,
-                              RestTemplateBuilder builder,
-                              AppProperties appProperties
-    ) {
+                              FileDownloader fileDownloader,
+                              ObjectMapper objectMapper) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.driverAccountRepository = driverAccountRepository;
+        this.fileDownloader = fileDownloader;
         this.objectMapper = objectMapper;
-        this.restTemplate = builder.build();
-        this.appProperties = appProperties;
     }
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = restTemplate.getForObject("http://har01d.org/zx.version?system=" + appProperties.getSystemId(), String.class);
+        String remote = fileDownloader.getZxVersion();
         String local = "";
         Path path = Utils.getDataPath("zx_version.txt");
         if (Files.exists(path)) {
             local = Files.readString(path);
         }
 
-        String remote2 = restTemplate.getForObject("http://har01d.org/zx.base.version?system=" + appProperties.getSystemId(), String.class);
-        String local2 = "";
-        path = Utils.getDataPath("zx_base_version.txt");
-        if (Files.exists(path)) {
-            local2 = Files.readString(path);
-        }
-        return Map.of("local", local, "remote", remote, "local2", local2, "remote2", remote2);
+        return Map.of("local", local, "remote", remote);
     }
 
     @GetMapping("/config")

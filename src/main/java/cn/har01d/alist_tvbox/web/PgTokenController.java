@@ -1,21 +1,21 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
-import cn.har01d.alist_tvbox.entity.*;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
+import cn.har01d.alist_tvbox.entity.Setting;
+import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.service.FileDownloader;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.util.Constants;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -31,31 +31,28 @@ public class PgTokenController {
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final PikPakAccountRepository pikPakAccountRepository;
+    private final FileDownloader fileDownloader;
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate;
-    private final AppProperties appProperties;
 
     public PgTokenController(SubscriptionService subscriptionService,
                              AccountRepository accountRepository,
                              SettingRepository settingRepository,
                              DriverAccountRepository driverAccountRepository,
                              PikPakAccountRepository pikPakAccountRepository,
-                             ObjectMapper objectMapper,
-                             RestTemplateBuilder builder,
-                             AppProperties appProperties) {
+                             FileDownloader fileDownloader,
+                             ObjectMapper objectMapper) {
         this.subscriptionService = subscriptionService;
         this.accountRepository = accountRepository;
         this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.pikPakAccountRepository = pikPakAccountRepository;
+        this.fileDownloader = fileDownloader;
         this.objectMapper = objectMapper;
-        this.restTemplate = builder.build();
-        this.appProperties = appProperties;
     }
 
     @GetMapping("/version")
     public Object version() throws IOException {
-        String remote = restTemplate.getForObject("http://har01d.org/pg.version?system=" + appProperties.getSystemId(), String.class);
+        String remote = fileDownloader.getPgVersion();
         String local = "";
         Path path = Utils.getDataPath("pg_version.txt");
         if (Files.exists(path)) {
