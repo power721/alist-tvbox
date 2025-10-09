@@ -458,7 +458,7 @@ public class AccountService {
         body.put("grant_type", REFRESH_TOKEN);
         log.debug("body: {}", body);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
-        String url = settingRepository.findById(OPEN_TOKEN_URL).map(Setting::getValue).orElse("https://ali.har01d.org/access_token");
+        String url = settingRepository.findById(OPEN_TOKEN_URL).map(Setting::getValue).orElse("https://ycyup.cn/alipan/access_token");
         ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
         log.debug("get open token response: {}", response.getBody());
         return response.getBody();

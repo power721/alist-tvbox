@@ -220,7 +220,7 @@ public class DoubanService {
         }
 
         try {
-            String remote = restTemplate.getForObject("http://har01d.org/movie_version", String.class).trim();
+            String remote = restTemplate.getForObject("https://d.har01d.cn/movie_version", String.class).trim();
             versions.setMovie(remote);
             String local = settingRepository.findById(MOVIE_VERSION).map(Setting::getValue).orElse("0.0").trim();
             String cached = getCachedVersion();
@@ -307,13 +307,13 @@ public class DoubanService {
     public String getAppRemoteVersion() {
         if (environment.matchesProfiles("standalone")) {
             try {
-                return restTemplate.getForObject("http://d.har01d.cn/app.version.txt", String.class);
+                return restTemplate.getForObject("https://d.har01d.cn/app.version.txt", String.class);
             } catch (Exception e) {
                 log.warn("", e);
             }
         } else {
             try {
-                return restTemplate.getForObject("http://d.har01d.cn/app_version", String.class);
+                return restTemplate.getForObject("https://d.har01d.cn/app_version", String.class);
             } catch (Exception e) {
                 log.warn("", e);
             }
@@ -324,7 +324,7 @@ public class DoubanService {
     public String getAListRemoteVersion() {
         if (environment.matchesProfiles("standalone")) {
             try {
-                return restTemplate.getForObject("http://d.har01d.cn/alist.version.txt", String.class);
+                return restTemplate.getForObject("https://d.har01d.cn/alist.version.txt", String.class);
             } catch (Exception e) {
                 log.warn("", e);
             }

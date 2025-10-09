@@ -89,7 +89,7 @@ public class AListLocalService {
         setSetting("default_page_size", "50", "number");
         String url = settingRepository.findById(Constants.OPEN_TOKEN_URL).map(Setting::getValue).orElse("");
         if (url.isEmpty() || url.equals("https://api.xhofe.top/alist/ali_open/token")) {
-            url = "https://ali.har01d.org/access_token";
+            url = "https://ycyup.cn/alipan/access_token";
             settingRepository.save(new Setting(Constants.OPEN_TOKEN_URL, url));
         }
         setSetting(Constants.OPEN_TOKEN_URL, url, "string");

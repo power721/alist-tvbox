@@ -43,7 +43,7 @@ public class FileDownloader {
     private static final Pattern PG_PATTERN = Pattern.compile("/power721/pg/releases/tag/(\\d+-\\d+)");
     private static final Pattern ZX_PATTERN = Pattern.compile("/power721/ZX/releases/tag/(\\d+-\\d+)");
 
-    private static final String BASE_URL = "http://d.har01d.cn/";
+    private static final String BASE_URL = "https://d.har01d.cn/";
     private static final String REMOTE_DIFF_ZIP_URL = BASE_URL + "diff.zip";
 
     private static final Set<String> GITHUB_PROXY = Set.of("https://slink.ltd/", "https://cors.zme.ink/", "https://git.886.be/", "https://gitdl.cn/", "https://ghfast.top/", "https://ghproxy.net/", "https://github.moeyy.xyz/", "https://gh-proxy.com/", "https://ghproxy.cc/", "https://gh.llkk.cc/", "https://gh.ddlc.top/", "https://gh-proxy.llyke.com/");

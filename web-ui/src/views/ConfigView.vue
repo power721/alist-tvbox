@@ -380,7 +380,6 @@ const options = [
   {
     label: '作者自建',
     options: [
-      // {label: 'har01d', value: 'https://ali.har01d.org/access_token'},
       {label: 'ycyup', value: 'https://ycyup.cn/alipan/access_token'},
     ]
   },
