@@ -79,6 +79,7 @@ import telegram4j.tl.MessageEntityTextUrl;
 import telegram4j.tl.User;
 import telegram4j.tl.messages.ChannelMessages;
 import telegram4j.tl.messages.DialogsSlice;
+import telegram4j.tl.messages.ImmutableBaseDialogs;
 import telegram4j.tl.messages.Messages;
 import telegram4j.tl.request.messages.ImmutableGetDialogs;
 import telegram4j.tl.request.messages.ImmutableGetHistory;
@@ -512,7 +513,7 @@ public class TelegramService {
         if (client == null) {
             return List.of();
         }
-        DialogsSlice dialogs = (DialogsSlice) client.getServiceHolder().getChatService().getDialogs(ImmutableGetDialogs.of(0, 0, 0, InputPeerSelf.instance(), 100, 0)).block();
+        ImmutableBaseDialogs dialogs = (ImmutableBaseDialogs) client.getServiceHolder().getChatService().getDialogs(ImmutableGetDialogs.of(0, 0, 0, InputPeerSelf.instance(), 100, 0)).block();
         return dialogs.chats().stream().map(this::parseChat).filter(Objects::nonNull).toList();
     }
 
