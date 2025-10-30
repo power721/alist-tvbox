@@ -256,6 +256,7 @@
               <el-button-group>
                 <el-button @click="play" v-if="!playing">播放</el-button>
                 <el-button @click="pause" v-if="playing">暂停</el-button>
+                <el-button @click="replay">重播</el-button>
                 <el-button @click="close">退出</el-button>
                 <el-button @click="toggleMute">{{ isMuted ? '取消静音' : '静音' }}</el-button>
                 <el-button @click="toggleFullscreen">全屏</el-button>
@@ -1660,7 +1661,7 @@ const sort = () => {
 
 const getPlayUrl = () => {
   const index = currentVideoIndex.value
-  playItem.value = playlist.value[index]
+  playItem.value = Object.assign({}, playlist.value[index])
   document.title = playItem.value.title
   saveHistory()
 }
@@ -1899,6 +1900,14 @@ const formatTime = (seconds: number): string => {
     m.toString().padStart(2, '0'),
     s.toString().padStart(2, '0')
   ].join(':');
+}
+
+const replay = () => {
+  playItem.value.url = ''
+  setTimeout(() => {{
+    getPlayUrl()
+    startPlay()
+  }}, 500)
 }
 
 const playNextVideo = () => {
