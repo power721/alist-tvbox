@@ -17,7 +17,7 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'corretto'
           cache: 'maven'
       - name: Build with Maven
@@ -36,6 +36,6 @@ jobs:
           file: docker/Dockerfile-jre
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/java:17
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/java:21
           cache-from: type=gha
           cache-to: type=gha,mode=max
