@@ -28,7 +28,7 @@ jobs:
       - name: setup graalvm
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'graalvm' # See 'Options' for all available distributions
           native-image-musl: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
