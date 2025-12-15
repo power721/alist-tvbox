@@ -8,7 +8,7 @@ COPY atv-cli ./
 
 RUN go build
 
-FROM haroldli/java:17 AS corretto-jdk
+FROM haroldli/java:21 AS corretto-jdk
 
 FROM haroldli/alist:${TAG}
 
