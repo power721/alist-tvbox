@@ -624,7 +624,7 @@ public class EmbyService {
         } catch (Exception e) {
             log.warn("start playing", e);
         }
-        String playPre = emby.getDeviceName().contains("emby") ? "/emby" : "";
+        String playPre = emby.getUrl().contains("emos.lol") ? "/emby" : "";
         List<String> urls = new ArrayList<>();
         for (var source : media.getItems()) {
             urls.add(source.getName());
