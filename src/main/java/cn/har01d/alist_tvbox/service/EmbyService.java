@@ -296,7 +296,7 @@ public class EmbyService {
     }
 
     public MovieList detail(String tid) throws JsonProcessingException {
-        String[] parts = tid.split("-");
+        String[] parts = tid.split("-", 2);
         Emby emby = embyRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
         var info = getEmbyInfo(emby);
         HttpHeaders headers = setHeaders(emby, info);
@@ -334,9 +334,9 @@ public class EmbyService {
             if (!urls.isEmpty()) {
                 names.add(name);
                 playUrl.add(String.join("#", urls));
+                movie.setVod_play_from(String.join("$$$", names));
+                movie.setVod_play_url(String.join("$$$", playUrl));
             }
-            movie.setVod_play_from(String.join("$$$", names));
-            movie.setVod_play_url(String.join("$$$", playUrl));
         }
         result.getList().add(movie);
 
@@ -363,7 +363,7 @@ public class EmbyService {
     private List<EmbyItem> getAll(Emby emby, EmbyInfo info, String sid) {
         HttpHeaders headers = setHeaders(emby, info);
         HttpEntity<Object> entity = new HttpEntity<>(null, headers);
-        String url = emby.getUrl() + "/emby/Users/" + info.getUser().getId() + "/Items?ParentId=" + sid + "&Filters=IsNotFolder&Recursive=true&Limit=2000&Fields=Chapters,ProductionYear,PremiereDate&ExcludeLocationTypes=Virtual&EnableTotalRecordCount=false&CollapseBoxSetItems=false";
+        String url = emby.getUrl() + "/emby/shows/" + sid + "/Episodes";
         var items = restTemplate.exchange(url, HttpMethod.GET, entity, EmbyItems.class).getBody();
         return items.getItems();
     }
@@ -431,7 +431,7 @@ public class EmbyService {
         List<MovieDetail> list = new ArrayList<>();
 
         if (id.contains("-")) {
-            String[] parts = id.split("-");
+            String[] parts = id.split("-", 2);
             if (sort == null) {
                 sort = "DateCreated,SortName:Descending";
             }
@@ -444,7 +444,9 @@ public class EmbyService {
             if (parts.length == 2) {
                 var view = info.getViews().get(Integer.parseInt(parts[1]));
                 parentId = view.getId();
-                if (view.getCollectionType().equals("movies")) {
+                if (view.getCollectionType() == null) {
+                    type = "";
+                } else if (view.getCollectionType().equals("movies")) {
                     type = "Movie";
                 } else if (view.getCollectionType().equals("tvshows")) {
                     type = "Series";
@@ -571,7 +573,7 @@ public class EmbyService {
     }
 
     public Object play(String id) throws JsonProcessingException {
-        String[] parts = id.split("-");
+        String[] parts = id.split("-", 2);
         Emby emby = embyRepository.findById(Integer.parseInt(parts[0])).orElseThrow(() -> new NotFoundException("站点不存在"));
         var info = getEmbyInfo(emby);
         String ua = Constants.EMBY_USER_AGENT;
@@ -622,11 +624,11 @@ public class EmbyService {
         } catch (Exception e) {
             log.warn("start playing", e);
         }
-
+        String playPre = emby.getUrl().contains("emos.lol") ? "/emby" : "";
         List<String> urls = new ArrayList<>();
         for (var source : media.getItems()) {
             urls.add(source.getName());
-            urls.add(emby.getUrl() + source.getUrl());
+            urls.add(emby.getUrl() + playPre + source.getUrl());
         }
         Map<String, Object> result = new HashMap<>();
         result.put("url", urls);
@@ -668,7 +670,7 @@ public class EmbyService {
             log.debug("get Emby info: {} {} {} {}", emby.getId(), emby.getName(), emby.getUrl(), emby.getUsername());
             HttpHeaders headers = setHeaders(emby, null);
             HttpEntity<Object> entity = new HttpEntity<>(body, headers);
-            EmbyInfo info = restTemplate.exchange(emby.getUrl() + "/emby/Users/AuthenticateByName", HttpMethod.POST, entity, EmbyInfo.class).getBody();
+            EmbyInfo info = restTemplate.exchange(emby.getUrl() + "/emby/Users/AuthenticateByName?X-Emby-Client=" + emby.getClientName() + "&X-Emby-Device-Name=" + emby.getDeviceName() + "&X-Emby-Device-Id=" + emby.getDeviceId() + "&X-Emby-Client-Version=" + emby.getClientVersion(), HttpMethod.POST, entity, EmbyInfo.class).getBody();
             cache.put(emby.getId(), info);
 
             headers = setHeaders(emby, info);
