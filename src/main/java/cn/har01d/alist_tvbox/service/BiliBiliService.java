@@ -72,7 +72,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
 import okhttp3.OkHttpClient;
@@ -101,7 +100,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
@@ -135,8 +133,7 @@ public class BiliBiliService {
     private static final String PLAYER2 = "https://api.bilibili.com/x/player/wbi/v2";
     private static final String TOKEN_API = "https://api.bilibili.com/x/player/playurl/token?%said=%d&cid=%d";
     private static final String POPULAR_API = "https://api.bilibili.com/x/web-interface/popular?ps=30&pn=";
-    private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/search/type?search_type=%s&page_size=50&keyword=%s&order=%s&duration=%s&page=%d";
-    private static final String SEARCH_API2 = "https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=%s&page_size=50&keyword=%s&order=%s&duration=%s&page=%d&tids=0";
+    private static final String SEARCH_API = "https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=%s&page_size=50&keyword=%s&order=%s&duration=%s&page=%d&tids=0";
     private static final String NEW_SEARCH_API = "https://api.bilibili.com/x/space/wbi/arc/search";
     private static final String TOP_FEED_API = "https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd";
     private static final String FEED_API = "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all?timezone_offset=-480&type=video&offset=%s&page=%d&features=itemOpusStyle";
@@ -1502,7 +1499,7 @@ public class BiliBiliService {
         int end = start + size;
 
         for (int i = start; i < end; i++) {
-            String url = String.format(SEARCH_API2, "video", wd, getSort(type), "0", i + 1);
+            String url = String.format(SEARCH_API, "video", wd, getSort(type), "0", i + 1);
             ResponseEntity<BiliBiliSearchResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchResponse.class);
             List<BiliBiliSearchResult.Video> videos = response.getBody().getData().getResult();
             list.addAll(videos);
@@ -2246,7 +2243,7 @@ public class BiliBiliService {
 
         int pages = 1;
         if (pg > 0) {
-            String url = String.format(SEARCH_API2, "video", wd, sort, duration, pg);
+            String url = String.format(SEARCH_API, "video", wd, sort, duration, pg);
             log.debug("search: {}", url);
             ResponseEntity<BiliBiliSearchResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchResponse.class);
             List<BiliBiliSearchResult.Video> videos = response.getBody().getData().getResult();
@@ -2273,7 +2270,7 @@ public class BiliBiliService {
             result.getList().addAll(searchPGC(entity, wd, sort));
             result.getList().addAll(searchBangumi(entity, wd, sort));
             for (int i = 1; i <= 2; i++) {
-                String url = String.format(SEARCH_API2, "video", wd, sort, duration, i);
+                String url = String.format(SEARCH_API, "video", wd, sort, duration, i);
                 log.debug("{}", url);
                 ResponseEntity<BiliBiliSearchResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchResponse.class);
                 List<BiliBiliSearchResult.Video> videos = response.getBody().getData().getResult();
@@ -2325,7 +2322,7 @@ public class BiliBiliService {
     }
 
     private List<MovieDetail> searchPGC(HttpEntity<Void> entity, String wd, String sort) {
-        String url = String.format(SEARCH_API2, "media_ft", wd, sort, "", 1);
+        String url = String.format(SEARCH_API, "media_ft", wd, sort, "", 1);
         log.debug("searchPGC: {}", url);
         ResponseEntity<BiliBiliSearchPgcResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchPgcResponse.class);
         return response.getBody().getData().getResult().stream().map(this::getSearchMovieDetail).collect(Collectors.toList());
@@ -2333,7 +2330,7 @@ public class BiliBiliService {
 
     private List<MovieDetail> searchBangumi(HttpEntity<Void> entity, String wd, String sort) {
         try {
-            String url = String.format(SEARCH_API2, "media_bangumi", wd, sort, "", 1);
+            String url = String.format(SEARCH_API, "media_bangumi", wd, sort, "", 1);
             log.debug("searchBangumi: {}", url);
             ResponseEntity<BiliBiliSearchPgcResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, BiliBiliSearchPgcResponse.class);
             return response.getBody().getData().getResult().stream().map(this::getSearchMovieDetail).collect(Collectors.toList());
