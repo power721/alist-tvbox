@@ -2,7 +2,7 @@ FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 
-ENV MEM_OPT="-Xmx512M" ALIST_PORT=5344 INSTALL=new
+ENV MEM_OPT="-Xmx1024M" ALIST_PORT=5344 INSTALL=new
 
 COPY config/alist.json /
 
