@@ -2,7 +2,7 @@ FROM haroldli/alist-base-new:hostmode
 
 LABEL MAINTAINER="Har01d"
 
-ENV MEM_OPT="-Xmx512M"
+ENV MEM_OPT="-Xmx1024M"
 
 COPY config/alist-host.json /alist.json
 
