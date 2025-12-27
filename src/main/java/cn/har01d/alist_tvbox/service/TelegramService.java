@@ -1225,7 +1225,7 @@ public class TelegramService {
         if (web) {
             channels = channels.stream().filter(TelegramChannel::isWebAccess).toList();
         } else {
-            if (StringUtils.isNotBlank(keyword) && StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
+            if (StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
                 List<String> ids = channels.stream()
                         .map(TelegramChannel::getUsername)
                         .toList();

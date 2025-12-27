@@ -38,17 +38,19 @@ public class RemoteSearchController {
     }
 
     @GetMapping("/pansou")
-    public Object pansou(String id, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
-        return pansou("", id, wd, pg);
+    public Object pansou(String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
+        return pansou("", id, t, wd, pg);
     }
 
     @GetMapping("/pansou/{token}")
-    public Object pansou(@PathVariable String token, String id, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
+    public Object pansou(@PathVariable String token, String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
             return remoteSearchService.detail(id);
         } else if (StringUtils.isNotBlank(wd)) {
             return remoteSearchService.pansou(wd);
+        } else if ("0".equals(t)) {
+            return remoteSearchService.pansou("");
         }
         return null;
     }
