@@ -21,7 +21,7 @@
     </p>
     <p>
       Telegram：
-      <a href="https://t.me/alist_tvbox_group" target="_blank">https://t.me/alist_tvbox_group</a>
+      <a href="https://t.me/+Vlgs24ZZxiM1Yzc1" target="_blank">https://t.me/alist_tvbox_group</a>
     </p>
     <p>
       手动部署Docker版：
