@@ -594,7 +594,13 @@ public class SubscriptionService {
             log.warn("", e);
         }
 
-        config.put("headers", List.of(buildHeader("img\\d+.doubanio.com")));
+        if (config.containsKey("headers")) {
+            List<Map<String, Object>> headers = new ArrayList<>((List<Map<String, Object>>) config.get("headers"));
+            headers.add(buildHeader("img\\d+.doubanio.com"));
+            config.put("headers", headers);
+        } else {
+            config.put("headers", List.of(buildHeader("img\\d+.doubanio.com")));
+        }
 
 //        addRules(config);
 
