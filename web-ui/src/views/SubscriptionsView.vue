@@ -3,7 +3,6 @@
     <h1>订阅列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
-      <el-button @click="handleLogin">登陆电报</el-button>
       <el-button @click="showScan">同步影视</el-button>
       <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
