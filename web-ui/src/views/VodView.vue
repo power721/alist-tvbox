@@ -1688,7 +1688,7 @@ const buildM3u8Url = (start: number) => {
 }
 
 const openInVLC = () => {
-  const url = playItem.value.url + '?name=' + playItem.value.title
+  const url = playItem.value.url + '?name=' + encodeURIComponent(playItem.value.title)
   openUrlInVLC(url)
 }
 

@@ -775,11 +775,11 @@ public class TvBoxService {
             }
 
             list = list.stream().distinct().limit(appProperties.getMaxSearchResult()).toList();
-            for (MovieDetail movie : list) {
-                if (movie.getVod_pic() != null && movie.getVod_pic().contains(".doubanio.com/")) {
-                    fixCover(movie);
-                }
-            }
+//            for (MovieDetail movie : list) {
+//                if (movie.getVod_pic() != null && movie.getVod_pic().contains(".doubanio.com/")) {
+//                    fixCover(movie);
+//                }
+//            }
         }
 
         log.info("search \"{}\" result: {}", keyword, list.size());

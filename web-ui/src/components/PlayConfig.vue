@@ -331,13 +331,6 @@ onMounted(() => {
   <el-tabs v-model="activeName" class="demo-tabs">
     <el-tab-pane label="基本配置" name="basic">
       <el-form label-width="140">
-        <el-form-item label="远程搜索地址">
-          <el-input v-model="tgSearch" placeholder="http://IP:7856"/>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="updateTgSearch">更新</el-button>
-          <a class="hint" target="_blank" href="https://t.me/alist_tvbox/711">部署</a>
-        </el-form-item>
         <el-form-item label="搜索超时时间">
           <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒
         </el-form-item>
