@@ -19,7 +19,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Service
 public class HuyaParseService {
     private static final String WUP_URL = "https://wup.huya.com";
-    public static final String HY_SDK_UA = "HYSDK(Windows, 30000002)_APP(pc_exe&7010100&official)_SDK(trans&2.27.0.5317)";
+    public static final String HY_SDK_UA = "HYSDK(Windows, 30000002)_APP(pc_exe&7060000&official)_SDK(trans&2.32.3.5646)";
 
     private final RestTemplate restTemplate;
 
