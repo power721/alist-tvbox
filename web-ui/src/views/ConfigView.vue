@@ -279,6 +279,15 @@
               @change="updateAListDebug"
             />
           </el-form-item>
+          <el-form-item label="夸克分享使用TV">
+            <el-switch
+              v-model="ussQuarkTv"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateUssQuarkTv"
+            />
+          </el-form-item>
         </div>
         <div class="el-row">
           <el-form-item label="网盘分享延迟校验">
@@ -405,6 +414,7 @@ const debugLog = ref(false)
 const aListDebug = ref(false)
 const aliTo115 = ref(false)
 const driverRoundRobin = ref(false)
+const ussQuarkTv = ref(false)
 const aliLazyLoad = ref(false)
 const cleanInvalidShares = ref(false)
 const enableHttps = ref(false)
@@ -576,6 +586,12 @@ const updateDriverRoundRobin = () => {
   })
 }
 
+const updateUssQuarkTv = () => {
+  axios.post('/api/settings', {name: 'use_quark_tv', value: ussQuarkTv.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateAliLazyLoad = () => {
   axios.post('/api/settings', {name: 'ali_lazy_load', value: aliLazyLoad.value}).then(() => {
     ElMessage.success('更新成功，重启生效')
@@ -654,6 +670,7 @@ onMounted(() => {
     aListDebug.value = data.alist_debug === 'true'
     aliTo115.value = data.ali_to_115 === 'true'
     driverRoundRobin.value = data.driver_round_robin === 'true'
+    ussQuarkTv.value = data.use_quark_tv === 'true'
     cleanInvalidShares.value = data.clean_invalid_shares === 'true'
     aliLazyLoad.value = data.ali_lazy_load !== 'false'
     mixSiteSource.value = data.mix_site_source !== 'false'

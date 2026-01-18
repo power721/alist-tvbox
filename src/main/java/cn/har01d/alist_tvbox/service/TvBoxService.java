@@ -2,35 +2,11 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
-import cn.har01d.alist_tvbox.dto.FileItem;
-import cn.har01d.alist_tvbox.dto.FilesList;
-import cn.har01d.alist_tvbox.dto.ShareLink;
-import cn.har01d.alist_tvbox.dto.Video;
-import cn.har01d.alist_tvbox.dto.Subtitle;
-import cn.har01d.alist_tvbox.entity.AListAlias;
-import cn.har01d.alist_tvbox.entity.AListAliasRepository;
-import cn.har01d.alist_tvbox.entity.Account;
-import cn.har01d.alist_tvbox.entity.AccountRepository;
-import cn.har01d.alist_tvbox.entity.Device;
-import cn.har01d.alist_tvbox.entity.DeviceRepository;
-import cn.har01d.alist_tvbox.entity.DriverAccount;
-import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
-import cn.har01d.alist_tvbox.entity.Meta;
-import cn.har01d.alist_tvbox.entity.MetaRepository;
-import cn.har01d.alist_tvbox.entity.Movie;
-import cn.har01d.alist_tvbox.entity.PikPakAccountRepository;
-import cn.har01d.alist_tvbox.entity.Share;
-import cn.har01d.alist_tvbox.entity.ShareRepository;
-import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.entity.Tmdb;
+import cn.har01d.alist_tvbox.dto.*;
+import cn.har01d.alist_tvbox.entity.*;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
-import cn.har01d.alist_tvbox.model.FileNameInfo;
-import cn.har01d.alist_tvbox.model.Filter;
-import cn.har01d.alist_tvbox.model.FilterValue;
-import cn.har01d.alist_tvbox.model.FsDetail;
-import cn.har01d.alist_tvbox.model.FsInfo;
-import cn.har01d.alist_tvbox.model.FsResponse;
+import cn.har01d.alist_tvbox.model.*;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
@@ -54,11 +30,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
@@ -67,25 +39,13 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
-import java.net.URL;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -93,10 +53,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.ALIST_PIC;
-import static cn.har01d.alist_tvbox.util.Constants.FILE;
-import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
-import static cn.har01d.alist_tvbox.util.Constants.PLAYLIST;
+import static cn.har01d.alist_tvbox.util.Constants.*;
 
 @Slf4j
 @Service
@@ -1131,7 +1088,7 @@ public class TvBoxService {
         if ("gui".equals(ac)) {
             return fsInfo.getType() == 1 || fsInfo.getType() == 2;
         }
-        if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3|| (fsInfo.getType() == 0 && fsInfo.getName().endsWith(".strm"))) {
+        if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3 || (fsInfo.getType() == 0 && fsInfo.getName().endsWith(".strm"))) {
             return true;
         }
         if ("web".equals(ac)) {
@@ -1458,9 +1415,8 @@ public class TvBoxService {
     }
 
     private DriverAccount getDriverAccount(String url, DriverType type) {
-        int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
-        if (index > 0) {
-            int id = Integer.parseInt(url.substring(index + Constants.STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
+        int id = getAccountId(url);
+        if (id > 0) {
             return driverAccountRepository.findById(id).orElse(null);
         } else {
             return driverAccountRepository.findByTypeAndMasterTrue(type).orElse(null);
@@ -1480,21 +1436,33 @@ public class TvBoxService {
     }
 
     private DriverAccount getDriverAccount(String url) {
-        int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
-        if (index > 0) {
-            int id = Integer.parseInt(url.substring(index + Constants.STORAGE_ID_FRAGMENT.length())) - DriverAccountService.IDX;
+        int id = getAccountId(url);
+        if (id > 0) {
             return driverAccountRepository.findById(id).orElse(null);
         }
         return null;
     }
 
     private Account getAliAccount(String url) {
-        int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
-        if (index > 0) {
-            int id = (Integer.parseInt(url.substring(index + Constants.STORAGE_ID_FRAGMENT.length())) - AccountService.IDX) / 2 + 1;
+        int id = getAccountId(url);
+        if (id > 0) {
             return accountRepository.findById(id).orElse(null);
         }
         return null;
+    }
+
+    private int getAccountId(String url) {
+        int index = url.indexOf(Constants.STORAGE_ID_FRAGMENT);
+        if (index > 0) {
+            int start = index + Constants.STORAGE_ID_FRAGMENT.length();
+            int end = url.indexOf("#", start);
+            if (end == -1) {
+                end = url.length();
+            }
+            int id = Integer.parseInt(url.substring(start, end)) - DriverAccountService.IDX;
+            return id;
+        }
+        return 0;
     }
 
     public Map<String, Object> getPlayUrl(Integer siteId, Integer id, Integer index, boolean getSub, String client) {
@@ -2418,13 +2386,13 @@ public class TvBoxService {
         }
 
         try {
-            if (new URL(url).getPath().endsWith(".strm")){
+            if (new URL(url).getPath().endsWith(".strm")) {
                 Request request = new Request.Builder().url(url).get().build();
-                try (Response response = okHttpClient.newCall(request).execute(); ResponseBody body = response.body()){
+                try (Response response = okHttpClient.newCall(request).execute(); ResponseBody body = response.body()) {
                     url = body != null ? body.string() : url;
                 }
             }
-        }catch (Exception ignored){
+        } catch (Exception ignored) {
         }
 
         return url;

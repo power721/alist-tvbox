@@ -615,8 +615,8 @@ public class DriverAccountService {
         return switch (account.getType()) {
             case BAIDU -> getBaiduUserInfo(account);
             case PAN115 -> get115UserInfo(account);
-            case QUARK -> getQuarkUserInfo(account);
-            case UC -> getUcUserInfo(account);
+            case QUARK, QUARK_TV -> getQuarkUserInfo(account);
+            case UC,UC_TV -> getUcUserInfo(account);
             case CLOUD189 -> get189UserInfo(account);
             default -> null;
         };

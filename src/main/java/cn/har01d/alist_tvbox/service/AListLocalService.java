@@ -108,6 +108,8 @@ public class AListLocalService {
         setSetting("ali_to_115", aliTo115, "bool");
         String roundRobin = settingRepository.findById("driver_round_robin").map(Setting::getValue).orElse("false");
         setSetting("driver_round_robin", roundRobin, "bool");
+        String ussQuarkTv = settingRepository.findById("use_quark_tv").map(Setting::getValue).orElse("false");
+        setSetting("use_quark_tv", ussQuarkTv, "bool");
         String lazy = settingRepository.findById("ali_lazy_load").map(Setting::getValue).orElse("true");
         setSetting("ali_lazy_load", lazy, "bool");
     }
