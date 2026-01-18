@@ -1411,7 +1411,9 @@ public class TvBoxService {
 
         result.put("url", url);
 
-        if (isUseProxy(url)) {
+        if (url.contains("#proxy=0")) {
+            // do nothing
+        } else if (isUseProxy(url)) {
             url = buildProxyUrl(site, name, path);
             result.put("url", url);
         } else if (fsDetail.getProvider().equals("QuarkShare") || fsDetail.getProvider().equals("Quark")) {
