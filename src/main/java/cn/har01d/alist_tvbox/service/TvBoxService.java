@@ -1373,11 +1373,11 @@ public class TvBoxService {
             result.put("url", url);
         } else if (fsDetail.getProvider().equals("QuarkShare") || fsDetail.getProvider().equals("Quark")) {
             var account = getDriverAccount(url, DriverType.QUARK);
-            String cookie = account.getCookie();
+            String cookie = account == null ? "": account.getCookie();
             result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.QUARK_USER_AGENT, "Referer", "https://pan.quark.cn"));
         } else if (fsDetail.getProvider().equals("UCShare") || fsDetail.getProvider().equals("UC")) {
             var account = getDriverAccount(url, DriverType.UC);
-            String cookie = account.getCookie();
+            String cookie = account == null ? "": account.getCookie();
             result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.UC_USER_AGENT, "Referer", "https://drive.uc.cn"));
         } else if (url.contains("xunlei.com")) {
             result.put("header", Map.of("User-Agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)"));
