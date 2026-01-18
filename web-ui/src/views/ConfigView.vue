@@ -279,7 +279,7 @@
               @change="updateAListDebug"
             />
           </el-form-item>
-          <el-form-item label="夸克分享使用TV">
+          <el-form-item label="夸克UC分享使用TV帐号">
             <el-switch
               v-model="ussQuarkTv"
               inline-prompt
