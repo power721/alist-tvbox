@@ -1,11 +1,5 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.util.Utils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Service;
-
 import cn.har01d.alist_tvbox.dto.AListAliasDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
@@ -13,6 +7,10 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.storage.Alias;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service

@@ -22,7 +22,6 @@ import cn.har01d.alist_tvbox.storage.Storage;
 import cn.har01d.alist_tvbox.storage.ThunderBrowser;
 import cn.har01d.alist_tvbox.storage.UC;
 import cn.har01d.alist_tvbox.storage.UCTV;
-import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -615,8 +614,8 @@ public class DriverAccountService {
         return switch (account.getType()) {
             case BAIDU -> getBaiduUserInfo(account);
             case PAN115 -> get115UserInfo(account);
-            case QUARK -> getQuarkUserInfo(account);
-            case UC -> getUcUserInfo(account);
+            case QUARK, QUARK_TV -> getQuarkUserInfo(account);
+            case UC, UC_TV -> getUcUserInfo(account);
             case CLOUD189 -> get189UserInfo(account);
             default -> null;
         };

@@ -169,6 +169,10 @@ public class ProxyService {
                 log.debug("302 {} {}", driver, url);
                 response.sendRedirect(url);
                 return;
+            } else if (url.contains("#proxy=0")) {
+                log.debug("302 {} {}", driver, url);
+                response.sendRedirect(url);
+                return;
             } else if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive")
                     || url.contains("baidu.com") || url.contains("quark.cn") || url.contains("uc.cn")
                     || url.startsWith("http://localhost")) {

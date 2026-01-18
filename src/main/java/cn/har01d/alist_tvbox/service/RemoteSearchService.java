@@ -12,6 +12,7 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -29,8 +30,6 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 @Slf4j
 @Service

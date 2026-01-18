@@ -96,13 +96,13 @@
         </el-form-item>
         <el-form-item label="Cookie" required v-if="supportCookie(form.type)">
           <el-input v-model="form.cookie" @change="getInfo" type="textarea" :rows="5"/>
-          <span v-if="form.type=='QUARK'">
+          <span v-if="form.type=='QUARK'||form.type=='QUARK_TV'">
             <a href="https://pan.quark.cn/" target="_blank">夸克网盘</a>
             <span class="hint"></span>
             <el-button type="primary" @click="showQrCode">扫码获取</el-button>
           </span>
 
-          <span v-if="form.type=='UC'">
+          <span v-if="form.type=='UC'||form.type=='UC_TV'">
             <a href="https://drive.uc.cn/" target="_blank">UC网盘</a>
             <span class="hint"></span>
             <el-button type="primary" @click="showQrCode">扫码获取</el-button>
@@ -406,7 +406,9 @@ const tvLinkMethod = [
 const supportCookie = (type: string) => {
   return type == 'PAN115'
     || type == 'QUARK'
+    || type == 'QUARK_TV'
     || type == 'UC'
+    || type == 'UC_TV'
     || type == 'BAIDU'
     || type == 'CLOUD189'
 }

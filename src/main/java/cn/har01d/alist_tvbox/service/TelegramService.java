@@ -78,7 +78,6 @@ import telegram4j.tl.InputUserSelf;
 import telegram4j.tl.MessageEntityTextUrl;
 import telegram4j.tl.User;
 import telegram4j.tl.messages.ChannelMessages;
-import telegram4j.tl.messages.DialogsSlice;
 import telegram4j.tl.messages.ImmutableBaseDialogs;
 import telegram4j.tl.messages.Messages;
 import telegram4j.tl.request.messages.ImmutableGetDialogs;
