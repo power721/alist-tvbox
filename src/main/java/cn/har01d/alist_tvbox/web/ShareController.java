@@ -119,7 +119,7 @@ public class ShareController {
     }
 
     @PostMapping("/api/import-share-file")
-    public int importShares(@RequestParam("file") MultipartFile file, int type) throws IOException {
+    public int importShares(@RequestParam("file") MultipartFile file, int type, int delay) throws IOException {
         if (file.isEmpty()) {
             throw new BadRequestException();
         }
@@ -128,6 +128,7 @@ public class ShareController {
         SharesDto sharesDto = new SharesDto();
         sharesDto.setType(type);
         sharesDto.setContent(content);
+        sharesDto.setDelay(delay);
         return shareService.importShares(sharesDto);
     }
 

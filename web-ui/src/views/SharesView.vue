@@ -252,6 +252,10 @@
           <el-radio :label="10" size="large">百度分享</el-radio>
         </el-radio-group>
       </el-form-item>
+      <el-form-item label="导入延迟(毫秒)">
+        <el-input-number v-model="sharesDto.delay" :min="0" :step="100" controls-position="right" style="width: 200px;"/>
+        <span class="hint">每个分享导入后等待的毫秒数（0表示无延迟）</span>
+      </el-form-item>
       <el-form-item label="分享内容">
         <el-input v-model="sharesDto.content" type="textarea" :rows="15"
                   :placeholder="'多行分享\n格式1：挂载路径 分享ID 目录ID 提取码\n格式2：挂载路径 分享链接\n格式3：挂载路径 分享链接 root 提取码'"/>
@@ -267,7 +271,7 @@
           :on-success="onUploadSuccess"
           :on-error="onUploadError"
           :headers="{'authorization': token}"
-          :data="{type: sharesDto.type}"
+          :data="{type: sharesDto.type, delay: sharesDto.delay}"
           :auto-upload="false"
         >
           <template #trigger>
@@ -406,7 +410,8 @@ const form = ref({
 })
 const sharesDto = ref({
   content: '',
-  type: -1
+  type: -1,
+  delay: 0
 })
 
 const handleAdd = () => {

@@ -426,6 +426,11 @@ public class ShareService {
                     }
                     create(share);
                     count++;
+
+                    // Sleep after each import if delay is specified
+                    if (dto.getDelay() > 0) {
+                        Thread.sleep(dto.getDelay());
+                    }
                 } catch (Exception e) {
                     log.warn("import share failed", e);
                 }
