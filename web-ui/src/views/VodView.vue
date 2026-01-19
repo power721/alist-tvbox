@@ -265,6 +265,39 @@
                 <el-button @click="forward">前进</el-button>
                 <el-button @click="playPrevVideo" v-if="playlist.length>1">上集</el-button>
                 <el-button @click="playNextVideo" v-if="playlist.length>1">下集</el-button>
+                <el-popover placement="top" :width="400" trigger="click" v-if="playlist.length>1">
+                  <template #reference>
+                    <el-button>选集 {{ currentVideoIndex + 1 }}/{{ playlist.length }}</el-button>
+                  </template>
+                  <template #default>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                      <div style="margin-bottom: 10px;">
+                        <span style="margin-right: 10px;">排序:</span>
+                        <el-select v-model="order" @change="sort" placeholder="排序" style="width: 130px;">
+                          <el-option
+                            v-for="item in sortOrders"
+                            :key="item.value"
+                            :label="item.label"
+                            :value="item.value"
+                          />
+                        </el-select>
+                      </div>
+                      <el-scrollbar height="300px">
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                          <el-button
+                            v-for="(_, index) in playlist"
+                            :key="index"
+                            :type="currentVideoIndex === index ? 'primary' : 'default'"
+                            :size="currentVideoIndex === index ? 'default' : 'small'"
+                            @click="playVideo(index)"
+                          >
+                            {{ index + 1 }}
+                          </el-button>
+                        </div>
+                      </el-scrollbar>
+                    </div>
+                  </template>
+                </el-popover>
                 <el-popover placement="bottom" width="400px" v-if="playlist.length>1">
                   <template #reference>
                     <el-button>片头<span v-if="skipStart">★</span></el-button>
@@ -1613,6 +1646,9 @@ const updateMuteState = () => {
 }
 
 const sort = () => {
+  // 保存当前播放视频的URL作为标识
+  const currentUrl = playItem.value.url
+
   switch (order.value) {
     case "index":
       playlist.value.sort((a, b) => a.index - b.index)
@@ -1662,7 +1698,9 @@ const sort = () => {
       })
       break
   }
-  currentVideoIndex.value = playlist.value.findIndex(e => e === playItem.value)
+
+  // 根据URL重新找到当前视频的索引
+  currentVideoIndex.value = playlist.value.findIndex(e => e.url === currentUrl)
 }
 
 const getPlayUrl = () => {
