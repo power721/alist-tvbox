@@ -31,6 +31,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -404,6 +405,8 @@ public class TmdbService {
         return new HashSet<>();
     }
 
+    private static final Pattern TMDBID = Pattern.compile("\\{tmdbid-(\\d+)}");
+
     private Tmdb handleIndexLine(int id, String line, String type, boolean force, Set<String> failed) {
         String[] parts = line.split("#");
         String path = parts[0];
@@ -418,6 +421,7 @@ public class TmdbService {
         }
 
         Integer year = getYearFromPath(path);
+        log.debug("{} {} {}", type, year, path);
         String name = "";
         Tmdb movie = null;
         if (parts.length == 2) {
@@ -434,6 +438,24 @@ public class TmdbService {
                 }
                 if (movie != null) {
                     name = movie.getName();
+                }
+            }
+        } else {
+            Matcher matcher = TMDBID.matcher(line);
+            if (matcher.find()) {
+                try {
+                    movie = getById(type, Integer.parseInt(matcher.group(1)));
+                } catch (Exception e) {
+                    log.warn("{} {}", id + 1, path, e);
+                }
+                if (movie != null) {
+                    if (year != null && year.equals(movie.getYear())) {
+                        name = movie.getName();
+                    } else if (line.contains(movie.getName())) {
+                        name = movie.getName();
+                    } else {
+                        movie = null;
+                    }
                 }
             }
         }
@@ -749,7 +771,14 @@ public class TmdbService {
     }
 
     public Tmdb search(String type, String name, String year, boolean match) {
-        String url = "https://api.themoviedb.org/3/search/" + type + "?query=" + name + "&api_key=" + apiKey + "&language=zh-CN&year=" + year;
+        String url = UriComponentsBuilder.fromUriString("https://api.themoviedb.org/3/search/" + type)
+                .queryParam("query", name)
+                .queryParam("api_key", apiKey)
+                .queryParam("language", "zh-CN")
+                .queryParam("year", year)
+                .build()
+                .encode()
+                .toUriString();
         long now = System.currentTimeMillis();
         if (!log.isDebugEnabled() && TMDB_API_KEY.equals(apiKey) && now - lastRequestTime < rateLimit) {
             sleep(lastRequestTime + rateLimit - now);
@@ -780,7 +809,13 @@ public class TmdbService {
     }
 
     public Tmdb getDetails(String type, Integer id) {
-        String url = "https://api.themoviedb.org/3/" + type + "/" + id + "?language=zh-CN&append_to_response=credits&api_key=" + apiKey;
+        String url = UriComponentsBuilder.fromUriString("https://api.themoviedb.org/3/" + type + "/" + id)
+                .queryParam("language", "zh-CN")
+                .queryParam("append_to_response", "credits")
+                .queryParam("api_key", apiKey)
+                .build()
+                .encode()
+                .toUriString();
         long now = System.currentTimeMillis();
         if (!log.isDebugEnabled() && TMDB_API_KEY.equals(apiKey) && now - lastRequestTime < rateLimit) {
             sleep(lastRequestTime + rateLimit - now);
