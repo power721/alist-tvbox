@@ -180,7 +180,7 @@
       </template>
       <div class="video-container">
         <el-row>
-          <el-col :span="18">
+          <el-col :span="isWideMode ? 24 : 18">
             <video
               ref="videoPlayer"
               :src="playItem.url"
@@ -193,7 +193,7 @@
               controls>
             </video>
           </el-col>
-          <el-col :span="5">
+          <el-col :span="5" v-show="!isWideMode">
             <div v-if="playlist.length>1">
               <div style="margin-left: 30px; margin-bottom: 10px;">
                 <el-link @click="openListInVLC(currentVideoIndex)">第{{
@@ -251,7 +251,7 @@
         </el-row>
 
         <el-row>
-          <el-col :span="18">
+          <el-col :span="isWideMode ? 24 : 18">
             <div>
               <el-button-group>
                 <el-button @click="play" v-if="!playing">播放</el-button>
@@ -259,6 +259,7 @@
                 <el-button @click="replay">重播</el-button>
                 <el-button @click="close">退出</el-button>
                 <el-button @click="toggleMute">{{ isMuted ? '取消静音' : '静音' }}</el-button>
+                <el-button @click="toggleWideMode">宽屏</el-button>
                 <el-button @click="toggleFullscreen">全屏</el-button>
                 <el-button @click="backward">后退</el-button>
                 <el-button @click="forward">前进</el-button>
@@ -672,6 +673,7 @@ const loading = ref(false)
 const playing = ref(false)
 const isMuted = ref(false)
 const isFullscreen = ref(false)
+const isWideMode = ref(false)
 const dialogVisible = ref(false)
 const imageVisible = ref(false)
 const formVisible = ref(false)
@@ -1489,6 +1491,10 @@ const toggleFullscreen = () => {
       exitFullscreen();
     }
   }
+}
+
+const toggleWideMode = () => {
+  isWideMode.value = !isWideMode.value
 }
 
 const enterFullscreen = (element) => {
