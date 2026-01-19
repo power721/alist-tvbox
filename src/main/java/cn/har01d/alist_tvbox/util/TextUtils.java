@@ -94,6 +94,7 @@ public class TextUtils {
                 .replaceAll("1-\\d+集", " ")
                 .replaceAll("共\\d+集\\+\\d+部剧场版", " ")
                 .replaceAll("豆瓣：[0-9.]+", " ")
+                .replaceAll("\\{tmdbid-\\d+}", "")
                 .replace("超前完结", " ")
                 .replace("番外", " ")
                 .replace("彩蛋", " ")
