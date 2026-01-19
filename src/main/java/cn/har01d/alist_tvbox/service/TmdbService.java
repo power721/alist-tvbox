@@ -421,7 +421,7 @@ public class TmdbService {
         }
 
         Integer year = getYearFromPath(path);
-        log.debug("{} {}", year, path);
+        log.debug("{} {} {}", type, year, path);
         String name = "";
         Tmdb movie = null;
         if (parts.length == 2) {
