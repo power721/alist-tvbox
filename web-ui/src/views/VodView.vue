@@ -283,16 +283,19 @@
                         </el-select>
                       </div>
                       <el-scrollbar height="300px">
-                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                          <el-button
-                            v-for="(_, index) in playlist"
+                        <div style="max-height: 300px; overflow-y: auto;">
+                          <div
+                            v-for="(video, index) in playlist"
                             :key="index"
-                            :type="currentVideoIndex === index ? 'primary' : 'default'"
-                            :size="currentVideoIndex === index ? 'default' : 'small'"
                             @click="playVideo(index)"
+                            style="padding: 8px; cursor: pointer; border-radius: 4px;"
+                            :style="{
+                              backgroundColor: currentVideoIndex === index ? '#409eff' : 'transparent',
+                              color: currentVideoIndex === index ? '#fff' : 'inherit'
+                            }"
                           >
-                            {{ index + 1 }}
-                          </el-button>
+                            {{ video.title }}
+                          </div>
                         </div>
                       </el-scrollbar>
                     </div>
