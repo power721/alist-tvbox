@@ -641,7 +641,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="doubanVisible" title="豆瓣模式" fullscreen>
+    <el-dialog v-model="doubanVisible" title="豆瓣电影" fullscreen>
       <el-container>
         <el-aside width="200px" v-loading="loadingCategories">
           <el-menu :default-active="selectedCategory" @select="handleCategorySelect">
