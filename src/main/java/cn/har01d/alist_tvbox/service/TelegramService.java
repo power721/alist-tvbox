@@ -952,15 +952,15 @@ public class TelegramService {
         return result;
     }
 
-    public MovieList listDouban(String type, String ac, String sort, Integer year, String genre, String region, int page) {
+    public MovieList listDouban(String type, String ac, String sort, Integer year, String genre, String region, int page, int size) {
         if (type.startsWith("s:")) {
-            return searchMovies(type.substring(2), false, 30);
+            return searchMovies(type.substring(2), false, size);
         }
 
-        return getDoubanList(type, ac, sort, year, genre, region, page);
+        return getDoubanList(type, ac, sort, year, genre, region, page, size);
     }
 
-    private MovieList getDoubanList(String type, String ac, String sort, Integer year, String genre, String region, int page) {
+    private MovieList getDoubanList(String type, String ac, String sort, Integer year, String genre, String region, int page, int size) {
         String key = type + "-" + page;
         MovieList result = douban.getIfPresent(key);
         if (result != null) {
@@ -968,25 +968,24 @@ public class TelegramService {
         }
 
         if (type.equals("local")) {
-            return getLocalMovieList(ac, sort, year, genre, region, page);
+            return getLocalMovieList(ac, sort, year, genre, region, page, size);
         }
 
         if (type.equals("random")) {
-            return getRandomMovie(ac);
+            return getRandomMovie(ac, size);
         }
 
         if (type.startsWith("suggestion_")) {
-            return getDoubanItems(type, ac, page);
+            return getDoubanItems(type, ac, page, size);
         }
 
         if (type.startsWith("hot_")) {
-            return getDoubanItems(type, ac, page);
+            return getDoubanItems(type, ac, page, size);
         }
 
         result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        int size = 30;
         int start = (page - 1) * size;
         String url = "https://m.douban.com/rexxar/api/v2/subject_collection/" + type + "/items?os=linux&for_mobile=1&callback=&start=" + start + "&count=" + size + "&loc_id=108288&_=0";
         HttpEntity<Void> httpEntity = buildHttpEntity();
@@ -1030,12 +1029,11 @@ public class TelegramService {
         }
     }
 
-    private MovieList getLocalMovieList(String ac, String sort, Integer year, String genre, String region, int page) {
+    private MovieList getLocalMovieList(String ac, String sort, Integer year, String genre, String region, int page, int size) {
         MovieList result;
         result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        int size = 30;
         Pageable pageable;
         if (StringUtils.isNotBlank(sort)) {
             List<Sort.Order> orders = new ArrayList<>();
@@ -1095,12 +1093,11 @@ public class TelegramService {
         return movieRepository.findAll(example, pageable);
     }
 
-    private MovieList getRandomMovie(String ac) {
+    private MovieList getRandomMovie(String ac, int size) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
         int total = (int) movieRepository.count();
-        int size = 30;
         int count = size + size / 2;
         int page = ThreadLocalRandom.current().nextInt(total / count);
         Collections.shuffle(fields);
@@ -1136,9 +1133,8 @@ public class TelegramService {
         return result;
     }
 
-    private MovieList getDoubanItems(String type, String ac, int page) {
+    private MovieList getDoubanItems(String type, String ac, int page, int size) {
         String key = type + "-" + page;
-        int size = 30;
         int start = (page - 1) * size;
         String url = "https://m.douban.com/rexxar/api/v2/subject/recent_hot/movie?limit=" + size + "&start=" + start;
         if (type.equals("hot_tv")) {

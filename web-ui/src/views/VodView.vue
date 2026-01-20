@@ -651,10 +651,10 @@
           </el-menu>
         </el-aside>
         <el-main v-loading="loadingPosters">
-          <el-row :gutter="20">
-            <el-col :span="4" v-for="item in doubanItems" :key="item.vod_id" style="margin-bottom: 20px;">
+          <el-row :gutter="30">
+            <el-col :span="3" v-for="item in doubanItems" :key="item.vod_id" style="margin-bottom: 20px;">
               <el-card :body-style="{ padding: '0px', cursor: 'pointer' }" shadow="hover" @click="searchDoubanItem(item)">
-                <el-image :src="item.vod_pic" fit="cover" style="width: 100%; height: 200px;" />
+                <el-image :src="item.vod_pic" fit="cover" style="width: 100%; height: 400px;" />
                 <div style="padding: 10px;">
                   <div style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     {{ item.vod_name }}
@@ -670,7 +670,7 @@
             v-if="doubanTotal > 0"
             layout="total, prev, pager, next"
             :current-page="doubanPage"
-            :page-size="30"
+            :page-size="35"
             :total="doubanTotal"
             @current-change="handleDoubanPageChange"
             style="margin-top: 20px; text-align: center;"
@@ -1608,7 +1608,7 @@ const handleCategorySelect = (typeId: string) => {
 
 const loadDoubanItems = (typeId: string, page: number) => {
   loadingPosters.value = true
-  axios.get('/tg-db/' + store.token + '?ac=web&t=' + encodeURIComponent(typeId) + '&pg=' + page).then(({data}) => {
+  axios.get('/tg-db/' + store.token + '?ac=web&size=35&t=' + encodeURIComponent(typeId) + '&pg=' + page).then(({data}) => {
     loadingPosters.value = false
     if (data.list) {
       doubanItems.value = data.list
