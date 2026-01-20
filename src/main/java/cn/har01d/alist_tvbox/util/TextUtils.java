@@ -21,6 +21,18 @@ public class TextUtils {
     private static final Pattern NAME1 = Pattern.compile("^【(.+)】$");
     private static final Pattern NAME2 = Pattern.compile("^\\w (.+)\\s+\\(\\d{4}\\).*");
     private static final Pattern NAME3 = Pattern.compile("^\\w (.+)\\.\\d{4} .+");
+    // 新增：S01E01, 1x01 等季集格式
+    private static final Pattern SEASON_EPISODE = Pattern.compile("[.\\s]?(S\\d{1,2})E(\\d{2,3})");
+    private static final Pattern SEASON_EPISODE2 = Pattern.compile("[.\\s]?(\\d{1,2})x(\\d{2,3})");
+    // 新增：流媒体平台标签
+    private static final Pattern STREAMING_PLATFORM = Pattern.compile("\\[(Netflix|Disney\\+|Hulu|HBO|Amazon\\+|Prime|Apple\\+|爱奇艺|腾讯|优酷|哔哩|Bilibili|芒果TV)]");
+    // 新增：编码和音视频格式
+    private static final Pattern AV_FORMAT = Pattern.compile("\\.(HEVC|H265|H264|x265|x264|AVC|AV1|VP9|VC-1|mp4|mkv|MPEG-2|Xvid)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern AUDIO_FORMAT = Pattern.compile("(DTS|DDP|DD\\+|AC3|AAC|FLAC|MP3|Opus|Atmos|TrueHD)([.\\s]?\\d+\\.?\\d*)?", Pattern.CASE_INSENSITIVE);
+    // 新增：分辨率标签
+    private static final Pattern RESOLUTION = Pattern.compile("\\.?(\\d{3,4}p|4K|2K|8K|UHD|FHD|QHD|SDR|HDR10|HDR|HD\\+?|Dolby\\s*Vision|DoVi)", Pattern.CASE_INSENSITIVE);
+    // 新增：发布组和字幕组
+    private static final Pattern RELEASE_GROUP = Pattern.compile("\\[([^]]+(字幕组|发布组|制作|Subs|Rip))]");
 
     public static boolean isChineseChar(int c) {
         return c >= 0x4E00 && c <= 0x9FA5;
@@ -87,6 +99,36 @@ public class TextUtils {
                 newName = parts[0];
             }
         }
+
+        // 新增：移除流媒体平台标签
+        newName = STREAMING_PLATFORM.matcher(newName).replaceAll(" ");
+
+        // 新增：移除发布组和字幕组标签
+        newName = RELEASE_GROUP.matcher(newName).replaceAll(" ");
+
+        // 新增：处理 S01E01, 1x01 格式
+        Matcher seMatcher = SEASON_EPISODE.matcher(newName);
+        if (seMatcher.find()) {
+            String season = seMatcher.group(1);
+            String newNum = number2text(season.substring(1));
+            newName = newName.replace(seMatcher.group(0), " 第" + newNum + "季");
+        } else {
+            seMatcher = SEASON_EPISODE2.matcher(newName);
+            if (seMatcher.find()) {
+                String season = seMatcher.group(1);
+                String newNum = number2text(season);
+                newName = newName.replace(seMatcher.group(0), " 第" + newNum + "季");
+            }
+        }
+
+        // 新增：移除编码格式标签
+        newName = AV_FORMAT.matcher(newName).replaceAll(" ");
+
+        // 新增：移除音频格式标签
+        newName = AUDIO_FORMAT.matcher(newName).replaceAll(" ");
+
+        // 新增：移除分辨率标签
+        newName = RESOLUTION.matcher(newName).replaceAll(" ");
 
         newName = newName
                 .replaceAll("第\\d+-\\d+集", " ")
@@ -194,6 +236,7 @@ public class TextUtils {
                 .replace("日语", " ")
                 .replace("日语版", " ")
                 .replace("全系列电影", " ")
+                .replace("【电影】", " ")
                 .replace("系列合集", " ")
                 .replace("大合集", " ")
                 .replace("(合集）", " ")

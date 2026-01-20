@@ -104,7 +104,8 @@ public class TvBoxService {
     private static final Pattern NUMBER = Pattern.compile("^Season (\\d{1,2}).*");
     private static final Pattern NUMBER1 = Pattern.compile("^SE(\\d{1,2}).*");
     private static final Pattern NUMBER2 = Pattern.compile("^S(\\d{1,2}).*");
-    private static final Pattern NUMBER3 = Pattern.compile("^第(.{1,2})季.*");
+    private static final Pattern NUMBER3 = Pattern.compile("^第\\s*(.{1,2})\\s*季.*");
+    private static final Pattern SHARE_ID = Pattern.compile("^\\d+@.+@.*");
 
     private final AccountRepository accountRepository;
     private final AListAliasRepository aliasRepository;
@@ -1729,9 +1730,12 @@ public class TvBoxService {
                 movieDetail.setVod_content(parent);
             }
             if (fsDetail.getType() != 5 && !setMovieInfo(site, movieDetail, fsDetail.getName(), parent, true)) {
-                movieDetail.setVod_name(getNameFromPath(parent));
-                setMovieInfo(site, movieDetail, "", parent, true);
-                movieDetail.setVod_name(fsDetail.getName());
+                String newName = getNameFromPath(parent);
+                if (!SHARE_ID.matcher(newName).matches()) {
+                    movieDetail.setVod_name(newName);
+                    setMovieInfo(site, movieDetail, "", parent, true);
+                    movieDetail.setVod_name(fsDetail.getName());
+                }
             }
             if ("PikPakShare".equals(fsDetail.getProvider())) {
                 movieDetail.setVod_remarks("P" + movieDetail.getVod_remarks());
@@ -2207,7 +2211,7 @@ public class TvBoxService {
                     var m = pattern.matcher(filename);
                     if (m.matches()) {
                         String newName = getNameFromPath(getParent(path));
-                        if (!newName.equals(name)) {
+                        if (!newName.equals(name) && !SHARE_ID.matcher(newName).matches()) {
                             movie = doubanService.getByName(newName);
                             break;
                         }
