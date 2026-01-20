@@ -86,12 +86,12 @@ public class TelegramController {
     }
 
     @GetMapping("/tg-db")
-    public Object db(String id, String t, String wd, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
-        return db("", id, t, wd, sort, year, genre, region, pg);
+    public Object db(String id, String t, String ac, String wd, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+        return db("", id, t, ac, wd, sort, year, genre, region, pg);
     }
 
     @GetMapping("/tg-db/{token}")
-    public Object db(@PathVariable String token, String id, String t, String wd, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+    public Object db(@PathVariable String token, String id, String t, String ac, String wd, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
             return telegramService.detail(id);
@@ -99,7 +99,7 @@ public class TelegramController {
             if (t.equals("0")) {
                 t = "suggestion";
             }
-            return telegramService.listDouban(t, sort, year, genre, region, pg);
+            return telegramService.listDouban(t, ac, sort, year, genre, region, pg);
         } else if (StringUtils.isNotBlank(wd)) {
             return telegramService.searchDouban(wd, 20);
         }

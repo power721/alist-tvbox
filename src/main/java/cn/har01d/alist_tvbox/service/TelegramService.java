@@ -952,15 +952,15 @@ public class TelegramService {
         return result;
     }
 
-    public MovieList listDouban(String type, String sort, Integer year, String genre, String region, int page) {
+    public MovieList listDouban(String type, String ac, String sort, Integer year, String genre, String region, int page) {
         if (type.startsWith("s:")) {
             return searchMovies(type.substring(2), false, 30);
         }
 
-        return getDoubanList(type, sort, year, genre, region, page);
+        return getDoubanList(type, ac, sort, year, genre, region, page);
     }
 
-    private MovieList getDoubanList(String type, String sort, Integer year, String genre, String region, int page) {
+    private MovieList getDoubanList(String type, String ac, String sort, Integer year, String genre, String region, int page) {
         String key = type + "-" + page;
         MovieList result = douban.getIfPresent(key);
         if (result != null) {
@@ -968,19 +968,19 @@ public class TelegramService {
         }
 
         if (type.equals("local")) {
-            return getLocalMovieList(sort, year, genre, region, page);
+            return getLocalMovieList(ac, sort, year, genre, region, page);
         }
 
         if (type.equals("random")) {
-            return getRandomMovie();
+            return getRandomMovie(ac);
         }
 
         if (type.startsWith("suggestion_")) {
-            return getDoubanItems(type, page);
+            return getDoubanItems(type, ac, page);
         }
 
         if (type.startsWith("hot_")) {
-            return getDoubanItems(type, page);
+            return getDoubanItems(type, ac, page);
         }
 
         result = new MovieList();
@@ -996,6 +996,10 @@ public class TelegramService {
         ArrayNode items = (ArrayNode) response.getBody().get("subject_collection_items");
         for (JsonNode item : items) {
             MovieDetail movieDetail = getMovieDetail(item);
+            if ("web".equals(ac)) {
+                fixCover(movieDetail);
+                movieDetail.setCate(null);
+            }
             list.add(movieDetail);
         }
 
@@ -1009,7 +1013,24 @@ public class TelegramService {
         return result;
     }
 
-    private MovieList getLocalMovieList(String sort, Integer year, String genre, String region, int page) {
+    private void fixCover(MovieDetail movie) {
+        try {
+            if (movie.getVod_pic() != null && !movie.getVod_pic().isEmpty()) {
+                String cover = ServletUriComponentsBuilder.fromCurrentRequest()
+                        .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                        .replacePath("/images")
+                        .replaceQuery("url=" + movie.getVod_pic())
+                        .build()
+                        .toUriString();
+                log.debug("cover url: {}", cover);
+                movie.setVod_pic(cover);
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+    }
+
+    private MovieList getLocalMovieList(String ac, String sort, Integer year, String genre, String region, int page) {
         MovieList result;
         result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
@@ -1038,7 +1059,11 @@ public class TelegramService {
             movieDetail.setVod_pic(movie.getCover());
             movieDetail.setVod_remarks(movie.getDbScore());
             movieDetail.setVod_tag(FOLDER);
-            movieDetail.setCate(new CategoryList());
+            if ("web".equals(ac)) {
+                fixCover(movieDetail);
+            } else {
+                movieDetail.setCate(new CategoryList());
+            }
             list.add(movieDetail);
         }
 
@@ -1070,7 +1095,7 @@ public class TelegramService {
         return movieRepository.findAll(example, pageable);
     }
 
-    private MovieList getRandomMovie() {
+    private MovieList getRandomMovie(String ac) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
@@ -1094,7 +1119,11 @@ public class TelegramService {
             movieDetail.setVod_pic(movie.getCover());
             movieDetail.setVod_remarks(movie.getDbScore());
             movieDetail.setVod_tag(FOLDER);
-            movieDetail.setCate(new CategoryList());
+            if ("web".equals(ac)) {
+                fixCover(movieDetail);
+            } else {
+                movieDetail.setCate(new CategoryList());
+            }
             list.add(movieDetail);
         }
 
@@ -1107,7 +1136,7 @@ public class TelegramService {
         return result;
     }
 
-    private MovieList getDoubanItems(String type, int page) {
+    private MovieList getDoubanItems(String type, String ac, int page) {
         String key = type + "-" + page;
         int size = 30;
         int start = (page - 1) * size;
@@ -1130,6 +1159,10 @@ public class TelegramService {
         ArrayNode items = (ArrayNode) response.getBody().get("items");
         for (JsonNode item : items) {
             MovieDetail movieDetail = getMovieDetail(item);
+            if ("web".equals(ac)) {
+                fixCover(movieDetail);
+                movieDetail.setCate(null);
+            }
             list.add(movieDetail);
         }
 

@@ -28,6 +28,7 @@
         <el-button :icon="Film" circle @click="goHistory" v-else/>
         <el-button :icon="Setting" circle @click="settingVisible=true" v-if="store.admin"/>
         <el-button :icon="Plus" circle @click="handleAdd"/>
+        <el-button type="warning" @click="openDoubanMode">豆瓣</el-button>
       </el-col>
     </el-row>
 
@@ -640,6 +641,44 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="doubanVisible" title="豆瓣模式" fullscreen>
+      <el-container>
+        <el-aside width="200px" v-loading="loadingCategories">
+          <el-menu :default-active="selectedCategory" @select="handleCategorySelect">
+            <el-menu-item v-for="cat in categories" :key="cat.type_id" :index="cat.type_id">
+              {{ cat.type_name }}
+            </el-menu-item>
+          </el-menu>
+        </el-aside>
+        <el-main v-loading="loadingPosters">
+          <el-row :gutter="20">
+            <el-col :span="4" v-for="item in doubanItems" :key="item.vod_id" style="margin-bottom: 20px;">
+              <el-card :body-style="{ padding: '0px', cursor: 'pointer' }" shadow="hover" @click="searchDoubanItem(item)">
+                <el-image :src="item.vod_pic" fit="cover" style="width: 100%; height: 200px;" />
+                <div style="padding: 10px;">
+                  <div style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    {{ item.vod_name }}
+                  </div>
+                  <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                    {{ item.vod_remarks }}
+                  </div>
+                </div>
+              </el-card>
+            </el-col>
+          </el-row>
+          <el-pagination
+            v-if="doubanTotal > 0"
+            layout="total, prev, pager, next"
+            :current-page="doubanPage"
+            :page-size="30"
+            :total="doubanTotal"
+            @current-change="handleDoubanPageChange"
+            style="margin-top: 20px; text-align: center;"
+          />
+        </el-main>
+      </el-container>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -719,6 +758,14 @@ const needRefresh = ref(false)
 const renameVisible = ref(false)
 const removeVisible = ref(false)
 const pushVisible = ref(false)
+const doubanVisible = ref(false)
+const categories = ref<any[]>([])
+const doubanItems = ref<any[]>([])
+const doubanPage = ref(1)
+const doubanTotal = ref(0)
+const loadingCategories = ref(false)
+const loadingPosters = ref(false)
+const selectedCategory = ref('')
 const batch = ref(false)
 const clean = ref(false)
 const deleteVisible = ref(false)
@@ -916,7 +963,7 @@ const handleAdd = () => {
 
 const search = () => {
   searching.value = true
-  axios.get('/api/telegram/search?wd=' + keyword.value).then(({data}) => {
+  return axios.get('/api/telegram/search?wd=' + keyword.value).then(({data}) => {
     searching.value = false
     results.value = data.map(e => {
       return {
@@ -1532,6 +1579,57 @@ const toggleFullscreen = () => {
 const toggleWideMode = () => {
   isWideMode.value = !isWideMode.value
   localStorage.setItem('wideMode', isWideMode.value.toString())
+}
+
+const openDoubanMode = () => {
+  doubanVisible.value = true
+  if (categories.value.length === 0) {
+    loadingCategories.value = true
+    axios.get('/tg-db/' + store.token).then(({data}) => {
+      loadingCategories.value = false
+      if (data.class) {
+        categories.value = data.class
+        if (categories.value.length > 0) {
+          handleCategorySelect(categories.value[0].type_id)
+        }
+      }
+    }).catch(() => {
+      loadingCategories.value = false
+      ElMessage.error('获取分类失败')
+    })
+  }
+}
+
+const handleCategorySelect = (typeId: string) => {
+  selectedCategory.value = typeId
+  doubanPage.value = 1
+  loadDoubanItems(typeId, 1)
+}
+
+const loadDoubanItems = (typeId: string, page: number) => {
+  loadingPosters.value = true
+  axios.get('/tg-db/' + store.token + '?ac=web&t=' + encodeURIComponent(typeId) + '&pg=' + page).then(({data}) => {
+    loadingPosters.value = false
+    if (data.list) {
+      doubanItems.value = data.list
+      doubanTotal.value = data.total || data.pagecount * 20 || 0
+    }
+  }).catch(() => {
+    loadingPosters.value = false
+    ElMessage.error('获取列表失败')
+  })
+}
+
+const handleDoubanPageChange = (page: number) => {
+  doubanPage.value = page
+  loadDoubanItems(selectedCategory.value, page)
+}
+
+const searchDoubanItem = (item: any) => {
+  keyword.value = item.vod_name
+  search().then(() => {
+    doubanVisible.value = false
+  })
 }
 
 const enterFullscreen = (element) => {
