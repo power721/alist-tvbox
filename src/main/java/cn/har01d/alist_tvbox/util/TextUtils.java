@@ -194,6 +194,7 @@ public class TextUtils {
                 .replace("日语", " ")
                 .replace("日语版", " ")
                 .replace("全系列电影", " ")
+                .replace("【电影】", " ")
                 .replace("系列合集", " ")
                 .replace("大合集", " ")
                 .replace("(合集）", " ")

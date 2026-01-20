@@ -180,7 +180,7 @@
       </template>
       <div class="video-container">
         <el-row>
-          <el-col :span="isWideMode ? 24 : 18">
+          <el-col :class="{wide:isWideMode}" :span="isWideMode ? 24 : 18">
             <video
               ref="videoPlayer"
               :src="playItem.url"
@@ -251,7 +251,7 @@
         </el-row>
 
         <el-row>
-          <el-col :span="isWideMode ? 24 : 18">
+          <el-col :class="{wide:isWideMode}" :span="isWideMode ? 24 : 18">
             <div>
               <el-button-group>
                 <el-button @click="play" v-if="!playing">播放</el-button>
@@ -449,7 +449,7 @@
         <div class="divider"></div>
 
         <el-row>
-          <el-col :span="18">
+          <el-col :class="{wide:isWideMode}" :span="18">
             <el-descriptions class="movie">
               <el-descriptions-item label="名称">{{ movies[0].vod_name }}</el-descriptions-item>
               <el-descriptions-item label="类型">{{ movies[0].type_name || '未知' }}</el-descriptions-item>
@@ -1531,6 +1531,7 @@ const toggleFullscreen = () => {
 
 const toggleWideMode = () => {
   isWideMode.value = !isWideMode.value
+  localStorage.setItem('wideMode', isWideMode.value.toString())
 }
 
 const enterFullscreen = (element) => {
@@ -2017,6 +2018,7 @@ onMounted(async () => {
     loadDevices()
   }
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
+  isWideMode.value = localStorage.getItem('wideMode') === 'true'
   timer = setInterval(save, 5000)
   window.addEventListener('keydown', handleKeyDown);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -2103,5 +2105,9 @@ video {
 
 #copy:hover {
   cursor: pointer;
+}
+
+.wide {
+  margin-left: 0;
 }
 </style>
