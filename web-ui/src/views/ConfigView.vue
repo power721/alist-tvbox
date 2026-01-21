@@ -217,6 +217,10 @@
           <el-input v-model="apiKey" style="width: 300px" type="password" readonly show-password/>
           <el-button type="primary" class="hint" @click="resetApiKey">重置</el-button>
         </el-form-item>
+        <el-form-item label="夸克TV机器码">
+          <el-input v-model="quarkDeviceId" style="width: 300px" type="text"/>
+          <el-button type="primary" class="hint" @click="updateQuarkDeviceId">更新</el-button>
+        </el-form-item>
         <el-form-item label="Cookie地址">
           <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
             阿里 Token
@@ -444,6 +448,7 @@ const atvPass = ref('')
 const apiKey = ref('')
 const apiClientId = ref('')
 const apiClientSecret = ref('')
+const quarkDeviceId = ref('')
 const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const login = ref({
   username: '',
@@ -604,6 +609,12 @@ const updateCleanInvalidShares = () => {
   })
 }
 
+const updateQuarkDeviceId = () => {
+  axios.post('/api/settings', {name: 'quark_device_id', value: quarkDeviceId.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateLogin = () => {
   axios.post('/api/alist/login', login.value).then(({data}) => {
     ElMessage.success('保存成功')
@@ -678,6 +689,7 @@ onMounted(() => {
     apiKey.value = data.api_key
     apiClientId.value = data.open_api_client_id || ''
     apiClientSecret.value = data.open_api_client_secret || ''
+    quarkDeviceId.value = data.quark_device_id || ''
     login.value.username = data.alist_username
     login.value.password = data.alist_password
     login.value.enabled = data.alist_login === 'true'
