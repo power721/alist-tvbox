@@ -17,10 +17,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/pan/accounts")
-public class PanAccountController {
+public class DriverAccountController {
     private final DriverAccountService driverAccountService;
 
-    public PanAccountController(DriverAccountService driverAccountService) {
+    public DriverAccountController(DriverAccountService driverAccountService) {
         this.driverAccountService = driverAccountService;
     }
 
