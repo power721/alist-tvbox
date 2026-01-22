@@ -10,6 +10,8 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,9 +28,13 @@ import java.util.List;
 public class TaskService {
     private final TaskRepository taskRepository;
 
-    public TaskService(TaskRepository taskRepository, JdbcTemplate jdbcTemplate) {
+    public TaskService(TaskRepository taskRepository, JdbcTemplate jdbcTemplate, Environment environment) {
         this.taskRepository = taskRepository;
-        jdbcTemplate.execute("ALTER TABLE task ALTER COLUMN summary TEXT");
+        if (environment.acceptsProfiles(Profiles.of("mysql"))) {
+            jdbcTemplate.execute("ALTER TABLE task MODIFY COLUMN summary TEXT");
+        } else {
+            jdbcTemplate.execute("ALTER TABLE task ALTER COLUMN summary TEXT");
+        }
     }
 
     @PostConstruct

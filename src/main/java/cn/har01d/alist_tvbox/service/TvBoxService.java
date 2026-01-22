@@ -1132,7 +1132,8 @@ public class TvBoxService {
         if ("gui".equals(ac)) {
             return fsInfo.getType() == 1 || fsInfo.getType() == 2;
         }
-        if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3 || (fsInfo.getType() == 0 && fsInfo.getName().endsWith(".strm"))) {
+        if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3
+                || (fsInfo.getType() == 0 && (fsInfo.getName().endsWith(".strm") || fsInfo.getName().endsWith(".iso")))) {
             return true;
         }
         if ("web".equals(ac)) {
