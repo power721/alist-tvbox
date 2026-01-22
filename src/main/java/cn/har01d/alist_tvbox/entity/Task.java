@@ -38,6 +38,7 @@ public class Task {
     private TaskResult result;
     @Column(columnDefinition = "TEXT")
     private String data;
+    @Column(columnDefinition = "TEXT")
     private String summary;
     private String error;
     private Instant createdTime;

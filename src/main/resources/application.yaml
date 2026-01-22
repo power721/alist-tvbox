@@ -100,6 +100,7 @@ app:
     - ts
     - 3gp
     - asf
+    - iso
   sites:
     - name: 本地
       url: ${ALIST_URL:http://127.0.0.1:5244}

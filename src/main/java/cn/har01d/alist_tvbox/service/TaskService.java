@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,8 +26,9 @@ import java.util.List;
 public class TaskService {
     private final TaskRepository taskRepository;
 
-    public TaskService(TaskRepository taskRepository) {
+    public TaskService(TaskRepository taskRepository, JdbcTemplate jdbcTemplate) {
         this.taskRepository = taskRepository;
+        jdbcTemplate.execute("ALTER TABLE task ALTER COLUMN summary TEXT");
     }
 
     @PostConstruct
