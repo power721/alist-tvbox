@@ -274,6 +274,10 @@ public class TmdbService {
         });
     }
 
+    public void deleteAll() {
+        tmdbMetaRepository.deleteAll();
+    }
+
     public boolean updateMetaMovie(Integer id, MetaDto dto) {
         if (dto.getTmId() == null || dto.getTmId() < 1) {
             throw new BadRequestException("TMDB ID不正确");
