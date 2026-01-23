@@ -10,9 +10,13 @@
       <el-button @click="showScrapeIndex">刮削</el-button>
       <!--      <el-button @click="fixMeta">去重</el-button>-->
       <el-button @click="syncMeta">同步</el-button>
-      <el-button>|</el-button>
       <el-button @click="refresh">刷新</el-button>
       <el-button type="primary" @click="addMeta">添加</el-button>
+      <el-popconfirm @confirm="clear" title="是否清空全部数据？">
+        <template #reference>
+          <el-button type="danger">清空</el-button>
+        </template>
+      </el-popconfirm>
       <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
     </el-row>
     <div class="space"></div>
@@ -237,6 +241,12 @@ const deleteSub = () => {
       refresh()
     })
   }
+}
+
+const clear = () => {
+  axios.delete('/api/tmdb/meta').then(() => {
+    refresh()
+  })
 }
 
 const search = () => {

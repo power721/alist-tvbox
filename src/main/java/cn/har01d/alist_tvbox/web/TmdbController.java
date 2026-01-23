@@ -75,6 +75,11 @@ public class TmdbController {
         service.delete(id);
     }
 
+    @DeleteMapping("/meta")
+    public void deleteAll() {
+        service.deleteAll();
+    }
+
     @PostMapping("/meta-batch-delete")
     public void batchDelete(@RequestBody List<Integer> ids) {
         service.batchDelete(ids);

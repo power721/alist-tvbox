@@ -51,7 +51,7 @@ public class ProxyService {
     private final AListLocalService aListLocalService;
     private final HuyaParseService huyaParseService;
     private final Set<String> proxyDrivers = Set.of("AliyundriveOpen", "AliyunShare", "BaiduNetdisk", "BaiduShare2",
-            "Quark", "UC", "QuarkShare", "UCShare", "115 Cloud", "115 Share");
+            "Quark", "UC", "QuarkShare", "UCShare", "115 Cloud");
     private final OkHttpClient okHttpClient = new OkHttpClient();
 
     public ProxyService(AppProperties appProperties,
@@ -173,7 +173,7 @@ public class ProxyService {
                 log.debug("302 {} {}", driver, url);
                 response.sendRedirect(url);
                 return;
-            } else if (proxyDrivers.contains(driver) || url.contains("115cdn") || url.contains("aliyundrive")
+            } else if (proxyDrivers.contains(driver) || url.contains("aliyundrive")
                     || url.contains("baidu.com") || url.contains("quark.cn") || url.contains("uc.cn")
                     || url.startsWith("http://localhost")) {
                 log.debug("{} {}", driver, url);
