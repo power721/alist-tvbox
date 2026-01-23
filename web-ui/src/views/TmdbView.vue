@@ -244,7 +244,7 @@ const deleteSub = () => {
 }
 
 const clear = () => {
-  axios.delete('/api/tmdb').then(() => {
+  axios.delete('/api/tmdb/meta').then(() => {
     refresh()
   })
 }
