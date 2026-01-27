@@ -19,17 +19,20 @@ axios.interceptors.response.use(function (response) {
 }, function (error) {
   if (error.response && error.response.status === 401) {
     accountService.logout()
-    if (error.response.data && (error.response.data.code === 40100 || error.response.data.code === 40102)) {
-      router.push('/')
+    // 避免重复跳转到登录页
+    if (router.currentRoute.value.path !== '/login') {
+      router.push('/login')
     }
   }
-  const data = error.response.data
-  console.debug(data.message)
-  ElMessage({
-    showClose: true,
-    grouping: true,
-    message: data.message || data.detail,
-    type: 'error',
-  })
+  const data = error.response?.data
+  if (data?.message || data?.detail) {
+    console.debug(data.message)
+    ElMessage({
+      showClose: true,
+      grouping: true,
+      message: data.message || data.detail,
+      type: 'error',
+    })
+  }
   return Promise.reject(data)
 })

@@ -231,6 +231,27 @@ public class AListLocalService {
         }
     }
 
+    public int getNextStorageId() {
+        if (System.getenv("NATIVE") != null && "sqlite3".equals(database)) {
+            try {
+                String maxId = Utils.executeQuery("SELECT MAX(ID) FROM x_storages");
+                return Integer.parseInt(maxId) + 1;
+            } catch (Exception e) {
+                log.warn("get next storage id failed", e);
+            }
+        }
+
+        try {
+            Integer result = alistJdbcTemplate.queryForObject("SELECT MAX(ID) FROM x_storages", new Object[]{}, Integer.class);
+            if (result != null) {
+                return result + 1;
+            }
+        } catch (Exception e) {
+            log.warn("get next storage id failed", e);
+        }
+        return 20000;
+    }
+
     public void setToken(Integer accountId, String key, String value) {
         if (StringUtils.isEmpty(value)) {
             log.warn("Token is empty: {} {} ", accountId, key);

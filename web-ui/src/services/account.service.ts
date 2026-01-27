@@ -42,8 +42,10 @@ class AccountService {
 
   logout() {
     this.account.authenticated = false
+    this.account.username = ''
     localStorage.removeItem("token")
-    return axios.post("/api/accounts/logout").then()
+    localStorage.removeItem("username")
+    return axios.post("/api/accounts/logout").catch(() => {})
   }
 }
 

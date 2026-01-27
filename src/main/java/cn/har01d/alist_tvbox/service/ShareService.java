@@ -46,6 +46,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -972,6 +973,9 @@ public class ShareService {
         try {
             String token = accountService.login();
             synchronized (this) {
+                if (environment.acceptsProfiles(Profiles.of("docker"))) {
+                    shareId = aListLocalService.getNextStorageId();
+                }
                 share.setId(shareId++);
             }
 

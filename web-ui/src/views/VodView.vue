@@ -268,7 +268,7 @@
                 <el-button @click="playNextVideo" v-if="playlist.length>1">下集</el-button>
                 <el-popover placement="top" :width="400" trigger="click" v-if="playlist.length>1">
                   <template #reference>
-                    <el-button>选集 {{ currentVideoIndex + 1 }}/{{ playlist.length }}</el-button>
+                    <el-button @click="scrollEpisodeList">选集 {{ currentVideoIndex + 1 }}/{{ playlist.length }}</el-button>
                   </template>
                   <template #default>
                     <div style="max-height: 400px; overflow-y: auto;">
@@ -283,7 +283,7 @@
                           />
                         </el-select>
                       </div>
-                      <el-scrollbar height="300px">
+                      <el-scrollbar ref="episodeScrollbarRef" height="300px">
                         <div style="max-height: 300px; overflow-y: auto;">
                           <div
                             v-for="(video, index) in playlist"
@@ -718,6 +718,7 @@ const route = useRoute()
 const router = useRouter()
 const videoPlayer = ref(null)
 const scrollbarRef = ref<ScrollbarInstance>()
+const episodeScrollbarRef = ref<ScrollbarInstance>()
 const filePath = ref('/')
 const keyword = ref('')
 const order = ref('index')
@@ -1504,6 +1505,14 @@ const scroll = () => {
   if (scrollbarRef.value) {
     scrollbarRef.value.setScrollTop(currentVideoIndex.value * 21.5)
   }
+}
+
+const scrollEpisodeList = () => {
+  setTimeout(() => {
+    if (episodeScrollbarRef.value) {
+      episodeScrollbarRef.value.setScrollTop(currentVideoIndex.value * 40)
+    }
+  }, 100)
 }
 
 const startPlay = () => {
