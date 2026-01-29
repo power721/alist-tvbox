@@ -220,7 +220,7 @@ public class AccountService {
         try {
             String sql = "DELETE FROM x_users WHERE username = 'atv'";
             aListLocalService.executeUpdate(sql);
-            sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,16383)";
+            sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES(4,'atv',\"" + generatePassword() + "\",'/',2,32767)";
             aListLocalService.executeUpdate(sql);
         } catch (Exception e) {
             log.warn("", e);

@@ -11,6 +11,11 @@
       <el-button @click="fixMeta">去重</el-button>
       <el-button @click="refresh">刷新</el-button>
       <el-button type="primary" @click="addMeta" v-if="showScrape">添加</el-button>
+      <el-popconfirm @confirm="clear" title="是否清空全部数据？">
+        <template #reference>
+          <el-button type="danger">清空</el-button>
+        </template>
+      </el-popconfirm>
       <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
     </el-row>
     <div class="space"></div>
@@ -194,6 +199,12 @@ const handleDelete = (data: Meta) => {
 const handleDeleteBatch = () => {
   batch.value = true
   dialogVisible.value = true
+}
+
+const clear = () => {
+  axios.delete('/api/meta').then(() => {
+    refresh()
+  })
 }
 
 const deleteSub = () => {

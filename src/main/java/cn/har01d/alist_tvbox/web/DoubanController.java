@@ -78,6 +78,11 @@ public class DoubanController {
         });
     }
 
+    @DeleteMapping("/api/meta")
+    public void deleteAll() {
+        service.deleteAll();
+    }
+
     @GetMapping("/api/versions")
     public Versions getRemoteVersion() {
         Versions versions = new Versions();

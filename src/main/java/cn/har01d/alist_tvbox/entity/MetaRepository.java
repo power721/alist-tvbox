@@ -34,6 +34,8 @@ public interface MetaRepository extends JpaRepository<Meta, Integer> {
 
     List<Meta> findByTmdb(Tmdb tmdb);
 
+    List<Meta> findByMovieNull();
+
     List<Meta> findByPathContains(String text);
 
     Page<Meta> findByPathContains(String text, Pageable pageable);

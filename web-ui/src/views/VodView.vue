@@ -1510,9 +1510,9 @@ const scroll = () => {
 const scrollEpisodeList = () => {
   setTimeout(() => {
     if (episodeScrollbarRef.value) {
-      episodeScrollbarRef.value.setScrollTop(currentVideoIndex.value * 40)
+      episodeScrollbarRef.value.setScrollTop(currentVideoIndex.value * 22)
     }
-  }, 100)
+  }, 600)
 }
 
 const startPlay = () => {

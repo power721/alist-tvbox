@@ -275,7 +275,12 @@ public class TmdbService {
     }
 
     public void deleteAll() {
-        tmdbMetaRepository.deleteAll();
+        List<TmdbMeta> list = tmdbMetaRepository.findAll();
+        log.info("delete {} meta", list.size());
+        tmdbMetaRepository.deleteAll(list);
+
+        List<Meta> aList = metaRepository.findByMovieNull();
+        metaRepository.deleteAll(aList);
     }
 
     public boolean updateMetaMovie(Integer id, MetaDto dto) {
@@ -590,10 +595,10 @@ public class TmdbService {
     private boolean isSpecialFolder(String name) {
         String lower = name.toLowerCase();
         return name.matches("Season \\d+")
-            || lower.startsWith("4k")
-            || lower.startsWith("2160p")
-            || lower.startsWith("1080p")
-            || SPECIAL_FOLDERS.contains(name);
+                || lower.startsWith("4k")
+                || lower.startsWith("2160p")
+                || lower.startsWith("1080p")
+                || SPECIAL_FOLDERS.contains(name);
     }
 
     private String getName(String path) {

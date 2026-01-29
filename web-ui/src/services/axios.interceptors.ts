@@ -21,7 +21,7 @@ axios.interceptors.response.use(function (response) {
     accountService.logout()
     // 避免重复跳转到登录页
     if (router.currentRoute.value.path !== '/login') {
-      router.push('/login')
+      router.push('/login?redirect=' + router.currentRoute.value.path)
     }
   }
   const data = error.response?.data
