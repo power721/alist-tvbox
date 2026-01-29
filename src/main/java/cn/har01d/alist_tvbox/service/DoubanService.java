@@ -1084,4 +1084,9 @@ public class DoubanService {
         return String.join(",", values);
     }
 
+    public void deleteAll() {
+        List<Meta> list = metaRepository.findByMovieNull();
+        log.info("delete {} meta", list.size());
+        metaRepository.deleteAll(list);
+    }
 }
