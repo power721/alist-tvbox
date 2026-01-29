@@ -276,9 +276,11 @@ public class TmdbService {
 
     public void deleteAll() {
         List<TmdbMeta> list = tmdbMetaRepository.findAll();
-        for (TmdbMeta meta : list) {
-            delete(meta);
-        }
+        log.info("delete {} meta", list.size());
+        tmdbMetaRepository.deleteAll(list);
+
+        List<Meta> aList = metaRepository.findByMovieNull();
+        metaRepository.deleteAll(aList);
     }
 
     public boolean updateMetaMovie(Integer id, MetaDto dto) {
