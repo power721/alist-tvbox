@@ -271,7 +271,7 @@
                     <el-button @click="scrollEpisodeList">选集 {{ currentVideoIndex + 1 }}/{{ playlist.length }}</el-button>
                   </template>
                   <template #default>
-                    <div style="max-height: 400px; overflow-y: auto;">
+                    <div>
                       <div style="margin-bottom: 10px;">
                         <span style="margin-right: 10px;">排序:</span>
                         <el-select v-model="order" @change="sort" placeholder="排序" style="width: 130px;">
@@ -284,7 +284,7 @@
                         </el-select>
                       </div>
                       <el-scrollbar ref="episodeScrollbarRef" height="300px">
-                        <div style="max-height: 300px; overflow-y: auto;">
+                        <div>
                           <div
                             v-for="(video, index) in playlist"
                             :key="index"
@@ -1510,9 +1510,12 @@ const scroll = () => {
 const scrollEpisodeList = () => {
   setTimeout(() => {
     if (episodeScrollbarRef.value) {
-      episodeScrollbarRef.value.setScrollTop(currentVideoIndex.value * 22)
+      const wrapRef = episodeScrollbarRef.value.wrapRef
+      if (wrapRef) {
+        wrapRef.scrollTop = currentVideoIndex.value * 31
+      }
     }
-  }, 600)
+  }, 100)
 }
 
 const startPlay = () => {
