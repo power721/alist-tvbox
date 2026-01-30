@@ -28,12 +28,14 @@ public class LiveService {
             .build();
     private final HuyaService huyaService;
 
-    public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService) {
+    public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService) {
         this.huyaService = huyaService;
         platforms.add(huyaService);
         platforms.add(douyuService);
         platforms.add(bilibiliService);
         platforms.add(ccService);
+        platforms.add(kuaishouService);
+        //platforms.add(douyinService);
     }
 
     public MovieList home() throws IOException {
