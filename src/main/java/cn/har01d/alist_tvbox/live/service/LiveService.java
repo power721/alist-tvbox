@@ -35,7 +35,7 @@ public class LiveService {
         platforms.add(bilibiliService);
         platforms.add(ccService);
         platforms.add(kuaishouService);
-        //platforms.add(douyinService);
+        platforms.add(douyinService);
     }
 
     public MovieList home() throws IOException {

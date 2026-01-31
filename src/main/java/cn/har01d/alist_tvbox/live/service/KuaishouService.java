@@ -222,7 +222,7 @@ public class KuaishouService implements LivePlatform {
         result.setPage(pg);
         result.setTotal(result.getList().size());
         result.setLimit(result.getList().size());
-        result.setPagecount(100);
+        result.setPagecount(list.size() >= 20 ? pg + 1 : pg);
 
         log.debug("快手list result: {}", result);
         return result;
