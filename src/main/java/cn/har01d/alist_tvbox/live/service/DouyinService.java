@@ -37,7 +37,7 @@ public class DouyinService implements LivePlatform {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    private String cookie = "";
+    private String cookie = "ttwid=1%7CB1qls3GdnZhUov9o2NxOMxxYS2ff6OSvEWbv0ytbES4%7C1680522049%7C280d802d6d478e3e78d0c807f7c487e7ffec0ae4e5fdd6a0fe74c3c6af149511";
 
     private static final String BASE_URL = "https://live.douyin.com";
     private static final String PARTITION_ROOM_API = "https://live.douyin.com/webcast/web/partition/detail/room/v2/";
