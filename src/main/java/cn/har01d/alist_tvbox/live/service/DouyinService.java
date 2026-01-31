@@ -1,24 +1,31 @@
 package cn.har01d.alist_tvbox.live.service;
 
-import cn.har01d.alist_tvbox.live.model.*;
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
-import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -26,6 +33,7 @@ import java.util.regex.Pattern;
 @Service
 public class DouyinService implements LivePlatform {
     private final Map<String, String> categoryMap = new HashMap<>();
+    private final AppProperties appProperties;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -39,11 +47,17 @@ public class DouyinService implements LivePlatform {
 
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0";
 
-    public DouyinService(RestTemplateBuilder builder, ObjectMapper objectMapper) {
+    // 抖音签名API地址，可通过环境变量配置
+    private final String signApiUrl;
+
+    public DouyinService(AppProperties appProperties, RestTemplateBuilder builder, ObjectMapper objectMapper) {
+        this.appProperties = appProperties;
+        this.signApiUrl = System.getenv().getOrDefault("DOUYIN_SIGN_API", "http://dy.har01d.cn/abogus");
         this.restTemplate = builder
                 .defaultHeader("User-Agent", USER_AGENT)
                 .build();
         this.objectMapper = objectMapper;
+        log.info("抖音签名API地址: {}", signApiUrl);
     }
 
     @Override
@@ -63,6 +77,7 @@ public class DouyinService implements LivePlatform {
 
         try {
             String url = buildPartitionUrl("720", "1", 1, 15);
+            url = signUrl(url); // 签名
             ResponseEntity<String> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -127,6 +142,7 @@ public class DouyinService implements LivePlatform {
 
                 JsonNode categoryDataNode = objectMapper.readTree(jsonText);
                 JsonNode categories = categoryDataNode.path("categoryData");
+                String cover = getCover();
 
                 for (JsonNode item : categories) {
                     JsonNode partition = item.path("partition");
@@ -137,6 +153,7 @@ public class DouyinService implements LivePlatform {
                     category.setType_id(getType() + "-" + catId);
                     category.setType_name(catName);
                     category.setType_flag(0);
+                    category.setCover(cover);
                     categoryMap.put(category.getType_id(), catId);
                     list.add(category);
 
@@ -151,6 +168,7 @@ public class DouyinService implements LivePlatform {
                         subCategory.setType_id(getType() + "-" + subId);
                         subCategory.setType_name(catName + " - " + subName);
                         subCategory.setType_flag(0);
+                        subCategory.setCover(cover);
                         categoryMap.put(subCategory.getType_id(), subId);
                         list.add(subCategory);
                     }
@@ -166,6 +184,15 @@ public class DouyinService implements LivePlatform {
 
         log.debug("抖音category result: {}", result);
         return result;
+    }
+
+    private String getCover() {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/douyin.png")
+                .replaceQuery(null)
+                .build()
+                .toUriString();
     }
 
     @Override
@@ -189,6 +216,7 @@ public class DouyinService implements LivePlatform {
 
         try {
             String url = buildPartitionUrl(parts[0], parts[1], pg, 15);
+            url = signUrl(url); // 签名
             ResponseEntity<String> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -286,8 +314,9 @@ public class DouyinService implements LivePlatform {
             headers.set("sec-fetch-mode", "cors");
             headers.set("sec-fetch-site", "same-origin");
 
+            String url = signUrl(builder.toUriString()); // 签名
             ResponseEntity<String> response = restTemplate.exchange(
-                    builder.toUriString(),
+                    url,
                     HttpMethod.GET,
                     new HttpEntity<>(headers),
                     String.class
@@ -386,8 +415,9 @@ public class DouyinService implements LivePlatform {
                     .queryParam("browser_name", "Edge")
                     .queryParam("browser_version", "125.0.0.0");
 
+            String url = signUrl(builder.toUriString()); // 签名
             ResponseEntity<String> response = restTemplate.exchange(
-                    builder.toUriString(),
+                    url,
                     HttpMethod.GET,
                     new HttpEntity<>(createHeaders()),
                     String.class
@@ -540,7 +570,10 @@ public class DouyinService implements LivePlatform {
             }
 
             if (!playUrlList.isEmpty()) {
-                playFrom.add("原画");
+                playFrom.add("FLV");
+                if (playUrlList.size() > 1) {
+                    playFrom.add("HLS");
+                }
                 movieDetail.setVod_play_from(String.join("$$$", playFrom));
                 movieDetail.setVod_play_url(String.join("$$$", playUrlList));
             }
@@ -553,14 +586,14 @@ public class DouyinService implements LivePlatform {
         JsonNode flvPullUrl = streamUrl.path("flv_pull_url");
         JsonNode hlsPullUrlMap = streamUrl.path("hls_pull_url_map");
 
-        Map<String, String> flvMap = new HashMap<>();
-        Map<String, String> hlsMap = new HashMap<>();
+        List<String> flvList = new ArrayList<>();
+        List<String> hlsList = new ArrayList<>();
 
         if (flvPullUrl.isObject()) {
             Iterator<String> flvKeys = flvPullUrl.fieldNames();
             while (flvKeys.hasNext()) {
                 String key = flvKeys.next();
-                flvMap.put(key, flvPullUrl.path(key).asText());
+                flvList.add(flvPullUrl.path(key).asText());
             }
         }
 
@@ -568,31 +601,35 @@ public class DouyinService implements LivePlatform {
             Iterator<String> hlsKeys = hlsPullUrlMap.fieldNames();
             while (hlsKeys.hasNext()) {
                 String key = hlsKeys.next();
-                hlsMap.put(key, hlsPullUrlMap.path(key).asText());
+                hlsList.add(hlsPullUrlMap.path(key).asText());
             }
         }
 
-        List<String> flvList = new ArrayList<>(flvMap.values());
-        List<String> hlsList = new ArrayList<>(hlsMap.values());
+        List<String> flv = new ArrayList<>();
+        List<String> hls = new ArrayList<>();
 
         for (JsonNode quality : qualities) {
             int level = quality.path("level").asInt();
             String name = quality.path("name").asText();
 
-            List<String> urls = new ArrayList<>();
-            int flvIndex = flvList.size() - level;
-            if (flvIndex >= 0 && flvIndex < flvList.size()) {
-                urls.add(flvList.get(flvIndex));
+            int index = flvList.size() - level;
+            if (index >= 0 && index < flvList.size()) {
+                flv.add(name + "$" + flvList.get(index));
             }
 
-            int hlsIndex = hlsList.size() - level;
-            if (hlsIndex >= 0 && hlsIndex < hlsList.size()) {
-                urls.add(hlsList.get(hlsIndex));
+            index = hlsList.size() - level;
+            if (index >= 0 && index < hlsList.size()) {
+                hls.add(name + "$" + hlsList.get(index));
             }
+        }
 
-            if (!urls.isEmpty()) {
-                playUrlList.add(name + "$" + String.join("#", urls));
-            }
+        flv = flv.reversed();
+        hls = hls.reversed();
+        if (!flv.isEmpty()) {
+            playUrlList.add(String.join("#", flv));
+        }
+        if (!hls.isEmpty()) {
+            playUrlList.add(String.join("#", hls));
         }
     }
 
@@ -692,9 +729,40 @@ public class DouyinService implements LivePlatform {
     }
 
     private String getFirstUrl(JsonNode urlListNode) {
-        if (urlListNode.isArray() && urlListNode.size() > 0) {
+        if (urlListNode.isArray() && !urlListNode.isEmpty()) {
             return urlListNode.get(0).asText();
         }
         return "";
+    }
+
+    private String signUrl(String url) {
+        try {
+            Map<String, String> requestBody = new HashMap<>();
+            requestBody.put("url", url);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<JsonNode> response = restTemplate.postForEntity(
+                    signApiUrl,
+                    request,
+                    JsonNode.class
+            );
+
+            JsonNode body = response.getBody();
+            if (body != null && body.has("signed_url")) {
+                String signedUrl = body.get("signed_url").asText();
+                log.debug("签名成功: {} -> {}", url, signedUrl);
+                return signedUrl;
+            } else {
+                log.warn("签名API返回无效响应: {}", body);
+                return url;
+            }
+        } catch (Exception e) {
+            log.error("调用签名API失败，使用原始URL: {}", url, e);
+            return url;
+        }
     }
 }

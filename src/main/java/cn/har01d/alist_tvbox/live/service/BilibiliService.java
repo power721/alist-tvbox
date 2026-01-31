@@ -103,13 +103,14 @@ public class BilibiliService implements LivePlatform {
         String url = "https://api.live.bilibili.com/xlive/web-interface/v1/index/getWebAreaList?source_id=2";
         var response = restTemplate.getForObject(url, BilibiliCategoriesResponse.class);
 
+        String cover = getCover();
         for (var data : response.getData().getData()) {
             categoryMap.put(String.valueOf(data.getId()), data.getList());
             Category category = new Category();
             category.setType_id(getType() + "-" + data.getId());
             category.setType_name(data.getName());
             category.setType_flag(0);
-            category.setCover("/bilibili.jpg");
+            category.setCover(cover);
             list.add(category);
         }
 
@@ -119,6 +120,15 @@ public class BilibiliService implements LivePlatform {
 
         log.debug("category result: {}", result);
         return result;
+    }
+
+    private String getCover() {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/bilibili.jpg")
+                .replaceQuery(null)
+                .build()
+                .toUriString();
     }
 
     private final Pattern pattern = Pattern.compile("\"access_id\"\\s*:\\s*\"([^\"]+)\"");
