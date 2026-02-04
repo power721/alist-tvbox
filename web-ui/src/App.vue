@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // @ts-nocheck
 import { RouterView, useRoute, useRouter } from 'vue-router'
-import accountService from "@/services/account.service";
-import { onMounted, ref } from "vue";
-import axios from "axios";
-import { store } from "@/services/store";
+import accountService from '@/services/account.service'
+import { onMounted, ref } from 'vue'
+import axios from 'axios'
+import { store } from '@/services/store'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
 const account = accountService.account
@@ -36,7 +36,7 @@ onMounted(() => {
     store.admin = data.role === 'ADMIN'
   })
 
-  axios.get("/api/profiles").then(({ data }) => {
+  axios.get('/api/profiles').then(({ data }) => {
     store.xiaoya = data.includes('xiaoya')
     store.docker = data.includes('docker')
     store.standalone = data.includes('standalone')
@@ -99,9 +99,14 @@ darkModeQuery.addEventListener('change', handleDarkModeChange)
           <el-menu-item index="/about" v-if="account.authenticated && store.admin">关于</el-menu-item>
           <div class="flex-grow" />
           <span id="mode" v-if="account.authenticated && store.admin">
-            <el-switch v-model="full" inline-prompt active-text="高级模式" inactive-text="简单模式"
+            <el-switch
+              v-model="full"
+              inline-prompt
+              active-text="高级模式"
+              inactive-text="简单模式"
               style="--el-switch-on-color: #13ce66; --el-switch-off-color: #409eff; margin-top: -24px"
-              @change="onModeChange" />
+              @change="onModeChange"
+            />
           </span>
           <el-sub-menu v-if="account.authenticated">
             <template #title>{{ account.username }}</template>

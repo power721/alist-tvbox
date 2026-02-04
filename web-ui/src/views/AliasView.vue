@@ -8,8 +8,8 @@
     <div class="space"></div>
 
     <el-table :data="files" border style="width: 100%">
-      <el-table-column prop="id" label="ID" width="70"/>
-      <el-table-column prop="path" label="挂载路径"/>
+      <el-table-column prop="id" label="ID" width="70" />
+      <el-table-column prop="path" label="挂载路径" />
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
@@ -21,18 +21,23 @@
     <el-dialog v-model="formVisible" :fullscreen="fullscreen" :title="dialogTitle">
       <el-form :model="form">
         <el-form-item label="挂载路径" label-width="120" required>
-          <el-input v-model="form.path" autocomplete="off"/>
+          <el-input v-model="form.path" autocomplete="off" />
         </el-form-item>
         <el-form-item label="内容" label-width="120" required>
-          <el-input v-model="form.content" type="textarea" :rows="fullscreen?45:15" placeholder="多行路径，每行一个路径或者路径:文件夹"/>
+          <el-input
+            v-model="form.content"
+            type="textarea"
+            :rows="fullscreen ? 45 : 15"
+            placeholder="多行路径，每行一个路径或者路径:文件夹"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="handleCancel">取消</el-button>
-        <el-button @click="fullscreen=!fullscreen">{{fullscreen?'缩小':'全屏'}}</el-button>
-        <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="handleCancel">取消</el-button>
+          <el-button @click="fullscreen = !fullscreen">{{ fullscreen ? '缩小' : '全屏' }}</el-button>
+          <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -40,18 +45,18 @@
       <p>是否删除别名</p>
       <p>{{ form.path }}</p>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="deleteSub">删除</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="danger" @click="deleteSub">删除</el-button>
+        </span>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
-import axios from "axios"
+import { onMounted, ref } from 'vue'
+import axios from 'axios'
 
 const updateAction = ref(false)
 const dialogTitle = ref('')
@@ -62,7 +67,7 @@ const fullscreen = ref(false)
 const form = ref({
   id: 0,
   path: '',
-  content: ''
+  content: '',
 })
 
 const handleAdd = () => {
@@ -71,13 +76,13 @@ const handleAdd = () => {
   form.value = {
     id: 0,
     path: '',
-    content: ''
+    content: '',
   }
   formVisible.value = true
 }
 
 const handleEdit = (file: any) => {
-  axios.get('/api/alist/alias/' + file.id).then(({data}) => {
+  axios.get('/api/alist/alias/' + file.id).then(({ data }) => {
     dialogTitle.value = '更新别名 - ' + file.id
     updateAction.value = true
     form.value = data
@@ -110,7 +115,7 @@ const handleConfirm = () => {
 }
 
 const load = () => {
-  axios.get('/api/alist/alias').then(({data}) => {
+  axios.get('/api/alist/alias').then(({ data }) => {
     files.value = data
   })
 }

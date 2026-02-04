@@ -6,12 +6,12 @@
     </div>
 
     <div>
-      <el-input v-model="id" @keyup.enter="getDetail" placeholder="vod_id"/>
+      <el-input v-model="id" @keyup.enter="getDetail" placeholder="vod_id" />
       <el-button type="primary" @click="getDetail">资源详情</el-button>
     </div>
 
     <div>
-      <el-input v-model="path" @keyup.enter="load" placeholder="目录完整路径"/>
+      <el-input v-model="path" @keyup.enter="load" placeholder="目录完整路径" />
       <el-button type="primary" @click="load">加载目录</el-button>
     </div>
 
@@ -32,15 +32,22 @@
 
     <h2>API返回数据</h2>
     <div class="data">
-      <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=5></json-viewer>
+      <json-viewer
+        :value="config"
+        expanded
+        copyable
+        show-double-quotes
+        :show-array-index="false"
+        :expand-depth="5"
+      ></json-viewer>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
-import axios from "axios"
-import {store} from "@/services/store";
+import { onMounted, ref } from 'vue'
+import axios from 'axios'
+import { store } from '@/services/store'
 
 const type = ref('1')
 const id = ref('')
@@ -67,26 +74,26 @@ const getPath = (type: string) => {
 
 const getDetail = function () {
   url.value = currentUrl + getPath(type.value) + '/' + store.token + '?ids=' + id.value
-  axios.get(getPath(type.value) + '/' + store.token + '?ids=' + id.value).then(({data}) => {
+  axios.get(getPath(type.value) + '/' + store.token + '?ids=' + id.value).then(({ data }) => {
     config.value = data
   })
 }
 
 const load = function () {
   url.value = currentUrl + getPath(type.value) + '/' + store.token + '?t=' + path.value
-  axios.get(getPath(type.value) + '/' + store.token + '?t=' + path.value ).then(({data}) => {
+  axios.get(getPath(type.value) + '/' + store.token + '?t=' + path.value).then(({ data }) => {
     config.value = data
   })
 }
 
 onMounted(async () => {
   if (!store.token) {
-    store.token = await axios.get("/api/token").then(({data}) => {
-      return data.token ? data.token.split(",")[0] : "-"
-    });
+    store.token = await axios.get('/api/token').then(({ data }) => {
+      return data.token ? data.token.split(',')[0] : '-'
+    })
   }
   url.value = currentUrl + getPath(type.value) + '/' + store.token
-  axios.get(getPath(type.value) + '/' + store.token).then(({data}) => {
+  axios.get(getPath(type.value) + '/' + store.token).then(({ data }) => {
     config.value = data
   })
 })

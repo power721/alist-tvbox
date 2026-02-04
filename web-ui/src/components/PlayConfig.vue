@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // @ts-nocheck
-import {VueDraggable} from "vue-draggable-plus";
-import {onMounted, ref} from "vue";
-import axios from "axios";
-import {ElMessage} from "element-plus";
-import Sortable from "sortablejs";
-import {Check, Close} from "@element-plus/icons-vue";
+import { VueDraggable } from 'vue-draggable-plus'
+import { onMounted, ref } from 'vue'
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
+import Sortable from 'sortablejs'
+import { Check, Close } from '@element-plus/icons-vue'
 
 interface Channel {
   id: number | null
@@ -50,69 +50,69 @@ const form = ref<Channel>({
 })
 
 const options = [
-  {label: '全部', value: 'ALL'},
-  {label: '百度', value: '10'},
-  {label: '天翼', value: '9'},
-  {label: '夸克', value: '5'},
-  {label: 'UC', value: '7'},
-  {label: '阿里', value: '0'},
-  {label: '115', value: '8'},
-  {label: '123', value: '3'},
-  {label: '迅雷', value: '2'},
-  {label: '移动', value: '6'},
-  {label: 'PikPak', value: '1'},
+  { label: '全部', value: 'ALL' },
+  { label: '百度', value: '10' },
+  { label: '天翼', value: '9' },
+  { label: '夸克', value: '5' },
+  { label: 'UC', value: '7' },
+  { label: '阿里', value: '0' },
+  { label: '115', value: '8' },
+  { label: '123', value: '3' },
+  { label: '迅雷', value: '2' },
+  { label: '移动', value: '6' },
+  { label: 'PikPak', value: '1' },
 ]
 
 const options2 = [
-  {label: '聚合', value: -1},
-  {label: '夸克', value: 5},
-  {label: 'UC', value: 7},
-  {label: '阿里', value: 0},
-  {label: '115', value: 8},
-  {label: '123', value: 3},
-  {label: '天翼', value: 9},
-  {label: '百度', value: 10},
-  {label: '迅雷', value: 2},
-  {label: '移动', value: 6},
-  {label: 'PikPak', value: 1},
+  { label: '聚合', value: -1 },
+  { label: '夸克', value: 5 },
+  { label: 'UC', value: 7 },
+  { label: '阿里', value: 0 },
+  { label: '115', value: 8 },
+  { label: '123', value: 3 },
+  { label: '天翼', value: 9 },
+  { label: '百度', value: 10 },
+  { label: '迅雷', value: 2 },
+  { label: '移动', value: 6 },
+  { label: 'PikPak', value: 1 },
 ]
 
 const orders = [
-  {label: '时间', value: 'time'},
-  {label: '网盘', value: 'type'},
-  {label: '名称', value: 'name'},
-  {label: '频道', value: 'channel'},
+  { label: '时间', value: 'time' },
+  { label: '网盘', value: 'type' },
+  { label: '名称', value: 'name' },
+  { label: '频道', value: 'channel' },
 ]
 
 const sources = [
-  {label: '全部', value: 'all'},
-  {label: '电报', value: 'tg'},
-  {label: '插件', value: 'plugin'},
+  { label: '全部', value: 'all' },
+  { label: '电报', value: 'tg' },
+  { label: '插件', value: 'plugin' },
 ]
 
 const activeName = ref('basic')
 
 const getTypeName = (id: number) => {
-  return options2.find(e => e.value === id)?.label
+  return options2.find((e) => e.value === id)?.label
 }
 
 const updateTgTimeout = () => {
-  axios.post('/api/settings', {name: 'tg_timeout', value: tgTimeout.value + ''}).then(() => {
+  axios.post('/api/settings', { name: 'tg_timeout', value: tgTimeout.value + '' }).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateTgSearch = () => {
-  axios.post('/api/settings', {name: 'tg_search', value: tgSearch.value}).then(({data}) => {
+  axios.post('/api/settings', { name: 'tg_search', value: tgSearch.value }).then(({ data }) => {
     tgSearch.value = data.value
     ElMessage.success('更新成功')
   })
 }
 
 const updatePanSouUrl = () => {
-  axios.post('/api/settings', {name: 'pan_sou_url', value: panSouUrl.value}).then(({data}) => {
+  axios.post('/api/settings', { name: 'pan_sou_url', value: panSouUrl.value }).then(({ data }) => {
     panSouUrl.value = data.value
-    axios.get('/api/pansou').then(({data}) => {
+    axios.get('/api/pansou').then(({ data }) => {
       plugins.value = data.plugins
     })
     ElMessage.success('更新成功')
@@ -120,23 +120,31 @@ const updatePanSouUrl = () => {
 }
 
 const updatePanSouSource = () => {
-  axios.post('/api/settings', {name: 'pan_sou_source', value: panSouSource.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
+  axios
+    .post('/api/settings', {
+      name: 'pan_sou_source',
+      value: panSouSource.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+    })
 }
 
 const updateCover = () => {
-  axios.post('/api/settings', {name: 'video_cover', value: cover.value}).then(({data}) => {
+  axios.post('/api/settings', { name: 'video_cover', value: cover.value }).then(({ data }) => {
     cover.value = data.value
     ElMessage.success('更新成功')
   })
 }
 
 const updateDrivers = () => {
-  const order = tgDriverOrder.value.map(e => e.id).join(',')
-  axios.post('/api/settings', {name: 'tgDriverOrder', value: order}).then()
-  const value = tgDriverOrder.value.map(e => e.id).filter(e => tgDrivers.value.includes(e)).join(',')
-  axios.post('/api/settings', {name: 'tg_drivers', value: value}).then(({data}) => {
+  const order = tgDriverOrder.value.map((e) => e.id).join(',')
+  axios.post('/api/settings', { name: 'tgDriverOrder', value: order }).then()
+  const value = tgDriverOrder.value
+    .map((e) => e.id)
+    .filter((e) => tgDrivers.value.includes(e))
+    .join(',')
+  axios.post('/api/settings', { name: 'tg_drivers', value: value }).then(({ data }) => {
     tgDrivers.value = data.value.split(',')
     ElMessage.success('更新成功')
   })
@@ -144,14 +152,14 @@ const updateDrivers = () => {
 
 const updatePlugins = () => {
   const value = panSouPlugins.value.join(',')
-  axios.post('/api/settings', {name: 'panSouPlugins', value: value}).then(({data}) => {
+  axios.post('/api/settings', { name: 'panSouPlugins', value: value }).then(({ data }) => {
     panSouPlugins.value = data.value.split(',')
     ElMessage.success('更新成功')
   })
 }
 
 const updateOrder = () => {
-  axios.post('/api/settings', {name: 'tg_sort_field', value: tgSortField.value}).then(() => {
+  axios.post('/api/settings', { name: 'tg_sort_field', value: tgSortField.value }).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -159,10 +167,7 @@ const updateOrder = () => {
 const changed = ref(false)
 const tableKey = ref(0)
 
-const tableRowClassName = ({row}: {
-  row: Channel
-  rowIndex: number
-}) => {
+const tableRowClassName = ({ row }: { row: Channel; rowIndex: number }) => {
   if (row.changed) {
     return 'warning-row'
   }
@@ -174,18 +179,18 @@ const treeToTile = (treeData: Channel[]) => {
 }
 
 const rowDrop = () => {
-  const tbody = document.querySelector("#channels tbody") as HTMLElement;
+  const tbody = document.querySelector('#channels tbody') as HTMLElement
   Sortable.create(tbody, {
     animation: 500,
-    handle: ".el-table__row",
-    draggable: ".el-table__row",
+    handle: '.el-table__row',
+    draggable: '.el-table__row',
     onMove() {
       activeRows.value = treeToTile(channels.value)
       return true
     },
     onEnd: (event: any) => {
-      let oldIndex = event.oldIndex
-      let newIndex = event.newIndex
+      const oldIndex = event.oldIndex
+      const newIndex = event.newIndex
       const oldRow = activeRows.value[oldIndex]
       const newRow = activeRows.value[newIndex]
       if (!oldRow || oldIndex === newIndex || oldRow.id === newRow.id) {
@@ -197,7 +202,7 @@ const rowDrop = () => {
       let order = 0
       const items: Channel[] = []
 
-      activeRows.value.forEach(e => {
+      activeRows.value.forEach((e) => {
         e.order = order++
         items.push(e)
       })
@@ -210,7 +215,7 @@ const rowDrop = () => {
       newRow.changed = true
       changed.value = true
     },
-  });
+  })
 }
 
 const handleAdd = () => {
@@ -262,7 +267,7 @@ const handleConfirm = () => {
 }
 
 const handleSave = () => {
-  axios.put('/api/telegram/channels', channels.value).then(({data}) => {
+  axios.put('/api/telegram/channels', channels.value).then(({ data }) => {
     ElMessage.success('保存成功')
     changed.value = false
     channels.value = data
@@ -270,7 +275,7 @@ const handleSave = () => {
 }
 
 const reload = () => {
-  axios.post('/api/telegram/reloadChannels').then(({data}) => {
+  axios.post('/api/telegram/reloadChannels').then(({ data }) => {
     ElMessage.success('重置成功')
     changed.value = false
     channels.value = data
@@ -278,7 +283,7 @@ const reload = () => {
 }
 
 const validate = () => {
-  axios.post('/api/telegram/validateChannels').then(({data}) => {
+  axios.post('/api/telegram/validateChannels').then(({ data }) => {
     ElMessage.success('校验完成')
     changed.value = false
     channels.value = data
@@ -286,7 +291,7 @@ const validate = () => {
 }
 
 const loadChannels = () => {
-  return axios.get('/api/telegram/channels').then(({data}) => {
+  return axios.get('/api/telegram/channels').then(({ data }) => {
     channels.value = data
     changed.value = false
     return data
@@ -297,13 +302,13 @@ onMounted(() => {
   loadChannels().then(() => {
     rowDrop()
   })
-  axios.get('/api/settings').then(({data}) => {
+  axios.get('/api/settings').then(({ data }) => {
     tgChannels.value = data.tg_channels
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
     panSouUrl.value = data.pan_sou_url
     if (panSouUrl.value) {
-      axios.get('/api/pansou').then(({data}) => {
+      axios.get('/api/pansou').then(({ data }) => {
         plugins.value = data.plugins
       })
     }
@@ -312,10 +317,10 @@ onMounted(() => {
     }
     panSouSource.value = data.pan_sou_source || 'all'
     tgSortField.value = data.tg_sort_field || 'time'
-    tgDriverOrder.value = data.tgDriverOrder.split(',').map(e => {
+    tgDriverOrder.value = data.tgDriverOrder.split(',').map((e) => {
       return {
         id: e,
-        name: options.find(o => o.value === e)?.label
+        name: options.find((o) => o.value === e)?.label,
       }
     })
     if (data.tg_drivers && data.tg_drivers.length) {
@@ -332,13 +337,13 @@ onMounted(() => {
     <el-tab-pane label="基本配置" name="basic">
       <el-form label-width="140">
         <el-form-item label="搜索超时时间">
-          <el-input-number v-model="tgTimeout" :min="500" :max="30000"/>&nbsp;毫秒
+          <el-input-number v-model="tgTimeout" :min="500" :max="30000" />&nbsp;毫秒
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgTimeout">更新</el-button>
         </el-form-item>
         <el-form-item label="PanSou地址">
-          <el-input v-model="panSouUrl" placeholder="http://IP:8888"/>
+          <el-input v-model="panSouUrl" placeholder="http://IP:8888" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updatePanSouUrl">更新</el-button>
@@ -356,7 +361,7 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="PanSou插件" v-if="panSouUrl">
           <el-checkbox-group v-model="panSouPlugins">
-            <el-checkbox v-for="item in plugins" :label="item" :value="item" :key="item"/>
+            <el-checkbox v-for="item in plugins" :label="item" :value="item" :key="item" />
           </el-checkbox-group>
         </el-form-item>
         <el-form-item v-if="panSouUrl">
@@ -386,7 +391,7 @@ onMounted(() => {
           <el-button type="primary" @click="updateOrder">更新</el-button>
         </el-form-item>
         <el-form-item label="默认视频壁纸">
-          <el-input v-model="cover"/>
+          <el-input v-model="cover" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateCover">更新</el-button>
@@ -407,31 +412,31 @@ onMounted(() => {
         <el-button type="primary" @click="handleAdd">添加</el-button>
       </el-row>
       <div class="space"></div>
-      <el-table :data="channels"
-                :row-class-name="tableRowClassName"
-                row-key="id"
-                id="channels"
-                :key="tableKey"
-                style="width: 100%">
+      <el-table
+        :data="channels"
+        :row-class-name="tableRowClassName"
+        row-key="id"
+        id="channels"
+        :key="tableKey"
+        style="width: 100%"
+      >
         <el-table-column prop="order" label="顺序" width="60">
           <template #default="scope">
             <span class="pointer">{{ scope.row.order }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="id" label="ID" width="120"/>
+        <el-table-column prop="id" label="ID" width="120" />
         <el-table-column prop="username" label="用户名" width="160">
           <template #default="scope">
-            <a :href="'https://t.me/'+scope.row.username" target="_blank">
+            <a :href="'https://t.me/' + scope.row.username" target="_blank">
               {{ scope.row.username }}
             </a>
           </template>
         </el-table-column>
-        <el-table-column prop="title" label="标题"/>
+        <el-table-column prop="title" label="标题" />
         <el-table-column prop="web" label="网页访问" width="100">
           <template #default="scope">
-            <a :href="'https://t.me/s/'+scope.row.username" target="_blank" v-if="scope.row.webAccess">
-              web
-            </a>
+            <a :href="'https://t.me/s/' + scope.row.username" target="_blank" v-if="scope.row.webAccess"> web </a>
             <span v-else></span>
           </template>
         </el-table-column>
@@ -442,16 +447,16 @@ onMounted(() => {
         </el-table-column>
         <el-table-column prop="enabled" label="开启搜索？" width="140">
           <template #default="scope">
-            <el-switch v-model="scope.row.enabled" @change="changed=true"/>
+            <el-switch v-model="scope.row.enabled" @change="changed = true" />
           </template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="70">
           <template #default="scope">
             <el-icon v-if="scope.row.valid">
-              <Check/>
+              <Check />
             </el-icon>
             <el-icon v-else>
-              <Close/>
+              <Close />
             </el-icon>
           </template>
         </el-table-column>
@@ -474,29 +479,24 @@ onMounted(() => {
   <el-dialog v-model="formVisible" :title="dialogTitle">
     <el-form label-width="140" :model="form">
       <el-form-item label="用户名" required>
-        <el-input style="width: 200px" v-model="form.username" autocomplete="off"/>
+        <el-input style="width: 200px" v-model="form.username" autocomplete="off" />
       </el-form-item>
-<!--      <el-form-item label="ID">-->
-<!--        <el-input v-model="form.id" autocomplete="off"/>-->
-<!--      </el-form-item>-->
-<!--      <el-form-item label="Access Hash">-->
-<!--        <el-input v-model="form.accessHash" autocomplete="off"/>-->
-<!--      </el-form-item>-->
+      <!--      <el-form-item label="ID">-->
+      <!--        <el-input v-model="form.id" autocomplete="off"/>-->
+      <!--      </el-form-item>-->
+      <!--      <el-form-item label="Access Hash">-->
+      <!--        <el-input v-model="form.accessHash" autocomplete="off"/>-->
+      <!--      </el-form-item>-->
       <el-form-item label="开启搜索？">
-        <el-switch v-model="form.enabled"/>
+        <el-switch v-model="form.enabled" />
       </el-form-item>
       <el-form-item label="资源类型">
         <el-select style="width: 120px" v-model="form.type">
-          <el-option
-            v-for="item in options2"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
+          <el-option v-for="item in options2" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>
       <el-form-item label="顺序">
-        <el-input-number v-model="form.order" :min="0"/>
+        <el-input-number v-model="form.order" :min="0" />
       </el-form-item>
     </el-form>
     <template #footer>
@@ -506,7 +506,6 @@ onMounted(() => {
       </span>
     </template>
   </el-dialog>
-
 </template>
 
 <style scoped>

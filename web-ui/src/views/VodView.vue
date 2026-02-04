@@ -1,11 +1,10 @@
 <template>
   <div class="vod">
-
     <el-row justify="space-between">
       <el-col :span="18">
         <el-breadcrumb separator="/">
-          <el-breadcrumb-item v-for="(item,index) in paths">
-            <a id="copy" @click="copy(item.path)" v-if="index==paths.length-1">
+          <el-breadcrumb-item v-for="(item, index) in paths">
+            <a id="copy" @click="copy(item.path)" v-if="index == paths.length - 1">
               {{ item.text }}
             </a>
             <a @click="loadFolder(item.path)" v-else>
@@ -18,16 +17,16 @@
       <el-col :span="2">
         <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源">
           <template #append>
-            <el-button :icon="Search" :disabled="searching" @click="search"/>
+            <el-button :icon="Search" :disabled="searching" @click="search" />
           </template>
         </el-input>
       </el-col>
 
       <el-col :span="2">
-        <el-button :icon="HomeFilled" circle @click="goBack" v-if="isHistory"/>
-        <el-button :icon="Film" circle @click="goHistory" v-else/>
-        <el-button :icon="Setting" circle @click="settingVisible=true" v-if="store.admin"/>
-        <el-button :icon="Plus" circle @click="handleAdd"/>
+        <el-button :icon="HomeFilled" circle @click="goBack" v-if="isHistory" />
+        <el-button :icon="Film" circle @click="goHistory" v-else />
+        <el-button :icon="Setting" circle @click="settingVisible = true" v-if="store.admin" />
+        <el-button :icon="Plus" circle @click="handleAdd" />
         <el-button type="warning" @click="openDoubanMode">豆瓣</el-button>
       </el-col>
     </el-row>
@@ -38,12 +37,7 @@
       <el-col :xs="3" :sm="3" :md="5" :span="9" v-if="results.length">
         {{ filteredResults.length }}/{{ results.length }}条搜索结果&nbsp;&nbsp;
         <el-select style="width: 90px" v-model="shareType" @change="filterSearchResults">
-          <el-option
-            v-for="item in options"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
+          <el-option v-for="item in options" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <el-button :icon="Delete" circle @click="clearSearch"></el-button>
         <el-table :data="filteredResults" v-loading="searching" class="results" @row-click="loadResult">
@@ -60,43 +54,56 @@
 
       <el-col :xs="22" :sm="20" :md="18" :span="14">
         <el-row justify="end">
-          <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
+          <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory && selected.length">删除</el-button>
           <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
           <el-button @click="showScan" v-if="store.admin">同步影视</el-button>
           <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
         </el-row>
-        <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" style="width: 100%"
-                  @row-click="load">
-          <el-table-column type="selection" width="55" v-if="isHistory"/>
+        <el-table
+          v-loading="loading"
+          :data="files"
+          @selection-change="handleSelectionChange"
+          style="width: 100%"
+          @row-click="load"
+        >
+          <el-table-column type="selection" width="55" v-if="isHistory" />
           <el-table-column prop="vod_name" label="名称" sortable>
             <template #default="scope">
               <el-popover :width="300" placement="left-start" v-if="scope.row.vod_pic">
-                <template #reference>
-                  📺
-                </template>
+                <template #reference> 📺 </template>
                 <template #default>
-                  <el-image :src="imageUrl(scope.row.vod_pic)" loading="lazy" show-progress fit="cover"/>
+                  <el-image :src="imageUrl(scope.row.vod_pic)" loading="lazy" show-progress fit="cover" />
                 </template>
               </el-popover>
-              <span v-else-if="scope.row.type==1">📂</span>
-              <span v-else-if="scope.row.type==2">🎬</span>
-              <span v-else-if="scope.row.type==3">🎧</span>
-              <span v-else-if="scope.row.type==4">🖹</span>
-              <span v-else-if="scope.row.type==5">📷</span>
-              <span v-else-if="scope.row.type==9">▶️</span>
+              <span v-else-if="scope.row.type == 1">📂</span>
+              <span v-else-if="scope.row.type == 2">🎬</span>
+              <span v-else-if="scope.row.type == 3">🎧</span>
+              <span v-else-if="scope.row.type == 4">🖹</span>
+              <span v-else-if="scope.row.type == 5">📷</span>
+              <span v-else-if="scope.row.type == 9">▶️</span>
               <span>{{ scope.row.vod_name }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="vod_remarks" label="大小" width="120"
-                           sortable :sort-method="sortFileSizes" v-if="!isHistory">
+          <el-table-column
+            prop="vod_remarks"
+            label="大小"
+            width="120"
+            sortable
+            :sort-method="sortFileSizes"
+            v-if="!isHistory"
+          >
             <template #default="scope">
               {{ scope.row.vod_tag === 'file' ? scope.row.vod_remarks : '-' }}
             </template>
           </el-table-column>
           <el-table-column prop="dbid" label="豆瓣ID" width="120" v-if="!isHistory">
             <template #default="scope">
-              <a @click.stop :href="'https://movie.douban.com/subject/'+scope.row.dbid" target="_blank"
-                 v-if="scope.row.dbid">
+              <a
+                @click.stop
+                :href="'https://movie.douban.com/subject/' + scope.row.dbid"
+                target="_blank"
+                v-if="scope.row.dbid"
+              >
                 {{ scope.row.dbid }}
               </a>
             </template>
@@ -111,9 +118,9 @@
               {{ scope.row.index > 0 ? scope.row.index : '' }}
             </template>
           </el-table-column>
-          <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
-          <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
-          <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="165" sortable/>
+          <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory" />
+          <el-table-column prop="progress" label="进度" width="120" v-if="isHistory" />
+          <el-table-column prop="vod_time" :label="isHistory ? '播放时间' : '修改时间'" width="165" sortable />
           <el-table-column width="90" v-if="isHistory">
             <template #default="scope">
               <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
@@ -121,35 +128,53 @@
           </el-table-column>
           <el-table-column width="120" v-else>
             <template #default="scope">
-              <el-button link type="primary" @click.stop="showRenameFile(scope.row)" v-if="store.admin&&scope.row.type!=9">
+              <el-button
+                link
+                type="primary"
+                @click.stop="showRenameFile(scope.row)"
+                v-if="store.admin && scope.row.type != 9"
+              >
                 重命名
               </el-button>
-              <el-button link type="danger" @click.stop="showRemoveFile(scope.row)" v-if="store.admin&&scope.row.type!=9">
+              <el-button
+                link
+                type="danger"
+                @click.stop="showRemoveFile(scope.row)"
+                v-if="store.admin && scope.row.type != 9"
+              >
                 删除
               </el-button>
             </template>
           </el-table-column>
         </el-table>
-        <el-pagination layout="total, prev, pager, next, jumper, sizes"
-                       :current-page="page" :page-size="size" :total="total"
-                       @current-change="handlePageChange" @size-change="handleSizeChange"/>
+        <el-pagination
+          layout="total, prev, pager, next, jumper, sizes"
+          :current-page="page"
+          :page-size="size"
+          :total="total"
+          @current-change="handlePageChange"
+          @size-change="handleSizeChange"
+        />
       </el-col>
     </el-row>
 
     <el-dialog v-model="imageVisible" :title="playItem.title" :fullscreen="true">
       <el-row>
         <el-col :span="18">
-          <el-image style="height:1080px;width:100%" fit="contain" :src="playItem.url"
-                    :preview-src-list="[playItem.url]" :hide-on-click-modal="true"/>
+          <el-image
+            style="height: 1080px; width: 100%"
+            fit="contain"
+            :src="playItem.url"
+            :preview-src-list="[playItem.url]"
+            :hide-on-click-modal="true"
+          />
         </el-col>
         <el-col :span="5">
           <el-scrollbar ref="scrollbarRef" height="1050px">
-            <div style="margin-left: 30px; margin-bottom: 10px;">
-              {{ currentImageIndex + 1 }} / {{ images.length }}
-            </div>
+            <div style="margin-left: 30px; margin-bottom: 10px">{{ currentImageIndex + 1 }} / {{ images.length }}</div>
             <ul>
               <li v-for="(image, index) in images" :key="index" @click="loadDetail(image.vod_id)">
-                <el-link type="primary" v-if="currentImageIndex==index">{{ image.vod_name }}</el-link>
+                <el-link type="primary" v-if="currentImageIndex == index">{{ image.vod_name }}</el-link>
                 <el-link v-else>{{ image.vod_name }}</el-link>
               </li>
             </ul>
@@ -158,21 +183,27 @@
       </el-row>
     </el-dialog>
 
-    <el-dialog class="player" v-model="dialogVisible" :fullscreen="true" :show-close="false" @opened="start"
-               @close="stop">
+    <el-dialog
+      class="player"
+      v-model="dialogVisible"
+      :fullscreen="true"
+      :show-close="false"
+      @opened="start"
+      @close="stop"
+    >
       <template #header="{ close, titleId, titleClass }">
         <div class="my-header">
           <h5 :id="titleId" :class="titleClass">{{ playItem.title }}</h5>
           <div class="buttons">
             <el-button @click="toggleFullscreen">
               <el-icon class="el-icon--left">
-                <FullScreen/>
+                <FullScreen />
               </el-icon>
               全屏
             </el-button>
             <el-button @click="close">
               <el-icon class="el-icon--left">
-                <CircleCloseFilled/>
+                <CircleCloseFilled />
               </el-icon>
               关闭
             </el-button>
@@ -181,7 +212,7 @@
       </template>
       <div class="video-container">
         <el-row>
-          <el-col :class="{wide:isWideMode}" :span="isWideMode ? 24 : 18">
+          <el-col :class="{ wide: isWideMode }" :span="isWideMode ? 24 : 18">
             <video
               ref="videoPlayer"
               :src="playItem.url"
@@ -191,25 +222,17 @@
               @play="updatePlayState"
               @pause="updatePlayState"
               @volumechange="updateMuteState"
-              controls>
-            </video>
+              controls
+            ></video>
           </el-col>
           <el-col :span="5" v-show="!isWideMode">
-            <div v-if="playlist.length>1">
-              <div style="margin-left: 30px; margin-bottom: 10px;">
-                <el-link @click="openListInVLC(currentVideoIndex)">第{{
-                    currentVideoIndex + 1
-                  }}集
-                </el-link>
+            <div v-if="playlist.length > 1">
+              <div style="margin-left: 30px; margin-bottom: 10px">
+                <el-link @click="openListInVLC(currentVideoIndex)">第{{ currentVideoIndex + 1 }}集 </el-link>
                 /
                 <el-link @click="openListInVLC(0)">总共{{ playlist.length }}集</el-link>
                 <el-select v-model="order" @change="sort" placeholder="排序" style="width: 110px; margin-left: 10px">
-                  <el-option
-                    v-for="item in sortOrders"
-                    :key="item.value"
-                    :label="item.label"
-                    :value="item.value"
-                  />
+                  <el-option v-for="item in sortOrders" :key="item.value" :label="item.label" :value="item.value" />
                 </el-select>
               </div>
               <el-scrollbar ref="scrollbarRef" height="1050px">
@@ -218,7 +241,7 @@
                     <el-popover placement="right" v-if="store.admin">
                       <template #reference>
                         <div>
-                          <el-link type="primary" v-if="currentVideoIndex==index">
+                          <el-link type="primary" v-if="currentVideoIndex == index">
                             {{ video.title }}
                           </el-link>
                           <el-link @click="playVideo(index)" v-else>
@@ -229,14 +252,14 @@
                       </template>
                       <template #default>
                         <el-button-group class="ml-4">
-                          <el-button type="primary" :icon="Edit" @click="showRename(video)"/>
-                          <el-button type="danger" :icon="Delete" @click="showRemove(video)" v-if="video!=playItem"/>
-                          <el-rate v-model="video.rating" @change="updateRating(video)" clearable/>
+                          <el-button type="primary" :icon="Edit" @click="showRename(video)" />
+                          <el-button type="danger" :icon="Delete" @click="showRemove(video)" v-if="video != playItem" />
+                          <el-rate v-model="video.rating" @change="updateRating(video)" clearable />
                         </el-button-group>
                       </template>
                     </el-popover>
                     <div v-else>
-                      <el-link type="primary" v-if="currentVideoIndex==index">
+                      <el-link type="primary" v-if="currentVideoIndex == index">
                         {{ video.title }}
                       </el-link>
                       <el-link @click="playVideo(index)" v-else>
@@ -252,7 +275,7 @@
         </el-row>
 
         <el-row>
-          <el-col :class="{wide:isWideMode}" :span="isWideMode ? 24 : 18">
+          <el-col :class="{ wide: isWideMode }" :span="isWideMode ? 24 : 18">
             <div>
               <el-button-group>
                 <el-button @click="play" v-if="!playing">播放</el-button>
@@ -264,17 +287,19 @@
                 <el-button @click="toggleFullscreen">全屏</el-button>
                 <el-button @click="backward">后退</el-button>
                 <el-button @click="forward">前进</el-button>
-                <el-button @click="playPrevVideo" v-if="playlist.length>1">上集</el-button>
-                <el-button @click="playNextVideo" v-if="playlist.length>1">下集</el-button>
-                <el-popover placement="top" :width="400" trigger="click" v-if="playlist.length>1">
+                <el-button @click="playPrevVideo" v-if="playlist.length > 1">上集</el-button>
+                <el-button @click="playNextVideo" v-if="playlist.length > 1">下集</el-button>
+                <el-popover placement="top" :width="400" trigger="click" v-if="playlist.length > 1">
                   <template #reference>
-                    <el-button @click="scrollEpisodeList">选集 {{ currentVideoIndex + 1 }}/{{ playlist.length }}</el-button>
+                    <el-button @click="scrollEpisodeList"
+                    >选集 {{ currentVideoIndex + 1 }}/{{ playlist.length }}</el-button
+                    >
                   </template>
                   <template #default>
                     <div>
-                      <div style="margin-bottom: 10px;">
-                        <span style="margin-right: 10px;">排序:</span>
-                        <el-select v-model="order" @change="sort" placeholder="排序" style="width: 130px;">
+                      <div style="margin-bottom: 10px">
+                        <span style="margin-right: 10px">排序:</span>
+                        <el-select v-model="order" @change="sort" placeholder="排序" style="width: 130px">
                           <el-option
                             v-for="item in sortOrders"
                             :key="item.value"
@@ -289,10 +314,10 @@
                             v-for="(video, index) in playlist"
                             :key="index"
                             @click="playVideo(index)"
-                            style="padding: 8px; cursor: pointer; border-radius: 4px;"
+                            style="padding: 8px; cursor: pointer; border-radius: 4px"
                             :style="{
                               backgroundColor: currentVideoIndex === index ? '#409eff' : 'transparent',
-                              color: currentVideoIndex === index ? '#fff' : 'inherit'
+                              color: currentVideoIndex === index ? '#fff' : 'inherit',
                             }"
                           >
                             {{ video.title }}
@@ -302,7 +327,7 @@
                     </div>
                   </template>
                 </el-popover>
-                <el-popover placement="bottom" width="400px" v-if="playlist.length>1">
+                <el-popover placement="bottom" width="400px" v-if="playlist.length > 1">
                   <template #reference>
                     <el-button>片头<span v-if="skipStart">★</span></el-button>
                   </template>
@@ -330,7 +355,7 @@
                     />
                   </template>
                 </el-popover>
-                <el-popover placement="bottom" width="400px" v-if="playlist.length>1">
+                <el-popover placement="bottom" width="400px" v-if="playlist.length > 1">
                   <template #reference>
                     <el-button>片尾<span v-if="skipEnd">★</span></el-button>
                   </template>
@@ -364,7 +389,12 @@
                   </template>
                   <template #default>
                     播放速度
-                    <el-slider v-model="currentSpeed" @change="setSpeed" :min="0.5" :max="2" :step="0.1" show-stops/>
+                    <el-slider v-model="currentSpeed"
+                               @change="setSpeed"
+                               :min="0.5"
+                               :max="2"
+                               :step="0.1"
+                               show-stops />
                   </template>
                 </el-popover>
                 <el-popover placement="bottom" width="300px">
@@ -373,12 +403,12 @@
                   </template>
                   <template #default>
                     音量
-                    <el-slider v-model="currentVolume" @change="setVolume" :min="0" :max="100" :step="5"/>
+                    <el-slider v-model="currentVolume" @change="setVolume" :min="0" :max="100" :step="5" />
                   </template>
                 </el-popover>
                 <el-button @click="showScrape" title="刮削">
                   <el-icon>
-                    <Connection/>
+                    <Connection />
                   </el-icon>
                 </el-button>
                 <!--                <el-popover placement="bottom" width="100px" v-if="playItem.rating">-->
@@ -399,7 +429,7 @@
                 <!--                </el-popover>-->
                 <el-button @click="showPush" title="推送" v-if="devices.length">
                   <el-icon>
-                    <Upload/>
+                    <Upload />
                   </el-icon>
                 </el-button>
                 <el-popover placement="bottom" width="350px">
@@ -408,21 +438,30 @@
                   </template>
                   <template #default>
                     <div class="players">
-                      <a :href="'iina://weblink?url='+playItem.url"><img alt="iina" src="/iina.webp"></a>
-                      <a :href="'potplayer://'+playItem.url"><img alt="potplayer" src="/potplayer.webp"></a>
-                      <a :href="'vlc://'+playItem.url"><img alt="vlc" src="/vlc.webp"></a>
-                      <a :href="'nplayer-'+playItem.url"><img alt="nplayer" src="/nplayer.webp"></a>
-                      <a :href="'omniplayer://weblink?url='+playItem.url"><img alt="omniplayer" src="/omniplayer.webp"></a>
-                      <a :href="'figplayer://weblink?url='+playItem.url"><img alt="figplayer" src="/figplayer.webp"></a>
-                      <a :href="'infuse://x-callback-url/play?url='+playItem.url"><img alt="infuse" src="/infuse.webp"></a>
-                      <a :href="'filebox://play?url='+playItem.url"><img alt="fileball" src="/fileball.webp"></a>
+                      <a :href="'iina://weblink?url=' + playItem.url"><img alt="iina" src="/iina.webp" /></a>
+                      <a :href="'potplayer://' + playItem.url"><img alt="potplayer" src="/potplayer.webp" /></a>
+                      <a :href="'vlc://' + playItem.url"><img alt="vlc" src="/vlc.webp" /></a>
+                      <a :href="'nplayer-' + playItem.url"><img alt="nplayer" src="/nplayer.webp" /></a>
+                      <a :href="'omniplayer://weblink?url=' + playItem.url"
+                      ><img alt="omniplayer"
+                            src="/omniplayer.webp"
+                      /></a>
+                      <a :href="'figplayer://weblink?url=' + playItem.url"
+                      ><img alt="figplayer"
+                            src="/figplayer.webp"
+                      /></a>
+                      <a :href="'infuse://x-callback-url/play?url=' + playItem.url"
+                      ><img alt="infuse"
+                            src="/infuse.webp"
+                      /></a>
+                      <a :href="'filebox://play?url=' + playItem.url"><img alt="fileball" src="/fileball.webp" /></a>
                       <!--<a :href="'iplay://play/any?type=url&url='+video.url"><img alt="iPlay" src="/iPlay.webp"></a>-->
                     </div>
                   </template>
                 </el-popover>
                 <el-popover placement="right-start">
                   <template #reference>
-                    <el-button :icon="QuestionFilled"/>
+                    <el-button :icon="QuestionFilled" />
                   </template>
                   <template #default>
                     <div>
@@ -437,8 +476,8 @@
                       <div>音量+： ↑</div>
                       <div>后退15秒： ←</div>
                       <div>前进15秒： →</div>
-                      <div v-if="playlist.length>1">上集： PageUp</div>
-                      <div v-if="playlist.length>1">下集： PageDown</div>
+                      <div v-if="playlist.length > 1">上集： PageUp</div>
+                      <div v-if="playlist.length > 1">下集： PageDown</div>
                     </div>
                   </template>
                 </el-popover>
@@ -450,7 +489,7 @@
         <div class="divider"></div>
 
         <el-row>
-          <el-col :class="{wide:isWideMode}" :span="18">
+          <el-col :class="{ wide: isWideMode }" :span="18">
             <el-descriptions class="movie">
               <el-descriptions-item label="名称">{{ movies[0].vod_name }}</el-descriptions-item>
               <el-descriptions-item label="类型">{{ movies[0].type_name || '未知' }}</el-descriptions-item>
@@ -461,7 +500,7 @@
               <el-descriptions-item label="导演">{{ movies[0].vod_director || '未知' }}</el-descriptions-item>
               <el-descriptions-item label="演员">{{ movies[0].vod_actor || '未知' }}</el-descriptions-item>
               <el-descriptions-item label="豆瓣" v-if="movies[0].dbid">
-                <a :href="'https://movie.douban.com/subject/'+movies[0].dbid" target="_blank">
+                <a :href="'https://movie.douban.com/subject/' + movies[0].dbid" target="_blank">
                   {{ movies[0].dbid }}
                 </a>
               </el-descriptions-item>
@@ -477,29 +516,29 @@
     <el-dialog v-model="formVisible" title="添加分享" @opened="focus">
       <el-form label-width="140" :model="form">
         <el-form-item label="分享链接" required>
-          <el-input id="link" v-model="form.link" @keyup.enter="addShare" autocomplete="off"/>
+          <el-input id="link" v-model="form.link" @keyup.enter="addShare" autocomplete="off" />
         </el-form-item>
         <el-form-item label="挂载路径">
-          <el-input v-model="form.path" autocomplete="off" placeholder="留空为临时挂载"/>
+          <el-input v-model="form.path" autocomplete="off" placeholder="留空为临时挂载" />
         </el-form-item>
         <el-form-item label="提取码">
-          <el-input v-model="form.code" autocomplete="off"/>
+          <el-input v-model="form.code" autocomplete="off" />
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="formVisible=false">取消</el-button>
-        <el-button type="primary" @click="addShare">添加</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="formVisible = false">取消</el-button>
+          <el-button type="primary" @click="addShare">添加</el-button>
+        </span>
       </template>
     </el-dialog>
 
     <el-dialog v-model="settingVisible" title="播放配置" fullscreen>
-      <PlayConfig/>
+      <PlayConfig />
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="settingVisible=false">关闭</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="settingVisible = false">关闭</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -512,20 +551,20 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="名称" required>
-          <el-input v-model="meta.name" id="meta-name" autocomplete="off"/>
+          <el-input v-model="meta.name" id="meta-name" autocomplete="off" />
         </el-form-item>
         <el-form-item label="年代">
-          <el-input-number v-model="meta.year" :min="1900" :max="2099" autocomplete="off"/>
+          <el-input-number v-model="meta.year" :min="1900" :max="2099" autocomplete="off" />
         </el-form-item>
         <el-form-item label="路径">
-          <el-input v-model="meta.path" autocomplete="off"/>
+          <el-input v-model="meta.path" autocomplete="off" />
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="addVisible=false">取消</el-button>
-        <el-button type="primary" :disabled="!meta.path||!meta.name" @click="scrape">刮削</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="addVisible = false">取消</el-button>
+          <el-button type="primary" :disabled="!meta.path || !meta.name" @click="scrape">刮削</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -541,10 +580,10 @@
         <p>{{ history.path }}</p>
       </div>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="deleteVisible = false">取消</el-button>
-        <el-button type="danger" @click="deleteHistory">删除</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="deleteVisible = false">取消</el-button>
+          <el-button type="danger" @click="deleteHistory">删除</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -552,11 +591,15 @@
       <el-row>
         <el-col span="8">
           <div>影视扫码添加AList TvBox</div>
-          <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 200px;">
+          <img alt="qr" :src="'data:image/png;base64,' + base64QrCode" style="width: 200px" />
         </el-col>
         <el-col span="10">
-          <el-input v-model="device.ip" style="width: 200px" placeholder="输入影视IP或者URL"
-                    @keyup.enter="addDevice"></el-input>
+          <el-input
+            v-model="device.ip"
+            style="width: 200px"
+            placeholder="输入影视IP或者URL"
+            @keyup.enter="addDevice"
+          ></el-input>
           <el-button @click="addDevice">添加</el-button>
         </el-col>
         <el-col span="6">
@@ -565,8 +608,8 @@
       </el-row>
 
       <el-table :data="devices" border style="width: 100%">
-        <el-table-column prop="name" label="名称" sortable width="180"/>
-        <el-table-column prop="uuid" label="ID" sortable width="180"/>
+        <el-table-column prop="name" label="名称" sortable width="180" />
+        <el-table-column prop="uuid" label="ID" sortable width="180" />
         <el-table-column prop="ip" label="URL地址" sortable>
           <template #default="scope">
             <a :href="scope.row.ip" target="_blank">{{ scope.row.ip }}</a>
@@ -585,59 +628,51 @@
 
     <el-dialog v-model="confirm" title="删除影视设备" width="30%">
       <p>是否删除影视设备？</p>
-      <p> {{ device.name }}</p>
+      <p>{{ device.name }}</p>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="confirm = false">取消</el-button>
-        <el-button type="danger" @click="deleteDevice">删除</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="confirm = false">取消</el-button>
+          <el-button type="danger" @click="deleteDevice">删除</el-button>
+        </span>
       </template>
     </el-dialog>
 
     <el-dialog v-model="renameVisible" title="重命名文件" width="70%">
       <p>是否重命名文件？</p>
-      <p> {{ editing.path }}</p>
-      <el-input v-model="name"/>
+      <p>{{ editing.path }}</p>
+      <el-input v-model="name" />
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="renameVisible = false">取消</el-button>
-        <el-button type="primary" @click="rename">更新</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="renameVisible = false">取消</el-button>
+          <el-button type="primary" @click="rename">更新</el-button>
+        </span>
       </template>
     </el-dialog>
 
     <el-dialog v-model="removeVisible" title="删除文件" width="70%">
       <p>是否删除文件？</p>
-      <p> {{ editing.path }}</p>
+      <p>{{ editing.path }}</p>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="removeVisible = false">取消</el-button>
-        <el-button type="danger" @click="remove">删除</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="removeVisible = false">取消</el-button>
+          <el-button type="danger" @click="remove">删除</el-button>
+        </span>
       </template>
     </el-dialog>
 
     <el-dialog v-model="pushVisible" title="推送播放地址" width="30%">
       <el-form label-width="auto">
         <el-form-item label="影视设备" required>
-          <el-select
-            v-model="device.id"
-            style="width: 240px"
-          >
-            <el-option
-              v-for="item in devices"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id"
-            />
+          <el-select v-model="device.id" style="width: 240px">
+            <el-option v-for="item in devices" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="pushVisible = false">取消</el-button>
-        <el-button type="primary" @click="doPush">推送</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="pushVisible = false">取消</el-button>
+          <el-button type="primary" @click="doPush">推送</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -652,14 +687,18 @@
         </el-aside>
         <el-main v-loading="loadingPosters">
           <el-row :gutter="30">
-            <el-col :span="3" v-for="item in doubanItems" :key="item.vod_id" style="margin-bottom: 20px;">
-              <el-card :body-style="{ padding: '0px', cursor: 'pointer' }" shadow="hover" @click="searchDoubanItem(item)">
-                <el-image :src="item.vod_pic" fit="cover" style="width: 100%; height: 400px;" />
-                <div style="padding: 10px;">
-                  <div style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <el-col :span="3" v-for="item in doubanItems" :key="item.vod_id" style="margin-bottom: 20px">
+              <el-card
+                :body-style="{ padding: '0px', cursor: 'pointer' }"
+                shadow="hover"
+                @click="searchDoubanItem(item)"
+              >
+                <el-image :src="item.vod_pic" fit="cover" style="width: 100%; height: 400px" />
+                <div style="padding: 10px">
+                  <div style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
                     {{ item.vod_name }}
                   </div>
-                  <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                  <div style="font-size: 12px; color: #999; margin-top: 5px">
                     {{ item.vod_remarks }}
                   </div>
                 </div>
@@ -673,25 +712,24 @@
             :page-size="35"
             :total="doubanTotal"
             @current-change="handleDoubanPageChange"
-            style="margin-top: 20px; text-align: center;"
+            style="margin-top: 20px; text-align: center"
           />
         </el-main>
       </el-container>
     </el-dialog>
-
   </div>
 </template>
 
 <script setup lang="ts">
 // @ts-nocheck
-import {onMounted, onUnmounted, reactive, ref, watch} from 'vue'
-import axios from "axios"
-import {ElMessage, type ScrollbarInstance} from "element-plus";
-import type {VodItem} from "@/model/VodItem";
-import type {PlayItem} from "@/model/PlayItem";
-import {useRoute, useRouter} from "vue-router";
-import clipBorad from "vue-clipboard3";
-import {debounce} from 'lodash-es'
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import axios from 'axios'
+import { ElMessage, type ScrollbarInstance } from 'element-plus'
+import type { VodItem } from '@/model/VodItem'
+import type { PlayItem } from '@/model/PlayItem'
+import { useRoute, useRouter } from 'vue-router'
+import clipBorad from 'vue-clipboard3'
+import { debounce } from 'lodash-es'
 import {
   CircleCloseFilled,
   Connection,
@@ -706,12 +744,12 @@ import {
   Search,
   Setting,
   Upload,
-} from "@element-plus/icons-vue";
-import type {Device} from "@/model/Device";
-import PlayConfig from "@/components/PlayConfig.vue";
-import {store} from "@/services/store";
+} from '@element-plus/icons-vue'
+import type { Device } from '@/model/Device'
+import PlayConfig from '@/components/PlayConfig.vue'
+import { store } from '@/services/store'
 
-let {toClipboard} = clipBorad();
+const { toClipboard } = clipBorad()
 
 let timer = 0
 const route = useRoute()
@@ -784,16 +822,16 @@ const filteredResults = ref<VodItem[]>([])
 const paths = ref<Item[]>([])
 const selected = ref<Item[]>([])
 const device = ref<Device>({
-  name: "",
-  type: "",
-  uuid: "",
+  name: '',
+  type: '',
+  uuid: '',
   id: 0,
-  ip: ''
+  ip: '',
 })
 const pageInfo = reactive({})
 const history = ref({
   id: 0,
-  vod_name: ''
+  vod_name: '',
 })
 const form = ref({
   link: '',
@@ -807,17 +845,17 @@ const meta = ref({
   path: '',
 })
 const options = [
-  {label: '全部', value: 'ALL'},
-  {label: '百度', value: '10'},
-  {label: '天翼', value: '9'},
-  {label: '夸克', value: '5'},
-  {label: 'UC', value: '7'},
-  {label: '阿里', value: '0'},
-  {label: '115', value: '8'},
-  {label: '123', value: '3'},
-  {label: '迅雷', value: '2'},
-  {label: '移动', value: '6'},
-  {label: 'PikPak', value: '1'},
+  { label: '全部', value: 'ALL' },
+  { label: '百度', value: '10' },
+  { label: '天翼', value: '9' },
+  { label: '夸克', value: '5' },
+  { label: 'UC', value: '7' },
+  { label: '阿里', value: '0' },
+  { label: '115', value: '8' },
+  { label: '123', value: '3' },
+  { label: '迅雷', value: '2' },
+  { label: '移动', value: '6' },
+  { label: 'PikPak', value: '1' },
 ]
 const sortOrders = [
   {
@@ -867,10 +905,10 @@ const sortOrders = [
 ]
 
 const sortFileSizes = (a, b) => {
-  const sizeA = parseFileSize(a.vod_remarks);
-  const sizeB = parseFileSize(b.vod_remarks);
-  return sizeA - sizeB;
-};
+  const sizeA = parseFileSize(a.vod_remarks)
+  const sizeB = parseFileSize(b.vod_remarks)
+  return sizeA - sizeB
+}
 
 const parseFileSize = (sizeStr) => {
   const units = {
@@ -879,23 +917,21 @@ const parseFileSize = (sizeStr) => {
     MB: 1024 * 1024,
     GB: 1024 * 1024 * 1024,
     TB: 1024 * 1024 * 1024 * 1024,
-  };
+  }
 
-  const match = sizeStr.match(/^(\d+\.?\d*)\s*([A-Za-z]+)/);
-  if (!match) return 0;
+  const match = sizeStr.match(/^(\d+\.?\d*)\s*([A-Za-z]+)/)
+  if (!match) return 0
 
-  const value = parseFloat(match[1]);
-  const unit = match[2].toUpperCase();
+  const value = parseFloat(match[1])
+  const unit = match[2].toUpperCase()
 
-  const unitKey = Object.keys(units).find(
-    key => key.toUpperCase() === unit
-  );
+  const unitKey = Object.keys(units).find((key) => key.toUpperCase() === unit)
 
-  return value * (units[unitKey] || 1);
-};
+  return value * (units[unitKey] || 1)
+}
 
 const showScan = () => {
-  axios.get('/api/qr-code').then(({data}) => {
+  axios.get('/api/qr-code').then(({ data }) => {
     base64QrCode.value = data
     scanVisible.value = true
   })
@@ -903,7 +939,7 @@ const showScan = () => {
 }
 
 const loadDevices = () => {
-  axios.get('/api/devices').then(({data}) => {
+  axios.get('/api/devices').then(({ data }) => {
     devices.value = data
   })
 }
@@ -918,7 +954,7 @@ const syncHistory = (id: number, mode: number) => {
 }
 
 const scanDevices = () => {
-  axios.post(`/api/devices/-/scan`).then(({data}) => {
+  axios.post('/api/devices/-/scan').then(({ data }) => {
     ElMessage.success(`扫描完成，添加了${data}个设备`)
     loadDevices()
   })
@@ -933,11 +969,11 @@ const addDevice = () => {
   if (!device.value.ip) {
     return
   }
-  axios.post(`/api/devices?ip=` + device.value.ip).then(() => {
+  axios.post('/api/devices?ip=' + device.value.ip).then(() => {
     confirm.value = false
     device.value.ip = ''
     ElMessage.success('添加成功')
-    axios.get('/api/devices').then(({data}) => {
+    axios.get('/api/devices').then(({ data }) => {
       devices.value = data
     })
   })
@@ -947,7 +983,7 @@ const deleteDevice = () => {
   axios.delete(`/api/devices/${device.value.id}`).then(() => {
     confirm.value = false
     ElMessage.success('删除成功')
-    axios.get('/api/devices').then(({data}) => {
+    axios.get('/api/devices').then(({ data }) => {
       devices.value = data
     })
   })
@@ -964,30 +1000,34 @@ const handleAdd = () => {
 
 const search = () => {
   searching.value = true
-  return axios.get('/api/telegram/search?wd=' + keyword.value).then(({data}) => {
-    searching.value = false
-    results.value = data.map(e => {
-      return {
-        vod_id: e.id + '',
-        vod_name: e.name,
-        vod_tag: 'folder',
-        vod_time: formatDate(e.time),
-        type_name: e.type,
-        vod_play_from: e.channel,
-        vod_play_url: e.link,
+  return axios.get('/api/telegram/search?wd=' + keyword.value).then(
+    ({ data }) => {
+      searching.value = false
+      results.value = data.map((e) => {
+        return {
+          vod_id: e.id + '',
+          vod_name: e.name,
+          vod_tag: 'folder',
+          vod_time: formatDate(e.time),
+          type_name: e.type,
+          vod_play_from: e.channel,
+          vod_play_url: e.link,
+        }
+      })
+      if (results.value.length == 0) {
+        ElMessage.info('无搜索结果')
       }
-    })
-    if (results.value.length == 0) {
-      ElMessage.info('无搜索结果')
-    }
-    filterSearchResults()
-  }, () => {
-    searching.value = false
-  })
+      filterSearchResults()
+    },
+    () => {
+      searching.value = false
+    },
+  )
 }
 
 const filterSearchResults = () => {
-  filteredResults.value = shareType.value != 'ALL' ? results.value.filter(e => e.type_name == shareType.value) : results.value
+  filteredResults.value =
+    shareType.value != 'ALL' ? results.value.filter((e) => e.type_name == shareType.value) : results.value
 }
 
 const getShareType = (type: string) => {
@@ -1035,8 +1075,8 @@ const handleSelectionChange = (val: ShareInfo[]) => {
 }
 
 const updateRating = (item: PlayItem) => {
-  const id = item.id;
-  axios.post(`/api/videos/${id}/rate`, {rating: item.rating}).then(() => {
+  const id = item.id
+  axios.post(`/api/videos/${id}/rate`, { rating: item.rating }).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -1057,8 +1097,8 @@ const showRename = (video: PlayItem) => {
 }
 
 const rename = () => {
-  const id = editing.value.id;
-  axios.post(`/api/videos/${id}/rename`, {name: name.value}).then(() => {
+  const id = editing.value.id
+  axios.post(`/api/videos/${id}/rename`, { name: name.value }).then(() => {
     renameVisible.value = false
     const index = editing.value.title.lastIndexOf('(')
     if (index > -1) {
@@ -1086,11 +1126,11 @@ const showRemove = (video: PlayItem) => {
 }
 
 const remove = () => {
-  const id = editing.value.id;
+  const id = editing.value.id
   axios.delete(`/api/videos/${id}`).then(() => {
     removeVisible.value = false
-    playlist.value = playlist.value.filter(e => e != editing.value)
-    currentVideoIndex.value = playlist.value.findIndex(e => e === playItem.value)
+    playlist.value = playlist.value.filter((e) => e != editing.value)
+    currentVideoIndex.value = playlist.value.findIndex((e) => e === playItem.value)
     ElMessage.success('删除成功')
     if (needRefresh.value) {
       refresh()
@@ -1108,7 +1148,7 @@ const showScrape = () => {
 }
 
 const scrape = () => {
-  axios.post('/api/tmdb/meta/-/scrape', meta.value).then(({data}) => {
+  axios.post('/api/tmdb/meta/-/scrape', meta.value).then(({ data }) => {
     if (data) {
       const movie = movies.value[0]
       movie.vod_name = data.vod_name
@@ -1133,7 +1173,7 @@ const focus = () => {
 }
 
 const addShare = () => {
-  axios.post('/api/share-link', form.value).then(({data}) => {
+  axios.post('/api/share-link', form.value).then(({ data }) => {
     loadFolder(data)
     formVisible.value = false
   })
@@ -1146,7 +1186,7 @@ const loadResult = (row: any) => {
     code: '',
   }
   toClipboard(row.vod_play_url).then()
-  axios.post('/api/share-link', form.value).then(({data}) => {
+  axios.post('/api/share-link', form.value).then(({ data }) => {
     loadFolder(data)
   })
 }
@@ -1157,7 +1197,7 @@ const loadShare = (link: string) => {
     path: '',
     code: '',
   }
-  axios.post('/api/share-link', form.value).then(({data}) => {
+  axios.post('/api/share-link', form.value).then(({ data }) => {
     loadFolder(data)
   })
 }
@@ -1186,24 +1226,24 @@ const goParent = (path: string) => {
 }
 
 const imageUrl = (url: string) => {
-  if (url.endsWith("/folder.png")) {
-    return url;
+  if (url.endsWith('/folder.png')) {
+    return url
   }
-  if (url.endsWith("/list.png")) {
-    return url;
+  if (url.endsWith('/list.png')) {
+    return url
   }
   return '/images?url=' + encodeURIComponent(url)
 }
 
 const handlePageChange = (value: number) => {
   page.value = value
-  if (!pageInfo[filePath.value]) pageInfo[filePath.value] = {page: value, pageSize: size.value}
+  if (!pageInfo[filePath.value]) pageInfo[filePath.value] = { page: value, pageSize: size.value }
   pageInfo[filePath.value].page = value
 }
 
 const handleSizeChange = (value: number) => {
   size.value = value
-  if (!pageInfo[filePath.value]) pageInfo[filePath.value] = {page: page.value, pageSize: value}
+  if (!pageInfo[filePath.value]) pageInfo[filePath.value] = { page: page.value, pageSize: value }
   pageInfo[filePath.value].size = value
 }
 
@@ -1245,14 +1285,17 @@ const loadFiles = (path: string) => {
   isHistory.value = false
   loading.value = true
   files.value = []
-  axios.get('/vod/' + store.token + '?ac=web&pg=' + page.value + '&size=' + size.value + '&t=' + id).then(({data}) => {
-    files.value = data.list
-    images.value = data.list.filter(e => e.type == 5)
-    total.value = data.total
-    loading.value = false
-  }, () => {
-    loading.value = false
-  })
+  axios.get('/vod/' + store.token + '?ac=web&pg=' + page.value + '&size=' + size.value + '&t=' + id).then(
+    ({ data }) => {
+      files.value = data.list
+      images.value = data.list.filter((e) => e.type == 5)
+      total.value = data.total
+      loading.value = false
+    },
+    () => {
+      loading.value = false
+    },
+  )
 }
 
 const getParent = (path: string) => {
@@ -1268,14 +1311,14 @@ const getPath = (id: string) => {
 const extractPaths = (id: string) => {
   const path = getPath(id)
   if (path == '/') {
-    paths.value = [{text: '🏠首页', path: '/'}]
+    paths.value = [{ text: '🏠首页', path: '/' }]
   } else {
     const array = path.split('/')
     const items: Item[] = []
     for (let index = 0; index < array.length; ++index) {
       const path = array.slice(0, index + 1).join('/')
       const text = array[index]
-      items.push({text: text ? text : '🏠首页', path: path ? path : '/'})
+      items.push({ text: text ? text : '🏠首页', path: path ? path : '/' })
     }
     paths.value = items
   }
@@ -1287,60 +1330,66 @@ const extractPaths = (id: string) => {
 
 const loadDetail = (id: string) => {
   loading.value = true
-  axios.get('/vod/' + store.token + '?ac=web&ids=' + id).then(({data}) => {
-    if (isHistory.value) {
-      goParent(data.list[0].path)
-    }
-    if (data.list[0].type == 5) {
-      let img = data.list[0]
-      currentImageIndex.value = images.value.findIndex(e => e.vod_id == id)
-      playItem.value.url = img.vod_play_url
-      playItem.value.title = img.vod_name
-      loading.value = false
-      imageVisible.value = true
-      return
-    }
+  axios.get('/vod/' + store.token + '?ac=web&ids=' + id).then(
+    ({ data }) => {
+      if (isHistory.value) {
+        goParent(data.list[0].path)
+      }
+      if (data.list[0].type == 5) {
+        const img = data.list[0]
+        currentImageIndex.value = images.value.findIndex((e) => e.vod_id == id)
+        playItem.value.url = img.vod_play_url
+        playItem.value.title = img.vod_name
+        loading.value = false
+        imageVisible.value = true
+        return
+      }
 
-    movies.value = data.list
-    //movies.value[0].vod_id = id
-    const pic = movies.value[0].vod_pic
-    if (pic && pic.includes('doubanio.com')) {
-      poster.value = '/images?url=' + pic.replace('s_ratio_poster', 'm')
-    } else {
-      poster.value = cover.value ? '/images?url=' + cover.value : ''
-    }
-    playlist.value = movies.value[0].items
-    let index = 0
-    for (const item of playlist.value) {
-      item.index = index++
-      if (!item.rating) {
-        item.rating = 0
-      }
-      if (item.time) {
-        item.time = new Date(item.time)
+      movies.value = data.list
+      //movies.value[0].vod_id = id
+      const pic = movies.value[0].vod_pic
+      if (pic && pic.includes('doubanio.com')) {
+        poster.value = '/images?url=' + pic.replace('s_ratio_poster', 'm')
       } else {
-        item.time = new Date()
+        poster.value = cover.value ? '/images?url=' + cover.value : ''
       }
-    }
-    playFrom.value = movies.value[0].vod_play_from.split("$$$");
-    getHistory(movies.value[0].vod_id).then(() => {
-      getPlayUrl()
+      playlist.value = movies.value[0].items
+      let index = 0
+      for (const item of playlist.value) {
+        item.index = index++
+        if (!item.rating) {
+          item.rating = 0
+        }
+        if (item.time) {
+          item.time = new Date(item.time)
+        } else {
+          item.time = new Date()
+        }
+      }
+      playFrom.value = movies.value[0].vod_play_from.split('$$$')
+      getHistory(movies.value[0].vod_id).then(
+        () => {
+          getPlayUrl()
+          loading.value = false
+          dialogVisible.value = true
+        },
+        () => {
+          loading.value = false
+        },
+      )
+    },
+    () => {
       loading.value = false
-      dialogVisible.value = true
-    }, () => {
-      loading.value = false
-    })
-  }, () => {
-    loading.value = false
-  })
+    },
+  )
 }
 
 const handleKeyDown = (event: KeyboardEvent) => {
   if (formVisible.value || addVisible.value || renameVisible.value || removeVisible.value) {
-    return;
+    return
   }
   if (document.activeElement === videoPlayer.value && event.code === 'Space') {
-    return;
+    return
   }
   if (imageVisible.value) {
     if (event.code === 'ArrowRight') {
@@ -1350,7 +1399,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
       event.preventDefault()
       showPrevImage()
     }
-    return;
+    return
   }
   if (!dialogVisible.value) {
     // if (event.code === 'Space' && files.value.length > 0 && files.value[0].vod_tag === 'file') {
@@ -1415,19 +1464,19 @@ const handleKeyDown = (event: KeyboardEvent) => {
     incVolume()
   } else if (event.code === 'KeyM') {
     if (event.ctrlKey || event.metaKey) {
-      return;
+      return
     }
     event.preventDefault()
     toggleMute()
   } else if (event.code === 'KeyC') {
     if (event.ctrlKey || event.metaKey) {
-      return;
+      return
     }
     event.preventDefault()
     copyPlayUrl()
   } else if (event.code === 'KeyV') {
     if (event.ctrlKey || event.metaKey) {
-      return;
+      return
     }
     event.preventDefault()
     openInVLC()
@@ -1451,7 +1500,7 @@ const start = () => {
     }
     videoPlayer.value.currentTime = currentTime.value
     videoPlayer.value.playbackRate = currentSpeed.value
-    videoPlayer.value.volume = currentVolume.value / 100.
+    videoPlayer.value.volume = currentVolume.value / 100
     videoPlayer.value.addEventListener('playbackratechange', handleSpeedChange)
     videoPlayer.value.addEventListener('volumechange', handleVolumeChange)
     videoPlayer.value.addEventListener('timeupdate', handleTimeUpdate)
@@ -1532,27 +1581,31 @@ const skip = () => {
 
 const play = () => {
   if (videoPlayer.value) {
-    const res = videoPlayer.value.play();
+    const res = videoPlayer.value.play()
     if (res) {
-      res.then(_ => {
-        playing.value = true
-        saveHistory()
-      }).catch(e => {
-        console.error(e)
-      })
+      res
+        .then((_) => {
+          playing.value = true
+          saveHistory()
+        })
+        .catch((e) => {
+          console.error(e)
+        })
     }
   }
 }
 
 const pause = () => {
   if (videoPlayer.value) {
-    const res = videoPlayer.value.pause();
+    const res = videoPlayer.value.pause()
     if (res) {
-      res.then(_ => {
-        playing.value = false
-      }).catch(e => {
-        console.error(e)
-      })
+      res
+        .then((_) => {
+          playing.value = false
+        })
+        .catch((e) => {
+          console.error(e)
+        })
     }
     saveHistory()
   }
@@ -1560,30 +1613,30 @@ const pause = () => {
 
 const forward = () => {
   if (videoPlayer.value) {
-    videoPlayer.value.currentTime += 15;
+    videoPlayer.value.currentTime += 15
     play()
   }
 }
 
 const backward = () => {
   if (videoPlayer.value) {
-    videoPlayer.value.currentTime -= 15;
+    videoPlayer.value.currentTime -= 15
     play()
   }
 }
 
 const toggleMute = () => {
   if (videoPlayer.value) {
-    videoPlayer.value.muted = !videoPlayer.value.muted;
+    videoPlayer.value.muted = !videoPlayer.value.muted
   }
 }
 
 const toggleFullscreen = () => {
   if (videoPlayer.value) {
     if (!isFullscreen.value) {
-      enterFullscreen(videoPlayer.value);
+      enterFullscreen(videoPlayer.value)
     } else {
-      exitFullscreen();
+      exitFullscreen()
     }
   }
 }
@@ -1597,18 +1650,21 @@ const openDoubanMode = () => {
   doubanVisible.value = true
   if (categories.value.length === 0) {
     loadingCategories.value = true
-    axios.get('/tg-db/' + store.token).then(({data}) => {
-      loadingCategories.value = false
-      if (data.class) {
-        categories.value = data.class
-        if (categories.value.length > 0) {
-          handleCategorySelect(categories.value[0].type_id)
+    axios
+      .get('/tg-db/' + store.token)
+      .then(({ data }) => {
+        loadingCategories.value = false
+        if (data.class) {
+          categories.value = data.class
+          if (categories.value.length > 0) {
+            handleCategorySelect(categories.value[0].type_id)
+          }
         }
-      }
-    }).catch(() => {
-      loadingCategories.value = false
-      ElMessage.error('获取分类失败')
-    })
+      })
+      .catch(() => {
+        loadingCategories.value = false
+        ElMessage.error('获取分类失败')
+      })
   }
 }
 
@@ -1620,16 +1676,19 @@ const handleCategorySelect = (typeId: string) => {
 
 const loadDoubanItems = (typeId: string, page: number) => {
   loadingPosters.value = true
-  axios.get('/tg-db/' + store.token + '?ac=web&size=35&t=' + encodeURIComponent(typeId) + '&pg=' + page).then(({data}) => {
-    loadingPosters.value = false
-    if (data.list) {
-      doubanItems.value = data.list
-      doubanTotal.value = data.total || data.pagecount * 20 || 0
-    }
-  }).catch(() => {
-    loadingPosters.value = false
-    ElMessage.error('获取列表失败')
-  })
+  axios
+    .get('/tg-db/' + store.token + '?ac=web&size=35&t=' + encodeURIComponent(typeId) + '&pg=' + page)
+    .then(({ data }) => {
+      loadingPosters.value = false
+      if (data.list) {
+        doubanItems.value = data.list
+        doubanTotal.value = data.total || data.pagecount * 20 || 0
+      }
+    })
+    .catch(() => {
+      loadingPosters.value = false
+      ElMessage.error('获取列表失败')
+    })
 }
 
 const handleDoubanPageChange = (page: number) => {
@@ -1646,30 +1705,33 @@ const searchDoubanItem = (item: any) => {
 
 const enterFullscreen = (element) => {
   if (element.requestFullscreen) {
-    element.requestFullscreen();
-  } else if (element.mozRequestFullScreen) { // Firefox
-    element.mozRequestFullScreen();
-  } else if (element.webkitRequestFullscreen) { // Chrome, Safari
-    element.webkitRequestFullscreen();
-  } else if (element.msRequestFullscreen) { // IE/Edge
-    element.msRequestFullscreen();
+    element.requestFullscreen()
+  } else if (element.mozRequestFullScreen) {
+    // Firefox
+    element.mozRequestFullScreen()
+  } else if (element.webkitRequestFullscreen) {
+    // Chrome, Safari
+    element.webkitRequestFullscreen()
+  } else if (element.msRequestFullscreen) {
+    // IE/Edge
+    element.msRequestFullscreen()
   }
 }
 
 const exitFullscreen = () => {
   if (document.exitFullscreen) {
-    document.exitFullscreen();
+    document.exitFullscreen()
   } else if (document.mozCancelFullScreen) {
-    document.mozCancelFullScreen();
+    document.mozCancelFullScreen()
   } else if (document.webkitExitFullscreen) {
-    document.webkitExitFullscreen();
+    document.webkitExitFullscreen()
   } else if (document.msExitFullscreen) {
-    document.msExitFullscreen();
+    document.msExitFullscreen()
   }
-};
+}
 
 const handleFullscreenChange = () => {
-  isFullscreen.value = document.fullscreenElement === videoPlayer.value;
+  isFullscreen.value = document.fullscreenElement === videoPlayer.value
 }
 
 const setVolume = (volume: number) => {
@@ -1706,7 +1768,12 @@ const decVolume = () => {
 const handleTimeUpdate = () => {
   if (videoPlayer.value) {
     const time = videoPlayer.value.currentTime
-    if (currentVideoIndex.value + 1 < playlist.value.length && duration.value > skipStart.value + skipEnd.value && time + skipEnd.value > duration.value && time < duration.value) {
+    if (
+      currentVideoIndex.value + 1 < playlist.value.length &&
+      duration.value > skipStart.value + skipEnd.value &&
+      time + skipEnd.value > duration.value &&
+      time < duration.value
+    ) {
       videoPlayer.value.currentTime = duration.value
     }
   }
@@ -1749,13 +1816,13 @@ const handleSpeedChange = () => {
 
 const updatePlayState = () => {
   if (videoPlayer.value) {
-    playing.value = !videoPlayer.value.paused;
+    playing.value = !videoPlayer.value.paused
   }
 }
 
 const updateMuteState = () => {
   if (videoPlayer.value) {
-    isMuted.value = videoPlayer.value.muted;
+    isMuted.value = videoPlayer.value.muted
   }
 }
 
@@ -1764,57 +1831,57 @@ const sort = () => {
   const currentUrl = playItem.value.url
 
   switch (order.value) {
-    case "index":
-      playlist.value.sort((a, b) => a.index - b.index)
-      break
-    case "name,asc":
-      playlist.value.sort((a, b) => a.name.localeCompare(b.name))
-      break
-    case "name,desc":
-      playlist.value.sort((a, b) => b.name.localeCompare(a.name))
-      break
-    case "size,asc":
-      playlist.value.sort((a, b) => a.size - b.size)
-      break
-    case "size,desc":
-      playlist.value.sort((a, b) => b.size - a.size)
-      break
-    case "rating,asc":
-      playlist.value.sort((a, b) => {
-        if (a.rating === b.rating) {
-          return a.index - b.index
-        }
-        return a.rating - b.rating
-      })
-      break
-    case "rating,desc":
-      playlist.value.sort((a, b) => {
-        if (a.rating === b.rating) {
-          return a.index - b.index
-        }
-        return b.rating - a.rating
-      })
-      break
-    case "time,asc":
-      playlist.value.sort((a, b) => {
-        if (a.time === b.time) {
-          return a.index - b.index
-        }
-        return a.time - b.time
-      })
-      break
-    case "time,desc":
-      playlist.value.sort((a, b) => {
-        if (a.time === b.time) {
-          return a.index - b.index
-        }
-        return b.time - a.time
-      })
-      break
+  case 'index':
+    playlist.value.sort((a, b) => a.index - b.index)
+    break
+  case 'name,asc':
+    playlist.value.sort((a, b) => a.name.localeCompare(b.name))
+    break
+  case 'name,desc':
+    playlist.value.sort((a, b) => b.name.localeCompare(a.name))
+    break
+  case 'size,asc':
+    playlist.value.sort((a, b) => a.size - b.size)
+    break
+  case 'size,desc':
+    playlist.value.sort((a, b) => b.size - a.size)
+    break
+  case 'rating,asc':
+    playlist.value.sort((a, b) => {
+      if (a.rating === b.rating) {
+        return a.index - b.index
+      }
+      return a.rating - b.rating
+    })
+    break
+  case 'rating,desc':
+    playlist.value.sort((a, b) => {
+      if (a.rating === b.rating) {
+        return a.index - b.index
+      }
+      return b.rating - a.rating
+    })
+    break
+  case 'time,asc':
+    playlist.value.sort((a, b) => {
+      if (a.time === b.time) {
+        return a.index - b.index
+      }
+      return a.time - b.time
+    })
+    break
+  case 'time,desc':
+    playlist.value.sort((a, b) => {
+      if (a.time === b.time) {
+        return a.index - b.index
+      }
+      return b.time - a.time
+    })
+    break
   }
 
   // 根据URL重新找到当前视频的索引
-  currentVideoIndex.value = playlist.value.findIndex(e => e.url === currentUrl)
+  currentVideoIndex.value = playlist.value.findIndex((e) => e.url === currentUrl)
 }
 
 const getPlayUrl = () => {
@@ -1885,20 +1952,22 @@ const saveHistory = () => {
     return
   }
   const movie = movies.value[0]
-  axios.post('/api/history?log=false', {
-    cid: 0,
-    key: movie.vod_id,
-    vodName: movie.vod_name,
-    vodPic: movie.vod_pic,
-    vodRemarks: playItem.value.title,
-    episode: currentVideoIndex.value,
-    episodeUrl: playItem.value.url,
-    position: Math.round(videoPlayer.value.currentTime * 1000),
-    opening: Math.round(skipStart.value * 1000),
-    ending: Math.round(skipEnd.value * 1000),
-    speed: currentSpeed.value,
-    createTime: new Date().getTime()
-  }).then()
+  axios
+    .post('/api/history?log=false', {
+      cid: 0,
+      key: movie.vod_id,
+      vodName: movie.vod_name,
+      vodPic: movie.vod_pic,
+      vodRemarks: playItem.value.title,
+      episode: currentVideoIndex.value,
+      episodeUrl: playItem.value.url,
+      position: Math.round(videoPlayer.value.currentTime * 1000),
+      opening: Math.round(skipStart.value * 1000),
+      ending: Math.round(skipEnd.value * 1000),
+      speed: currentSpeed.value,
+      createTime: new Date().getTime(),
+    })
+    .then()
 }
 
 const getHistory = (id: string) => {
@@ -1912,14 +1981,14 @@ const getHistory = (id: string) => {
   minute2.value = 0
   second2.value = 0
 
-  return axios.get('/history/' + store.token + "?key=" + id).then(({data}) => {
+  return axios.get('/history/' + store.token + '?key=' + id).then(({ data }) => {
     if (data) {
       if (data.episode > -1) {
         currentVideoIndex.value = data.episode
       } else {
-        let path = data.episodeUrl as string
+        const path = data.episodeUrl as string
         if (path) {
-          currentVideoIndex.value = playlist.value.findIndex(e => {
+          currentVideoIndex.value = playlist.value.findIndex((e) => {
             let u = e.url
             let index = u.indexOf('?')
             if (index > 0) {
@@ -1929,7 +1998,7 @@ const getHistory = (id: string) => {
             if (index > 0) {
               u = u.substring(index + 1)
             }
-            return u === path;
+            return u === path
           })
         }
         if (currentVideoIndex.value < 0) {
@@ -1950,23 +2019,28 @@ const getHistory = (id: string) => {
 }
 
 const loadHistory = () => {
-  axios.get('/api/history?sort=createTime,desc&page=' + (page.value - 1) + '&size=' + size.value).then(({data}) => {
+  axios.get('/api/history?sort=createTime,desc&page=' + (page.value - 1) + '&size=' + size.value).then(({ data }) => {
     total.value = data.totalElements
-    files.value = data.content.sort((a, b) => b.t - a.t).map(e => {
-      return {
-        id: e.id,
-        vod_id: e.key,
-        vod_name: e.vodName,
-        vod_pic: e.vodPic,
-        vod_remarks: e.vodRemarks,
-        index: e.episode + 1,
-        progress: formatTime(e.position / 1000),
-        vod_tag: 'file',
-        vod_time: formatDate(e.createTime)
-      }
-    })
+    files.value = data.content
+      .sort((a, b) => b.t - a.t)
+      .map((e) => {
+        return {
+          id: e.id,
+          vod_id: e.key,
+          vod_name: e.vodName,
+          vod_pic: e.vodPic,
+          vod_remarks: e.vodRemarks,
+          index: e.episode + 1,
+          progress: formatTime(e.position / 1000),
+          vod_tag: 'file',
+          vod_time: formatDate(e.createTime),
+        }
+      })
     isHistory.value = true
-    paths.value = [{text: '🏠首页', path: '/'}, {text: '播放记录', path: '/~history'}]
+    paths.value = [
+      { text: '🏠首页', path: '/' },
+      { text: '播放记录', path: '/~history' },
+    ]
   })
 }
 
@@ -1975,10 +2049,15 @@ const deleteHistory = () => {
     if (clean.value) {
       clearHistory()
     } else {
-      axios.post('/api/history/-/delete', selected.value.map(s => s.id)).then(() => {
-        deleteVisible.value = false
-        loadHistory()
-      })
+      axios
+        .post(
+          '/api/history/-/delete',
+          selected.value.map((s) => s.id),
+        )
+        .then(() => {
+          deleteVisible.value = false
+          loadHistory()
+        })
     }
   } else {
     axios.delete('/api/history/' + history.value.id).then(() => {
@@ -2032,47 +2111,42 @@ const doPush = () => {
 }
 
 const formatDate = (timestamp: number): string => {
-  const date: Date = new Date(timestamp);
-  const year: number = date.getFullYear();
-  const month: string = String(date.getMonth() + 1).padStart(2, '0');
-  const day: string = String(date.getDate()).padStart(2, '0');
-  const hours: string = String(date.getHours()).padStart(2, '0');
-  const minutes: string = String(date.getMinutes()).padStart(2, '0');
-  const seconds: string = String(date.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  const date: Date = new Date(timestamp)
+  const year: number = date.getFullYear()
+  const month: string = String(date.getMonth() + 1).padStart(2, '0')
+  const day: string = String(date.getDate()).padStart(2, '0')
+  const hours: string = String(date.getHours()).padStart(2, '0')
+  const minutes: string = String(date.getMinutes()).padStart(2, '0')
+  const seconds: string = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
 const formatTime = (seconds: number): string => {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor(seconds % 3600 / 60);
-  const s = Math.floor(seconds % 3600 % 60);
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor((seconds % 3600) % 60)
 
   if (h > 0) {
-    return [
-      h.toString().padStart(2, '0'),
-      m.toString().padStart(2, '0'),
-      s.toString().padStart(2, '0')
-    ].join(':');
+    return [h.toString().padStart(2, '0'), m.toString().padStart(2, '0'), s.toString().padStart(2, '0')].join(':')
   }
-  return [
-    m.toString().padStart(2, '0'),
-    s.toString().padStart(2, '0')
-  ].join(':');
+  return [m.toString().padStart(2, '0'), s.toString().padStart(2, '0')].join(':')
 }
 
 const replay = () => {
   playItem.value.url = ''
-  setTimeout(() => {{
-    getPlayUrl()
-    startPlay()
-  }}, 500)
+  setTimeout(() => {
+    {
+      getPlayUrl()
+      startPlay()
+    }
+  }, 500)
 }
 
 const playNextVideo = () => {
   if (currentVideoIndex.value + 1 == playlist.value.length) {
     return
   }
-  currentVideoIndex.value++;
+  currentVideoIndex.value++
   scroll()
   getPlayUrl()
   startPlay()
@@ -2082,14 +2156,14 @@ const playPrevVideo = () => {
   if (currentVideoIndex.value < 1) {
     return
   }
-  currentVideoIndex.value--;
+  currentVideoIndex.value--
   scroll()
   getPlayUrl()
   startPlay()
 }
 
 const playVideo = (index: number) => {
-  currentVideoIndex.value = index;
+  currentVideoIndex.value = index
   getPlayUrl()
   startPlay()
 }
@@ -2110,9 +2184,9 @@ const showPrevImage = () => {
 
 onMounted(async () => {
   if (!store.token) {
-    store.token = await axios.get("/api/token").then(({data}) => {
-      return data.token ? data.token.split(",")[0] : "-"
-    });
+    store.token = await axios.get('/api/token').then(({ data }) => {
+      return data.token ? data.token.split(',')[0] : '-'
+    })
   }
 
   const link = route.query.link
@@ -2130,8 +2204,8 @@ onMounted(async () => {
   currentVolume.value = parseInt(localStorage.getItem('volume') || '100')
   isWideMode.value = localStorage.getItem('wideMode') === 'true'
   timer = setInterval(save, 5000)
-  window.addEventListener('keydown', handleKeyDown);
-  document.addEventListener('fullscreenchange', handleFullscreenChange);
+  window.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
 })
 
 watch([page, size], ([newPage, newSize]) => {
@@ -2140,7 +2214,7 @@ watch([page, size], ([newPage, newSize]) => {
       ...route.query,
       page: newPage,
       size: newSize,
-    }
+    },
   })
 })
 
@@ -2155,7 +2229,7 @@ watch(
       }
     }
   },
-  {immediate: true}
+  { immediate: true },
 )
 
 watch(
@@ -2171,13 +2245,13 @@ watch(
       page.value = pageInfo[filePath.value]?.page || 1
       debouncedFetch()
     }
-  }
+  },
 )
 
 onUnmounted(() => {
   clearInterval(timer)
-  window.removeEventListener('keydown', handleKeyDown);
-  document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  window.removeEventListener('keydown', handleKeyDown)
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
 </script>
 

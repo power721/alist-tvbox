@@ -3,50 +3,50 @@
     <el-form :model="form" :label-width="labelWidth">
       <el-form-item label="站点">
         <el-select v-model="form.siteId">
-          <el-option :label="site.name" :value="site.id" v-for="site of sites"/>
+          <el-option :label="site.name" :value="site.id" v-for="site of sites" />
         </el-select>
       </el-form-item>
       <el-form-item label="索引名称">
-        <el-input v-model="form.indexName" autocomplete="off"/>
+        <el-input v-model="form.indexName" autocomplete="off" />
       </el-form-item>
       <el-form-item label="索引路径">
-        <el-input type="textarea" v-model="form.paths" :rows="6" placeholder="每行一个路径"/>
+        <el-input type="textarea" v-model="form.paths" :rows="6" placeholder="每行一个路径" />
       </el-form-item>
       <el-form-item label="排除路径">
         <span>支持多个路径，逗号分割</span>
-        <el-input v-model="form.excludes" autocomplete="off" placeholder="逗号分割"/>
+        <el-input v-model="form.excludes" autocomplete="off" placeholder="逗号分割" />
       </el-form-item>
       <el-form-item label="忽略关键词">
         <span>支持多个关键词，逗号分割</span>
-        <el-input v-model="form.stopWords" autocomplete="off" placeholder="逗号分割"/>
+        <el-input v-model="form.stopWords" autocomplete="off" placeholder="逗号分割" />
       </el-form-item>
       <el-form-item label="排除外部AList站点？">
-        <el-switch v-model="form.excludeExternal"/>
+        <el-switch v-model="form.excludeExternal" />
       </el-form-item>
       <el-form-item label="自动刮削？">
-        <el-switch v-model="form.scrape"/>
+        <el-switch v-model="form.scrape" />
       </el-form-item>
       <el-form-item label="包含文件？">
-        <el-switch v-model="form.includeFiles"/>
+        <el-switch v-model="form.includeFiles" />
       </el-form-item>
       <el-form-item label="增量更新？">
-        <el-switch v-model="form.incremental"/>
+        <el-switch v-model="form.incremental" />
       </el-form-item>
       <el-form-item label="压缩文件？">
-        <el-switch v-model="form.compress"/>
+        <el-switch v-model="form.compress" />
       </el-form-item>
       <el-form-item label="限速">
-        <el-input-number v-model="form.sleep" :min="0"/>
+        <el-input-number v-model="form.sleep" :min="0" />
         <span class="hint">毫秒</span>
       </el-form-item>
       <el-form-item label="最大索引目录层级">
-        <el-input-number v-model="form.maxDepth" :min="1"/>
+        <el-input-number v-model="form.maxDepth" :min="1" />
       </el-form-item>
       <el-form-item>
         <el-button type="primary" @click="handleForm">开始索引</el-button>
         <el-button type="info" @click="showTemplateSetting">存为模板</el-button>
         <el-button type="info" @click="showTemplates">索引模板</el-button>
-        <el-button type="info" @click="validateVisible=true">校验内置索引</el-button>
+        <el-button type="info" @click="validateVisible = true">校验内置索引</el-button>
       </el-form-item>
     </el-form>
     <div class="space"></div>
@@ -54,11 +54,11 @@
     <h2>任务列表</h2>
     <el-row justify="end">
       <el-button @click="loadTasks">刷新</el-button>
-      <el-button @click="cleanVisible=true">清理</el-button>
+      <el-button @click="cleanVisible = true">清理</el-button>
     </el-row>
     <el-table :data="tasks.content" border style="width: 100%">
-      <el-table-column prop="id" label="ID" sortable width="70"/>
-      <el-table-column prop="name" label="名称" sortable width="180"/>
+      <el-table-column prop="id" label="ID" sortable width="70" />
+      <el-table-column prop="name" label="名称" sortable width="180" />
       <el-table-column prop="status" label="状态" sortable width="120">
         <template #default="scope">
           <span>{{ getTaskStatus(scope.row.status) }}</span>
@@ -69,34 +69,45 @@
           <span>{{ getTaskResult(scope.row.result) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="summary" label="概要"/>
-      <el-table-column prop="error" label="错误"/>
-      <el-table-column prop="startTime" label="开始时间" :formatter="datetime" sortable width="155"/>
-      <el-table-column prop="endTime" label="结束时间" :formatter="datetime" sortable width="155"/>
+      <el-table-column prop="summary" label="概要" />
+      <el-table-column prop="error" label="错误" />
+      <el-table-column prop="startTime" label="开始时间" :formatter="datetime" sortable width="155" />
+      <el-table-column prop="endTime" label="结束时间" :formatter="datetime" sortable width="155" />
       <el-table-column label="耗时" width="80">
         <template #default="scope">
-          <div>{{ formatDuration(scope.row.startTime, scope.row.endTime) }}</div>
+          <div>
+            {{ formatDuration(scope.row.startTime, scope.row.endTime) }}
+          </div>
         </template>
       </el-table-column>
       <el-table-column fixed="right" label="操作" width="140">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">数据</el-button>
-          <el-button link type="danger" size="small" @click="handleCancel(scope.row)"
-                     :disabled="scope.row.status==='COMPLETED'">取消
+          <el-button
+            link
+            type="danger"
+            size="small"
+            @click="handleCancel(scope.row)"
+            :disabled="scope.row.status === 'COMPLETED'"
+          >取消
           </el-button>
           <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
-    <el-pagination layout="total, prev, pager, next" v-model:current-page="currentPage"
-                   @current-change="handleCurrentChange" :total="total"/>
+    <el-pagination
+      layout="total, prev, pager, next"
+      v-model:current-page="currentPage"
+      @current-change="handleCurrentChange"
+      :total="total"
+    />
 
     <el-dialog v-model="dialogVisible" :title="task.name" width="60%">
       <pre>{{ task.data }}</pre>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogVisible = false">关闭</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">关闭</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -104,14 +115,14 @@
       <div>
         清理{{ days }}天以前的任务
         <el-form-item label="天数">
-          <el-input-number v-model="days" :min="1"/>
+          <el-input-number v-model="days" :min="1" />
         </el-form-item>
       </div>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="cleanVisible = false">关闭</el-button>
-        <el-button type="primary" @click="cleanTasks">清理</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="cleanVisible = false">关闭</el-button>
+          <el-button type="primary" @click="cleanTasks">清理</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -120,67 +131,67 @@
         <p>校验内置的索引文件，检查路径是否失效。</p>
         <el-form label-width="auto">
           <el-form-item label="更新搜索排除列表？">
-            <el-switch v-model="updateExcludePath"/>
+            <el-switch v-model="updateExcludePath" />
           </el-form-item>
           <el-form-item label="最大校验目录层级">
-            <el-input-number v-model="depth" :min="1" :max="3"/>
+            <el-input-number v-model="depth" :min="1" :max="3" />
           </el-form-item>
         </el-form>
       </div>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogVisible = false">关闭</el-button>
-        <el-button type="primary" @click="validateIndexFiles">校验</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">关闭</el-button>
+          <el-button type="primary" @click="validateIndexFiles">校验</el-button>
+        </span>
       </template>
     </el-dialog>
 
     <el-dialog v-model="settingVisible" title="模板设置">
       <el-form :model="form" :label-width="labelWidth">
         <el-form-item label="定时索引？">
-          <el-switch v-model="form.scheduled"/>
+          <el-switch v-model="form.scheduled" />
         </el-form-item>
         <el-form-item label="索引时间(小时)">
           <el-checkbox-group v-model="timeList" :disabled="!form.scheduled">
-            <el-checkbox label="10"/>
-            <el-checkbox label="12"/>
-            <el-checkbox label="14"/>
-            <el-checkbox label="16"/>
-            <el-checkbox label="18"/>
-            <el-checkbox label="19"/>
-            <el-checkbox label="20"/>
-            <el-checkbox label="21"/>
-            <el-checkbox label="22"/>
-            <el-checkbox label="23"/>
+            <el-checkbox label="10" />
+            <el-checkbox label="12" />
+            <el-checkbox label="14" />
+            <el-checkbox label="16" />
+            <el-checkbox label="18" />
+            <el-checkbox label="19" />
+            <el-checkbox label="20" />
+            <el-checkbox label="21" />
+            <el-checkbox label="22" />
+            <el-checkbox label="23" />
           </el-checkbox-group>
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="settingVisible = false">关闭</el-button>
-        <el-button type="success" v-if="templateId" @click="saveTemplate(templateId)">更新</el-button>
-        <el-button type="primary" @click="saveTemplate(null)">保存</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="settingVisible = false">关闭</el-button>
+          <el-button type="success" v-if="templateId" @click="saveTemplate(templateId)">更新</el-button>
+          <el-button type="primary" @click="saveTemplate(null)">保存</el-button>
+        </span>
       </template>
     </el-dialog>
 
     <el-dialog v-model="templatesVisible" title="索引模板" width="80%">
       <el-table :data="templates" border style="width: 100%">
-        <el-table-column prop="id" label="ID" sortable width="70"/>
-        <el-table-column prop="name" label="名称" sortable width="120"/>
-        <el-table-column prop="siteId" label="站点" sortable width="80"/>
+        <el-table-column prop="id" label="ID" sortable width="70" />
+        <el-table-column prop="name" label="名称" sortable width="120" />
+        <el-table-column prop="siteId" label="站点" sortable width="80" />
         <el-table-column prop="scheduled" label="定时索引?" width="90">
           <template #default="scope">
             <el-icon v-if="scope.row.scheduled">
-              <Check/>
+              <Check />
             </el-icon>
             <el-icon v-else>
-              <Close/>
+              <Close />
             </el-icon>
           </template>
         </el-table-column>
-        <el-table-column prop="data" label="数据"/>
-        <el-table-column prop="createdTime" label="创建时间" :formatter="datetime" sortable width="155"/>
+        <el-table-column prop="data" label="数据" />
+        <el-table-column prop="createdTime" label="创建时间" :formatter="datetime" sortable width="155" />
         <el-table-column fixed="right" label="操作" width="140">
           <template #default="scope">
             <el-button link type="primary" size="small" @click="loadTemplate(scope.row)">加载</el-button>
@@ -189,24 +200,24 @@
         </el-table-column>
       </el-table>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="templatesVisible = false">关闭</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="templatesVisible = false">关闭</el-button>
+        </span>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, reactive, ref} from 'vue'
-import axios from "axios";
-import type {Site} from "@/model/Site";
-import type {TaskPage} from "@/model/Page";
-import type {Task} from "@/model/Task";
-import {onUnmounted} from "@vue/runtime-core";
-import type {IndexTemplate} from "@/model/IndexTemplate";
-import {ElMessage} from "element-plus";
-import {formatDatetime, formatDuration} from "@/services/utils";
+import { onMounted, reactive, ref } from 'vue'
+import axios from 'axios'
+import type { Site } from '@/model/Site'
+import type { TaskPage } from '@/model/Page'
+import type { Task } from '@/model/Task'
+import { onUnmounted } from 'vue'
+import type { IndexTemplate } from '@/model/IndexTemplate'
+import { ElMessage } from 'element-plus'
+import { formatDatetime, formatDuration } from '@/services/utils'
 
 interface Item {
   key: number
@@ -256,7 +267,7 @@ const datetime = (row: any, column: any, cellValue: any) => {
 }
 
 const loadSites = () => {
-  axios.get('/api/sites').then(({data}) => {
+  axios.get('/api/sites').then(({ data }) => {
     sites.value = data
     if (sites.value && sites.value.length > 0) {
       form.siteId = sites.value[0].id
@@ -265,23 +276,25 @@ const loadSites = () => {
 }
 
 const loadTasks = () => {
-  axios.get('/api/tasks?sort=id,desc&size=10&page=' + (currentPage.value - 1)).then(({data}) => {
+  axios.get('/api/tasks?sort=id,desc&size=10&page=' + (currentPage.value - 1)).then(({ data }) => {
     tasks.value = data
     total.value = data.totalElements
   })
 }
 
 const loadTemplates = () => {
-  axios.get('/api/index-templates?sort=id,desc').then(({data}) => {
+  axios.get('/api/index-templates?sort=id,desc').then(({ data }) => {
     templates.value = data.content
   })
 }
 
 const validateIndexFiles = () => {
-  axios.post('/api/index-files/validate?updateExcludePath=' + updateExcludePath.value + '&depth=' + depth.value).then(() => {
-    validateVisible.value = false
-    setTimeout(loadTasks, 3000)
-  })
+  axios
+    .post('/api/index-files/validate?updateExcludePath=' + updateExcludePath.value + '&depth=' + depth.value)
+    .then(() => {
+      validateVisible.value = false
+      setTimeout(loadTasks, 3000)
+    })
 }
 
 const showTemplates = () => {
@@ -339,10 +352,10 @@ const saveTemplate = (id: number | null) => {
     scrape: form.scrape,
     scheduled: form.scheduled,
     scheduleTime: timeList.value.join('|'),
-    data: JSON.stringify(data)
+    data: JSON.stringify(data),
   }
   const url = id ? '/api/index-templates/' + templateId.value : '/api/index-templates'
-  axios.post(url, request).then(({data}) => {
+  axios.post(url, request).then(({ data }) => {
     ElMessage.success('保存模板成功')
     settingVisible.value = false
     loadTemplate(data)

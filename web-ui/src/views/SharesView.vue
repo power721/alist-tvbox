@@ -1,7 +1,7 @@
 <template>
   <h2>资源列表</h2>
   <el-row justify="end">
-    <el-input style="width: 200px;" v-model="keyword" @keyup="search">
+    <el-input style="width: 200px" v-model="keyword" @keyup="search">
       <template #append>
         <el-button :icon="Search" @click="search" />
       </template>
@@ -98,8 +98,14 @@
     </el-table-column>
   </el-table>
   <div>
-    <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" :page-size="size"
-      :total="total" @current-change="loadShares" @size-change="handleSizeChange" />
+    <el-pagination
+      layout="total, prev, pager, next, jumper, sizes"
+      :current-page="page"
+      :page-size="size"
+      :total="total"
+      @current-change="loadShares"
+      @size-change="handleSizeChange"
+    />
   </div>
 
   <div class="space"></div>
@@ -152,8 +158,14 @@
     </el-table-column>
   </el-table>
   <div>
-    <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page1" :total="total1"
-      :page-size="size1" @current-change="loadStorages" @size-change="handleSize1Change" />
+    <el-pagination
+      layout="total, prev, pager, next, jumper, sizes"
+      :current-page="page1"
+      :total="total1"
+      :page-size="size1"
+      @current-change="loadStorages"
+      @size-change="handleSize1Change"
+    />
   </div>
 
   <el-dialog v-model="formVisible" width="60%" :title="dialogTitle">
@@ -177,24 +189,39 @@
       <!-- STRM 存储特有配置 -->
       <template v-if="form.type == 11 && form.strmConfig">
         <el-form-item label="源路径" label-width="140" required>
-          <el-input v-model="form.strmConfig.paths" type="textarea" :rows="3"
-            placeholder="STRM文件指向的实际媒体文件所在路径，例如：/115/电影" autocomplete="off" />
+          <el-input
+            v-model="form.strmConfig.paths"
+            type="textarea"
+            :rows="3"
+            placeholder="STRM文件指向的实际媒体文件所在路径，例如：/115/电影"
+            autocomplete="off"
+          />
         </el-form-item>
         <el-form-item label="站点URL" label-width="140" required>
-          <el-input v-model="form.strmConfig.siteUrl" autocomplete="off"
-            placeholder="AList站点访问地址，例如：http://localhost:5244" />
+          <el-input
+            v-model="form.strmConfig.siteUrl"
+            autocomplete="off"
+            placeholder="AList站点访问地址，例如：http://localhost:5244"
+          />
         </el-form-item>
         <el-form-item label="路径前缀" label-width="140">
           <el-input v-model="form.strmConfig.pathPrefix" autocomplete="off" placeholder="默认为 /d" />
         </el-form-item>
         <el-form-item label="下载文件类型" label-width="140">
-          <el-input v-model="form.strmConfig.downloadFileTypes" autocomplete="off"
-            placeholder="逗号分隔的文件扩展名，例如：ass,srt,vtt,sub,strm" />
+          <el-input
+            v-model="form.strmConfig.downloadFileTypes"
+            autocomplete="off"
+            placeholder="逗号分隔的文件扩展名，例如：ass,srt,vtt,sub,strm"
+          />
         </el-form-item>
         <el-form-item label="过滤文件类型" label-width="140">
-          <el-input v-model="form.strmConfig.filterFileTypes" type="textarea" :rows="2"
+          <el-input
+            v-model="form.strmConfig.filterFileTypes"
+            type="textarea"
+            :rows="2"
             placeholder="需要生成STRM文件的媒体文件类型，例如：mp4,mkv,flv,avi,wmv,ts,rmvb,webm,mp3,flac,aac,wav,ogg"
-            autocomplete="off" />
+            autocomplete="off"
+          />
         </el-form-item>
         <el-form-item label="编码路径" label-width="140">
           <el-switch v-model="form.strmConfig.encodePath" />
@@ -209,36 +236,41 @@
           <el-switch v-model="form.strmConfig.saveStrmToLocal" />
         </el-form-item>
         <el-form-item v-if="form.strmConfig.saveStrmToLocal" label="本地保存路径" label-width="140">
-          <el-input v-model="form.strmConfig.saveStrmLocalPath" autocomplete="off"
-            placeholder="本地保存的路径，例如：local_strm" />
+          <el-input
+            v-model="form.strmConfig.saveStrmLocalPath"
+            autocomplete="off"
+            placeholder="本地保存的路径，例如：local_strm"
+          />
         </el-form-item>
         <el-form-item v-if="form.strmConfig.saveStrmToLocal" label="保存模式" label-width="140">
           <el-select v-model="form.strmConfig.saveLocalMode" placeholder="选择保存模式">
             <el-option label="新增模式" value="insert">
               <span>新增模式</span>
-              <span style="color: var(--el-text-color-secondary); font-size: 12px; margin-left: 8px;">
+              <span style="color: var(--el-text-color-secondary); font-size: 12px; margin-left: 8px">
                 仅对本地没有的文件进行生成
               </span>
             </el-option>
             <el-option label="更新模式" value="update">
               <span>更新模式</span>
-              <span style="color: var(--el-text-color-secondary); font-size: 12px; margin-left: 8px;">
+              <span style="color: var(--el-text-color-secondary); font-size: 12px; margin-left: 8px">
                 生成新文件并更新已有文件
               </span>
             </el-option>
             <el-option label="同步模式" value="sync">
               <span>同步模式</span>
-              <span style="color: var(--el-text-color-secondary); font-size: 12px; margin-left: 8px;">
+              <span style="color: var(--el-text-color-secondary); font-size: 12px; margin-left: 8px">
                 完全同步，删除网盘中不存在的本地文件
               </span>
             </el-option>
           </el-select>
-          <div style="color: var(--el-text-color-secondary); font-size: 12px; margin-top: 4px; line-height: 1.5;">
-            💡 <strong>新增模式</strong>: 仅对本地没有的文件进行生成，对本地文件不进行任何操作<br>
-            💡 <strong>更新模式</strong>: 对本地没有的文件进行生成同时更新本地文件内容至最新<br>
-            💡 <strong>同步模式</strong>: 在更新模式的基础上删除本地中网盘没有的文件<br>
-            <span style="color: var(--el-color-warning);">⚠️ 推荐:
-              如果使用刮削器等软件读取本地strm文件并生成元数据，请选择<strong>更新模式</strong>，以确保本地strm文件内容是最新的且不会删除元数据文件</span>
+          <div style="color: var(--el-text-color-secondary); font-size: 12px; margin-top: 4px; line-height: 1.5">
+            💡 <strong>新增模式</strong>: 仅对本地没有的文件进行生成，对本地文件不进行任何操作<br />
+            💡 <strong>更新模式</strong>: 对本地没有的文件进行生成同时更新本地文件内容至最新<br />
+            💡 <strong>同步模式</strong>: 在更新模式的基础上删除本地中网盘没有的文件<br />
+            <span style="color: var(--el-color-warning)"
+            >⚠️ 推荐:
+              如果使用刮削器等软件读取本地strm文件并生成元数据，请选择<strong>更新模式</strong>，以确保本地strm文件内容是最新的且不会删除元数据文件</span
+            >
           </div>
         </el-form-item>
       </template>
@@ -321,30 +353,44 @@
         </el-radio-group>
       </el-form-item>
       <el-form-item label="导入延迟(毫秒)">
-        <el-input-number v-model="sharesDto.delay" :min="0" :step="100" controls-position="right"
-          style="width: 200px;" />
+        <el-input-number
+          v-model="sharesDto.delay"
+          :min="0"
+          :step="100"
+          controls-position="right"
+          style="width: 200px"
+        />
         <span class="hint">每个分享导入后等待的毫秒数（0表示无延迟）</span>
       </el-form-item>
       <el-form-item label="分享内容">
-        <el-input v-model="sharesDto.content" type="textarea" :rows="15"
-          :placeholder="'多行分享\n格式1：挂载路径 分享ID 目录ID 提取码\n格式2：挂载路径 分享链接\n格式3：挂载路径 分享链接 root 提取码'" />
+        <el-input
+          v-model="sharesDto.content"
+          type="textarea"
+          :rows="15"
+          :placeholder="'多行分享\n格式1：挂载路径 分享ID 目录ID 提取码\n格式2：挂载路径 分享链接\n格式3：挂载路径 分享链接 root 提取码'"
+        />
       </el-form-item>
       <el-form-item label="导入文件">
-        <el-upload ref="upload" action="/api/import-share-file" accept="text/plain" class="upload" :limit="1"
-          :on-exceed="handleExceed" :on-success="onUploadSuccess" :on-error="onUploadError"
-          :headers="{ 'authorization': token }" :data="{ type: sharesDto.type, delay: sharesDto.delay }"
-          :auto-upload="false">
+        <el-upload
+          ref="upload"
+          action="/api/import-share-file"
+          accept="text/plain"
+          class="upload"
+          :limit="1"
+          :on-exceed="handleExceed"
+          :on-success="onUploadSuccess"
+          :on-error="onUploadError"
+          :headers="{ authorization: token }"
+          :data="{ type: sharesDto.type, delay: sharesDto.delay }"
+          :auto-upload="false"
+        >
           <template #trigger>
             <el-button type="primary" :disabled="uploading">选择文件</el-button>
           </template>
           <span class="hint"></span>
-          <el-button type="success" :disabled="uploading" @click="submitUpload">
-            上传导入
-          </el-button>
+          <el-button type="success" :disabled="uploading" @click="submitUpload"> 上传导入 </el-button>
           <template #tip>
-            <div class="el-upload__tip">
-              上传分享列表文件，最大20MB
-            </div>
+            <div class="el-upload__tip">上传分享列表文件，最大20MB</div>
           </template>
         </el-upload>
       </el-form-item>
@@ -382,18 +428,17 @@
       </span>
     </template>
   </el-dialog>
-
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import axios from "axios";
+import { onMounted, ref } from 'vue'
+import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { genFileId } from 'element-plus'
 import type { UploadInstance, UploadProps, UploadRawFile } from 'element-plus'
 const upload = ref<UploadInstance>()
-import accountService from "@/services/account.service";
-import { Search } from "@element-plus/icons-vue";
+import accountService from '@/services/account.service'
+import { Search } from '@element-plus/icons-vue'
 
 const token = accountService.getToken()
 
@@ -453,7 +498,7 @@ const storage = ref<Storage>({
   mount_path: '',
   driver: '',
   status: '',
-  addition: ''
+  addition: '',
 })
 const sort = ref('')
 const page = ref(1)
@@ -494,13 +539,13 @@ const form = ref<ShareInfo>({
     withSign: false,
     saveStrmToLocal: false,
     saveStrmLocalPath: '',
-    saveLocalMode: 'update'
-  }
+    saveLocalMode: 'update',
+  },
 })
 const sharesDto = ref({
   content: '',
   type: -1,
-  delay: 0
+  delay: 0,
 })
 
 const handleAdd = () => {
@@ -526,8 +571,8 @@ const handleAdd = () => {
       withSign: false,
       saveStrmToLocal: false,
       saveStrmLocalPath: '',
-      saveLocalMode: 'update'
-    }
+      saveLocalMode: 'update',
+    },
   }
   formVisible.value = true
 }
@@ -547,7 +592,7 @@ const handleEdit = (data: ShareInfo) => {
     withSign: false,
     saveStrmToLocal: false,
     saveStrmLocalPath: '',
-    saveLocalMode: 'update'
+    saveLocalMode: 'update',
   }
   if (data.type === 11 && data.folderId) {
     try {
@@ -565,7 +610,7 @@ const handleEdit = (data: ShareInfo) => {
     cookie: data.cookie,
     status: data.status,
     type: data.type,
-    strmConfig: strmConfig
+    strmConfig: strmConfig,
   }
   formVisible.value = true
 }
@@ -589,9 +634,14 @@ const handleDeleteBatch = () => {
 const deleteSub = () => {
   dialogVisible.value = false
   if (batch.value) {
-    axios.post('/api/delete-shares', multipleSelection.value.map(s => s.id)).then(() => {
-      loadShares(page.value)
-    })
+    axios
+      .post(
+        '/api/delete-shares',
+        multipleSelection.value.map((s) => s.id),
+      )
+      .then(() => {
+        loadShares(page.value)
+      })
   } else {
     axios.delete('/api/shares/' + form.value.id).then(() => {
       loadShares(page.value)
@@ -602,9 +652,14 @@ const deleteSub = () => {
 const deleteStorage = () => {
   dialogVisible1.value = false
   if (selectedStorages.value.length) {
-    axios.post('/api/delete-shares', selectedStorages.value.map(s => s.id)).then(() => {
-      loadStorages(page1.value)
-    })
+    axios
+      .post(
+        '/api/delete-shares',
+        selectedStorages.value.map((s) => s.id),
+      )
+      .then(() => {
+        loadStorages(page1.value)
+      })
   } else {
     axios.delete('/api/shares/' + storage.value.id).then(() => {
       loadStorages(page1.value)
@@ -617,7 +672,7 @@ const handleCancel = () => {
 }
 
 const fullPath = (share: any) => {
-  const path = share.path;
+  const path = share.path
   if (path.startsWith('/')) {
     return path
   }
@@ -701,10 +756,23 @@ const search = () => {
 
 const loadShares = (value: number) => {
   page.value = value
-  axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value + '&sort=' + sort.value + '&type=' + type.value + '&keyword=' + keyword.value).then(({ data }) => {
-    shares.value = data.content
-    total.value = data.totalElements
-  })
+  axios
+    .get(
+      '/api/shares?page=' +
+        (page.value - 1) +
+        '&size=' +
+        size.value +
+        '&sort=' +
+        sort.value +
+        '&type=' +
+        type.value +
+        '&keyword=' +
+        keyword.value,
+    )
+    .then(({ data }) => {
+      shares.value = data.content
+      total.value = data.totalElements
+    })
 }
 
 const loadStorages = (value: number) => {
@@ -804,15 +872,24 @@ const submitUpload = () => {
 
 const importShares = () => {
   uploading.value = true
-  axios.post('/api/import-shares', sharesDto.value).then(({ data }) => {
-    uploadSuccess(data)
-  }, (err) => {
-    uploadError(err)
-  })
+  axios.post('/api/import-shares', sharesDto.value).then(
+    ({ data }) => {
+      uploadSuccess(data)
+    },
+    (err) => {
+      uploadError(err)
+    },
+  )
 }
 
 const exportShares = () => {
-  window.location.href = '/api/export-shares?type=' + form.value.type + '&t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
+  window.location.href =
+    '/api/export-shares?type=' +
+    form.value.type +
+    '&t=' +
+    new Date().getTime() +
+    '&X-ACCESS-TOKEN=' +
+    localStorage.getItem('token')
 }
 
 const uploadSuccess = (response: any) => {
@@ -828,7 +905,7 @@ const uploadError = (error: Error) => {
   ElMessage.error('导入失败：' + error)
 }
 
-const handleSort = (data: { prop: string, order: any }) => {
+const handleSort = (data: { prop: string; order: any }) => {
   if (data.order) {
     sort.value = data.prop + ',' + (data.order === 'ascending' ? 'asc' : 'desc')
   } else {

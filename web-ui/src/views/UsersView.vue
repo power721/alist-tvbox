@@ -8,12 +8,17 @@
     <div class="space"></div>
 
     <el-table :data="users" border style="width: 100%">
-      <el-table-column prop="id" label="ID"/>
-      <el-table-column prop="username" label="用户名"/>
+      <el-table-column prop="id" label="ID" />
+      <el-table-column prop="username" label="用户名" />
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
-          <el-button type="danger" size="small" @click="handleDelete(scope.row)" v-if="scope.row.id!=1">删除</el-button>
+          <el-button type="danger"
+                     size="small"
+                     @click="handleDelete(scope.row)"
+                     v-if="scope.row.id != 1"
+          >删除</el-button
+          >
         </template>
       </el-table-column>
     </el-table>
@@ -21,17 +26,17 @@
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form" label-width="120">
         <el-form-item label="用户名" required>
-          <el-input v-model="form.username" autocomplete="off"/>
+          <el-input v-model="form.username" autocomplete="off" />
         </el-form-item>
         <el-form-item label="密码">
-          <el-input type="password" v-model="form.password" autocomplete="off"/>
+          <el-input type="password" v-model="form.password" autocomplete="off" />
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="handleCancel">取消</el-button>
-        <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="handleCancel">取消</el-button>
+          <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -39,18 +44,18 @@
       <p>是否删除用户 - {{ form.id }}</p>
       <p>{{ form.username }}</p>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="deleteUser">删除</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="danger" @click="deleteUser">删除</el-button>
+        </span>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
-import axios from "axios"
+import { onMounted, ref } from 'vue'
+import axios from 'axios'
 
 interface User {
   id: number
@@ -112,7 +117,7 @@ const handleConfirm = () => {
 }
 
 const load = () => {
-  axios.get('/api/users').then(({data}) => {
+  axios.get('/api/users').then(({ data }) => {
     users.value = data
   })
 }

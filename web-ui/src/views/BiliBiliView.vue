@@ -4,13 +4,14 @@
       <div v-if="userInfo">
         <span v-if="userInfo.uname">用户名：{{ userInfo.uname }}</span>
         <span class="hint">登录状态：{{ userInfo.isLogin ? '已登录' : '未登录' }}</span>
-        <span v-if="userInfo.uname" class="hint">会员状态：{{
-            userInfo.vipType ? userInfo.vip_label.text : '无会员'
-          }}</span>
+        <span v-if="userInfo.uname"
+              class="hint"
+        >会员状态：{{ userInfo.vipType ? userInfo.vip_label.text : '无会员' }}</span
+        >
       </div>
       <div class="">
         <el-button type="primary" @click="scanLogin">登录</el-button>
-        <el-button type="primary" @click="settingVisible=true">配置</el-button>
+        <el-button type="primary" @click="settingVisible = true">配置</el-button>
       </div>
     </div>
 
@@ -23,41 +24,37 @@
     </el-row>
     <div class="space"></div>
 
-    <el-table :data="list"
-              :row-class-name="tableRowClassName"
-              row-key="id"
-              :key="tableKey"
-              style="width: 100%">
+    <el-table :data="list" :row-class-name="tableRowClassName" row-key="id" :key="tableKey" style="width: 100%">
       <el-table-column prop="order" label="顺序" sortable width="100">
         <template #default="scope">
           <span class="pointer">{{ scope.row.order }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="id" label="ID" sortable width="100"/>
-      <el-table-column prop="name" label="名称" width="200"/>
-      <el-table-column prop="value" label="值" sortable/>
+      <el-table-column prop="id" label="ID" sortable width="100" />
+      <el-table-column prop="name" label="名称" width="200" />
+      <el-table-column prop="value" label="值" sortable />
       <el-table-column prop="type" label="类型" sortable width="180">
         <template #default="scope">
-          <span v-if="scope.row.type==1">一级分类</span>
-          <span v-if="scope.row.type==2">二级分类</span>
-          <span v-if="scope.row.type==3">频道</span>
-          <span v-if="scope.row.type==4">搜索</span>
-          <span v-if="scope.row.type==5">UP主</span>
+          <span v-if="scope.row.type == 1">一级分类</span>
+          <span v-if="scope.row.type == 2">二级分类</span>
+          <span v-if="scope.row.type == 3">频道</span>
+          <span v-if="scope.row.type == 4">搜索</span>
+          <span v-if="scope.row.type == 5">UP主</span>
         </template>
       </el-table-column>
-      <el-table-column prop="parentId" label="父类ID" sortable width="180"/>
+      <el-table-column prop="parentId" label="父类ID" sortable width="180" />
       <el-table-column prop="show" label="显示？" sortable width="140">
         <template #default="scope">
-          <el-switch v-model="scope.row.show" @change="changed=true"/>
+          <el-switch v-model="scope.row.show" @change="changed = true" />
         </template>
       </el-table-column>
       <el-table-column prop="reserved" label="保留的？" sortable width="140">
         <template #default="scope">
           <el-icon v-if="scope.row.reserved">
-            <Check/>
+            <Check />
           </el-icon>
           <el-icon v-else>
-            <Close/>
+            <Close />
           </el-icon>
         </template>
       </el-table-column>
@@ -74,16 +71,16 @@
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form label-width="140" :model="form">
         <el-form-item label="名称" required>
-          <el-input v-model="form.name" placeholder="显示的名称" autocomplete="off"/>
+          <el-input v-model="form.name" placeholder="显示的名称" autocomplete="off" />
         </el-form-item>
         <el-form-item label="值" required>
-          <el-input v-model="form.value" placeholder="分类ID或者UP主ID或者搜索关键词" autocomplete="off"/>
+          <el-input v-model="form.value" placeholder="分类ID或者UP主ID或者搜索关键词" autocomplete="off" />
         </el-form-item>
-        <el-form-item label="父ID" required v-if="form.type==2">
-          <el-input v-model="form.parentId" autocomplete="off"/>
+        <el-form-item label="父ID" required v-if="form.type == 2">
+          <el-input v-model="form.parentId" autocomplete="off" />
         </el-form-item>
         <el-form-item label="显示？">
-          <el-switch v-model="form.show"/>
+          <el-switch v-model="form.show" />
         </el-form-item>
         <!--        <el-form-item label="保留的？">-->
         <!--          <el-switch v-model="form.reserved"/>-->
@@ -91,21 +88,21 @@
         <el-form-item label="类型">
           <el-radio-group v-model="form.type" class="ml-4">
             <!--            <el-radio :label="1" size="large">一级分类</el-radio>-->
-<!--                        <el-radio :label="2" size="large">二级分类</el-radio>-->
-<!--                        <el-radio :label="3" size="large">频道</el-radio>-->
+            <!--                        <el-radio :label="2" size="large">二级分类</el-radio>-->
+            <!--                        <el-radio :label="3" size="large">频道</el-radio>-->
             <el-radio :label="4" size="large">搜索</el-radio>
             <el-radio :label="5" size="large">UP主</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="顺序">
-          <el-input-number v-model="form.order" :min="0"/>
+          <el-input-number v-model="form.order" :min="0" />
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="handleCancel">取消</el-button>
-        <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="handleCancel">取消</el-button>
+          <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -113,30 +110,30 @@
       <p>是否删除分类 - {{ form.name }}</p>
       <p>{{ form.value }}</p>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="deleteSite">删除</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="danger" @click="deleteSite">删除</el-button>
+        </span>
       </template>
     </el-dialog>
 
     <el-dialog v-model="loginVisible" title="扫码登录" width="550px" @close="cancel">
       <div v-if="base64QrCode">
-        <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
+        <img alt="qr" :src="'data:image/png;base64,' + base64QrCode" style="width: 500px" />
         <span class="hint">打开BiliBili手机客户端扫码</span>
       </div>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="loginVisible=false">取消</el-button>
-        <!--        <el-button type="primary" @click="checkLogin">我已扫码</el-button>-->
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="loginVisible = false">取消</el-button>
+          <!--        <el-button type="primary" @click="checkLogin">我已扫码</el-button>-->
+        </span>
       </template>
     </el-dialog>
 
     <el-dialog v-model="settingVisible" title="B站设置" width="60%">
       <el-form label-width="150px">
         <el-form-item label="登录Cookie" label-width="120">
-          <el-input v-model="bilibiliCookie" type="textarea" :rows="5"/>
+          <el-input v-model="bilibiliCookie" type="textarea" :rows="5" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateBilibiliCookie">更新</el-button>
@@ -160,25 +157,19 @@
           />
         </el-form-item>
         <el-form-item label="强制dash视频格式">
-          <el-switch
-            v-model="dash"
-            inline-prompt
-            active-text="开启"
-            inactive-text="关闭"
-            @change="updateDash"
-          />
+          <el-switch v-model="dash" inline-prompt active-text="开启" inactive-text="关闭" @change="updateDash" />
         </el-form-item>
-<!--        <el-form-item label="视频格式">-->
-<!--          <el-checkbox v-model="checks[0]" label="HDR" size="large"/>-->
-<!--          <el-checkbox v-model="checks[1]" label="4K" size="large"/>-->
-<!--          <el-checkbox v-model="checks[2]" label="杜比音频" size="large"/>-->
-<!--          <el-checkbox v-model="checks[3]" label="杜比视界" size="large"/>-->
-<!--          <el-checkbox v-model="checks[4]" label="8K" size="large"/>-->
-<!--          <el-checkbox v-model="checks[5]" label="AV1编码" size="large"/>-->
-<!--        </el-form-item>-->
-<!--        <el-form-item>-->
-<!--          <el-button type="primary" @click="updateFnval">更新</el-button>-->
-<!--        </el-form-item>-->
+        <!--        <el-form-item label="视频格式">-->
+        <!--          <el-checkbox v-model="checks[0]" label="HDR" size="large"/>-->
+        <!--          <el-checkbox v-model="checks[1]" label="4K" size="large"/>-->
+        <!--          <el-checkbox v-model="checks[2]" label="杜比音频" size="large"/>-->
+        <!--          <el-checkbox v-model="checks[3]" label="杜比视界" size="large"/>-->
+        <!--          <el-checkbox v-model="checks[4]" label="8K" size="large"/>-->
+        <!--          <el-checkbox v-model="checks[5]" label="AV1编码" size="large"/>-->
+        <!--        </el-form-item>-->
+        <!--        <el-form-item>-->
+        <!--          <el-button type="primary" @click="updateFnval">更新</el-button>-->
+        <!--        </el-form-item>-->
         <el-form-item label="视频画质">
           <el-checkbox-group v-model="qns">
             <el-checkbox label="360P 流畅" value="16" />
@@ -199,31 +190,30 @@
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="settingVisible = false">取消</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="settingVisible = false">取消</el-button>
+        </span>
       </template>
     </el-dialog>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
-import Sortable from "sortablejs"
-import {Check, Close} from '@element-plus/icons-vue'
-import axios from "axios"
-import {ElMessage} from "element-plus";
+import { onMounted, ref } from 'vue'
+import Sortable from 'sortablejs'
+import { Check, Close } from '@element-plus/icons-vue'
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 const columns = [
-  {title: "ID", key: "id", dataKey: "id"},
-  {title: "姓名", key: "name", dataKey: "name"},
-  {title: "值", key: "value", dataKey: "value"},
-  {title: "类型", key: "type", dataKey: "type"},
-  {title: "显示", key: "show", dataKey: "show"},
-  {title: "保留的", key: "reserved", dataKey: "reserved"},
-  {title: "顺序", key: "order", dataKey: "order"},
-  {title: "父类ID", key: "parentId", dataKey: "parentId"},
+  { title: 'ID', key: 'id', dataKey: 'id' },
+  { title: '姓名', key: 'name', dataKey: 'name' },
+  { title: '值', key: 'value', dataKey: 'value' },
+  { title: '类型', key: 'type', dataKey: 'type' },
+  { title: '显示', key: 'show', dataKey: 'show' },
+  { title: '保留的', key: 'reserved', dataKey: 'reserved' },
+  { title: '顺序', key: 'order', dataKey: 'order' },
+  { title: '父类ID', key: 'parentId', dataKey: 'parentId' },
 ]
 
 interface Nav {
@@ -240,10 +230,7 @@ interface Nav {
   children: Nav[]
 }
 
-const tableRowClassName = ({row}: {
-  row: Nav
-  rowIndex: number
-}) => {
+const tableRowClassName = ({ row }: { row: Nav; rowIndex: number }) => {
   if (row.changed) {
     return 'warning-row'
   }
@@ -279,17 +266,19 @@ const form = ref<Nav>({
   expanded: false,
   order: 1,
   parentId: 0,
-  children: []
+  children: [],
 })
 
 const treeToTile = (treeData: Nav[]) => {
   const arr: Nav[] = []
   const expanded = (data: Nav[]) => {
     if (data && data.length > 0) {
-      data.filter(d => d).forEach(e => {
-        arr.push(e)
-        expanded(e['children'] || [])
-      })
+      data
+        .filter((d) => d)
+        .forEach((e) => {
+          arr.push(e)
+          expanded(e['children'] || [])
+        })
     }
   }
   expanded(treeData)
@@ -297,23 +286,23 @@ const treeToTile = (treeData: Nav[]) => {
 }
 
 const rowDrop = () => {
-  const tbody = document.querySelector(".el-table__body-wrapper tbody") as HTMLElement;
+  const tbody = document.querySelector('.el-table__body-wrapper tbody') as HTMLElement
   Sortable.create(tbody, {
     animation: 500,
-    handle: ".el-table__row",
-    draggable: ".el-table__row",
-    onMove({dragged, related}) {
+    handle: '.el-table__row',
+    draggable: '.el-table__row',
+    onMove({ dragged, related }) {
       activeRows.value = treeToTile(list.value)
       const oldRow = activeRows.value[(dragged as HTMLTableRowElement).rowIndex]
       const newRow = activeRows.value[(related as HTMLTableRowElement).rowIndex]
       if ((oldRow.type == 2) !== (newRow.type == 2)) {
         return false
       }
-      return !(oldRow.type === 2 && oldRow.parentId !== newRow.parentId);
+      return !(oldRow.type === 2 && oldRow.parentId !== newRow.parentId)
     },
     onEnd: (event: any) => {
-      let oldIndex = event.oldIndex
-      let newIndex = event.newIndex
+      const oldIndex = event.oldIndex
+      const newIndex = event.newIndex
       const oldRow = activeRows.value[oldIndex]
       const newRow = activeRows.value[newIndex]
       if (!oldRow || oldIndex === newIndex || oldRow.id === newRow.id) {
@@ -326,9 +315,9 @@ const rowDrop = () => {
       const items: Nav[] = []
 
       if (oldRow.type === 2) {
-        const parent = list.value.find(e => e.id === oldRow.parentId)
+        const parent = list.value.find((e) => e.id === oldRow.parentId)
         console.log(oldRow.id, oldRow.parentId, parent)
-        activeRows.value.forEach(e => {
+        activeRows.value.forEach((e) => {
           if (e.type == 2 && e.parentId === oldRow.parentId) {
             e.order = order++
             items.push(e)
@@ -338,7 +327,7 @@ const rowDrop = () => {
           parent.children = items
         }
       } else {
-        activeRows.value.forEach(e => {
+        activeRows.value.forEach((e) => {
           if (e.type != 2) {
             e.order = order++
             items.push(e)
@@ -354,7 +343,7 @@ const rowDrop = () => {
       newRow.changed = true
       changed.value = true
     },
-  });
+  })
 }
 
 const handleAdd = () => {
@@ -371,7 +360,7 @@ const handleAdd = () => {
     expanded: false,
     order: 1,
     parentId: 0,
-    children: []
+    children: [],
   }
   formVisible.value = true
 }
@@ -408,35 +397,55 @@ const handleConfirm = () => {
 }
 
 const handleSave = () => {
-  const items = list.value.map(e => ({id: e.id, order: e.order, show: e.show, children: e.children}));
-  axios.put('/api/nav', {list: items}).then(() => {
+  const items = list.value.map((e) => ({
+    id: e.id,
+    order: e.order,
+    show: e.show,
+    children: e.children,
+  }))
+  axios.put('/api/nav', { list: items }).then(() => {
     ElMessage.success('保存成功')
     load()
   })
 }
 
 const updateBilibiliCookie = () => {
-  axios.post('/api/settings', {name: 'bilibili_cookie', value: bilibiliCookie.value}).then(() => {
-    ElMessage.success('更新成功')
-    loadUser()
-  })
+  axios
+    .post('/api/settings', {
+      name: 'bilibili_cookie',
+      value: bilibiliCookie.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+      loadUser()
+    })
 }
 
 const updateHeartbeat = () => {
-  axios.post('/api/settings', {name: 'bilibili_heartbeat', value: heartbeat.value + ''}).then(() => {
-    ElMessage.success('更新成功')
-    loadUser()
-  })
+  axios
+    .post('/api/settings', {
+      name: 'bilibili_heartbeat',
+      value: heartbeat.value + '',
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+      loadUser()
+    })
 }
 
 const updateSearchable = () => {
-  axios.post('/api/settings', {name: 'bilibili_searchable', value: searchable.value + ''}).then(() => {
-    ElMessage.success('更新成功')
-  })
+  axios
+    .post('/api/settings', {
+      name: 'bilibili_searchable',
+      value: searchable.value + '',
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+    })
 }
 
 const updateDash = () => {
-  axios.post('/api/settings', {name: 'bilibili_dash', value: dash.value + ''}).then(() => {
+  axios.post('/api/settings', { name: 'bilibili_dash', value: dash.value + '' }).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -444,19 +453,19 @@ const updateDash = () => {
 const updateFnval = () => {
   let val = 16
   let num = 64
-  for (let flag of checks.value) {
+  for (const flag of checks.value) {
     if (flag) {
       val += num
     }
     num *= 2
   }
-  axios.post('/api/settings', {name: 'bilibili_fnval', value: val + ''}).then(() => {
+  axios.post('/api/settings', { name: 'bilibili_fnval', value: val + '' }).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateQn = () => {
-  axios.post('/api/settings', {name: 'bilibili_qn', value: qns.value.join(',')}).then(() => {
+  axios.post('/api/settings', { name: 'bilibili_qn', value: qns.value.join(',') }).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -465,7 +474,7 @@ const scanLogin = () => {
   base64QrCode.value = ''
   qrcodeKey.value = ''
   clearInterval(timer)
-  axios.post('/api/bilibili/login', null).then(({data}) => {
+  axios.post('/api/bilibili/login', null).then(({ data }) => {
     base64QrCode.value = data.image
     qrcodeKey.value = data.qrcode_key
     loginVisible.value = true
@@ -483,7 +492,7 @@ const checkLogin = () => {
 
 const check = () => {
   if (count-- > 0) {
-    axios.get('/api/bilibili/check?key=' + qrcodeKey.value).then(({data}) => {
+    axios.get('/api/bilibili/check?key=' + qrcodeKey.value).then(({ data }) => {
       if (data === 0) {
         success()
       } else if (data !== 1) {
@@ -496,7 +505,7 @@ const check = () => {
 }
 
 const success = () => {
-  ElMessage.success("登录成功")
+  ElMessage.success('登录成功')
   clearInterval(timer)
   timer = 0
   getBilibiliCookie()
@@ -506,12 +515,12 @@ const success = () => {
 
 const fail = (code: number) => {
   if (code === 86038 || code === 2) {
-    ElMessage.error("二维码已失效，重新生成")
+    ElMessage.error('二维码已失效，重新生成')
     scanLogin()
   } else if (code === 86090) {
-    ElMessage.error("二维码已扫码未确认")
+    ElMessage.error('二维码已扫码未确认')
   } else {
-    ElMessage.error("登录失败")
+    ElMessage.error('登录失败')
   }
 
   clearInterval(timer)
@@ -525,31 +534,31 @@ const cancel = () => {
 }
 
 const getHeartbeat = () => {
-  axios.get('/api/settings/bilibili_heartbeat').then(({data}) => {
+  axios.get('/api/settings/bilibili_heartbeat').then(({ data }) => {
     heartbeat.value = data.value === 'true'
   })
 }
 
 const getSearchable = () => {
-  axios.get('/api/settings/bilibili_searchable').then(({data}) => {
+  axios.get('/api/settings/bilibili_searchable').then(({ data }) => {
     searchable.value = data.value !== 'false'
   })
 }
 
 const getDash = () => {
-  axios.get('/api/settings/bilibili_dash').then(({data}) => {
+  axios.get('/api/settings/bilibili_dash').then(({ data }) => {
     dash.value = data.value === 'true'
   })
 }
 
 const getBilibiliCookie = () => {
-  axios.get('/api/settings/bilibili_cookie').then(({data}) => {
+  axios.get('/api/settings/bilibili_cookie').then(({ data }) => {
     bilibiliCookie.value = data.value
   })
 }
 
 const getQn = () => {
-  axios.get('/api/settings/bilibili_qn').then(({data}) => {
+  axios.get('/api/settings/bilibili_qn').then(({ data }) => {
     if (data.value) {
       qns.value = data.value.split(',')
     }
@@ -557,7 +566,7 @@ const getQn = () => {
 }
 
 const getFnval = () => {
-  axios.get('/api/settings/bilibili_fnval').then(({data}) => {
+  axios.get('/api/settings/bilibili_fnval').then(({ data }) => {
     let val = +data.value
     if (!val) {
       val = 2512
@@ -571,7 +580,7 @@ const getFnval = () => {
 }
 
 const load = () => {
-  return axios.get('/api/nav').then(({data}) => {
+  return axios.get('/api/nav').then(({ data }) => {
     list.value = data
     list.value.sort((a, b) => a.order - b.order)
     changed.value = false
@@ -580,7 +589,7 @@ const load = () => {
 }
 
 const loadUser = () => {
-  axios.get('/api/bilibili/status').then(({data}) => {
+  axios.get('/api/bilibili/status').then(({ data }) => {
     userInfo.value = data
   })
 }

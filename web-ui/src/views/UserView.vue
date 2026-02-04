@@ -1,13 +1,13 @@
 <template>
   <el-form :model="form" :rules="rules" status-icon label-width="120px">
     <el-form-item prop="username" label="用户名">
-      <el-input v-model="form.username"/>
+      <el-input v-model="form.username" />
     </el-form-item>
     <el-form-item prop="password" label="账号密码">
-      <el-input type="password" v-model="form.password" show-password/>
+      <el-input type="password" v-model="form.password" show-password />
     </el-form-item>
     <el-form-item prop="confirmPassword" label="确认密码">
-      <el-input type="password" v-model="form.confirmPassword" show-password/>
+      <el-input type="password" v-model="form.confirmPassword" show-password />
     </el-form-item>
     <el-form-item>
       <el-button type="primary" @click="updateUser">更新</el-button>
@@ -16,26 +16,20 @@
 </template>
 
 <script setup lang="ts">
-import {reactive, ref} from "vue";
-import {ElMessage} from "element-plus";
-import accountService from "@/services/account.service";
+import { reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import accountService from '@/services/account.service'
 
 const form = ref({
   username: accountService.account.username,
   password: '',
   confirmPassword: '',
-  authenticated: false
+  authenticated: false,
 })
 const rules = reactive({
-  username: [
-    {required: true, message: '请输入用户名', trigger: 'blur'}
-  ],
-  password: [
-    {required: true, message: '请输入密码', trigger: 'blur'}
-  ],
-  confirmPassword: [
-    {required: true, message: '请确认密码', trigger: 'blur'}
-  ],
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  confirmPassword: [{ required: true, message: '请确认密码', trigger: 'blur' }],
 })
 
 const updateUser = () => {
@@ -57,5 +51,4 @@ const updateUser = () => {
 }
 </script>
 
-<style>
-</style>
+<style></style>

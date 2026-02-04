@@ -8,16 +8,16 @@
     <div class="space"></div>
 
     <el-table :data="rules" border style="width: 100%">
-      <el-table-column prop="name" label="名称/Token"/>
+      <el-table-column prop="name" label="名称/Token" />
       <el-table-column prop="url" label="默认订阅地址" sortable>
         <template #default="scope">
-          <a :href="currentUrl+'/sub/'+scope.row.name+'/0'" target="_blank">
+          <a :href="currentUrl + '/sub/' + scope.row.name + '/0'" target="_blank">
             {{ currentUrl }}/sub/{{ scope.row.name }}/0
           </a>
         </template>
       </el-table-column>
-      <el-table-column prop="include" label="白名单"/>
-      <el-table-column prop="exclude" label="黑名单"/>
+      <el-table-column prop="include" label="白名单" />
+      <el-table-column prop="exclude" label="黑名单" />
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
@@ -42,25 +42,33 @@
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form" label-width="120">
         <el-form-item label="名称/Token" required>
-          <el-input v-model="form.name" autocomplete="off"/>
-          <a :href="currentUrl+'/sub/'+form.name+'/0'" target="_blank" v-if="form.name">
+          <el-input v-model="form.name" autocomplete="off" />
+          <a :href="currentUrl + '/sub/' + form.name + '/0'" target="_blank" v-if="form.name">
             {{ currentUrl }}/sub/{{ form.name }}/0
           </a>
         </el-form-item>
         <el-form-item label="白名单">
-          <el-input v-model="form.include" type="textarea" :rows="5"
-                    :placeholder="'多行路径\n每行一个路径\n路径以/开头'"/>
+          <el-input
+            v-model="form.include"
+            type="textarea"
+            :rows="5"
+            :placeholder="'多行路径\n每行一个路径\n路径以/开头'"
+          />
         </el-form-item>
         <el-form-item label="黑名单">
-          <el-input v-model="form.exclude" type="textarea" :rows="5"
-                    :placeholder="'多行规则\n每行一个路径或者关键词\n路径以/开头'"/>
+          <el-input
+            v-model="form.exclude"
+            type="textarea"
+            :rows="5"
+            :placeholder="'多行规则\n每行一个路径或者关键词\n路径以/开头'"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="handleCancel">取消</el-button>
-        <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="handleCancel">取消</el-button>
+          <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -68,18 +76,18 @@
       <p>是否删除规则 - {{ form.id }}</p>
       <p>{{ form.name }}</p>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="deleteSub">删除</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="danger" @click="deleteSub">删除</el-button>
+        </span>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
-import axios from "axios"
+import { onMounted, ref } from 'vue'
+import axios from 'axios'
 
 interface Rule {
   id: number
@@ -151,7 +159,7 @@ const handleConfirm = () => {
 }
 
 const load = () => {
-  axios.get('/api/tenants').then(({data}) => {
+  axios.get('/api/tenants').then(({ data }) => {
     rules.value = data
   })
 }

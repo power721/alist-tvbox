@@ -2,12 +2,14 @@
   <div class="search">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="currentUrl+getPath(type)+'/'+store.token+'?wd=' + keyword"
-         target="_blank">{{ currentUrl }}{{ getPath(type) }}/{{ store.token }}?wd={{ keyword }}</a>
+      <a :href="currentUrl + getPath(type) + '/' + store.token + '?wd=' + keyword"
+         target="_blank"
+      >{{ currentUrl }}{{ getPath(type) }}/{{ store.token }}?wd={{ keyword }}</a
+      >
     </div>
 
     <div>
-      <el-input v-model="keyword" @change="search"/>
+      <el-input v-model="keyword" @change="search" />
       <el-button type="primary" @click="search" :disabled="!keyword">搜索</el-button>
       <el-button type="primary" @click="showDialog" v-if="store.admin">设置</el-button>
     </div>
@@ -27,29 +29,29 @@
     <span class="divider" v-if="store.admin"></span>
     <a href="/#/tmdb" v-if="store.admin">TMDB电影数据列表</a>
 
-    <el-table v-if="(type==''||type=='1')&&config" :data="config.list" border style="width: 100%">
+    <el-table v-if="(type == '' || type == '1') && config" :data="config.list" border style="width: 100%">
       <el-table-column prop="vod_name" label="名称" width="300">
         <template #default="scope">
-          <a :href="'/#/vod'+scope.row.vod_content" target="_blank">
+          <a :href="'/#/vod' + scope.row.vod_content" target="_blank">
             {{ scope.row.vod_name }}
           </a>
         </template>
       </el-table-column>
       <el-table-column prop="vod_content" label="路径">
         <template #default="scope">
-          <a :href="'/#/vod'+scope.row.vod_content" target="_blank">
+          <a :href="'/#/vod' + scope.row.vod_content" target="_blank">
             {{ scope.row.vod_content }}
           </a>
         </template>
       </el-table-column>
-      <el-table-column prop="vod_year" label="年份" width="90"/>
-      <el-table-column prop="vod_remarks" label="评分" width="100"/>
+      <el-table-column prop="vod_year" label="年份" width="90" />
+      <el-table-column prop="vod_remarks" label="评分" width="100" />
     </el-table>
 
-    <el-table v-if="(type=='6')&&config" :data="config.list" border style="width: 100%">
+    <el-table v-if="type == '6' && config" :data="config.list" border style="width: 100%">
       <el-table-column prop="vod_name" label="名称">
         <template #default="scope">
-          <a :href="'/#/vod?link='+scope.row.vod_id" target="_blank">
+          <a :href="'/#/vod?link=' + scope.row.vod_id" target="_blank">
             {{ scope.row.vod_name }}
           </a>
         </template>
@@ -61,12 +63,17 @@
           </a>
         </template>
       </el-table-column>
-      <el-table-column prop="vod_remarks" label="类型" width="100"/>
+      <el-table-column prop="vod_remarks" label="类型" width="100" />
     </el-table>
 
-    <h2 v-if="type!='6'">API返回数据</h2>
-    <div class="data" v-if="type!='6'">
-      <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=3>
+    <h2 v-if="type != '6'">API返回数据</h2>
+    <div class="data" v-if="type != '6'">
+      <json-viewer :value="config"
+                   expanded
+                   copyable
+                   show-double-quotes
+                   :show-array-index="false"
+                   :expand-depth="3">
       </json-viewer>
     </div>
 
@@ -80,25 +87,24 @@
           </el-checkbox-group>
         </el-form-item>
         <el-form-item label="排除路径">
-          <el-input v-model="form.excludedPaths" type="textarea" :rows="15" :placeholder="'多行以/开头的路径'"/>
+          <el-input v-model="form.excludedPaths" type="textarea" :rows="15" :placeholder="'多行以/开头的路径'" />
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogVisible=false">取消</el-button>
-        <el-button type="primary" @click="update">更新</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="update">更新</el-button>
+        </span>
       </template>
     </el-dialog>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import {ref} from 'vue'
-import axios from "axios"
-import {ElMessage} from "element-plus";
-import {store} from "@/services/store";
+import { ref } from 'vue'
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
+import { store } from '@/services/store'
 
 const type = ref('1')
 const keyword = ref('')
@@ -134,13 +140,13 @@ const search = function () {
     return
   }
   config.value = ''
-  axios.get(getPath(type.value) + '/' + store.token + '?ac=web&wd=' + keyword.value.trim()).then(({data}) => {
+  axios.get(getPath(type.value) + '/' + store.token + '?ac=web&wd=' + keyword.value.trim()).then(({ data }) => {
     config.value = data
   })
 }
 
 const showDialog = () => {
-  axios.get('/api/index-files/settings').then(({data}) => {
+  axios.get('/api/index-files/settings').then(({ data }) => {
     data.excludedPaths = data.excludedPaths.replace(/,/g, '\n')
     form.value = data
     dialogVisible.value = true

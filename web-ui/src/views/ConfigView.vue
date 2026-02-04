@@ -7,9 +7,13 @@
             <div class="card-header">
               <span>AList运行状态</span>
               <div>
-                <el-button type="primary" v-if="store.aListStatus===0" @click="handleAList('start')">启动</el-button>
-                <el-button type="warning" v-if="store.aListStatus!==0" @click="handleAList('restart')">重启</el-button>
-                <el-button type="danger" v-if="store.aListStatus!==0" @click="handleAList('stop')">停止</el-button>
+                <el-button type="primary" v-if="store.aListStatus === 0" @click="handleAList('start')">启动</el-button>
+                <el-button type="warning"
+                           v-if="store.aListStatus !== 0"
+                           @click="handleAList('restart')"
+                >重启</el-button
+                >
+                <el-button type="danger" v-if="store.aListStatus !== 0" @click="handleAList('stop')">停止</el-button>
               </div>
             </div>
           </template>
@@ -17,7 +21,7 @@
             v-model="aListStarted"
             inline-prompt
             :disabled="true"
-            :active-text="store.aListStatus>=2?'运行中':'启动中'"
+            :active-text="store.aListStatus >= 2 ? '运行中' : '启动中'"
             inactive-text="停止中"
           />
           <span class="hint" v-if="aListStartTime">启动时间：{{ formatTime(aListStartTime) }}</span>
@@ -36,18 +40,13 @@
         <el-card class="box-card" v-if="store.aListStatus">
           <el-form :model="login" label-width="120px">
             <el-form-item prop="token" label="强制登录AList">
-              <el-switch
-                v-model="login.enabled"
-                inline-prompt
-                active-text="开启"
-                inactive-text="关闭"
-              />
+              <el-switch v-model="login.enabled" inline-prompt active-text="开启" inactive-text="关闭" />
             </el-form-item>
             <el-form-item prop="username" label="用户名">
-              <el-input v-model="login.username"/>
+              <el-input v-model="login.username" />
             </el-form-item>
             <el-form-item prop="password" label="密码">
-              <el-input v-model="login.password" type="password" show-password/>
+              <el-input v-model="login.password" type="password" show-password />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="updateLogin">保存</el-button>
@@ -58,16 +57,11 @@
         <el-card class="box-card">
           <el-form :model="form" label-width="120px">
             <el-form-item prop="enabledToken" label="安全订阅">
-              <el-switch
-                v-model="form.enabledToken"
-                inline-prompt
-                active-text="开启"
-                inactive-text="关闭"
-              />
+              <el-switch v-model="form.enabledToken" inline-prompt active-text="开启" inactive-text="关闭" />
               <span class="hint">建议外网开启，多个安全Token，逗号分割。</span>
             </el-form-item>
             <el-form-item prop="token" label="安全Token">
-              <el-input v-model="form.token" type="password" show-password/>
+              <el-input v-model="form.token" type="password" show-password />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="updateToken">更新</el-button>
@@ -80,42 +74,32 @@
         <el-card class="box-card">
           <el-form label-width="120px">
             <el-form-item label="计划时间">
-              <el-time-picker v-model="scheduleTime"/>
+              <el-time-picker v-model="scheduleTime" />
               <el-button type="primary" @click="updateScheduleTime">更新</el-button>
               <span class="hint">自动签到的时间</span>
             </el-form-item>
           </el-form>
         </el-card>
 
-        <el-card class="box-card" v-if="dockerVersion||appVersion||aListVersion">
+        <el-card class="box-card" v-if="dockerVersion || appVersion || aListVersion">
           <template #header>
             <div class="card-header">
               <span>应用数据</span>
               <div>
-                <el-button type="primary" plain @click="dialogVisible=true">高级设置</el-button>
+                <el-button type="primary" plain @click="dialogVisible = true">高级设置</el-button>
               </div>
             </div>
           </template>
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
-          <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
-            <el-tooltip
-              class="box-item"
-              effect="dark"
-              :content="tooltip"
-              placement="top"
-            >
+          <div v-if="appRemoteVersion && appRemoteVersion > appVersion">
+            <el-tooltip class="box-item" effect="dark" :content="tooltip" placement="top">
               最新版本：{{ appRemoteVersion }}，请重新运行安装脚本，升级应用。
             </el-tooltip>
             <div class="changelog" v-if="changelog">更新日志： {{ changelog }}</div>
           </div>
           <div v-if="aListVersion">AList版本：{{ aListVersion }}</div>
-          <div v-if="aListRemoteVersion&&aListRemoteVersion>aListVersion">
-            <el-tooltip
-              class="box-item"
-              effect="dark"
-              :content="tooltip"
-              placement="top"
-            >
+          <div v-if="aListRemoteVersion && aListRemoteVersion > aListVersion">
+            <el-tooltip class="box-item" effect="dark" :content="tooltip" placement="top">
               最新版本：{{ aListRemoteVersion }}，请重新运行安装脚本，升级应用。
             </el-tooltip>
           </div>
@@ -126,12 +110,12 @@
             <div class="card-header">索引数据</div>
           </template>
           <div>本地版本：{{ indexVersion }}</div>
-          <div v-if="indexRemoteVersion&&indexRemoteVersion!=indexVersion">
+          <div v-if="indexRemoteVersion && indexRemoteVersion != indexVersion">
             最新版本：{{ indexRemoteVersion }}，后台更新中。
           </div>
         </el-card>
 
-        <el-card class="box-card" v-if="movieVersion&&!store.standalone">
+        <el-card class="box-card" v-if="movieVersion && !store.standalone">
           <template #header>
             <div class="card-header">豆瓣电影数据</div>
           </template>
@@ -146,11 +130,11 @@
               />
             </el-form-item>
           </el-form>
-          <div>本地版本：<a href="/#/meta">{{ movieVersion }}</a></div>
-          <div v-if="movieRemoteVersion&&movieRemoteVersion>movieVersion">
-            最新版本：{{
-              movieRemoteVersion
-            }}，后台更新中。
+          <div>
+            本地版本：<a href="/#/meta">{{ movieVersion }}</a>
+          </div>
+          <div v-if="movieRemoteVersion && movieRemoteVersion > movieVersion">
+            最新版本：{{ movieRemoteVersion }}，后台更新中。
           </div>
         </el-card>
         <el-card class="box-card" v-if="!store.xiaoya">
@@ -176,73 +160,53 @@
       <el-form label-width="180px">
         <el-form-item label="开放Token认证URL">
           <el-select v-model="openTokenUrl" class="m-2" placeholder="Select">
-            <el-option-group
-              v-for="group in options"
-              :key="group.label"
-              :label="group.label"
-            >
-              <el-option
-                v-for="item in group.options"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
+            <el-option-group v-for="group in options" :key="group.label" :label="group.label">
+              <el-option v-for="item in group.options" :key="item.value" :label="item.label" :value="item.value" />
             </el-option-group>
           </el-select>
-          <el-input v-model="openTokenUrl"/>
+          <el-input v-model="openTokenUrl" />
           <el-button type="primary" @click="updateOpenTokenUrl">更新</el-button>
         </el-form-item>
-        <el-form-item label="Client ID" v-if="openTokenUrl=='https://openapi.alipan.com/oauth/access_token'">
-          <el-input v-model="apiClientId" type="text"/>
+        <el-form-item label="Client ID" v-if="openTokenUrl == 'https://openapi.alipan.com/oauth/access_token'">
+          <el-input v-model="apiClientId" type="text" />
         </el-form-item>
-        <el-form-item label="Client Secret" v-if="openTokenUrl=='https://openapi.alipan.com/oauth/access_token'">
-          <el-input v-model="apiClientSecret" type="password" show-password/>
+        <el-form-item label="Client Secret" v-if="openTokenUrl == 'https://openapi.alipan.com/oauth/access_token'">
+          <el-input v-model="apiClientSecret" type="password" show-password />
           <el-button type="primary" @click="updateOpenTokenUrl">更新</el-button>
         </el-form-item>
         <el-form-item label="TMDB API Key">
-          <el-input v-model="tmdbApiKey" type="password" show-password/>
+          <el-input v-model="tmdbApiKey" type="password" show-password />
           <el-button type="primary" @click="updateTmdbApiKey">更新</el-button>
         </el-form-item>
         <el-form-item label="User Agent">
-          <el-input v-model="userAgent"/>
+          <el-input v-model="userAgent" />
           <el-button type="primary" @click="setUserAgent">更新</el-button>
           <el-button type="primary" @click="currentUserAgent">当前UA</el-button>
           <el-button type="primary" @click="randomUserAgent">随机UA</el-button>
         </el-form-item>
         <el-form-item label="AList管理密码" v-if="!store.xiaoya">
-          <el-input v-model="atvPass" style="width: 160px" type="password" show-password/>
+          <el-input v-model="atvPass" style="width: 160px" type="password" show-password />
           <el-button type="primary" class="hint" @click="resetAListPassword">重置</el-button>
         </el-form-item>
         <el-form-item label="AList TvBox API Key">
-          <el-input v-model="apiKey" style="width: 300px" type="password" readonly show-password/>
+          <el-input v-model="apiKey" style="width: 300px" type="password" readonly show-password />
           <el-button type="primary" class="hint" @click="resetApiKey">重置</el-button>
         </el-form-item>
         <el-form-item label="夸克TV机器码">
-          <el-input v-model="quarkDeviceId" style="width: 300px" type="text"/>
+          <el-input v-model="quarkDeviceId" style="width: 300px" type="text" />
           <el-button type="primary" class="hint" @click="updateQuarkDeviceId">更新</el-button>
         </el-form-item>
         <el-form-item label="Cookie地址">
-          <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank">
-            阿里 Token
-          </a><span class="hint"></span>
-          <a :href="currentUrl + '/ali/open/' + aliSecret" target="_blank">
-            阿里 Open Token
-          </a><span class="hint"></span>
-          <a :href="currentUrl + '/quark/cookie/' + aliSecret" target="_blank">
-            夸克 Cookie
-          </a><span class="hint"></span>
-          <a :href="currentUrl + '/uc/cookie/' + aliSecret" target="_blank">
-            UC Cookie
-          </a><span class="hint"></span>
-          <a :href="currentUrl + '/115/cookie/' + aliSecret" target="_blank">
-            115 Cookie
-          </a><span class="hint"></span>
-          <a :href="currentUrl + '/baidu/cookie/' + aliSecret" target="_blank">
-            百度 Cookie
-          </a><span class="hint"></span>
-          <a :href="currentUrl + '/bili/cookie/' + aliSecret" target="_blank">
-            B站 Cookie
-          </a>
+          <a :href="currentUrl + '/ali/token/' + aliSecret" target="_blank"> 阿里 Token </a><span class="hint"></span>
+          <a :href="currentUrl + '/ali/open/' + aliSecret" target="_blank"> 阿里 Open Token </a
+          ><span class="hint"></span>
+          <a :href="currentUrl + '/quark/cookie/' + aliSecret" target="_blank"> 夸克 Cookie </a
+          ><span class="hint"></span> <a :href="currentUrl + '/uc/cookie/' + aliSecret" target="_blank"> UC Cookie </a
+          ><span class="hint"></span> <a :href="currentUrl + '/115/cookie/' + aliSecret" target="_blank"> 115 Cookie </a
+          ><span class="hint"></span>
+          <a :href="currentUrl + '/baidu/cookie/' + aliSecret" target="_blank"> 百度 Cookie </a
+          ><span class="hint"></span>
+          <a :href="currentUrl + '/bili/cookie/' + aliSecret" target="_blank"> B站 Cookie </a>
         </el-form-item>
         <div class="el-row">
           <el-form-item label="订阅替换阿里token地址">
@@ -361,21 +325,20 @@
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogVisible=false">关闭</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">关闭</el-button>
+        </span>
       </template>
     </el-dialog>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from "vue";
-import {ElMessage} from "element-plus";
-import axios from "axios";
-import {onUnmounted} from "@vue/runtime-core";
-import {store} from "@/services/store";
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import axios from 'axios'
+import { onUnmounted } from 'vue'
+import { store } from '@/services/store'
 
 let intervalId = 0
 const currentUrl = window.location.origin
@@ -392,22 +355,26 @@ const increase = () => {
 const options = [
   {
     label: '作者自建',
-    options: [
-      {label: 'ycyup', value: 'https://ycyup.cn/alipan/access_token'},
-    ]
+    options: [{ label: 'ycyup', value: 'https://ycyup.cn/alipan/access_token' }],
   },
   {
     label: 'TV Token',
     options: [
-      {label: '本地代理', value: window.location.origin + '/ali/access_token'},
-    ]
+      {
+        label: '本地代理',
+        value: window.location.origin + '/ali/access_token',
+      },
+    ],
   },
   {
     label: '阿里',
     options: [
-      {label: '阿里官方', value: 'https://openapi.alipan.com/oauth/access_token'}
-    ]
-  }
+      {
+        label: '阿里官方',
+        value: 'https://openapi.alipan.com/oauth/access_token',
+      },
+    ],
+  },
 ]
 const tooltip = ref('sudo bash -c "$(curl -fsSL https://d.har01d.cn/alist-tvbox.sh)"')
 const aListStarted = ref(false)
@@ -453,12 +420,12 @@ const scheduleTime = ref(new Date(2023, 6, 20, 8, 0))
 const login = ref({
   username: '',
   password: '',
-  enabled: false
+  enabled: false,
 })
 
 const form = ref({
   token: '',
-  enabledToken: true
+  enabledToken: true,
 })
 
 const formatTime = (value: string | number) => {
@@ -466,7 +433,7 @@ const formatTime = (value: string | number) => {
 }
 
 const updateToken = () => {
-  axios.post('/api/token', form.value).then(({data}) => {
+  axios.post('/api/token', form.value).then(({ data }) => {
     form.value = data
     if (data.enabledToken) {
       ElMessage.success('成功开启安全订阅')
@@ -483,17 +450,19 @@ const resetAListToken = () => {
 }
 
 const updateOpenTokenUrl = () => {
-  axios.post('/api/open-token-url', {
-    url: openTokenUrl.value,
-    clientId: apiClientId.value,
-    clientSecret: apiClientSecret.value
-  }).then(() => {
-    ElMessage.success('更新成功，重启生效')
-  })
+  axios
+    .post('/api/open-token-url', {
+      url: openTokenUrl.value,
+      clientId: apiClientId.value,
+      clientSecret: apiClientSecret.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功，重启生效')
+    })
 }
 
 const updateTmdbApiKey = () => {
-  axios.post('/api/settings', {name: 'tmdb_api_key', value: tmdbApiKey.value}).then(() => {
+  axios.post('/api/settings', { name: 'tmdb_api_key', value: tmdbApiKey.value }).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -511,119 +480,160 @@ const setUserAgent = () => {
 }
 
 const updateUserAgent = (value: string) => {
-  axios.post('/api/settings', {name: 'user_agent', value: value}).then(({data}) => {
+  axios.post('/api/settings', { name: 'user_agent', value: value }).then(({ data }) => {
     userAgent.value = data.value
     ElMessage.success('更新成功')
   })
 }
 
 const resetApiKey = () => {
-  axios.post('/api/settings/apikey').then(({data}) => {
+  axios.post('/api/settings/apikey').then(({ data }) => {
     apiKey.value = data
     ElMessage.success('重置成功')
   })
 }
 
 const resetAListPassword = () => {
-  axios.post('/api/alist/password').then(({data}) => {
+  axios.post('/api/alist/password').then(({ data }) => {
     atvPass.value = data
     ElMessage.success('重置成功，重启生效')
   })
 }
 
 const updateDeleteDelayTime = () => {
-  axios.post('/api/settings', {name: 'delete_delay_time', value: deleteDelayTime.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
+  axios
+    .post('/api/settings', {
+      name: 'delete_delay_time',
+      value: deleteDelayTime.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+    })
 }
 
 const updateTempShareExpiration = () => {
-  axios.post('/api/settings', {name: 'temp_share_expiration', value: tempShareExpiration.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
+  axios
+    .post('/api/settings', {
+      name: 'temp_share_expiration',
+      value: tempShareExpiration.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+    })
 }
 
 const updateValidateSharesInterval = () => {
-  axios.post('/api/settings', {name: 'validateSharesInterval', value: validateSharesInterval.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
+  axios
+    .post('/api/settings', {
+      name: 'validateSharesInterval',
+      value: validateSharesInterval.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+    })
 }
 
 const updateMixed = () => {
-  axios.post('/api/settings', {name: 'mix_site_source', value: mixSiteSource.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
+  axios
+    .post('/api/settings', {
+      name: 'mix_site_source',
+      value: mixSiteSource.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+    })
 }
 
 const updateReplaceAliToken = () => {
-  axios.post('/api/settings', {name: 'replace_ali_token', value: replaceAliToken.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
+  axios
+    .post('/api/settings', {
+      name: 'replace_ali_token',
+      value: replaceAliToken.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+    })
 }
 
 const updateEnableHttps = () => {
-  axios.post('/api/settings', {name: 'enable_https', value: enableHttps.value}).then(() => {
+  axios.post('/api/settings', { name: 'enable_https', value: enableHttps.value }).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateDebugLog = () => {
-  axios.post('/api/settings', {name: 'debug_log', value: debugLog.value}).then(() => {
+  axios.post('/api/settings', { name: 'debug_log', value: debugLog.value }).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateAListDebug = () => {
-  axios.post('/api/settings', {name: 'alist_debug', value: aListDebug.value}).then(() => {
+  axios.post('/api/settings', { name: 'alist_debug', value: aListDebug.value }).then(() => {
     ElMessage.success('更新成功，重启生效')
   })
 }
 
 const updateAliTo115 = () => {
-  axios.post('/api/settings', {name: 'ali_to_115', value: aliTo115.value}).then(() => {
+  axios.post('/api/settings', { name: 'ali_to_115', value: aliTo115.value }).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateDriverRoundRobin = () => {
-  axios.post('/api/settings', {name: 'driver_round_robin', value: driverRoundRobin.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
+  axios
+    .post('/api/settings', {
+      name: 'driver_round_robin',
+      value: driverRoundRobin.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+    })
 }
 
 const updateUssQuarkTv = () => {
-  axios.post('/api/settings', {name: 'use_quark_tv', value: ussQuarkTv.value}).then(() => {
+  axios.post('/api/settings', { name: 'use_quark_tv', value: ussQuarkTv.value }).then(() => {
     ElMessage.success('更新成功')
   })
 }
 
 const updateAliLazyLoad = () => {
-  axios.post('/api/settings', {name: 'ali_lazy_load', value: aliLazyLoad.value}).then(() => {
+  axios.post('/api/settings', { name: 'ali_lazy_load', value: aliLazyLoad.value }).then(() => {
     ElMessage.success('更新成功，重启生效')
   })
 }
 
 const updateCleanInvalidShares = () => {
-  axios.post('/api/settings', {name: 'clean_invalid_shares', value: cleanInvalidShares.value}).then(() => {
-    ElMessage.success('更新成功，重启生效')
-  })
+  axios
+    .post('/api/settings', {
+      name: 'clean_invalid_shares',
+      value: cleanInvalidShares.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功，重启生效')
+    })
 }
 
 const updateQuarkDeviceId = () => {
-  axios.post('/api/settings', {name: 'quark_device_id', value: quarkDeviceId.value}).then(() => {
-    ElMessage.success('更新成功')
-  })
+  axios
+    .post('/api/settings', {
+      name: 'quark_device_id',
+      value: quarkDeviceId.value,
+    })
+    .then(() => {
+      ElMessage.success('更新成功')
+    })
 }
 
 const updateLogin = () => {
-  axios.post('/api/alist/login', login.value).then(({data}) => {
+  axios.post('/api/alist/login', login.value).then(({ data }) => {
     ElMessage.success('保存成功')
     login.value = data
   })
 }
 
 const exportDatabase = () => {
-  window.location.href = '/api/settings/export' + '?t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
+  window.location.href =
+    '/api/settings/export' + '?t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem('token')
 }
 
 const updateScheduleTime = () => {
@@ -640,7 +650,7 @@ const handleAList = (op: string) => {
 }
 
 const getAListStatus = () => {
-  axios.get('/api/alist/status').then(({data}) => {
+  axios.get('/api/alist/status').then(({ data }) => {
     increase()
     store.aListStatus = data
     aListStarted.value = data != 0
@@ -655,7 +665,7 @@ const getAListStatus = () => {
 }
 
 onMounted(() => {
-  axios.get('/api/settings').then(({data}) => {
+  axios.get('/api/settings').then(({ data }) => {
     form.value.token = data.token
     form.value.enabledToken = data.enabled_token === 'true'
     scheduleTime.value = data.schedule_time || new Date(2023, 6, 20, 9, 0)
@@ -699,7 +709,7 @@ onMounted(() => {
       tooltip.value = 'sudo bash -c "$(curl -fsSL http://d.har01d.cn/alist-tvbox.sh)" -s update'
     }
   })
-  axios.get('/api/alist/status').then(({data}) => {
+  axios.get('/api/alist/status').then(({ data }) => {
     store.aListStatus = data
     aListStarted.value = data != 0
     if (data === 1) {
@@ -707,7 +717,7 @@ onMounted(() => {
       intervalId = setInterval(getAListStatus, 1000)
     }
   })
-  axios.get('/api/versions').then(({data}) => {
+  axios.get('/api/versions').then(({ data }) => {
     movieRemoteVersion.value = data.movie
     cachedMovieVersion.value = data.cachedMovie
     indexRemoteVersion.value = data.index

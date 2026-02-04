@@ -1,4 +1,4 @@
-import {createApp} from 'vue'
+import { createApp } from 'vue'
 import ElementPlus from 'element-plus'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import 'element-plus/dist/index.css'
@@ -10,7 +10,7 @@ import router from './router'
 import '@/services/axios.interceptors'
 
 import './assets/main.css'
-import accountService from "@/services/account.service";
+import accountService from '@/services/account.service'
 
 const app = createApp(App)
 
@@ -31,7 +31,7 @@ router.beforeEach((to, from, next) => {
   if (to.meta.auth && !token) {
     next({
       path: '/login',
-      query: {redirect: to.fullPath}
+      query: { redirect: to.fullPath },
     })
   } else {
     next()

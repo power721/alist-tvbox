@@ -8,13 +8,18 @@
     <div class="space"></div>
 
     <el-table :data="files" border style="width: 100%">
-<!--      <el-table-column prop="id" label="ID" width="70"/>-->
-      <el-table-column prop="dir" label="文件目录" width="250"/>
-      <el-table-column prop="name" label="文件名称" width="180"/>
-      <el-table-column prop="path" label="完整路径"/>
+      <!--      <el-table-column prop="id" label="ID" width="70"/>-->
+      <el-table-column prop="dir" label="文件目录" width="250" />
+      <el-table-column prop="name" label="文件名称" width="180" />
+      <el-table-column prop="path" label="完整路径" />
       <el-table-column prop="link" label="链接">
         <template #default="scope">
-          <a :href="currentUrl+scope.row.path.substring(4)" target="_blank" v-if="scope.row.path.startsWith('/www/')">{{currentUrl + scope.row.path.substring(4)}}</a>
+          <a
+            :href="currentUrl + scope.row.path.substring(4)"
+            target="_blank"
+            v-if="scope.row.path.startsWith('/www/')"
+          >{{ currentUrl + scope.row.path.substring(4) }}</a
+          >
         </template>
       </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
@@ -29,29 +34,24 @@
       <el-form :model="form">
         <el-form-item label="目录" label-width="120" required>
           <el-select v-model="form.dir">
-            <el-option
-              v-for="item in options"
-              :key="item"
-              :label="item"
-              :value="item"
-            />
+            <el-option v-for="item in options" :key="item" :label="item" :value="item" />
           </el-select>
-          <el-input v-model="form.dir" autocomplete="off"/>
+          <el-input v-model="form.dir" autocomplete="off" />
         </el-form-item>
         <el-form-item label="名称" label-width="120" required>
-          <el-input v-model="form.name" autocomplete="off"/>
+          <el-input v-model="form.name" autocomplete="off" />
         </el-form-item>
         <el-form-item label="内容" label-width="120" required>
-          <el-input v-model="form.content" type="textarea" :rows="fullscreen?45:15"/>
+          <el-input v-model="form.content" type="textarea" :rows="fullscreen ? 45 : 15" />
           <a href="https://www.json.cn/" target="_blank">JSON验证</a>
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="handleCancel">取消</el-button>
-        <el-button @click="fullscreen=!fullscreen">{{fullscreen?'缩小':'全屏'}}</el-button>
-        <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="handleCancel">取消</el-button>
+          <el-button @click="fullscreen = !fullscreen">{{ fullscreen ? '缩小' : '全屏' }}</el-button>
+          <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -62,13 +62,20 @@
       </div>
       <h2>JSON数据</h2>
       <el-scrollbar height="800px">
-        <json-viewer :value="jsonData" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=5></json-viewer>
+        <json-viewer
+          :value="jsonData"
+          expanded
+          copyable
+          show-double-quotes
+          :show-array-index="false"
+          :expand-depth="5"
+        ></json-viewer>
       </el-scrollbar>
       <div class="json"></div>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button type="primary" @click="detailVisible = false">关闭</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button type="primary" @click="detailVisible = false">关闭</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -76,18 +83,18 @@
       <p>是否删除配置文件 - {{ form.name }}</p>
       <p>{{ form.path }}</p>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="deleteSub">删除</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="danger" @click="deleteSub">删除</el-button>
+        </span>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
-import axios from "axios"
+import { onMounted, ref } from 'vue'
+import axios from 'axios'
 
 const currentUrl = window.location.origin
 const updateAction = ref(false)
@@ -103,7 +110,7 @@ const form = ref({
   name: '',
   dir: '/data',
   path: '',
-  content: ''
+  content: '',
 })
 const options = ['/data', '/www/tvbox', '/www/files', '/www/cat', '/www/pg', '/www/pg/lib', '/www/zx']
 
@@ -115,13 +122,13 @@ const handleAdd = () => {
     name: '',
     dir: '/data',
     path: '',
-    content: ''
+    content: '',
   }
   formVisible.value = true
 }
 
 const handleEdit = (file: any) => {
-  axios.get('/api/files/' + file.id).then(({data}) => {
+  axios.get('/api/files/' + file.id).then(({ data }) => {
     dialogTitle.value = '更新配置文件 - ' + data.name
     updateAction.value = true
     form.value = data
@@ -154,7 +161,7 @@ const handleConfirm = () => {
 }
 
 const load = () => {
-  axios.get('/api/files').then(({data}) => {
+  axios.get('/api/files').then(({ data }) => {
     files.value = data
   })
 }

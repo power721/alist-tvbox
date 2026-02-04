@@ -10,5 +10,5 @@ export const store = reactive({
   baseUrl: '',
   token: '',
   role: 'USER',
-  aListStatus: 0
+  aListStatus: 0,
 })

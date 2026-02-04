@@ -1,10 +1,9 @@
 <script setup lang="ts">
-
-import {computed, onMounted, ref} from "vue";
-import axios from "axios";
-import {onUnmounted} from "@vue/runtime-core";
-import {useRoute, useRouter} from "vue-router";
-import {store} from "@/services/store";
+import { computed, onMounted, ref } from 'vue'
+import axios from 'axios'
+import { onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { store } from '@/services/store'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,7 +22,7 @@ const increase = () => {
 const aListStarted = ref(false)
 
 const getAListStatus = () => {
-  axios.get('/api/alist/start/status').then(({data}) => {
+  axios.get('/api/alist/start/status').then(({ data }) => {
     increase()
     store.aListStatus = data
     aListStarted.value = data != 0
@@ -39,7 +38,7 @@ const getAListStatus = () => {
 }
 
 onMounted(() => {
-  axios.get('/api/alist/status').then(({data}) => {
+  axios.get('/api/alist/status').then(({ data }) => {
     store.aListStatus = data
     aListStarted.value = data != 0
     if (data === 1) {
@@ -69,7 +68,7 @@ onUnmounted(() => {
         v-model="aListStarted"
         inline-prompt
         :disabled="true"
-        :active-text="store.aListStatus>=2?'运行中':'启动中'"
+        :active-text="store.aListStatus >= 2 ? '运行中' : '启动中'"
         inactive-text="停止中"
       />
       <el-progress
@@ -80,13 +79,9 @@ onUnmounted(() => {
         :duration="duration"
         v-if="intervalId"
       />
-      <el-text class="mx-1" type="warning">
-        部分功能不可用，请等待AList启动完成。
-      </el-text>
+      <el-text class="mx-1" type="warning"> 部分功能不可用，请等待AList启动完成。 </el-text>
     </el-card>
   </div>
 </template>
 
-<style scoped>
-
-</style>
+<style scoped></style>

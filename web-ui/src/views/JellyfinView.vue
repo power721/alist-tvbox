@@ -8,10 +8,10 @@
     <div class="space"></div>
 
     <el-table :data="sites" border style="width: 100%">
-<!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
-      <el-table-column prop="name" label="名称" sortable width="180"/>
-      <el-table-column prop="order" label="顺序" sortable width="90"/>
-      <el-table-column prop="username" label="用户名" sortable width="180"/>
+      <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
+      <el-table-column prop="name" label="名称" sortable width="180" />
+      <el-table-column prop="order" label="顺序" sortable width="90" />
+      <el-table-column prop="username" label="用户名" sortable width="180" />
       <el-table-column prop="url" label="URL地址" sortable>
         <template #default="scope">
           <a :href="scope.row.url" target="_blank">{{ scope.row.url }}</a>
@@ -28,41 +28,41 @@
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form label-width="140" :model="form">
         <el-form-item label="名称" required>
-          <el-input v-model="form.name" autocomplete="off"/>
+          <el-input v-model="form.name" autocomplete="off" />
         </el-form-item>
         <el-form-item label="URL地址" required>
-          <el-input v-model="form.url" autocomplete="off"/>
+          <el-input v-model="form.url" autocomplete="off" />
         </el-form-item>
         <el-form-item label="用户名" required>
-          <el-input v-model="form.username" autocomplete="off"/>
+          <el-input v-model="form.username" autocomplete="off" />
         </el-form-item>
         <el-form-item label="密码" required>
-          <el-input v-model="form.password" type="password" show-password autocomplete="off"/>
+          <el-input v-model="form.password" type="password" show-password autocomplete="off" />
         </el-form-item>
         <el-form-item label="User Agent">
-          <el-input v-model="form.userAgent" type="textarea" autocomplete="off"/>
+          <el-input v-model="form.userAgent" type="textarea" autocomplete="off" />
         </el-form-item>
         <el-form-item label="客户端名称">
-          <el-input v-model="form.clientName" autocomplete="off"/>
+          <el-input v-model="form.clientName" autocomplete="off" />
         </el-form-item>
         <el-form-item label="客户端版本">
-          <el-input v-model="form.clientVersion" autocomplete="off"/>
+          <el-input v-model="form.clientVersion" autocomplete="off" />
         </el-form-item>
         <el-form-item label="设备ID">
-          <el-input v-model="form.deviceId" autocomplete="off"/>
+          <el-input v-model="form.deviceId" autocomplete="off" />
         </el-form-item>
         <el-form-item label="设备名称">
-          <el-input v-model="form.deviceName" autocomplete="off"/>
+          <el-input v-model="form.deviceName" autocomplete="off" />
         </el-form-item>
         <el-form-item label="顺序" label-width="140">
-          <el-input-number v-model="form.order" :min="0"/>
+          <el-input-number v-model="form.order" :min="0" />
         </el-form-item>
       </el-form>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="handleCancel">取消</el-button>
-        <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="handleCancel">取消</el-button>
+          <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
+        </span>
       </template>
     </el-dialog>
 
@@ -70,19 +70,19 @@
       <p>是否删除Jellyfin站点 - {{ form.name }}</p>
       <p>{{ form.url }}</p>
       <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="deleteSite">删除</el-button>
-      </span>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="danger" @click="deleteSite">删除</el-button>
+        </span>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
-import {Check, Close, Refresh} from '@element-plus/icons-vue'
-import axios from "axios"
+import { onMounted, ref } from 'vue'
+import { Check, Close, Refresh } from '@element-plus/icons-vue'
+import axios from 'axios'
 
 const updateAction = ref(false)
 const dialogTitle = ref('')
@@ -154,7 +154,7 @@ const handleConfirm = () => {
 }
 
 const load = () => {
-  axios.get('/api/jellyfin').then(({data}) => {
+  axios.get('/api/jellyfin').then(({ data }) => {
     sites.value = data
   })
 }

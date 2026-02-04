@@ -1,7 +1,6 @@
 <script setup lang="ts">
-
-import {onMounted, ref} from "vue";
-import axios from "axios";
+import { onMounted, ref } from 'vue'
+import axios from 'axios'
 
 const type = ref('app')
 const level = ref(localStorage.getItem('log_level') || 'ALL')
@@ -12,24 +11,24 @@ const logs = ref([])
 const options = [
   {
     label: '全部',
-    value: 'ALL'
+    value: 'ALL',
   },
   {
     label: 'ERROR',
-    value: 'ERROR'
+    value: 'ERROR',
   },
   {
     label: 'WARN',
-    value: 'WARN'
+    value: 'WARN',
   },
   {
     label: 'INFO',
-    value: 'INFO'
+    value: 'INFO',
   },
   {
     label: 'DEBUG',
-    value: 'DEBUG'
-  }
+    value: 'DEBUG',
+  },
 ]
 
 const reload = () => {
@@ -43,21 +42,23 @@ const onTypeChange = () => {
 
 const load = (pageNumber: number) => {
   page.value = pageNumber
-  axios.get('/api/logs?type=' + type.value + '&size=50&page=' + (pageNumber - 1) + '&level=' + level.value).then(({data}) => {
-    logs.value = data.content
-    total.value = data.totalElements
-    count.value = data.numberOfElements
-  })
+  axios
+    .get('/api/logs?type=' + type.value + '&size=50&page=' + (pageNumber - 1) + '&level=' + level.value)
+    .then(({ data }) => {
+      logs.value = data.content
+      total.value = data.totalElements
+      count.value = data.numberOfElements
+    })
 }
 
 const download = () => {
-  window.location.href = '/api/logs/download?t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
+  window.location.href =
+    '/api/logs/download?t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem('token')
 }
 
 onMounted(() => {
   load(1)
 })
-
 </script>
 
 <template>
@@ -70,16 +71,21 @@ onMounted(() => {
       </el-radio-group>
     </el-form-item>
 
-    <el-form-item label="级别" v-if="type=='app'">
+    <el-form-item label="级别" v-if="type == 'app'">
       <el-select style="width: 90px" v-model="level" @change="onTypeChange">
-        <el-option :label="option.label" :key="option.value" :value="option.value" v-for="option in options"/>
+        <el-option :label="option.label" :key="option.value" :value="option.value" v-for="option in options" />
       </el-select>
     </el-form-item>
   </el-form>
 
   <div class="flex">
-    <el-pagination layout="prev, pager, next" :page-size="50" :current-page="page" :total="total"
-                   @current-change="load"/>
+    <el-pagination
+      layout="prev, pager, next"
+      :page-size="50"
+      :current-page="page"
+      :total="total"
+      @current-change="load"
+    />
     <div>
       <el-button type="primary" @click="reload">刷新</el-button>
       <el-button type="primary" class="download" @click="download">下载日志</el-button>
@@ -87,8 +93,13 @@ onMounted(() => {
   </div>
   <div v-for="log of logs" v-html="log"></div>
   <div v-if="count >= 50">
-    <el-pagination layout="prev, pager, next" :page-size="50" :current-page="page" :total="total"
-                   @current-change="load"/>
+    <el-pagination
+      layout="prev, pager, next"
+      :page-size="50"
+      :current-page="page"
+      :total="total"
+      @current-change="load"
+    />
   </div>
 </template>
 
