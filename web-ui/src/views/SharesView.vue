@@ -175,7 +175,7 @@
       </el-form-item>
 
       <!-- STRM 存储特有配置 -->
-      <template v-if="form.type == 11">
+      <template v-if="form.type == 11 && form.strmConfig">
         <el-form-item label="源路径" label-width="140" required>
           <el-input v-model="form.strmConfig.paths" type="textarea" :rows="3"
             placeholder="STRM文件指向的实际媒体文件所在路径，例如：/115/电影" autocomplete="off" />
@@ -406,6 +406,19 @@ interface ShareInfo {
   cookie: string
   status: string
   type: number
+  strmConfig?: {
+    paths: string
+    siteUrl: string
+    pathPrefix: string
+    downloadFileTypes: string
+    filterFileTypes: string
+    encodePath: boolean
+    withoutUrl: boolean
+    withSign: boolean
+    saveStrmToLocal: boolean
+    saveStrmLocalPath: string
+    saveLocalMode: string
+  }
 }
 
 interface Storage {
@@ -461,13 +474,14 @@ const dialogVisible = ref(false)
 const dialogVisible1 = ref(false)
 const updateAction = ref(false)
 const batch = ref(false)
-const form = ref({
+const form = ref<ShareInfo>({
   id: '',
   path: '',
   shareId: '',
   folderId: '',
   password: '',
   cookie: '',
+  status: '',
   type: -1,
   strmConfig: {
     paths: '',
@@ -499,6 +513,7 @@ const handleAdd = () => {
     folderId: '',
     password: '',
     cookie: '',
+    status: '',
     type: 0,
     strmConfig: {
       paths: '',
@@ -548,6 +563,7 @@ const handleEdit = (data: ShareInfo) => {
     folderId: data.folderId,
     password: data.password,
     cookie: data.cookie,
+    status: data.status,
     type: data.type,
     strmConfig: strmConfig
   }
