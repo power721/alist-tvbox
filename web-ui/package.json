@@ -13,8 +13,8 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "@types/sortablejs": "^1.15.9",
-    "axios": "1.12.0",
-    "element-plus": "2.11.3",
+    "axios": "^1.13.4",
+    "element-plus": "^2.13.2",
     "lodash-es": "^4.17.23",
     "mpegts.js": "^1.8.0",
     "sortablejs": "^1.15.6",
@@ -22,7 +22,7 @@
     "vue-clipboard3": "^2.0.0",
     "vue-draggable-plus": "^0.6.1",
     "vue-json-viewer": "^3.0.4",
-    "vue-router": "^4.6.4"
+    "vue-router": "^5.0.2"
   },
   "devDependencies": {
     "@types/node": "^25.2.0",
