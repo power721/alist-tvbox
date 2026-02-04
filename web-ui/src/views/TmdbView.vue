@@ -30,11 +30,9 @@
       </el-table-column>
       <el-table-column prop="tmId" label="TMDB ID" width="100">
         <template #default="scope">
-          <a
-            v-if="scope.row.tmId"
-            :href="'https://www.themoviedb.org/' + scope.row.type + '/' + scope.row.tmId"
-            target="_blank"
-          >
+          <a v-if="scope.row.tmId"
+             :href="'https://www.themoviedb.org/' + scope.row.type + '/' + scope.row.tmId"
+             target="_blank">
             {{ scope.row.tmId }}
           </a>
         </template>
@@ -57,15 +55,13 @@
       </el-table-column>
     </el-table>
     <div>
-      <el-pagination
-        layout="total, prev, pager, next, jumper, sizes"
-        :current-page="page"
-        @current-change="load"
-        :page-size="size"
-        :page-sizes="sizes"
-        :total="total"
-        @size-change="handleSizeChange"
-      />
+      <el-pagination layout="total, prev, pager, next, jumper, sizes"
+                     :current-page="page"
+                     @current-change="load"
+                     :page-size="size"
+                     :page-sizes="sizes"
+                     :total="total"
+                     @size-change="handleSizeChange" />
     </div>
 
     <el-dialog v-model="formVisible" :title="'编辑 ' + form.id" width="60%">
@@ -128,9 +124,7 @@
         </el-form-item>
         <el-form-item label="搜索">
           <a href="https://www.themoviedb.org/search?query="
-             target="_blank"
-          >https://www.themoviedb.org/search?query=</a
-          >
+             target="_blank">https://www.themoviedb.org/search?query=</a>
         </el-form-item>
         <el-form-item label="TMDB ID" required>
           <el-input-number v-model="form.tmId" min="0" autocomplete="off" />
@@ -273,11 +267,7 @@ const refresh = () => {
   load(page.value)
 }
 
-const fixMeta = () => {
-  axios.post('/api/tmdb/fix-meta').then(({ data }) => {
-    ElMessage.success('删除' + data + '个重复数据')
-  })
-}
+
 
 const getUrl = (meta: Meta) => {
   return '/#/vod' + meta.path

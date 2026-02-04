@@ -4,7 +4,7 @@ import axios from 'axios'
 import mpegts from 'mpegts.js'
 import { onUnmounted } from 'vue'
 import { Search, Refresh, CircleCloseFilled } from '@element-plus/icons-vue'
-import { ElMessage, type TabsPaneContext } from 'element-plus'
+import { type TabsPaneContext } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { store } from '@/services/store'
 
@@ -14,7 +14,7 @@ const page = ref(1)
 const total = ref(0)
 const loading = ref(false)
 const dialogVisible = ref(false)
-const enableLive = ref(false)
+
 const playUrl = ref('')
 const playFrom = ref<string[]>([])
 const playUrls = ref<string[]>([])
@@ -293,11 +293,7 @@ const reloadRooms = (value: number) => {
   })
 }
 
-const updateLive = () => {
-  axios.post('/api/settings', { name: 'enable_live', value: enableLive.value }).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
+
 
 onMounted(async () => {
   if (!store.token) {
@@ -331,13 +327,8 @@ onUnmounted(() => {
 
         <div v-show="!rooms.length">
           <div id="type-filter">
-            <el-input
-              v-model="typeKeyword"
-              style="width: 240px"
-              placeholder="筛选"
-              @input="filterTypes"
-              :prefix-icon="Search"
-            />
+            <el-input v-model="typeKeyword" style="width: 240px" placeholder="筛选" @input="filterTypes"
+              :prefix-icon="Search" />
           </div>
           <el-row>
             <el-col :span="5" v-for="type of filteredTypes" class="type">
@@ -354,20 +345,11 @@ onUnmounted(() => {
         <div>
           <div id="pagination">
             <el-button :icon="Refresh" circle @click="refresh" />
-            <el-pagination
-              layout="prev, pager, next"
-              :page-count="total"
-              :current-page="page"
-              @current-change="reloadRooms"
-            />
+            <el-pagination layout="prev, pager, next" :page-count="total" :current-page="page"
+              @current-change="reloadRooms" />
             <div v-if="rooms.length && rooms[0].vod_tag == 'folder'">
-              <el-input
-                v-model="roomKeyword"
-                style="width: 240px"
-                placeholder="筛选"
-                @input="filterRooms"
-                :prefix-icon="Search"
-              />
+              <el-input v-model="roomKeyword" style="width: 240px" placeholder="筛选" @input="filterRooms"
+                :prefix-icon="Search" />
             </div>
           </div>
           <el-row>
@@ -466,7 +448,7 @@ onUnmounted(() => {
   padding-bottom: 56.25%;
 }
 
-.video-container > div {
+.video-container>div {
   position: absolute;
   top: 0;
   left: 0;

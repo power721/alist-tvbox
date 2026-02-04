@@ -20,18 +20,14 @@
       </el-table-column>
       <el-table-column prop="url" label="TvBox配置地址" sortable>
         <template #default="scope">
-          <a :href="currentUrl + '/sub' + token + '/' + scope.row.sid"
-             target="_blank"
-          >{{ currentUrl }}/sub{{ token }}/{{ scope.row.sid }}</a
-          >
+          <a :href="currentUrl + '/sub' + token + '/' + scope.row.sid" target="_blank">{{ currentUrl }}/sub{{ token
+          }}/{{ scope.row.sid }}</a>
         </template>
       </el-table-column>
       <el-table-column prop="url" label="多仓聚合地址" sortable>
         <template #default="scope">
-          <a :href="currentUrl + '/repo' + token + '/' + scope.row.sid"
-             target="_blank"
-          >{{ currentUrl }}/repo{{ token }}/{{ scope.row.sid }}</a
-          >
+          <a :href="currentUrl + '/repo' + token + '/' + scope.row.sid" target="_blank">{{ currentUrl }}/repo{{ token
+          }}/{{ scope.row.sid }}</a>
         </template>
       </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
@@ -49,14 +45,11 @@
 
     <el-row>
       猫影视配置接口：
-      <a
-        :href="
-          currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@') +
-            '/open' +
-            token
-        "
-        target="_blank"
-      >
+      <a :href="currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@') +
+           '/open' +
+           token
+         "
+         target="_blank">
         {{ currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@') }}/open{{
           token
         }}
@@ -64,15 +57,12 @@
     </el-row>
     <el-row>
       猫影视node配置接口：
-      <a
-        :href="
-          currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@') +
-            '/node' +
-            (token ? token : '/-') +
-            '/index.config.js'
-        "
-        target="_blank"
-      >
+      <a :href="currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@') +
+           '/node' +
+           (token ? token : '/-') +
+           '/index.config.js'
+         "
+         target="_blank">
         {{ currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@') }}/node{{
           token ? token : '/-'
         }}/index.js.md5
@@ -83,12 +73,12 @@
       &nbsp;&nbsp;
       <a href="https://github.com/power721/pg/releases" target="_blank">PG包远程</a>： {{ pgRemote }}
       <span class="hint"></span>
-      <span v-if="pgLocal == pgRemote"
-      ><el-icon color="green"><Check /></el-icon
-      ></span>
-      <span v-else
-      ><el-icon color="orange"><Warning /></el-icon
-      ></span>
+      <span v-if="pgLocal == pgRemote"><el-icon color="green">
+        <Check />
+      </el-icon></span>
+      <span v-else><el-icon color="orange">
+        <Warning />
+      </el-icon></span>
     </el-row>
     <!--    <el-row>-->
     <!--      真心全量包本地： {{ zxLocal2 }}-->
@@ -102,12 +92,12 @@
       &nbsp;&nbsp;
       <a href="https://github.com/power721/ZX/releases" target="_blank">真心包远程</a>： {{ zxRemote }}
       <span class="hint"></span>
-      <span v-if="zxLocal == zxRemote"
-      ><el-icon color="green"><Check /></el-icon
-      ></span>
-      <span v-else
-      ><el-icon color="orange"><Warning /></el-icon
-      ></span>
+      <span v-if="zxLocal == zxRemote"><el-icon color="green">
+        <Check />
+      </el-icon></span>
+      <span v-else><el-icon color="orange">
+        <Warning />
+      </el-icon></span>
     </el-row>
     <el-row>
       <el-button @click="syncCat">同步文件</el-button>
@@ -147,14 +137,12 @@
       </div>
       <h2>JSON数据</h2>
       <el-scrollbar height="800px">
-        <json-viewer
-          :value="jsonData"
-          expanded
-          copyable
-          show-double-quotes
-          :show-array-index="false"
-          :expand-depth="5"
-        ></json-viewer>
+        <json-viewer :value="jsonData"
+                     expanded
+                     copyable
+                     show-double-quotes
+                     :show-array-index="false"
+                     :expand-depth="5"></json-viewer>
       </el-scrollbar>
       <div class="json"></div>
       <template #footer>
@@ -226,12 +214,10 @@
           <img alt="qr" :src="'data:image/png;base64,' + base64QrCode" style="width: 200px" />
         </el-col>
         <el-col span="10">
-          <el-input
-            v-model="device.ip"
-            style="width: 200px"
-            placeholder="输入影视IP或者URL"
-            @keyup.enter="addDevice"
-          ></el-input>
+          <el-input v-model="device.ip"
+                    style="width: 200px"
+                    placeholder="输入影视IP或者URL"
+                    @keyup.enter="addDevice"></el-input>
           <el-button @click="addDevice">添加</el-button>
         </el-col>
         <el-col span="6">
@@ -350,10 +336,7 @@ const pushForm = ref({
   token: '',
   url: '',
 })
-const sub = ref({
-  name: '',
-  sid: '',
-})
+
 const form = ref({
   id: 0,
   sid: '',
@@ -371,15 +354,7 @@ const user = ref({
 })
 let timer = 0
 
-const handleLogin = () => {
-  axios.get('/api/telegram/user').then(({ data }) => {
-    user.value = data
-  })
-  axios.get('/api/settings/tg_auth_type').then(({ data }) => {
-    tgAuthType.value = data.value || 'qr'
-  })
-  tgVisible.value = true
-}
+
 
 const login = () => {
   axios.post('/api/telegram/login')
@@ -412,12 +387,7 @@ const cancelLogin = () => {
   tgVisible.value = false
 }
 
-const reset = () => {
-  axios.post('/api/telegram/reset').then(() => {
-    ElMessage.success('重置成功')
-    clearInterval(timer)
-  })
-}
+
 
 const logout = () => {
   axios.post('/api/telegram/logout').then(() => {

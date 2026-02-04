@@ -59,13 +59,11 @@
           <el-button @click="showScan" v-if="store.admin">同步影视</el-button>
           <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
         </el-row>
-        <el-table
-          v-loading="loading"
-          :data="files"
-          @selection-change="handleSelectionChange"
-          style="width: 100%"
-          @row-click="load"
-        >
+        <el-table v-loading="loading"
+                  :data="files"
+                  @selection-change="handleSelectionChange"
+                  style="width: 100%"
+                  @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory" />
           <el-table-column prop="vod_name" label="名称" sortable>
             <template #default="scope">
@@ -84,26 +82,22 @@
               <span>{{ scope.row.vod_name }}</span>
             </template>
           </el-table-column>
-          <el-table-column
-            prop="vod_remarks"
-            label="大小"
-            width="120"
-            sortable
-            :sort-method="sortFileSizes"
-            v-if="!isHistory"
-          >
+          <el-table-column prop="vod_remarks"
+                           label="大小"
+                           width="120"
+                           sortable
+                           :sort-method="sortFileSizes"
+                           v-if="!isHistory">
             <template #default="scope">
               {{ scope.row.vod_tag === 'file' ? scope.row.vod_remarks : '-' }}
             </template>
           </el-table-column>
           <el-table-column prop="dbid" label="豆瓣ID" width="120" v-if="!isHistory">
             <template #default="scope">
-              <a
-                @click.stop
-                :href="'https://movie.douban.com/subject/' + scope.row.dbid"
-                target="_blank"
-                v-if="scope.row.dbid"
-              >
+              <a @click.stop
+                 :href="'https://movie.douban.com/subject/' + scope.row.dbid"
+                 target="_blank"
+                 v-if="scope.row.dbid">
                 {{ scope.row.dbid }}
               </a>
             </template>
@@ -128,46 +122,38 @@
           </el-table-column>
           <el-table-column width="120" v-else>
             <template #default="scope">
-              <el-button
-                link
-                type="primary"
-                @click.stop="showRenameFile(scope.row)"
-                v-if="store.admin && scope.row.type != 9"
-              >
+              <el-button link
+                         type="primary"
+                         @click.stop="showRenameFile(scope.row)"
+                         v-if="store.admin && scope.row.type != 9">
                 重命名
               </el-button>
-              <el-button
-                link
-                type="danger"
-                @click.stop="showRemoveFile(scope.row)"
-                v-if="store.admin && scope.row.type != 9"
-              >
+              <el-button link
+                         type="danger"
+                         @click.stop="showRemoveFile(scope.row)"
+                         v-if="store.admin && scope.row.type != 9">
                 删除
               </el-button>
             </template>
           </el-table-column>
         </el-table>
-        <el-pagination
-          layout="total, prev, pager, next, jumper, sizes"
-          :current-page="page"
-          :page-size="size"
-          :total="total"
-          @current-change="handlePageChange"
-          @size-change="handleSizeChange"
-        />
+        <el-pagination layout="total, prev, pager, next, jumper, sizes"
+                       :current-page="page"
+                       :page-size="size"
+                       :total="total"
+                       @current-change="handlePageChange"
+                       @size-change="handleSizeChange" />
       </el-col>
     </el-row>
 
     <el-dialog v-model="imageVisible" :title="playItem.title" :fullscreen="true">
       <el-row>
         <el-col :span="18">
-          <el-image
-            style="height: 1080px; width: 100%"
-            fit="contain"
-            :src="playItem.url"
-            :preview-src-list="[playItem.url]"
-            :hide-on-click-modal="true"
-          />
+          <el-image style="height: 1080px; width: 100%"
+                    fit="contain"
+                    :src="playItem.url"
+                    :preview-src-list="[playItem.url]"
+                    :hide-on-click-modal="true" />
         </el-col>
         <el-col :span="5">
           <el-scrollbar ref="scrollbarRef" height="1050px">
@@ -183,14 +169,12 @@
       </el-row>
     </el-dialog>
 
-    <el-dialog
-      class="player"
-      v-model="dialogVisible"
-      :fullscreen="true"
-      :show-close="false"
-      @opened="start"
-      @close="stop"
-    >
+    <el-dialog class="player"
+               v-model="dialogVisible"
+               :fullscreen="true"
+               :show-close="false"
+               @opened="start"
+               @close="stop">
       <template #header="{ close, titleId, titleClass }">
         <div class="my-header">
           <h5 :id="titleId" :class="titleClass">{{ playItem.title }}</h5>
@@ -213,17 +197,15 @@
       <div class="video-container">
         <el-row>
           <el-col :class="{ wide: isWideMode }" :span="isWideMode ? 24 : 18">
-            <video
-              ref="videoPlayer"
-              :src="playItem.url"
-              :poster="poster"
-              :autoplay="true"
-              @ended="playNextVideo"
-              @play="updatePlayState"
-              @pause="updatePlayState"
-              @volumechange="updateMuteState"
-              controls
-            ></video>
+            <video ref="videoPlayer"
+                   :src="playItem.url"
+                   :poster="poster"
+                   :autoplay="true"
+                   @ended="playNextVideo"
+                   @play="updatePlayState"
+                   @pause="updatePlayState"
+                   @volumechange="updateMuteState"
+                   controls></video>
           </el-col>
           <el-col :span="5" v-show="!isWideMode">
             <div v-if="playlist.length > 1">
@@ -291,35 +273,30 @@
                 <el-button @click="playNextVideo" v-if="playlist.length > 1">下集</el-button>
                 <el-popover placement="top" :width="400" trigger="click" v-if="playlist.length > 1">
                   <template #reference>
-                    <el-button @click="scrollEpisodeList"
-                    >选集 {{ currentVideoIndex + 1 }}/{{ playlist.length }}</el-button
-                    >
+                    <el-button @click="scrollEpisodeList">选集 {{ currentVideoIndex + 1 }}/{{ playlist.length
+                    }}</el-button>
                   </template>
                   <template #default>
                     <div>
                       <div style="margin-bottom: 10px">
                         <span style="margin-right: 10px">排序:</span>
                         <el-select v-model="order" @change="sort" placeholder="排序" style="width: 130px">
-                          <el-option
-                            v-for="item in sortOrders"
-                            :key="item.value"
-                            :label="item.label"
-                            :value="item.value"
-                          />
+                          <el-option v-for="item in sortOrders"
+                                     :key="item.value"
+                                     :label="item.label"
+                                     :value="item.value" />
                         </el-select>
                       </div>
                       <el-scrollbar ref="episodeScrollbarRef" height="300px">
                         <div>
-                          <div
-                            v-for="(video, index) in playlist"
-                            :key="index"
-                            @click="playVideo(index)"
-                            style="padding: 8px; cursor: pointer; border-radius: 4px"
-                            :style="{
-                              backgroundColor: currentVideoIndex === index ? '#409eff' : 'transparent',
-                              color: currentVideoIndex === index ? '#fff' : 'inherit',
-                            }"
-                          >
+                          <div v-for="(video, index) in playlist"
+                               :key="index"
+                               @click="playVideo(index)"
+                               style="padding: 8px; cursor: pointer; border-radius: 4px"
+                               :style="{
+                                 backgroundColor: currentVideoIndex === index ? '#409eff' : 'transparent',
+                                 color: currentVideoIndex === index ? '#fff' : 'inherit',
+                               }">
                             {{ video.title }}
                           </div>
                         </div>
@@ -333,26 +310,22 @@
                   </template>
                   <template #default>
                     跳过片头
-                    <el-input-number
-                      v-model="minute1"
-                      class="mx-4"
-                      :min="0"
-                      :max="4"
-                      value-on-clear="min"
-                      controls-position="right"
-                      @change="handleMinute1Change"
-                    />
+                    <el-input-number v-model="minute1"
+                                     class="mx-4"
+                                     :min="0"
+                                     :max="4"
+                                     value-on-clear="min"
+                                     controls-position="right"
+                                     @change="handleMinute1Change" />
                     :
-                    <el-input-number
-                      v-model="second1"
-                      class="mx-4"
-                      :min="0"
-                      :max="59"
-                      :step="5"
-                      value-on-clear="min"
-                      controls-position="right"
-                      @change="handleSecond1Change"
-                    />
+                    <el-input-number v-model="second1"
+                                     class="mx-4"
+                                     :min="0"
+                                     :max="59"
+                                     :step="5"
+                                     value-on-clear="min"
+                                     controls-position="right"
+                                     @change="handleSecond1Change" />
                   </template>
                 </el-popover>
                 <el-popover placement="bottom" width="400px" v-if="playlist.length > 1">
@@ -361,26 +334,22 @@
                   </template>
                   <template #default>
                     跳过片尾
-                    <el-input-number
-                      v-model="minute2"
-                      class="mx-4"
-                      :min="0"
-                      :max="4"
-                      value-on-clear="min"
-                      controls-position="right"
-                      @change="handleMinute2Change"
-                    />
+                    <el-input-number v-model="minute2"
+                                     class="mx-4"
+                                     :min="0"
+                                     :max="4"
+                                     value-on-clear="min"
+                                     controls-position="right"
+                                     @change="handleMinute2Change" />
                     :
-                    <el-input-number
-                      v-model="second2"
-                      class="mx-4"
-                      :min="0"
-                      :max="59"
-                      :step="5"
-                      value-on-clear="min"
-                      controls-position="right"
-                      @change="handleSecond2Change"
-                    />
+                    <el-input-number v-model="second2"
+                                     class="mx-4"
+                                     :min="0"
+                                     :max="59"
+                                     :step="5"
+                                     value-on-clear="min"
+                                     controls-position="right"
+                                     @change="handleSecond2Change" />
                   </template>
                 </el-popover>
                 <el-popover placement="bottom" width="300px">
@@ -442,18 +411,12 @@
                       <a :href="'potplayer://' + playItem.url"><img alt="potplayer" src="/potplayer.webp" /></a>
                       <a :href="'vlc://' + playItem.url"><img alt="vlc" src="/vlc.webp" /></a>
                       <a :href="'nplayer-' + playItem.url"><img alt="nplayer" src="/nplayer.webp" /></a>
-                      <a :href="'omniplayer://weblink?url=' + playItem.url"
-                      ><img alt="omniplayer"
-                            src="/omniplayer.webp"
-                      /></a>
-                      <a :href="'figplayer://weblink?url=' + playItem.url"
-                      ><img alt="figplayer"
-                            src="/figplayer.webp"
-                      /></a>
-                      <a :href="'infuse://x-callback-url/play?url=' + playItem.url"
-                      ><img alt="infuse"
-                            src="/infuse.webp"
-                      /></a>
+                      <a :href="'omniplayer://weblink?url=' + playItem.url"><img alt="omniplayer"
+                                                                                 src="/omniplayer.webp" /></a>
+                      <a :href="'figplayer://weblink?url=' + playItem.url"><img alt="figplayer"
+                                                                                src="/figplayer.webp" /></a>
+                      <a :href="'infuse://x-callback-url/play?url=' + playItem.url"><img alt="infuse"
+                                                                                         src="/infuse.webp" /></a>
                       <a :href="'filebox://play?url=' + playItem.url"><img alt="fileball" src="/fileball.webp" /></a>
                       <!--<a :href="'iplay://play/any?type=url&url='+video.url"><img alt="iPlay" src="/iPlay.webp"></a>-->
                     </div>
@@ -594,12 +557,10 @@
           <img alt="qr" :src="'data:image/png;base64,' + base64QrCode" style="width: 200px" />
         </el-col>
         <el-col span="10">
-          <el-input
-            v-model="device.ip"
-            style="width: 200px"
-            placeholder="输入影视IP或者URL"
-            @keyup.enter="addDevice"
-          ></el-input>
+          <el-input v-model="device.ip"
+                    style="width: 200px"
+                    placeholder="输入影视IP或者URL"
+                    @keyup.enter="addDevice"></el-input>
           <el-button @click="addDevice">添加</el-button>
         </el-col>
         <el-col span="6">
@@ -688,11 +649,9 @@
         <el-main v-loading="loadingPosters">
           <el-row :gutter="30">
             <el-col :span="3" v-for="item in doubanItems" :key="item.vod_id" style="margin-bottom: 20px">
-              <el-card
-                :body-style="{ padding: '0px', cursor: 'pointer' }"
-                shadow="hover"
-                @click="searchDoubanItem(item)"
-              >
+              <el-card :body-style="{ padding: '0px', cursor: 'pointer' }"
+                       shadow="hover"
+                       @click="searchDoubanItem(item)">
                 <el-image :src="item.vod_pic" fit="cover" style="width: 100%; height: 400px" />
                 <div style="padding: 10px">
                   <div style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
@@ -705,15 +664,13 @@
               </el-card>
             </el-col>
           </el-row>
-          <el-pagination
-            v-if="doubanTotal > 0"
-            layout="total, prev, pager, next"
-            :current-page="doubanPage"
-            :page-size="35"
-            :total="doubanTotal"
-            @current-change="handleDoubanPageChange"
-            style="margin-top: 20px; text-align: center"
-          />
+          <el-pagination v-if="doubanTotal > 0"
+                         layout="total, prev, pager, next"
+                         :current-page="doubanPage"
+                         :page-size="35"
+                         :total="doubanTotal"
+                         @current-change="handleDoubanPageChange"
+                         style="margin-top: 20px; text-align: center" />
         </el-main>
       </el-container>
     </el-dialog>
@@ -1584,7 +1541,7 @@ const play = () => {
     const res = videoPlayer.value.play()
     if (res) {
       res
-        .then((_) => {
+        .then(() => {
           playing.value = true
           saveHistory()
         })
@@ -1600,7 +1557,7 @@ const pause = () => {
     const res = videoPlayer.value.pause()
     if (res) {
       res
-        .then((_) => {
+        .then(() => {
           playing.value = false
         })
         .catch((e) => {
@@ -1924,7 +1881,7 @@ const openUrlInVLC = (url: string) => {
     if (!vlcAttempt || vlcAttempt.closed) {
       try {
         window.open(`xdg-open vlc://${url}`, '_blank')
-      } catch (e) {
+      } catch {
         copyPlayUrl()
       }
     }

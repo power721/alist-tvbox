@@ -84,14 +84,11 @@ import { ElMessage } from 'element-plus'
 import { store } from '@/services/store'
 import router from '@/router'
 
-interface Item {
-  path: string
-  text: string
-}
+
 
 const platforms = ['pc', 'web', 'android']
 const methods = ['oauth2', 'http']
-const exp = ref(0)
+
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const accounts = ref([])

@@ -81,7 +81,6 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Check, Close, Refresh } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 const updateAction = ref(false)
