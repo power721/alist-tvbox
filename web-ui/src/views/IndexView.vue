@@ -3,7 +3,7 @@
     <el-form :model="form" :label-width="labelWidth">
       <el-form-item label="站点">
         <el-select v-model="form.siteId">
-          <el-option :label="site.name" :value="site.id" v-for="site of sites" />
+          <el-option :label="site.name" :value="site.id" v-for="site of sites" :key="site.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="索引名称">
@@ -83,24 +83,20 @@
       <el-table-column fixed="right" label="操作" width="140">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">数据</el-button>
-          <el-button
-            link
-            type="danger"
-            size="small"
-            @click="handleCancel(scope.row)"
-            :disabled="scope.row.status === 'COMPLETED'"
-          >取消
+          <el-button link
+                     type="danger"
+                     size="small"
+                     @click="handleCancel(scope.row)"
+                     :disabled="scope.row.status === 'COMPLETED'">取消
           </el-button>
           <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
-    <el-pagination
-      layout="total, prev, pager, next"
-      v-model:current-page="currentPage"
-      @current-change="handleCurrentChange"
-      :total="total"
-    />
+    <el-pagination layout="total, prev, pager, next"
+                   v-model:current-page="currentPage"
+                   @current-change="handleCurrentChange"
+                   :total="total" />
 
     <el-dialog v-model="dialogVisible" :title="task.name" width="60%">
       <pre>{{ task.data }}</pre>

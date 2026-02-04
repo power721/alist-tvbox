@@ -312,7 +312,7 @@ onUnmounted(() => {
 <template>
   <div class="mainContainer">
     <el-tabs v-model="category.type_id" @tab-click="handleCategoryClick">
-      <el-tab-pane :label="item.type_name" :name="item.type_id" v-for="item of categories">
+      <el-tab-pane :label="item.type_name" :name="item.type_id" v-for="item of categories" :key="item.type_id">
         <el-breadcrumb separator="/">
           <el-breadcrumb-item>
             <RouterLink :to="'/live/' + category.type_id" @click="returnHome">首页</RouterLink>
@@ -327,11 +327,14 @@ onUnmounted(() => {
 
         <div v-show="!rooms.length">
           <div id="type-filter">
-            <el-input v-model="typeKeyword" style="width: 240px" placeholder="筛选" @input="filterTypes"
-              :prefix-icon="Search" />
+            <el-input v-model="typeKeyword"
+                      style="width: 240px"
+                      placeholder="筛选"
+                      @input="filterTypes"
+                      :prefix-icon="Search" />
           </div>
           <el-row>
-            <el-col :span="5" v-for="type of filteredTypes" class="type">
+            <el-col :span="5" v-for="type of filteredTypes" :key="type.vod_id" class="type">
               <RouterLink :to="'/live/' + type.vod_id" @click="loadRooms(type)">
                 <div class="card-header">
                   <span>{{ type.vod_name }}</span>
@@ -345,15 +348,20 @@ onUnmounted(() => {
         <div>
           <div id="pagination">
             <el-button :icon="Refresh" circle @click="refresh" />
-            <el-pagination layout="prev, pager, next" :page-count="total" :current-page="page"
-              @current-change="reloadRooms" />
+            <el-pagination layout="prev, pager, next"
+                           :page-count="total"
+                           :current-page="page"
+                           @current-change="reloadRooms" />
             <div v-if="rooms.length && rooms[0].vod_tag == 'folder'">
-              <el-input v-model="roomKeyword" style="width: 240px" placeholder="筛选" @input="filterRooms"
-                :prefix-icon="Search" />
+              <el-input v-model="roomKeyword"
+                        style="width: 240px"
+                        placeholder="筛选"
+                        @input="filterRooms"
+                        :prefix-icon="Search" />
             </div>
           </div>
           <el-row>
-            <el-col :span="10" v-for="room of filteredRooms" class="room">
+            <el-col :span="10" v-for="room of filteredRooms" :key="room.vod_id" class="room">
               <RouterLink :to="'/live/' + room.vod_id" @click="load(room)" v-if="room.vod_tag == 'folder'">
                 <div class="card-header">
                   <span>{{ room.vod_remarks }}： {{ room.vod_name }}</span>
@@ -409,8 +417,11 @@ onUnmounted(() => {
 
           <div class="controls">
             <el-tabs v-model="activeName" @tab-click="handleClick">
-              <el-tab-pane :label="item" :name="item" v-for="item of playFrom">
-                <el-button :type="playUrl == url ? 'primary' : ''" v-for="url of playUrls" @click="loadFlv(url)">
+              <el-tab-pane :label="item" :name="item" v-for="item of playFrom" :key="item">
+                <el-button :type="playUrl == url ? 'primary' : ''"
+                           v-for="url of playUrls"
+                           :key="url"
+                           @click="loadFlv(url)">
                   {{ url.split('$')[0] }}
                 </el-button>
               </el-tab-pane>

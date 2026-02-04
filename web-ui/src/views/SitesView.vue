@@ -32,11 +32,9 @@
       <el-table-column prop="indexFile" label="索引文件">
         <template #default="scope">
           {{ scope.row.indexFile }}
-          <el-button
-            :icon="Refresh"
-            @click="updateIndexFile(scope.row.id)"
-            v-if="scope.row.indexFile && scope.row.indexFile.startsWith('http')"
-          >
+          <el-button :icon="Refresh"
+                     @click="updateIndexFile(scope.row.id)"
+                     v-if="scope.row.indexFile && scope.row.indexFile.startsWith('http')">
           </el-button>
         </template>
       </el-table-column>
@@ -108,41 +106,35 @@
     <el-dialog v-model="siteVisible" :title="dialogTitle" :fullscreen="true">
       <h2>文件夹列表</h2>
       <el-breadcrumb separator="/">
-        <el-breadcrumb-item v-for="item of paths">
+        <el-breadcrumb-item v-for="item of paths" :key="item.path">
           <a @click="loadFiles(item.path)">{{ item.text }}</a>
         </el-breadcrumb-item>
       </el-breadcrumb>
       <div class="space"></div>
       <el-scrollbar>
         <div>
-          <el-button
-            v-for="item in jsonData.list.filter((e) => e.vod_tag == 'folder')"
-            :key="item.vod_id"
-            @click="loadFiles(item.vod_id)"
-            text
-          >{{ item.vod_name }}
+          <el-button v-for="item in jsonData.list.filter((e) => e.vod_tag == 'folder')"
+                     :key="item.vod_id"
+                     @click="loadFiles(item.vod_id)"
+                     text>{{ item.vod_name }}
           </el-button>
         </div>
       </el-scrollbar>
-      <el-pagination
-        v-show="total > 100"
-        layout="prev, pager, next"
-        :page-size="100"
-        :current-page="page"
-        :total="total"
-        @current-change="loadData"
-      />
+      <el-pagination v-show="total > 100"
+                     layout="prev, pager, next"
+                     :page-size="100"
+                     :current-page="page"
+                     :total="total"
+                     @current-change="loadData" />
       <el-divider />
       <h2>JSON数据</h2>
       <el-scrollbar height="600px">
-        <json-viewer
-          :value="jsonData"
-          expanded
-          copyable
-          show-double-quotes
-          :show-array-index="false"
-          :expand-depth="3"
-        ></json-viewer>
+        <json-viewer :value="jsonData"
+                     expanded
+                     copyable
+                     show-double-quotes
+                     :show-array-index="false"
+                     :expand-depth="3"></json-viewer>
       </el-scrollbar>
       <div class="json"></div>
       <template #footer>
@@ -164,17 +156,15 @@
             <el-button v-if="indexTotal" @click="scrapeIndex">刮削</el-button>
             <el-button type="danger" @click="deleteIndexFile">删除</el-button>
             <el-button type="primary" class="download" v-if="indexTotal" @click="downloadIndexFile">下载文件</el-button>
-            <el-upload
-              ref="upload"
-              accept=".txt"
-              :action="'/api/index-files/upload?siteId=' + form.id + '&indexName=' + indexName"
-              :headers="headers"
-              :limit="1"
-              :show-file-list="false"
-              :on-exceed="handleExceed"
-              :on-success="handleUploadSuccess"
-              :on-error="handleUploadError"
-            >
+            <el-upload ref="upload"
+                       accept=".txt"
+                       :action="'/api/index-files/upload?siteId=' + form.id + '&indexName=' + indexName"
+                       :headers="headers"
+                       :limit="1"
+                       :show-file-list="false"
+                       :on-exceed="handleExceed"
+                       :on-success="handleUploadSuccess"
+                       :on-error="handleUploadError">
               <template #trigger>
                 <el-button type="primary">上传文件</el-button>
               </template>
@@ -185,14 +175,12 @@
             <a href="/#/tmdb">TMDB电影数据列表</a>
           </div>
         </div>
-        <el-pagination
-          layout="prev, pager, next"
-          :page-size="50"
-          :current-page="indexPage"
-          :total="indexTotal"
-          @current-change="loadIndexFile"
-        />
-        <div v-for="line of indexContent">
+        <el-pagination layout="prev, pager, next"
+                       :page-size="50"
+                       :current-page="indexPage"
+                       :total="indexTotal"
+                       @current-change="loadIndexFile" />
+        <div v-for="line of indexContent" :key="line.id">
           {{ line.id }}
           <el-button size="small" @click="toggleExcluded(line.id)">
             <el-icon v-if="line.path.startsWith('-')">
@@ -205,13 +193,11 @@
           : {{ line.path }}
         </div>
         <div v-if="indexCount >= 50">
-          <el-pagination
-            layout="prev, pager, next"
-            :page-size="50"
-            :current-page="indexPage"
-            :total="indexTotal"
-            @current-change="loadIndexFile"
-          />
+          <el-pagination layout="prev, pager, next"
+                         :page-size="50"
+                         :current-page="indexPage"
+                         :total="indexTotal"
+                         @current-change="loadIndexFile" />
         </div>
       </div>
       <template #footer>
@@ -402,7 +388,7 @@ const handleConfirm = () => {
 }
 
 const updateIndexFile = (id: string | number) => {
-  axios.post('/api/sites/' + id + '/updateIndexFile').then(() => {})
+  axios.post('/api/sites/' + id + '/updateIndexFile').then(() => { })
 }
 
 const load = () => {
@@ -438,11 +424,11 @@ const loadIndexFile = (pageNumber: number) => {
   axios
     .get(
       '/api/index-files?siteId=' +
-        form.value.id +
-        '&indexName=' +
-        indexName.value +
-        '&size=50&page=' +
-        (pageNumber - 1),
+      form.value.id +
+      '&indexName=' +
+      indexName.value +
+      '&size=50&page=' +
+      (pageNumber - 1),
     )
     .then(
       ({ data }) => {

@@ -68,7 +68,7 @@
       <el-form label-width="140px">
         <el-form-item label="站点" required>
           <el-select v-model="form.siteId">
-            <el-option :label="site.name" :value="site.id" v-for="site of sites" />
+            <el-option :label="site.name" :value="site.id" v-for="site of sites" :key="site.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="类型" required>
@@ -110,7 +110,7 @@
       <el-form label-width="140px">
         <el-form-item label="站点" required>
           <el-select v-model="form.siteId">
-            <el-option :label="site.name" :value="site.id" v-for="site of sites" />
+            <el-option :label="site.name" :value="site.id" v-for="site of sites" :key="site.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="类型" required>
@@ -157,7 +157,7 @@
     <el-dialog v-model="scrapeVisible" title="刮削索引文件">
       <el-form-item label="站点">
         <el-select v-model="siteId" @change="loadIndexFiles">
-          <el-option :label="site.name" :value="site.id" v-for="site of sites" />
+          <el-option :label="site.name" :value="site.id" v-for="site of sites" :key="site.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="强制更新？">

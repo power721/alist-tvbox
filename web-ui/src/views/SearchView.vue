@@ -2,10 +2,8 @@
   <div class="search">
     <h2>API地址</h2>
     <div class="description">
-      <a :href="currentUrl + getPath(type) + '/' + store.token + '?wd=' + keyword"
-         target="_blank"
-      >{{ currentUrl }}{{ getPath(type) }}/{{ store.token }}?wd={{ keyword }}</a
-      >
+      <a :href="currentUrl + getPath(type) + '/' + store.token + '?wd=' + keyword" target="_blank">{{ currentUrl }}{{
+        getPath(type) }}/{{ store.token }}?wd={{ keyword }}</a>
     </div>
 
     <div>
@@ -81,7 +79,7 @@
       <el-form label-width="auto">
         <el-form-item label="搜索文件">
           <el-checkbox-group v-model="form.searchSources">
-            <el-checkbox :value="file" name="index" v-for="file in form.files">
+            <el-checkbox :value="file" name="index" v-for="file in form.files" :key="file">
               {{ file }}
             </el-checkbox>
           </el-checkbox-group>

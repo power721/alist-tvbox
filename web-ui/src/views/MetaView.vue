@@ -31,11 +31,9 @@
       </el-table-column>
       <el-table-column prop="tmId" label="TMDB ID" width="100">
         <template #default="scope">
-          <a
-            v-if="scope.row.tmId"
-            :href="'https://www.themoviedb.org/' + scope.row.type + '/' + scope.row.tmId"
-            target="_blank"
-          >
+          <a v-if="scope.row.tmId"
+             :href="'https://www.themoviedb.org/' + scope.row.type + '/' + scope.row.tmId"
+             target="_blank">
             {{ scope.row.tmId }}
           </a>
         </template>
@@ -58,22 +56,20 @@
       </el-table-column>
     </el-table>
     <div>
-      <el-pagination
-        layout="total, prev, pager, next, jumper, sizes"
-        :current-page="page"
-        @current-change="load"
-        :page-size="size"
-        :page-sizes="sizes"
-        :total="total"
-        @size-change="handleSizeChange"
-      />
+      <el-pagination layout="total, prev, pager, next, jumper, sizes"
+                     :current-page="page"
+                     @current-change="load"
+                     :page-size="size"
+                     :page-sizes="sizes"
+                     :total="total"
+                     @size-change="handleSizeChange" />
     </div>
 
     <el-dialog v-model="formVisible" :title="'编辑 ' + form.id" width="60%">
       <el-form label-width="140px">
         <el-form-item label="站点" required>
           <el-select v-model="form.siteId">
-            <el-option :label="site.name" :value="site.id" v-for="site of sites" />
+            <el-option :label="site.name" :value="site.id" v-for="site of sites" :key="site.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="路径" required>
@@ -141,7 +137,7 @@
     <el-dialog v-model="scrapeVisible" title="刮削索引文件">
       <el-form-item label="站点">
         <el-select v-model="siteId">
-          <el-option :label="site.name" :value="site.id" v-for="site of sites" />
+          <el-option :label="site.name" :value="site.id" v-for="site of sites" :key="site.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="强制更新？">

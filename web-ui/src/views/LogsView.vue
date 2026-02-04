@@ -79,27 +79,23 @@ onMounted(() => {
   </el-form>
 
   <div class="flex">
-    <el-pagination
-      layout="prev, pager, next"
-      :page-size="50"
-      :current-page="page"
-      :total="total"
-      @current-change="load"
-    />
+    <el-pagination layout="prev, pager, next"
+                   :page-size="50"
+                   :current-page="page"
+                   :total="total"
+                   @current-change="load" />
     <div>
       <el-button type="primary" @click="reload">刷新</el-button>
       <el-button type="primary" class="download" @click="download">下载日志</el-button>
     </div>
   </div>
-  <div v-for="log of logs" v-html="log"></div>
+  <div v-for="(log, i) of logs" :key="i" v-html="log"></div>
   <div v-if="count >= 50">
-    <el-pagination
-      layout="prev, pager, next"
-      :page-size="50"
-      :current-page="page"
-      :total="total"
-      @current-change="load"
-    />
+    <el-pagination layout="prev, pager, next"
+                   :page-size="50"
+                   :current-page="page"
+                   :total="total"
+                   @current-change="load" />
   </div>
 </template>
 

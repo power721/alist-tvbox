@@ -3,7 +3,7 @@
     <el-row justify="space-between">
       <el-col :span="18">
         <el-breadcrumb separator="/">
-          <el-breadcrumb-item v-for="(item, index) in paths">
+          <el-breadcrumb-item v-for="(item, index) in paths" :key="index">
             <a id="copy" @click="copy(item.path)" v-if="index == paths.length - 1">
               {{ item.text }}
             </a>
@@ -1788,53 +1788,53 @@ const sort = () => {
   const currentUrl = playItem.value.url
 
   switch (order.value) {
-  case 'index':
-    playlist.value.sort((a, b) => a.index - b.index)
-    break
-  case 'name,asc':
-    playlist.value.sort((a, b) => a.name.localeCompare(b.name))
-    break
-  case 'name,desc':
-    playlist.value.sort((a, b) => b.name.localeCompare(a.name))
-    break
-  case 'size,asc':
-    playlist.value.sort((a, b) => a.size - b.size)
-    break
-  case 'size,desc':
-    playlist.value.sort((a, b) => b.size - a.size)
-    break
-  case 'rating,asc':
-    playlist.value.sort((a, b) => {
-      if (a.rating === b.rating) {
-        return a.index - b.index
-      }
-      return a.rating - b.rating
-    })
-    break
-  case 'rating,desc':
-    playlist.value.sort((a, b) => {
-      if (a.rating === b.rating) {
-        return a.index - b.index
-      }
-      return b.rating - a.rating
-    })
-    break
-  case 'time,asc':
-    playlist.value.sort((a, b) => {
-      if (a.time === b.time) {
-        return a.index - b.index
-      }
-      return a.time - b.time
-    })
-    break
-  case 'time,desc':
-    playlist.value.sort((a, b) => {
-      if (a.time === b.time) {
-        return a.index - b.index
-      }
-      return b.time - a.time
-    })
-    break
+    case 'index':
+      playlist.value.sort((a, b) => a.index - b.index)
+      break
+    case 'name,asc':
+      playlist.value.sort((a, b) => a.name.localeCompare(b.name))
+      break
+    case 'name,desc':
+      playlist.value.sort((a, b) => b.name.localeCompare(a.name))
+      break
+    case 'size,asc':
+      playlist.value.sort((a, b) => a.size - b.size)
+      break
+    case 'size,desc':
+      playlist.value.sort((a, b) => b.size - a.size)
+      break
+    case 'rating,asc':
+      playlist.value.sort((a, b) => {
+        if (a.rating === b.rating) {
+          return a.index - b.index
+        }
+        return a.rating - b.rating
+      })
+      break
+    case 'rating,desc':
+      playlist.value.sort((a, b) => {
+        if (a.rating === b.rating) {
+          return a.index - b.index
+        }
+        return b.rating - a.rating
+      })
+      break
+    case 'time,asc':
+      playlist.value.sort((a, b) => {
+        if (a.time === b.time) {
+          return a.index - b.index
+        }
+        return a.time - b.time
+      })
+      break
+    case 'time,desc':
+      playlist.value.sort((a, b) => {
+        if (a.time === b.time) {
+          return a.index - b.index
+        }
+        return b.time - a.time
+      })
+      break
   }
 
   // 根据URL重新找到当前视频的索引
