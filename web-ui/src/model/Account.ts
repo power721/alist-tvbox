@@ -1,5 +1,5 @@
 export class Account {
-  username = ''
-  password = ''
-  authenticated = false
+  username = "";
+  password = "";
+  authenticated = false;
 }

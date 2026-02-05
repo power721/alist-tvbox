@@ -3,28 +3,33 @@
     <div class="flex">
       <div v-if="userInfo">
         <span v-if="userInfo.uname">用户名：{{ userInfo.uname }}</span>
-        <span class="hint">登录状态：{{ userInfo.isLogin ? '已登录' : '未登录' }}</span>
-        <span v-if="userInfo.uname"
-              class="hint"
-        >会员状态：{{ userInfo.vipType ? userInfo.vip_label.text : '无会员' }}</span
+        <span class="hint">登录状态：{{ userInfo.isLogin ? "已登录" : "未登录" }}</span>
+        <span v-if="userInfo.uname" class="hint"
+          >会员状态：{{ userInfo.vipType ? userInfo.vip_label.text : "无会员" }}</span
         >
       </div>
       <div class="">
-        <el-button type="primary" @click="scanLogin">登录</el-button>
-        <el-button type="primary" @click="settingVisible = true">配置</el-button>
+        <el-button type="primary" @click="scanLogin"> 登录 </el-button>
+        <el-button type="primary" @click="settingVisible = true"> 配置 </el-button>
       </div>
     </div>
 
     <h1>分类列表</h1>
     <el-row justify="end">
       <span style="margin-right: 16px">可以拖动行排序</span>
-      <el-button @click="load">刷新</el-button>
-      <el-button type="primary" :disabled="!changed" @click="handleSave">保存</el-button>
-      <el-button type="primary" @click="handleAdd">添加</el-button>
+      <el-button @click="load"> 刷新 </el-button>
+      <el-button type="primary" :disabled="!changed" @click="handleSave"> 保存 </el-button>
+      <el-button type="primary" @click="handleAdd"> 添加 </el-button>
     </el-row>
-    <div class="space"></div>
+    <div class="space" />
 
-    <el-table :data="list" :row-class-name="tableRowClassName" row-key="id" :key="tableKey" style="width: 100%">
+    <el-table
+      :key="tableKey"
+      :data="list"
+      :row-class-name="tableRowClassName"
+      row-key="id"
+      style="width: 100%"
+    >
       <el-table-column prop="order" label="顺序" sortable width="100">
         <template #default="scope">
           <span class="pointer">{{ scope.row.order }}</span>
@@ -61,8 +66,12 @@
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <div v-if="!scope.row.reserved">
-            <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
+            <el-button link type="primary" size="small" @click="handleEdit(scope.row)">
+              编辑
+            </el-button>
+            <el-button link type="danger" size="small" @click="handleDelete(scope.row)">
+              删除
+            </el-button>
           </div>
         </template>
       </el-table-column>
@@ -74,9 +83,13 @@
           <el-input v-model="form.name" placeholder="显示的名称" autocomplete="off" />
         </el-form-item>
         <el-form-item label="值" required>
-          <el-input v-model="form.value" placeholder="分类ID或者UP主ID或者搜索关键词" autocomplete="off" />
+          <el-input
+            v-model="form.value"
+            placeholder="分类ID或者UP主ID或者搜索关键词"
+            autocomplete="off"
+          />
         </el-form-item>
-        <el-form-item label="父ID" required v-if="form.type == 2">
+        <el-form-item v-if="form.type == 2" label="父ID" required>
           <el-input v-model="form.parentId" autocomplete="off" />
         </el-form-item>
         <el-form-item label="显示？">
@@ -90,8 +103,8 @@
             <!--            <el-radio :label="1" size="large">一级分类</el-radio>-->
             <!--                        <el-radio :label="2" size="large">二级分类</el-radio>-->
             <!--                        <el-radio :label="3" size="large">频道</el-radio>-->
-            <el-radio :label="4" size="large">搜索</el-radio>
-            <el-radio :label="5" size="large">UP主</el-radio>
+            <el-radio :label="4" size="large"> 搜索 </el-radio>
+            <el-radio :label="5" size="large"> UP主 </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="顺序">
@@ -101,7 +114,9 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="handleCancel">取消</el-button>
-          <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
+          <el-button type="primary" @click="handleConfirm">{{
+            updateAction ? "更新" : "添加"
+          }}</el-button>
         </span>
       </template>
     </el-dialog>
@@ -136,7 +151,7 @@
           <el-input v-model="bilibiliCookie" type="textarea" :rows="5" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="updateBilibiliCookie">更新</el-button>
+          <el-button type="primary" @click="updateBilibiliCookie"> 更新 </el-button>
         </el-form-item>
         <el-form-item label="上报播放记录">
           <el-switch
@@ -157,7 +172,13 @@
           />
         </el-form-item>
         <el-form-item label="强制dash视频格式">
-          <el-switch v-model="dash" inline-prompt active-text="开启" inactive-text="关闭" @change="updateDash" />
+          <el-switch
+            v-model="dash"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+            @change="updateDash"
+          />
         </el-form-item>
         <!--        <el-form-item label="视频格式">-->
         <!--          <el-checkbox v-model="checks[0]" label="HDR" size="large"/>-->
@@ -186,7 +207,7 @@
           </el-checkbox-group>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="updateQn">更新</el-button>
+          <el-button type="primary" @click="updateQn"> 更新 </el-button>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -199,66 +220,66 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import Sortable from 'sortablejs'
-import { Check, Close } from '@element-plus/icons-vue'
-import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { onMounted, ref } from "vue";
+import Sortable from "sortablejs";
+import { Check, Close } from "@element-plus/icons-vue";
+import { api } from "@/services/api";
+import { ElMessage } from "element-plus";
 
 const columns = [
-  { title: 'ID', key: 'id', dataKey: 'id' },
-  { title: '姓名', key: 'name', dataKey: 'name' },
-  { title: '值', key: 'value', dataKey: 'value' },
-  { title: '类型', key: 'type', dataKey: 'type' },
-  { title: '显示', key: 'show', dataKey: 'show' },
-  { title: '保留的', key: 'reserved', dataKey: 'reserved' },
-  { title: '顺序', key: 'order', dataKey: 'order' },
-  { title: '父类ID', key: 'parentId', dataKey: 'parentId' },
-]
+  { title: "ID", key: "id", dataKey: "id" },
+  { title: "姓名", key: "name", dataKey: "name" },
+  { title: "值", key: "value", dataKey: "value" },
+  { title: "类型", key: "type", dataKey: "type" },
+  { title: "显示", key: "show", dataKey: "show" },
+  { title: "保留的", key: "reserved", dataKey: "reserved" },
+  { title: "顺序", key: "order", dataKey: "order" },
+  { title: "父类ID", key: "parentId", dataKey: "parentId" },
+];
 
 interface Nav {
-  id: number
-  order: number
-  name: string
-  value: string
-  show: boolean
-  reserved: boolean
-  changed: boolean
-  expanded: boolean
-  type: number
-  parentId: number
-  children: Nav[]
+  id: number;
+  order: number;
+  name: string;
+  value: string;
+  show: boolean;
+  reserved: boolean;
+  changed: boolean;
+  expanded: boolean;
+  type: number;
+  parentId: number;
+  children: Nav[];
 }
 
 const tableRowClassName = ({ row }: { row: Nav; rowIndex: number }) => {
   if (row.changed) {
-    return 'warning-row'
+    return "warning-row";
   }
-  return ''
-}
-const base64QrCode = ref('')
-const qrcodeKey = ref('')
-const qns = ref(['16', '32', '64', '74', '80', '112', '116', '120', '125', '126', '127'])
-const bilibiliCookie = ref('')
-const checks = ref<boolean[]>([true, true, true, false, true, true])
-const userInfo = ref<any>({})
-const heartbeat = ref(false)
-const searchable = ref(false)
-const dash = ref(false)
-const updateAction = ref(false)
-const dialogTitle = ref('')
-const list = ref<Nav[]>([])
-const activeRows = ref<Nav[]>([])
-const formVisible = ref(false)
-const dialogVisible = ref(false)
-const settingVisible = ref(false)
-const loginVisible = ref(false)
-const changed = ref(false)
-const tableKey = ref(0)
+  return "";
+};
+const base64QrCode = ref("");
+const qrcodeKey = ref("");
+const qns = ref(["16", "32", "64", "74", "80", "112", "116", "120", "125", "126", "127"]);
+const bilibiliCookie = ref("");
+const checks = ref<boolean[]>([true, true, true, false, true, true]);
+const userInfo = ref<any>({});
+const heartbeat = ref(false);
+const searchable = ref(false);
+const dash = ref(false);
+const updateAction = ref(false);
+const dialogTitle = ref("");
+const list = ref<Nav[]>([]);
+const activeRows = ref<Nav[]>([]);
+const formVisible = ref(false);
+const dialogVisible = ref(false);
+const settingVisible = ref(false);
+const loginVisible = ref(false);
+const changed = ref(false);
+const tableKey = ref(0);
 const form = ref<Nav>({
   id: 0,
-  name: '',
-  value: '',
+  name: "",
+  value: "",
   type: 4,
   show: true,
   reserved: false,
@@ -267,92 +288,92 @@ const form = ref<Nav>({
   order: 1,
   parentId: 0,
   children: [],
-})
+});
 
 const treeToTile = (treeData: Nav[]) => {
-  const arr: Nav[] = []
+  const arr: Nav[] = [];
   const expanded = (data: Nav[]) => {
     if (data && data.length > 0) {
       data
         .filter((d) => d)
         .forEach((e) => {
-          arr.push(e)
-          expanded(e['children'] || [])
-        })
+          arr.push(e);
+          expanded(e["children"] || []);
+        });
     }
-  }
-  expanded(treeData)
-  return arr
-}
+  };
+  expanded(treeData);
+  return arr;
+};
 
 const rowDrop = () => {
-  const tbody = document.querySelector('.el-table__body-wrapper tbody') as HTMLElement
+  const tbody = document.querySelector(".el-table__body-wrapper tbody") as HTMLElement;
   Sortable.create(tbody, {
     animation: 500,
-    handle: '.el-table__row',
-    draggable: '.el-table__row',
+    handle: ".el-table__row",
+    draggable: ".el-table__row",
     onMove({ dragged, related }) {
-      activeRows.value = treeToTile(list.value)
-      const oldRow = activeRows.value[(dragged as HTMLTableRowElement).rowIndex]
-      const newRow = activeRows.value[(related as HTMLTableRowElement).rowIndex]
+      activeRows.value = treeToTile(list.value);
+      const oldRow = activeRows.value[(dragged as HTMLTableRowElement).rowIndex];
+      const newRow = activeRows.value[(related as HTMLTableRowElement).rowIndex];
       if ((oldRow.type == 2) !== (newRow.type == 2)) {
-        return false
+        return false;
       }
-      return !(oldRow.type === 2 && oldRow.parentId !== newRow.parentId)
+      return !(oldRow.type === 2 && oldRow.parentId !== newRow.parentId);
     },
     onEnd: (event: any) => {
-      const oldIndex = event.oldIndex
-      const newIndex = event.newIndex
-      const oldRow = activeRows.value[oldIndex]
-      const newRow = activeRows.value[newIndex]
+      const oldIndex = event.oldIndex;
+      const newIndex = event.newIndex;
+      const oldRow = activeRows.value[oldIndex];
+      const newRow = activeRows.value[newIndex];
       if (!oldRow || oldIndex === newIndex || oldRow.id === newRow.id) {
-        return
+        return;
       }
 
-      activeRows.value.splice(oldIndex, 1)
-      activeRows.value.splice(newIndex, 0, oldRow)
-      let order = 1
-      const items: Nav[] = []
+      activeRows.value.splice(oldIndex, 1);
+      activeRows.value.splice(newIndex, 0, oldRow);
+      let order = 1;
+      const items: Nav[] = [];
 
       if (oldRow.type === 2) {
-        const parent = list.value.find((e) => e.id === oldRow.parentId)
-        console.log(oldRow.id, oldRow.parentId, parent)
+        const parent = list.value.find((e) => e.id === oldRow.parentId);
+        console.log(oldRow.id, oldRow.parentId, parent);
         activeRows.value.forEach((e) => {
           if (e.type == 2 && e.parentId === oldRow.parentId) {
-            e.order = order++
-            items.push(e)
+            e.order = order++;
+            items.push(e);
           }
-        })
+        });
         if (parent) {
-          parent.children = items
+          parent.children = items;
         }
       } else {
         activeRows.value.forEach((e) => {
           if (e.type != 2) {
-            e.order = order++
-            items.push(e)
+            e.order = order++;
+            items.push(e);
           }
-        })
-        list.value = items
+        });
+        list.value = items;
 
-        tableKey.value = Math.random()
-        setTimeout(() => rowDrop(), 500)
+        tableKey.value = Math.random();
+        setTimeout(() => rowDrop(), 500);
       }
 
-      oldRow.changed = true
-      newRow.changed = true
-      changed.value = true
+      oldRow.changed = true;
+      newRow.changed = true;
+      changed.value = true;
     },
-  })
-}
+  });
+};
 
 const handleAdd = () => {
-  dialogTitle.value = '添加分类'
-  updateAction.value = false
+  dialogTitle.value = "添加分类";
+  updateAction.value = false;
   form.value = {
     id: 0,
-    name: '',
-    value: '',
+    name: "",
+    value: "",
     type: 4,
     show: true,
     reserved: false,
@@ -361,40 +382,40 @@ const handleAdd = () => {
     order: 1,
     parentId: 0,
     children: [],
-  }
-  formVisible.value = true
-}
+  };
+  formVisible.value = true;
+};
 
 const handleEdit = (data: any) => {
-  dialogTitle.value = '更新分类 - ' + data.name
-  updateAction.value = true
-  form.value = Object.assign({}, data)
-  formVisible.value = true
-}
+  dialogTitle.value = "更新分类 - " + data.name;
+  updateAction.value = true;
+  form.value = Object.assign({}, data);
+  formVisible.value = true;
+};
 
 const handleDelete = (data: any) => {
-  form.value = data
-  dialogVisible.value = true
-}
+  form.value = data;
+  dialogVisible.value = true;
+};
 
 const deleteSite = () => {
-  dialogVisible.value = false
-  axios.delete('/api/nav/' + form.value.id).then(() => {
-    load()
-  })
-}
+  dialogVisible.value = false;
+  api.delete("/api/nav/" + form.value.id).then(() => {
+    load();
+  });
+};
 
 const handleCancel = () => {
-  formVisible.value = false
-}
+  formVisible.value = false;
+};
 
 const handleConfirm = () => {
-  const url = updateAction.value ? '/api/nav/' + form.value.id : '/api/nav'
-  axios.post(url, form.value).then(() => {
-    formVisible.value = false
-    load()
-  })
-}
+  const url = updateAction.value ? "/api/nav/" + form.value.id : "/api/nav";
+  api.post(url, form.value).then(() => {
+    formVisible.value = false;
+    load();
+  });
+};
 
 const handleSave = () => {
   const items = list.value.map((e) => ({
@@ -402,209 +423,209 @@ const handleSave = () => {
     order: e.order,
     show: e.show,
     children: e.children,
-  }))
-  axios.put('/api/nav', { list: items }).then(() => {
-    ElMessage.success('保存成功')
-    load()
-  })
-}
+  }));
+  api.put("/api/nav", { list: items }).then(() => {
+    ElMessage.success("保存成功");
+    load();
+  });
+};
 
 const updateBilibiliCookie = () => {
-  axios
-    .post('/api/settings', {
-      name: 'bilibili_cookie',
+  api
+    .post("/api/settings", {
+      name: "bilibili_cookie",
       value: bilibiliCookie.value,
     })
     .then(() => {
-      ElMessage.success('更新成功')
-      loadUser()
-    })
-}
+      ElMessage.success("更新成功");
+      loadUser();
+    });
+};
 
 const updateHeartbeat = () => {
-  axios
-    .post('/api/settings', {
-      name: 'bilibili_heartbeat',
-      value: heartbeat.value + '',
+  api
+    .post("/api/settings", {
+      name: "bilibili_heartbeat",
+      value: heartbeat.value + "",
     })
     .then(() => {
-      ElMessage.success('更新成功')
-      loadUser()
-    })
-}
+      ElMessage.success("更新成功");
+      loadUser();
+    });
+};
 
 const updateSearchable = () => {
-  axios
-    .post('/api/settings', {
-      name: 'bilibili_searchable',
-      value: searchable.value + '',
+  api
+    .post("/api/settings", {
+      name: "bilibili_searchable",
+      value: searchable.value + "",
     })
     .then(() => {
-      ElMessage.success('更新成功')
-    })
-}
+      ElMessage.success("更新成功");
+    });
+};
 
 const updateDash = () => {
-  axios.post('/api/settings', { name: 'bilibili_dash', value: dash.value + '' }).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
+  api.post("/api/settings", { name: "bilibili_dash", value: dash.value + "" }).then(() => {
+    ElMessage.success("更新成功");
+  });
+};
 
 const updateFnval = () => {
-  let val = 16
-  let num = 64
+  let val = 16;
+  let num = 64;
   for (const flag of checks.value) {
     if (flag) {
-      val += num
+      val += num;
     }
-    num *= 2
+    num *= 2;
   }
-  axios.post('/api/settings', { name: 'bilibili_fnval', value: val + '' }).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
+  api.post("/api/settings", { name: "bilibili_fnval", value: val + "" }).then(() => {
+    ElMessage.success("更新成功");
+  });
+};
 
 const updateQn = () => {
-  axios.post('/api/settings', { name: 'bilibili_qn', value: qns.value.join(',') }).then(() => {
-    ElMessage.success('更新成功')
-  })
-}
+  api.post("/api/settings", { name: "bilibili_qn", value: qns.value.join(",") }).then(() => {
+    ElMessage.success("更新成功");
+  });
+};
 
 const scanLogin = () => {
-  base64QrCode.value = ''
-  qrcodeKey.value = ''
-  clearInterval(timer)
-  axios.post('/api/bilibili/login', null).then(({ data }) => {
-    base64QrCode.value = data.image
-    qrcodeKey.value = data.qrcode_key
-    loginVisible.value = true
-    checkLogin()
-  })
-}
+  base64QrCode.value = "";
+  qrcodeKey.value = "";
+  clearInterval(timer);
+  api.post("/api/bilibili/login", null).then((data) => {
+    base64QrCode.value = data.image;
+    qrcodeKey.value = data.qrcode_key;
+    loginVisible.value = true;
+    checkLogin();
+  });
+};
 
-let timer = 0
-let count = 90
+let timer = 0;
+let count = 90;
 
 const checkLogin = () => {
-  count = 180
-  timer = setInterval(check, 1000)
-}
+  count = 180;
+  timer = setInterval(check, 1000);
+};
 
 const check = () => {
   if (count-- > 0) {
-    axios.get('/api/bilibili/check?key=' + qrcodeKey.value).then(({ data }) => {
+    api.get("/api/bilibili/check?key=" + qrcodeKey.value).then((data) => {
       if (data === 0) {
-        success()
+        success();
       } else if (data !== 1) {
-        fail(data)
+        fail(data);
       }
-    })
+    });
   } else {
-    fail(2)
+    fail(2);
   }
-}
+};
 
 const success = () => {
-  ElMessage.success('登录成功')
-  clearInterval(timer)
-  timer = 0
-  getBilibiliCookie()
-  loadUser()
-  loginVisible.value = false
-}
+  ElMessage.success("登录成功");
+  clearInterval(timer);
+  timer = 0;
+  getBilibiliCookie();
+  loadUser();
+  loginVisible.value = false;
+};
 
 const fail = (code: number) => {
   if (code === 86038 || code === 2) {
-    ElMessage.error('二维码已失效，重新生成')
-    scanLogin()
+    ElMessage.error("二维码已失效，重新生成");
+    scanLogin();
   } else if (code === 86090) {
-    ElMessage.error('二维码已扫码未确认')
+    ElMessage.error("二维码已扫码未确认");
   } else {
-    ElMessage.error('登录失败')
+    ElMessage.error("登录失败");
   }
 
-  clearInterval(timer)
-  timer = 0
-}
+  clearInterval(timer);
+  timer = 0;
+};
 
 const cancel = () => {
-  loginVisible.value = false
-  clearInterval(timer)
-  timer = 0
-}
+  loginVisible.value = false;
+  clearInterval(timer);
+  timer = 0;
+};
 
 const getHeartbeat = () => {
-  axios.get('/api/settings/bilibili_heartbeat').then(({ data }) => {
-    heartbeat.value = data.value === 'true'
-  })
-}
+  api.get("/api/settings/bilibili_heartbeat").then((data) => {
+    heartbeat.value = data.value === "true";
+  });
+};
 
 const getSearchable = () => {
-  axios.get('/api/settings/bilibili_searchable').then(({ data }) => {
-    searchable.value = data.value !== 'false'
-  })
-}
+  api.get("/api/settings/bilibili_searchable").then((data) => {
+    searchable.value = data.value !== "false";
+  });
+};
 
 const getDash = () => {
-  axios.get('/api/settings/bilibili_dash').then(({ data }) => {
-    dash.value = data.value === 'true'
-  })
-}
+  api.get("/api/settings/bilibili_dash").then((data) => {
+    dash.value = data.value === "true";
+  });
+};
 
 const getBilibiliCookie = () => {
-  axios.get('/api/settings/bilibili_cookie').then(({ data }) => {
-    bilibiliCookie.value = data.value
-  })
-}
+  api.get("/api/settings/bilibili_cookie").then((data) => {
+    bilibiliCookie.value = data.value;
+  });
+};
 
 const getQn = () => {
-  axios.get('/api/settings/bilibili_qn').then(({ data }) => {
+  api.get("/api/settings/bilibili_qn").then((data) => {
     if (data.value) {
-      qns.value = data.value.split(',')
+      qns.value = data.value.split(",");
     }
-  })
-}
+  });
+};
 
 const getFnval = () => {
-  axios.get('/api/settings/bilibili_fnval').then(({ data }) => {
-    let val = +data.value
+  api.get("/api/settings/bilibili_fnval").then((data) => {
+    let val = +data.value;
     if (!val) {
-      val = 2512
+      val = 2512;
     }
-    let num = 64
+    let num = 64;
     for (let i = 0; i < checks.value.length; i++) {
-      checks.value[i] = (val & num) != 0
-      num *= 2
+      checks.value[i] = (val & num) != 0;
+      num *= 2;
     }
-  })
-}
+  });
+};
 
 const load = () => {
-  return axios.get('/api/nav').then(({ data }) => {
-    list.value = data
-    list.value.sort((a, b) => a.order - b.order)
-    changed.value = false
-    return data
-  })
-}
+  return api.get("/api/nav").then((data) => {
+    list.value = data;
+    list.value.sort((a, b) => a.order - b.order);
+    changed.value = false;
+    return data;
+  });
+};
 
 const loadUser = () => {
-  axios.get('/api/bilibili/status').then(({ data }) => {
-    userInfo.value = data
-  })
-}
+  api.get("/api/bilibili/status").then((data) => {
+    userInfo.value = data;
+  });
+};
 
 onMounted(() => {
-  loadUser()
-  getHeartbeat()
-  getSearchable()
-  getBilibiliCookie()
-  getDash()
-  getQn()
+  loadUser();
+  getHeartbeat();
+  getSearchable();
+  getBilibiliCookie();
+  getDash();
+  getQn();
   load().then(() => {
-    rowDrop()
-  })
-})
+    rowDrop();
+  });
+});
 </script>
 
 <style scoped>

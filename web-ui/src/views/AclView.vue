@@ -2,10 +2,10 @@
   <div class="files">
     <h1>AList访问控制</h1>
     <el-row justify="end">
-      <el-button @click="load">刷新</el-button>
-      <el-button type="primary" @click="handleAdd">添加</el-button>
+      <el-button @click="load"> 刷新 </el-button>
+      <el-button type="primary" @click="handleAdd"> 添加 </el-button>
     </el-row>
-    <div class="space"></div>
+    <div class="space" />
 
     <el-table :data="rules" border style="width: 100%">
       <el-table-column prop="name" label="名称/Token" />
@@ -20,13 +20,13 @@
       <el-table-column prop="exclude" label="黑名单" />
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
-          <el-button type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
-          <el-button type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
+          <el-button type="primary" size="small" @click="handleEdit(scope.row)"> 编辑 </el-button>
+          <el-button type="danger" size="small" @click="handleDelete(scope.row)"> 删除 </el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <div class="divider"></div>
+    <div class="divider" />
 
     <div>
       <h3>说明</h3>
@@ -43,7 +43,7 @@
       <el-form :model="form" label-width="120">
         <el-form-item label="名称/Token" required>
           <el-input v-model="form.name" autocomplete="off" />
-          <a :href="currentUrl + '/sub/' + form.name + '/0'" target="_blank" v-if="form.name">
+          <a v-if="form.name" :href="currentUrl + '/sub/' + form.name + '/0'" target="_blank">
             {{ currentUrl }}/sub/{{ form.name }}/0
           </a>
         </el-form-item>
@@ -67,7 +67,9 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="handleCancel">取消</el-button>
-          <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
+          <el-button type="primary" @click="handleConfirm">{{
+            updateAction ? "更新" : "添加"
+          }}</el-button>
         </span>
       </template>
     </el-dialog>
@@ -86,87 +88,87 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import axios from 'axios'
+import { onMounted, ref } from "vue";
+import { api } from "@/services/api";
 
 interface Rule {
-  id: number
-  name: string
-  include: string
-  exclude: string
+  id: number;
+  name: string;
+  include: string;
+  exclude: string;
 }
 
-const currentUrl = window.location.origin
-const updateAction = ref(false)
-const dialogTitle = ref('')
-const rules = ref<Rule[]>([])
-const formVisible = ref(false)
-const dialogVisible = ref(false)
+const currentUrl = window.location.origin;
+const updateAction = ref(false);
+const dialogTitle = ref("");
+const rules = ref<Rule[]>([]);
+const formVisible = ref(false);
+const dialogVisible = ref(false);
 const form = ref<Rule>({
   id: 0,
-  name: '',
-  include: '',
-  exclude: '',
-})
+  name: "",
+  include: "",
+  exclude: "",
+});
 
 const handleAdd = () => {
-  dialogTitle.value = '添加规则'
-  updateAction.value = false
+  dialogTitle.value = "添加规则";
+  updateAction.value = false;
   form.value = {
     id: 0,
-    name: '',
-    include: '',
-    exclude: '',
-  }
-  formVisible.value = true
-}
+    name: "",
+    include: "",
+    exclude: "",
+  };
+  formVisible.value = true;
+};
 
 const handleEdit = (file: Rule) => {
-  dialogTitle.value = '更新规则 - ' + file.id
-  updateAction.value = true
-  const rule = Object.assign({}, file)
-  rule.include = rule.include.replace(/,/g, '\n')
-  rule.exclude = rule.exclude.replace(/,/g, '\n')
-  form.value = rule
-  formVisible.value = true
-}
+  dialogTitle.value = "更新规则 - " + file.id;
+  updateAction.value = true;
+  const rule = Object.assign({}, file);
+  rule.include = rule.include.replace(/,/g, "\n");
+  rule.exclude = rule.exclude.replace(/,/g, "\n");
+  form.value = rule;
+  formVisible.value = true;
+};
 
 const handleDelete = (data: any) => {
-  form.value = data
-  dialogVisible.value = true
-}
+  form.value = data;
+  dialogVisible.value = true;
+};
 
 const deleteSub = () => {
-  dialogVisible.value = false
-  axios.delete('/api/tenants/' + form.value.id).then(() => {
-    load()
-  })
-}
+  dialogVisible.value = false;
+  api.delete("/api/tenants/" + form.value.id).then(() => {
+    load();
+  });
+};
 
 const handleCancel = () => {
-  formVisible.value = false
-}
+  formVisible.value = false;
+};
 
 const handleConfirm = () => {
-  const url = updateAction.value ? '/api/tenants/' + form.value.id : '/api/tenants'
-  const rule = Object.assign({}, form.value)
-  rule.include = rule.include.replace(/\n/g, ',')
-  rule.exclude = rule.exclude.replace(/\n/g, ',')
-  axios.post(url, rule).then(() => {
-    formVisible.value = false
-    load()
-  })
-}
+  const url = updateAction.value ? "/api/tenants/" + form.value.id : "/api/tenants";
+  const rule = Object.assign({}, form.value);
+  rule.include = rule.include.replace(/\n/g, ",");
+  rule.exclude = rule.exclude.replace(/\n/g, ",");
+  api.post(url, rule).then(() => {
+    formVisible.value = false;
+    load();
+  });
+};
 
 const load = () => {
-  axios.get('/api/tenants').then(({ data }) => {
-    rules.value = data
-  })
-}
+  api.get("/api/tenants").then((data) => {
+    rules.value = data;
+  });
+};
 
 onMounted(() => {
-  load()
-})
+  load();
+});
 </script>
 
 <style scoped>

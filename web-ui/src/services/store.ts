@@ -1,4 +1,4 @@
-import { reactive } from 'vue'
+import { reactive } from "vue";
 
 export const store = reactive({
   xiaoya: false,
@@ -6,9 +6,9 @@ export const store = reactive({
   docker: false,
   standalone: false,
   admin: false,
-  installMode: '',
-  baseUrl: '',
-  token: '',
-  role: 'USER',
+  installMode: "",
+  baseUrl: "",
+  token: "",
+  role: "USER",
   aListStatus: 0,
-})
+});

@@ -2,10 +2,10 @@
   <div class="sites">
     <h1>Jellyfin站点列表</h1>
     <el-row justify="end">
-      <el-button @click="load">刷新</el-button>
-      <el-button type="primary" @click="handleAdd">添加</el-button>
+      <el-button @click="load"> 刷新 </el-button>
+      <el-button type="primary" @click="handleAdd"> 添加 </el-button>
     </el-row>
-    <div class="space"></div>
+    <div class="space" />
 
     <el-table :data="sites" border style="width: 100%">
       <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
@@ -19,8 +19,12 @@
       </el-table-column>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
-          <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
-          <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
+          <el-button link type="primary" size="small" @click="handleEdit(scope.row)">
+            编辑
+          </el-button>
+          <el-button link type="danger" size="small" @click="handleDelete(scope.row)">
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -61,7 +65,9 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="handleCancel">取消</el-button>
-          <el-button type="primary" @click="handleConfirm">{{ updateAction ? '更新' : '添加' }}</el-button>
+          <el-button type="primary" @click="handleConfirm">{{
+            updateAction ? "更新" : "添加"
+          }}</el-button>
         </span>
       </template>
     </el-dialog>
@@ -80,87 +86,87 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import axios from 'axios'
+import { onMounted, ref } from "vue";
+import { api } from "@/services/api";
 
-const updateAction = ref(false)
-const dialogTitle = ref('')
-const sites = ref([])
-const formVisible = ref(false)
-const dialogVisible = ref(false)
+const updateAction = ref(false);
+const dialogTitle = ref("");
+const sites = ref([]);
+const formVisible = ref(false);
+const dialogVisible = ref(false);
 const form = ref({
   id: 0,
-  name: '',
-  url: '',
-  userAgent: '',
-  username: '',
-  password: '',
-  clientName: '',
-  clientVersion: '',
-  deviceId: '',
-  deviceName: '',
+  name: "",
+  url: "",
+  userAgent: "",
+  username: "",
+  password: "",
+  clientName: "",
+  clientVersion: "",
+  deviceId: "",
+  deviceName: "",
   order: 0,
-})
+});
 
 const handleAdd = () => {
-  dialogTitle.value = '添加Jellyfin站点'
-  updateAction.value = false
+  dialogTitle.value = "添加Jellyfin站点";
+  updateAction.value = false;
   form.value = {
     id: 0,
-    name: '',
-    url: '',
-    userAgent: '',
-    username: '',
-    password: '',
-    clientName: '',
-    clientVersion: '',
-    deviceId: '',
-    deviceName: '',
+    name: "",
+    url: "",
+    userAgent: "",
+    username: "",
+    password: "",
+    clientName: "",
+    clientVersion: "",
+    deviceId: "",
+    deviceName: "",
     order: 0,
-  }
-  formVisible.value = true
-}
+  };
+  formVisible.value = true;
+};
 
 const handleEdit = (data: any) => {
-  dialogTitle.value = '更新Jellyfin站点 - ' + data.name
-  updateAction.value = true
-  form.value = Object.assign({}, data)
-  formVisible.value = true
-}
+  dialogTitle.value = "更新Jellyfin站点 - " + data.name;
+  updateAction.value = true;
+  form.value = Object.assign({}, data);
+  formVisible.value = true;
+};
 
 const handleDelete = (data: any) => {
-  form.value = data
-  dialogVisible.value = true
-}
+  form.value = data;
+  dialogVisible.value = true;
+};
 
 const deleteSite = () => {
-  dialogVisible.value = false
-  axios.delete('/api/jellyfin/' + form.value.id).then(() => {
-    load()
-  })
-}
+  dialogVisible.value = false;
+  api.delete("/api/jellyfin/" + form.value.id).then(() => {
+    load();
+  });
+};
 
 const handleCancel = () => {
-  formVisible.value = false
-}
+  formVisible.value = false;
+};
 
 const handleConfirm = () => {
-  const url = updateAction.value ? '/api/jellyfin/' + form.value.id : '/api/jellyfin'
-  axios.post(url, form.value).then(() => {
-    formVisible.value = false
-    load()
-  })
-}
+  const url = updateAction.value ? "/api/jellyfin/" + form.value.id : "/api/jellyfin";
+  api.post(url, form.value).then(() => {
+    formVisible.value = false;
+    load();
+  });
+};
 
 const load = () => {
-  axios.get('/api/jellyfin').then(({ data }) => {
-    sites.value = data
-  })
-}
+  api.get("/api/jellyfin").then((data) => {
+    sites.value = data;
+  });
+};
 
 onMounted(() => {
-  load()
-})
+  load();
+});
 </script>
 
 <style scoped>
