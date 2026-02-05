@@ -6,6 +6,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
+/**
+ * STRM Storage implementation.
+ * Note: STRM configuration JSON is stored in Share.cookie field (TEXT type)
+ * instead of folderId to avoid VARCHAR(255) size limitations.
+ */
 @Slf4j
 public class StrmStorage extends Storage {
     private static final ObjectMapper mapper = new ObjectMapper();
@@ -13,14 +18,19 @@ public class StrmStorage extends Storage {
     public StrmStorage(Share share) {
         super(share, "Strm");
         
+        // STRM 类型使用 Share.cookie 字段存储配置 JSON（因为 cookie 是 TEXT 类型，可存储任意大小）
         try {
-            parseStrmConfig(share.getFolderId());
+            parseStrmConfig(share.getCookie());
         } catch (Exception e) {
             log.error("Failed to parse STRM config", e);
             throw new RuntimeException("STRM配置解析失败: " + e.getMessage());
         }
     }
     
+    /**
+     * 解析 STRM 配置 JSON
+     * @param configJson 从 Share.cookie 字段读取的配置 JSON 字符串
+     */
     private void parseStrmConfig(String configJson) throws Exception {
         if (StringUtils.isBlank(configJson)) {
             throw new IllegalArgumentException("STRM配置不能为空");

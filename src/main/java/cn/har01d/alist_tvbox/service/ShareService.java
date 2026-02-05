@@ -1045,15 +1045,15 @@ public class ShareService {
             }
         }
         
-        // STRM 类型需要验证 folderId 包含有效的 JSON 配置
+        // STRM 类型使用 cookie 字段存储配置 JSON
         if (share.getType() == 11) {
-            if (StringUtils.isBlank(share.getFolderId())) {
+            if (StringUtils.isBlank(share.getCookie())) {
                 throw new BadRequestException("STRM配置不能为空");
             }
             try {
                 // 验证 JSON 格式
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                mapper.readTree(share.getFolderId());
+                mapper.readTree(share.getCookie());
             } catch (Exception e) {
                 throw new BadRequestException("STRM配置格式错误: " + e.getMessage());
             }
@@ -1065,10 +1065,12 @@ public class ShareService {
     }
 
     private void fixStrmConfig(Share share) {
+        // STRM 类型: 将 strmConfig 对象序列化到 cookie 字段
         if (share.getType() == 11 && share.getStrmConfig() != null) {
             try {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                share.setFolderId(mapper.writeValueAsString(share.getStrmConfig()));
+                String jsonConfig = mapper.writeValueAsString(share.getStrmConfig());
+                share.setCookie(jsonConfig);
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());
             }
@@ -1076,7 +1078,7 @@ public class ShareService {
     }
 
     private static void fixFolderId(Share share) {
-        // STRM 类型的 folderId 包含 JSON 配置，不需要修正
+        // STRM 类型使用 cookie 字段存储配置，folderId 不需要修正
         if (share.getType() == 11) {
             return;
         }

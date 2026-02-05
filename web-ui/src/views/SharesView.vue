@@ -655,9 +655,10 @@ const handleEdit = (data: ShareInfo) => {
     saveStrmLocalPath: "",
     saveLocalMode: "update",
   };
-  if (data.type === 11 && data.folderId) {
+  // Parse STRM config from cookie field (backend stores it there to avoid VARCHAR(255) limit)
+  if (data.type === 11 && data.cookie) {
     try {
-      strmConfig = JSON.parse(data.folderId);
+      strmConfig = JSON.parse(data.cookie);
     } catch (e) {
       console.error("Failed to parse STRM config:", e);
     }
