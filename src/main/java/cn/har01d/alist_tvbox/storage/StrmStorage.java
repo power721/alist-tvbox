@@ -17,6 +17,7 @@ public class StrmStorage extends Storage {
     
     public StrmStorage(Share share) {
         super(share, "Strm");
+        setWebdavPolicy("native_proxy");
         
         // STRM 类型使用 Share.cookie 字段存储配置 JSON（因为 cookie 是 TEXT 类型，可存储任意大小）
         try {

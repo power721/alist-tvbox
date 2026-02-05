@@ -194,7 +194,11 @@
   <el-dialog v-model="formVisible" width="60%" :title="dialogTitle">
     <el-form :model="form">
       <el-form-item label="挂载路径" label-width="140" required>
-        <el-input v-model="form.path" autocomplete="off" />
+        <el-input
+          v-model="form.path"
+          autocomplete="off"
+          placeholder="默认为根目录 (STRM类型如果不以/开头，将自动补充/strm/前缀)"
+        />
       </el-form-item>
       <el-form-item
         v-if="form.type != 4 && form.type != 11"
@@ -275,7 +279,7 @@
           <el-input
             v-model="form.strmConfig.saveStrmLocalPath"
             autocomplete="off"
-            placeholder="本地保存的路径，例如：local_strm"
+            placeholder="本地保存的路径，例如：local_strm (如果不以/开头，将自动补充/data/前缀)"
           />
         </el-form-item>
         <el-form-item v-if="form.strmConfig.saveStrmToLocal" label="保存模式" label-width="140">
@@ -591,7 +595,7 @@ const form = ref<ShareInfo>({
   type: -1,
   strmConfig: {
     paths: "",
-    siteUrl: "",
+    siteUrl: window.location.origin,
     pathPrefix: "/d",
     downloadFileTypes: "ass,srt,vtt,sub,strm",
     filterFileTypes: "mp4,mkv,flv,avi,wmv,ts,rmvb,webm,mp3,flac,aac,wav,ogg,m4a,wma,alac",
@@ -623,11 +627,11 @@ const handleAdd = () => {
     type: 0,
     strmConfig: {
       paths: "",
-      siteUrl: "",
+      siteUrl: window.location.origin,
       pathPrefix: "/d",
       downloadFileTypes: "ass,srt,vtt,sub,strm",
       filterFileTypes: "mp4,mkv,flv,avi,wmv,ts,rmvb,webm,mp3,flac,aac,wav,ogg,m4a,wma,alac",
-      encodePath: true,
+      encodePath: false,
       withoutUrl: false,
       withSign: false,
       saveStrmToLocal: false,
@@ -759,13 +763,21 @@ const fullPath = (share: any) => {
   } else if (share.type == 4) {
     return path;
   } else if (share.type == 11) {
-    return path;
+    // STRM: 如果不以 / 开头，自动补充 /strm/ 前缀
+    return path.startsWith("/") ? path : "/strm/" + path;
   } else {
     return "/🈴我的阿里分享/" + path;
   }
 };
 
 const handleConfirm = () => {
+  if (
+    form.value.type === 11 &&
+    form.value.strmConfig?.saveStrmLocalPath &&
+    !form.value.strmConfig.saveStrmLocalPath.startsWith("/")
+  ) {
+    form.value.strmConfig.saveStrmLocalPath = "/data/" + form.value.strmConfig.saveStrmLocalPath;
+  }
   api.post("/api/shares/" + form.value.id, form.value).then(() => {
     formVisible.value = false;
     loadShares(page.value);
