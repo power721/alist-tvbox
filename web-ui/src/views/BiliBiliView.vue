@@ -316,17 +316,17 @@ const rowDrop = () => {
       activeRows.value = treeToTile(list.value);
       const oldRow = activeRows.value[(dragged as HTMLTableRowElement).rowIndex];
       const newRow = activeRows.value[(related as HTMLTableRowElement).rowIndex];
-      if ((oldRow.type == 2) !== (newRow.type == 2)) {
+      if (oldRow && newRow && (oldRow.type == 2) !== (newRow.type == 2)) {
         return false;
       }
-      return !(oldRow.type === 2 && oldRow.parentId !== newRow.parentId);
+      return !(oldRow && newRow && oldRow.type === 2 && oldRow.parentId !== newRow.parentId);
     },
     onEnd: (event: any) => {
       const oldIndex = event.oldIndex;
       const newIndex = event.newIndex;
       const oldRow = activeRows.value[oldIndex];
       const newRow = activeRows.value[newIndex];
-      if (!oldRow || oldIndex === newIndex || oldRow.id === newRow.id) {
+      if (!oldRow || !newRow || oldIndex === newIndex || oldRow.id === newRow.id) {
         return;
       }
 
@@ -360,8 +360,8 @@ const rowDrop = () => {
         setTimeout(() => rowDrop(), 500);
       }
 
-      oldRow.changed = true;
-      newRow.changed = true;
+      if (oldRow) oldRow.changed = true;
+      if (newRow) newRow.changed = true;
       changed.value = true;
     },
   });
