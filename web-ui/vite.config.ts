@@ -9,6 +9,22 @@ const API: string = 'http://127.0.0.1:4567'
 export default defineConfig({
   build: {
     outDir: '../src/main/resources/static',
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('element-plus')) {
+              return 'element-plus';
+            }
+            if (id.includes('@vue') || id.includes('vue')) {
+              return 'framework';
+            }
+            return 'vendor';
+          }
+        },
+      },
+    },
   },
   plugins: [vue()],
   resolve: {
