@@ -375,9 +375,10 @@ const loadFiles = (id: string) => {
 };
 
 const extractPaths = (id: string) => {
-  const path = decodeURIComponent(id)
-    .replace(form.value.id + "$", "")
-    .split("$")[0];
+  const path =
+    decodeURIComponent(id)
+      .replace(form.value.id + "$", "")
+      .split("$")[0] || "";
   if (path == "/") {
     paths.value = [{ path: "/", text: "首页" }];
     return;
