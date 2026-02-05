@@ -1,5 +1,5 @@
-import {createRouter, createWebHashHistory} from 'vue-router'
-import HomeView from '@/views/HomeView.vue'
+import { createRouter, createWebHashHistory } from "vue-router";
+import HomeView from "@/views/HomeView.vue";
 import SitesView from "@/views/SitesView.vue";
 import SubscriptionsView from "@/views/SubscriptionsView.vue";
 import ConfigView from "@/views/ConfigView.vue";
@@ -29,177 +29,177 @@ import UsersView from "@/views/UsersView.vue";
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
-  linkActiveClass: 'is-active',
+  linkActiveClass: "is-active",
   routes: [
     {
-      path: '/',
-      name: 'home',
+      path: "/",
+      name: "home",
       component: HomeView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/wait',
-      name: 'wait',
+      path: "/wait",
+      name: "wait",
       component: WaitAList,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/logs',
-      name: 'logs',
+      path: "/logs",
+      name: "logs",
       component: LogsView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/index',
-      name: 'index',
+      path: "/index",
+      name: "index",
       component: IndexView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/system',
-      name: 'system',
+      path: "/system",
+      name: "system",
       component: SystemInfo,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/accounts',
-      name: 'accounts',
+      path: "/accounts",
+      name: "accounts",
       component: AccountsView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/pikpak',
-      name: 'pikpak',
+      path: "/pikpak",
+      name: "pikpak",
       component: PikPakView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/sites',
-      name: 'sites',
+      path: "/sites",
+      name: "sites",
       component: SitesView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/emby',
-      name: 'emby',
+      path: "/emby",
+      name: "emby",
       component: EmbyView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/bilibili',
-      name: 'bilibili',
+      path: "/bilibili",
+      name: "bilibili",
       component: BiliBiliView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/files',
-      name: 'files',
+      path: "/files",
+      name: "files",
       component: FilesView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/meta',
-      name: 'meta',
+      path: "/meta",
+      name: "meta",
       component: MetaView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/tmdb',
-      name: 'tmdb',
+      path: "/tmdb",
+      name: "tmdb",
       component: TmdbView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/alias',
-      name: 'alias',
+      path: "/alias",
+      name: "alias",
       component: AliasView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/subscriptions',
-      name: 'subscriptions',
+      path: "/subscriptions",
+      name: "subscriptions",
       component: SubscriptionsView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/shares',
-      name: 'shares',
+      path: "/shares",
+      name: "shares",
       component: SharesView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/user',
-      name: 'user',
+      path: "/user",
+      name: "user",
       component: UserView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/users',
-      name: 'users',
+      path: "/users",
+      name: "users",
       component: UsersView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/config',
-      name: 'config',
+      path: "/config",
+      name: "config",
       component: ConfigView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/acl',
-      name: 'acl',
+      path: "/acl",
+      name: "acl",
       component: AclView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/sub/:id',
-      name: 'sub',
+      path: "/sub/:id",
+      name: "sub",
       component: SubView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/live',
-      name: 'liveHome',
+      path: "/live",
+      name: "liveHome",
       component: LiveView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/live/:id',
-      name: 'live',
+      path: "/live/:id",
+      name: "live",
       component: LiveView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/vod/:path*',
-      name: 'vod-path',
+      path: "/vod/:path*",
+      name: "vod-path",
       component: VodView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/vod-api',
-      name: 'vod-api',
+      path: "/vod-api",
+      name: "vod-api",
       component: VodApiView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/search',
-      name: 'search',
+      path: "/search",
+      name: "search",
       component: SearchView,
-      meta: {auth: true}
+      meta: { auth: true },
     },
     {
-      path: '/login',
-      name: 'login',
+      path: "/login",
+      name: "login",
       component: LoginView,
-      meta: {guest: true}
+      meta: { guest: true },
     },
     {
-      path: '/about',
-      name: 'about',
+      path: "/about",
+      name: "about",
       component: AboutView,
-      meta: {auth: true}
-    }
-  ]
-})
+      meta: { auth: true },
+    },
+  ],
+});
 
-export default router
+export default router;

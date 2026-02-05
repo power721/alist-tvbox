@@ -20,8 +20,10 @@
       <div>JRE目录： {{ info.javaHome }}</div>
       <div>JVM名称： {{ info.jvmName }}</div>
       <div>JVM CPU： {{ info.jvmCpus }}核</div>
-      <div>JVM 内存：
-        <span data-tooltip="空闲内存">{{ byte2string(info.jvmUsedMemory)}}</span> /
+      <div>
+        JVM 内存：
+        <span data-tooltip="空闲内存">{{ byte2string(info.jvmUsedMemory) }}</span>
+        /
         <span data-tooltip="总内存">{{ byte2string(info.jvmTotalMemory) }}</span>
       </div>
     </el-card>
@@ -58,20 +60,20 @@
       <div>AList端口： {{ info.alistPort }}</div>
       <div>PID： {{ info.pid }}</div>
     </el-card>
-
   </div>
-</template>L
+</template>
+L
 
 <script setup lang="ts">
-import {onMounted, ref} from "vue";
-import axios from "axios";
+import { onMounted, ref } from "vue";
+import { api } from "@/services/api";
 
-const info = ref<any>({})
+const info = ref<any>({});
 const load = () => {
-  axios.get('/api/system').then(({data}) => {
-    info.value = data
-  })
-}
+  api.get("/api/system").then((data) => {
+    info.value = data;
+  });
+};
 
 const KB = 1024;
 const MB = 1024 * KB;
@@ -79,39 +81,38 @@ const GB = 1024 * MB;
 const TB = 1024 * GB;
 const PB = 1024 * TB;
 const EB = 1024 * PB;
-const ZB = 1024 * EB;
 
 const number2string = (num: number, fractionDigits = 2) => {
   let str = num.toFixed(fractionDigits);
-  while (str.endsWith('0')) {
+  while (str.endsWith("0")) {
     str = str.substring(0, str.length - 1);
   }
-  if (str.endsWith('.')) {
+  if (str.endsWith(".")) {
     str = str.substring(0, str.length - 1);
   }
   return str;
-}
-const byte2string = (bytes: number, unit = '') => {
-  if (bytes >= EB || unit === 'EB') {
-    return number2string(bytes / EB) + ' EB';
-  } else if (bytes >= PB || unit === 'PB') {
-    return number2string(bytes / PB) + ' PB';
-  } else if (bytes >= TB || unit === 'TB') {
-    return number2string(bytes / TB) + ' TB';
-  } else if (bytes >= GB || unit === 'GB') {
-    return number2string(bytes / GB) + ' GB';
-  } else if (bytes >= MB || unit === 'MB') {
-    return number2string(bytes / MB) + ' MB';
-  } else if (bytes >= KB || unit === 'KB') {
-    return number2string(bytes / KB) + ' KB';
+};
+const byte2string = (bytes: number, unit = "") => {
+  if (bytes >= EB || unit === "EB") {
+    return number2string(bytes / EB) + " EB";
+  } else if (bytes >= PB || unit === "PB") {
+    return number2string(bytes / PB) + " PB";
+  } else if (bytes >= TB || unit === "TB") {
+    return number2string(bytes / TB) + " TB";
+  } else if (bytes >= GB || unit === "GB") {
+    return number2string(bytes / GB) + " GB";
+  } else if (bytes >= MB || unit === "MB") {
+    return number2string(bytes / MB) + " MB";
+  } else if (bytes >= KB || unit === "KB") {
+    return number2string(bytes / KB) + " KB";
   } else {
-    return bytes + ' bytes';
+    return bytes + " bytes";
   }
-}
+};
 
 onMounted(() => {
-  load()
-})
+  load();
+});
 </script>
 
 <style scoped>

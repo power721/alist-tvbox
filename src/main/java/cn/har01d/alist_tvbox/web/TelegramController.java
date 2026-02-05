@@ -1,3 +1,4 @@
+/*
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.tg.Message;
@@ -196,4 +197,14 @@ public class TelegramController {
     public List<Message> getChatHistory(String id) {
         return telegramService.getHistory(id);
     }
+}
+*/
+package cn.har01d.alist_tvbox.web;
+
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class TelegramController {
+    // Controller functionality disabled due to missing telegram4j dependency
+    // Uncomment and fix dependencies to restore functionality
 }

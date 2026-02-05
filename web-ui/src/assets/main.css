@@ -1,33 +1,33 @@
-@import './base.css';
+@import "./base.css";
 
 span.info {
-    color: #337ecc;
+  color: #337ecc;
 }
 
 span.success {
-    color: #67c23a;
+  color: #67c23a;
 }
 
 span.error {
-    color: #f56c6c;
+  color: #f56c6c;
 }
 
 .el-table .warning-row {
-    --el-table-tr-bg-color: var(--el-color-warning-light-9);
+  --el-table-tr-bg-color: var(--el-color-warning-light-9);
 }
 
 .vod tr.el-table__row {
-    cursor: pointer;
+  cursor: pointer;
 }
 
 div.el-dialog.player {
-    padding: 6px;
+  padding: 6px;
 }
 
 div.player .el-descriptions__body .el-descriptions__table:not(.is-bordered) .el-descriptions__cell {
-    padding-bottom: 6px;
+  padding-bottom: 6px;
 }
 
 div.player .el-dialog__header {
-    padding-bottom: 0;
+  padding-bottom: 0;
 }
