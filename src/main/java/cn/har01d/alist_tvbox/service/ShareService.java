@@ -971,6 +971,7 @@ public class ShareService {
 
     public Share create(Share share) {
         aListLocalService.validateAListStatus();
+        fixStrmConfig(share);
         validate(share);
         parseShare(share);
         fixFolderId(share);
@@ -1004,6 +1005,7 @@ public class ShareService {
 
     public Share update(Integer id, Share share) {
         aListLocalService.validateAListStatus();
+        fixStrmConfig(share);
         validate(share);
         parseShare(share);
         fixFolderId(share);
@@ -1059,6 +1061,17 @@ public class ShareService {
 
         if (share.getCookie() != null) {
             share.setCookie(share.getCookie().trim());
+        }
+    }
+
+    private void fixStrmConfig(Share share) {
+        if (share.getType() == 11 && share.getStrmConfig() != null) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                share.setFolderId(mapper.writeValueAsString(share.getStrmConfig()));
+            } catch (Exception e) {
+                log.warn("{}", e.getMessage());
+            }
         }
     }
 

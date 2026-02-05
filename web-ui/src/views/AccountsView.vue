@@ -173,9 +173,11 @@
       <el-form :model="form" label-width="auto">
         <el-form-item v-if="form.accessTokenOpen" prop="accessTokenOpen" label="开放access token">
           <el-input v-model="form.accessTokenOpen" maxlength="128" readonly />
-          <span class="hint">创建时间： {{ formatTime(iat[1]) }}</span>
-          <span class="hint">更新时间： {{ formatTime(form.accessTokenOpenTime) }}</span>
-          <span class="hint">过期时间： {{ formatTime(exp[1]) }}</span>
+          <div v-if="iat.length > 1 && exp.length > 1">
+            <span class="hint">创建时间： {{ formatTime(iat[1]!) }}</span>
+            <span class="divider" />
+            <span class="hint">过期时间： {{ formatTime(exp[1]!) }}</span>
+          </div>
         </el-form-item>
         <el-form-item prop="refreshToken" label="阿里refresh token" required>
           <el-input v-model="form.refreshToken" maxlength="128" placeholder="长度32位" />
@@ -202,9 +204,11 @@
           <div class="hint">
             TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码获取</a>
           </div>
-          <span class="hint">创建时间： {{ formatTime(iat[2]) }}</span>
-          <span class="hint">更新时间： {{ formatTime(form.openTokenTime) }}</span>
-          <span class="hint">过期时间： {{ formatTime(exp[2]) }}</span>
+          <div v-if="iat.length > 2 && exp.length > 2">
+            <span class="hint">创建时间： {{ formatTime(iat[2]!) }}</span>
+            <span class="divider" />
+            <span class="hint">过期时间： {{ formatTime(exp[2]!) }}</span>
+          </div>
         </el-form-item>
         <el-form-item v-if="form.openToken" label="加载我的云盘">
           <el-switch
@@ -359,6 +363,11 @@ const form = ref({
 });
 
 const formatTime = (value: string | number) => {
+  // JWT iat/exp are in seconds, Date constructor expects milliseconds
+  if (typeof value === "number" && value < 10000000000) {
+    // Heuristic to check if it's likely seconds
+    return new Date(value * 1000).toLocaleString("zh-cn");
+  }
   return new Date(value).toLocaleString("zh-cn");
 };
 
@@ -366,19 +375,42 @@ const showDetails = (data: any) => {
   form.value = Object.assign({}, data);
   updateAction.value = true;
   if (form.value.accessToken) {
-    const details = JSON.parse(atob(form.value.accessToken.split(".")[1]));
-    iat.value[0] = details.iat * 1000;
-    exp.value[0] = details.exp * 1000;
+    const parts = form.value.accessToken.split(".");
+    if (parts.length > 1) {
+      const details = JSON.parse(atob(parts[1]!));
+      if (details.iat) {
+        iat.value[1] = details.iat;
+      }
+      if (details.exp) {
+        exp.value[1] = details.exp;
+      }
+    }
   }
+
   if (form.value.accessTokenOpen) {
-    const details = JSON.parse(atob(form.value.accessTokenOpen.split(".")[1]));
-    iat.value[1] = details.iat * 1000;
-    exp.value[1] = details.exp * 1000;
+    const parts = form.value.accessTokenOpen.split(".");
+    if (parts.length > 1) {
+      const details = JSON.parse(atob(parts[1]!));
+      if (details.iat) {
+        iat.value[2] = details.iat;
+      }
+      if (details.exp) {
+        exp.value[2] = details.exp;
+      }
+    }
   }
+
   if (form.value.openToken) {
-    const details = JSON.parse(atob(form.value.openToken.split(".")[1]));
-    iat.value[2] = details.iat * 1000;
-    exp.value[2] = details.exp * 1000;
+    const parts = form.value.openToken.split(".");
+    if (parts.length > 1) {
+      const details = JSON.parse(atob(parts[1]!));
+      if (details.iat) {
+        iat.value[2] = details.iat;
+      }
+      if (details.exp) {
+        exp.value[2] = details.exp;
+      }
+    }
   }
   detailVisible.value = true;
 };

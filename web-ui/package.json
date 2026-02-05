@@ -23,8 +23,8 @@
     "sortablejs": "^1.15.6",
     "vue": "^3.5.27",
     "vue-draggable-plus": "^0.6.1",
-    "vue-json-viewer": "^3.0.4",
-    "vue-router": "^5.0.2"
+    "vue-router": "^5.0.2",
+    "vue3-json-viewer": "^2.4.1"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
