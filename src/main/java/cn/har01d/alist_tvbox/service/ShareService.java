@@ -416,11 +416,28 @@ public class ShareService {
                     } else {
                         share.setShareId(parts[1]);
                     }
-                    if (parts.length > 2) {
-                        share.setFolderId(parts[2]);
-                    }
-                    if (parts.length > 3) {
-                        share.setPassword(parts[3]);
+                    
+                    // Special handling for STRM type (11:STRM)
+                    if (share.getType() == 11 && "STRM".equals(share.getShareId())) {
+                        // For STRM, parts[2] is the Base64 encoded cookie JSON
+                        if (parts.length > 2) {
+                            try {
+                                byte[] decodedBytes = java.util.Base64.getDecoder().decode(parts[2]);
+                                share.setCookie(new String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8));
+                            } catch (Exception e) {
+                                log.warn("Failed to decode STRM cookie: {}", e.getMessage());
+                            }
+                        }
+                        // STRM uses empty shareId
+                        share.setShareId("");
+                    } else {
+                        // Standard format for other types
+                        if (parts.length > 2) {
+                            share.setFolderId(parts[2]);
+                        }
+                        if (parts.length > 3) {
+                            share.setPassword(parts[3]);
+                        }
                     }
                     share.setPath(getMountPath(share));
                     if (shareRepository.existsByPath(share.getPath())) {
@@ -475,12 +492,24 @@ public class ShareService {
             if (share.isTemp()) {
                 continue;
             }
-            sb.append(getMountPath(share).replace(" ", "")).append("  ")
-                    .append(share.getType()).append(":")
-                    .append(share.getShareId()).append("  ")
-                    .append(StringUtils.isBlank(share.getFolderId()) ? "root" : share.getFolderId()).append("  ")
-                    .append(share.getPassword())
-                    .append("\n");
+            
+            sb.append(getMountPath(share).replace(" ", "")).append("  ");
+            
+            // Special handling for STRM type (type 11)
+            if (share.getType() == 11) {
+                sb.append(share.getType()).append(":STRM").append("  ");
+                // Export the cookie field (Base64 encoded to avoid parsing issues)
+                String cookieJson = StringUtils.isBlank(share.getCookie()) ? "{}" : share.getCookie();
+                sb.append(java.util.Base64.getEncoder().encodeToString(cookieJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            } else {
+                // Standard format for other types
+                sb.append(share.getType()).append(":")
+                        .append(share.getShareId()).append("  ")
+                        .append(StringUtils.isBlank(share.getFolderId()) ? "root" : share.getFolderId()).append("  ")
+                        .append(share.getPassword());
+            }
+            
+            sb.append("\n");
         }
 
         log.info("export {} shares to file: {}", list.size(), fileName);
