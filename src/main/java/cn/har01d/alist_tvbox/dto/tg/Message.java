@@ -56,24 +56,24 @@ public class Message {
         }
     }
 
-    public Message(String channel, telegram4j.tl.BaseMessage message) {
-        this.id = message.id();
-        this.time = Instant.ofEpochSecond(message.date());
-        this.content = message.message();
-        this.link = parseLink();
-        this.name = parseName();
-        this.channel = channel;
-    }
+    // public Message(String channel, telegram4j.tl.BaseMessage message) {
+    //     this.id = message.id();
+    //     this.time = Instant.ofEpochSecond(message.date());
+    //     this.content = message.message();
+    //     this.link = parseLink();
+    //     this.name = parseName();
+    //     this.channel = channel;
+    // }
 
-    public Message(String channel, telegram4j.tl.BaseMessage message, String link) {
-        this.id = message.id();
-        this.time = Instant.ofEpochSecond(message.date());
-        this.content = message.message();
-        this.link = link;
-        this.type = parseType(link);
-        this.name = parseName();
-        this.channel = channel;
-    }
+    // public Message(String channel, telegram4j.tl.BaseMessage message, String link) {
+    //     this.id = message.id();
+    //     this.time = Instant.ofEpochSecond(message.date());
+    //     this.content = message.message();
+    //     this.link = link;
+    //     this.type = parseType(link);
+    //     this.name = parseName();
+    //     this.channel = channel;
+    // }
 
     public Message(SearchResult message, String link) {
         this.id = message.getId();
