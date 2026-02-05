@@ -32,6 +32,8 @@ public class Share {
     private boolean temp;
     private Instant time = Instant.now();
     private transient String error;
+    @jakarta.persistence.Transient
+    private Object strmConfig;
 
     @Override
     public boolean equals(Object o) {
