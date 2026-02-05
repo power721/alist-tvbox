@@ -19,7 +19,7 @@
     "mpegts.js": "^1.8.0",
     "sortablejs": "^1.15.6",
     "vue": "^3.5.27",
-    "vue-clipboard3": "^2.0.0",
+    "@vueuse/core": "^14.2.0",
     "vue-draggable-plus": "^0.6.1",
     "vue-json-viewer": "^3.0.4",
     "vue-router": "^5.0.2"

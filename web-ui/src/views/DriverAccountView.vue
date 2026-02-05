@@ -147,18 +147,12 @@
           <el-button type="primary" @click="copyLink">获取认证令牌</el-button>
           <div class="hint">通过认证后复制浏览器链接填入</div>
         </el-form-item>
-        <el-form-item
-          label="用户名"
-          v-if="form.type == 'THUNDER' || form.type == 'CLOUD189' || form.type == 'PAN123'"
-          required
-        >
+        <el-form-item label="用户名" v-if="form.type == 'THUNDER' || form.type == 'CLOUD189' || form.type == 'PAN123'"
+          required>
           <el-input v-model="form.username" :placeholder="form.type == 'THUNDER' ? '+86 12345678900' : ''" />
         </el-form-item>
-        <el-form-item
-          label="密码"
-          v-if="form.type == 'THUNDER' || form.type == 'CLOUD189' || form.type == 'PAN123'"
-          required
-        >
+        <el-form-item label="密码" v-if="form.type == 'THUNDER' || form.type == 'CLOUD189' || form.type == 'PAN123'"
+          required>
           <el-input type="password" show-password v-model="form.password" />
         </el-form-item>
         <el-form-item label="验证码" v-if="form.type == 'THUNDER' || form.type == 'CLOUD189'">
@@ -202,10 +196,8 @@
         <el-form-item v-if="supportProxy(form.type)" label="分片大小">
           <el-input-number :min="64" :max="4096" v-model="form.addition.chunk_size" />
         </el-form-item>
-        <el-form-item
-          label="主账号"
-          v-if="!driverRoundRobin && form.type != 'OPEN115' && form.type != 'QUARK_TV' && form.type != 'UC_TV'"
-        >
+        <el-form-item label="主账号"
+          v-if="!driverRoundRobin && form.type != 'OPEN115' && form.type != 'QUARK_TV' && form.type != 'UC_TV'">
           <el-switch v-model="form.master" inline-prompt active-text="是" inactive-text="否" />
           <span class="hint">主账号用来观看分享</span>
         </el-form-item>
@@ -271,9 +263,9 @@ import { onMounted, ref } from 'vue'
 import { Check, Close } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import clipBorad from 'vue-clipboard3'
+import { useClipboard } from '@vueuse/core'
 
-const { toClipboard } = clipBorad()
+const { copy } = useClipboard()
 
 const updateAction = ref(false)
 const dialogTitle = ref('')
@@ -590,7 +582,7 @@ const getInfo = () => {
 const copyLink = () => {
   const url =
     'https://openapi.baidu.com/oauth/2.0/authorize?response_type=token&scope=basic,netdisk&client_id=IlLqBbU3GjQ0t46TRwFateTprHWl39zF&redirect_uri=oob&confirm_login=0'
-  toClipboard(url).then(() => {
+  copy(url).then(() => {
     ElMessage.success('链接已复制，在新页面打开')
   })
 }
