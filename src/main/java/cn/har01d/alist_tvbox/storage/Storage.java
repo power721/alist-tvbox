@@ -113,9 +113,8 @@ public class Storage {
             return "/我的移动分享/" + path;
         } else if (share.getType() == 10) {
             return "/我的百度分享/" + path;
-        } else if (share.getType() == 4 || share.getType() == 11) {
-            // 本地存储和 STRM 存储直接返回路径
-            return path;
+        } else if (share.getType() == 11) {
+            return "/strm/" + path;
         }
         return path;
     }

@@ -40,6 +40,7 @@ import cn.har01d.alist_tvbox.storage.UCShare;
 import cn.har01d.alist_tvbox.storage.UrlTree;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
@@ -102,6 +103,7 @@ public class ShareService {
 
     private final int offset = 99900;
     private int shareId = 20000;
+    private final ObjectMapper objectMapper;
 
     public ShareService(AppProperties appProperties,
                         ShareRepository shareRepository,
@@ -117,7 +119,8 @@ public class ShareService {
                         ConfigFileService configFileService,
                         PikPakService pikPakService,
                         RestTemplateBuilder builder,
-                        Environment environment) {
+                        Environment environment,
+                        ObjectMapper objectMapper) {
         this.appProperties = appProperties;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
@@ -132,6 +135,7 @@ public class ShareService {
         this.configFileService = configFileService;
         this.pikPakService = pikPakService;
         this.environment = environment;
+        this.objectMapper = objectMapper;
         this.restTemplate = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).build();
     }
 
@@ -1074,17 +1078,16 @@ public class ShareService {
             }
         }
         
-        // STRM 类型需要验证 folderId 包含有效的 JSON 配置
+        // STRM 类型使用 cookie 字段存储配置 JSON
         if (share.getType() == 11) {
-            if (StringUtils.isBlank(share.getFolderId())) {
+            if (StringUtils.isBlank(share.getCookie())) {
                 throw new BadRequestException("STRM配置不能为空");
             }
             try {
                 // 验证 JSON 格式
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                mapper.readTree(share.getFolderId());
+                objectMapper.readTree(share.getCookie());
             } catch (Exception e) {
-                throw new BadRequestException("STRM配置格式错误: " + e.getMessage());
+                throw new BadRequestException("STRM配置格式错误", e);
             }
         }
 
@@ -1094,18 +1097,19 @@ public class ShareService {
     }
 
     private void fixStrmConfig(Share share) {
+        // STRM 类型: 将 strmConfig 对象序列化到 cookie 字段
         if (share.getType() == 11 && share.getStrmConfig() != null) {
             try {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                share.setFolderId(mapper.writeValueAsString(share.getStrmConfig()));
+                String jsonConfig = objectMapper.writeValueAsString(share.getStrmConfig());
+                share.setCookie(jsonConfig);
             } catch (Exception e) {
-                log.warn("{}", e.getMessage());
+                log.warn("解析STRM配置失败", e);
             }
         }
     }
 
     private static void fixFolderId(Share share) {
-        // STRM 类型的 folderId 包含 JSON 配置，不需要修正
+        // STRM 类型使用 cookie 字段存储配置，folderId 不需要修正
         if (share.getType() == 11) {
             return;
         }
