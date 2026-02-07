@@ -34,11 +34,13 @@ import cn.har01d.alist_tvbox.storage.Pan189Share;
 import cn.har01d.alist_tvbox.storage.PikPakShare;
 import cn.har01d.alist_tvbox.storage.QuarkShare;
 import cn.har01d.alist_tvbox.storage.Storage;
+import cn.har01d.alist_tvbox.storage.StrmStorage;
 import cn.har01d.alist_tvbox.storage.ThunderShare;
 import cn.har01d.alist_tvbox.storage.UCShare;
 import cn.har01d.alist_tvbox.storage.UrlTree;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
@@ -101,6 +103,7 @@ public class ShareService {
 
     private final int offset = 99900;
     private int shareId = 20000;
+    private final ObjectMapper objectMapper;
 
     public ShareService(AppProperties appProperties,
                         ShareRepository shareRepository,
@@ -116,7 +119,8 @@ public class ShareService {
                         ConfigFileService configFileService,
                         PikPakService pikPakService,
                         RestTemplateBuilder builder,
-                        Environment environment) {
+                        Environment environment,
+                        ObjectMapper objectMapper) {
         this.appProperties = appProperties;
         this.shareRepository = shareRepository;
         this.metaRepository = metaRepository;
@@ -131,6 +135,7 @@ public class ShareService {
         this.configFileService = configFileService;
         this.pikPakService = pikPakService;
         this.environment = environment;
+        this.objectMapper = objectMapper;
         this.restTemplate = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).build();
     }
 
@@ -415,11 +420,28 @@ public class ShareService {
                     } else {
                         share.setShareId(parts[1]);
                     }
-                    if (parts.length > 2) {
-                        share.setFolderId(parts[2]);
-                    }
-                    if (parts.length > 3) {
-                        share.setPassword(parts[3]);
+                    
+                    // Special handling for STRM type (11:STRM)
+                    if (share.getType() == 11 && "STRM".equals(share.getShareId())) {
+                        // For STRM, parts[2] is the Base64 encoded cookie JSON
+                        if (parts.length > 2) {
+                            try {
+                                byte[] decodedBytes = java.util.Base64.getDecoder().decode(parts[2]);
+                                share.setCookie(new String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8));
+                            } catch (Exception e) {
+                                log.warn("Failed to decode STRM cookie: {}", e.getMessage());
+                            }
+                        }
+                        // STRM uses empty shareId
+                        share.setShareId("");
+                    } else {
+                        // Standard format for other types
+                        if (parts.length > 2) {
+                            share.setFolderId(parts[2]);
+                        }
+                        if (parts.length > 3) {
+                            share.setPassword(parts[3]);
+                        }
                     }
                     share.setPath(getMountPath(share));
                     if (shareRepository.existsByPath(share.getPath())) {
@@ -464,20 +486,34 @@ public class ShareService {
             fileName = "123_shares.txt";
         } else if (type == 0) {
             fileName = "ali_shares.txt";
-        } else if (type == 4) {
+        } else if (type == 10) {
             fileName = "baidu_shares.txt";
+        } else if (type == 11) {
+            fileName = "strm_shares.txt";
         }
 
         for (Share share : list) {
             if (share.isTemp()) {
                 continue;
             }
-            sb.append(getMountPath(share).replace(" ", "")).append("  ")
-                    .append(share.getType()).append(":")
-                    .append(share.getShareId()).append("  ")
-                    .append(StringUtils.isBlank(share.getFolderId()) ? "root" : share.getFolderId()).append("  ")
-                    .append(share.getPassword())
-                    .append("\n");
+            
+            sb.append(getMountPath(share).replace(" ", "")).append("  ");
+            
+            // Special handling for STRM type (type 11)
+            if (share.getType() == 11) {
+                sb.append(share.getType()).append(":STRM").append("  ");
+                // Export the cookie field (Base64 encoded to avoid parsing issues)
+                String cookieJson = StringUtils.isBlank(share.getCookie()) ? "{}" : share.getCookie();
+                sb.append(java.util.Base64.getEncoder().encodeToString(cookieJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            } else {
+                // Standard format for other types
+                sb.append(share.getType()).append(":")
+                        .append(share.getShareId()).append("  ")
+                        .append(StringUtils.isBlank(share.getFolderId()) ? "root" : share.getFolderId()).append("  ")
+                        .append(share.getPassword());
+            }
+            
+            sb.append("\n");
         }
 
         log.info("export {} shares to file: {}", list.size(), fileName);
@@ -544,6 +580,8 @@ public class ShareService {
             storage = new Pan139Share(share);
         } else if (share.getType() == 10) {
             storage = new BaiduShare(share);
+        } else if (share.getType() == 11) {
+            storage = new StrmStorage(share);
         }
 
         if (storage != null) {
@@ -966,6 +1004,7 @@ public class ShareService {
 
     public Share create(Share share) {
         aListLocalService.validateAListStatus();
+        fixStrmConfig(share);
         validate(share);
         parseShare(share);
         fixFolderId(share);
@@ -999,6 +1038,7 @@ public class ShareService {
 
     public Share update(Integer id, Share share) {
         aListLocalService.validateAListStatus();
+        fixStrmConfig(share);
         validate(share);
         parseShare(share);
         fixFolderId(share);
@@ -1031,9 +1071,23 @@ public class ShareService {
 //            throw new BadRequestException("挂载路径不能包含空格");
 //        }
 
-        if (share.getType() != 4) {
+        // STRM 和本地存储类型不需要 shareId
+        if (share.getType() != 4 && share.getType() != 11) {
             if (StringUtils.isBlank(share.getShareId())) {
                 throw new BadRequestException("分享ID不能为空");
+            }
+        }
+        
+        // STRM 类型使用 cookie 字段存储配置 JSON
+        if (share.getType() == 11) {
+            if (StringUtils.isBlank(share.getCookie())) {
+                throw new BadRequestException("STRM配置不能为空");
+            }
+            try {
+                // 验证 JSON 格式
+                objectMapper.readTree(share.getCookie());
+            } catch (Exception e) {
+                throw new BadRequestException("STRM配置格式错误", e);
             }
         }
 
@@ -1042,7 +1096,24 @@ public class ShareService {
         }
     }
 
+    private void fixStrmConfig(Share share) {
+        // STRM 类型: 将 strmConfig 对象序列化到 cookie 字段
+        if (share.getType() == 11 && share.getStrmConfig() != null) {
+            try {
+                String jsonConfig = objectMapper.writeValueAsString(share.getStrmConfig());
+                share.setCookie(jsonConfig);
+            } catch (Exception e) {
+                log.warn("解析STRM配置失败", e);
+            }
+        }
+    }
+
     private static void fixFolderId(Share share) {
+        // STRM 类型使用 cookie 字段存储配置，folderId 不需要修正
+        if (share.getType() == 11) {
+            return;
+        }
+        
         if (StringUtils.isBlank(share.getFolderId())) {
             if (share.getType() == 3 || share.getType() == 5 || share.getType() == 7) {
                 share.setFolderId("0");

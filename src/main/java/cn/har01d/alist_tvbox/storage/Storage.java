@@ -113,6 +113,8 @@ public class Storage {
             return "/我的移动分享/" + path;
         } else if (share.getType() == 10) {
             return "/我的百度分享/" + path;
+        } else if (share.getType() == 11) {
+            return "/strm/" + path;
         }
         return path;
     }
