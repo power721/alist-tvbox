@@ -6,6 +6,9 @@ import { onMounted, ref } from "vue";
 import axios from "axios";
 import { store } from "@/services/store";
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import { useDark } from '@vueuse/core'
+
+useDark()
 
 const account = accountService.account
 const route = useRoute()
@@ -58,21 +61,6 @@ onMounted(() => {
     }
   })
 })
-
-const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)')
-const handleDarkModeChange = (e: MediaQueryListEvent | MediaQueryList) => {
-  if (e.matches) {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-  }
-}
-
-// Initial check
-handleDarkModeChange(darkModeQuery)
-
-// Listen for changes
-darkModeQuery.addEventListener('change', handleDarkModeChange)
 </script>
 
 <template>

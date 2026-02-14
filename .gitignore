@@ -38,3 +38,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Others ###
+musl-1.2.5/
+musl-toolchain/
+*.out
+*.tar
+*.tgz
