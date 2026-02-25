@@ -31,18 +31,6 @@ public class TelegramChannel {
     public TelegramChannel() {
     }
 
-    public TelegramChannel(telegram4j.tl.Channel channel) {
-        this.id = channel.id();
-        this.title = channel.title();
-        this.username = channel.username();
-        this.accessHash = channel.accessHash();
-    }
-
-    public TelegramChannel(telegram4j.tl.BaseChat chat) {
-        this.id = chat.id();
-        this.title = chat.title();
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

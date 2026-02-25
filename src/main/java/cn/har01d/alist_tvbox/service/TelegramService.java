@@ -7,29 +7,24 @@ import cn.har01d.alist_tvbox.dto.tg.SearchResponse;
 import cn.har01d.alist_tvbox.dto.tg.SearchResult;
 import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.entity.MovieRepository;
-import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.TelegramChannel;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
-import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
-import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
 import okhttp3.OkHttpClient;
@@ -54,48 +49,15 @@ import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-import reactor.core.publisher.Mono;
-import telegram4j.core.InitConnectionParams;
-import telegram4j.core.MTProtoTelegramClient;
-import telegram4j.core.auth.AuthorizationHandler;
-import telegram4j.core.auth.CodeAuthorizationHandler;
-import telegram4j.core.auth.QRAuthorizationHandler;
-import telegram4j.core.auth.TwoFactorHandler;
-import telegram4j.mtproto.store.FileStoreLayout;
-import telegram4j.mtproto.store.StoreLayout;
-import telegram4j.mtproto.store.StoreLayoutImpl;
-import telegram4j.tl.BaseChat;
-import telegram4j.tl.BaseMessage;
-import telegram4j.tl.Channel;
-import telegram4j.tl.ImmutableInputClientProxy;
-import telegram4j.tl.ImmutableInputPeerChannel;
-import telegram4j.tl.ImmutableInputPeerChat;
-import telegram4j.tl.InputClientProxy;
-import telegram4j.tl.InputMessagesFilterEmpty;
-import telegram4j.tl.InputPeer;
-import telegram4j.tl.InputPeerSelf;
-import telegram4j.tl.InputUserSelf;
-import telegram4j.tl.MessageEntityTextUrl;
-import telegram4j.tl.User;
-import telegram4j.tl.messages.ChannelMessages;
-import telegram4j.tl.messages.ImmutableBaseDialogs;
-import telegram4j.tl.messages.Messages;
-import telegram4j.tl.request.messages.ImmutableGetDialogs;
-import telegram4j.tl.request.messages.ImmutableGetHistory;
-import telegram4j.tl.request.messages.ImmutableSearch;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -103,10 +65,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.TimeZone;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -133,11 +92,9 @@ public class TelegramService {
     private final ObjectMapper objectMapper;
     private final ExecutorService executorService = Executors.newFixedThreadPool(Math.min(10, Runtime.getRuntime().availableProcessors() * 2));
     private final OkHttpClient httpClient = new OkHttpClient();
-    private final LoadingCache<String, InputPeer> cache = Caffeine.newBuilder().build(this::resolveUsername);
     private final LoadingCache<String, List<Message>> searchCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(15)).build(this::getFromChannel);
     private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private final Cache<String, String> lastId = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
-    private MTProtoTelegramClient client;
     private final List<String> fields = new ArrayList<>(List.of("id", "name", "genre", "description", "language", "country", "directors", "editors", "actors", "cover", "dbScore", "year"));
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -232,10 +189,6 @@ public class TelegramService {
 
     @PostConstruct
     public void init() {
-        String tgPhase = settingRepository.findById("tg_phase").map(Setting::getValue).orElse("0");
-        if ("9".equals(tgPhase)) {
-            connect();
-        }
         if (telegramChannelRepository.count() == 0) {
             try {
                 var channels = loadChannels();
@@ -276,16 +229,6 @@ public class TelegramService {
         }
 
         for (var channel : channels) {
-            if (client != null && StringUtils.isBlank(appProperties.getTgSearch())) {
-                try {
-                    resolveUsername(channel.getUsername());
-                    channel.setValid(true);
-                } catch (Exception e) {
-                    log.warn("Access channel failed: {} {}", channel.getTitle(), e.getMessage());
-                    channel.setValid(false);
-                }
-            }
-
             validateWebAccess(channel);
         }
         telegramChannelRepository.saveAll(channels);
@@ -332,228 +275,6 @@ public class TelegramService {
 
     public List<TelegramChannel> list() {
         return telegramChannelRepository.findAll(Sort.by("order"));
-    }
-
-    public void reset() {
-        settingRepository.deleteById("tg_phone");
-        settingRepository.deleteById("tg_code");
-        settingRepository.deleteById("tg_password");
-        settingRepository.deleteById("tg_qr_img");
-        settingRepository.deleteById("tg_scanned");
-        appProperties.setTgLogin(false);
-    }
-
-    public void logout() {
-        if (client != null) {
-            client.getServiceHolder().getAuthService().logOut().block();
-            client.disconnect().block();
-            client = null;
-        }
-
-        reset();
-        settingRepository.save(new Setting("tg_phase", "0"));
-
-        try {
-            Files.deleteIfExists(Utils.getDataPath("t4j.bin"));
-        } catch (IOException e) {
-            log.warn("删除session文件失败", e);
-        }
-    }
-
-    public void connect() {
-        appProperties.setTgLogin(false);
-        if (client != null) {
-            client.disconnect().block();
-        }
-
-        new Thread(() -> {
-            int apiId = IdUtils.getApiId();
-            String apiHash = IdUtils.getApiHash();
-            boolean qr = settingRepository.findById("tg_auth_type").map(Setting::getValue).orElse("qr").equals("qr");
-            AuthorizationHandler authHandler;
-            if (qr) {
-                log.info("Telegram扫码登陆");
-                settingRepository.deleteById("tg_scanned");
-                settingRepository.deleteById("tg_qr_img");
-                authHandler = new QRAuthorizationHandler(new QRAuthorizationHandler.Callback() {
-                    @Override
-                    public Mono<ActionType> onLoginToken(AuthorizationHandler.Resources res, QRAuthorizationHandler.Context ctx) {
-                        settingRepository.save(new Setting("tg_phase", "0"));
-                        log.info("Scan QR {}, expired: {}.", ctx.loginUrl(), ctx.expiresIn());
-                        try {
-                            String img = Utils.getQrCode(ctx.loginUrl());
-                            settingRepository.save(new Setting("tg_qr_img", img));
-                        } catch (IOException e) {
-                            return Mono.error(e);
-                        }
-                        settingRepository.save(new Setting("tg_phase", "1"));
-                        String scanned = waitSettingAvailable("tg_scanned");
-                        settingRepository.deleteById("tg_password");
-                        settingRepository.save(new Setting("tg_phase", "2"));
-                        return scanned != null ? Mono.just(ActionType.STOP) : Mono.just(ActionType.RETRY);
-                    }
-
-                    @Override
-                    public Mono<String> on2FAPassword(AuthorizationHandler.Resources res, TwoFactorHandler.Context ctx) {
-                        log.info("Input the 2FA password.");
-                        settingRepository.save(new Setting("tg_phase", "5"));
-                        String password = waitSettingAvailable("tg_password");
-                        settingRepository.save(new Setting("tg_phase", "6"));
-                        return password != null ? Mono.just(password) : Mono.empty();
-                    }
-                });
-            } else {
-                log.info("Telegram验证码登陆");
-                authHandler = new CodeAuthorizationHandler(new CodeAuthorizationHandler.Callback() {
-                    @Override
-                    public Mono<CodeAuthorizationHandler.PhoneNumberAction> onPhoneNumber(AuthorizationHandler.Resources res, CodeAuthorizationHandler.PhoneNumberContext ctx) {
-                        log.info("Input the phone number.");
-                        settingRepository.save(new Setting("tg_phase", "1"));
-                        String phone = waitSettingAvailable("tg_phone");
-                        settingRepository.deleteById("tg_code");
-                        settingRepository.deleteById("tg_password");
-                        settingRepository.save(new Setting("tg_phase", "2"));
-                        return phone != null ? Mono.just(CodeAuthorizationHandler.PhoneNumberAction.of(phone)) : Mono.just(CodeAuthorizationHandler.PhoneNumberAction.cancel());
-                    }
-
-                    @Override
-                    public Mono<CodeAuthorizationHandler.CodeAction> onSentCode(AuthorizationHandler.Resources res, CodeAuthorizationHandler.PhoneCodeContext ctx) {
-                        log.info("Input the verification code.");
-                        settingRepository.save(new Setting("tg_phase", "3"));
-                        String code = waitSettingAvailable("tg_code");
-                        settingRepository.save(new Setting("tg_phase", "4"));
-                        return code != null ? Mono.just(CodeAuthorizationHandler.CodeAction.of(code)) : Mono.just(CodeAuthorizationHandler.CodeAction.cancel());
-                    }
-
-                    @Override
-                    public Mono<String> on2FAPassword(AuthorizationHandler.Resources res, TwoFactorHandler.Context ctx) {
-                        log.info("Input the 2FA password.");
-                        settingRepository.save(new Setting("tg_phase", "5"));
-                        String password = waitSettingAvailable("tg_password");
-                        settingRepository.save(new Setting("tg_phase", "6"));
-                        return password != null ? Mono.just(password) : Mono.empty();
-                    }
-                });
-            }
-            StoreLayout storeLayout = new FileStoreLayout(new StoreLayoutImpl(c -> c.maximumSize(1000)), Utils.getDataPath("t4j.bin"));
-            client = MTProtoTelegramClient
-                    .create(apiId, apiHash, authHandler)
-                    .setStoreLayout(storeLayout)
-                    .setInitConnectionParams(initConnectionParams())
-                    .connect()
-                    .block();
-
-            if (client == null) {
-                settingRepository.save(new Setting("tg_phase", "0"));
-                log.warn("Telegram连接失败");
-                return;
-            }
-
-            settingRepository.save(new Setting("tg_phase", "9"));
-            appProperties.setTgLogin(true);
-            log.info("Telegram连接成功");
-            client.onDisconnect().block();
-            client = null;
-            log.info("Telegram关闭连接");
-        }).start();
-    }
-
-    private static InitConnectionParams initConnectionParams() {
-        InputClientProxy proxy = null;
-        Path path = Utils.getDataPath("proxy.txt");
-        if (Files.exists(path)) {
-            try {
-                String text = Files.readString(path).trim();
-                URI uri = new URI(text);
-                int port = uri.getPort();
-                if (port == -1) {
-                    port = getDefaultPort(uri.getScheme());
-                }
-                log.info("use proxy {}:{}", uri.getHost(), port);
-                proxy = ImmutableInputClientProxy.of(uri.getHost(), port);
-            } catch (Exception e) {
-                log.warn("Read proxy failed.", e);
-            }
-        }
-
-        String appVersion = "1.0.0";
-        String deviceModel = "AList-TvBox";
-        String systemVersion = String.join(" ", System.getProperty("os.name"),
-                System.getProperty("os.version"),
-                System.getProperty("os.arch"));
-
-        String langCode = Locale.getDefault().getLanguage().toLowerCase(Locale.ROOT);
-        JsonNode node = JsonNodeFactory.instance.objectNode()
-                .put("tz_offset", TimeZone.getDefault().getRawOffset() / 1000d);
-
-        log.debug("InitConnectionParams: {} {} {}", langCode, systemVersion, node);
-        return new InitConnectionParams(appVersion, deviceModel, langCode,
-                "", systemVersion, langCode, proxy, node);
-    }
-
-    private static int getDefaultPort(String scheme) {
-        if (scheme == null) return 8080;
-        return switch (scheme.toLowerCase()) {
-            case "http" -> 80;
-            case "https" -> 443;
-            case "socks", "socks5" -> 1080;
-            default -> 8080;
-        };
-    }
-
-    public User getUser() {
-        if (client == null) {
-            return null;
-        }
-        return client.getServiceHolder().getUserService().getUser(InputUserSelf.instance()).block();
-    }
-
-    public List<TelegramChannel> getAllChats() {
-        if (client == null) {
-            return List.of();
-        }
-        ImmutableBaseDialogs dialogs = (ImmutableBaseDialogs) client.getServiceHolder().getChatService().getDialogs(ImmutableGetDialogs.of(0, 0, 0, InputPeerSelf.instance(), 100, 0)).block();
-        return dialogs.chats().stream().map(this::parseChat).filter(Objects::nonNull).toList();
-    }
-
-    private TelegramChannel parseChat(telegram4j.tl.Chat chat) {
-        if (chat instanceof Channel) {
-            return new TelegramChannel((Channel) chat);
-        }
-        if (chat instanceof BaseChat) {
-            return new TelegramChannel((BaseChat) chat);
-        }
-        return null;
-    }
-
-    public List<Message> getHistory(String id) {
-        if (client == null) {
-            return List.of();
-        }
-        String[] parts = id.split("\\$");
-        InputPeer inputPeer = ImmutableInputPeerChannel.of(Long.parseLong(parts[0]), Long.parseLong(parts[1]));
-
-        Messages messages = client.getServiceHolder().getChatService().getHistory(ImmutableGetHistory.of(inputPeer, 0, 0, 0, 100, 0, 0, 0)).block();
-        log.info("{}", messages);
-        if (messages instanceof ChannelMessages) {
-            return ((ChannelMessages) messages).messages().stream().filter(e -> e instanceof BaseMessage).map(BaseMessage.class::cast).map(e -> new Message("", e)).toList();
-        }
-        return List.of();
-    }
-
-    private String waitSettingAvailable(String key) {
-        for (int i = 0; i < 120; ++i) {
-            String value = settingRepository.findById(key).map(Setting::getValue).orElse(null);
-            if (value != null) {
-                return value;
-            }
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                break;
-            }
-        }
-        return null;
     }
 
     public Map<String, Object> searchZx(String keyword, String username) {
@@ -651,7 +372,7 @@ public class TelegramService {
         }
 
         List<TelegramChannel> channels;
-        if (web || (client == null && StringUtils.isBlank(appProperties.getTgSearch()))) {
+        if (web || (StringUtils.isBlank(appProperties.getTgSearch()))) {
             channels = telegramChannelRepository.findByWebAccessTrue(Sort.by("order"));
         } else {
             channels = list();
@@ -1265,9 +986,7 @@ public class TelegramService {
         }
 
         if (results.isEmpty()) {
-            if (client == null) {
-                channels = channels.stream().filter(TelegramChannel::isWebAccess).toList();
-            }
+            channels = channels.stream().filter(TelegramChannel::isWebAccess).toList();
 
             List<Future<List<Message>>> futures = new ArrayList<>();
             for (var channel : channels) {
@@ -1382,83 +1101,18 @@ public class TelegramService {
     }
 
     public List<Message> searchFromChannel(String username, String keyword, boolean web, int size) throws IOException {
-        if (web || client == null) {
-            List<Message> list = searchFromWeb(username, keyword, "");
-            List<Message> result = list.stream().filter(e -> e.getType() != null).toList();
-            log.info("Search {} from web {} get {} results.", keyword, username, result.size());
-            return result;
-        }
-        List<Message> result = List.of();
-
-        try {
-            InputPeer inputPeer = cache.get(username);
-            int minDate = (int) (Instant.now().minus(90, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toEpochMilli() / 1000);
-            Messages messages = client.getServiceHolder().getChatService().search(ImmutableSearch.of(inputPeer, keyword, InputMessagesFilterEmpty.instance(), minDate, 0, 0, 0, size, 0, 0, 0)).block();
-            if (messages instanceof ChannelMessages) {
-                result = ((ChannelMessages) messages).messages().stream().filter(e -> e instanceof BaseMessage).map(BaseMessage.class::cast).flatMap(e -> parseMessage(username, e)).toList();
-            }
-            log.info("Search {} from {} get {} results.", keyword, username, result.size());
-        } catch (Exception e) {
-            log.warn("search from channel {} failed", username, e);
-        }
+        List<Message> list = searchFromWeb(username, keyword, "");
+        List<Message> result = list.stream().filter(e -> e.getType() != null).toList();
+        log.info("Search {} from web {} get {} results.", keyword, username, result.size());
         return result;
     }
 
     public TelegramChannel getChannelByName(String username) {
-        if (client == null) {
-            TelegramChannel channel = new TelegramChannel();
-            channel.setId(telegramChannelRepository.count());
-            channel.setUsername(username);
-            channel.setTitle(username);
-            return channel;
-        }
-
-        try {
-            var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
-            var chat = resolvedPeer.chats().get(0);
-            TelegramChannel channel = null;
-            if (chat instanceof Channel) {
-                channel = new TelegramChannel((Channel) chat);
-            } else if (chat instanceof BaseChat) {
-                channel = new TelegramChannel((BaseChat) chat);
-            }
-            return channel;
-        } catch (Exception e) {
-            throw new BadRequestException("用户名无效", e);
-        }
-    }
-
-    private InputPeer resolveUsername(String username) {
-        var resolvedPeer = client.getServiceHolder().getUserService().resolveUsername(username).block();
-        var chat = resolvedPeer.chats().get(0);
-        InputPeer inputPeer = null;
-        if (chat instanceof Channel channel) {
-            inputPeer = ImmutableInputPeerChannel.of(chat.id(), channel.accessHash());
-        } else if (chat instanceof BaseChat) {
-            inputPeer = ImmutableInputPeerChat.of(chat.id());
-        }
-        return inputPeer;
-    }
-
-    private Stream<Message> parseMessage(String channel, telegram4j.tl.BaseMessage message) {
-        List<Message> list = new ArrayList<>();
-        for (String link : Message.parseLinks(message.message())) {
-            list.add(new Message(channel, message, link));
-        }
-
-        if (message.entities() != null) {
-            List<String> urls = message.entities()
-                    .stream()
-                    .filter(e -> e instanceof MessageEntityTextUrl)
-                    .map(e -> (MessageEntityTextUrl) e)
-                    .map(MessageEntityTextUrl::url)
-                    .toList();
-            for (String link : Message.parseLinks(urls)) {
-                list.add(new Message(channel, message, link));
-            }
-        }
-
-        return list.stream();
+        TelegramChannel channel = new TelegramChannel();
+        channel.setId(telegramChannelRepository.count());
+        channel.setUsername(username);
+        channel.setTitle(username);
+        return channel;
     }
 
     private Stream<Message> parseMessage(SearchResult result) {
@@ -1570,11 +1224,6 @@ public class TelegramService {
         response.close();
 
         return html;
-    }
-
-    @PreDestroy
-    public void disconnect() {
-        client.disconnect().block();
     }
 
     public List<TelegramChannel> updateAll(List<TelegramChannel> channels) {

@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import telegram4j.tl.User;
 
 import java.io.IOException;
 import java.util.Base64;
@@ -42,21 +41,6 @@ public class TelegramController {
         this.telegramService = telegramService;
         this.subscriptionService = subscriptionService;
         this.objectMapper = objectMapper;
-    }
-
-    @PostMapping("/api/telegram/reset")
-    public void reset() {
-        telegramService.reset();
-    }
-
-    @PostMapping("/api/telegram/login")
-    public void login() {
-        telegramService.connect();
-    }
-
-    @PostMapping("/api/telegram/logout")
-    public void logout() {
-        telegramService.logout();
     }
 
     @GetMapping("/api/telegram/search")
@@ -147,16 +131,6 @@ public class TelegramController {
         return telegramService.searchWeb(request.getKeyword(), request.getChannelUsername(), request.getEncode());
     }
 
-    @GetMapping("/api/telegram/user")
-    public User getUser() {
-        return telegramService.getUser();
-    }
-
-    @GetMapping("/api/telegram/chats")
-    public List<TelegramChannel> getAllChats() {
-        return telegramService.getAllChats();
-    }
-
     @GetMapping("/api/telegram/channels")
     public List<TelegramChannel> list() {
         return telegramService.list();
@@ -192,8 +166,4 @@ public class TelegramController {
         return telegramService.validateChannels();
     }
 
-    @GetMapping("/api/telegram/history")
-    public List<Message> getChatHistory(String id) {
-        return telegramService.getHistory(id);
-    }
 }
