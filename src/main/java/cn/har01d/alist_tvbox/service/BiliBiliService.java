@@ -1082,7 +1082,7 @@ public class BiliBiliService {
                         if (season.getMeta() != null) {
                             MovieDetail movieDetail = new MovieDetail();
                             movieDetail.setVod_id("archive$" + season.getMeta().getSeason_id() + "$" + mid);
-                            movieDetail.setVod_name(season.getMeta().getName() + " (合集)");
+                            movieDetail.setVod_name(season.getMeta().getName());
                             movieDetail.setVod_tag(FILE);
                             movieDetail.setVod_pic(fixCover(season.getMeta().getCover()));
                             movieDetail.setVod_remarks(season.getMeta().getTotal() + "个视频");
@@ -1245,7 +1245,7 @@ public class BiliBiliService {
             if (!allArchives.isEmpty() && meta != null) {
                 MovieDetail movieDetail = new MovieDetail();
                 movieDetail.setVod_id("archive$" + seasonId + "$" + mid);
-                movieDetail.setVod_name(meta.getName() + " (合集)");
+                movieDetail.setVod_name(meta.getName());
                 movieDetail.setVod_tag(FILE);
                 movieDetail.setVod_pic(fixCover(meta.getCover()));
                 movieDetail.setVod_play_from(BILI_BILI);
