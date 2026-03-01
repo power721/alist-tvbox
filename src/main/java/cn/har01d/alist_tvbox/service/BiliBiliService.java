@@ -1081,7 +1081,7 @@ public class BiliBiliService {
                     for (var season : seasonsList) {
                         if (season.getMeta() != null) {
                             MovieDetail movieDetail = new MovieDetail();
-                            movieDetail.setVod_id("archive_season$" + season.getMeta().getSeason_id() + "$" + mid);
+                            movieDetail.setVod_id("archive$" + season.getMeta().getSeason_id() + "$" + mid);
                             movieDetail.setVod_name(season.getMeta().getName() + " (合集)");
                             movieDetail.setVod_tag(FILE);
                             movieDetail.setVod_pic(fixCover(season.getMeta().getCover()));
@@ -1244,7 +1244,7 @@ public class BiliBiliService {
 
             if (!allArchives.isEmpty() && meta != null) {
                 MovieDetail movieDetail = new MovieDetail();
-                movieDetail.setVod_id("archive_season$" + seasonId + "$" + mid);
+                movieDetail.setVod_id("archive$" + seasonId + "$" + mid);
                 movieDetail.setVod_name(meta.getName() + " (合集)");
                 movieDetail.setVod_tag(FILE);
                 movieDetail.setVod_pic(fixCover(meta.getCover()));
@@ -1580,7 +1580,7 @@ public class BiliBiliService {
             return getBangumi(bvid);
         }
 
-        if (bvid.startsWith("archive_season$")) {
+        if (bvid.startsWith("archive$")) {
             return getArchiveSeasonPlaylist(bvid);
         }
 
