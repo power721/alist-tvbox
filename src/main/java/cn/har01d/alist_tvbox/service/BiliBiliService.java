@@ -32,11 +32,18 @@ import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchPgcResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchPgcResult;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSearchResult;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonArchivesDetail;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonArchivesDetailResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfo;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfo2;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonInfoList;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonResponse2;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeasonsArchivesListResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeriesArchives;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeriesArchivesResponse;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeriesMeta;
+import cn.har01d.alist_tvbox.dto.bili.BiliBiliSeriesMetaResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliTokenResponse;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2Info;
 import cn.har01d.alist_tvbox.dto.bili.BiliBiliV2InfoResponse;
@@ -150,6 +157,10 @@ public class BiliBiliService {
     public static final String LIKE_LIST_API = "https://api.bilibili.com/x/space/like/video?vmid=%d";
     public static final String COLLECTED_API = "https://api.bilibili.com/x/v3/fav/folder/collected/list?pn=%d&ps=30&up_mid=%d&platform=web&web_location=333.1387";
     public static final String FAV_LIST_API = "https://api.bilibili.com/x/space/fav/season/list?season_id=%s&pn=%d&ps=30&web_location=333.1387";
+    public static final String SEASONS_SERIES_LIST_API = "https://api.bilibili.com/x/polymer/web-space/seasons_series_list";
+    public static final String SEASON_ARCHIVES_DETAIL_API = "https://api.bilibili.com/x/polymer/web-space/seasons_archives_list";
+    public static final String SERIES_ARCHIVES_API = "https://api.bilibili.com/x/series/archives";
+    public static final String SERIES_META_API = "https://api.bilibili.com/x/series/series";
 
     private final List<FilterValue> filters1 = Arrays.asList(
             new FilterValue("综合排序", ""),
@@ -669,7 +680,7 @@ public class BiliBiliService {
         }
     }
 
-    private String playCount(int view) {
+    private String playCount(long view) {
         if (view >= 10000) {
             return (view / 10000) + "万播放 ";
         } else if (view >= 1000) {
@@ -1053,6 +1064,55 @@ public class BiliBiliService {
             list.add(movieDetail);
         }
 
+        // 获取用户的合集和系列（使用同一个API）
+        try {
+            String seasonsUrl = SEASONS_SERIES_LIST_API + "?mid=" + mid + "&page_size=18&page_num=" + page + "&web_location=333.1387";
+            HttpEntity<Void> seasonsEntity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://space.bilibili.com"));
+            BiliBiliSeasonsArchivesListResponse seasonsResponse = restTemplate.exchange(
+                    seasonsUrl, HttpMethod.GET, seasonsEntity, BiliBiliSeasonsArchivesListResponse.class
+            ).getBody();
+
+            if (seasonsResponse != null && seasonsResponse.getCode() == 0 && seasonsResponse.getData() != null
+                    && seasonsResponse.getData().getItems_lists() != null) {
+
+                // 处理合集列表
+                var seasonsList = seasonsResponse.getData().getItems_lists().getSeasons_list();
+                if (seasonsList != null) {
+                    for (var season : seasonsList) {
+                        if (season.getMeta() != null) {
+                            MovieDetail movieDetail = new MovieDetail();
+                            movieDetail.setVod_id("archive_season$" + season.getMeta().getSeason_id() + "$" + mid);
+                            movieDetail.setVod_name(season.getMeta().getName() + " (合集)");
+                            movieDetail.setVod_tag(FILE);
+                            movieDetail.setVod_pic(fixCover(season.getMeta().getCover()));
+                            movieDetail.setVod_remarks(season.getMeta().getTotal() + "个视频");
+                            movieDetail.setVod_content(season.getMeta().getDescription());
+                            result.getList().add(movieDetail);
+                        }
+                    }
+                }
+
+                // 处理系列列表
+                var seriesList = seasonsResponse.getData().getItems_lists().getSeries_list();
+                if (seriesList != null) {
+                    for (var series : seriesList) {
+                        if (series.getMeta() != null) {
+                            MovieDetail movieDetail = new MovieDetail();
+                            movieDetail.setVod_id("series$" + series.getMeta().getSeries_id() + "$" + mid);
+                            movieDetail.setVod_name(series.getMeta().getName() + " (系列)");
+                            movieDetail.setVod_tag(FILE);
+                            movieDetail.setVod_pic(fixCover(series.getMeta().getCover()));
+                            movieDetail.setVod_remarks(series.getMeta().getTotal() + "个视频");
+                            movieDetail.setVod_content(series.getMeta().getDescription());
+                            result.getList().add(movieDetail);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch seasons and series list: {}", e.getMessage());
+        }
+
         long seconds = searchInfo.getList().getVlist().stream().map(BiliBiliSearchInfo.Video::getLength).mapToLong(Utils::durationToSeconds).sum();
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setVod_id("up$" + mid + "$" + sort + "$" + page);
@@ -1128,6 +1188,163 @@ public class BiliBiliService {
         result.getList().add(movieDetail);
 
         log.debug("getUpPlaylist: {}", result);
+        return result;
+    }
+
+    private MovieList getArchiveSeasonPlaylist(String tid) {
+        String[] parts = tid.split("\\$");
+        String seasonId = parts[1];
+        String mid = parts[2];
+
+        long views = 0;
+        long seconds = 0;
+        MovieList result = new MovieList();
+        List<MovieDetail> allArchives = new ArrayList<>();
+        BiliBiliSeasonArchivesDetail.SeasonMeta meta = null;
+
+        try {
+            int page = 1;
+            while (true) {
+                String url = SEASON_ARCHIVES_DETAIL_API + "?mid=" + mid + "&season_id=" + seasonId
+                        + "&sort_reverse=false&page_size=30&page_num=" + page + "&web_location=333.1387";
+                HttpEntity<Void> entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://space.bilibili.com"));
+                log.debug("getArchiveSeasonPlaylist: {}", url);
+
+                BiliBiliSeasonArchivesDetailResponse response = restTemplate.exchange(
+                        url, HttpMethod.GET, entity, BiliBiliSeasonArchivesDetailResponse.class
+                ).getBody();
+
+                if (response != null && response.getCode() == 0 && response.getData() != null) {
+                    BiliBiliSeasonArchivesDetail detail = response.getData();
+                    if (meta == null) {
+                        meta = detail.getMeta();
+                    }
+
+                    if (detail.getArchives().isEmpty()) {
+                        break;
+                    }
+
+                    for (BiliBiliSeasonArchivesDetail.Archive archive : detail.getArchives()) {
+                        seconds += archive.getDuration();
+                        views += archive.getStat() == null ? 0 : archive.getStat().getView();
+                        MovieDetail movieDetail = new MovieDetail();
+                        movieDetail.setVod_id(archive.getBvid());
+                        movieDetail.setVod_name(archive.getTitle());
+                        allArchives.add(movieDetail);
+                    }
+
+                    if (detail.getArchives().size() < 30) {
+                        break;
+                    }
+                    page++;
+                } else {
+                    break;
+                }
+            }
+
+            if (!allArchives.isEmpty() && meta != null) {
+                MovieDetail movieDetail = new MovieDetail();
+                movieDetail.setVod_id("archive_season$" + seasonId + "$" + mid);
+                movieDetail.setVod_name(meta.getName() + " (合集)");
+                movieDetail.setVod_tag(FILE);
+                movieDetail.setVod_pic(fixCover(meta.getCover()));
+                movieDetail.setVod_play_from(BILI_BILI);
+                String playUrl = allArchives.stream()
+                        .map(e -> fixTitle(e.getVod_name()) + "$" + buildPlayUrl(e.getVod_id()))
+                        .collect(Collectors.joining("#"));
+                movieDetail.setVod_play_url(playUrl);
+                movieDetail.setVod_content(meta.getDescription());
+                movieDetail.setVod_remarks(playCount(views) + Utils.secondsToDuration(seconds));
+                result.getList().add(movieDetail);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get archive season playlist", e);
+        }
+        log.debug("getArchiveSeasonPlaylist: {}", result);
+        return result;
+    }
+
+    private MovieList getSeriesPlaylist(String tid) {
+        String[] parts = tid.split("\\$");
+        String seriesId = parts[1];
+        String mid = parts[2];
+
+        MovieList result = new MovieList();
+        List<MovieDetail> allArchives = new ArrayList<>();
+        BiliBiliSeriesMeta.SeriesMeta meta = null;
+
+        try {
+            // 先获取 series metadata
+            String metaUrl = SERIES_META_API + "?series_id=" + seriesId + "&web_location=333.1387";
+            HttpEntity<Void> metaEntity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://space.bilibili.com"));
+            BiliBiliSeriesMetaResponse metaResponse = restTemplate.exchange(
+                    metaUrl, HttpMethod.GET, metaEntity, BiliBiliSeriesMetaResponse.class
+            ).getBody();
+
+            if (metaResponse == null || metaResponse.getCode() != 0 || metaResponse.getData() == null) {
+                return result;
+            }
+
+            meta = metaResponse.getData().getMeta();
+            long views = 0;
+            long seconds = 0;
+
+            // 获取所有视频列表
+            int page = 1;
+            while (true) {
+                String url = SERIES_ARCHIVES_API + "?mid=" + mid + "&current_mid=" + mid + "&series_id=" + seriesId
+                        + "&only_normal=true&sort=desc&ps=30&pn=" + page + "&web_location=333.1387";
+                HttpEntity<Void> entity = buildHttpEntity(null, Map.of(HttpHeaders.REFERER, "https://space.bilibili.com"));
+                log.debug("getSeriesPlaylist: {}", url);
+
+                BiliBiliSeriesArchivesResponse response = restTemplate.exchange(
+                        url, HttpMethod.GET, entity, BiliBiliSeriesArchivesResponse.class
+                ).getBody();
+
+                if (response != null && response.getCode() == 0 && response.getData() != null) {
+                    BiliBiliSeriesArchives detail = response.getData();
+
+                    if (detail.getArchives().isEmpty()) {
+                        break;
+                    }
+
+                    for (BiliBiliSeriesArchives.Archive archive : detail.getArchives()) {
+                        seconds += archive.getDuration();
+                        views += archive.getStat() == null ? 0 : archive.getStat().getView();
+                        MovieDetail movieDetail = new MovieDetail();
+                        movieDetail.setVod_id(archive.getBvid());
+                        movieDetail.setVod_name(archive.getTitle());
+                        allArchives.add(movieDetail);
+                    }
+
+                    if (detail.getArchives().size() < 30) {
+                        break;
+                    }
+                    page++;
+                } else {
+                    break;
+                }
+            }
+
+            if (!allArchives.isEmpty() && meta != null) {
+                MovieDetail movieDetail = new MovieDetail();
+                movieDetail.setVod_id("series$" + seriesId + "$" + mid + "$1");
+                movieDetail.setVod_name(meta.getName() + " (系列)");
+                movieDetail.setVod_tag(FILE);
+                movieDetail.setVod_pic(fixCover(""));
+                movieDetail.setVod_play_from(BILI_BILI);
+                String playUrl = allArchives.stream()
+                        .map(e -> fixTitle(e.getVod_name()) + "$" + buildPlayUrl(e.getVod_id()))
+                        .collect(Collectors.joining("#"));
+                movieDetail.setVod_play_url(playUrl);
+                movieDetail.setVod_content(meta.getDescription());
+                movieDetail.setVod_remarks(playCount(views) + Utils.secondsToDuration(seconds));
+                result.getList().add(movieDetail);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get series playlist", e);
+        }
+        log.debug("getSeriesPlaylist: {}", result);
         return result;
     }
 
@@ -1363,6 +1580,14 @@ public class BiliBiliService {
             return getBangumi(bvid);
         }
 
+        if (bvid.startsWith("archive_season$")) {
+            return getArchiveSeasonPlaylist(bvid);
+        }
+
+        if (bvid.startsWith("series$")) {
+            return getSeriesPlaylist(bvid);
+        }
+
         BiliBiliInfo info = cache.get(bvid);
         MovieDetail movieDetail = getMovieDetail(info, true);
 
@@ -1382,12 +1607,12 @@ public class BiliBiliService {
         }
 
         if (info.getOwner() != null) {
-//            if ("com.fongmi.android.tv".equals(client)) {
-//                long id = info.getOwner().getMid();
-//                String name = info.getOwner().getName();
-//                String owner = String.format("[a=cr:{\"id\":\"up:%d\",\"name\":\"%s\"}/]%s[/a]", id, name, name);
-//                movieDetail.setVod_director(owner);
-//            }
+            if ("com.fongmi.android.tv".equals(client)) {
+                long id = info.getOwner().getMid();
+                String name = info.getOwner().getName();
+                String owner = String.format("[a=cr:{\"id\":\"up:%d\",\"name\":\"%s\"}/]%s[/a]", id, name, name);
+                movieDetail.setVod_director(owner);
+            }
 
             try {
                 MovieList movieList = getUpPlaylist("up$" + info.getOwner().getMid());
