@@ -2422,6 +2422,21 @@ public class TvBoxService {
             url = "http:" + url;
         }
 
+        // First: try to fetch .strm file content (using original address, can connect directly to AList)
+        try {
+            if (new URL(url).getPath().endsWith(".strm")) {
+                Request request = new Request.Builder().url(url).get().build();
+                try (Response response = okHttpClient.newCall(request).execute(); ResponseBody body = response.body()) {
+                    String content = body != null ? body.string().trim() : null;
+                    if (content != null && !content.isEmpty()) {
+                        url = content;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        // Second: replace localhost with external address for non-.strm files
         if (url.startsWith("http://localhost")) {
             String proxy = ServletUriComponentsBuilder.fromCurrentRequest()
                     .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
@@ -2433,16 +2448,6 @@ public class TvBoxService {
             int index = url.indexOf('/', 16);
             url = proxy + url.substring(index + 1);
             log.debug("fixHttp: {}", url);
-        }
-
-        try {
-            if (new URL(url).getPath().endsWith(".strm")) {
-                Request request = new Request.Builder().url(url).get().build();
-                try (Response response = okHttpClient.newCall(request).execute(); ResponseBody body = response.body()) {
-                    url = body != null ? body.string() : url;
-                }
-            }
-        } catch (Exception ignored) {
         }
 
         return url;
