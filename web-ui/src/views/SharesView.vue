@@ -332,13 +332,14 @@
       <el-form-item label="导入文件">
         <el-upload ref="upload" action="/api/import-share-file" accept="text/plain" class="upload" :limit="1"
           :on-exceed="handleExceed" :on-success="onUploadSuccess" :on-error="onUploadError"
+          :on-change="handleFileChange"
           :headers="{ 'authorization': token }" :data="{ type: sharesDto.type, delay: sharesDto.delay }"
           :auto-upload="false">
           <template #trigger>
             <el-button type="primary" :disabled="uploading">选择文件</el-button>
           </template>
           <span class="hint"></span>
-          <el-button type="success" :disabled="uploading" @click="submitUpload">
+          <el-button type="success" :disabled="uploading || !hasFile" @click="submitUpload">
             上传导入
           </el-button>
           <template #tip>
@@ -353,7 +354,7 @@
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="uploadVisible = false">取消</el-button>
-        <el-button class="ml-3" type="success" :disabled="uploading" @click="importShares">导入</el-button>
+        <el-button class="ml-3" type="success" :disabled="uploading || !hasContent" @click="importShares">导入</el-button>
       </span>
     </template>
   </el-dialog>
@@ -386,7 +387,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import axios from "axios";
 import { ElMessage } from 'element-plus'
 import { genFileId } from 'element-plus'
@@ -502,6 +503,10 @@ const sharesDto = ref({
   type: -1,
   delay: 0
 })
+const selectedFile = ref<UploadRawFile | null>(null)
+
+const hasContent = computed(() => sharesDto.value.content.trim().length > 0)
+const hasFile = computed(() => selectedFile.value !== null)
 
 const handleAdd = () => {
   dialogTitle.value = '添加分享'
@@ -791,6 +796,7 @@ const showUpload = () => {
   if (upload.value) {
     upload.value!.clearFiles()
   }
+  selectedFile.value = null
 }
 
 const handleExceed: UploadProps['onExceed'] = (files) => {
@@ -798,6 +804,15 @@ const handleExceed: UploadProps['onExceed'] = (files) => {
   const file = files[0] as UploadRawFile
   file.uid = genFileId()
   upload.value!.handleStart(file)
+  selectedFile.value = file
+}
+
+const handleFileChange: UploadProps['onChange'] = (uploadFile, uploadFiles) => {
+  if (uploadFiles.length > 0 && uploadFiles[0].raw) {
+    selectedFile.value = uploadFiles[0].raw
+  } else {
+    selectedFile.value = null
+  }
 }
 
 const onUploadSuccess: UploadProps['onSuccess'] = (data) => {
