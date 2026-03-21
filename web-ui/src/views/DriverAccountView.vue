@@ -116,7 +116,7 @@
 
           <span v-if="form.type=='BAIDU'">
             <a href="https://pan.baidu.com/disk/main" target="_blank">百度网盘</a>
-            <span class="hint">只需要BDUSS</span>
+            <span class="hint">需要完整Cookie</span>
           </span>
 
           <span v-if="form.type=='CLOUD189'">
@@ -142,7 +142,7 @@
           <el-input v-model="form.token" type="textarea" :rows="3"/>
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
-        <el-form-item label="认证令牌" v-if="form.type=='BAIDU'" required>
+        <el-form-item label="认证令牌" v-if="form.type=='BAIDU'">
           <el-input v-model="form.addition.access_token" @change="fixBaiduToken"/>
           <el-button type="primary" @click="copyLink">获取认证令牌</el-button>
           <div class="hint">通过认证后复制浏览器链接填入</div>
