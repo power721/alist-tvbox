@@ -1430,9 +1430,8 @@ public class TvBoxService {
             result.put("header", Map.of("User-Agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)"));
         } else if (url.contains("115cdn.net")) {
             var account = getDriverAccount(url, DriverType.PAN115);
-            String cookie = account.getCookie();
             // 115会把UA生成签名校验
-            result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.USER_AGENT, "Referer", "https://115.com/"));
+            result.put("header", Map.of("User-Agent", Constants.USER_AGENT, "Referer", "https://115.com/"));
         } else if (fsDetail.getProvider().contains("Baidu")) {
             result.put("header", Map.of("User-Agent", "netdisk"));
         } else if (url.contains("ali")) {
