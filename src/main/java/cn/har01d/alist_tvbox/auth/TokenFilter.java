@@ -33,7 +33,7 @@ public class TokenFilter extends OncePerRequestFilter {
     @Lazy
     @Autowired(required = false)
     private SubscriptionService subscriptionService;
-    private String apiKey;
+    private volatile String apiKey;
 
     public TokenFilter(TokenService tokenService, SettingRepository settingRepository) {
         this.tokenService = tokenService;
