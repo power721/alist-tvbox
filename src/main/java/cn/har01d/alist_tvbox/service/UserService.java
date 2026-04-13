@@ -67,6 +67,7 @@ public class UserService {
     }
 
     private void loadUsernames() {
+        usernames.clear();
         userRepository.findAll().forEach(user -> usernames.add(user.getUsername()));
     }
 

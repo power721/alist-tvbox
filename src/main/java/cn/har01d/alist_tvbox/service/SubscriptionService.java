@@ -332,6 +332,11 @@ public class SubscriptionService {
         return value;
     }
 
+    public void clearRequestContext() {
+        currentToken.remove();
+        tenantService.clear();
+    }
+
     public TokenDto updateToken(TokenDto dto) {
         if (dto.isEnabledToken() && StringUtils.isBlank(dto.getToken())) {
             tokens = IdUtils.generate(8);

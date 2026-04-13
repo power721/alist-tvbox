@@ -73,7 +73,7 @@ public class TmdbService {
 
     private String apiKey;
     private long lastRequestTime;
-    private int siteId = 1;  // TODO: move to context
+    private final ThreadLocal<Integer> siteId = ThreadLocal.withInitial(() -> 1);
 
     public TmdbService(TmdbRepository tmdbRepository,
                        TmdbMetaRepository tmdbMetaRepository,
@@ -313,8 +313,12 @@ public class TmdbService {
         log.info("get {} lines from index file {}", lines.size(), path);
         Site site = siteService.getById(siteId);
         Task task = taskService.addScrapeTask(site);
-        this.siteId = siteId;
-        scrapeIndexFile(task, lines, force);
+        this.siteId.set(siteId);
+        try {
+            scrapeIndexFile(task, lines, force);
+        } finally {
+            this.siteId.remove();
+        }
     }
 
     public void scrapeIndexFile(Task task, List<String> lines, boolean force) {
@@ -386,7 +390,11 @@ public class TmdbService {
 
     private static void writeText(String name, String content) {
         try {
-            Files.writeString(Utils.getDataPath("atv", name), content);
+            Path path = Utils.getDataPath("atv", name);
+            if (path.getParent() != null) {
+                Files.createDirectories(path.getParent());
+            }
+            Files.writeString(path, content);
         } catch (Exception e) {
             log.warn("", e);
         }
@@ -415,7 +423,7 @@ public class TmdbService {
         if (meta == null) {
             meta = new TmdbMeta();
             meta.setPath(path);
-            meta.setSiteId(siteId);
+            meta.setSiteId(siteId.get());
         } else if (meta.getTmdb() != null && !force) {
             return meta.getTmdb();
         }

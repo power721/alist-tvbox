@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
+import cn.har01d.alist_tvbox.auth.TokenFilter;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.domain.Role;
@@ -48,6 +49,7 @@ public class SettingService {
     private final AppProperties appProperties;
     private final TmdbService tmdbService;
     private final AListLocalService aListLocalService;
+    private final TokenFilter tokenFilter;
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
 
@@ -56,6 +58,7 @@ public class SettingService {
                           AppProperties appProperties,
                           TmdbService tmdbService,
                           AListLocalService aListLocalService,
+                          TokenFilter tokenFilter,
                           SettingRepository settingRepository,
                           DriverAccountRepository driverAccountRepository) {
         this.jdbcTemplate = jdbcTemplate;
@@ -63,6 +66,7 @@ public class SettingService {
         this.appProperties = appProperties;
         this.tmdbService = tmdbService;
         this.aListLocalService = aListLocalService;
+        this.tokenFilter = tokenFilter;
         this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
     }
@@ -137,6 +141,7 @@ public class SettingService {
         String apiKey = UUID.randomUUID().toString().replace("-", "");
         log.debug("generate api key: {}", apiKey);
         settingRepository.save(new Setting("api_key", apiKey));
+        tokenFilter.setApiKey(apiKey);
         return apiKey;
     }
 
