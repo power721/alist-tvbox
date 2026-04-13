@@ -86,6 +86,9 @@
           <div class="hint" v-if="tokenUrl.includes('ycyup.cn')">
             ycyup:<a href="https://ycyup.cn/alipan/authorize" title="需要选择ycyup的认证URL" target="_blank">获取开放token</a>
           </div>
+          <div class="hint" v-if="tokenUrl.includes('har01d.cn')">
+            har01d:<a href="https://ali.har01d.cn/authorize" title="需要选择har01d的认证URL" target="_blank">获取开放token</a>
+          </div>
           <div class="hint">
             TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码获取</a>
           </div>
@@ -168,6 +171,9 @@
           <el-input v-model="form.openToken" type="textarea" rows="4" minlength="256" placeholder="长度280位"/>
           <div class="hint" v-if="tokenUrl.includes('ycyup.cn')">
             ycyup:<a href="https://ycyup.cn/alipan/authorize" title="需要选择ycyup的认证URL" target="_blank">获取开放token</a>
+          </div>
+          <div class="hint" v-if="tokenUrl.includes('har01d.cn')">
+            har01d:<a href="https://ali.har01d.cn/authorize" title="需要选择har01d的认证URL" target="_blank">获取开放token</a>
           </div>
           <div class="hint">
             TV Token:<a href="javascript:void(0)" @click.stop="getQr">扫码获取</a>

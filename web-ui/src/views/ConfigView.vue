@@ -394,6 +394,7 @@ const options = [
     label: '作者自建',
     options: [
       {label: 'ycyup', value: 'https://ycyup.cn/alipan/access_token'},
+      {label: 'har01d', value: 'https://ali.har01d.cn/access_token'},
     ]
   },
   {
