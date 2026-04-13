@@ -26,7 +26,7 @@ public class WebSecurityConfiguration {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .authorizeHttpRequests(requests -> requests.requestMatchers(
+                        .authorizeHttpRequests(requests -> requests.requestMatchers(
                                 "/tg/**",
                                 "/tgs/**",
                                 "/tv/**",
@@ -34,9 +34,7 @@ public class WebSecurityConfiguration {
                                 "/ali/access_token",
                                 "/api/alist/status",
                                 "/api/profiles",
-                                "/api/accounts/login",
-                                "/api/accounts/logout",
-                                "/api/accounts/principal"
+                                "/api/accounts/login"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers(
@@ -46,7 +44,9 @@ public class WebSecurityConfiguration {
                                 "/api/telegram/search",
                                 "/api/settings/install_mode",
                                 "/api/alist/start/status",
-                                "/api/share-link"
+                                "/api/share-link",
+                                "/api/accounts/logout",
+                                "/api/accounts/principal"
                         ).authenticated()
                         .requestMatchers("/api/history/**").hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
                         .requestMatchers("/api/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())

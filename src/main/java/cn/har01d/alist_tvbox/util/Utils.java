@@ -276,7 +276,10 @@ public final class Utils {
     }
 
     public static Path getDataPath(String... path) {
-        String base = inDocker ? "/data" : "/opt/atv/data";
+        String base = System.getProperty("atv.data.dir");
+        if (StringUtils.isBlank(base)) {
+            base = inDocker ? "/data" : "/opt/atv/data";
+        }
         return Path.of(base, path);
     }
 

@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.PlayUrl;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.BiliBiliService;
 import cn.har01d.alist_tvbox.service.ProxyService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
@@ -82,10 +83,10 @@ public class PlayController {
         if (StringUtils.isNotBlank(id)) {
             String[] parts = id.split("@");
             if (parts.length > 1) {
-                site = Integer.parseInt(parts[0]);
+                site = parseInt(parts[0], "站点参数格式不正确");
                 path = parts[1];
                 try {
-                    path = proxyService.getPath(Integer.parseInt(path));
+                    path = proxyService.getPath(parseInt(path, "播放参数格式不正确"));
                 } catch (NumberFormatException e) {
                     log.debug("", e);
                 } catch (Exception e) {
@@ -96,24 +97,35 @@ public class PlayController {
             }
         }
 
+        if (StringUtils.isBlank(path)) {
+            throw new BadRequestException("缺少播放参数");
+        }
+
         boolean getSub = true;
         Map<String, Object> result;
-        if (path.contains("/")) {
-            if (path.startsWith("/")) {
-                result = tvBoxService.getPlayUrl(site, path, getSub, client);
+        try {
+            if (path.contains("/")) {
+                if (path.startsWith("/")) {
+                    result = tvBoxService.getPlayUrl(site, path, getSub, client);
+                } else {
+                    int index = path.indexOf('/');
+                    id = path.substring(0, index);
+                    path = path.substring(index);
+                    result = tvBoxService.getPlayUrl(site, parseInt(id, "播放参数格式不正确"), path, getSub, client);
+                }
+            } else if (path.contains("-")) {
+                String[] parts = path.split("-", 2);
+                if (parts.length != 2) {
+                    throw new BadRequestException("播放参数格式不正确");
+                }
+                id = parts[0];
+                int index = parseInt(parts[1], "播放参数格式不正确");
+                result = tvBoxService.getPlayUrl(site, parseInt(id, "播放参数格式不正确"), index, getSub, client);
             } else {
-                int index = path.indexOf('/');
-                id = path.substring(0, index);
-                path = path.substring(index);
-                result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), path, getSub, client);
+                result = tvBoxService.getPlayUrl(site, parseInt(path, "播放参数格式不正确"), getSub, client);
             }
-        } else if (path.contains("-")) {
-            String[] parts = path.split("-");
-            id = parts[0];
-            int index = Integer.parseInt(parts[1]);
-            result = tvBoxService.getPlayUrl(site, Integer.parseInt(id), index, getSub, client);
-        } else {
-            result = tvBoxService.getPlayUrl(site, Integer.parseInt(path), getSub, client);
+        } catch (NumberFormatException e) {
+            throw new BadRequestException("播放参数格式不正确", e);
         }
 
 //        String url = (String) result.get("url");
@@ -122,5 +134,13 @@ public class PlayController {
 //        }
 
         return result;
+    }
+
+    private int parseInt(String value, String message) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new BadRequestException(message, e);
+        }
     }
 }

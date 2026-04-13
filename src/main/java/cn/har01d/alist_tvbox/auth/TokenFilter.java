@@ -4,12 +4,15 @@ import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
+import cn.har01d.alist_tvbox.service.SubscriptionService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -26,11 +29,19 @@ import java.util.Set;
 @Component
 public class TokenFilter extends OncePerRequestFilter {
     private final TokenService tokenService;
-    private final String apiKey;
+
+    @Lazy
+    @Autowired(required = false)
+    private SubscriptionService subscriptionService;
+    private volatile String apiKey;
 
     public TokenFilter(TokenService tokenService, SettingRepository settingRepository) {
         this.tokenService = tokenService;
         apiKey = settingRepository.findById("api_key").map(Setting::getValue).orElse("");
+    }
+
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
     }
 
     @Override
@@ -63,6 +74,11 @@ public class TokenFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (UserUnauthorizedException e) {
             sendError(response, e);
+        } finally {
+            SecurityContextHolder.clearContext();
+            if (subscriptionService != null) {
+                subscriptionService.clearRequestContext();
+            }
         }
     }
 

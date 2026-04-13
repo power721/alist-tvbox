@@ -1133,7 +1133,7 @@ public class TvBoxService {
             return fsInfo.getType() == 1 || fsInfo.getType() == 2;
         }
         if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3
-                || (fsInfo.getType() == 0 && (fsInfo.getName().endsWith(".strm") || fsInfo.getName().endsWith(".iso")))) {
+                || (fsInfo.getType() == 0 && (fsInfo.getName().endsWith(".strm") || fsInfo.getName().endsWith(".iso") || fsInfo.getName().endsWith(".cas")))) {
             return true;
         }
         if ("web".equals(ac)) {
@@ -2368,7 +2368,7 @@ public class TvBoxService {
         int index = name.lastIndexOf('.');
         if (index > 0) {
             String suffix = name.substring(index + 1).toLowerCase();
-            return appProperties.getFormats().contains(suffix) || "strm".equals(suffix);
+            return appProperties.getFormats().contains(suffix) || "strm".equals(suffix) || "cas".equals(suffix);
         }
         return false;
     }
