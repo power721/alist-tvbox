@@ -682,7 +682,7 @@ public class TelegramService {
     }
 
     private MovieList getDoubanList(String type, String ac, String sort, Integer year, String genre, String region, int page, int size) {
-        String key = type + "-" + page;
+        String key = ac + "-" + type + "-" + page;
         MovieList result = douban.getIfPresent(key);
         if (result != null) {
             return result;
@@ -855,7 +855,7 @@ public class TelegramService {
     }
 
     private MovieList getDoubanItems(String type, String ac, int page, int size) {
-        String key = type + "-" + page;
+        String key = ac + "-" + type + "-" + page;
         int start = (page - 1) * size;
         String url = "https://m.douban.com/rexxar/api/v2/subject/recent_hot/movie?limit=" + size + "&start=" + start;
         if (type.equals("hot_tv")) {

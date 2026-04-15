@@ -1107,9 +1107,9 @@ public class TvBoxService {
 
         result.getList().addAll(folders);
 
-        if (page == 1 && files.size() > 1 && !"gui".equals(ac)) {
+        if (page == 1 && files.size() > 1) {
             MovieDetail playlist = generatePlaylist(site, path, total - folders.size(), files);
-            if ("web".equals(ac)) {
+            if ("web".equals(ac) || "gui".equals(ac)) {
                 playlist.setType(9);
                 playlist.setVod_remarks("");
                 playlist.setVod_play_url(buildM3u8Url(path));
@@ -2477,6 +2477,7 @@ public class TvBoxService {
         return ServletUriComponentsBuilder.fromCurrentRequest()
                 .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
                 .replacePath(p)
+                .replaceQuery("")
                 .build()
                 .toUriString();
     }
