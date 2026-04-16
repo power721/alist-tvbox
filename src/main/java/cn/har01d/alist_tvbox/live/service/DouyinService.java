@@ -196,7 +196,7 @@ public class DouyinService implements LivePlatform {
     }
 
     @Override
-    public MovieList list(String id, String sort, Integer pg) throws IOException {
+    public MovieList list(String id, String ac, String sort, Integer pg) throws IOException {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 

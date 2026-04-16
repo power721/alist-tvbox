@@ -227,4 +227,9 @@ public class TvBoxController {
 
         return subscriptionService.repository(token, id);
     }
+
+    @GetMapping("/api/capabilities")
+    public Map<String, Boolean> getCapabilities() {
+        return subscriptionService.getCapabilities();
+    }
 }

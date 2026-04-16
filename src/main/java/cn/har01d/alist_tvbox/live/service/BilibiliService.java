@@ -134,7 +134,7 @@ public class BilibiliService implements LivePlatform {
     private final Pattern pattern = Pattern.compile("\"access_id\"\\s*:\\s*\"([^\"]+)\"");
 
     @Override
-    public MovieList list(String tid, String sort, Integer pg) throws IOException {
+    public MovieList list(String tid, String ac, String sort, Integer pg) throws IOException {
         String[] parts = tid.split("-");
 
         MovieList result = new MovieList();
@@ -150,7 +150,11 @@ public class BilibiliService implements LivePlatform {
                 MovieDetail detail = new MovieDetail();
                 detail.setVod_id(tid + "-" + item.getId());
                 detail.setVod_name(item.getName());
-                detail.setVod_pic(fixCover(item.getPic()));
+                if ("gui".equals(ac)) {
+                    detail.setVod_pic(item.getPic());
+                } else {
+                    detail.setVod_pic(fixCover(item.getPic()));
+                }
                 detail.setVod_remarks(item.getParent_name());
                 detail.setVod_tag(FOLDER);
                 list.add(detail);
@@ -188,7 +192,11 @@ public class BilibiliService implements LivePlatform {
                 MovieDetail detail = new MovieDetail();
                 detail.setVod_id(getType() + "$" + room.getRoomid());
                 detail.setVod_name(room.getTitle());
-                detail.setVod_pic(fixCover(room.getCover()));
+                if ("gui".equals(ac)) {
+                    detail.setVod_pic(room.getCover());
+                } else {
+                    detail.setVod_pic(fixCover(room.getCover()));
+                }
                 detail.setVod_remarks(room.getUname());
                 userMap.put(String.valueOf(room.getRoomid()), room.getUname());
                 list.add(detail);

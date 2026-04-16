@@ -1848,7 +1848,7 @@ public class TvBoxService {
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(site.getName());
-        if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
+        if ("detail".equals(ac) || "web".equals(ac)) {
             depth = 1;
             movieDetail.setType(9);
         } else {
@@ -1936,7 +1936,11 @@ public class TvBoxService {
                     if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
                         Video item = new Video();
                         item.setName(name);
-                        item.setTitle(title);
+                        if ("gui".equals(ac) && StringUtils.isNotBlank(folder)) {
+                            item.setTitle(folder + " - " + title);
+                        } else {
+                            item.setTitle(title);
+                        }
                         item.setPath(filepath);
                         item.setTime(time.get(name));
                         item.setSize(size.get(name));

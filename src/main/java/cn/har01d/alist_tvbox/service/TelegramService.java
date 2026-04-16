@@ -347,12 +347,16 @@ public class TelegramService {
                 .collect(Collectors.joining("\n"));
     }
 
-    public MovieList detail(String tid) {
+    public MovieList detail(String tid, String ac, String title) {
         ShareLink share = new ShareLink();
         share.setLink(tid);
         String path = shareService.add(share);
 
-        return tvBoxService.getDetail("", "1$" + path + "/~playlist");
+        MovieList result = tvBoxService.getDetail(ac, "1$" + path + "/~playlist");
+        if (StringUtils.isNotBlank(title)) {
+            result.getList().get(0).setVod_name(title);
+        }
+        return result;
     }
 
     private String encodeUrl(String url) {

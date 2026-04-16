@@ -26,10 +26,10 @@ public class LiveService {
             .maximumSize(20)
             .expireAfterWrite(Duration.ofMinutes(15))
             .build();
-    private final HuyaService huyaService;
+    private final DouyuService douyuService;
 
     public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService) {
-        this.huyaService = huyaService;
+        this.douyuService = douyuService;
         platforms.add(huyaService);
         platforms.add(douyuService);
         platforms.add(bilibiliService);
@@ -39,7 +39,7 @@ public class LiveService {
     }
 
     public MovieList home() throws IOException {
-        return huyaService.home();
+        return douyuService.home();
     }
 
     public CategoryList category() throws IOException {
@@ -60,13 +60,13 @@ public class LiveService {
         return result;
     }
 
-    public MovieList list(String id, String sort, Integer pg) throws IOException {
+    public MovieList list(String id, String ac, String sort, Integer pg) throws IOException {
         MovieList result = new MovieList();
         if (id.contains("-")) {
             String[] parts = id.split("-");
             for (LivePlatform platform : platforms) {
                 if (platform.getType().equals(parts[0])) {
-                    return platform.list(id, sort, pg);
+                    return platform.list(id, ac, sort, pg);
                 }
             }
         } else {
