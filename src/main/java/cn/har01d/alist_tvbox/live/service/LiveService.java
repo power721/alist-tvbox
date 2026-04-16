@@ -26,10 +26,10 @@ public class LiveService {
             .maximumSize(20)
             .expireAfterWrite(Duration.ofMinutes(15))
             .build();
-    private final DouyuService douyuService;
+    private final HuyaService huyaService;
 
     public LiveService(HuyaService huyaService, DouyuService douyuService, BilibiliService bilibiliService, CcService ccService, KuaishouService kuaishouService, DouyinService douyinService) {
-        this.douyuService = douyuService;
+        this.huyaService = huyaService;
         platforms.add(huyaService);
         platforms.add(douyuService);
         platforms.add(bilibiliService);
@@ -39,7 +39,7 @@ public class LiveService {
     }
 
     public MovieList home() throws IOException {
-        return douyuService.home();
+        return huyaService.home();
     }
 
     public CategoryList category() throws IOException {
