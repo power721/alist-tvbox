@@ -38,7 +38,7 @@ public class HuyaController {
             if (t.equals("0")) {
                 return huyaService.home();
             }
-            return huyaService.list(t, sort, pg);
+            return huyaService.list(t, "", sort, pg);
         }
         return huyaService.category();
     }

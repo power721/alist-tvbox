@@ -21,12 +21,12 @@ public class LiveController {
     }
 
     @GetMapping("/live")
-    public Object browse(String ids, String wd, String t, String platform, String sort, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
-        return browse("", ids, wd, t, platform, sort, pg);
+    public Object browse(String ids, String wd, String ac, String t, String platform, String sort, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
+        return browse("", ids, wd, ac, t, platform, sort, pg);
     }
 
     @GetMapping("/live/{token}")
-    public Object browse(@PathVariable String token, String ids, String wd, String t, String platform, String sort, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
+    public Object browse(@PathVariable String token, String ids, String wd, String ac, String t, String platform, String sort, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
         subscriptionService.checkToken(token);
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
@@ -39,7 +39,7 @@ public class LiveController {
             if (t.equals("0")) {
                 return liveService.home();
             }
-            return liveService.list(t, sort, pg);
+            return liveService.list(t, ac, sort, pg);
         }
         return liveService.category();
     }

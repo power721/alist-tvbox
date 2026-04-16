@@ -1117,6 +1117,14 @@ public class SubscriptionService {
         }
     }
 
+    public Map<String, Boolean> getCapabilities() {
+        Map<String, Boolean> map = new HashMap<>();
+        map.put("emby", embyRepository.count() > 0);
+        map.put("jellyfin", jellyfinRepository.count() > 0);
+        map.put("pansou", StringUtils.isNotBlank(appProperties.getPanSouUrl()));
+        return map;
+    }
+
     private Map<String, Object> buildSite(String token, String uid, String key, String name) throws IOException {
         Map<String, Object> site = new HashMap<>();
         String url = readHostAddress("");

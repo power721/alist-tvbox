@@ -60,13 +60,13 @@ public class LiveService {
         return result;
     }
 
-    public MovieList list(String id, String sort, Integer pg) throws IOException {
+    public MovieList list(String id, String ac, String sort, Integer pg) throws IOException {
         MovieList result = new MovieList();
         if (id.contains("-")) {
             String[] parts = id.split("-");
             for (LivePlatform platform : platforms) {
                 if (platform.getType().equals(parts[0])) {
-                    return platform.list(id, sort, pg);
+                    return platform.list(id, ac, sort, pg);
                 }
             }
         } else {

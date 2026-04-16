@@ -6,6 +6,10 @@
       <a href="https://github.com/power721/alist-tvbox" target="_blank">https://github.com/power721/alist-tvbox</a>
     </p>
     <p>
+      电脑客户端：
+      <a href="https://github.com/power721/atv-player" target="_blank">https://github.com/power721/atv-player</a>
+    </p>
+    <p>
       中文文档：<a href="https://har01d.cn/#/notes/alist-tvbox" target="_blank">https://har01d.cn/#/notes/alist-tvbox</a>
     </p>
     <p>
