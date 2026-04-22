@@ -16,6 +16,7 @@ public class Pan189 extends Storage {
         addAddition("upload_method", "stream");
         addAddition("upload_thread", "3");
         addAddition("rapid_upload", true);
+        addAddition("restore_source_from_cas", true);
         buildAddition(account);
     }
 }
