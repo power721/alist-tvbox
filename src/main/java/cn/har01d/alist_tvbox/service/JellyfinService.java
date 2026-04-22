@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.JellyfinPlayInfo;
 import cn.har01d.alist_tvbox.dto.bili.Sub;
 import cn.har01d.alist_tvbox.dto.emby.EmbyInfo;
 import cn.har01d.alist_tvbox.dto.emby.EmbyItem;
@@ -30,6 +31,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -432,7 +434,7 @@ public class JellyfinService {
             new FilterValue("时长⬆️", "Runtime,SortName:Ascending"),
             new FilterValue("时长⬇️", "Runtime,SortName:Descending")
     );
-    private Map<String, Object> last;
+    private JellyfinPlayInfo last;
 
     public JellyfinService(JellyfinRepository jellyfinRepository, SettingRepository settingRepository, RestTemplateBuilder builder, ObjectMapper objectMapper) {
         this.jellyfinRepository = jellyfinRepository;
@@ -817,24 +819,30 @@ public class JellyfinService {
         String url = jellyfin.getUrl() + "/Items/" + parts[1] + "/PlaybackInfo";
         var media = restTemplate.exchange(url, HttpMethod.POST, entity, EmbyMediaSources.class).getBody();
 
+        var jellyfinPlayInfo = new JellyfinPlayInfo(jellyfin, info, parts[1], media.getSessionId(), media.getItems().get(0).getId(), media.getItems().get(0).getRunTimeTicks());
+
         if (last != null) {
-            url = jellyfin.getUrl() + "/Sessions/Playing/Stopped";
-            entity = new HttpEntity<>(last, headers);
-            var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-            log.debug("stop playing: {} {}", last, response.getStatusCode());
+            try {
+                url = jellyfin.getUrl() + "/Sessions/Playing/Stopped";
+                entity = new HttpEntity<>(last.getStopped(), headers);
+                restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            } catch (Exception e) {
+                log.warn("stop playing", e);
+            }
         }
 
-        url = jellyfin.getUrl() + "/Sessions/Playing";
-        Map<String, Object> data = new HashMap<>();
-        data.put("ItemId", parts[1]);
-        data.put("PlaySessionId", media.getSessionId());
-        data.put("MediaSourceId", media.getItems().get(0).getId());
-        data.put("PlayMethod", "DirectPlay");
-        data.put("PositionTicks", media.getItems().get(0).getRunTimeTicks() * 2 / 3);
-        entity = new HttpEntity<>(data, headers);
-        var response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-        log.debug("start playing: {} {}", data, response.getStatusCode());
-        last = data;
+        try {
+            url = jellyfin.getUrl() + "/Sessions/Playing";
+            entity = new HttpEntity<>(jellyfinPlayInfo.getPlaying(), headers);
+            restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+
+            url = jellyfin.getUrl() + "/Sessions/Playing/Progress";
+            entity = new HttpEntity<>(jellyfinPlayInfo.getProgress(media.getItems().get(0).getRunTimeTicks() * 2 / 3 / 10000), headers);
+            restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        } catch (Exception e) {
+            log.warn("start playing", e);
+        }
+        last = jellyfinPlayInfo;
 
         List<String> urls = new ArrayList<>();
         for (var source : media.getItems()) {
@@ -852,6 +860,33 @@ public class JellyfinService {
         result.put("parse", 0);
         log.debug("{}", result);
         return result;
+    }
+
+    public void updateProgress(String id, long progress) {
+        if (last != null) {
+            var jellyfin = last.getJellyfin();
+            if (id.equals(jellyfin.getId() + "-" + last.getItemId())) {
+                var info = last.getInfo();
+                HttpHeaders headers = setHeaders(jellyfin, info);
+                try {
+                    String url;
+                    String json;
+                    if (progress > 0) {
+                        url = jellyfin.getUrl() + "/Sessions/Playing/Progress";
+                        json = last.getProgress(progress);
+                    } else {
+                        url = jellyfin.getUrl() + "/Sessions/Playing/Stopped";
+                        json = last.getStopped();
+                        log.debug("stop jellyfin: {}", jellyfin.getId() + "-" + last.getItemId());
+                        last = null;
+                    }
+                    HttpEntity<Object> entity = new HttpEntity<>(json, headers);
+                    restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+                } catch (Exception e) {
+                    log.warn("update progress failed", e);
+                }
+            }
+        }
     }
 
     private List<Sub> getSubtitles(Jellyfin jellyfin, EmbyMediaSources.MediaSources mediaSources) {
@@ -903,6 +938,7 @@ public class JellyfinService {
 
     private HttpHeaders setHeaders(Jellyfin emby, EmbyInfo info) {
         HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
         if (StringUtils.isNotBlank(emby.getUserAgent())) {
             headers.set(HttpHeaders.USER_AGENT, emby.getUserAgent());
         }
