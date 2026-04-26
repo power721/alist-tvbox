@@ -1374,7 +1374,7 @@ public class TvBoxService {
                 .toUriString();
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub, String client) {
+    public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub, String client, String type) {
         Site site = siteService.getById(siteId);
         String url = null;
         String name = getNameFromPath(path);
@@ -1413,28 +1413,41 @@ public class TvBoxService {
 
         result.put("url", url);
 
+        DriverType driverType = switch (fsDetail.getProvider()) {
+            case "QuarkShare", "Quark", "QuarkTV" ->  DriverType.QUARK;
+            case "UCShare", "UC", "UCTV" ->  DriverType.UC;
+            case "ThunderBrowser", "ThunderShare" ->  DriverType.THUNDER;
+            case "115 Cloud", "115 Share" ->  DriverType.PAN115;
+            case "BaiduNetdisk", "BaiduShare2" ->  DriverType.BAIDU;
+            case "123Pan", "123PanShare" ->  DriverType.PAN123;
+            case "139Yun", "Yun139Share" ->  DriverType.PAN139;
+            case "189CloudPC", "189Share" ->  DriverType.CLOUD189;
+            case "AliyunShare",  "AliyundriveOpen" ->  DriverType.ALI;
+            default -> DriverType.UNKNOWN;
+        };
+        result.put("type", driverType);
+
         if (url.contains("#proxy=0")) {
             // do nothing
-        } else if (isUseProxy(url)) {
+        } else if (isUseProxy(url) && !"client-proxy".equals(type)) {
             url = buildProxyUrl(site, name, path);
             result.put("url", url);
-        } else if (fsDetail.getProvider().equals("QuarkShare") || fsDetail.getProvider().equals("Quark")) {
-            var account = getDriverAccount(url, DriverType.QUARK);
+        } else if (driverType == DriverType.QUARK) {
+            var account = getDriverAccount(url, driverType);
             String cookie = account == null ? "" : account.getCookie();
             result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.QUARK_USER_AGENT, "Referer", "https://pan.quark.cn"));
-        } else if (fsDetail.getProvider().equals("UCShare") || fsDetail.getProvider().equals("UC")) {
-            var account = getDriverAccount(url, DriverType.UC);
+        } else if (driverType == DriverType.UC) {
+            var account = getDriverAccount(url, driverType);
             String cookie = account == null ? "" : account.getCookie();
             result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.UC_USER_AGENT, "Referer", "https://drive.uc.cn"));
-        } else if (url.contains("xunlei.com")) {
+        } else if (driverType == DriverType.THUNDER) {
             result.put("header", Map.of("User-Agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)"));
-        } else if (url.contains("115cdn.net")) {
-            var account = getDriverAccount(url, DriverType.PAN115);
+        } else if (driverType == DriverType.PAN115) {
             // 115会把UA生成签名校验
             result.put("header", Map.of("User-Agent", Constants.USER_AGENT, "Referer", "https://115.com/"));
-        } else if (fsDetail.getProvider().contains("Baidu")) {
+        } else if (driverType == DriverType.BAIDU) {
             result.put("header", Map.of("User-Agent", "netdisk"));
-        } else if (url.contains("ali")) {
+        } else if (url.contains("ali") || driverType ==  DriverType.ALI) {
             result.put("format", "application/octet-stream");
             result.put("header", Map.of("User-Agent", appProperties.getUserAgent(), "Referer", Constants.ALIPAN, "origin", Constants.ALIPAN));
         }
@@ -1511,15 +1524,15 @@ public class TvBoxService {
         return 0;
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, Integer index, boolean getSub, String client) {
-        return getPlayUrl(siteId, id, cache.getIfPresent(id).get(index - 1), getSub, client);
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, Integer index, boolean getSub, String client, String type) {
+        return getPlayUrl(siteId, id, cache.getIfPresent(id).get(index - 1), getSub, client, type);
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, boolean getSub, String client) {
-        return getPlayUrl(siteId, id, "", getSub, client);
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, boolean getSub, String client, String type) {
+        return getPlayUrl(siteId, id, "", getSub, client, type);
     }
 
-    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path, boolean getSub, String client) {
+    public Map<String, Object> getPlayUrl(Integer siteId, Integer id, String path, boolean getSub, String client, String type) {
         Meta meta = metaRepository.findById(id).orElseThrow(NotFoundException::new);
         if (siteId == null) {
             siteId = meta.getSiteId();
@@ -1528,7 +1541,7 @@ public class TvBoxService {
             siteId = 1;
         }
         log.debug("getPlayUrl: {} {} {}", siteId, id, path);
-        return getPlayUrl(siteId, meta.getPath() + path, getSub, client);
+        return getPlayUrl(siteId, meta.getPath() + path, getSub, client, type);
     }
 
     private String findBestSubtitle(List<String> subtitles, String name) {

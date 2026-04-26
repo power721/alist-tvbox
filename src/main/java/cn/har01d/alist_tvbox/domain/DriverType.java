@@ -12,7 +12,7 @@ public enum DriverType {
     UC_TV,
     OPEN115,
     BAIDU,
-    OTHER4,
+    ALI,
     OTHER5,
     OTHER6,
     OTHER7,
@@ -27,5 +27,5 @@ public enum DriverType {
     OTHER16,
     OTHER17,
     OTHER18,
-    OTHER19,
+    UNKNOWN,
 }
