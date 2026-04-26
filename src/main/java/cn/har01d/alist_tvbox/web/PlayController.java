@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -106,12 +105,12 @@ public class PlayController {
         try {
             if (path.contains("/")) {
                 if (path.startsWith("/")) {
-                    result = tvBoxService.getPlayUrl(site, path, getSub, client);
+                    result = tvBoxService.getPlayUrl(site, path, getSub, client, type);
                 } else {
                     int index = path.indexOf('/');
                     id = path.substring(0, index);
                     path = path.substring(index);
-                    result = tvBoxService.getPlayUrl(site, parseInt(id, "播放参数格式不正确"), path, getSub, client);
+                    result = tvBoxService.getPlayUrl(site, parseInt(id, "播放参数格式不正确"), path, getSub, client, type);
                 }
             } else if (path.contains("-")) {
                 String[] parts = path.split("-", 2);
@@ -120,9 +119,9 @@ public class PlayController {
                 }
                 id = parts[0];
                 int index = parseInt(parts[1], "播放参数格式不正确");
-                result = tvBoxService.getPlayUrl(site, parseInt(id, "播放参数格式不正确"), index, getSub, client);
+                result = tvBoxService.getPlayUrl(site, parseInt(id, "播放参数格式不正确"), index, getSub, client, type);
             } else {
-                result = tvBoxService.getPlayUrl(site, parseInt(path, "播放参数格式不正确"), getSub, client);
+                result = tvBoxService.getPlayUrl(site, parseInt(path, "播放参数格式不正确"), getSub, client, type);
             }
         } catch (NumberFormatException e) {
             throw new BadRequestException("播放参数格式不正确", e);
