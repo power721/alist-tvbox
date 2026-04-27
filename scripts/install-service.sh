@@ -133,12 +133,12 @@ cd "$TMPDIR"
 
 [ "$LOCAL_VERSION1" != "$VERSION1" ] && {
   log "$YELLOW" "升级 AList TvBox: $LOCAL_VERSION1 -> $VERSION1"
-  wget http://har01d.org/atv.tgz -O atv.tgz && tar xf atv.tgz
+  wget http://sync.har01d.cn/atv.tgz -O atv.tgz && tar xf atv.tgz
 }
 
 [ "$LOCAL_VERSION2" != "$VERSION2" ] && {
   log "$YELLOW" "升级 Power AList: $LOCAL_VERSION2 -> $VERSION2"
-  wget http://har01d.org/alist.tgz -O alist.tgz && tar xf alist.tgz
+  wget http://sync.har01d.cn/alist.tgz -O alist.tgz && tar xf alist.tgz
 }
 
 # ========== 生成 systemd 服务 ==========
