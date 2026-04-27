@@ -1129,9 +1129,9 @@ public class TvBoxService {
     }
 
     private boolean isAcceptType(FsInfo fsInfo, String ac) {
-        if ("gui".equals(ac)) {
-            return fsInfo.getType() == 1 || fsInfo.getType() == 2;
-        }
+//        if ("gui".equals(ac)) {
+//            return fsInfo.getType() == 1 || fsInfo.getType() == 2;
+//        }
         if (fsInfo.getType() == 1 || fsInfo.getType() == 2 || fsInfo.getType() == 3
                 || (fsInfo.getType() == 0 && (fsInfo.getName().endsWith(".strm") || fsInfo.getName().endsWith(".iso") || fsInfo.getName().endsWith(".cas")))) {
             return true;
