@@ -1452,6 +1452,10 @@ public class TvBoxService {
             result.put("header", Map.of("User-Agent", appProperties.getUserAgent(), "Referer", Constants.ALIPAN, "origin", Constants.ALIPAN));
         }
 
+        if ("UCTV".equals(fsDetail.getProvider())) {
+            result.put("header", Map.of("User-Agent", Constants.USER_AGENT));
+        }
+
         if (!getSub) {
             log.debug("[{}] getPlayUrl result: {}", fsDetail.getProvider(), result);
             return result;
