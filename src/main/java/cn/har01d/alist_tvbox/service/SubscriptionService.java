@@ -1314,6 +1314,11 @@ public class SubscriptionService {
             json = Pattern.compile("^\\s*//.*\r?\n?", Pattern.MULTILINE).matcher(json).replaceAll("");
             json = json.replace("\r", " ").replace("\n", " ");
             json = json.replace("{Cloud-drive", "{\"Cloud-drive");
+            if (json.contains("tvfan/Cloud-drive.txt")) {
+                String address = readHostAddress();
+                String token = getCurrentOrFirstToken();
+                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
+            }
 
             return objectMapper.readValue(json, Map.class);
         } catch (Exception e) {
