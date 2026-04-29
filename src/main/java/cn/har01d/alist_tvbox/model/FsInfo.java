@@ -6,6 +6,7 @@ import lombok.Data;
 public class FsInfo {
     private String name;
     private int type;
+    private int duration;
     private long size;
     private String thumb;
     private String thumbnail;

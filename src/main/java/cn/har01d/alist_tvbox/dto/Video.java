@@ -12,6 +12,7 @@ public class Video {
     private String time;
     private String url;
     private Long size;
+    private Integer duration;
     private Integer rating;
 
     public Video() {
