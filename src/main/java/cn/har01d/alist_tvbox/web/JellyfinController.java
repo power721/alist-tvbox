@@ -75,15 +75,15 @@ public class JellyfinController {
     }
 
     @GetMapping("/jellyfin-play")
-    public Object play(String id, long t, HttpServletRequest request) throws IOException {
+    public Object play(String id, Long t, HttpServletRequest request) throws IOException {
         return play("", id, t, request);
     }
 
     @GetMapping("/jellyfin-play/{token}")
-    public Object play(@PathVariable String token, String id, long t, HttpServletRequest request) throws IOException {
+    public Object play(@PathVariable String token, String id, Long t, HttpServletRequest request) throws IOException {
         subscriptionService.checkToken(token);
 
-        if (t == 0) {
+        if (t == null || t == 0) {
             return jellyfinService.play(id);
         } else {
             jellyfinService.updateProgress(id, t);
