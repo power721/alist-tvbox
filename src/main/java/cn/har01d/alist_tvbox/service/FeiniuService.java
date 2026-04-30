@@ -34,6 +34,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -154,6 +155,7 @@ public class FeiniuService {
         result.setList(list);
         result.setTotal(list.size());
         result.setLimit(list.size());
+        log.debug("home: {}", result);
         return result;
     }
 
@@ -447,9 +449,20 @@ public class FeiniuService {
             movie.setVod_name(item.path("tv_title").asText());
         }
         movie.setVod_pic(imageUrl(site, firstText(item, "poster", "poster_list", "posters"), subToken, baseUrl));
-        movie.setVod_remarks(item.path("vote_average").asText(""));
+        movie.setVod_remarks(formatVoteAverage(item.path("vote_average").asText("")));
         movie.setVod_year(yearOf(item));
         return movie;
+    }
+
+    private String formatVoteAverage(String value) {
+        if (StringUtils.isBlank(value)) {
+            return "";
+        }
+        try {
+            return String.format(Locale.US, "%.1f", Double.parseDouble(value));
+        } catch (NumberFormatException e) {
+            return value;
+        }
     }
 
     private List<Sub> getSubtitles(Feiniu site, String token, JsonNode streamList) {
