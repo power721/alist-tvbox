@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.TableGenerator;
+import jakarta.persistence.Transient;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -30,4 +31,8 @@ public class Feiniu {
     private String username = "";
     private String password = "";
     private String token = "";
+    @Transient
+    private String fnosToken = "";
+    @Transient
+    private String fnosLongToken = "";
 }

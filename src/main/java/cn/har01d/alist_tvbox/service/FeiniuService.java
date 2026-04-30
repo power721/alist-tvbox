@@ -52,6 +52,8 @@ public class FeiniuService {
             new FilterValue("加入日期⬆️", "create_time:ASC"),
             new FilterValue("上映日期⬇️", "release_date:DESC"),
             new FilterValue("上映日期⬆️", "release_date:ASC"),
+            new FilterValue("评分⬆️", "vote_average:ASC"),
+            new FilterValue("评分⬆️", "vote_average:ASC"),
             new FilterValue("名称⬆️", "sort_title:ASC"),
             new FilterValue("名称⬇️", "sort_title:DESC")
     );
@@ -277,7 +279,7 @@ public class FeiniuService {
         JsonNode playInfo = apiClient.getPlayInfo(site, token, idParts.guid());
         JsonNode streamList = apiClient.getStreamList(site, token, idParts.guid());
         JsonNode streamInfo = loadStreamInfo(site, token, playInfo);
-        Object url = buildPlayUrl(site, token, playInfo, streamList, streamInfo, subToken, baseUrl);
+        PlayUrlResult playResult = buildPlayUrl(site, token, playInfo, streamList, streamInfo, subToken, baseUrl);
 
         lastPlayState = new LastPlayState(
                 site,
@@ -287,11 +289,12 @@ public class FeiniuService {
                 playInfo.path("video_guid").asText(""),
                 playInfo.path("audio_guid").asText(""),
                 playInfo.path("subtitle_guid").asText(""),
+                playResult.playLink(),
                 playInfo.path("item").path("duration").asLong(playInfo.path("duration").asLong(0))
         );
 
         Map<String, Object> result = new HashMap<>();
-        result.put("url", url);
+        result.put("url", playResult.url());
         result.put("subs", getSubtitles(site, token, streamList));
         result.put("header", "{\"Authorization\":\"" + token + "\",\"Cookie\":\"mode=relay; Trim-MC-token=" + token + "\",\"User-Agent\":\"" + StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT) + "\"}");
         result.put("parse", 0);
@@ -417,37 +420,41 @@ public class FeiniuService {
         return subtitles;
     }
 
-    private Object buildPlayUrl(Feiniu site, String token, JsonNode playInfo, JsonNode streamList, JsonNode streamInfo,
-                                String subToken, String baseUrl) {
+    private PlayUrlResult buildPlayUrl(Feiniu site, String token, JsonNode playInfo, JsonNode streamList, JsonNode streamInfo,
+                                       String subToken, String baseUrl) {
         if (isDirectPlayable(streamInfo)) {
-            return buildFallbackUrls(site, playInfo, streamList);
+            return new PlayUrlResult(buildFallbackUrls(site, playInfo, streamList), fallbackPlayLink(site, playInfo));
         }
 
-        List<String> urls = buildTranscodeUrls(site, token, playInfo, streamInfo);
-        if (!urls.isEmpty()) {
-            return urls;
+        PlayUrlResult transcodeResult = buildTranscodeUrls(site, token, playInfo, streamInfo);
+        if (transcodeResult != null && !transcodeResult.isEmpty()) {
+            return transcodeResult;
         }
 
-        return buildFallbackUrls(site, playInfo, streamList);
+        return new PlayUrlResult(buildFallbackUrls(site, playInfo, streamList), fallbackPlayLink(site, playInfo));
     }
 
-    private List<String> buildTranscodeUrls(Feiniu site, String token, JsonNode playInfo, JsonNode streamInfo) {
+    private PlayUrlResult buildTranscodeUrls(Feiniu site, String token, JsonNode playInfo, JsonNode streamInfo) {
         List<QualityOption> qualities = collectQualityOptions(streamInfo);
         if (qualities.isEmpty()) {
             qualities = List.of(new QualityOption(preferredResolution(streamInfo), preferredBitrate(streamInfo)));
         }
 
         List<String> urls = new ArrayList<>();
+        String actualPlayLink = "";
         for (QualityOption quality : qualities) {
             JsonNode playResponse = startPlay(site, token, playInfo, streamInfo, quality.resolution(), quality.bitrate());
             String playLink = playResponse == null ? "" : playResponse.path("play_link").asText("");
             if (StringUtils.isBlank(playLink)) {
                 continue;
             }
+            if (StringUtils.isBlank(actualPlayLink)) {
+                actualPlayLink = playLink;
+            }
             urls.add(resolutionLabel(quality.resolution()));
             urls.add(apiClient.absoluteUrl(site, playLink));
         }
-        return urls;
+        return new PlayUrlResult(urls, actualPlayLink);
     }
 
     private JsonNode loadStreamInfo(Feiniu site, String token, JsonNode playInfo) {
@@ -581,6 +588,14 @@ public class FeiniuService {
         return videoStream.path("bitrate").asLong(0);
     }
 
+    private String fallbackPlayLink(Feiniu site, JsonNode playInfo) {
+        String mediaGuid = playInfo.path("media_guid").asText("");
+        if (StringUtils.isBlank(mediaGuid)) {
+            return "";
+        }
+        return new URLWrapper(apiClient.getMediaRangeUrl(site, mediaGuid)).host();
+    }
+
     private String resolutionLabel(String resolution) {
         if (StringUtils.isBlank(resolution)) {
             return "转码";
@@ -682,7 +697,9 @@ public class FeiniuService {
         if (StringUtils.isNotBlank(token)) {
             try {
                 apiClient.getUserInfo(site, token);
-                return token;
+                if (hasSessionCookies(site) || StringUtils.isBlank(site.getUsername()) || StringUtils.isBlank(site.getPassword())) {
+                    return token;
+                }
             } catch (Exception ignored) {
                 // fall through to relogin
             }
@@ -694,6 +711,10 @@ public class FeiniuService {
         site.setToken(newToken);
         feiniuRepository.save(site);
         return newToken;
+    }
+
+    private boolean hasSessionCookies(Feiniu site) {
+        return StringUtils.isNotBlank(site.getFnosToken()) && StringUtils.isNotBlank(site.getFnosLongToken());
     }
 
     private String imageUrl(Feiniu site, String path) {
@@ -770,17 +791,25 @@ public class FeiniuService {
     private record QualityOption(String resolution, long bitrate) {
     }
 
+    private record PlayUrlResult(Object url, String playLink) {
+        private boolean isEmpty() {
+            return !(url instanceof List<?> list) || list.isEmpty();
+        }
+    }
+
     private record LastPlayState(Feiniu site, String token, String itemId, String mediaGuid, String videoGuid,
-                                 String audioGuid, String subtitleGuid, long duration) {
+                                 String audioGuid, String subtitleGuid, String playLink, long duration) {
         private String guid() {
             return itemId.substring(itemId.lastIndexOf(':') + 1);
         }
+    }
 
-        private String playLink() {
+    private record URLWrapper(String value) {
+        private String host() {
             try {
-                return new URL(site.getUrl()).getHost();
+                return new URL(value).getHost();
             } catch (Exception e) {
-                return site.getUrl();
+                return value;
             }
         }
     }

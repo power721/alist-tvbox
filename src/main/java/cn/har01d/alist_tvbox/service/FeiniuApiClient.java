@@ -11,6 +11,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -40,16 +41,26 @@ public class FeiniuApiClient {
     }
 
     public String login(Feiniu feiniu) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("app_name", "trimemedia-web");
-        body.put("username", feiniu.getUsername());
-        body.put("password", feiniu.getPassword());
-        JsonNode data = post(feiniu, "", "/v/api/v1/login", body);
-        String token = data.path("token").asText("");
-        if (StringUtils.isBlank(token)) {
-            throw new BadRequestException("飞牛影视登录失败");
+        try {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("app_name", "trimemedia-web");
+            body.put("username", feiniu.getUsername());
+            body.put("password", feiniu.getPassword());
+            String json = objectMapper.writeValueAsString(body);
+            HttpEntity<String> entity = new HttpEntity<>(json, headers(feiniu, "", "/v/api/v1/login", json));
+            ResponseEntity<JsonNode> response = restTemplate.exchange(feiniu.getUrl() + "/v/api/v1/login", HttpMethod.POST, entity, JsonNode.class);
+            captureSessionCookies(feiniu, response.getHeaders());
+            JsonNode data = extractData(response.getBody());
+            String token = data.path("token").asText("");
+            if (StringUtils.isBlank(token)) {
+                throw new BadRequestException("飞牛影视登录失败");
+            }
+            return token;
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BadRequestException("飞牛影视登录失败", e);
         }
-        return token;
     }
 
     public JsonNode getMediaDbList(Feiniu feiniu, String token) {
@@ -153,6 +164,23 @@ public class FeiniuApiClient {
         headers.set("authx", signer.build(path, bodyJson, nonce, timestamp));
         headers.set(HttpHeaders.USER_AGENT, StringUtils.defaultIfBlank(feiniu.getUserAgent(), Constants.USER_AGENT));
         return headers;
+    }
+
+    private void captureSessionCookies(Feiniu feiniu, HttpHeaders headers) {
+        feiniu.setFnosToken(extractCookieValue(headers, "fnos-token"));
+        feiniu.setFnosLongToken(extractCookieValue(headers, "fnos-long-token"));
+    }
+
+    private String extractCookieValue(HttpHeaders headers, String name) {
+        for (String header : headers.getOrEmpty(HttpHeaders.SET_COOKIE)) {
+            for (String cookie : header.split(";")) {
+                String trimmed = cookie.trim();
+                if (trimmed.startsWith(name + "=")) {
+                    return trimmed.substring(name.length() + 1);
+                }
+            }
+        }
+        return "";
     }
 
     private JsonNode extractData(JsonNode response) {
