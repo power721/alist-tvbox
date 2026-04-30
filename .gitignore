@@ -38,6 +38,7 @@ build/
 
 ### VS Code ###
 .vscode/
+.worktrees/
 
 ### Others ###
 musl-1.2.5/

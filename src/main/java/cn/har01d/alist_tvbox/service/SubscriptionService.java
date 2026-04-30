@@ -176,6 +176,24 @@ public class SubscriptionService {
             subscriptionRepository.save(sub);
             settingRepository.save(new Setting("fix_sid", "true"));
             settingRepository.save(new Setting("fix_sub_id", "true"));
+
+            sub = new Subscription();
+            sub.setSid("pg");
+            sub.setName("PG");
+            sub.setUrl("/pg/jsm.json");
+            subscriptionRepository.save(sub);
+
+            sub = new Subscription();
+            sub.setSid("ok");
+            sub.setName("OK");
+            sub.setUrl("http://ok321.top/ok");
+            subscriptionRepository.save(sub);
+
+            sub = new Subscription();
+            sub.setSid("zx");
+            sub.setName("真心");
+            sub.setUrl("/zx/FongMi.json");
+            subscriptionRepository.save(sub);
         } else {
             fixUrl(list);
             fixSid(list);
@@ -190,28 +208,6 @@ public class SubscriptionService {
             map.put(sub.getSid(), sub);
         }
         subscriptionRepository.deleteAll(duplicated);
-
-        if (subscriptionRepository.findBySid("pg").isEmpty()) {
-            Subscription sub = new Subscription();
-            sub.setSid("pg");
-            sub.setName("PG");
-            sub.setUrl("/pg/jsm.json");
-            subscriptionRepository.save(sub);
-        }
-        if (subscriptionRepository.findBySid("ok").isEmpty()) {
-            Subscription sub = new Subscription();
-            sub.setSid("ok");
-            sub.setName("OK");
-            sub.setUrl("http://ok321.top/ok");
-            subscriptionRepository.save(sub);
-        }
-        if (subscriptionRepository.findBySid("zx").isEmpty()) {
-            Subscription sub = new Subscription();
-            sub.setSid("zx");
-            sub.setName("真心");
-            sub.setUrl("/zx/FongMi.json");
-            subscriptionRepository.save(sub);
-        }
     }
 
     private void fixUrl(List<Subscription> list) {
