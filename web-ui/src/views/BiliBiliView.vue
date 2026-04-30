@@ -138,6 +138,9 @@
         <el-form-item label="登录Cookie" label-width="120">
           <el-input v-model="bilibiliCookie" type="textarea" :rows="5"/>
         </el-form-item>
+        <el-form-item label="Refresh Token" label-width="120">
+          <el-input v-model="bilibiliRefreshToken" type="textarea" :rows="2"/>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateBilibiliCookie">更新</el-button>
         </el-form-item>
@@ -253,6 +256,7 @@ const base64QrCode = ref('')
 const qrcodeKey = ref('')
 const qns = ref(['16', '32', '64', '74', '80', '112', '116', '120', '125', '126', '127'])
 const bilibiliCookie = ref('')
+const bilibiliRefreshToken = ref('')
 const checks = ref<boolean[]>([true, true, true, false, true, true])
 const userInfo = ref<any>({})
 const heartbeat = ref(false)
@@ -416,8 +420,10 @@ const handleSave = () => {
 }
 
 const updateBilibiliCookie = () => {
-  axios.post('/api/settings', {name: 'bilibili_cookie', value: bilibiliCookie.value}).then(() => {
+  axios.post('/api/bilibili/cookie', {cookie: bilibiliCookie.value, refreshToken: bilibiliRefreshToken.value}).then(() => {
     ElMessage.success('更新成功')
+    getBilibiliCookie()
+    getBilibiliRefreshToken()
     loadUser()
   })
 }
@@ -548,6 +554,12 @@ const getBilibiliCookie = () => {
   })
 }
 
+const getBilibiliRefreshToken = () => {
+  axios.get('/api/settings/bilibili_token').then(({data}) => {
+    bilibiliRefreshToken.value = data?.value || ''
+  })
+}
+
 const getQn = () => {
   axios.get('/api/settings/bilibili_qn').then(({data}) => {
     if (data.value) {
@@ -590,6 +602,7 @@ onMounted(() => {
   getHeartbeat()
   getSearchable()
   getBilibiliCookie()
+  getBilibiliRefreshToken()
   getDash()
   getQn()
   load().then(() => {

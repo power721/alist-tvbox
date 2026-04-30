@@ -221,7 +221,11 @@ public class BilibiliService implements LivePlatform {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.REFERER, "https://live.bilibili.com/");
         headers.set(HttpHeaders.USER_AGENT, appProperties.getUserAgent());
-        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("buvid3=" + UUID.randomUUID() + ThreadLocalRandom.current().nextInt(10000, 99999) + "infoc");
+        String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+        if (!cookie.contains("buvid3=")) {
+            cookie += "; buvid3=" + UUID.randomUUID() + ThreadLocalRandom.current().nextInt(10000, 99999) + "infoc";
+            settingRepository.save(new Setting(BILIBILI_COOKIE, cookie));
+        }
         headers.set(HttpHeaders.COOKIE, cookie);
         return new HttpEntity<>(data, headers);
     }

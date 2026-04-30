@@ -5,4 +5,5 @@ import lombok.Data;
 @Data
 public class CookieData {
     private String cookie;
+    private String refreshToken;
 }
