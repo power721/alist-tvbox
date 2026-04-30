@@ -54,6 +54,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -290,7 +291,7 @@ public class EmbyService {
             movie.setVod_tag(FOLDER);
         }
         movie.setVod_director(emby.getName());
-        movie.setVod_remarks(Objects.toString(item.getRating(), null));
+        movie.setVod_remarks(formatRating(item.getRating()));
         movie.setVod_year(Objects.toString(item.getYear(), null));
         return movie;
     }
@@ -421,9 +422,24 @@ public class EmbyService {
             }
             movie.setVod_pic(cover);
         }
-        movie.setVod_remarks(emby.getName() + " " + Objects.toString(item.getRating(), ""));
+        movie.setVod_remarks(formatSearchRating(emby.getName(), item.getRating()));
         movie.setVod_year(Objects.toString(item.getYear(), null));
         return movie;
+    }
+
+    private String formatRating(Double rating) {
+        if (rating == null || rating <= 0) {
+            return "";
+        }
+        return String.format(Locale.US, "%.1f", rating);
+    }
+
+    private String formatSearchRating(String name, Double rating) {
+        String value = formatRating(rating);
+        if (value.isEmpty()) {
+            return name;
+        }
+        return name + " " + value;
     }
 
     public MovieList list(String id, String sort, Integer pg) {

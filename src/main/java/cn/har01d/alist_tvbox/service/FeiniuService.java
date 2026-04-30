@@ -25,8 +25,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -281,6 +281,9 @@ public class FeiniuService {
                 movie.setVod_play_from(String.join("$$$", from));
                 movie.setVod_play_url(String.join("$$$", urls));
             }
+            if (urls.size() == 1) {
+                movie.setVod_play_from(site.getName());
+            }
         }
         log.debug("detail: {}", movie);
 
@@ -459,7 +462,11 @@ public class FeiniuService {
             return "";
         }
         try {
-            return String.format(Locale.US, "%.1f", Double.parseDouble(value));
+            double score = Double.parseDouble(value);
+            if (score <= 0) {
+                return "";
+            }
+            return String.format(Locale.US, "%.1f", score);
         } catch (NumberFormatException e) {
             return value;
         }

@@ -42,6 +42,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -591,7 +592,7 @@ public class JellyfinService {
             movie.setVod_pic(jellyfin.getUrl() + "/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
         }
         movie.setVod_director(jellyfin.getName());
-        movie.setVod_remarks(Objects.toString(item.getRating(), null));
+        movie.setVod_remarks(formatRating(item.getRating()));
         movie.setVod_year(Objects.toString(item.getYear(), null));
         return movie;
     }
@@ -700,9 +701,23 @@ public class JellyfinService {
         if (item.getImageTags() != null && item.getImageTags().getPrimary() != null) {
             movie.setVod_pic(jellyfin.getUrl() + "/Items/" + item.getId() + "/Images/Primary?maxWidth=400&tag=" + item.getImageTags().getPrimary() + "&quality=90");
         }
-        movie.setVod_remarks(jellyfin.getName() + " " + Objects.toString(item.getRating(), ""));
+        movie.setVod_remarks(formatSearchRating(jellyfin.getName(), item.getRating()));
         movie.setVod_year(Objects.toString(item.getYear(), null));
         return movie;
+    }
+
+    private static String formatRating(Double rating) {
+        if (rating == null || rating <= 0) {
+            return "";
+        }
+        return String.format(Locale.US, "%.1f", rating);
+    }
+
+    private static String formatSearchRating(String name, Double rating) {
+        if (rating == null || rating <= 0) {
+            return name;
+        }
+        return name + " " + String.format(Locale.US, "%.1f", rating);
     }
 
     public MovieList list(String id, String sort, Integer pg) {
