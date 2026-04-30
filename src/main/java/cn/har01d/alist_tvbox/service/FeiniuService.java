@@ -117,7 +117,7 @@ public class FeiniuService {
                 JsonNode libs = apiClient.getMediaDbList(site, token);
                 for (JsonNode lib : libs) {
                     Category category = new Category();
-                    category.setType_id(site.getId() + ":lib:" + lib.path("guid").asText());
+                    category.setType_id(buildLibraryId(site.getId(), lib.path("guid").asText()));
                     category.setType_name(lib.path("title").asText());
                     category.setType_flag(0);
                     category.setCover(imageUrl(site, firstText(lib, "poster", "posters")));
@@ -151,14 +151,14 @@ public class FeiniuService {
 
     public MovieList list(String id, String sort, Integer pg) {
         MovieList result = new MovieList();
-        if (!id.contains(":")) {
+        if (StringUtils.isNumeric(id)) {
             Feiniu site = getById(Integer.parseInt(id));
             String token = ensureToken(site);
             List<MovieDetail> list = new ArrayList<>();
             JsonNode libs = apiClient.getMediaDbList(site, token);
             for (JsonNode lib : libs) {
                 MovieDetail movie = new MovieDetail();
-                movie.setVod_id(site.getId() + ":lib:" + lib.path("guid").asText());
+                movie.setVod_id(buildLibraryId(site.getId(), lib.path("guid").asText()));
                 movie.setVod_name(lib.path("title").asText());
                 movie.setVod_pic(imageUrl(site, firstText(lib, "poster", "posters")));
                 movie.setVod_tag(FOLDER);
@@ -170,23 +170,23 @@ public class FeiniuService {
             return result;
         }
 
-        String[] parts = id.split(":");
-        Feiniu site = getById(Integer.parseInt(parts[0]));
+        ListIdParts idParts = parseListId(id);
+        Feiniu site = getById(idParts.siteId());
         String token = ensureToken(site);
         Map<String, Object> body = new LinkedHashMap<>();
-        if ("lib".equals(parts[1])) {
+        if (idParts.type() == 0) {
             String[] sorts = StringUtils.defaultIfBlank(sort, "create_time:DESC").split(":");
             body.put("tags", Map.of("type", List.of("Movie", "TV", "Directory", "Video")));
             body.put("exclude_grouped_video", 1);
             body.put("sort_type", sorts.length > 1 ? sorts[1] : "DESC");
             body.put("sort_column", sorts[0]);
-            body.put("ancestor_guid", parts[2]);
-        } else if ("dir".equals(parts[1])) {
+            body.put("ancestor_guid", idParts.guid());
+        } else if (idParts.type() == 1) {
             String[] sorts = StringUtils.defaultIfBlank(sort, "sort_title:ASC").split(":");
             body.put("tags", Map.of());
             body.put("sort_type", sorts.length > 1 ? sorts[1] : "ASC");
             body.put("sort_column", sorts[0]);
-            body.put("parent_guid", parts[3]);
+            body.put("parent_guid", idParts.guid());
         } else {
             throw new BadRequestException("不支持的飞牛目录");
         }
@@ -296,7 +296,7 @@ public class FeiniuService {
         Map<String, Object> result = new HashMap<>();
         result.put("url", playResult.url());
         result.put("subs", getSubtitles(site, token, streamList));
-        result.put("header", "{\"Authorization\":\"" + token + "\",\"Cookie\":\"mode=relay; Trim-MC-token=" + token + "\",\"User-Agent\":\"" + StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT) + "\"}");
+        result.put("header", "{\"Cookie\":\"mode=relay; Trim-MC-token=" + token + "\",\"User-Agent\":\"" + StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT) + "\"}");
         result.put("parse", 0);
         log.debug("result: {}", result);
         return result;
@@ -385,7 +385,7 @@ public class FeiniuService {
         String type = item.path("type").asText();
         String guid = item.path("guid").asText();
         if ("Directory".equals(type) && directoryAsFolder) {
-            movie.setVod_id(site.getId() + ":dir:" + item.path("ancestor_guid").asText() + ":" + guid);
+            movie.setVod_id(buildDirectoryId(site.getId(), guid));
             movie.setVod_tag(FOLDER);
         } else {
             movie.setVod_id(buildItemId(site.getId(), guid));
@@ -776,15 +776,34 @@ public class FeiniuService {
     }
 
     private String buildItemId(int siteId, String guid) {
-        return siteId + ":item:" + guid;
+        return siteId + "-2-" + guid;
+    }
+
+    private String buildLibraryId(int siteId, String guid) {
+        return siteId + "-0-" + guid;
+    }
+
+    private String buildDirectoryId(int siteId, String guid) {
+        return siteId + "-1-" + guid;
     }
 
     private IdParts parseItemId(String id) {
-        String[] parts = id.split(":");
-        if (parts.length < 3 || !"item".equals(parts[1])) {
+        ListIdParts parts = parseListId(id);
+        if (parts.type() != 2) {
             throw new BadRequestException("无效的飞牛资源ID");
         }
-        return new IdParts(Integer.parseInt(parts[0]), parts[2]);
+        return new IdParts(parts.siteId(), parts.guid());
+    }
+
+    private ListIdParts parseListId(String id) {
+        String[] parts = id.split("-", 3);
+        if (parts.length == 3
+                && StringUtils.isNumeric(parts[0])
+                && StringUtils.isNumeric(parts[1])
+                && StringUtils.isNotBlank(parts[2])) {
+            return new ListIdParts(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), parts[2]);
+        }
+        throw new BadRequestException("无效的飞牛资源ID");
     }
 
     private String episodeLabel(JsonNode item) {
@@ -804,6 +823,9 @@ public class FeiniuService {
     }
 
     private record IdParts(int siteId, String guid) {
+    }
+
+    private record ListIdParts(int siteId, int type, String guid) {
     }
 
     private record QualityOption(String resolution, long bitrate) {
