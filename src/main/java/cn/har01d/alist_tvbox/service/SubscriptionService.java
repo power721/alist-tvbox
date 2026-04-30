@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.EmbyRepository;
+import cn.har01d.alist_tvbox.entity.FeiniuRepository;
 import cn.har01d.alist_tvbox.entity.JellyfinRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -90,6 +91,7 @@ public class SubscriptionService {
     private final ShareRepository shareRepository;
     private final DriverAccountRepository panAccountRepository;
     private final EmbyRepository embyRepository;
+    private final FeiniuRepository feiniuRepository;
     private final JellyfinRepository jellyfinRepository;
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
@@ -114,6 +116,7 @@ public class SubscriptionService {
                                ShareRepository shareRepository,
                                DriverAccountRepository panAccountRepository,
                                EmbyRepository embyRepository,
+                               FeiniuRepository feiniuRepository,
                                JellyfinRepository jellyfinRepository,
                                AListLocalService aListLocalService,
                                ConfigFileService configFileService,
@@ -135,6 +138,7 @@ public class SubscriptionService {
         this.shareRepository = shareRepository;
         this.panAccountRepository = panAccountRepository;
         this.embyRepository = embyRepository;
+        this.feiniuRepository = feiniuRepository;
         this.jellyfinRepository = jellyfinRepository;
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
@@ -1067,6 +1071,16 @@ public class SubscriptionService {
         }
 
         try {
+            if (feiniuRepository.count() > 0) {
+                Map<String, Object> site = buildSite(token, uid, "csp_FeiNiu", "飞牛影视");
+                sites.add(id++, site);
+                log.debug("add 飞牛影视 site: {}", site);
+            }
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+
+        try {
             Map<String, Object> site = buildSite(token, uid, "csp_Live", "网络直播");
             sites.add(id++, site);
             log.debug("add Live site: {}", site);
@@ -1117,6 +1131,7 @@ public class SubscriptionService {
         Map<String, Boolean> map = new HashMap<>();
         map.put("emby", embyRepository.count() > 0);
         map.put("jellyfin", jellyfinRepository.count() > 0);
+        map.put("feiniu", feiniuRepository.count() > 0);
         map.put("pansou", StringUtils.isNotBlank(appProperties.getPanSouUrl()));
         return map;
     }

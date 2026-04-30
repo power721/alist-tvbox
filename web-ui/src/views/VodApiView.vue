@@ -23,6 +23,7 @@
         <el-radio label="3" size="large">YouTube</el-radio>
         <el-radio label="4" size="large">Emby</el-radio>
         <el-radio label="5" size="large">Jellyfin</el-radio>
+        <el-radio label="7" size="large">飞牛影视</el-radio>
       </el-radio-group>
     </el-form-item>
 
@@ -60,6 +61,8 @@ const getPath = (type: string) => {
     return '/emby'
   } else if (type == '5') {
     return '/jellyfin'
+  } else if (type == '7') {
+    return '/feiniu'
   } else {
     return '/vod'
   }

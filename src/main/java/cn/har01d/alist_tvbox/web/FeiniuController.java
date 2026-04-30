@@ -1,7 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.entity.Emby;
-import cn.har01d.alist_tvbox.service.EmbyService;
+import cn.har01d.alist_tvbox.entity.Feiniu;
+import cn.har01d.alist_tvbox.service.FeiniuService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,78 +16,76 @@ import java.io.IOException;
 import java.util.List;
 
 @RestController
-public class EmbyController {
-    private final EmbyService embyService;
+public class FeiniuController {
+    private final FeiniuService feiniuService;
     private final SubscriptionService subscriptionService;
 
-    public EmbyController(EmbyService embyService, SubscriptionService subscriptionService) {
-        this.embyService = embyService;
+    public FeiniuController(FeiniuService feiniuService, SubscriptionService subscriptionService) {
+        this.feiniuService = feiniuService;
         this.subscriptionService = subscriptionService;
     }
 
-    @GetMapping("/api/emby")
-    public List<Emby> list() {
-        return embyService.findAll();
+    @GetMapping("/api/feiniu")
+    public List<Feiniu> list() {
+        return feiniuService.findAll();
     }
 
-    @PostMapping("/api/emby")
-    public Emby create(@RequestBody Emby dto) {
-        return embyService.create(dto);
+    @PostMapping("/api/feiniu")
+    public Feiniu create(@RequestBody Feiniu dto) {
+        return feiniuService.create(dto);
     }
 
-    @GetMapping("/api/emby/{id}")
-    public Emby get(@PathVariable int id) {
-        return embyService.getById(id);
+    @GetMapping("/api/feiniu/{id}")
+    public Feiniu get(@PathVariable int id) {
+        return feiniuService.getById(id);
     }
 
-    @PostMapping("/api/emby/{id}")
-    public Emby update(@PathVariable int id, @RequestBody Emby dto) {
-        return embyService.update(id, dto);
+    @PostMapping("/api/feiniu/{id}")
+    public Feiniu update(@PathVariable int id, @RequestBody Feiniu dto) {
+        return feiniuService.update(id, dto);
     }
 
-    @DeleteMapping("/api/emby/{id}")
+    @DeleteMapping("/api/feiniu/{id}")
     public void delete(@PathVariable int id) {
-        embyService.delete(id);
+        feiniuService.delete(id);
     }
 
-    @GetMapping("/emby")
+    @GetMapping("/feiniu")
     public Object browse(String ids, String wd, String t, String sort, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
         return browse("", ids, wd, t, sort, pg);
     }
 
-    @GetMapping("/emby/{token}")
+    @GetMapping("/feiniu/{token}")
     public Object browse(@PathVariable String token, String ids, String wd, String t, String sort, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
         subscriptionService.checkToken(token);
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
-                return embyService.home();
+                return feiniuService.home();
             }
-            return embyService.detail(ids);
+            return feiniuService.detail(ids);
         } else if (wd != null && !wd.isEmpty()) {
-            return embyService.search(wd);
+            return feiniuService.search(wd);
         } else if (t != null && !t.isEmpty()) {
             if (t.equals("0")) {
-                return embyService.home();
+                return feiniuService.home();
             }
-            return embyService.list(t, sort, pg);
+            return feiniuService.list(t, sort, pg);
         }
-        return embyService.category();
+        return feiniuService.category();
     }
 
-    @GetMapping("/emby-play")
+    @GetMapping("/feiniu-play")
     public Object play(String id, Long t, HttpServletRequest request) throws IOException {
         return play("", id, t, request);
     }
 
-    @GetMapping("/emby-play/{token}")
+    @GetMapping("/feiniu-play/{token}")
     public Object play(@PathVariable String token, String id, Long t, HttpServletRequest request) throws IOException {
         subscriptionService.checkToken(token);
-
         if (t == null || t == 0) {
-            return embyService.play(id);
-        } else {
-            embyService.updateProgress(id, t);
+            return feiniuService.play(id);
         }
+        feiniuService.updateProgress(id, t);
         return "";
     }
 }

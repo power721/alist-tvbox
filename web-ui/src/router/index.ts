@@ -22,6 +22,8 @@ import SystemInfo from "@/views/SystemInfo.vue";
 import MetaView from "@/views/MetaView.vue";
 import TmdbView from "@/views/TmdbView.vue";
 import EmbyView from "@/views/EmbyView.vue";
+import JellyfinView from "@/views/JellyfinView.vue";
+import FeiniuView from "@/views/FeiniuView.vue";
 import LiveView from "@/views/LiveView.vue";
 import VodApiView from "@/views/VodApiView.vue";
 import AclView from "@/views/AclView.vue";
@@ -83,6 +85,18 @@ const router = createRouter({
       path: '/emby',
       name: 'emby',
       component: EmbyView,
+      meta: {auth: true}
+    },
+    {
+      path: '/jellyfin',
+      name: 'jellyfin',
+      component: JellyfinView,
+      meta: {auth: true}
+    },
+    {
+      path: '/feiniu',
+      name: 'feiniu',
+      component: FeiniuView,
       meta: {auth: true}
     },
     {

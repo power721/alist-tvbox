@@ -217,6 +217,10 @@
 
   <JellyfinView></JellyfinView>
 
+  <div class="divider"></div>
+
+  <FeiniuView></FeiniuView>
+
 </template>
 
 <script setup lang="ts">
@@ -229,6 +233,7 @@ import type {VodList} from "@/model/VodList";
 import type {Meta} from "@/model/Meta";
 import EmbyView from "@/views/EmbyView.vue";
 import JellyfinView from "@/views/JellyfinView.vue";
+import FeiniuView from "@/views/FeiniuView.vue";
 import {store} from "@/services/store";
 
 const upload = ref<UploadInstance>()
