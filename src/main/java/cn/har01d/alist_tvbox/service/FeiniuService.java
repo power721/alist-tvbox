@@ -13,10 +13,21 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URLEncoder;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -26,9 +37,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Scanner;
 
 import static cn.har01d.alist_tvbox.util.Constants.FOLDER;
 
+@Slf4j
 @Service
 public class FeiniuService {
     private final FeiniuRepository feiniuRepository;
@@ -253,13 +266,18 @@ public class FeiniuService {
     }
 
     public Object play(String id) {
+        return play(id, "", "");
+    }
+
+    public Object play(String id, String subToken, String baseUrl) {
         IdParts idParts = parseItemId(id);
         Feiniu site = getById(idParts.siteId());
         String token = ensureToken(site);
 
         JsonNode playInfo = apiClient.getPlayInfo(site, token, idParts.guid());
         JsonNode streamList = apiClient.getStreamList(site, token, idParts.guid());
-        Object url = buildFallbackUrls(site, playInfo, streamList);
+        JsonNode streamInfo = loadStreamInfo(site, token, playInfo);
+        Object url = buildPlayUrl(site, token, playInfo, streamList, streamInfo, subToken, baseUrl);
 
         lastPlayState = new LastPlayState(
                 site,
@@ -275,9 +293,45 @@ public class FeiniuService {
         Map<String, Object> result = new HashMap<>();
         result.put("url", url);
         result.put("subs", getSubtitles(site, token, streamList));
-        result.put("header", "{\"Authorization\":\"" + token + "\",\"Cookie\":\"mode=relay; Trim-MC-token=" + token + "\",\"User-Agent\":\"" + StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT) + "\"}");
+        if (isProxyPlayResult(url)) {
+            result.put("header", "{\"User-Agent\":\"" + StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT) + "\"}");
+        } else {
+            result.put("header", "{\"Authorization\":\"" + token + "\",\"Cookie\":\"mode=relay; Trim-MC-token=" + token + "\",\"User-Agent\":\"" + StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT) + "\"}");
+        }
         result.put("parse", 0);
+        log.debug("result: {}", result);
         return result;
+    }
+
+    public void proxy(int siteId, String path, String subToken, String baseUrl,
+                      HttpServletRequest request, HttpServletResponse response) throws IOException {
+        Feiniu site = getById(siteId);
+        String token = ensureToken(site);
+        String targetUrl = path.startsWith("http://") || path.startsWith("https://") ? path : site.getUrl() + path;
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(targetUrl).openConnection();
+        connection.setRequestMethod(request.getMethod());
+        connection.setRequestProperty("Authorization", token);
+        connection.setRequestProperty("Cookie", "mode=relay; Trim-MC-token=" + token);
+        connection.setRequestProperty("User-Agent", StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT));
+        if (StringUtils.isNotBlank(request.getHeader("Range"))) {
+            connection.setRequestProperty("Range", request.getHeader("Range"));
+        }
+        if (StringUtils.isNotBlank(request.getHeader("If-Range"))) {
+            connection.setRequestProperty("If-Range", request.getHeader("If-Range"));
+        }
+
+        int status = connection.getResponseCode();
+        response.setStatus(status);
+        if (connection.getContentType() != null) {
+            response.setContentType(connection.getContentType());
+        }
+        if (isPlaylist(targetUrl, connection.getContentType())) {
+            String playlist = readText(status >= 400 ? connection.getErrorStream() : connection.getInputStream());
+            response.getWriter().write(rewritePlaylist(playlist, siteId, subToken, baseUrl, targetUrl));
+            return;
+        }
+        copy(status >= 400 ? connection.getErrorStream() : connection.getInputStream(), response.getOutputStream());
     }
 
     public void updateProgress(String id, long progress) {
@@ -367,6 +421,228 @@ public class FeiniuService {
         return subtitles;
     }
 
+    private Object buildPlayUrl(Feiniu site, String token, JsonNode playInfo, JsonNode streamList, JsonNode streamInfo,
+                                String subToken, String baseUrl) {
+        if (isDirectPlayable(streamInfo)) {
+            return buildFallbackUrls(site, playInfo, streamList);
+        }
+
+        JsonNode playResponse = startPlay(site, token, playInfo, streamInfo);
+        if (playResponse != null && StringUtils.isNotBlank(playResponse.path("play_link").asText())) {
+            return List.of(
+                    resolutionLabel(preferredResolution(streamInfo)),
+                    buildProxyUrl(baseUrl, subToken, site.getId(), playResponse.path("play_link").asText())
+            );
+        }
+
+        return buildFallbackUrls(site, playInfo, streamList);
+    }
+
+    private JsonNode loadStreamInfo(Feiniu site, String token, JsonNode playInfo) {
+        String mediaGuid = playInfo.path("media_guid").asText("");
+        if (StringUtils.isBlank(mediaGuid)) {
+            return null;
+        }
+        try {
+            return apiClient.getStream(site, token, mediaGuid);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private boolean isDirectPlayable(JsonNode streamInfo) {
+        if (streamInfo == null || streamInfo.isMissingNode() || streamInfo.isNull()) {
+            return true;
+        }
+        JsonNode videoStream = streamInfo.path("video_stream");
+        String videoCodec = videoStream.path("codec_name").asText("");
+        String wrapper = videoStream.path("wrapper").asText("");
+        JsonNode audioStream = firstAudioStream(streamInfo);
+        String audioCodec = audioStream.path("codec_name").asText("");
+
+        return "h264".equalsIgnoreCase(videoCodec)
+                && "aac".equalsIgnoreCase(audioCodec)
+                && ("MP4".equalsIgnoreCase(wrapper) || StringUtils.isBlank(wrapper));
+    }
+
+    private JsonNode startPlay(Feiniu site, String token, JsonNode playInfo, JsonNode streamInfo) {
+        JsonNode videoStream = streamInfo.path("video_stream");
+        JsonNode audioStream = firstAudioStream(streamInfo);
+        String mediaGuid = firstNonBlank(
+                playInfo.path("media_guid").asText(""),
+                videoStream.path("media_guid").asText("")
+        );
+        String videoGuid = firstNonBlank(
+                playInfo.path("video_guid").asText(""),
+                videoStream.path("guid").asText("")
+        );
+        if (StringUtils.isBlank(mediaGuid) || StringUtils.isBlank(videoGuid)) {
+            return null;
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("media_guid", mediaGuid);
+        body.put("video_guid", videoGuid);
+        body.put("video_encoder", "h264");
+        body.put("resolution", preferredResolution(streamInfo));
+        body.put("bitrate", preferredBitrate(streamInfo));
+        body.put("startTimestamp", 0L);
+        body.put("audio_encoder", "aac");
+        body.put("audio_guid", firstNonBlank(
+                playInfo.path("audio_guid").asText(""),
+                audioStream.path("guid").asText("")
+        ));
+        body.put("subtitle_guid", playInfo.path("subtitle_guid").asText(""));
+        body.put("channels", audioStream.path("channels").asInt(0));
+
+        try {
+            return apiClient.startPlay(site, token, body);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private JsonNode firstAudioStream(JsonNode streamInfo) {
+        JsonNode audioStreams = streamInfo.path("audio_streams");
+        if (audioStreams.isArray() && !audioStreams.isEmpty()) {
+            return audioStreams.get(0);
+        }
+        return streamInfo.path("audio_stream");
+    }
+
+    private String preferredResolution(JsonNode streamInfo) {
+        JsonNode qualities = streamInfo.path("qualities");
+        if (qualities.isArray() && !qualities.isEmpty()) {
+            String resolution = qualities.get(0).path("resolution").asText("");
+            if (StringUtils.isNotBlank(resolution)) {
+                return resolution;
+            }
+        }
+        JsonNode videoStream = streamInfo.path("video_stream");
+        String resolution = videoStream.path("resolution").asText("");
+        if (StringUtils.isNotBlank(resolution)) {
+            return resolution;
+        }
+        resolution = videoStream.path("resolution_type").asText("").replace("p", "");
+        if (StringUtils.isNotBlank(resolution)) {
+            return resolution;
+        }
+        int height = videoStream.path("height").asInt(0);
+        return height > 0 ? String.valueOf(height) : "";
+    }
+
+    private long preferredBitrate(JsonNode streamInfo) {
+        JsonNode qualities = streamInfo.path("qualities");
+        if (qualities.isArray() && !qualities.isEmpty()) {
+            long bitrate = qualities.get(0).path("bitrate").asLong(0);
+            if (bitrate > 0) {
+                return bitrate;
+            }
+        }
+        JsonNode videoStream = streamInfo.path("video_stream");
+        long bitrate = videoStream.path("bps").asLong(0);
+        if (bitrate > 0) {
+            return bitrate;
+        }
+        return videoStream.path("bitrate").asLong(0);
+    }
+
+    private String resolutionLabel(String resolution) {
+        if (StringUtils.isBlank(resolution)) {
+            return "转码";
+        }
+        return resolution.endsWith("p") ? resolution : resolution + "p";
+    }
+
+    private boolean isProxyPlayResult(Object url) {
+        if (url instanceof String value) {
+            return value.contains("/feiniu-proxy/");
+        }
+        if (url instanceof List<?> values) {
+            for (Object value : values) {
+                if (value instanceof String string && string.contains("/feiniu-proxy/")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    String rewritePlaylist(String playlist, int siteId, String token, String baseUrl, String currentUrl) {
+        if (StringUtils.isBlank(playlist)) {
+            return "";
+        }
+        URI current = URI.create(currentUrl);
+        StringBuilder builder = new StringBuilder();
+        for (String line : playlist.split("\\R", -1)) {
+            if (line.isBlank()) {
+                builder.append(line).append('\n');
+                continue;
+            }
+            if (line.startsWith("#")) {
+                builder.append(rewriteTaggedUriLine(line, siteId, token, baseUrl, current)).append('\n');
+                continue;
+            }
+            String resolved = current.resolve(line).toString();
+            builder.append(buildProxyUrl(baseUrl, token, siteId, resolved)).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private String rewriteTaggedUriLine(String line, int siteId, String token, String baseUrl, URI current) {
+        int uriIndex = line.indexOf("URI=\"");
+        if (uriIndex < 0) {
+            return line;
+        }
+        int start = uriIndex + 5;
+        int end = line.indexOf('"', start);
+        if (end < 0) {
+            return line;
+        }
+        String original = line.substring(start, end);
+        String resolved = current.resolve(original).toString();
+        return line.substring(0, start)
+                + buildProxyUrl(baseUrl, token, siteId, resolved)
+                + line.substring(end);
+    }
+
+    private String buildProxyUrl(String baseUrl, String token, int siteId, String path) {
+        return UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/feiniu-proxy/{token}")
+                .queryParam("site", siteId)
+                .queryParam("path", URLEncoder.encode(path, StandardCharsets.UTF_8).replace("+", "%20"))
+                .buildAndExpand(token)
+                .toUriString();
+    }
+
+    private boolean isPlaylist(String targetUrl, String contentType) {
+        return targetUrl.contains(".m3u8")
+                || (contentType != null && (contentType.contains("mpegurl") || contentType.contains("application/vnd.apple.mpegurl")));
+    }
+
+    private String readText(InputStream inputStream) throws IOException {
+        if (inputStream == null) {
+            return "";
+        }
+        try (InputStream in = inputStream; Scanner scanner = new Scanner(in, StandardCharsets.UTF_8)) {
+            scanner.useDelimiter("\\A");
+            return scanner.hasNext() ? scanner.next() : "";
+        }
+    }
+
+    private void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
+        if (inputStream == null) {
+            return;
+        }
+        try (InputStream in = inputStream) {
+            byte[] buffer = new byte[64 * 1024];
+            int len;
+            while ((len = in.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, len);
+            }
+        }
+    }
+
     private Object buildFallbackUrls(Feiniu site, JsonNode playInfo, JsonNode streamList) {
         List<String> urls = new ArrayList<>();
         JsonNode videoStreams = streamList.path("video_streams");
@@ -427,6 +703,15 @@ public class FeiniuService {
         String date = firstText(item, "release_date", "air_date");
         if (date.length() >= 4) {
             return date.substring(0, 4);
+        }
+        return "";
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (StringUtils.isNotBlank(value)) {
+                return value;
+            }
         }
         return "";
     }

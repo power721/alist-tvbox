@@ -15,7 +15,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -90,12 +94,35 @@ public class FeiniuApiClient {
         return get(feiniu, token, "/v/api/v1/stream/list/" + guid);
     }
 
+    public JsonNode getStream(Feiniu feiniu, String token, String mediaGuid) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("header", Map.of(HttpHeaders.USER_AGENT, List.of("trim_player")));
+        body.put("level", 1);
+        body.put("media_guid", mediaGuid);
+        body.put("ip", stringToUuid(StringUtils.defaultIfBlank(feiniu.getUsername(), feiniu.getName())));
+        return post(feiniu, token, "/v/api/v1/stream", body);
+    }
+
+    public JsonNode startPlay(Feiniu feiniu, String token, Map<String, Object> body) {
+        return post(feiniu, token, "/v/api/v1/play/play", body);
+    }
+
     public void recordPlay(Feiniu feiniu, String token, Map<String, Object> body) {
         post(feiniu, token, "/v/api/v1/play/record", body);
     }
 
     public String getMediaRangeUrl(Feiniu feiniu, String mediaGuid) {
         return feiniu.getUrl() + "/v/api/v1/media/range/" + mediaGuid;
+    }
+
+    public String absoluteUrl(Feiniu feiniu, String path) {
+        if (StringUtils.isBlank(path)) {
+            return "";
+        }
+        if (path.startsWith("http://") || path.startsWith("https://")) {
+            return path;
+        }
+        return feiniu.getUrl() + path;
     }
 
     private JsonNode get(Feiniu feiniu, String token, String path) {
@@ -140,5 +167,22 @@ public class FeiniuApiClient {
 
     private String randomNonce() {
         return String.valueOf(ThreadLocalRandom.current().nextInt(100000, 1000000));
+    }
+
+    private String stringToUuid(String value) {
+        if (StringUtils.isBlank(value)) {
+            return "00000000-0000-0000-0000-000000000000";
+        }
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-1").digest(value.getBytes(StandardCharsets.UTF_8));
+            String hex = HexFormat.of().formatHex(hash, 0, 16);
+            return hex.substring(0, 8) + "-"
+                    + hex.substring(8, 12) + "-"
+                    + hex.substring(12, 16) + "-"
+                    + hex.substring(16, 20) + "-"
+                    + hex.substring(20);
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-1 unavailable", e);
+        }
     }
 }
