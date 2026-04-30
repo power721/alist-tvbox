@@ -441,6 +441,7 @@ public class FeiniuService {
         }
 
         List<String> urls = new ArrayList<>();
+        appendOriginalUrl(urls, site, playInfo);
         String actualPlayLink = "";
         for (QualityOption quality : qualities) {
             JsonNode playResponse = startPlay(site, token, playInfo, streamInfo, quality.resolution(), quality.bitrate());
@@ -451,10 +452,25 @@ public class FeiniuService {
             if (StringUtils.isBlank(actualPlayLink)) {
                 actualPlayLink = playLink;
             }
-            urls.add(resolutionLabel(quality.resolution()));
-            urls.add(apiClient.absoluteUrl(site, playLink));
+            addUrlPair(urls, resolutionLabel(quality.resolution()), apiClient.absoluteUrl(site, playLink));
         }
         return new PlayUrlResult(urls, actualPlayLink);
+    }
+
+    private void appendOriginalUrl(List<String> urls, Feiniu site, JsonNode playInfo) {
+        String mediaGuid = playInfo.path("media_guid").asText("");
+        if (StringUtils.isBlank(mediaGuid)) {
+            return;
+        }
+        addUrlPair(urls, "原画", apiClient.getMediaRangeUrl(site, mediaGuid));
+    }
+
+    private void addUrlPair(List<String> urls, String label, String url) {
+        if (StringUtils.isBlank(label) || StringUtils.isBlank(url)) {
+            return;
+        }
+        urls.add(label);
+        urls.add(url);
     }
 
     private JsonNode loadStreamInfo(Feiniu site, String token, JsonNode playInfo) {
@@ -678,18 +694,20 @@ public class FeiniuService {
         }
     }
 
-    private Object buildFallbackUrls(Feiniu site, JsonNode playInfo, JsonNode streamList) {
+    private List<String> buildFallbackUrls(Feiniu site, JsonNode playInfo, JsonNode streamList) {
         List<String> urls = new ArrayList<>();
         JsonNode videoStreams = streamList.path("video_streams");
         if (videoStreams.isArray() && !videoStreams.isEmpty()) {
             for (JsonNode stream : videoStreams) {
                 String mediaGuid = stream.path("media_guid").asText();
-                urls.add(StringUtils.defaultIfBlank(stream.path("resolution_type").asText(), stream.path("title").asText("默认")));
-                urls.add(apiClient.getMediaRangeUrl(site, mediaGuid));
+                addUrlPair(urls,
+                        StringUtils.defaultIfBlank(stream.path("resolution_type").asText(), stream.path("title").asText("默认")),
+                        apiClient.getMediaRangeUrl(site, mediaGuid));
             }
             return urls;
         }
-        return apiClient.getMediaRangeUrl(site, playInfo.path("media_guid").asText());
+        appendOriginalUrl(urls, site, playInfo);
+        return urls;
     }
 
     private String ensureToken(Feiniu site) {
@@ -791,9 +809,9 @@ public class FeiniuService {
     private record QualityOption(String resolution, long bitrate) {
     }
 
-    private record PlayUrlResult(Object url, String playLink) {
+    private record PlayUrlResult(List<String> url, String playLink) {
         private boolean isEmpty() {
-            return !(url instanceof List<?> list) || list.isEmpty();
+            return url == null || url.size() < 2 || url.size() % 2 != 0;
         }
     }
 
