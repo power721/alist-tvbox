@@ -54,27 +54,31 @@ public class FeiniuController {
     }
 
     @GetMapping("/feiniu")
-    public Object browse(String ids, String wd, String t, String sort, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
-        return browse("", ids, wd, t, sort, pg);
+    public Object browse(String ids, String wd, String t, String sort,
+                         @RequestParam(required = false, defaultValue = "1") Integer pg,
+                         HttpServletRequest request) throws IOException {
+        return browse("", ids, wd, t, sort, pg, request);
     }
 
     @GetMapping("/feiniu/{token}")
-    public Object browse(@PathVariable String token, String ids, String wd, String t, String sort, @RequestParam(required = false, defaultValue = "1") Integer pg) throws IOException {
+    public Object browse(@PathVariable String token, String ids, String wd, String t, String sort,
+                         @RequestParam(required = false, defaultValue = "1") Integer pg,
+                         HttpServletRequest request) throws IOException {
         subscriptionService.checkToken(token);
         if (ids != null && !ids.isEmpty()) {
             if (ids.equals("recommend")) {
-                return feiniuService.home();
+                return feiniuService.home(token, baseUrl(request));
             }
-            return feiniuService.detail(ids);
+            return feiniuService.detail(ids, token, baseUrl(request));
         } else if (wd != null && !wd.isEmpty()) {
-            return feiniuService.search(wd);
+            return feiniuService.search(wd, token, baseUrl(request));
         } else if (t != null && !t.isEmpty()) {
             if (t.equals("0")) {
-                return feiniuService.home();
+                return feiniuService.home(token, baseUrl(request));
             }
-            return feiniuService.list(t, sort, pg);
+            return feiniuService.list(t, sort, pg, token, baseUrl(request));
         }
-        return feiniuService.category();
+        return feiniuService.category(token, baseUrl(request));
     }
 
     @GetMapping("/feiniu-play")
@@ -97,6 +101,13 @@ public class FeiniuController {
                       HttpServletRequest request, HttpServletResponse response) throws IOException {
         subscriptionService.checkToken(token);
         feiniuService.proxy(site, path, token, baseUrl(request), request, response);
+    }
+
+    @RequestMapping("/feiniu-img/{token}")
+    public void proxyImage(@PathVariable String token, int site, String path,
+                           HttpServletRequest request, HttpServletResponse response) throws IOException {
+        subscriptionService.checkToken(token);
+        feiniuService.proxyImage(site, path, token, request, response);
     }
 
     private String baseUrl(HttpServletRequest request) {

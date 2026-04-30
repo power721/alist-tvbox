@@ -99,6 +99,10 @@ public class FeiniuService {
     }
 
     public CategoryList category() {
+        return category("", "");
+    }
+
+    public CategoryList category(String subToken, String baseUrl) {
         CategoryList result = new CategoryList();
         List<Category> categories = new ArrayList<>();
         List<Feiniu> sites = findAll();
@@ -120,7 +124,7 @@ public class FeiniuService {
                     category.setType_id(buildLibraryId(site.getId(), lib.path("guid").asText()));
                     category.setType_name(lib.path("title").asText());
                     category.setType_flag(0);
-                    category.setCover(imageUrl(site, firstText(lib, "poster", "posters")));
+                    category.setCover(imageUrl(site, firstText(lib, "poster", "posters"), subToken, baseUrl));
                     categories.add(category);
                     result.getFilters().put(category.getType_id(), List.of(new Filter("sort", "排序", filters)));
                 }
@@ -134,13 +138,17 @@ public class FeiniuService {
     }
 
     public MovieList home() {
+        return home("", "");
+    }
+
+    public MovieList home(String subToken, String baseUrl) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
         for (Feiniu site : findAll()) {
             String token = ensureToken(site);
             JsonNode items = apiClient.getPlayList(site, token);
             for (JsonNode item : items) {
-                list.add(toItemDetail(site, item, false));
+                list.add(toItemDetail(site, item, false, subToken, baseUrl));
             }
         }
         result.setList(list);
@@ -150,6 +158,10 @@ public class FeiniuService {
     }
 
     public MovieList list(String id, String sort, Integer pg) {
+        return list(id, sort, pg, "", "");
+    }
+
+    public MovieList list(String id, String sort, Integer pg, String subToken, String baseUrl) {
         MovieList result = new MovieList();
         if (StringUtils.isNumeric(id)) {
             Feiniu site = getById(Integer.parseInt(id));
@@ -160,7 +172,7 @@ public class FeiniuService {
                 MovieDetail movie = new MovieDetail();
                 movie.setVod_id(buildLibraryId(site.getId(), lib.path("guid").asText()));
                 movie.setVod_name(lib.path("title").asText());
-                movie.setVod_pic(imageUrl(site, firstText(lib, "poster", "posters")));
+                movie.setVod_pic(imageUrl(site, firstText(lib, "poster", "posters"), subToken, baseUrl));
                 movie.setVod_tag(FOLDER);
                 list.add(movie);
             }
@@ -196,17 +208,22 @@ public class FeiniuService {
         JsonNode data = apiClient.getItemList(site, token, body);
         List<MovieDetail> list = new ArrayList<>();
         for (JsonNode item : data.path("list")) {
-            list.add(toItemDetail(site, item, true));
+            list.add(toItemDetail(site, item, true, subToken, baseUrl));
         }
         result.setList(list);
         result.setTotal(data.path("total").asInt(list.size()));
         result.setLimit(list.size());
         result.setPage(pg == null ? 1 : pg);
         result.setPagecount(Math.max(1, (result.getTotal() + 49) / 50));
+        log.debug("list: {}", result);
         return result;
     }
 
     public MovieList search(String wd) {
+        return search(wd, "", "");
+    }
+
+    public MovieList search(String wd, String subToken, String baseUrl) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
         List<Feiniu> sites = findAll();
@@ -215,7 +232,7 @@ public class FeiniuService {
             String token = ensureToken(site);
             JsonNode items = apiClient.search(site, token, wd);
             for (JsonNode item : items) {
-                MovieDetail movie = toItemDetail(site, item, false);
+                MovieDetail movie = toItemDetail(site, item, false, subToken, baseUrl);
                 if (multiple) {
                     movie.setVod_remarks(site.getName() + " " + StringUtils.defaultString(movie.getVod_remarks()));
                 }
@@ -229,12 +246,16 @@ public class FeiniuService {
     }
 
     public MovieList detail(String tid) {
+        return detail(tid, "", "");
+    }
+
+    public MovieList detail(String tid, String subToken, String baseUrl) {
         IdParts id = parseItemId(tid);
         Feiniu site = getById(id.siteId());
         String token = ensureToken(site);
         JsonNode item = apiClient.getItem(site, token, id.guid());
 
-        MovieDetail movie = toItemDetail(site, item, false);
+        MovieDetail movie = toItemDetail(site, item, false, subToken, baseUrl);
         movie.setVod_content(item.path("overview").asText(""));
         movie.setVod_play_from(site.getName());
         movie.setVod_play_url("播放$" + buildItemId(site.getId(), id.guid()));
@@ -259,6 +280,7 @@ public class FeiniuService {
                 movie.setVod_play_url(String.join("$$$", urls));
             }
         }
+        log.debug("detail: {}", movie);
 
         MovieList result = new MovieList();
         result.getList().add(movie);
@@ -305,7 +327,7 @@ public class FeiniuService {
     public void proxy(int siteId, String path, String subToken, String baseUrl,
                       HttpServletRequest request, HttpServletResponse response) throws IOException {
         Feiniu site = getById(siteId);
-        String token = ensureToken(site);
+        String token = tokenForProxy(site);
         String targetUrl = path.startsWith("http://") || path.startsWith("https://") ? path : site.getUrl() + path;
 
         HttpURLConnection connection = (HttpURLConnection) new URL(targetUrl).openConnection();
@@ -331,6 +353,36 @@ public class FeiniuService {
             return;
         }
         copy(status >= 400 ? connection.getErrorStream() : connection.getInputStream(), response.getOutputStream());
+    }
+
+    public void proxyImage(int siteId, String path, String subToken,
+                           HttpServletRequest request, HttpServletResponse response) throws IOException {
+        Feiniu site = getById(siteId);
+        String token = tokenForProxy(site);
+        String imagePath = path.startsWith("http://") || path.startsWith("https://")
+                ? path
+                : site.getUrl() + "/v/api/v1/sys/img" + path;
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(imagePath).openConnection();
+        connection.setRequestMethod(request.getMethod());
+        connection.setRequestProperty("Authorization", token);
+        connection.setRequestProperty("Cookie", "mode=relay; Trim-MC-token=" + token);
+        connection.setRequestProperty("Referer", site.getUrl() + "/v");
+        connection.setRequestProperty("User-Agent", StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT));
+
+        int status = connection.getResponseCode();
+        response.setStatus(status);
+        if (connection.getContentType() != null) {
+            response.setContentType(connection.getContentType());
+        }
+        copy(status >= 400 ? connection.getErrorStream() : connection.getInputStream(), response.getOutputStream());
+    }
+
+    private String tokenForProxy(Feiniu site) {
+        if (StringUtils.isNotBlank(site.getToken())) {
+            return site.getToken();
+        }
+        return ensureToken(site);
     }
 
     public void updateProgress(String id, long progress) {
@@ -380,7 +432,7 @@ public class FeiniuService {
         }
     }
 
-    private MovieDetail toItemDetail(Feiniu site, JsonNode item, boolean directoryAsFolder) {
+    private MovieDetail toItemDetail(Feiniu site, JsonNode item, boolean directoryAsFolder, String subToken, String baseUrl) {
         MovieDetail movie = new MovieDetail();
         String type = item.path("type").asText();
         String guid = item.path("guid").asText();
@@ -394,7 +446,7 @@ public class FeiniuService {
         if ("Episode".equals(type) && StringUtils.isNotBlank(item.path("tv_title").asText())) {
             movie.setVod_name(item.path("tv_title").asText());
         }
-        movie.setVod_pic(imageUrl(site, firstText(item, "poster", "poster_list", "posters")));
+        movie.setVod_pic(imageUrl(site, firstText(item, "poster", "poster_list", "posters"), subToken, baseUrl));
         movie.setVod_remarks(item.path("vote_average").asText(""));
         movie.setVod_year(yearOf(item));
         return movie;
@@ -735,6 +787,41 @@ public class FeiniuService {
         return StringUtils.isNotBlank(site.getFnosToken()) && StringUtils.isNotBlank(site.getFnosLongToken());
     }
 
+    private String imageUrl(Feiniu site, String path, String subToken, String baseUrl) {
+        if (StringUtils.isBlank(path)) {
+            return null;
+        }
+        if (StringUtils.isBlank(subToken) || StringUtils.isBlank(baseUrl)) {
+            if (path.startsWith("http")) {
+                return path;
+            }
+            return site.getUrl() + "/v/api/v1/sys/img" + path;
+        }
+        return buildImageProxyUrl(baseUrl, subToken, site.getId(), path);
+    }
+
+    private String buildImageProxyUrl(String baseUrl, String token, int siteId, String path) {
+        if (path.startsWith("http://") || path.startsWith("https://")) {
+            return UriComponentsBuilder.fromHttpUrl(baseUrl)
+                    .path("/feiniu-img/{token}")
+                    .queryParam("site", siteId)
+                    .queryParam("path", path)
+                    .buildAndExpand(token)
+                    .encode()
+                    .toUriString();
+        }
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        return UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/feiniu-img/{token}")
+                .queryParam("site", siteId)
+                .queryParam("path", path)
+                .buildAndExpand(token)
+                .encode()
+                .toUriString();
+    }
+
     private String imageUrl(Feiniu site, String path) {
         if (StringUtils.isBlank(path)) {
             return null;
@@ -742,7 +829,7 @@ public class FeiniuService {
         if (path.startsWith("http")) {
             return path;
         }
-        return site.getUrl() + path;
+        return site.getUrl() + "/v/api/v1/sys/img" + path;
     }
 
     private String firstText(JsonNode node, String... keys) {
@@ -840,7 +927,8 @@ public class FeiniuService {
     private record LastPlayState(Feiniu site, String token, String itemId, String mediaGuid, String videoGuid,
                                  String audioGuid, String subtitleGuid, String playLink, long duration) {
         private String guid() {
-            return itemId.substring(itemId.lastIndexOf(':') + 1);
+            int index = itemId.indexOf('-', itemId.indexOf('-') + 1);
+            return index >= 0 ? itemId.substring(index + 1) : itemId;
         }
     }
 
