@@ -494,19 +494,13 @@ public class FeiniuService {
 
         List<String> urls = new ArrayList<>();
         appendOriginalUrl(urls, site, playInfo);
-        String actualPlayLink = "";
-        for (QualityOption quality : qualities) {
-            JsonNode playResponse = startPlay(site, token, playInfo, streamInfo, quality.resolution(), quality.bitrate());
-            String playLink = playResponse == null ? "" : playResponse.path("play_link").asText("");
-            if (StringUtils.isBlank(playLink)) {
-                continue;
-            }
-            if (StringUtils.isBlank(actualPlayLink)) {
-                actualPlayLink = playLink;
-            }
+        QualityOption quality = qualities.getFirst();
+        JsonNode playResponse = startPlay(site, token, playInfo, streamInfo, quality.resolution(), quality.bitrate());
+        String playLink = playResponse == null ? "" : playResponse.path("play_link").asText("");
+        if (StringUtils.isNotBlank(playLink)) {
             addUrlPair(urls, resolutionLabel(quality.resolution()), apiClient.absoluteUrl(site, playLink));
         }
-        return new PlayUrlResult(urls, actualPlayLink);
+        return new PlayUrlResult(urls, playLink);
     }
 
     private void appendOriginalUrl(List<String> urls, Feiniu site, JsonNode playInfo) {
@@ -765,26 +759,15 @@ public class FeiniuService {
     private String ensureToken(Feiniu site) {
         String token = site.getToken();
         if (StringUtils.isNotBlank(token)) {
-            try {
-                apiClient.getUserInfo(site, token);
-                if (hasSessionCookies(site) || StringUtils.isBlank(site.getUsername()) || StringUtils.isBlank(site.getPassword())) {
-                    return token;
-                }
-            } catch (Exception ignored) {
-                // fall through to relogin
-            }
+            return token;
         }
         if (StringUtils.isBlank(site.getUsername()) || StringUtils.isBlank(site.getPassword())) {
-            throw new BadRequestException(site.getName() + " 缺少有效Token，且未配置用户名密码");
+            throw new BadRequestException(site.getName() + " 缺少Token，且未配置用户名密码");
         }
         String newToken = apiClient.login(site);
         site.setToken(newToken);
         feiniuRepository.save(site);
         return newToken;
-    }
-
-    private boolean hasSessionCookies(Feiniu site) {
-        return StringUtils.isNotBlank(site.getFnosToken()) && StringUtils.isNotBlank(site.getFnosLongToken());
     }
 
     private String imageUrl(Feiniu site, String path, String subToken, String baseUrl) {
