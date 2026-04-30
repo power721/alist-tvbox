@@ -293,11 +293,7 @@ public class FeiniuService {
         Map<String, Object> result = new HashMap<>();
         result.put("url", url);
         result.put("subs", getSubtitles(site, token, streamList));
-        if (isProxyPlayResult(url)) {
-            result.put("header", "{\"User-Agent\":\"" + StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT) + "\"}");
-        } else {
-            result.put("header", "{\"Authorization\":\"" + token + "\",\"Cookie\":\"mode=relay; Trim-MC-token=" + token + "\",\"User-Agent\":\"" + StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT) + "\"}");
-        }
+        result.put("header", "{\"Authorization\":\"" + token + "\",\"Cookie\":\"mode=relay; Trim-MC-token=" + token + "\",\"User-Agent\":\"" + StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT) + "\"}");
         result.put("parse", 0);
         log.debug("result: {}", result);
         return result;
@@ -427,15 +423,31 @@ public class FeiniuService {
             return buildFallbackUrls(site, playInfo, streamList);
         }
 
-        JsonNode playResponse = startPlay(site, token, playInfo, streamInfo);
-        if (playResponse != null && StringUtils.isNotBlank(playResponse.path("play_link").asText())) {
-            return List.of(
-                    resolutionLabel(preferredResolution(streamInfo)),
-                    buildProxyUrl(baseUrl, subToken, site.getId(), playResponse.path("play_link").asText())
-            );
+        List<String> urls = buildTranscodeUrls(site, token, playInfo, streamInfo);
+        if (!urls.isEmpty()) {
+            return urls;
         }
 
         return buildFallbackUrls(site, playInfo, streamList);
+    }
+
+    private List<String> buildTranscodeUrls(Feiniu site, String token, JsonNode playInfo, JsonNode streamInfo) {
+        List<QualityOption> qualities = collectQualityOptions(streamInfo);
+        if (qualities.isEmpty()) {
+            qualities = List.of(new QualityOption(preferredResolution(streamInfo), preferredBitrate(streamInfo)));
+        }
+
+        List<String> urls = new ArrayList<>();
+        for (QualityOption quality : qualities) {
+            JsonNode playResponse = startPlay(site, token, playInfo, streamInfo, quality.resolution(), quality.bitrate());
+            String playLink = playResponse == null ? "" : playResponse.path("play_link").asText("");
+            if (StringUtils.isBlank(playLink)) {
+                continue;
+            }
+            urls.add(resolutionLabel(quality.resolution()));
+            urls.add(apiClient.absoluteUrl(site, playLink));
+        }
+        return urls;
     }
 
     private JsonNode loadStreamInfo(Feiniu site, String token, JsonNode playInfo) {
@@ -465,7 +477,8 @@ public class FeiniuService {
                 && ("MP4".equalsIgnoreCase(wrapper) || StringUtils.isBlank(wrapper));
     }
 
-    private JsonNode startPlay(Feiniu site, String token, JsonNode playInfo, JsonNode streamInfo) {
+    private JsonNode startPlay(Feiniu site, String token, JsonNode playInfo, JsonNode streamInfo,
+                               String resolution, long bitrate) {
         JsonNode videoStream = streamInfo.path("video_stream");
         JsonNode audioStream = firstAudioStream(streamInfo);
         String mediaGuid = firstNonBlank(
@@ -484,8 +497,8 @@ public class FeiniuService {
         body.put("media_guid", mediaGuid);
         body.put("video_guid", videoGuid);
         body.put("video_encoder", "h264");
-        body.put("resolution", preferredResolution(streamInfo));
-        body.put("bitrate", preferredBitrate(streamInfo));
+        body.put("resolution", resolution);
+        body.put("bitrate", bitrate);
         body.put("startTimestamp", 0L);
         body.put("audio_encoder", "aac");
         body.put("audio_guid", firstNonBlank(
@@ -500,6 +513,27 @@ public class FeiniuService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private List<QualityOption> collectQualityOptions(JsonNode streamInfo) {
+        JsonNode qualities = streamInfo.path("qualities");
+        if (!qualities.isArray() || qualities.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Long> options = new LinkedHashMap<>();
+        for (JsonNode quality : qualities) {
+            String resolution = quality.path("resolution").asText("");
+            long bitrate = quality.path("bitrate").asLong(0);
+            if (StringUtils.isBlank(resolution) || bitrate <= 0 || options.containsKey(resolution)) {
+                continue;
+            }
+            options.put(resolution, bitrate);
+        }
+        List<QualityOption> result = new ArrayList<>();
+        for (Map.Entry<String, Long> entry : options.entrySet()) {
+            result.add(new QualityOption(entry.getKey(), entry.getValue()));
+        }
+        return result;
     }
 
     private JsonNode firstAudioStream(JsonNode streamInfo) {
@@ -552,20 +586,6 @@ public class FeiniuService {
             return "转码";
         }
         return resolution.endsWith("p") ? resolution : resolution + "p";
-    }
-
-    private boolean isProxyPlayResult(Object url) {
-        if (url instanceof String value) {
-            return value.contains("/feiniu-proxy/");
-        }
-        if (url instanceof List<?> values) {
-            for (Object value : values) {
-                if (value instanceof String string && string.contains("/feiniu-proxy/")) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     String rewritePlaylist(String playlist, int siteId, String token, String baseUrl, String currentUrl) {
@@ -745,6 +765,9 @@ public class FeiniuService {
     }
 
     private record IdParts(int siteId, String guid) {
+    }
+
+    private record QualityOption(String resolution, long bitrate) {
     }
 
     private record LastPlayState(Feiniu site, String token, String itemId, String mediaGuid, String videoGuid,
