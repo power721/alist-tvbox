@@ -35,10 +35,4 @@ public class OfflineDownloadController {
     public OfflineDownloadConfigDto saveConfig(@RequestBody OfflineDownloadConfigRequest request) {
         return offlineDownloadService.saveConfig(request);
     }
-
-    @PostMapping
-    public Object download(@RequestBody OfflineDownloadRequest request,
-                           @RequestParam(required = false, defaultValue = "") String ac) {
-        return offlineDownloadService.download(request, ac);
-    }
 }

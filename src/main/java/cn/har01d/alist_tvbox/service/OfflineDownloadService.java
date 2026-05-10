@@ -135,7 +135,6 @@ public class OfflineDownloadService {
         if (target.folder()) {
             targetPath += "/~playlist";
         }
-        subscriptionService.checkToken(subscriptionService.getFirstToken());
         return tvBoxService.getDetail(ac, "1$" + targetPath);
     }
 
@@ -151,7 +150,7 @@ public class OfflineDownloadService {
         Optional<OfflineDownloadTask> localTask = offlineDownloadTaskRepository
                 .findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(account.getId(), urlHash);
         if (localTask.isPresent() && STATUS_COMPLETED.equals(localTask.get().getStatus()) && StringUtils.isNotBlank(localTask.get().getTargetPath())) {
-            return new DownloadTarget(localTask.get().getTargetPath(), localTask.get().isFolder());
+            return new DownloadTarget(resolveTargetPath(account, localTask.get()), localTask.get().isFolder());
         }
 
         String cookie = requireCookie(account);
@@ -192,7 +191,7 @@ public class OfflineDownloadService {
                 if (StringUtils.isBlank(name)) {
                     throw new BadRequestException("离线下载任务成功但未返回名称");
                 }
-                String targetPath = mountPath + "/" + OFFLINE_DIR_NAME + "/" + name;
+                String targetPath = buildTargetPath(account, name);
                 saveTask(account.getId(), urlHash, task, targetPath);
                 return new DownloadTarget(targetPath, isFolderTask(task));
             }
@@ -209,9 +208,16 @@ public class OfflineDownloadService {
     }
 
     public void syncSelectedAccountTempDir(Integer accountId) {
+        refreshOfflineFolderId(accountId);
     }
 
     public void syncConfiguredTempDirOnStartup() {
+        try {
+            StoredConfig config = loadEnabledConfig();
+            refreshOfflineFolderId(config.accountId());
+        } catch (BadRequestException e) {
+            log.debug("skip syncing offline folder on startup: {}", e.getMessage());
+        }
     }
 
     private StoredConfig loadEnabledConfig() {
@@ -285,6 +291,22 @@ public class OfflineDownloadService {
         } catch (JsonProcessingException e) {
             throw new BadRequestException("保存离线下载配置失败", e);
         }
+    }
+
+    private void refreshOfflineFolderId(Integer accountId) {
+        Optional<Setting> setting = settingRepository.findById(SETTING_NAME);
+        if (setting.isEmpty() || StringUtils.isBlank(setting.get().getValue())) {
+            return;
+        }
+        StoredConfig config = parseConfig(setting.get().getValue());
+        if (!config.enabled() || config.accountId() == null || !Objects.equals(config.accountId(), accountId)) {
+            return;
+        }
+
+        String driverType = normalizeDriverType(config.driverType());
+        DriverAccount account = getAccount(config.accountId(), driverType);
+        String offlineFolderId = ensureOfflineFolder(account);
+        settingRepository.save(new Setting(SETTING_NAME, writeConfig(new StoredConfig(true, driverType, account.getId(), offlineFolderId))));
     }
 
     private String requireCookie(DriverAccount account) {
@@ -438,6 +460,17 @@ public class OfflineDownloadService {
         }
         String message = firstNonBlank(addTask.path("error_msg").asText(), addTask.path("errtype").asText(), addTask.path("msg").asText());
         return StringUtils.contains(message, "已存在") || StringUtils.contains(message, "重复");
+    }
+
+    private String resolveTargetPath(DriverAccount account, OfflineDownloadTask task) {
+        if (StringUtils.isNotBlank(task.getTaskName())) {
+            return buildTargetPath(account, task.getTaskName());
+        }
+        return task.getTargetPath();
+    }
+
+    private String buildTargetPath(DriverAccount account, String taskName) {
+        return Storage.getMountPath(account) + "/" + OFFLINE_DIR_NAME + "/" + taskName;
     }
 
     private void saveTask(Integer accountId, String urlHash, ObjectNode task, String targetPath) {

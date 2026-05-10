@@ -174,6 +174,45 @@ class OfflineDownloadServiceTest {
     }
 
     @Test
+    void syncSelectedAccountTempDirShouldRefreshOfflineFolderIdForConfiguredAccount() throws Exception {
+        DriverAccount account = account(12, "🈲我的115云盘", "new-parent-id",
+                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"old-folder-id\"}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        when(restTemplate.exchange(eq("https://webapi.115.com/files?aid=1&cid=new-parent-id&offset=0&limit=20&type=0&show_dir=1&fc_mix=0&natsort=1&count_folders=1&format=json&custom_order=0"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(folderListResponse("new-folder-id")));
+
+        service.syncSelectedAccountTempDir(12);
+
+        var setting = org.mockito.ArgumentCaptor.forClass(Setting.class);
+        verify(settingRepository).save(setting.capture());
+        ObjectNode saved = (ObjectNode) objectMapper.readTree(setting.getValue().getValue());
+        assertEquals(true, saved.path("enabled").asBoolean());
+        assertEquals("PAN115", saved.path("driverType").asText());
+        assertEquals(12, saved.path("accountId").asInt());
+        assertEquals("new-folder-id", saved.path("offlineFolderId").asText());
+    }
+
+    @Test
+    void syncConfiguredTempDirOnStartupShouldRefreshOfflineFolderId() throws Exception {
+        DriverAccount account = account(12, "🈲我的115云盘", "startup-parent-id",
+                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"stale-folder-id\"}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        when(restTemplate.exchange(eq("https://webapi.115.com/files?aid=1&cid=startup-parent-id&offset=0&limit=20&type=0&show_dir=1&fc_mix=0&natsort=1&count_folders=1&format=json&custom_order=0"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(folderListResponse("startup-folder-id")));
+
+        service.syncConfiguredTempDirOnStartup();
+
+        var setting = org.mockito.ArgumentCaptor.forClass(Setting.class);
+        verify(settingRepository).save(setting.capture());
+        ObjectNode saved = (ObjectNode) objectMapper.readTree(setting.getValue().getValue());
+        assertEquals("startup-folder-id", saved.path("offlineFolderId").asText());
+    }
+
+    @Test
     void downloadShouldRejectUnsupportedScheme() {
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
                 service.download(new OfflineDownloadRequest("ftp://example.com/test"), ""));
@@ -261,6 +300,32 @@ class OfflineDownloadServiceTest {
 
         assertEquals(1, result.getList().size());
         assertEquals("3", result.getList().getFirst().getVod_id());
+    }
+
+    @Test
+    void downloadShouldKeepCurrentTokenContext() {
+        DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166",
+                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
+        MovieList movieList = new MovieList();
+        MovieDetail detail = new MovieDetail();
+        detail.setVod_id("7");
+        movieList.getList().add(detail);
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        when(tvBoxService.getDetail("", "1$/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务/~playlist")).thenReturn(movieList);
+        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(spaceResponse()));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(addTaskResponse()));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=1000&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
+
+        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), "");
+
+        assertEquals(1, result.getList().size());
+        assertEquals("7", result.getList().getFirst().getVod_id());
+        verify(subscriptionService, never()).checkToken(any());
     }
 
     @Test
@@ -376,6 +441,22 @@ class OfflineDownloadServiceTest {
     }
 
     @Test
+    void downloadPathShouldRebuildCompletedLocalTaskPathFromCurrentMountPath() {
+        DriverAccount account = account(12, "新115账号名", "3142159731515950166",
+                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
+                .thenReturn(Optional.of(completedTask("/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务", "完成任务")));
+
+        String result = service.downloadPath(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
+
+        assertEquals("/115云盘/新115账号名/alist-tvbox-offline/完成任务", result);
+        verify(restTemplate, never()).exchange(eq("https://115.com/?ct=clouddownload&ac=space"), any(), any(), eq(String.class));
+    }
+
+    @Test
     void downloadShouldRejectInvalid115Cookie() {
         DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166", "CID=test-cid; SEID=test-seid");
         when(settingRepository.findById("offline_download_config"))
@@ -445,12 +526,16 @@ class OfflineDownloadServiceTest {
     }
 
     private ObjectNode folderListResponse(boolean exists) {
+        return folderListResponse(exists ? "3142159731515950166" : null);
+    }
+
+    private ObjectNode folderListResponse(String existingId) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("state", true);
         var data = node.putArray("data");
-        if (exists) {
+        if (existingId != null) {
             var item = data.addObject();
-            item.put("cid", "3142159731515950166");
+            item.put("cid", existingId);
             item.put("n", "alist-tvbox-offline");
             item.put("pid", "3425588780152254335");
         }
@@ -477,9 +562,14 @@ class OfflineDownloadServiceTest {
     }
 
     private OfflineDownloadTask completedTask(String path) {
+        return completedTask(path, "完成任务");
+    }
+
+    private OfflineDownloadTask completedTask(String path, String taskName) {
         OfflineDownloadTask task = new OfflineDownloadTask();
         task.setAccountId(12);
         task.setTargetPath(path);
+        task.setTaskName(taskName);
         task.setStatus("COMPLETED");
         task.setFolder(true);
         return task;

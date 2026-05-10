@@ -3,7 +3,6 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.config.RestErrorHandler;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigDto;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadQuotaResponse;
-import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.service.OfflineDownloadService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,10 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.util.Map;
-
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -73,50 +69,5 @@ class OfflineDownloadControllerTest {
                 .andExpect(status().isOk());
 
         verify(offlineDownloadService).saveConfig(any());
-    }
-
-    @Test
-    void shouldReturnPlaylistForOfflineDownload() throws Exception {
-        when(offlineDownloadService.download(any(OfflineDownloadRequest.class), eq(""))).thenReturn((Map<String, Object>) (Map<?, ?>) Map.of(
-                "page", 1,
-                "pagecount", 1,
-                "limit", 100,
-                "total", 1,
-                "list", java.util.List.of(Map.of("vod_id", "1"))
-        ));
-
-        mockMvc.perform(post("/api/offline_download")
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {"url":"magnet:?xt=urn:btih:test"}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.list[0].vod_id").value("1"));
-
-        verify(offlineDownloadService).download(any(OfflineDownloadRequest.class), eq(""));
-    }
-
-    @Test
-    void shouldPassAcQueryParamForOfflineDownload() throws Exception {
-        when(offlineDownloadService.download(any(OfflineDownloadRequest.class), eq("list"))).thenReturn((Map<String, Object>) (Map<?, ?>) Map.of(
-                "page", 1,
-                "pagecount", 1,
-                "limit", 100,
-                "total", 1,
-                "list", java.util.List.of(Map.of("vod_id", "1"))
-        ));
-
-        mockMvc.perform(post("/api/offline_download")
-                        .queryParam("ac", "list")
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {"url":"magnet:?xt=urn:btih:test"}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.list[0].vod_id").value("1"));
-
-        verify(offlineDownloadService).download(any(OfflineDownloadRequest.class), eq("list"));
     }
 }
