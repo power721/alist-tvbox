@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.config.RestErrorHandler;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigDto;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadQuotaResponse;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.service.OfflineDownloadService;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +42,7 @@ class OfflineDownloadControllerTest {
 
     @Test
     void shouldGetOfflineDownloadConfig() throws Exception {
-        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadService.ConfigResponse(true, "PAN115", 12, "/115云盘/测试"));
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(true, "PAN115", 12, "/115云盘/测试"));
 
         mockMvc.perform(get("/api/offline_download/config"))
                 .andExpect(status().isOk())
@@ -52,7 +54,7 @@ class OfflineDownloadControllerTest {
 
     @Test
     void shouldGetOfflineDownloadQuota() throws Exception {
-        when(offlineDownloadService.getQuota()).thenReturn(new OfflineDownloadService.QuotaResponse(1371, 1500, 129));
+        when(offlineDownloadService.getQuota()).thenReturn(new OfflineDownloadQuotaResponse(1371, 1500, 129));
 
         mockMvc.perform(get("/api/offline_download/quota"))
                 .andExpect(status().isOk())

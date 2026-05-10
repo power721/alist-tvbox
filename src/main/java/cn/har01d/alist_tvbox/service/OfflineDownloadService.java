@@ -1,6 +1,9 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigRequest;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigDto;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadQuotaResponse;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
@@ -52,15 +55,6 @@ public class OfflineDownloadService {
     private static final Pattern UID_PATTERN = Pattern.compile("UID=(\\d+)");
     private static final String STATUS_COMPLETED = "COMPLETED";
 
-    public record ConfigRequest(boolean enabled, String driverType, Integer accountId) {
-    }
-
-    public record ConfigResponse(boolean enabled, String driverType, Integer accountId, String folder) {
-    }
-
-    public record QuotaResponse(int surplus, int count, int used) {
-    }
-
     private record StoredConfig(boolean enabled, String driverType, Integer accountId, String offlineFolderId) {
     }
 
@@ -91,10 +85,10 @@ public class OfflineDownloadService {
         this.objectMapper = objectMapper;
     }
 
-    public ConfigResponse getConfig() {
+    public OfflineDownloadConfigDto getConfig() {
         Optional<Setting> setting = settingRepository.findById(SETTING_NAME);
         if (setting.isEmpty() || StringUtils.isBlank(setting.get().getValue())) {
-            return new ConfigResponse(false, DEFAULT_DRIVER_TYPE, null, "");
+            return new OfflineDownloadConfigDto(false, DEFAULT_DRIVER_TYPE, null, "");
         }
 
         StoredConfig config = parseConfig(setting.get().getValue());
@@ -104,31 +98,31 @@ public class OfflineDownloadService {
                     .map(Storage::getMountPath)
                     .orElse("");
         }
-        return new ConfigResponse(config.enabled(), normalizeDriverType(config.driverType()), config.accountId(), folder);
+        return new OfflineDownloadConfigDto(config.enabled(), normalizeDriverType(config.driverType()), config.accountId(), folder);
     }
 
-    public ConfigResponse saveConfig(ConfigRequest request) {
+    public OfflineDownloadConfigDto saveConfig(OfflineDownloadConfigRequest request) {
         validateConfig(request);
         String driverType = normalizeDriverType(request.driverType());
         StoredConfig normalized = new StoredConfig(request.enabled(), driverType, request.accountId(), "");
         if (!normalized.enabled()) {
             settingRepository.save(new Setting(SETTING_NAME, writeConfig(normalized)));
-            return new ConfigResponse(false, driverType, normalized.accountId(), "");
+            return new OfflineDownloadConfigDto(false, driverType, normalized.accountId(), "");
         }
 
         DriverAccount account = getAccount(normalized.accountId(), driverType);
         String offlineFolderId = ensureOfflineFolder(account);
         settingRepository.save(new Setting(SETTING_NAME, writeConfig(new StoredConfig(true, driverType, account.getId(), offlineFolderId))));
-        return new ConfigResponse(true, driverType, account.getId(), Storage.getMountPath(account));
+        return new OfflineDownloadConfigDto(true, driverType, account.getId(), Storage.getMountPath(account));
     }
 
-    public QuotaResponse getQuota() {
+    public OfflineDownloadQuotaResponse getQuota() {
         StoredConfig config = loadEnabledConfig();
         DriverAccount account = getAccount(config.accountId(), normalizeDriverType(config.driverType()));
         String cookie = requireCookie(account);
         String uid = extractUid(cookie);
         ObjectNode quota = exchange(String.format(QUOTA_URL, uid), HttpMethod.POST, cookie, "https://115.com/", "");
-        return new QuotaResponse(
+        return new OfflineDownloadQuotaResponse(
                 quota.path("surplus").asInt(0),
                 quota.path("count").asInt(0),
                 quota.path("used").asInt(0)
@@ -236,7 +230,7 @@ public class OfflineDownloadService {
         return config;
     }
 
-    private void validateConfig(ConfigRequest request) {
+    private void validateConfig(OfflineDownloadConfigRequest request) {
         String driverType = normalizeDriverType(request.driverType());
         if (!request.enabled()) {
             return;

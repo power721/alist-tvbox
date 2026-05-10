@@ -1,5 +1,8 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigDto;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigRequest;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadQuotaResponse;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.service.OfflineDownloadService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,17 +22,17 @@ public class OfflineDownloadController {
     }
 
     @GetMapping("/config")
-    public OfflineDownloadService.ConfigResponse getConfig() {
+    public OfflineDownloadConfigDto getConfig() {
         return offlineDownloadService.getConfig();
     }
 
     @GetMapping("/quota")
-    public OfflineDownloadService.QuotaResponse getQuota() {
+    public OfflineDownloadQuotaResponse getQuota() {
         return offlineDownloadService.getQuota();
     }
 
     @PostMapping("/config")
-    public OfflineDownloadService.ConfigResponse saveConfig(@RequestBody OfflineDownloadService.ConfigRequest request) {
+    public OfflineDownloadConfigDto saveConfig(@RequestBody OfflineDownloadConfigRequest request) {
         return offlineDownloadService.saveConfig(request);
     }
 

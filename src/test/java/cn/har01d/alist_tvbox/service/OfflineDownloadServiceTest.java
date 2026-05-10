@@ -1,6 +1,9 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigDto;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigRequest;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadQuotaResponse;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
@@ -82,7 +85,7 @@ class OfflineDownloadServiceTest {
     @Test
     void saveConfigShouldRejectMissingAccountWhenEnabled() {
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "PAN115", null)));
+                service.saveConfig(new OfflineDownloadConfigRequest(true, "PAN115", null)));
 
         assertEquals("请选择离线下载账号", exception.getMessage());
     }
@@ -101,7 +104,7 @@ class OfflineDownloadServiceTest {
                     return textHtmlJson(quotaResponse());
                 });
 
-        OfflineDownloadService.QuotaResponse result = service.getQuota();
+        OfflineDownloadQuotaResponse result = service.getQuota();
 
         assertEquals(1371, result.surplus());
         assertEquals(1500, result.count());
@@ -126,7 +129,7 @@ class OfflineDownloadServiceTest {
                     return textHtmlJson(createFolderResponse("3142159731515950166"));
                 });
 
-        OfflineDownloadService.ConfigResponse response = service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "PAN115", 12));
+        OfflineDownloadConfigDto response = service.saveConfig(new OfflineDownloadConfigRequest(true, "PAN115", 12));
 
         verify(settingRepository).save(any(Setting.class));
         assertEquals("/115云盘/🈲我的115云盘", response.folder());
@@ -140,7 +143,7 @@ class OfflineDownloadServiceTest {
         when(restTemplate.exchange(eq("https://webapi.115.com/files?aid=1&cid=3425588780152254335&offset=0&limit=20&type=0&show_dir=1&fc_mix=0&natsort=1&count_folders=1&format=json&custom_order=0"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
                 .thenReturn(textHtmlJson(folderListResponse(true)));
 
-        service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "PAN115", 12));
+        service.saveConfig(new OfflineDownloadConfigRequest(true, "PAN115", 12));
 
         verify(restTemplate, never()).exchange(eq("https://webapi.115.com/files/add"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class));
     }
@@ -148,7 +151,7 @@ class OfflineDownloadServiceTest {
     @Test
     void saveConfigShouldRejectThunderDriverType() {
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "THUNDER", 13)));
+                service.saveConfig(new OfflineDownloadConfigRequest(true, "THUNDER", 13)));
 
         assertEquals("当前仅支持115云盘离线下载", exception.getMessage());
     }
@@ -160,7 +163,7 @@ class OfflineDownloadServiceTest {
                 .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
 
-        OfflineDownloadService.ConfigResponse response = service.getConfig();
+        OfflineDownloadConfigDto response = service.getConfig();
 
         assertEquals("/115云盘/🈲我的115云盘", response.folder());
     }
