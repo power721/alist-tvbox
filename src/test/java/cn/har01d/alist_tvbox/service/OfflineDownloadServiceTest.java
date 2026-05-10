@@ -20,6 +20,7 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
@@ -83,9 +84,9 @@ class OfflineDownloadServiceTest {
         DriverAccount account = account(12, "🈲我的115云盘", "3425588780152254335",
                 "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
-        when(restTemplate.exchange(eq("https://webapi.115.com/files?aid=1&cid=3425588780152254335&offset=0&limit=20&type=0&show_dir=1&fc_mix=0&natsort=1&count_folders=1&format=json&custom_order=0"), eq(HttpMethod.GET), any(HttpEntity.class), eq(ObjectNode.class)))
-                .thenReturn(ResponseEntity.ok(folderListResponse(false)));
-        when(restTemplate.exchange(eq("https://webapi.115.com/files/add"), eq(HttpMethod.POST), any(HttpEntity.class), eq(ObjectNode.class)))
+        when(restTemplate.exchange(eq("https://webapi.115.com/files?aid=1&cid=3425588780152254335&offset=0&limit=20&type=0&show_dir=1&fc_mix=0&natsort=1&count_folders=1&format=json&custom_order=0"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(folderListResponse(false)));
+        when(restTemplate.exchange(eq("https://webapi.115.com/files/add"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
                 .thenAnswer(invocation -> {
                     HttpEntity<?> entity = invocation.getArgument(2);
                     assertCookieHeaders(entity, account.getCookie(), "https://115.com/");
@@ -93,7 +94,7 @@ class OfflineDownloadServiceTest {
                     MultiValueMap<String, Object> body = (MultiValueMap<String, Object>) entity.getBody();
                     assertEquals("3425588780152254335", body.getFirst("pid"));
                     assertEquals("alist-tvbox-offline", body.getFirst("cname"));
-                    return ResponseEntity.ok(createFolderResponse("3142159731515950166"));
+                    return textHtmlJson(createFolderResponse("3142159731515950166"));
                 });
 
         OfflineDownloadService.ConfigResponse response = service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "PAN115", 12));
@@ -107,12 +108,12 @@ class OfflineDownloadServiceTest {
         DriverAccount account = account(12, "🈲我的115云盘", "3425588780152254335",
                 "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
-        when(restTemplate.exchange(eq("https://webapi.115.com/files?aid=1&cid=3425588780152254335&offset=0&limit=20&type=0&show_dir=1&fc_mix=0&natsort=1&count_folders=1&format=json&custom_order=0"), eq(HttpMethod.GET), any(HttpEntity.class), eq(ObjectNode.class)))
-                .thenReturn(ResponseEntity.ok(folderListResponse(true)));
+        when(restTemplate.exchange(eq("https://webapi.115.com/files?aid=1&cid=3425588780152254335&offset=0&limit=20&type=0&show_dir=1&fc_mix=0&natsort=1&count_folders=1&format=json&custom_order=0"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(folderListResponse(true)));
 
         service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "PAN115", 12));
 
-        verify(restTemplate, never()).exchange(eq("https://webapi.115.com/files/add"), eq(HttpMethod.POST), any(HttpEntity.class), eq(ObjectNode.class));
+        verify(restTemplate, never()).exchange(eq("https://webapi.115.com/files/add"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class));
     }
 
     @Test
@@ -181,9 +182,9 @@ class OfflineDownloadServiceTest {
                 .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
         when(tvBoxService.getDetail("", "1$/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务/~playlist")).thenReturn(movieList);
-        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(ObjectNode.class)))
-                .thenReturn(ResponseEntity.ok(spaceResponse()));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(ObjectNode.class)))
+        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(spaceResponse()));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
                 .thenAnswer(invocation -> {
                     HttpEntity<?> entity = invocation.getArgument(2);
                     assertCookieHeaders(entity, account.getCookie(), "https://115.com/");
@@ -193,16 +194,16 @@ class OfflineDownloadServiceTest {
                     assertTrue(body.contains("uid=6338615"));
                     assertTrue(body.contains("url%5B0%5D=magnet%3A%3Fxt%3Durn%3Abtih%3Atest"));
                     assertTrue(body.contains("wp_path_id=3142159731515950166"));
-                    return ResponseEntity.ok(addTaskResponse());
+                    return textHtmlJson(addTaskResponse());
                 });
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=15&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(ObjectNode.class)))
-                .thenReturn(ResponseEntity.ok(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
-        lenient().when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_del"), eq(HttpMethod.POST), any(HttpEntity.class), eq(ObjectNode.class)))
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=15&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
+        lenient().when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_del"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
                 .thenAnswer(invocation -> {
                     HttpEntity<?> entity = invocation.getArgument(2);
                     String body = entity.getBody().toString();
                     assertTrue(body.contains("hash%5B0%5D=3425507259668098980"));
-                    return ResponseEntity.ok(deleteTaskResponse());
+                    return textHtmlJson(deleteTaskResponse());
                 });
 
         MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
@@ -223,14 +224,14 @@ class OfflineDownloadServiceTest {
                 .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
         when(tvBoxService.getDetail("", "1$/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务.mkv")).thenReturn(movieList);
-        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(ObjectNode.class)))
-                .thenReturn(ResponseEntity.ok(spaceResponse()));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(ObjectNode.class)))
-                .thenReturn(ResponseEntity.ok(addTaskResponse()));
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=15&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(ObjectNode.class)))
-                .thenReturn(ResponseEntity.ok(taskListResponse("magnet:?xt=urn:btih:test", "完成任务.mkv", 2, false)));
-        lenient().when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_del"), eq(HttpMethod.POST), any(HttpEntity.class), eq(ObjectNode.class)))
-                .thenReturn(ResponseEntity.ok(deleteTaskResponse()));
+        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(spaceResponse()));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(addTaskResponse()));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=15&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务.mkv", 2, false)));
+        lenient().when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_del"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(deleteTaskResponse()));
 
         MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
 
@@ -245,13 +246,13 @@ class OfflineDownloadServiceTest {
         when(settingRepository.findById("offline_download_config"))
                 .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
-        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(ObjectNode.class)))
-                .thenReturn(ResponseEntity.ok(spaceResponse()));
+        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(spaceResponse()));
         ObjectNode addTask = objectMapper.createObjectNode();
         addTask.put("state", false);
         addTask.put("error_msg", "任务已存在，请勿输入重复的链接地址");
-        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(ObjectNode.class)))
-                .thenReturn(ResponseEntity.ok(addTask));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(addTask));
 
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
                 service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test")));
@@ -314,6 +315,16 @@ class OfflineDownloadServiceTest {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("state", true);
         return node;
+    }
+
+    private ResponseEntity<String> textHtmlJson(ObjectNode node) {
+        try {
+            return ResponseEntity.ok()
+                    .contentType(MediaType.TEXT_HTML)
+                    .body(objectMapper.writeValueAsString(node));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private ObjectNode folderListResponse(boolean exists) {

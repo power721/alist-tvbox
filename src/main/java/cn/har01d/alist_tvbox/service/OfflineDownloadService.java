@@ -115,6 +115,7 @@ public class OfflineDownloadService {
         String mountPath = Storage.getMountPath(account);
 
         ObjectNode space = exchange(SPACE_URL, HttpMethod.GET, cookie, "https://115.com/", null);
+        log.debug("space: {}", space);
         ensureState(space, "获取115离线下载签名失败");
         String sign = text(space, "sign");
         long time = number(space, "time");
@@ -124,6 +125,7 @@ public class OfflineDownloadService {
 
         String body = buildAddTaskBody(sign, time, uid, request.url(), pathId);
         ObjectNode addTask = exchange(ADD_TASK_URL, HttpMethod.POST, cookie, "https://115.com/", body);
+        log.debug("add task: {}", addTask);
         ensureState(addTask, "提交115离线下载任务失败");
         if (addTask.path("errno").asInt(0) != 0) {
             throw new BadRequestException("task failed: " + firstNonBlank(addTask.path("error_msg").asText(), "115离线下载任务提交失败"));
@@ -269,12 +271,13 @@ public class OfflineDownloadService {
         headers.set(HttpHeaders.COOKIE, cookie);
         headers.set(HttpHeaders.REFERER, referer);
         headers.set(HttpHeaders.USER_AGENT, cn.har01d.alist_tvbox.util.Constants.USER_AGENT);
+        headers.set(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE + ", text/html, */*");
         if (method == HttpMethod.POST) {
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         }
         HttpEntity<?> entity = method == HttpMethod.POST ? new HttpEntity<>(body, headers) : new HttpEntity<>(headers);
-        ResponseEntity<ObjectNode> response = restTemplate.exchange(url, method, entity, ObjectNode.class);
-        return response.getBody();
+        ResponseEntity<String> response = restTemplate.exchange(url, method, entity, String.class);
+        return parseJsonBody(response.getBody(), url);
     }
 
     private String ensureOfflineFolder(DriverAccount account) {
@@ -298,14 +301,27 @@ public class OfflineDownloadService {
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
         form.add("pid", parentId);
         form.add("cname", OFFLINE_DIR_NAME);
-        ResponseEntity<ObjectNode> response = restTemplate.exchange(FILE_ADD_URL, HttpMethod.POST, new HttpEntity<>(form, headers), ObjectNode.class);
-        ObjectNode body = response.getBody();
+        headers.set(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE + ", text/html, */*");
+        ResponseEntity<String> response = restTemplate.exchange(FILE_ADD_URL, HttpMethod.POST, new HttpEntity<>(form, headers), String.class);
+        ObjectNode body = parseJsonBody(response.getBody(), FILE_ADD_URL);
         ensureState(body, "创建115离线下载目录失败");
         String folderId = firstNonBlank(body.path("file_id").asText(), body.path("cid").asText());
         if (StringUtils.isBlank(folderId)) {
             throw new BadRequestException("创建115离线下载目录失败");
         }
         return folderId;
+    }
+
+    private ObjectNode parseJsonBody(String body, String url) {
+        if (StringUtils.isBlank(body)) {
+            throw new BadRequestException("115接口返回空响应: " + url);
+        }
+        try {
+            return (ObjectNode) objectMapper.readTree(body);
+        } catch (Exception e) {
+            String snippet = body.length() > 200 ? body.substring(0, 200) + "..." : body;
+            throw new BadRequestException("115接口返回非JSON响应: " + snippet, e);
+        }
     }
 
     private String requireParentFolderId(DriverAccount account) {
