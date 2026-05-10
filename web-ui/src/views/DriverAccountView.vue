@@ -273,6 +273,15 @@
           />
         </div>
       </div>
+      <div class="config-actions">
+        <el-button
+          type="primary"
+          :loading="savingLocalProxyConfig"
+          @click="saveLocalProxyConfig"
+        >
+          保存代理配置
+        </el-button>
+      </div>
       <el-divider>离线下载</el-divider>
       <el-form label-width="140">
         <el-form-item label="开启离线下载">
@@ -309,10 +318,18 @@
           <span>{{ offlineQuotaText }}</span>
         </el-form-item>
       </el-form>
+      <div class="config-actions">
+        <el-button
+          type="primary"
+          :loading="savingOfflineDownloadConfig"
+          @click="saveOfflineDownloadConfig"
+        >
+          保存离线下载配置
+        </el-button>
+      </div>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="configVisible = false">取消</el-button>
-        <el-button type="primary" @click="updateConfig">保存</el-button>
       </span>
       </template>
     </el-dialog>
@@ -467,6 +484,8 @@ const offlineDownloadConfig = ref<OfflineDownloadConfig>({
   accountId: null,
 })
 const offlineDownloadQuota = ref<OfflineDownloadQuota>(null)
+const savingLocalProxyConfig = ref(false)
+const savingOfflineDownloadConfig = ref(false)
 const offlineAccounts = computed(() => accounts.value.filter((item) => item.type === offlineDownloadConfig.value.driverType))
 const offlineMountFolder = computed(() => {
   const account = offlineAccounts.value.find((item) => item.id === offlineDownloadConfig.value.accountId)
@@ -673,15 +692,28 @@ const updateOfflineDownloadConfig = () => {
   return axios.post('/api/offline_download/config', offlineDownloadConfig.value)
 }
 
-const updateConfig = async () => {
+const saveLocalProxyConfig = async () => {
   try {
+    savingLocalProxyConfig.value = true
     await updateLocalProxyConfig()
+    ElMessage.success('代理配置已保存')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '代理配置保存失败')
+  } finally {
+    savingLocalProxyConfig.value = false
+  }
+}
+
+const saveOfflineDownloadConfig = async () => {
+  try {
+    savingOfflineDownloadConfig.value = true
     await updateOfflineDownloadConfig()
     await loadOfflineDownloadQuota()
-    ElMessage.success('更新成功')
-    configVisible.value = false
+    ElMessage.success('离线下载配置已保存')
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '更新失败')
+    ElMessage.error(e?.response?.data?.message || '离线下载配置保存失败')
+  } finally {
+    savingOfflineDownloadConfig.value = false
   }
 }
 
@@ -933,5 +965,11 @@ onMounted(() => {
 
 .proxy-config-head {
   font-weight: 600;
+}
+
+.config-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>
