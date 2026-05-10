@@ -73,13 +73,14 @@ class OfflineDownloadServiceTest {
         DriverAccount account = new DriverAccount();
         account.setId(12);
         account.setType(DriverType.PAN115);
-        account.setFolder("/115云盘/测试");
+        account.setName("🈲我的115云盘");
+        account.setFolder("0");
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
 
         service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "PAN115", 12));
 
         verify(settingRepository).save(any(Setting.class));
-        verify(aListLocalService).set115TempDir("/115云盘/测试/alist-tvbox-offline");
+        verify(aListLocalService).set115TempDir("/115云盘/🈲我的115云盘/alist-tvbox-offline");
     }
 
     @Test
@@ -87,13 +88,14 @@ class OfflineDownloadServiceTest {
         DriverAccount account = new DriverAccount();
         account.setId(13);
         account.setType(DriverType.THUNDER);
-        account.setFolder("/迅雷云盘/测试");
+        account.setName("迅雷账号");
+        account.setFolder("0");
         when(driverAccountRepository.findById(13)).thenReturn(Optional.of(account));
 
         service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "THUNDER", 13));
 
         verify(settingRepository).save(any(Setting.class));
-        verify(aListLocalService).setThunderBrowserTempDir("/迅雷云盘/测试/alist-tvbox-offline");
+        verify(aListLocalService).setThunderBrowserTempDir("/我的迅雷云盘/迅雷账号/alist-tvbox-offline");
     }
 
     @Test
@@ -101,11 +103,28 @@ class OfflineDownloadServiceTest {
         DriverAccount account = new DriverAccount();
         account.setId(12);
         account.setType(DriverType.PAN115);
-        account.setFolder("/115云盘/测试");
+        account.setName("🈲我的115云盘");
+        account.setFolder("0");
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
 
         assertThrows(BadRequestException.class, () ->
                 service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "THUNDER", 12)));
+    }
+
+    @Test
+    void getConfigShouldReturnMountPathFor115Account() {
+        DriverAccount account = new DriverAccount();
+        account.setId(12);
+        account.setType(DriverType.PAN115);
+        account.setName("🈲我的115云盘");
+        account.setFolder("0");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+
+        OfflineDownloadService.ConfigResponse response = service.getConfig();
+
+        assertEquals("/115云盘/🈲我的115云盘", response.folder());
     }
 
     @Test
@@ -131,12 +150,13 @@ class OfflineDownloadServiceTest {
         movieList.getList().add(detail);
         account.setId(12);
         account.setType(DriverType.PAN115);
-        account.setFolder("/115云盘/测试");
+        account.setName("🈲我的115云盘");
+        account.setFolder("0");
         when(settingRepository.findById("offline_download_config"))
                 .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12}")));
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
         when(accountService.login()).thenReturn("Bearer test-token");
-        when(tvBoxService.getDetail("", "1$/115云盘/测试/alist-tvbox-offline/任务名/~playlist")).thenReturn(movieList);
+        when(tvBoxService.getDetail("", "1$/115云盘/🈲我的115云盘/alist-tvbox-offline/任务名/~playlist")).thenReturn(movieList);
         when(restTemplate.postForObject(eq("/api/fs/add_offline_download"), any(), eq(Map.class)))
                 .thenReturn(Map.of(
                         "code", 200,
@@ -173,12 +193,13 @@ class OfflineDownloadServiceTest {
         MovieList movieList = new MovieList();
         account.setId(13);
         account.setType(DriverType.THUNDER);
-        account.setFolder("/迅雷云盘/测试");
+        account.setName("迅雷账号");
+        account.setFolder("0");
         when(settingRepository.findById("offline_download_config"))
                 .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"THUNDER\",\"accountId\":13}")));
         when(driverAccountRepository.findById(13)).thenReturn(Optional.of(account));
         when(accountService.login()).thenReturn("Bearer test-token");
-        when(tvBoxService.getDetail("", "1$/迅雷云盘/测试/alist-tvbox-offline/任务名/~playlist")).thenReturn(movieList);
+        when(tvBoxService.getDetail("", "1$/我的迅雷云盘/迅雷账号/alist-tvbox-offline/任务名/~playlist")).thenReturn(movieList);
         when(restTemplate.postForObject(eq("/api/fs/add_offline_download"), any(), eq(Map.class)))
                 .thenAnswer(invocation -> {
                     HttpEntity<Map<String, Object>> entity = invocation.getArgument(1);

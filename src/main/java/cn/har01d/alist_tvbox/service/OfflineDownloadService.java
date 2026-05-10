@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.storage.Storage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.StringUtils;
@@ -79,7 +80,7 @@ public class OfflineDownloadService {
         String folder = "";
         if (config.accountId() != null) {
             folder = driverAccountRepository.findById(config.accountId())
-                    .map(DriverAccount::getFolder)
+                    .map(Storage::getMountPath)
                     .orElse("");
         }
         return new ConfigResponse(config.enabled(), normalizeDriverType(config.driverType()), config.accountId(), folder);
@@ -95,8 +96,9 @@ public class OfflineDownloadService {
         }
 
         DriverAccount account = getAccount(normalized.accountId(), driverType);
-        syncTempDir(driverType, account.getFolder());
-        return new ConfigResponse(true, driverType, account.getId(), account.getFolder());
+        String folder = Storage.getMountPath(account);
+        syncTempDir(driverType, folder);
+        return new ConfigResponse(true, driverType, account.getId(), folder);
     }
 
     public Object download(DownloadRequest request) {
@@ -105,7 +107,7 @@ public class OfflineDownloadService {
         String driverType = normalizeDriverType(config.driverType());
         DriverConf conf = getDriverConf(driverType);
         DriverAccount account = getAccount(config.accountId(), driverType);
-        String folder = account.getFolder();
+        String folder = Storage.getMountPath(account);
         if (StringUtils.isBlank(folder)) {
             throw new BadRequestException(conf.accountType() == DriverType.PAN115 ? "115账号挂载目录不能为空" : "迅雷账号挂载目录不能为空");
         }
@@ -151,10 +153,11 @@ public class OfflineDownloadService {
         }
         String driverType = normalizeDriverType(config.driverType());
         DriverAccount account = getAccount(accountId, driverType);
-        if (StringUtils.isBlank(account.getFolder())) {
+        String folder = Storage.getMountPath(account);
+        if (StringUtils.isBlank(folder)) {
             return;
         }
-        syncTempDir(driverType, account.getFolder());
+        syncTempDir(driverType, folder);
     }
 
     private ConfigRequest loadEnabledConfig() {
@@ -180,7 +183,7 @@ public class OfflineDownloadService {
                 throw new BadRequestException("请选择离线下载账号");
             }
             DriverAccount account = getAccount(request.accountId(), driverType);
-            if (StringUtils.isBlank(account.getFolder())) {
+            if (StringUtils.isBlank(Storage.getMountPath(account))) {
                 if (account.getType() == DriverType.PAN115) {
                     throw new BadRequestException("115账号挂载目录不能为空");
                 }

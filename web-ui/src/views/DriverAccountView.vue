@@ -461,7 +461,7 @@ const offlineDownloadConfig = ref<OfflineDownloadConfig>({
 const offlineAccounts = computed(() => accounts.value.filter((item) => item.type === offlineDownloadConfig.value.driverType))
 const offlineMountFolder = computed(() => {
   const account = offlineAccounts.value.find((item) => item.id === offlineDownloadConfig.value.accountId)
-  return account?.folder || ''
+  return account ? fullPath(account) : ''
 })
 
 watch(() => offlineDownloadConfig.value.driverType, () => {
