@@ -62,17 +62,20 @@ public class OfflineDownloadService {
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final TvBoxService tvBoxService;
+    private final SubscriptionService subscriptionService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
     public OfflineDownloadService(SettingRepository settingRepository,
                                   DriverAccountRepository driverAccountRepository,
                                   @Lazy TvBoxService tvBoxService,
+                                  SubscriptionService subscriptionService,
                                   RestTemplateBuilder builder,
                                   ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.tvBoxService = tvBoxService;
+        this.subscriptionService = subscriptionService;
         this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
     }
@@ -114,6 +117,7 @@ public class OfflineDownloadService {
         if (target.folder()) {
             targetPath += "/~playlist";
         }
+        subscriptionService.checkToken(subscriptionService.getFirstToken());
         return tvBoxService.getDetail(ac, "1$" + targetPath);
     }
 

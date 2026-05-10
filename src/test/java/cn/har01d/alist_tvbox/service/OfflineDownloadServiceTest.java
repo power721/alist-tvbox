@@ -46,6 +46,8 @@ class OfflineDownloadServiceTest {
     @Mock
     private TvBoxService tvBoxService;
     @Mock
+    private SubscriptionService subscriptionService;
+    @Mock
     private RestTemplate restTemplate;
     @Mock
     private RestTemplateBuilder restTemplateBuilder;
@@ -61,6 +63,7 @@ class OfflineDownloadServiceTest {
                 settingRepository,
                 driverAccountRepository,
                 tvBoxService,
+                subscriptionService,
                 restTemplateBuilder,
                 objectMapper
         );
