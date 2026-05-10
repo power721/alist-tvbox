@@ -197,6 +197,30 @@ class OfflineDownloadServiceTest {
     }
 
     @Test
+    void downloadShouldExtractReadableMessageWhenAddTaskFails() {
+        DriverAccount account = new DriverAccount();
+        account.setId(12);
+        account.setType(DriverType.PAN115);
+        account.setName("🈲我的115云盘");
+        account.setFolder("0");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        when(accountService.login()).thenReturn("Bearer test-token");
+        when(restTemplate.postForObject(eq("/api/fs/add_offline_download"), any(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "code", 500,
+                        "message", "failed to add offline download task: {\"data\":\"encrypted\",\"errcode\":10008,\"error_msg\":\"任务已存在，请勿输入重复的链接地址\",\"state\":false}: unexpected error",
+                        "data", "failed to add offline download task: {\"data\":\"encrypted\",\"errcode\":10008,\"error_msg\":\"任务已存在，请勿输入重复的链接地址\",\"state\":false}: unexpected error"
+                ));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () ->
+                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test")));
+
+        assertEquals("task failed: 任务已存在，请勿输入重复的链接地址", exception.getMessage());
+    }
+
+    @Test
     void downloadShouldUseThunderBrowserTool() {
         DriverAccount account = new DriverAccount();
         MovieList movieList = new MovieList();

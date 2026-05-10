@@ -10,6 +10,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.storage.Storage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Lazy;
@@ -26,6 +27,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 
+@Slf4j
 @Service
 public class OfflineDownloadService {
     static final String SETTING_NAME = "offline_download_config";
@@ -116,6 +118,7 @@ public class OfflineDownloadService {
                 "tool", conf.tool(),
                 "delete_policy", "delete_never"
         ));
+        log.debug("add offline download task: url={}, path={}, tool={}, deletePolicy={}", request.url(), path, conf.tool(), "delete_never");
         Map<String, Object> response = restTemplate.postForObject("/api/fs/add_offline_download", entity, Map.class);
         String taskId = extractTaskId(response);
         for (int i = 0; i < 10; i++) {
@@ -266,17 +269,51 @@ public class OfflineDownloadService {
 
     @SuppressWarnings("unchecked")
     private String extractTaskId(Map<String, Object> response) {
+        if (response == null) {
+            throw new BadRequestException("AList返回数据无效");
+        }
+        int code = ((Number) response.getOrDefault("code", -1)).intValue();
+        if (code != 200) {
+            throw new BadRequestException("task failed: " + extractReadableError(response));
+        }
         Map<String, Object> data = getData(response);
         Object tasksObject = data.get("tasks");
         if (!(tasksObject instanceof List<?> tasks) || tasks.isEmpty()) {
-            throw new BadRequestException("AList未返回离线下载任务");
+            throw new BadRequestException("task failed: " + extractReadableError(response));
         }
         Object first = tasks.getFirst();
         if (!(first instanceof Map<?, ?> task) || task.get("id") == null) {
-            throw new BadRequestException("AList未返回离线下载任务");
+            throw new BadRequestException("task failed: " + extractReadableError(response));
         }
         return task.get("id").toString();
     }
+
+    private String extractReadableError(Map<String, Object> response) {
+        String message = Objects.toString(response.get("message"), "");
+        String data = Objects.toString(response.get("data"), "");
+        String source = StringUtils.isNotBlank(message) ? message : data;
+        if (StringUtils.isBlank(source)) {
+            return "AList未返回离线下载任务";
+        }
+        String errorMessage = extractInnerErrorMessage(source);
+        return StringUtils.isNotBlank(errorMessage) ? errorMessage : source;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String extractInnerErrorMessage(String source) {
+        int start = source.indexOf('{');
+        int end = source.lastIndexOf('}');
+        if (start < 0 || end <= start) {
+            return "";
+        }
+        try {
+            Map<String, Object> data = objectMapper.readValue(source.substring(start, end + 1), Map.class);
+            return Objects.toString(data.get("error_msg"), "");
+        } catch (JsonProcessingException e) {
+            return "";
+        }
+    }
+
     private void sleepOneSecond() {
         try {
             Thread.sleep(1000);
