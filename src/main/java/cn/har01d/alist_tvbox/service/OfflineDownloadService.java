@@ -4,6 +4,8 @@ import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
+import cn.har01d.alist_tvbox.entity.OfflineDownloadTask;
+import cn.har01d.alist_tvbox.entity.OfflineDownloadTaskRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
@@ -25,8 +27,10 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import java.security.MessageDigest;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -41,11 +45,11 @@ public class OfflineDownloadService {
     static final String OFFLINE_DIR_NAME = "alist-tvbox-offline";
     private static final String SPACE_URL = "https://115.com/?ct=clouddownload&ac=space";
     private static final String ADD_TASK_URL = "https://clouddownload.115.com/web/?ac=add_task_urls";
-    private static final String TASK_LIST_URL = "https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=15&stat=11";
-    private static final String TASK_DELETE_URL = "https://clouddownload.115.com/web/?ac=task_del";
+    private static final int TASK_LIST_PAGE_SIZE = 1000;
     private static final String FILE_LIST_URL = "https://webapi.115.com/files?aid=1&cid=%s&offset=0&limit=20&type=0&show_dir=1&fc_mix=0&natsort=1&count_folders=1&format=json&custom_order=0";
     private static final String FILE_ADD_URL = "https://webapi.115.com/files/add";
     private static final Pattern UID_PATTERN = Pattern.compile("UID=(\\d+)");
+    private static final String STATUS_COMPLETED = "COMPLETED";
 
     public record ConfigRequest(boolean enabled, String driverType, Integer accountId) {
     }
@@ -63,6 +67,7 @@ public class OfflineDownloadService {
     private final DriverAccountRepository driverAccountRepository;
     private final TvBoxService tvBoxService;
     private final SubscriptionService subscriptionService;
+    private final OfflineDownloadTaskRepository offlineDownloadTaskRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -70,12 +75,14 @@ public class OfflineDownloadService {
                                   DriverAccountRepository driverAccountRepository,
                                   @Lazy TvBoxService tvBoxService,
                                   SubscriptionService subscriptionService,
+                                  OfflineDownloadTaskRepository offlineDownloadTaskRepository,
                                   RestTemplateBuilder builder,
                                   ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.tvBoxService = tvBoxService;
         this.subscriptionService = subscriptionService;
+        this.offlineDownloadTaskRepository = offlineDownloadTaskRepository;
         this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
     }
@@ -129,6 +136,13 @@ public class OfflineDownloadService {
         validateUrl(request.url());
         StoredConfig config = loadEnabledConfig();
         DriverAccount account = getAccount(config.accountId(), normalizeDriverType(config.driverType()));
+        String urlHash = hashUrl(request.url());
+        Optional<OfflineDownloadTask> localTask = offlineDownloadTaskRepository
+                .findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(account.getId(), urlHash);
+        if (localTask.isPresent() && STATUS_COMPLETED.equals(localTask.get().getStatus()) && StringUtils.isNotBlank(localTask.get().getTargetPath())) {
+            return new DownloadTarget(localTask.get().getTargetPath(), localTask.get().isFolder());
+        }
+
         String cookie = requireCookie(account);
         String uid = extractUid(cookie);
         String pathId = requireOfflineFolderId(config);
@@ -146,15 +160,16 @@ public class OfflineDownloadService {
         String body = buildAddTaskBody(sign, time, uid, request.url(), pathId);
         ObjectNode addTask = exchange(ADD_TASK_URL, HttpMethod.POST, cookie, "https://115.com/", body);
         log.debug("add task: {}", addTask);
-        ensureState(addTask, "提交115离线下载任务失败");
-        if (addTask.path("errno").asInt(0) != 0) {
+        boolean duplicateTask = isDuplicateTask(addTask);
+        if (!duplicateTask) {
+            ensureState(addTask, "提交115离线下载任务失败");
+        }
+        if (!duplicateTask && addTask.path("errno").asInt(0) != 0) {
             throw new BadRequestException("task failed: " + firstNonBlank(addTask.path("error_msg").asText(), "115离线下载任务提交失败"));
         }
 
         for (int i = 0; i < 10; i++) {
-            ObjectNode taskList = exchange(TASK_LIST_URL, HttpMethod.POST, cookie, "https://115.com/", "");
-            ensureState(taskList, "查询115离线下载任务失败");
-            ObjectNode task = findTask(taskList, request.url());
+            ObjectNode task = findTask(request.url(), cookie, duplicateTask ? 2 : 1);
             if (task == null) {
                 sleepOneSecond();
                 continue;
@@ -167,7 +182,7 @@ public class OfflineDownloadService {
                     throw new BadRequestException("离线下载任务成功但未返回名称");
                 }
                 String targetPath = mountPath + "/" + OFFLINE_DIR_NAME + "/" + name;
-                deleteTaskAsync(cookie, uid, task.path("info_hash").asText(""), sign, time);
+                saveTask(account.getId(), urlHash, task, targetPath);
                 return new DownloadTarget(targetPath, isFolderTask(task));
             }
 
@@ -374,7 +389,19 @@ public class OfflineDownloadService {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    private ObjectNode findTask(ObjectNode taskList, String url) {
+    private ObjectNode findTask(String url, String cookie, int pages) {
+        for (int page = 1; page <= pages; page++) {
+            ObjectNode taskList = exchange(taskListUrl(page), HttpMethod.POST, cookie, "https://115.com/", "");
+            ensureState(taskList, "查询115离线下载任务失败");
+            ObjectNode task = findTaskInPage(taskList, url);
+            if (task != null) {
+                return task;
+            }
+        }
+        return null;
+    }
+
+    private ObjectNode findTaskInPage(ObjectNode taskList, String url) {
         if (!taskList.has("tasks") || !taskList.get("tasks").isArray()) {
             return null;
         }
@@ -390,22 +417,49 @@ public class OfflineDownloadService {
         return task.path("file_category").asInt(1) == 0;
     }
 
-    private void deleteTaskAsync(String cookie, String uid, String infoHash, String sign, long time) {
-        if (StringUtils.isBlank(infoHash)) {
-            return;
+    private String taskListUrl(int page) {
+        return "https://clouddownload.115.com/web/?ac=task_lists&page=" + page + "&page_size=" + TASK_LIST_PAGE_SIZE + "&stat=11";
+    }
+
+    private boolean isDuplicateTask(ObjectNode addTask) {
+        if (addTask == null) {
+            return false;
         }
-        Thread.startVirtualThread(() -> {
-            try {
-                String body = "sign=" + encode(sign)
-                        + "&time=" + time
-                        + "&uid=" + encode(uid)
-                        + "&flag=0"
-                        + "&hash%5B0%5D=" + encode(infoHash);
-                exchange(TASK_DELETE_URL, HttpMethod.POST, cookie, "https://115.com/", body);
-            } catch (Exception e) {
-                log.warn("delete offline task failed: {}", infoHash, e);
+        String message = firstNonBlank(addTask.path("error_msg").asText(), addTask.path("errtype").asText(), addTask.path("msg").asText());
+        return StringUtils.contains(message, "已存在") || StringUtils.contains(message, "重复");
+    }
+
+    private void saveTask(Integer accountId, String urlHash, ObjectNode task, String targetPath) {
+        OfflineDownloadTask entity = offlineDownloadTaskRepository
+                .findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(accountId, urlHash)
+                .orElseGet(OfflineDownloadTask::new);
+        Instant now = Instant.now();
+        if (entity.getCreatedTime() == null) {
+            entity.setCreatedTime(now);
+        }
+        entity.setAccountId(accountId);
+        entity.setUrlHash(urlHash);
+        entity.setInfoHash(firstNonBlank(task.path("info_hash").asText(), entity.getInfoHash()));
+        entity.setTargetPath(targetPath);
+        entity.setTaskName(task.path("name").asText(entity.getTaskName()));
+        entity.setStatus(STATUS_COMPLETED);
+        entity.setFolder(isFolderTask(task));
+        entity.setUpdatedTime(now);
+        offlineDownloadTaskRepository.save(entity);
+    }
+
+    private String hashUrl(String url) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(url.trim().getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                sb.append(String.format("%02x", b));
             }
-        });
+            return sb.toString();
+        } catch (Exception e) {
+            throw new BadRequestException("计算离线下载链接摘要失败", e);
+        }
     }
 
     private String text(ObjectNode node, String field) {
