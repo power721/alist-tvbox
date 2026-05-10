@@ -286,7 +286,6 @@
         <el-form-item label="网盘类型">
           <el-select v-model="offlineDownloadConfig.driverType" :disabled="!offlineDownloadConfig.enabled">
             <el-option label="115云盘" value="PAN115"/>
-            <el-option label="迅雷云盘" value="THUNDER"/>
           </el-select>
         </el-form-item>
         <el-form-item label="网盘账号">
@@ -383,7 +382,7 @@ type LocalProxyConfig = Record<CloudDriveType, LocalProxyItem>
 
 type OfflineDownloadConfig = {
   enabled: boolean
-  driverType: 'PAN115' | 'THUNDER'
+  driverType: 'PAN115'
   accountId: number | null
 }
 
@@ -619,7 +618,7 @@ const loadOfflineDownloadConfig = () => {
   axios.get('/api/offline_download/config').then(({data}) => {
     offlineDownloadConfig.value = {
       enabled: !!data?.enabled,
-      driverType: data?.driverType === 'THUNDER' ? 'THUNDER' : 'PAN115',
+      driverType: 'PAN115',
       accountId: data?.accountId ?? null,
     }
   })
