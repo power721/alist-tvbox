@@ -137,6 +137,38 @@ class OfflineDownloadServiceTest {
     }
 
     @Test
+    void syncConfiguredTempDirOnStartupShouldRestore115TempDir() {
+        DriverAccount account = new DriverAccount();
+        account.setId(12);
+        account.setType(DriverType.PAN115);
+        account.setName("🈲我的115云盘");
+        account.setFolder("0");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+
+        service.syncConfiguredTempDirOnStartup();
+
+        verify(aListLocalService).set115TempDir("/115云盘/🈲我的115云盘/alist-tvbox-offline");
+    }
+
+    @Test
+    void syncConfiguredTempDirOnStartupShouldRestoreThunderTempDir() {
+        DriverAccount account = new DriverAccount();
+        account.setId(13);
+        account.setType(DriverType.THUNDER);
+        account.setName("迅雷账号");
+        account.setFolder("0");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"THUNDER\",\"accountId\":13}")));
+        when(driverAccountRepository.findById(13)).thenReturn(Optional.of(account));
+
+        service.syncConfiguredTempDirOnStartup();
+
+        verify(aListLocalService).setThunderBrowserTempDir("/我的迅雷云盘/迅雷账号/alist-tvbox-offline");
+    }
+
+    @Test
     void downloadShouldRejectUnsupportedScheme() {
         assertThrows(BadRequestException.class, () ->
                 service.download(new OfflineDownloadRequest("ftp://example.com/test")));

@@ -50,6 +50,9 @@ import static cn.har01d.alist_tvbox.util.Constants.ALIST_START_TIME;
 @Service
 
 public class AListLocalService {
+    private static final String TYPE_STRING = "string";
+    private static final int OFFLINE_DOWNLOAD_GROUP = 6;
+    private static final int PRIVATE_FLAG = 2;
 
     private final SettingRepository settingRepository;
     private final SiteRepository siteRepository;
@@ -196,6 +199,7 @@ public class AListLocalService {
     }
 
     public Response<String> set115TempDir(String tempDir) {
+        setOfflineDownloadTempDir("115_temp_dir", tempDir);
         HttpHeaders headers = new HttpHeaders();
         Site site = siteRepository.findById(1).orElseThrow();
         headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
@@ -209,6 +213,7 @@ public class AListLocalService {
     }
 
     public Response<String> setThunderBrowserTempDir(String tempDir) {
+        setOfflineDownloadTempDir("thunder_browser_temp_dir", tempDir);
         HttpHeaders headers = new HttpHeaders();
         Site site = siteRepository.findById(1).orElseThrow();
         headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
@@ -219,6 +224,15 @@ public class AListLocalService {
         ResponseEntity<Response<String>> response = restTemplate.exchange("/api/admin/setting/set_thunder_browser", HttpMethod.POST, entity, new ParameterizedTypeReference<Response<String>>() {
         });
         return response.getBody();
+    }
+
+    public void setOfflineDownloadTempDir(String key, String tempDir) {
+        log.debug("set offline download temp dir {}={}", key, tempDir);
+        executeUpdate(String.format("DELETE FROM x_setting_items WHERE `key` = '%s'", key));
+        executeUpdate(String.format(
+                "INSERT INTO x_setting_items (`key`,value,type,flag,`group`) VALUES('%s','%s','%s',%d,%d)",
+                key, tempDir, TYPE_STRING, PRIVATE_FLAG, OFFLINE_DOWNLOAD_GROUP
+        ));
     }
 
     public void saveStorage(Storage storage) {

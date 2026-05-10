@@ -161,6 +161,24 @@ public class OfflineDownloadService {
         syncTempDir(driverType, folder);
     }
 
+    public void syncConfiguredTempDirOnStartup() {
+        Optional<Setting> setting = settingRepository.findById(SETTING_NAME);
+        if (setting.isEmpty() || StringUtils.isBlank(setting.get().getValue())) {
+            return;
+        }
+        ConfigRequest config = parseConfig(setting.get().getValue());
+        if (!config.enabled() || config.accountId() == null) {
+            return;
+        }
+        String driverType = normalizeDriverType(config.driverType());
+        DriverAccount account = getAccount(config.accountId(), driverType);
+        String folder = Storage.getMountPath(account);
+        if (StringUtils.isBlank(folder)) {
+            return;
+        }
+        syncTempDir(driverType, folder);
+    }
+
     private ConfigRequest loadEnabledConfig() {
         Optional<Setting> setting = settingRepository.findById(SETTING_NAME);
         if (setting.isEmpty() || StringUtils.isBlank(setting.get().getValue())) {

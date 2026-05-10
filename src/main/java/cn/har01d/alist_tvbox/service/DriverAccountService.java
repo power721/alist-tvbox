@@ -241,6 +241,7 @@ public class DriverAccountService {
                 saveStorage(account, false);
             }
         }
+        offlineDownloadService.syncConfiguredTempDirOnStartup();
     }
 
     private void saveStorage(DriverAccount account, boolean disabled) {
