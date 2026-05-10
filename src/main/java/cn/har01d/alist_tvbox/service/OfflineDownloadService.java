@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -55,14 +56,14 @@ public class OfflineDownloadService {
                                   AListLocalService aListLocalService,
                                   AccountService accountService,
                                   @Lazy TvBoxService tvBoxService,
-                                  RestTemplate restTemplate,
+                                  RestTemplateBuilder builder,
                                   ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.aListLocalService = aListLocalService;
         this.accountService = accountService;
         this.tvBoxService = tvBoxService;
-        this.restTemplate = restTemplate;
+        this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
         drivers.put(DriverType.PAN115.name(), new DriverConf(DriverType.PAN115, "115 Cloud", aListLocalService::set115TempDir));
         drivers.put(DriverType.THUNDER.name(), new DriverConf(DriverType.THUNDER, "ThunderBrowser", aListLocalService::setThunderBrowserTempDir));

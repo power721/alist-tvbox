@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.web.client.RestTemplate;
 
@@ -42,18 +43,21 @@ class OfflineDownloadServiceTest {
     private TvBoxService tvBoxService;
     @Mock
     private RestTemplate restTemplate;
+    @Mock
+    private RestTemplateBuilder restTemplateBuilder;
 
     private OfflineDownloadService service;
 
     @BeforeEach
     void setUp() {
+        when(restTemplateBuilder.build()).thenReturn(restTemplate);
         service = new OfflineDownloadService(
                 settingRepository,
                 driverAccountRepository,
                 aListLocalService,
                 accountService,
                 tvBoxService,
-                restTemplate,
+                restTemplateBuilder,
                 new ObjectMapper()
         );
     }
