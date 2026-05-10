@@ -59,6 +59,7 @@ public class DriverAccountService {
     private final ShareRepository shareRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
+    private final OfflineDownloadService offlineDownloadService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate alistJdbcTemplate;
@@ -70,6 +71,7 @@ public class DriverAccountService {
                                 ShareRepository shareRepository,
                                 AccountService accountService,
                                 AListLocalService aListLocalService,
+                                OfflineDownloadService offlineDownloadService,
                                 RestTemplateBuilder builder,
                                 ObjectMapper objectMapper,
                                 @Qualifier("alistJdbcTemplate") JdbcTemplate alistJdbcTemplate) {
@@ -79,6 +81,7 @@ public class DriverAccountService {
         this.shareRepository = shareRepository;
         this.accountService = accountService;
         this.aListLocalService = aListLocalService;
+        this.offlineDownloadService = offlineDownloadService;
         this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
         this.alistJdbcTemplate = alistJdbcTemplate;
@@ -317,6 +320,7 @@ public class DriverAccountService {
     public DriverAccount update(Integer id, DriverAccount dto) {
         validate(dto);
         var account = get(id);
+        String previousFolder = account.getFolder();
         var other = driverAccountRepository.findByNameAndType(dto.getName(), dto.getType());
         if (other != null && !other.getId().equals(id)) {
             throw new BadRequestException("账号名称已经存在");
@@ -358,6 +362,9 @@ public class DriverAccountService {
         }
 
         driverAccountRepository.save(account);
+        if (account.getType() == DriverType.PAN115 && !Objects.equals(previousFolder, account.getFolder())) {
+            offlineDownloadService.syncSelectedAccountTempDir(account.getId());
+        }
 
         updateStorage(account);
 

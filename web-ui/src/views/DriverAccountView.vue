@@ -273,10 +273,43 @@
           />
         </div>
       </div>
+      <el-divider>离线下载</el-divider>
+      <el-form label-width="140">
+        <el-form-item label="开启离线下载">
+          <el-switch
+            v-model="offlineDownloadConfig.enabled"
+            inline-prompt
+            active-text="开启"
+            inactive-text="关闭"
+          />
+        </el-form-item>
+        <el-form-item label="网盘类型">
+          <el-select v-model="offlineDownloadConfig.driverType" disabled>
+            <el-option label="115云盘" value="PAN115"/>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="115账号">
+          <el-select
+            v-model="offlineDownloadConfig.accountId"
+            clearable
+            :disabled="!offlineDownloadConfig.enabled"
+          >
+            <el-option
+              v-for="item in offline115Accounts"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="当前挂载目录">
+          <el-input :model-value="offlineMountFolder" readonly/>
+        </el-form-item>
+      </el-form>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="configVisible = false">取消</el-button>
-        <el-button type="primary" @click="updateLocalProxyConfig">保存</el-button>
+        <el-button type="primary" @click="updateConfig">保存</el-button>
       </span>
       </template>
     </el-dialog>
@@ -329,7 +362,7 @@
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
+import {computed, onMounted, ref} from 'vue'
 import {Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
@@ -347,9 +380,22 @@ type LocalProxyItem = {
 
 type LocalProxyConfig = Record<CloudDriveType, LocalProxyItem>
 
+type OfflineDownloadConfig = {
+  enabled: boolean
+  driverType: 'PAN115'
+  accountId: number | null
+}
+
+type DriverAccountItem = {
+  id: number
+  type: string
+  name: string
+  folder: string
+}
+
 const updateAction = ref(false)
 const dialogTitle = ref('')
-const accounts = ref([])
+const accounts = ref<DriverAccountItem[]>([])
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const configVisible = ref(false)
@@ -406,6 +452,16 @@ const defaultLocalProxyConfig = (): LocalProxyConfig => ({
   BAIDU: {enabled: true, concurrency: 5, chunk_size: 2048},
 })
 const localProxyConfig = ref<LocalProxyConfig>(defaultLocalProxyConfig())
+const offlineDownloadConfig = ref<OfflineDownloadConfig>({
+  enabled: false,
+  driverType: 'PAN115',
+  accountId: null,
+})
+const offline115Accounts = computed(() => accounts.value.filter((item) => item.type === 'PAN115'))
+const offlineMountFolder = computed(() => {
+  const account = offline115Accounts.value.find((item) => item.id === offlineDownloadConfig.value.accountId)
+  return account?.folder || ''
+})
 
 const app = ref('alipaymini')
 const uid = ref('')
@@ -551,19 +607,38 @@ const loadLocalProxyConfig = () => {
   })
 }
 
+const loadOfflineDownloadConfig = () => {
+  axios.get('/api/offline_download/config').then(({data}) => {
+    offlineDownloadConfig.value = {
+      enabled: !!data?.enabled,
+      driverType: 'PAN115',
+      accountId: data?.accountId ?? null,
+    }
+  })
+}
+
 const openConfig = () => {
   loadLocalProxyConfig()
+  loadOfflineDownloadConfig()
   configVisible.value = true
 }
 
 const updateLocalProxyConfig = () => {
-  axios.post('/api/settings', {
+  return axios.post('/api/settings', {
     name: 'local_proxy_config',
     value: JSON.stringify(localProxyConfig.value),
-  }).then(() => {
-    ElMessage.success('更新成功')
-    configVisible.value = false
   })
+}
+
+const updateOfflineDownloadConfig = () => {
+  return axios.post('/api/offline_download/config', offlineDownloadConfig.value)
+}
+
+const updateConfig = async () => {
+  await updateLocalProxyConfig()
+  await updateOfflineDownloadConfig()
+  ElMessage.success('更新成功')
+  configVisible.value = false
 }
 
 const getTypeName = (type: string) => {
@@ -785,6 +860,7 @@ const load = () => {
 onMounted(() => {
   load()
   loadLocalProxyConfig()
+  loadOfflineDownloadConfig()
   axios.get('/api/settings/driver_round_robin').then(({data}) => {
     driverRoundRobin.value = data.value === 'true'
   })

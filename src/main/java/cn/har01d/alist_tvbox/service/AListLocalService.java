@@ -23,6 +23,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -190,6 +191,17 @@ public class AListLocalService {
         String url = "/api/admin/setting/get?key=" + key;
         ResponseEntity<SettingResponse> response = restTemplate.exchange(url, HttpMethod.GET, entity, SettingResponse.class);
         return response.getBody();
+    }
+
+    public SettingResponse set115TempDir(String tempDir) {
+        HttpHeaders headers = new HttpHeaders();
+        Site site = siteRepository.findById(1).orElseThrow();
+        headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, Object> body = new HashMap<>();
+        body.put("temp_dir", tempDir);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+        return restTemplate.postForObject("/api/admin/setting/set_115", entity, SettingResponse.class);
     }
 
     public void saveStorage(Storage storage) {

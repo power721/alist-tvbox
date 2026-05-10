@@ -1,0 +1,34 @@
+package cn.har01d.alist_tvbox.web;
+
+import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
+import cn.har01d.alist_tvbox.service.OfflineDownloadService;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/offline_download")
+public class OfflineDownloadController {
+    private final OfflineDownloadService offlineDownloadService;
+
+    public OfflineDownloadController(OfflineDownloadService offlineDownloadService) {
+        this.offlineDownloadService = offlineDownloadService;
+    }
+
+    @GetMapping("/config")
+    public OfflineDownloadService.ConfigResponse getConfig() {
+        return offlineDownloadService.getConfig();
+    }
+
+    @PostMapping("/config")
+    public OfflineDownloadService.ConfigResponse saveConfig(@RequestBody OfflineDownloadService.ConfigRequest request) {
+        return offlineDownloadService.saveConfig(request);
+    }
+
+    @PostMapping
+    public Object download(@RequestBody OfflineDownloadRequest request) {
+        return offlineDownloadService.download(new OfflineDownloadService.DownloadRequest(request.url()));
+    }
+}

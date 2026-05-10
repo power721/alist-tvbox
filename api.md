@@ -344,6 +344,15 @@ PikPak网盘
 | GET | `/api/pan115/status` | 获取115状态 |
 | GET | `/api/pan115/result` | 获取115结果 |
 
+### OfflineDownloadController
+115离线下载
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/offline_download/config` | 获取离线下载配置 |
+| POST | `/api/offline_download/config` | 保存离线下载配置 |
+| POST | `/api/offline_download` | 提交离线下载并同步返回播放列表 |
+
 ---
 
 ## 订阅与配置
