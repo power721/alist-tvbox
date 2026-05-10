@@ -362,7 +362,8 @@ public class DriverAccountService {
         }
 
         driverAccountRepository.save(account);
-        if (account.getType() == DriverType.PAN115 && !Objects.equals(previousFolder, account.getFolder())) {
+        if ((account.getType() == DriverType.PAN115 || account.getType() == DriverType.THUNDER)
+                && !Objects.equals(previousFolder, account.getFolder())) {
             offlineDownloadService.syncSelectedAccountTempDir(account.getId());
         }
 

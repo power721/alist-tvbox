@@ -15,15 +15,17 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 @Service
 public class OfflineDownloadService {
     static final String SETTING_NAME = "offline_download_config";
-    static final String DRIVER_TYPE = "PAN115";
+    static final String DEFAULT_DRIVER_TYPE = "PAN115";
     static final String OFFLINE_DIR = "/alist-tvbox-offline";
 
     public record ConfigRequest(boolean enabled, String driverType, Integer accountId) {
@@ -42,6 +44,10 @@ public class OfflineDownloadService {
     private final TvBoxService tvBoxService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final Map<String, DriverConf> drivers = new HashMap<>();
+
+    private record DriverConf(DriverType accountType, String tool, Consumer<String> tempDirSync) {
+    }
 
     public OfflineDownloadService(SettingRepository settingRepository,
                                   DriverAccountRepository driverAccountRepository,
@@ -57,12 +63,14 @@ public class OfflineDownloadService {
         this.tvBoxService = tvBoxService;
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
+        drivers.put(DriverType.PAN115.name(), new DriverConf(DriverType.PAN115, "115 Cloud", aListLocalService::set115TempDir));
+        drivers.put(DriverType.THUNDER.name(), new DriverConf(DriverType.THUNDER, "ThunderBrowser", aListLocalService::setThunderBrowserTempDir));
     }
 
     public ConfigResponse getConfig() {
         Optional<Setting> setting = settingRepository.findById(SETTING_NAME);
         if (setting.isEmpty() || StringUtils.isBlank(setting.get().getValue())) {
-            return new ConfigResponse(false, DRIVER_TYPE, null, "");
+            return new ConfigResponse(false, DEFAULT_DRIVER_TYPE, null, "");
         }
 
         ConfigRequest config = parseConfig(setting.get().getValue());
@@ -72,36 +80,38 @@ public class OfflineDownloadService {
                     .map(DriverAccount::getFolder)
                     .orElse("");
         }
-        return new ConfigResponse(config.enabled(), defaultDriverType(config.driverType()), config.accountId(), folder);
+        return new ConfigResponse(config.enabled(), normalizeDriverType(config.driverType()), config.accountId(), folder);
     }
 
     public ConfigResponse saveConfig(ConfigRequest request) {
         validateConfig(request);
-        String driverType = defaultDriverType(request.driverType());
+        String driverType = normalizeDriverType(request.driverType());
         ConfigRequest normalized = new ConfigRequest(request.enabled(), driverType, request.accountId());
         settingRepository.save(new Setting(SETTING_NAME, writeConfig(normalized)));
         if (!normalized.enabled()) {
             return new ConfigResponse(false, driverType, normalized.accountId(), "");
         }
 
-        DriverAccount account = get115Account(normalized.accountId());
-        aListLocalService.set115TempDir(buildOfflinePath(account.getFolder()));
+        DriverAccount account = getAccount(normalized.accountId(), driverType);
+        syncTempDir(driverType, account.getFolder());
         return new ConfigResponse(true, driverType, account.getId(), account.getFolder());
     }
 
     public Object download(DownloadRequest request) {
         validateUrl(request.url());
         ConfigRequest config = loadEnabledConfig();
-        DriverAccount account = get115Account(config.accountId());
+        String driverType = normalizeDriverType(config.driverType());
+        DriverConf conf = getDriverConf(driverType);
+        DriverAccount account = getAccount(config.accountId(), driverType);
         String folder = account.getFolder();
         if (StringUtils.isBlank(folder)) {
-            throw new BadRequestException("115账号挂载目录不能为空");
+            throw new BadRequestException(conf.accountType() == DriverType.PAN115 ? "115账号挂载目录不能为空" : "迅雷账号挂载目录不能为空");
         }
         String path = buildOfflinePath(folder);
         HttpEntity<Map<String, Object>> entity = createAuthorizedEntity(Map.of(
                 "urls", List.of(request.url()),
                 "path", path,
-                "tool", "115 Cloud",
+                "tool", conf.tool(),
                 "delete_policy", "delete_never"
         ));
         Map<String, Object> response = restTemplate.postForObject("/api/fs/add_offline_download", entity, Map.class);
@@ -137,11 +147,12 @@ public class OfflineDownloadService {
         if (!config.enabled() || !Objects.equals(config.accountId(), accountId)) {
             return;
         }
-        DriverAccount account = get115Account(accountId);
+        String driverType = normalizeDriverType(config.driverType());
+        DriverAccount account = getAccount(accountId, driverType);
         if (StringUtils.isBlank(account.getFolder())) {
             return;
         }
-        aListLocalService.set115TempDir(buildOfflinePath(account.getFolder()));
+        syncTempDir(driverType, account.getFolder());
     }
 
     private ConfigRequest loadEnabledConfig() {
@@ -153,36 +164,35 @@ public class OfflineDownloadService {
         if (!config.enabled()) {
             throw new BadRequestException("离线下载未开启");
         }
-        if (!DRIVER_TYPE.equals(defaultDriverType(config.driverType()))) {
-            throw new BadRequestException("当前仅支持115云盘离线下载");
-        }
+        normalizeDriverType(config.driverType());
         if (config.accountId() == null) {
-            throw new BadRequestException("未配置115账号");
+            throw new BadRequestException("未配置离线下载账号");
         }
         return config;
     }
 
     private void validateConfig(ConfigRequest request) {
-        String driverType = defaultDriverType(request.driverType());
+        String driverType = normalizeDriverType(request.driverType());
         if (request.enabled()) {
-            if (!DRIVER_TYPE.equals(driverType)) {
-                throw new BadRequestException("当前仅支持115云盘离线下载");
-            }
             if (request.accountId() == null) {
-                throw new BadRequestException("请选择115账号");
+                throw new BadRequestException("请选择离线下载账号");
             }
-            DriverAccount account = get115Account(request.accountId());
+            DriverAccount account = getAccount(request.accountId(), driverType);
             if (StringUtils.isBlank(account.getFolder())) {
-                throw new BadRequestException("115账号挂载目录不能为空");
+                if (account.getType() == DriverType.PAN115) {
+                    throw new BadRequestException("115账号挂载目录不能为空");
+                }
+                throw new BadRequestException("迅雷账号挂载目录不能为空");
             }
         }
     }
 
-    private DriverAccount get115Account(Integer accountId) {
+    private DriverAccount getAccount(Integer accountId, String driverType) {
         DriverAccount account = driverAccountRepository.findById(accountId)
-                .orElseThrow(() -> new BadRequestException("115账号不存在"));
-        if (account.getType() != DriverType.PAN115) {
-            throw new BadRequestException("当前仅支持115云盘离线下载");
+                .orElseThrow(() -> new BadRequestException("离线下载账号不存在"));
+        DriverConf conf = getDriverConf(driverType);
+        if (account.getType() != conf.accountType()) {
+            throw new BadRequestException("离线下载账号类型和所选网盘类型不匹配");
         }
         return account;
     }
@@ -202,8 +212,22 @@ public class OfflineDownloadService {
         return value + OFFLINE_DIR;
     }
 
-    private String defaultDriverType(String driverType) {
-        return StringUtils.isBlank(driverType) ? DRIVER_TYPE : driverType;
+    private String normalizeDriverType(String driverType) {
+        String value = StringUtils.isBlank(driverType) ? DEFAULT_DRIVER_TYPE : driverType;
+        getDriverConf(value);
+        return value;
+    }
+
+    private DriverConf getDriverConf(String driverType) {
+        DriverConf conf = drivers.get(driverType);
+        if (conf == null) {
+            throw new BadRequestException("当前仅支持115云盘和迅雷云盘离线下载");
+        }
+        return conf;
+    }
+
+    private void syncTempDir(String driverType, String folder) {
+        getDriverConf(driverType).tempDirSync().accept(buildOfflinePath(folder));
     }
 
     private ConfigRequest parseConfig(String value) {

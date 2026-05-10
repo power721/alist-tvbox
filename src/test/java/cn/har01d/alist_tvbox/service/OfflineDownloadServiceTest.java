@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpEntity;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
@@ -78,6 +79,32 @@ class OfflineDownloadServiceTest {
     }
 
     @Test
+    void saveConfigShouldPersistAndSyncThunderTempDir() {
+        DriverAccount account = new DriverAccount();
+        account.setId(13);
+        account.setType(DriverType.THUNDER);
+        account.setFolder("/迅雷云盘/测试");
+        when(driverAccountRepository.findById(13)).thenReturn(Optional.of(account));
+
+        service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "THUNDER", 13));
+
+        verify(settingRepository).save(any(Setting.class));
+        verify(aListLocalService).setThunderBrowserTempDir("/迅雷云盘/测试/alist-tvbox-offline");
+    }
+
+    @Test
+    void saveConfigShouldRejectMismatchedAccountType() {
+        DriverAccount account = new DriverAccount();
+        account.setId(12);
+        account.setType(DriverType.PAN115);
+        account.setFolder("/115云盘/测试");
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+
+        assertThrows(BadRequestException.class, () ->
+                service.saveConfig(new OfflineDownloadService.ConfigRequest(true, "THUNDER", 12)));
+    }
+
+    @Test
     void downloadShouldRejectUnsupportedScheme() {
         assertThrows(BadRequestException.class, () ->
                 service.download(new OfflineDownloadService.DownloadRequest("ftp://example.com/test")));
@@ -134,5 +161,29 @@ class OfflineDownloadServiceTest {
 
         assertEquals(1, result.getList().size());
         assertEquals("1", result.getList().getFirst().getVod_id());
+    }
+
+    @Test
+    void downloadShouldUseThunderBrowserTool() {
+        DriverAccount account = new DriverAccount();
+        MovieList movieList = new MovieList();
+        account.setId(13);
+        account.setType(DriverType.THUNDER);
+        account.setFolder("/迅雷云盘/测试");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"THUNDER\",\"accountId\":13}")));
+        when(driverAccountRepository.findById(13)).thenReturn(Optional.of(account));
+        when(accountService.login()).thenReturn("Bearer test-token");
+        when(tvBoxService.getDetail("", "1$/迅雷云盘/测试/alist-tvbox-offline/任务名/~playlist")).thenReturn(movieList);
+        when(restTemplate.postForObject(eq("/api/fs/add_offline_download"), any(), eq(Map.class)))
+                .thenAnswer(invocation -> {
+                    HttpEntity<Map<String, Object>> entity = invocation.getArgument(1);
+                    assertEquals("ThunderBrowser", entity.getBody().get("tool"));
+                    return Map.of("code", 200, "data", Map.of("tasks", List.of(Map.of("id", "task-1"))));
+                });
+        when(restTemplate.postForObject(eq("/api/task/offline_download/info?tid=task-1"), any(), eq(Map.class)))
+                .thenReturn(Map.of("code", 200, "data", Map.of("state", 2, "name", "任务名")));
+
+        service.download(new OfflineDownloadService.DownloadRequest("magnet:?xt=urn:btih:test"));
     }
 }

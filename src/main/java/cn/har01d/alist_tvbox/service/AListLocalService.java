@@ -204,6 +204,17 @@ public class AListLocalService {
         return restTemplate.postForObject("/api/admin/setting/set_115", entity, SettingResponse.class);
     }
 
+    public SettingResponse setThunderBrowserTempDir(String tempDir) {
+        HttpHeaders headers = new HttpHeaders();
+        Site site = siteRepository.findById(1).orElseThrow();
+        headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, Object> body = new HashMap<>();
+        body.put("temp_dir", tempDir);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+        return restTemplate.postForObject("/api/admin/setting/set_thunder_browser", entity, SettingResponse.class);
+    }
+
     public void saveStorage(Storage storage) {
         executeUpdate("DELETE FROM x_storages WHERE id = " + storage.getId());
         String time = storage.getTime().truncatedTo(ChronoUnit.SECONDS).atZone(ZoneId.systemDefault()).toLocalDateTime().toString();

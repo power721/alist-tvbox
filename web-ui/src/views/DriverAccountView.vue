@@ -284,18 +284,19 @@
           />
         </el-form-item>
         <el-form-item label="网盘类型">
-          <el-select v-model="offlineDownloadConfig.driverType" disabled>
+          <el-select v-model="offlineDownloadConfig.driverType" :disabled="!offlineDownloadConfig.enabled">
             <el-option label="115云盘" value="PAN115"/>
+            <el-option label="迅雷云盘" value="THUNDER"/>
           </el-select>
         </el-form-item>
-        <el-form-item label="115账号">
+        <el-form-item label="网盘账号">
           <el-select
             v-model="offlineDownloadConfig.accountId"
             clearable
             :disabled="!offlineDownloadConfig.enabled"
           >
             <el-option
-              v-for="item in offline115Accounts"
+              v-for="item in offlineAccounts"
               :key="item.id"
               :label="item.name"
               :value="item.id"
@@ -362,7 +363,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from 'vue'
+import {computed, onMounted, ref, watch} from 'vue'
 import {Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
@@ -382,7 +383,7 @@ type LocalProxyConfig = Record<CloudDriveType, LocalProxyItem>
 
 type OfflineDownloadConfig = {
   enabled: boolean
-  driverType: 'PAN115'
+  driverType: 'PAN115' | 'THUNDER'
   accountId: number | null
 }
 
@@ -457,10 +458,17 @@ const offlineDownloadConfig = ref<OfflineDownloadConfig>({
   driverType: 'PAN115',
   accountId: null,
 })
-const offline115Accounts = computed(() => accounts.value.filter((item) => item.type === 'PAN115'))
+const offlineAccounts = computed(() => accounts.value.filter((item) => item.type === offlineDownloadConfig.value.driverType))
 const offlineMountFolder = computed(() => {
-  const account = offline115Accounts.value.find((item) => item.id === offlineDownloadConfig.value.accountId)
+  const account = offlineAccounts.value.find((item) => item.id === offlineDownloadConfig.value.accountId)
   return account?.folder || ''
+})
+
+watch(() => offlineDownloadConfig.value.driverType, () => {
+  const exists = offlineAccounts.value.some((item) => item.id === offlineDownloadConfig.value.accountId)
+  if (!exists) {
+    offlineDownloadConfig.value.accountId = null
+  }
 })
 
 const app = ref('alipaymini')
@@ -611,7 +619,7 @@ const loadOfflineDownloadConfig = () => {
   axios.get('/api/offline_download/config').then(({data}) => {
     offlineDownloadConfig.value = {
       enabled: !!data?.enabled,
-      driverType: 'PAN115',
+      driverType: data?.driverType === 'THUNDER' ? 'THUNDER' : 'PAN115',
       accountId: data?.accountId ?? null,
     }
   })
