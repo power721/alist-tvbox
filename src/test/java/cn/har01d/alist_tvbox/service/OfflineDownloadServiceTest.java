@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
@@ -26,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,7 +52,9 @@ class OfflineDownloadServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(restTemplateBuilder.build()).thenReturn(restTemplate);
+        lenient().when(aListLocalService.getInternalPort()).thenReturn(5244);
+        lenient().when(restTemplateBuilder.rootUri(any())).thenReturn(restTemplateBuilder);
+        lenient().when(restTemplateBuilder.build()).thenReturn(restTemplate);
         service = new OfflineDownloadService(
                 settingRepository,
                 driverAccountRepository,
@@ -60,6 +64,11 @@ class OfflineDownloadServiceTest {
                 restTemplateBuilder,
                 new ObjectMapper()
         );
+    }
+
+    @Test
+    void shouldBuildRestTemplateWithAListRootUri() {
+        verify(restTemplateBuilder).rootUri("http://localhost:5244");
     }
 
     @Test
@@ -130,7 +139,7 @@ class OfflineDownloadServiceTest {
     @Test
     void downloadShouldRejectUnsupportedScheme() {
         assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadService.DownloadRequest("ftp://example.com/test")));
+                service.download(new OfflineDownloadRequest("ftp://example.com/test")));
     }
 
     @Test
@@ -138,7 +147,7 @@ class OfflineDownloadServiceTest {
         when(settingRepository.findById("offline_download_config")).thenReturn(Optional.empty());
 
         assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadService.DownloadRequest("magnet:?xt=urn:btih:test")));
+                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test")));
     }
 
     @Test
@@ -181,7 +190,7 @@ class OfflineDownloadServiceTest {
                         )
         ));
 
-        MovieList result = (MovieList) service.download(new OfflineDownloadService.DownloadRequest("magnet:?xt=urn:btih:test"));
+        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
 
         assertEquals(1, result.getList().size());
         assertEquals("1", result.getList().getFirst().getVod_id());
@@ -209,6 +218,6 @@ class OfflineDownloadServiceTest {
         when(restTemplate.postForObject(eq("/api/task/offline_download/info?tid=task-1"), any(), eq(Map.class)))
                 .thenReturn(Map.of("code", 200, "data", Map.of("state", 2, "name", "任务名")));
 
-        service.download(new OfflineDownloadService.DownloadRequest("magnet:?xt=urn:btih:test"));
+        service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
     }
 }

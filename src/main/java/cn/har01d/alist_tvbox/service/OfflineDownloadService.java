@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
@@ -37,9 +38,6 @@ public class OfflineDownloadService {
     public record ConfigResponse(boolean enabled, String driverType, Integer accountId, String folder) {
     }
 
-    public record DownloadRequest(String url) {
-    }
-
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final AListLocalService aListLocalService;
@@ -64,7 +62,7 @@ public class OfflineDownloadService {
         this.aListLocalService = aListLocalService;
         this.accountService = accountService;
         this.tvBoxService = tvBoxService;
-        this.restTemplate = builder.build();
+        this.restTemplate = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).build();
         this.objectMapper = objectMapper;
         drivers.put(DriverType.PAN115.name(), new DriverConf(DriverType.PAN115, "115 Cloud", aListLocalService::set115TempDir));
         drivers.put(DriverType.THUNDER.name(), new DriverConf(DriverType.THUNDER, "ThunderBrowser", aListLocalService::setThunderBrowserTempDir));
@@ -101,7 +99,7 @@ public class OfflineDownloadService {
         return new ConfigResponse(true, driverType, account.getId(), folder);
     }
 
-    public Object download(DownloadRequest request) {
+    public Object download(OfflineDownloadRequest request) {
         validateUrl(request.url());
         ConfigRequest config = loadEnabledConfig();
         String driverType = normalizeDriverType(config.driverType());

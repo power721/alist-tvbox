@@ -29,6 +29,6 @@ public class OfflineDownloadController {
 
     @PostMapping
     public Object download(@RequestBody OfflineDownloadRequest request) {
-        return offlineDownloadService.download(new OfflineDownloadService.DownloadRequest(request.url()));
+        return offlineDownloadService.download(request);
     }
 }

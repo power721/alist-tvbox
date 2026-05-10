@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.config.RestErrorHandler;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.service.OfflineDownloadService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,7 +63,7 @@ class OfflineDownloadControllerTest {
 
     @Test
     void shouldReturnPlaylistForOfflineDownload() throws Exception {
-        when(offlineDownloadService.download(any(OfflineDownloadService.DownloadRequest.class))).thenReturn((Map<String, Object>) (Map<?, ?>) Map.of(
+        when(offlineDownloadService.download(any(OfflineDownloadRequest.class))).thenReturn((Map<String, Object>) (Map<?, ?>) Map.of(
                 "page", 1,
                 "pagecount", 1,
                 "limit", 100,
