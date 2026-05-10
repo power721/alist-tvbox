@@ -200,6 +200,9 @@ public class AListLocalService {
 
     public Response<String> set115TempDir(String tempDir) {
         setOfflineDownloadTempDir("115_temp_dir", tempDir);
+        if (checkStatus() < 2) {
+            return successResponse();
+        }
         HttpHeaders headers = new HttpHeaders();
         Site site = siteRepository.findById(1).orElseThrow();
         headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
@@ -214,6 +217,9 @@ public class AListLocalService {
 
     public Response<String> setThunderBrowserTempDir(String tempDir) {
         setOfflineDownloadTempDir("thunder_browser_temp_dir", tempDir);
+        if (checkStatus() < 2) {
+            return successResponse();
+        }
         HttpHeaders headers = new HttpHeaders();
         Site site = siteRepository.findById(1).orElseThrow();
         headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
@@ -233,6 +239,14 @@ public class AListLocalService {
                 "INSERT INTO x_setting_items (`key`,value,type,flag,`group`) VALUES('%s','%s','%s',%d,%d)",
                 key, tempDir, TYPE_STRING, PRIVATE_FLAG, OFFLINE_DOWNLOAD_GROUP
         ));
+    }
+
+    private Response<String> successResponse() {
+        Response<String> response = new Response<>();
+        response.setCode(200);
+        response.setMessage("success");
+        response.setData("ok");
+        return response;
     }
 
     public void saveStorage(Storage storage) {
