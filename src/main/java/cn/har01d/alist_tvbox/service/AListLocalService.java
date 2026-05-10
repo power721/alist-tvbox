@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.AliTokensResponse;
+import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.model.SettingResponse;
 import cn.har01d.alist_tvbox.storage.Storage;
 import cn.har01d.alist_tvbox.util.Constants;
@@ -18,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.env.Environment;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpEntity;
@@ -193,7 +195,7 @@ public class AListLocalService {
         return response.getBody();
     }
 
-    public SettingResponse set115TempDir(String tempDir) {
+    public Response<String> set115TempDir(String tempDir) {
         HttpHeaders headers = new HttpHeaders();
         Site site = siteRepository.findById(1).orElseThrow();
         headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
@@ -201,10 +203,12 @@ public class AListLocalService {
         Map<String, Object> body = new HashMap<>();
         body.put("temp_dir", tempDir);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        return restTemplate.postForObject("/api/admin/setting/set_115", entity, SettingResponse.class);
+        ResponseEntity<Response<String>> response = restTemplate.exchange("/api/admin/setting/set_115", HttpMethod.POST, entity, new ParameterizedTypeReference<Response<String>>() {
+        });
+        return response.getBody();
     }
 
-    public SettingResponse setThunderBrowserTempDir(String tempDir) {
+    public Response<String> setThunderBrowserTempDir(String tempDir) {
         HttpHeaders headers = new HttpHeaders();
         Site site = siteRepository.findById(1).orElseThrow();
         headers.set(HttpHeaders.AUTHORIZATION, site.getToken());
@@ -212,7 +216,9 @@ public class AListLocalService {
         Map<String, Object> body = new HashMap<>();
         body.put("temp_dir", tempDir);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        return restTemplate.postForObject("/api/admin/setting/set_thunder_browser", entity, SettingResponse.class);
+        ResponseEntity<Response<String>> response = restTemplate.exchange("/api/admin/setting/set_thunder_browser", HttpMethod.POST, entity, new ParameterizedTypeReference<Response<String>>() {
+        });
+        return response.getBody();
     }
 
     public void saveStorage(Storage storage) {
