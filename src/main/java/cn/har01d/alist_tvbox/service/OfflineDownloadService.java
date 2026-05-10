@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -53,7 +54,7 @@ public class OfflineDownloadService {
                                   DriverAccountRepository driverAccountRepository,
                                   AListLocalService aListLocalService,
                                   AccountService accountService,
-                                  TvBoxService tvBoxService,
+                                  @Lazy TvBoxService tvBoxService,
                                   RestTemplate restTemplate,
                                   ObjectMapper objectMapper) {
         this.settingRepository = settingRepository;
