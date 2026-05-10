@@ -615,34 +615,36 @@ const normalizeLocalProxyConfig = (value: any): LocalProxyConfig => {
   return defaults
 }
 
-const loadLocalProxyConfig = () => {
-  axios.get('/api/settings/local_proxy_config').then(({data}) => {
-    if (!data || !data.value) {
-      localProxyConfig.value = defaultLocalProxyConfig()
-      return
-    }
+const loadLocalProxyConfig = async () => {
+  const {data} = await axios.get('/api/settings/local_proxy_config')
+  if (!data || !data.value) {
+    localProxyConfig.value = defaultLocalProxyConfig()
+    return
+  }
 
-    try {
-      localProxyConfig.value = normalizeLocalProxyConfig(JSON.parse(data.value))
-    } catch (e) {
-      localProxyConfig.value = defaultLocalProxyConfig()
-    }
-  })
+  try {
+    localProxyConfig.value = normalizeLocalProxyConfig(JSON.parse(data.value))
+  } catch (e) {
+    localProxyConfig.value = defaultLocalProxyConfig()
+  }
 }
 
-const loadOfflineDownloadConfig = () => {
-  axios.get('/api/offline_download/config').then(({data}) => {
-    offlineDownloadConfig.value = {
-      enabled: !!data?.enabled,
-      driverType: 'PAN115',
-      accountId: data?.accountId ?? null,
-    }
-  })
+const loadOfflineDownloadConfig = async () => {
+  const {data} = await axios.get('/api/offline_download/config')
+  offlineDownloadConfig.value = {
+    enabled: !!data?.enabled,
+    driverType: 'PAN115',
+    accountId: data?.accountId ?? null,
+  }
 }
 
-const loadOfflineDownloadQuota = () => {
+const loadOfflineDownloadQuota = async () => {
   offlineDownloadQuota.value = null
-  axios.get('/api/offline_download/quota').then(({data}) => {
+  if (!offlineDownloadConfig.value.enabled || offlineDownloadConfig.value.accountId == null) {
+    return
+  }
+
+  await axios.get('/api/offline_download/quota').then(({data}) => {
     offlineDownloadQuota.value = {
       surplus: data?.surplus ?? 0,
       count: data?.count ?? 0,
@@ -653,10 +655,10 @@ const loadOfflineDownloadQuota = () => {
   })
 }
 
-const openConfig = () => {
-  loadLocalProxyConfig()
-  loadOfflineDownloadConfig()
-  loadOfflineDownloadQuota()
+const openConfig = async () => {
+  await loadLocalProxyConfig()
+  await loadOfflineDownloadConfig()
+  await loadOfflineDownloadQuota()
   configVisible.value = true
 }
 
@@ -672,10 +674,15 @@ const updateOfflineDownloadConfig = () => {
 }
 
 const updateConfig = async () => {
-  await updateLocalProxyConfig()
-  await updateOfflineDownloadConfig()
-  ElMessage.success('更新成功')
-  configVisible.value = false
+  try {
+    await updateLocalProxyConfig()
+    await updateOfflineDownloadConfig()
+    await loadOfflineDownloadQuota()
+    ElMessage.success('更新成功')
+    configVisible.value = false
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '更新失败')
+  }
 }
 
 const getTypeName = (type: string) => {
@@ -896,8 +903,6 @@ const load = () => {
 
 onMounted(() => {
   load()
-  loadLocalProxyConfig()
-  loadOfflineDownloadConfig()
   axios.get('/api/settings/driver_round_robin').then(({data}) => {
     driverRoundRobin.value = data.value === 'true'
   })

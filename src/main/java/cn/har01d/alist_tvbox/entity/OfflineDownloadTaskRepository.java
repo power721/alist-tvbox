@@ -6,6 +6,4 @@ import java.util.Optional;
 
 public interface OfflineDownloadTaskRepository extends JpaRepository<OfflineDownloadTask, Integer> {
     Optional<OfflineDownloadTask> findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(Integer accountId, String urlHash);
-
-    Optional<OfflineDownloadTask> findFirstByAccountIdAndInfoHashOrderByUpdatedTimeDesc(Integer accountId, String infoHash);
 }

@@ -28,6 +28,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
@@ -149,6 +150,18 @@ class OfflineDownloadServiceTest {
     }
 
     @Test
+    void saveConfigShouldRejectBlankMountPath() {
+        DriverAccount account = account(12, "", "3425588780152254335",
+                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () ->
+                service.saveConfig(new OfflineDownloadConfigRequest(true, "PAN115", 12)));
+
+        assertEquals("离线下载账号挂载目录不能为空", exception.getMessage());
+    }
+
+    @Test
     void saveConfigShouldRejectThunderDriverType() {
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
                 service.saveConfig(new OfflineDownloadConfigRequest(true, "THUNDER", 13)));
@@ -210,6 +223,21 @@ class OfflineDownloadServiceTest {
         verify(settingRepository).save(setting.capture());
         ObjectNode saved = (ObjectNode) objectMapper.readTree(setting.getValue().getValue());
         assertEquals("startup-folder-id", saved.path("offlineFolderId").asText());
+    }
+
+    @Test
+    void syncConfiguredTempDirOnStartupShouldIgnoreRestClientException() {
+        DriverAccount account = account(12, "🈲我的115云盘", "startup-parent-id",
+                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"stale-folder-id\"}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        when(restTemplate.exchange(eq("https://webapi.115.com/files?aid=1&cid=startup-parent-id&offset=0&limit=20&type=0&show_dir=1&fc_mix=0&natsort=1&count_folders=1&format=json&custom_order=0"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenThrow(new RestClientException("115 unavailable"));
+
+        service.syncConfiguredTempDirOnStartup();
+
+        verify(settingRepository, never()).save(any(Setting.class));
     }
 
     @Test

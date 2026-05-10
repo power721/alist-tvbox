@@ -28,13 +28,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.security.MessageDigest;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -107,12 +107,15 @@ public class OfflineDownloadService {
         StoredConfig normalized = new StoredConfig(request.enabled(), driverType, request.accountId(), "");
         if (!normalized.enabled()) {
             settingRepository.save(new Setting(SETTING_NAME, writeConfig(normalized)));
+            log.info("offline download config disabled");
             return new OfflineDownloadConfigDto(false, driverType, normalized.accountId(), "");
         }
 
         DriverAccount account = getAccount(normalized.accountId(), driverType);
         String offlineFolderId = ensureOfflineFolder(account);
         settingRepository.save(new Setting(SETTING_NAME, writeConfig(new StoredConfig(true, driverType, account.getId(), offlineFolderId))));
+        log.info("offline download config saved: driverType={}, accountId={}, offlineFolderId={}",
+                driverType, account.getId(), offlineFolderId);
         return new OfflineDownloadConfigDto(true, driverType, account.getId(), Storage.getMountPath(account));
     }
 
@@ -157,6 +160,7 @@ public class OfflineDownloadService {
         String uid = extractUid(cookie);
         String pathId = requireOfflineFolderId(config);
         String mountPath = Storage.getMountPath(account);
+        log.info("submitting offline download: accountId={}, pathId={}, urlHash={}", account.getId(), pathId, urlHash);
 
         ObjectNode space = exchange(SPACE_URL, HttpMethod.GET, cookie, "https://115.com/", null);
         log.debug("space: {}", space);
@@ -171,11 +175,16 @@ public class OfflineDownloadService {
         ObjectNode addTask = exchange(ADD_TASK_URL, HttpMethod.POST, cookie, "https://115.com/", body);
         log.debug("add task: {}", addTask);
         boolean duplicateTask = isDuplicateTask(addTask);
+        if (duplicateTask) {
+            log.info("offline download task already exists: accountId={}, urlHash={}", account.getId(), urlHash);
+        }
         if (!duplicateTask) {
             ensureState(addTask, "提交115离线下载任务失败");
         }
         if (!duplicateTask && addTask.path("errno").asInt(0) != 0) {
-            throw new BadRequestException("task failed: " + firstNonBlank(addTask.path("error_msg").asText(), "115离线下载任务提交失败"));
+            String message = StringUtils.firstNonBlank(addTask.path("error_msg").asText(), "115离线下载任务提交失败");
+            log.info("offline download task submit failed: accountId={}, urlHash={}, message={}", account.getId(), urlHash, message);
+            throw new BadRequestException("task failed: " + message);
         }
 
         for (int i = 0; i < 10; i++) {
@@ -193,11 +202,13 @@ public class OfflineDownloadService {
                 }
                 String targetPath = buildTargetPath(account, name);
                 saveTask(account.getId(), urlHash, task, targetPath);
+                log.info("offline download task completed: accountId={}, urlHash={}, targetPath={}", account.getId(), urlHash, targetPath);
                 return new DownloadTarget(targetPath, isFolderTask(task));
             }
 
             if (status == -1 || status == 4) {
-                String message = firstNonBlank(task.path("errtype").asText(), task.path("name").asText(), "115离线下载任务失败");
+                String message = StringUtils.firstNonBlank(task.path("errtype").asText(), task.path("name").asText(), "115离线下载任务失败");
+                log.info("offline download task failed: accountId={}, urlHash={}, message={}", account.getId(), urlHash, message);
                 throw new BadRequestException("task failed: " + message);
             }
 
@@ -215,7 +226,7 @@ public class OfflineDownloadService {
         try {
             StoredConfig config = loadEnabledConfig();
             refreshOfflineFolderId(config.accountId());
-        } catch (BadRequestException e) {
+        } catch (BadRequestException | RestClientException e) {
             log.debug("skip syncing offline folder on startup: {}", e.getMessage());
         }
     }
@@ -245,8 +256,8 @@ public class OfflineDownloadService {
             throw new BadRequestException("请选择离线下载账号");
         }
         DriverAccount account = getAccount(request.accountId(), driverType);
-        if (StringUtils.isBlank(Storage.getMountPath(account))) {
-            throw new BadRequestException("115账号挂载目录不能为空");
+        if (StringUtils.isBlank(account.getName()) || StringUtils.isBlank(Storage.getMountPath(account))) {
+            throw new BadRequestException("离线下载账号挂载目录不能为空");
         }
     }
 
@@ -353,28 +364,32 @@ public class OfflineDownloadService {
         if (list.has("data") && list.get("data").isArray()) {
             for (var item : list.get("data")) {
                 if (OFFLINE_DIR_NAME.equals(item.path("n").asText())) {
-                    return firstNonBlank(item.path("file_id").asText(), item.path("cid").asText());
+                    return StringUtils.firstNonBlank(item.path("file_id").asText(), item.path("cid").asText());
                 }
             }
         }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HttpHeaders.COOKIE, cookie);
-        headers.set(HttpHeaders.REFERER, "https://115.com/");
-        headers.set(HttpHeaders.USER_AGENT, cn.har01d.alist_tvbox.util.Constants.USER_AGENT);
-        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
         form.add("pid", parentId);
         form.add("cname", OFFLINE_DIR_NAME);
-        headers.set(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE + ", text/html, */*");
-        ResponseEntity<String> response = restTemplate.exchange(FILE_ADD_URL, HttpMethod.POST, new HttpEntity<>(form, headers), String.class);
-        ObjectNode body = parseJsonBody(response.getBody(), FILE_ADD_URL);
+        ObjectNode body = exchangeMultipart(FILE_ADD_URL, cookie, "https://115.com/", form);
         ensureState(body, "创建115离线下载目录失败");
-        String folderId = firstNonBlank(body.path("file_id").asText(), body.path("cid").asText());
+        String folderId = StringUtils.firstNonBlank(body.path("file_id").asText(), body.path("cid").asText());
         if (StringUtils.isBlank(folderId)) {
             throw new BadRequestException("创建115离线下载目录失败");
         }
         return folderId;
+    }
+
+    private ObjectNode exchangeMultipart(String url, String cookie, String referer, MultiValueMap<String, Object> body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.COOKIE, cookie);
+        headers.set(HttpHeaders.REFERER, referer);
+        headers.set(HttpHeaders.USER_AGENT, cn.har01d.alist_tvbox.util.Constants.USER_AGENT);
+        headers.set(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE + ", text/html, */*");
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(body, headers), String.class);
+        return parseJsonBody(response.getBody(), url);
     }
 
     private ObjectNode parseJsonBody(String body, String url) {
@@ -398,8 +413,8 @@ public class OfflineDownloadService {
 
     private void ensureState(ObjectNode node, String message) {
         if (node == null || !node.path("state").asBoolean(false)) {
-            String error = node == null ? "" : firstNonBlank(node.path("error_msg").asText(), node.path("errtype").asText(), node.path("msg").asText());
-            throw new BadRequestException("task failed: " + firstNonBlank(error, message));
+            String error = node == null ? "" : StringUtils.firstNonBlank(node.path("error_msg").asText(), node.path("errtype").asText(), node.path("msg").asText());
+            throw new BadRequestException("task failed: " + StringUtils.firstNonBlank(error, message));
         }
     }
 
@@ -458,7 +473,7 @@ public class OfflineDownloadService {
         if (addTask == null) {
             return false;
         }
-        String message = firstNonBlank(addTask.path("error_msg").asText(), addTask.path("errtype").asText(), addTask.path("msg").asText());
+        String message = StringUtils.firstNonBlank(addTask.path("error_msg").asText(), addTask.path("errtype").asText(), addTask.path("msg").asText());
         return StringUtils.contains(message, "已存在") || StringUtils.contains(message, "重复");
     }
 
@@ -483,7 +498,7 @@ public class OfflineDownloadService {
         }
         entity.setAccountId(accountId);
         entity.setUrlHash(urlHash);
-        entity.setInfoHash(firstNonBlank(task.path("info_hash").asText(), entity.getInfoHash()));
+        entity.setInfoHash(StringUtils.firstNonBlank(task.path("info_hash").asText(), entity.getInfoHash()));
         entity.setTargetPath(targetPath);
         entity.setTaskName(task.path("name").asText(entity.getTaskName()));
         entity.setStatus(STATUS_COMPLETED);
@@ -512,15 +527,6 @@ public class OfflineDownloadService {
 
     private long number(ObjectNode node, String field) {
         return node.path(field).asLong(0);
-    }
-
-    private String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (StringUtils.isNotBlank(value)) {
-                return value;
-            }
-        }
-        return "";
     }
 
     private void sleepOneSecond() {
