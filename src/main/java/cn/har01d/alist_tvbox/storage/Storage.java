@@ -20,6 +20,7 @@ public class Storage {
     private String driver;
     private String path;
     private String addition = "";
+    private String customCachePolicies = "";
     private String webdavPolicy = "302_redirect";
     private int cacheExpiration = 30;
     private boolean webProxy;

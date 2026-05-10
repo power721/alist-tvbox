@@ -7,6 +7,7 @@ public class Pan115 extends Storage {
         super(account, "115 Cloud");
         setWebProxy(account.isUseProxy());
         setWebdavPolicy("native_proxy");
+        setCustomCachePolicies("/alist-tvbox-offline:0");
         addAddition("cookie", account.getCookie());
         addAddition("qrcode_token", account.getToken());
         addAddition("root_folder_id", account.getFolder());

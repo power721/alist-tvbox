@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
+import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
@@ -47,6 +48,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.core.io.ClassPathResource;
@@ -98,6 +100,7 @@ public class ShareService {
     private final ConfigFileService configFileService;
     private final PikPakService pikPakService;
     private final DriverAccountService driverAccountService;
+    private final OfflineDownloadService offlineDownloadService;
     private final RestTemplate restTemplate;
     private final Environment environment;
 
@@ -118,6 +121,7 @@ public class ShareService {
                         AListLocalService aListLocalService,
                         ConfigFileService configFileService,
                         PikPakService pikPakService,
+                        @Lazy OfflineDownloadService offlineDownloadService,
                         RestTemplateBuilder builder,
                         Environment environment,
                         ObjectMapper objectMapper) {
@@ -134,6 +138,7 @@ public class ShareService {
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
         this.pikPakService = pikPakService;
+        this.offlineDownloadService = offlineDownloadService;
         this.environment = environment;
         this.objectMapper = objectMapper;
         this.restTemplate = builder.rootUri("http://localhost:" + aListLocalService.getInternalPort()).build();
@@ -977,8 +982,13 @@ public class ShareService {
     }
 
     public String add(ShareLink dto) {
+        String link = StringUtils.trimToEmpty(URLDecoder.decode(dto.getLink(), StandardCharsets.UTF_8));
+        if (isOfflineDownloadLink(link)) {
+            return offlineDownloadService.downloadPath(new OfflineDownloadRequest(link));
+        }
+
         Share share = new Share();
-        share.setShareId(URLDecoder.decode(dto.getLink(), StandardCharsets.UTF_8));
+        share.setShareId(link);
         share.setPassword(dto.getCode());
         if (!parseLink(share)) {
             log.warn("无法识别的分享链接: {}", share.getShareId());
@@ -1014,6 +1024,11 @@ public class ShareService {
         }
 
         return path;
+    }
+
+    private boolean isOfflineDownloadLink(String link) {
+        String value = StringUtils.lowerCase(link);
+        return value.startsWith("magnet:") || value.startsWith("ed2k:");
     }
 
     public Share create(Share share) {

@@ -144,7 +144,7 @@ class OfflineDownloadServiceTest {
     @Test
     void downloadShouldRejectUnsupportedScheme() {
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadRequest("ftp://example.com/test")));
+                service.download(new OfflineDownloadRequest("ftp://example.com/test"), ""));
 
         assertEquals("不支持的离线下载链接", exception.getMessage());
     }
@@ -154,7 +154,7 @@ class OfflineDownloadServiceTest {
         when(settingRepository.findById("offline_download_config")).thenReturn(Optional.empty());
 
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test")));
+                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), ""));
 
         assertEquals("离线下载未开启", exception.getMessage());
     }
@@ -165,7 +165,7 @@ class OfflineDownloadServiceTest {
                 .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"THUNDER\",\"accountId\":13}")));
 
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test")));
+                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), ""));
 
         assertEquals("当前仅支持115云盘离线下载", exception.getMessage());
     }
@@ -206,10 +206,58 @@ class OfflineDownloadServiceTest {
                     return textHtmlJson(deleteTaskResponse());
                 });
 
-        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
+        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), "");
 
         assertEquals(1, result.getList().size());
         assertEquals("1", result.getList().getFirst().getVod_id());
+    }
+
+    @Test
+    void downloadShouldPassAcToTvBoxDetail() {
+        DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166",
+                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
+        MovieList movieList = new MovieList();
+        MovieDetail detail = new MovieDetail();
+        detail.setVod_id("3");
+        movieList.getList().add(detail);
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        when(tvBoxService.getDetail("list", "1$/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务/~playlist")).thenReturn(movieList);
+        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(spaceResponse()));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(addTaskResponse()));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=15&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
+        lenient().when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_del"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(deleteTaskResponse()));
+
+        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), "list");
+
+        assertEquals(1, result.getList().size());
+        assertEquals("3", result.getList().getFirst().getVod_id());
+    }
+
+    @Test
+    void downloadPathShouldReturnOfflineTargetPath() {
+        DriverAccount account = account(12, "🈲我的115云盘", "3142159731515950166",
+                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        when(restTemplate.exchange(eq("https://115.com/?ct=clouddownload&ac=space"), eq(HttpMethod.GET), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(spaceResponse()));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=add_task_urls"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(addTaskResponse()));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=15&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
+        lenient().when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_del"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(textHtmlJson(deleteTaskResponse()));
+
+        String result = service.downloadPath(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
+
+        assertEquals("/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务", result);
     }
 
     @Test
@@ -233,7 +281,7 @@ class OfflineDownloadServiceTest {
         lenient().when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_del"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
                 .thenReturn(textHtmlJson(deleteTaskResponse()));
 
-        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
+        MovieList result = (MovieList) service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), "");
 
         assertEquals(1, result.getList().size());
         assertEquals("2", result.getList().getFirst().getVod_id());
@@ -255,7 +303,7 @@ class OfflineDownloadServiceTest {
                 .thenReturn(textHtmlJson(addTask));
 
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test")));
+                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), ""));
 
         assertEquals("task failed: 任务已存在，请勿输入重复的链接地址", exception.getMessage());
     }
@@ -268,7 +316,7 @@ class OfflineDownloadServiceTest {
         when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
 
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
-                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test")));
+                service.download(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"), ""));
 
         assertEquals("115账号Cookie缺少UID", exception.getMessage());
     }

@@ -56,6 +56,9 @@ public class OfflineDownloadService {
     private record StoredConfig(boolean enabled, String driverType, Integer accountId, String offlineFolderId) {
     }
 
+    private record DownloadTarget(String path, boolean folder) {
+    }
+
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final TvBoxService tvBoxService;
@@ -105,7 +108,20 @@ public class OfflineDownloadService {
         return new ConfigResponse(true, driverType, account.getId(), Storage.getMountPath(account));
     }
 
-    public Object download(OfflineDownloadRequest request) {
+    public Object download(OfflineDownloadRequest request, String ac) {
+        DownloadTarget target = downloadTarget(request);
+        String targetPath = target.path();
+        if (target.folder()) {
+            targetPath += "/~playlist";
+        }
+        return tvBoxService.getDetail(ac, "1$" + targetPath);
+    }
+
+    public String downloadPath(OfflineDownloadRequest request) {
+        return downloadTarget(request).path();
+    }
+
+    private DownloadTarget downloadTarget(OfflineDownloadRequest request) {
         validateUrl(request.url());
         StoredConfig config = loadEnabledConfig();
         DriverAccount account = getAccount(config.accountId(), normalizeDriverType(config.driverType()));
@@ -147,11 +163,8 @@ public class OfflineDownloadService {
                     throw new BadRequestException("离线下载任务成功但未返回名称");
                 }
                 String targetPath = mountPath + "/" + OFFLINE_DIR_NAME + "/" + name;
-                if (isFolderTask(task)) {
-                    targetPath += "/~playlist";
-                }
                 deleteTaskAsync(cookie, uid, task.path("info_hash").asText(""), sign, time);
-                return tvBoxService.getDetail("", "1$" + targetPath);
+                return new DownloadTarget(targetPath, isFolderTask(task));
             }
 
             if (status == -1 || status == 4) {

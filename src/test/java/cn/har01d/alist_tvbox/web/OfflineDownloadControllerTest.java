@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -63,7 +64,7 @@ class OfflineDownloadControllerTest {
 
     @Test
     void shouldReturnPlaylistForOfflineDownload() throws Exception {
-        when(offlineDownloadService.download(any(OfflineDownloadRequest.class))).thenReturn((Map<String, Object>) (Map<?, ?>) Map.of(
+        when(offlineDownloadService.download(any(OfflineDownloadRequest.class), eq(""))).thenReturn((Map<String, Object>) (Map<?, ?>) Map.of(
                 "page", 1,
                 "pagecount", 1,
                 "limit", 100,
@@ -79,5 +80,30 @@ class OfflineDownloadControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(1))
                 .andExpect(jsonPath("$.list[0].vod_id").value("1"));
+
+        verify(offlineDownloadService).download(any(OfflineDownloadRequest.class), eq(""));
+    }
+
+    @Test
+    void shouldPassAcQueryParamForOfflineDownload() throws Exception {
+        when(offlineDownloadService.download(any(OfflineDownloadRequest.class), eq("list"))).thenReturn((Map<String, Object>) (Map<?, ?>) Map.of(
+                "page", 1,
+                "pagecount", 1,
+                "limit", 100,
+                "total", 1,
+                "list", java.util.List.of(Map.of("vod_id", "1"))
+        ));
+
+        mockMvc.perform(post("/api/offline_download")
+                        .queryParam("ac", "list")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"url":"magnet:?xt=urn:btih:test"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.list[0].vod_id").value("1"));
+
+        verify(offlineDownloadService).download(any(OfflineDownloadRequest.class), eq("list"));
     }
 }

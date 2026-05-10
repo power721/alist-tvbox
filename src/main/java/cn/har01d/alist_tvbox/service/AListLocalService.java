@@ -87,6 +87,7 @@ public class AListLocalService {
 
     @PostConstruct
     public void setup() {
+        addColumnIfMissing("ALTER TABLE x_storages ADD COLUMN custom_cache_policies text DEFAULT ''");
         log.info("AList internal port: {}", internalPort);
         log.info("AList external port: {}", externalPort);
         setSetting("external_port", String.valueOf(externalPort), "number");
@@ -249,14 +250,25 @@ public class AListLocalService {
         return response;
     }
 
+    private void addColumnIfMissing(String sql) {
+        try {
+            executeUpdate(sql);
+        } catch (Exception e) {
+            if (!e.getMessage().contains("duplicate column name")) {
+                throw e;
+            }
+        }
+    }
+
     public void saveStorage(Storage storage) {
         executeUpdate("DELETE FROM x_storages WHERE id = " + storage.getId());
         String time = storage.getTime().truncatedTo(ChronoUnit.SECONDS).atZone(ZoneId.systemDefault()).toLocalDateTime().toString();
         String sql = "INSERT INTO x_storages " +
-                "(id,mount_path,`order`,driver,cache_expiration,status,addition,modified,disabled,order_by,order_direction,extract_folder,web_proxy,webdav_policy) " +
-                "VALUES (%d,'%s',0,'%s',%d,'work','%s','%s',%d,'name','asc','front',%d,'%s');";
+                "(id,mount_path,`order`,driver,cache_expiration,custom_cache_policies,status,addition,modified,disabled,order_by,order_direction,extract_folder,web_proxy,webdav_policy) " +
+                "VALUES (%d,'%s',0,'%s',%d,'%s','work','%s','%s',%d,'name','asc','front',%d,'%s');";
         executeUpdate(String.format(sql, storage.getId(), storage.getPath(), storage.getDriver(),
-                storage.getCacheExpiration(), storage.getAddition(), time, storage.isDisabled() ? 1 : 0, storage.isWebProxy() ? 1 : 0, storage.getWebdavPolicy()));
+                storage.getCacheExpiration(), storage.getCustomCachePolicies(),
+                storage.getAddition(), time, storage.isDisabled() ? 1 : 0, storage.isWebProxy() ? 1 : 0, storage.getWebdavPolicy()));
         log.info("[{}] insert {} storage : {}", storage.getId(), storage.getDriver(), storage.getPath());
     }
 

@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.service.OfflineDownloadService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,7 +29,8 @@ public class OfflineDownloadController {
     }
 
     @PostMapping
-    public Object download(@RequestBody OfflineDownloadRequest request) {
-        return offlineDownloadService.download(request);
+    public Object download(@RequestBody OfflineDownloadRequest request,
+                           @RequestParam(required = false, defaultValue = "") String ac) {
+        return offlineDownloadService.download(request, ac);
     }
 }
