@@ -23,6 +23,11 @@ public class OfflineDownloadController {
         return offlineDownloadService.getConfig();
     }
 
+    @GetMapping("/quota")
+    public OfflineDownloadService.QuotaResponse getQuota() {
+        return offlineDownloadService.getQuota();
+    }
+
     @PostMapping("/config")
     public OfflineDownloadService.ConfigResponse saveConfig(@RequestBody OfflineDownloadService.ConfigRequest request) {
         return offlineDownloadService.saveConfig(request);

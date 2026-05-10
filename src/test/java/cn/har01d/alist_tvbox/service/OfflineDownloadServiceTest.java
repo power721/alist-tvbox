@@ -88,6 +88,27 @@ class OfflineDownloadServiceTest {
     }
 
     @Test
+    void getQuotaShouldReturn115QuotaInfo() {
+        DriverAccount account = account(12, "🈲我的115云盘", "3425588780152254335",
+                "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
+        when(settingRepository.findById("offline_download_config"))
+                .thenReturn(Optional.of(new Setting("offline_download_config", "{\"enabled\":true,\"driverType\":\"PAN115\",\"accountId\":12,\"offlineFolderId\":\"3142159731515950166\"}")));
+        when(driverAccountRepository.findById(12)).thenReturn(Optional.of(account));
+        when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=get_quota_package_info&uid=6338615"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenAnswer(invocation -> {
+                    HttpEntity<?> entity = invocation.getArgument(2);
+                    assertCookieHeaders(entity, account.getCookie(), "https://115.com/");
+                    return textHtmlJson(quotaResponse());
+                });
+
+        OfflineDownloadService.QuotaResponse result = service.getQuota();
+
+        assertEquals(1371, result.surplus());
+        assertEquals(1500, result.count());
+        assertEquals(129, result.used());
+    }
+
+    @Test
     void saveConfigShouldPersistWithoutSyncingAList() {
         DriverAccount account = account(12, "🈲我的115云盘", "3425588780152254335",
                 "UID=6338615_A1_1778368227; CID=test-cid; SEID=test-seid; KID=test-kid");
@@ -386,6 +407,14 @@ class OfflineDownloadServiceTest {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("state", true);
         node.put("errno", 0);
+        return node;
+    }
+
+    private ObjectNode quotaResponse() {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("count", 1500);
+        node.put("surplus", 1371);
+        node.put("used", 129);
         return node;
     }
 

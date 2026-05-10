@@ -45,6 +45,7 @@ public class OfflineDownloadService {
     static final String OFFLINE_DIR_NAME = "alist-tvbox-offline";
     private static final String SPACE_URL = "https://115.com/?ct=clouddownload&ac=space";
     private static final String ADD_TASK_URL = "https://clouddownload.115.com/web/?ac=add_task_urls";
+    private static final String QUOTA_URL = "https://clouddownload.115.com/web/?ac=get_quota_package_info&uid=%s";
     private static final int TASK_LIST_PAGE_SIZE = 1000;
     private static final String FILE_LIST_URL = "https://webapi.115.com/files?aid=1&cid=%s&offset=0&limit=20&type=0&show_dir=1&fc_mix=0&natsort=1&count_folders=1&format=json&custom_order=0";
     private static final String FILE_ADD_URL = "https://webapi.115.com/files/add";
@@ -55,6 +56,9 @@ public class OfflineDownloadService {
     }
 
     public record ConfigResponse(boolean enabled, String driverType, Integer accountId, String folder) {
+    }
+
+    public record QuotaResponse(int surplus, int count, int used) {
     }
 
     private record StoredConfig(boolean enabled, String driverType, Integer accountId, String offlineFolderId) {
@@ -116,6 +120,19 @@ public class OfflineDownloadService {
         String offlineFolderId = ensureOfflineFolder(account);
         settingRepository.save(new Setting(SETTING_NAME, writeConfig(new StoredConfig(true, driverType, account.getId(), offlineFolderId))));
         return new ConfigResponse(true, driverType, account.getId(), Storage.getMountPath(account));
+    }
+
+    public QuotaResponse getQuota() {
+        StoredConfig config = loadEnabledConfig();
+        DriverAccount account = getAccount(config.accountId(), normalizeDriverType(config.driverType()));
+        String cookie = requireCookie(account);
+        String uid = extractUid(cookie);
+        ObjectNode quota = exchange(String.format(QUOTA_URL, uid), HttpMethod.POST, cookie, "https://115.com/", "");
+        return new QuotaResponse(
+                quota.path("surplus").asInt(0),
+                quota.path("count").asInt(0),
+                quota.path("used").asInt(0)
+        );
     }
 
     public Object download(OfflineDownloadRequest request, String ac) {

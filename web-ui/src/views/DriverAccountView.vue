@@ -305,6 +305,9 @@
         <el-form-item label="当前挂载目录">
           <el-input :model-value="offlineMountFolder" readonly/>
         </el-form-item>
+        <el-form-item v-if="offlineQuotaText" label="115本月配额">
+          <span>{{ offlineQuotaText }}</span>
+        </el-form-item>
       </el-form>
       <template #footer>
       <span class="dialog-footer">
@@ -386,6 +389,12 @@ type OfflineDownloadConfig = {
   accountId: number | null
 }
 
+type OfflineDownloadQuota = {
+  surplus: number
+  count: number
+  used: number
+} | null
+
 type DriverAccountItem = {
   id: number
   type: string
@@ -457,10 +466,17 @@ const offlineDownloadConfig = ref<OfflineDownloadConfig>({
   driverType: 'PAN115',
   accountId: null,
 })
+const offlineDownloadQuota = ref<OfflineDownloadQuota>(null)
 const offlineAccounts = computed(() => accounts.value.filter((item) => item.type === offlineDownloadConfig.value.driverType))
 const offlineMountFolder = computed(() => {
   const account = offlineAccounts.value.find((item) => item.id === offlineDownloadConfig.value.accountId)
   return account ? fullPath(account) : ''
+})
+const offlineQuotaText = computed(() => {
+  if (!offlineDownloadQuota.value) {
+    return ''
+  }
+  return `本月配额：剩${offlineDownloadQuota.value.surplus}/总${offlineDownloadQuota.value.count}个`
 })
 
 watch(() => offlineDownloadConfig.value.driverType, () => {
@@ -624,9 +640,23 @@ const loadOfflineDownloadConfig = () => {
   })
 }
 
+const loadOfflineDownloadQuota = () => {
+  offlineDownloadQuota.value = null
+  axios.get('/api/offline_download/quota').then(({data}) => {
+    offlineDownloadQuota.value = {
+      surplus: data?.surplus ?? 0,
+      count: data?.count ?? 0,
+      used: data?.used ?? 0,
+    }
+  }).catch(() => {
+    offlineDownloadQuota.value = null
+  })
+}
+
 const openConfig = () => {
   loadLocalProxyConfig()
   loadOfflineDownloadConfig()
+  loadOfflineDownloadQuota()
   configVisible.value = true
 }
 
