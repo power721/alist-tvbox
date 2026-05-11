@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS PUBLIC.PLUGIN
+(
+    ID              INTEGER not null
+        primary key,
+    NAME            CHARACTER VARYING(255) not null,
+    URL             CHARACTER VARYING not null
+        constraint UK_PLUGIN_URL
+            unique,
+    ENABLED         BOOLEAN default TRUE not null,
+    SORT_ORDER      INTEGER not null,
+    EXTEND          CHARACTER VARYING,
+    SOURCE_NAME     CHARACTER VARYING(255) not null,
+    LAST_CHECKED_AT TIMESTAMP WITH TIME ZONE,
+    LAST_ERROR      CHARACTER VARYING
+);
+
+CREATE INDEX IF NOT EXISTS IDX_PLUGIN_SORT_ORDER ON PUBLIC.PLUGIN (SORT_ORDER);

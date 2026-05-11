@@ -3,6 +3,7 @@
     <h1>订阅列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
+      <el-button @click="showPlugins">插件管理</el-button>
       <el-button @click="showScan">同步影视</el-button>
       <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
@@ -293,19 +294,86 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="pluginVisible" title="插件管理" width="80%">
+      <el-form :inline="true" :model="pluginForm">
+        <el-form-item label="地址" required>
+          <el-input v-model="pluginForm.url" style="width: 460px" placeholder="https://example.com/plugin.txt"/>
+        </el-form-item>
+        <el-form-item label="名称">
+          <el-input v-model="pluginForm.name" style="width: 180px" placeholder="留空用文件名"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="addPlugin">添加插件</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-table :data="plugins" row-key="id" id="plugins-table" border style="width: 100%">
+        <el-table-column label="顺序" width="80">
+          <template #default="scope">
+            <span class="pointer">{{ scope.row.sortOrder }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="name" label="名称" width="180">
+          <template #default="scope">
+            <el-input v-model="scope.row.name" @change="updatePlugin(scope.row)"/>
+          </template>
+        </el-table-column>
+        <el-table-column prop="url" label="地址">
+          <template #default="scope">
+            <a :href="scope.row.url" target="_blank">{{ scope.row.url }}</a>
+          </template>
+        </el-table-column>
+        <el-table-column prop="enabled" label="启用" width="90">
+          <template #default="scope">
+            <el-switch v-model="scope.row.enabled" @change="updatePlugin(scope.row)"/>
+          </template>
+        </el-table-column>
+        <el-table-column prop="extend" label="扩展配置" width="220">
+          <template #default="scope">
+            <el-input v-model="scope.row.extend" @change="updatePlugin(scope.row)"/>
+          </template>
+        </el-table-column>
+        <el-table-column prop="lastCheckedAt" label="最近检查" width="180"/>
+        <el-table-column prop="lastError" label="状态" width="180">
+          <template #default="scope">
+            <span>{{ scope.row.lastError || '正常' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="160">
+          <template #default="scope">
+            <el-button link type="primary" @click="refreshPlugin(scope.row.id)">刷新</el-button>
+            <el-button link type="danger" @click="deletePlugin(scope.row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
+import {nextTick, onMounted, ref} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
 import {onUnmounted} from "@vue/runtime-core";
+import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
 
 interface Sub {
   sid: '',
   name: '',
+}
+
+interface Plugin {
+  id: number
+  name: string
+  url: string
+  enabled: boolean
+  sortOrder: number
+  extend: string
+  sourceName: string
+  lastCheckedAt: string
+  lastError: string
 }
 
 const currentUrl = window.location.origin
@@ -331,6 +399,7 @@ const devices = ref<Device[]>([])
 const detailVisible = ref(false)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
+const pluginVisible = ref(false)
 const tgVisible = ref(false)
 const scanVisible = ref(false)
 const confirm = ref(false)
@@ -367,7 +436,20 @@ const user = ref({
   last_name: '',
   phone: ''
 })
+const plugins = ref<Plugin[]>([])
+const pluginForm = ref<Plugin>({
+  id: 0,
+  name: '',
+  url: '',
+  enabled: true,
+  sortOrder: 0,
+  extend: '',
+  sourceName: '',
+  lastCheckedAt: '',
+  lastError: ''
+})
 let timer = 0
+let pluginSortable: Sortable | null = null
 
 const handleLogin = () => {
   axios.get('/api/telegram/user').then(({data}) => {
@@ -443,6 +525,94 @@ const handleAdd = () => {
     override: ''
   }
   formVisible.value = true
+}
+
+const resetPluginForm = () => {
+  pluginForm.value = {
+    id: 0,
+    name: '',
+    url: '',
+    enabled: true,
+    sortOrder: 0,
+    extend: '',
+    sourceName: '',
+    lastCheckedAt: '',
+    lastError: ''
+  }
+}
+
+const enablePluginRowDrop = () => {
+  const tbody = document.querySelector('#plugins-table .el-table__body-wrapper tbody') as HTMLElement
+  if (!tbody) {
+    return
+  }
+  pluginSortable?.destroy()
+  pluginSortable = Sortable.create(tbody, {
+    animation: 300,
+    draggable: '.el-table__row',
+    onEnd: ({oldIndex, newIndex}) => {
+      if (oldIndex == null || newIndex == null || oldIndex === newIndex) {
+        return
+      }
+      const row = plugins.value.splice(oldIndex, 1)[0]
+      plugins.value.splice(newIndex, 0, row)
+      plugins.value.forEach((item, index) => {
+        item.sortOrder = index + 1
+      })
+      axios.post('/api/plugins/reorder', plugins.value.map(item => item.id)).then(() => {
+        ElMessage.success('排序已更新')
+        loadPlugins()
+      })
+    }
+  })
+}
+
+const loadPlugins = () => {
+  axios.get('/api/plugins').then(({data}) => {
+    plugins.value = data
+    nextTick(() => enablePluginRowDrop())
+  })
+}
+
+const showPlugins = () => {
+  pluginVisible.value = true
+  resetPluginForm()
+  loadPlugins()
+}
+
+const addPlugin = () => {
+  axios.post('/api/plugins', {
+    url: pluginForm.value.url,
+    name: pluginForm.value.name
+  }).then(() => {
+    ElMessage.success('添加成功')
+    resetPluginForm()
+    loadPlugins()
+  })
+}
+
+const updatePlugin = (plugin: Plugin) => {
+  axios.put('/api/plugins/' + plugin.id, plugin).then(({data}) => {
+    Object.assign(plugin, data)
+    ElMessage.success('更新成功')
+  })
+}
+
+const refreshPlugin = (id: number) => {
+  axios.post('/api/plugins/' + id + '/refresh').then(({data}) => {
+    const index = plugins.value.findIndex(item => item.id === id)
+    if (index >= 0) {
+      plugins.value[index] = data
+    }
+    ElMessage.success('刷新完成')
+  })
+}
+
+const deletePlugin = (id: number) => {
+  axios.delete('/api/plugins/' + id).then(() => {
+    ElMessage.success('删除成功')
+    loadPlugins()
+  })
 }
 
 const handleEdit = (data: any) => {
@@ -628,6 +798,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearInterval(timer)
+  pluginSortable?.destroy()
 })
 </script>
 
@@ -638,6 +809,10 @@ onUnmounted(() => {
 
 .hint {
   margin-left: 16px;
+}
+
+.pointer {
+  cursor: move;
 }
 
 .json pre {

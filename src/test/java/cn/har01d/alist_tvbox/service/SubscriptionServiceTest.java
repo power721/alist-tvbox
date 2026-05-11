@@ -2,6 +2,8 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.entity.AccountRepository;
+import cn.har01d.alist_tvbox.entity.Plugin;
+import cn.har01d.alist_tvbox.entity.PluginRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
@@ -24,7 +26,10 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -51,6 +56,8 @@ class SubscriptionServiceTest {
     private SubscriptionRepository subscriptionRepository;
     @Mock
     private AccountRepository accountRepository;
+    @Mock
+    private PluginRepository pluginRepository;
     @Mock
     private SiteRepository siteRepository;
     @Mock
@@ -137,5 +144,58 @@ class SubscriptionServiceTest {
         assertThat(((Map<String, Object>) localProxyConfig.get("QUARK"))).containsEntry("chunk_size", 1024);
         assertThat(((Map<String, Object>) localProxyConfig.get("UC"))).containsEntry("enabled", false);
         assertThat(((Map<String, Object>) localProxyConfig.get("UC"))).containsEntry("chunk_size", 256);
+    }
+
+    @Test
+    void buildPluginSiteShouldAppendExtendSuffix() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
+        request.setScheme("http");
+        request.setServerName("127.0.0.1");
+        request.setServerPort(4567);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        when(appProperties.isEnableHttps()).thenReturn(false);
+
+        Plugin plugin = new Plugin();
+        plugin.setName("4K指南");
+        plugin.setUrl("https://example.com/4k.txt");
+        plugin.setExtend("foo=bar");
+
+        Map<String, Object> site = ReflectionTestUtils.invokeMethod(subscriptionService, "buildPluginSite", plugin);
+
+        assertThat(site).containsEntry("name", "4K指南");
+        assertThat(site).containsEntry("key", "4K指南");
+        assertThat(site).containsEntry("api", "http://127.0.0.1:4567/Atvp.py");
+        assertThat(site).containsEntry("ext", "https://example.com/4k.txt@@foo=bar");
+    }
+
+    @Test
+    void addPluginSitesShouldUseEnabledPluginsInSortOrder() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
+        request.setScheme("http");
+        request.setServerName("127.0.0.1");
+        request.setServerPort(4567);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        when(appProperties.isEnableHttps()).thenReturn(false);
+
+        Plugin first = new Plugin();
+        first.setName("插件A");
+        first.setUrl("https://example.com/a.txt");
+        first.setSortOrder(1);
+        first.setEnabled(true);
+        Plugin second = new Plugin();
+        second.setName("插件B");
+        second.setUrl("https://example.com/b.txt");
+        second.setSortOrder(2);
+        second.setEnabled(true);
+
+        when(pluginRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()).thenReturn(List.of(first, second));
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("sites", new ArrayList<Map<String, Object>>());
+
+        ReflectionTestUtils.invokeMethod(subscriptionService, "addPluginSites", config);
+
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        assertThat(sites).extracting(site -> site.get("name")).containsExactly("插件A", "插件B");
     }
 }
