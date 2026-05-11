@@ -255,6 +255,13 @@ class Spider(HostSpider):
             decoded.append(bytes(byte ^ xor_key for byte in data))
         return b"".join(decoded).decode("utf-8")
 
+    def _strip_prefix(self, text, prefix):
+        value = str(text or "")
+        marker = str(prefix or "")
+        if marker and value.startswith(marker):
+            return value[len(marker):]
+        return value
+
     def _parse_secspider_text(self, package_text):
         headers = {}
         payload = ""
@@ -263,7 +270,7 @@ class Spider(HostSpider):
                 key, _, value = line[3:].partition(":")
                 headers[key] = value
             elif line.startswith("payload.base64:"):
-                payload = line.removeprefix("payload.base64:")
+                payload = self._strip_prefix(line, "payload.base64:")
         required = [
             "name",
             "version",
@@ -315,7 +322,7 @@ class Spider(HostSpider):
         verifier = eddsa.new(ECC.import_key(public_key_text), "rfc8032")
         verifier.verify(
             self._build_signing_bytes(headers, payload_b64),
-            base64.b64decode(headers["sig"].removeprefix("base64:")),
+            base64.b64decode(self._strip_prefix(headers["sig"], "base64:")),
         )
 
     def _decrypt_secspider_source(self, package_text):
@@ -348,12 +355,12 @@ class Spider(HostSpider):
             num_keys=1,
             context=f"secspider:{headers['name']}:{headers['version']}:wrap-nonce".encode("utf-8"),
         )
-        wrap_blob = base64.b64decode(headers["ek"].removeprefix("base64:"))
+        wrap_blob = base64.b64decode(self._strip_prefix(headers["ek"], "base64:"))
         wrap_cipher = AES.new(wrap_key, AES.MODE_GCM, nonce=wrap_nonce)
         content_key = wrap_cipher.decrypt_and_verify(wrap_blob[:-16], wrap_blob[-16:])
 
         payload_blob = base64.b64decode(payload_b64)
-        payload_nonce = base64.b64decode(headers["nonce"].removeprefix("base64:"))
+        payload_nonce = base64.b64decode(self._strip_prefix(headers["nonce"], "base64:"))
         payload_cipher = AES.new(content_key, AES.MODE_GCM, nonce=payload_nonce)
         source_bytes = payload_cipher.decrypt_and_verify(payload_blob[:-16], payload_blob[-16:])
         source_hash = SHA256.new(source_bytes).hexdigest()
