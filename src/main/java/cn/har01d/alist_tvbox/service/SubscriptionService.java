@@ -11,6 +11,8 @@ import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.EmbyRepository;
 import cn.har01d.alist_tvbox.entity.FeiniuRepository;
 import cn.har01d.alist_tvbox.entity.JellyfinRepository;
+import cn.har01d.alist_tvbox.entity.Plugin;
+import cn.har01d.alist_tvbox.entity.PluginRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.ShareRepository;
@@ -93,6 +95,7 @@ public class SubscriptionService {
     private final EmbyRepository embyRepository;
     private final FeiniuRepository feiniuRepository;
     private final JellyfinRepository jellyfinRepository;
+    private final PluginRepository pluginRepository;
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
     private final TenantService tenantService;
@@ -118,6 +121,7 @@ public class SubscriptionService {
                                EmbyRepository embyRepository,
                                FeiniuRepository feiniuRepository,
                                JellyfinRepository jellyfinRepository,
+                               PluginRepository pluginRepository,
                                AListLocalService aListLocalService,
                                ConfigFileService configFileService,
                                TenantService tenantService,
@@ -140,6 +144,7 @@ public class SubscriptionService {
         this.embyRepository = embyRepository;
         this.feiniuRepository = feiniuRepository;
         this.jellyfinRepository = jellyfinRepository;
+        this.pluginRepository = pluginRepository;
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
         this.tenantService = tenantService;
@@ -1125,6 +1130,8 @@ public class SubscriptionService {
                 log.warn("", e);
             }
         }
+
+        addPluginSites(config);
     }
 
     public Map<String, Boolean> getCapabilities() {
@@ -1174,6 +1181,31 @@ public class SubscriptionService {
             style.put("ratio", 1.597);
             site.put("style", style);
         }
+        return site;
+    }
+
+    private void addPluginSites(Map<String, Object> config) {
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        for (Plugin plugin : pluginRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()) {
+            sites.add(buildPluginSite(plugin));
+        }
+    }
+
+    private Map<String, Object> buildPluginSite(Plugin plugin) {
+        Map<String, Object> site = new HashMap<>();
+        site.put("filterable", 1);
+        site.put("quickSearch", 1);
+        site.put("name", plugin.getName());
+        site.put("changeable", 0);
+        site.put("api", readHostAddress("") + "/Atvp.py");
+        site.put("type", 3);
+        site.put("key", plugin.getName());
+        site.put("searchable", 1);
+        String ext = plugin.getUrl();
+        if (StringUtils.isNotBlank(plugin.getExtend())) {
+            ext += "@@" + plugin.getExtend();
+        }
+        site.put("ext", ext);
         return site;
     }
 
