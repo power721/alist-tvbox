@@ -1,5 +1,6 @@
 # coding=utf-8
 import base64
+import html
 import json
 import os
 import re
@@ -7,6 +8,7 @@ import types
 from abc import ABCMeta, abstractmethod
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from xml.etree import ElementTree
 
 import requests
 from Crypto.Cipher import AES
@@ -397,6 +399,50 @@ class Spider(HostSpider):
     def searchContent(self, key, quick, pg="1"):
         return self._require_inner().searchContent(key, quick, pg)
 
+    def _is_qqmusic_qrc_xml(self, text):
+        value = str(text or "").strip()
+        return value.startswith("<?xml") and "<QrcInfos" in value and "LyricContent=" in value
+
+    def _qq_qrc_xml_to_apk_lrc(self, xml_text):
+        value = str(xml_text or "").strip()
+        if not value:
+            return ""
+        raw = ""
+        match = re.search(r'<Lyric_1\b[^>]*\bLyricContent="(.*?)"\s*/>', value, re.S)
+        if match:
+            raw = match.group(1)
+        else:
+            try:
+                root = ElementTree.fromstring(value)
+            except ElementTree.ParseError:
+                return ""
+            lyric_node = root.find(".//Lyric_1")
+            if lyric_node is None:
+                return ""
+            raw = lyric_node.get("LyricContent", "")
+
+        text = html.unescape(raw)
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+        lines = []
+        for raw_line in text.split("\n"):
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith(("[ti:", "[ar:", "[al:", "[by:", "[offset:")):
+                continue
+            if re.match(r"^\[\d+,\d+\].*\(\d+,\d+\)", line):
+                lines.append(line)
+        return "\n".join(lines)
+
+    def _normalize_lyric_value(self, lyric_value):
+        if isinstance(lyric_value, dict):
+            text = str(lyric_value.get("text") or "")
+            if self._is_qqmusic_qrc_xml(text):
+                return self._qq_qrc_xml_to_apk_lrc(text) or text
+            return text
+        return str(lyric_value or "")
+
     def _normalize_player_content(self, result):
         if not isinstance(result, dict):
             return result
@@ -404,15 +450,12 @@ class Spider(HostSpider):
         payload = dict(result)
 
         lyric_value = payload.pop("lyric", None)
-        if "lyric_text" not in payload and lyric_value is not None:
-            if isinstance(lyric_value, dict):
-                payload["lyric_text"] = str(lyric_value.get("text") or "")
-            else:
-                payload["lyric_text"] = str(lyric_value)
+        if "lrc" not in payload and lyric_value is not None:
+            payload["lrc"] = self._normalize_lyric_value(lyric_value)
 
         cover_value = payload.pop("cover", None)
-        if "cover_url" not in payload and cover_value is not None:
-            payload["cover_url"] = cover_value
+        if "artwork" not in payload and cover_value is not None:
+            payload["artwork"] = cover_value
 
         qualities_value = payload.pop("qualities", None)
         if qualities_value is not None:
