@@ -13,6 +13,7 @@ public class MvcConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/cat/**").addResourceLocations("file:" + Utils.getWebPath("cat") + "/");
         registry.addResourceHandler("/tvbox/**").addResourceLocations("file:" + Utils.getWebPath("tvbox") + "/");
         registry.addResourceHandler("/files/**").addResourceLocations("file:" + Utils.getWebPath("files") + "/");
+        registry.addResourceHandler("/plugins/**").addResourceLocations("file:" + Utils.getWebPath("plugins") + "/");
         registry.addResourceHandler("/pg/**").addResourceLocations("file:" + Utils.getWebPath("pg") + "/");
         registry.addResourceHandler("/zx/**").addResourceLocations("file:" + Utils.getWebPath("zx") + "/");
     }

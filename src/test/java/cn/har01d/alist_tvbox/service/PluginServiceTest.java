@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,7 +44,7 @@ class PluginServiceTest {
         plugin.setUrl("https://github.com/har01d5/tvbox/raw/refs/heads/master/py/4K%E6%8C%87%E5%8D%97.txt");
 
         when(pluginRepository.findByUrl(plugin.getUrl())).thenReturn(Optional.empty());
-        when(restTemplate.getForObject(plugin.getUrl(), String.class)).thenReturn("#EXTM3U");
+        when(restTemplate.getForObject(URI.create(plugin.getUrl()), String.class)).thenReturn("#EXTM3U");
         when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of());
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -63,7 +64,7 @@ class PluginServiceTest {
         plugin.setUrl("https://example.com/missing.txt");
 
         when(pluginRepository.findByUrl(plugin.getUrl())).thenReturn(Optional.empty());
-        when(restTemplate.getForObject(plugin.getUrl(), String.class)).thenThrow(new RuntimeException("404"));
+        when(restTemplate.getForObject(URI.create(plugin.getUrl()), String.class)).thenThrow(new RuntimeException("404"));
 
         assertThatThrownBy(() -> pluginService.create(plugin))
                 .isInstanceOf(BadRequestException.class)
@@ -79,7 +80,7 @@ class PluginServiceTest {
         plugin.setUrl("https://example.com/4K%E6%8C%87%E5%8D%97.txt");
 
         when(pluginRepository.findById(9)).thenReturn(Optional.of(plugin));
-        when(restTemplate.getForObject(plugin.getUrl(), String.class)).thenReturn("ok");
+        when(restTemplate.getForObject(URI.create(plugin.getUrl()), String.class)).thenReturn("ok");
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Plugin refreshed = pluginService.refresh(9);

@@ -193,9 +193,39 @@ class SubscriptionServiceTest {
         Map<String, Object> config = new HashMap<>();
         config.put("sites", new ArrayList<Map<String, Object>>());
 
-        ReflectionTestUtils.invokeMethod(subscriptionService, "addPluginSites", config);
+        int nextIndex = ReflectionTestUtils.invokeMethod(subscriptionService, "addPluginSites", config, 0);
 
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        assertThat(nextIndex).isEqualTo(2);
         assertThat(sites).extracting(site -> site.get("name")).containsExactly("插件A", "插件B");
+    }
+
+    @Test
+    void addPluginSitesShouldInsertBeforeExistingSites() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
+        request.setScheme("http");
+        request.setServerName("127.0.0.1");
+        request.setServerPort(4567);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        when(appProperties.isEnableHttps()).thenReturn(false);
+
+        Plugin plugin = new Plugin();
+        plugin.setName("插件A");
+        plugin.setUrl("https://example.com/a.txt");
+        plugin.setSortOrder(1);
+        plugin.setEnabled(true);
+
+        when(pluginRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()).thenReturn(List.of(plugin));
+
+        Map<String, Object> builtIn = new HashMap<>();
+        builtIn.put("name", "AList");
+        Map<String, Object> config = new HashMap<>();
+        config.put("sites", new ArrayList<>(List.of(builtIn)));
+
+        int nextIndex = ReflectionTestUtils.invokeMethod(subscriptionService, "addPluginSites", config, 0);
+
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        assertThat(nextIndex).isEqualTo(1);
+        assertThat(sites).extracting(site -> site.get("name")).containsExactly("插件A", "AList");
     }
 }

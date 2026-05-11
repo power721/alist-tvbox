@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
@@ -116,7 +117,7 @@ public class PluginService {
 
     private void checkUrlReachable(String url) {
         try {
-            restTemplate.getForObject(url, String.class);
+            restTemplate.getForObject(URI.create(url), String.class);
         } catch (Exception e) {
             throw new BadRequestException("插件地址不可访问", e);
         }
