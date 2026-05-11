@@ -397,8 +397,45 @@ class Spider(HostSpider):
     def searchContent(self, key, quick, pg="1"):
         return self._require_inner().searchContent(key, quick, pg)
 
+    def _normalize_player_content(self, result):
+        if not isinstance(result, dict):
+            return result
+
+        payload = dict(result)
+
+        lyric_value = payload.pop("lyric", None)
+        if "lyric_text" not in payload and lyric_value is not None:
+            if isinstance(lyric_value, dict):
+                payload["lyric_text"] = str(lyric_value.get("text") or "")
+            else:
+                payload["lyric_text"] = str(lyric_value)
+
+        cover_value = payload.pop("cover", None)
+        if "cover_url" not in payload and cover_value is not None:
+            payload["cover_url"] = cover_value
+
+        qualities_value = payload.pop("qualities", None)
+        if "quality_urls" not in payload and qualities_value is not None:
+            if isinstance(qualities_value, dict):
+                qualities_value = [qualities_value]
+            quality_urls = []
+            for entry in qualities_value:
+                if not isinstance(entry, dict):
+                    continue
+                item = {
+                    "quality": str(entry.get("quality") or entry.get("label") or ""),
+                    "url": str(entry.get("url") or ""),
+                }
+                if "size" in entry and entry.get("size") is not None:
+                    item["size"] = entry.get("size")
+                quality_urls.append(item)
+            payload["quality_urls"] = quality_urls
+
+        return payload
+
     def playerContent(self, flag, id, vipFlags):
-        return self._require_inner().playerContent(flag, id, vipFlags)
+        result = self._require_inner().playerContent(flag, id, vipFlags)
+        return self._normalize_player_content(result)
 
     def liveContent(self, url):
         return self._require_inner().liveContent(url)
