@@ -40,6 +40,9 @@ public class Plugin {
     @Column(name = "source_name")
     private String sourceName;
 
+    @Column(name = "local_path")
+    private String localPath;
+
     @Column(name = "last_checked_at")
     private OffsetDateTime lastCheckedAt;
 

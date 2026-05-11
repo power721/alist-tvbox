@@ -1026,8 +1026,6 @@ public class SubscriptionService {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
 
         String uid = generateUid();
-        id = addPluginSites(config, id);
-
         try {
             Site site1 = siteRepository.findById(1).orElse(null);
             if (site1 != null) {
@@ -1133,6 +1131,7 @@ public class SubscriptionService {
             }
         }
 
+        addPluginSites(config, id);
     }
 
     public Map<String, Boolean> getCapabilities() {
@@ -1185,12 +1184,11 @@ public class SubscriptionService {
         return site;
     }
 
-    private int addPluginSites(Map<String, Object> config, int index) {
+    private void addPluginSites(Map<String, Object> config, int index) {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         for (Plugin plugin : pluginRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()) {
             sites.add(index++, buildPluginSite(plugin));
         }
-        return index;
     }
 
     private Map<String, Object> buildPluginSite(Plugin plugin) {
@@ -1203,7 +1201,7 @@ public class SubscriptionService {
         site.put("type", 3);
         site.put("key", plugin.getName());
         site.put("searchable", 1);
-        String ext = plugin.getUrl();
+        String ext = readHostAddress("") + plugin.getLocalPath().substring(4);
         if (StringUtils.isNotBlank(plugin.getExtend())) {
             ext += "@@" + plugin.getExtend();
         }

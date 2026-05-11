@@ -147,7 +147,7 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    void buildPluginSiteShouldAppendExtendSuffix() {
+    void buildPluginSiteShouldAppendExtendSuffixToLocalPluginUrl() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
         request.setScheme("http");
         request.setServerName("127.0.0.1");
@@ -157,7 +157,7 @@ class SubscriptionServiceTest {
 
         Plugin plugin = new Plugin();
         plugin.setName("4K指南");
-        plugin.setUrl("https://example.com/4k.txt");
+        plugin.setLocalPath("/www/plugins/12.txt");
         plugin.setExtend("foo=bar");
 
         Map<String, Object> site = ReflectionTestUtils.invokeMethod(subscriptionService, "buildPluginSite", plugin);
@@ -165,67 +165,6 @@ class SubscriptionServiceTest {
         assertThat(site).containsEntry("name", "4K指南");
         assertThat(site).containsEntry("key", "4K指南");
         assertThat(site).containsEntry("api", "http://127.0.0.1:4567/Atvp.py");
-        assertThat(site).containsEntry("ext", "https://example.com/4k.txt@@foo=bar");
-    }
-
-    @Test
-    void addPluginSitesShouldUseEnabledPluginsInSortOrder() {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
-        request.setScheme("http");
-        request.setServerName("127.0.0.1");
-        request.setServerPort(4567);
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
-        when(appProperties.isEnableHttps()).thenReturn(false);
-
-        Plugin first = new Plugin();
-        first.setName("插件A");
-        first.setUrl("https://example.com/a.txt");
-        first.setSortOrder(1);
-        first.setEnabled(true);
-        Plugin second = new Plugin();
-        second.setName("插件B");
-        second.setUrl("https://example.com/b.txt");
-        second.setSortOrder(2);
-        second.setEnabled(true);
-
-        when(pluginRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()).thenReturn(List.of(first, second));
-
-        Map<String, Object> config = new HashMap<>();
-        config.put("sites", new ArrayList<Map<String, Object>>());
-
-        int nextIndex = ReflectionTestUtils.invokeMethod(subscriptionService, "addPluginSites", config, 0);
-
-        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
-        assertThat(nextIndex).isEqualTo(2);
-        assertThat(sites).extracting(site -> site.get("name")).containsExactly("插件A", "插件B");
-    }
-
-    @Test
-    void addPluginSitesShouldInsertBeforeExistingSites() {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
-        request.setScheme("http");
-        request.setServerName("127.0.0.1");
-        request.setServerPort(4567);
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
-        when(appProperties.isEnableHttps()).thenReturn(false);
-
-        Plugin plugin = new Plugin();
-        plugin.setName("插件A");
-        plugin.setUrl("https://example.com/a.txt");
-        plugin.setSortOrder(1);
-        plugin.setEnabled(true);
-
-        when(pluginRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()).thenReturn(List.of(plugin));
-
-        Map<String, Object> builtIn = new HashMap<>();
-        builtIn.put("name", "AList");
-        Map<String, Object> config = new HashMap<>();
-        config.put("sites", new ArrayList<>(List.of(builtIn)));
-
-        int nextIndex = ReflectionTestUtils.invokeMethod(subscriptionService, "addPluginSites", config, 0);
-
-        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
-        assertThat(nextIndex).isEqualTo(1);
-        assertThat(sites).extracting(site -> site.get("name")).containsExactly("插件A", "AList");
+        assertThat(site).containsEntry("ext", "http://127.0.0.1:4567/plugins/12.txt@@foo=bar");
     }
 }

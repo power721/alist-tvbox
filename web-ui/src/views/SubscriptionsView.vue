@@ -372,6 +372,7 @@ interface Plugin {
   sortOrder: number
   extend: string
   sourceName: string
+  localPath: string
   lastCheckedAt: string
   lastError: string
 }
@@ -445,6 +446,7 @@ const pluginForm = ref<Plugin>({
   sortOrder: 0,
   extend: '',
   sourceName: '',
+  localPath: '',
   lastCheckedAt: '',
   lastError: ''
 })
@@ -536,6 +538,7 @@ const resetPluginForm = () => {
     sortOrder: 0,
     extend: '',
     sourceName: '',
+    localPath: '',
     lastCheckedAt: '',
     lastError: ''
   }
