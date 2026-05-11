@@ -1201,7 +1201,7 @@ public class SubscriptionService {
         site.put("type", 3);
         site.put("key", plugin.getName());
         site.put("searchable", 1);
-        String ext = readHostAddress("") + plugin.getLocalPath().substring(4);
+        String ext = readHostAddress("") + "/plugins/" + getCurrentOrFirstToken() + "/" + plugin.getId() + ".txt";
         if (StringUtils.isNotBlank(plugin.getExtend())) {
             ext += "@@" + plugin.getExtend();
         }

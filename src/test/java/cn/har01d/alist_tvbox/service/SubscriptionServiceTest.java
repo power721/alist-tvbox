@@ -62,6 +62,10 @@ class SubscriptionServiceTest {
     private SiteRepository siteRepository;
     @Mock
     private AListLocalService aListLocalService;
+    @Mock
+    private TenantService tenantService;
+    @Mock
+    private UserService userService;
 
     @InjectMocks
     private SubscriptionService subscriptionService;
@@ -147,17 +151,20 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    void buildPluginSiteShouldAppendExtendSuffixToLocalPluginUrl() {
+    void buildPluginSiteShouldAppendExtendSuffixToTokenizedPluginUrl() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
         request.setScheme("http");
         request.setServerName("127.0.0.1");
         request.setServerPort(4567);
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
         when(appProperties.isEnableHttps()).thenReturn(false);
+        when(appProperties.isEnabledToken()).thenReturn(false);
+
+        subscriptionService.checkToken("abc123");
 
         Plugin plugin = new Plugin();
+        plugin.setId(12);
         plugin.setName("4K指南");
-        plugin.setLocalPath("/www/plugins/12.txt");
         plugin.setExtend("foo=bar");
 
         Map<String, Object> site = ReflectionTestUtils.invokeMethod(subscriptionService, "buildPluginSite", plugin);
@@ -165,6 +172,76 @@ class SubscriptionServiceTest {
         assertThat(site).containsEntry("name", "4K指南");
         assertThat(site).containsEntry("key", "4K指南");
         assertThat(site).containsEntry("api", "http://127.0.0.1:4567/Atvp.py");
-        assertThat(site).containsEntry("ext", "http://127.0.0.1:4567/plugins/12.txt@@foo=bar");
+        assertThat(site).containsEntry("ext", "http://127.0.0.1:4567/plugins/abc123/12.txt@@foo=bar");
+    }
+
+    @Test
+    void addPluginSitesShouldUseEnabledPluginsInSortOrder() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
+        request.setScheme("http");
+        request.setServerName("127.0.0.1");
+        request.setServerPort(4567);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        when(appProperties.isEnableHttps()).thenReturn(false);
+        when(appProperties.isEnabledToken()).thenReturn(false);
+
+        subscriptionService.checkToken("abc123");
+
+        Plugin first = new Plugin();
+        first.setId(1);
+        first.setName("插件A");
+        first.setSortOrder(1);
+        first.setEnabled(true);
+        Plugin second = new Plugin();
+        second.setId(2);
+        second.setName("插件B");
+        second.setSortOrder(2);
+        second.setEnabled(true);
+
+        when(pluginRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()).thenReturn(List.of(first, second));
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("sites", new ArrayList<Map<String, Object>>());
+
+        ReflectionTestUtils.invokeMethod(subscriptionService, "addPluginSites", config, 0);
+
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        assertThat(sites).extracting(site -> site.get("name")).containsExactly("插件A", "插件B");
+        assertThat(sites).extracting(site -> site.get("ext")).containsExactly(
+                "http://127.0.0.1:4567/plugins/abc123/1.txt",
+                "http://127.0.0.1:4567/plugins/abc123/2.txt"
+        );
+    }
+
+    @Test
+    void addPluginSitesShouldInsertBeforeExistingSites() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/subscriptions");
+        request.setScheme("http");
+        request.setServerName("127.0.0.1");
+        request.setServerPort(4567);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        when(appProperties.isEnableHttps()).thenReturn(false);
+        when(appProperties.isEnabledToken()).thenReturn(false);
+
+        subscriptionService.checkToken("abc123");
+
+        Plugin plugin = new Plugin();
+        plugin.setId(1);
+        plugin.setName("插件A");
+        plugin.setSortOrder(1);
+        plugin.setEnabled(true);
+
+        when(pluginRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()).thenReturn(List.of(plugin));
+
+        Map<String, Object> builtIn = new HashMap<>();
+        builtIn.put("name", "AList");
+        Map<String, Object> config = new HashMap<>();
+        config.put("sites", new ArrayList<>(List.of(builtIn)));
+
+        ReflectionTestUtils.invokeMethod(subscriptionService, "addPluginSites", config, 0);
+
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        assertThat(sites).extracting(site -> site.get("name")).containsExactly("插件A", "AList");
+        assertThat(sites.getFirst()).containsEntry("ext", "http://127.0.0.1:4567/plugins/abc123/1.txt");
     }
 }

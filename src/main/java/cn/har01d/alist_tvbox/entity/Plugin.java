@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -42,6 +43,10 @@ public class Plugin {
 
     @Column(name = "local_path")
     private String localPath;
+
+    @JsonIgnore
+    @Column(columnDefinition = "TEXT")
+    private String content;
 
     @Column(name = "last_checked_at")
     private OffsetDateTime lastCheckedAt;

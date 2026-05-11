@@ -415,21 +415,20 @@ class Spider(HostSpider):
             payload["cover_url"] = cover_value
 
         qualities_value = payload.pop("qualities", None)
-        if "quality_urls" not in payload and qualities_value is not None:
+        if qualities_value is not None:
             if isinstance(qualities_value, dict):
                 qualities_value = [qualities_value]
-            quality_urls = []
+            urls = []
             for entry in qualities_value:
                 if not isinstance(entry, dict):
                     continue
-                item = {
-                    "quality": str(entry.get("quality") or entry.get("label") or ""),
-                    "url": str(entry.get("url") or ""),
-                }
-                if "size" in entry and entry.get("size") is not None:
-                    item["size"] = entry.get("size")
-                quality_urls.append(item)
-            payload["quality_urls"] = quality_urls
+                quality = str(entry.get("quality") or entry.get("label") or "")
+                url = str(entry.get("url") or "")
+                if not quality or not url:
+                    continue
+                urls.extend([quality, url])
+            if urls:
+                payload["url"] = urls
 
         return payload
 
