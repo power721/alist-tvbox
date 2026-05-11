@@ -13,7 +13,6 @@ from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto.Protocol.KDF import HKDF
 from Crypto.PublicKey import ECC
-from Crypto.Signature import eddsa
 from lxml import etree
 
 
@@ -310,6 +309,15 @@ class Spider(HostSpider):
             ]
         ).encode("utf-8")
 
+    def _verify_signature(self, headers, payload_b64, public_key_text):
+        from Crypto.Signature import eddsa
+
+        verifier = eddsa.new(ECC.import_key(public_key_text), "rfc8032")
+        verifier.verify(
+            self._build_signing_bytes(headers, payload_b64),
+            base64.b64decode(headers["sig"].removeprefix("base64:")),
+        )
+
     def _decrypt_secspider_source(self, package_text):
         headers, payload_b64 = self._parse_secspider_text(package_text)
         public_key_text = self._deobfuscate_chunks(
@@ -320,11 +328,10 @@ class Spider(HostSpider):
             self._master_secret_chunks,
             self.MASTER_SECRET_XOR,
         ).encode("utf-8")
-        verifier = eddsa.new(ECC.import_key(public_key_text), "rfc8032")
-        verifier.verify(
-            self._build_signing_bytes(headers, payload_b64),
-            base64.b64decode(headers["sig"].removeprefix("base64:")),
-        )
+        try:
+            self._verify_signature(headers, payload_b64, public_key_text)
+        except ImportError:
+            self.log("Atvp: Crypto.Signature.eddsa unavailable, skip secspider signature verification")
         wrap_key = HKDF(
             master=master_secret,
             key_len=32,
@@ -417,9 +424,10 @@ class Spider(HostSpider):
         return super().getProxyUrl(local)
 
     def getDependence(self):
-        inner = self._require_inner()
-        if hasattr(inner, "getDependence"):
-            return inner.getDependence()
+        if self._inner is None:
+            return []
+        if hasattr(self._inner, "getDependence"):
+            return self._inner.getDependence()
         return []
 
     def danmaku(self):
