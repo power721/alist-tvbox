@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigDto;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigRequest;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadQuotaResponse;
-import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
+import cn.har01d.alist_tvbox.dto.ParseRequest;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.OfflineDownloadTask;
@@ -12,8 +12,6 @@ import cn.har01d.alist_tvbox.entity.OfflineDownloadTaskRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
-import cn.har01d.alist_tvbox.tvbox.MovieDetail;
-import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.BeforeEach;
@@ -255,7 +253,7 @@ class OfflineDownloadServiceTest {
         when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=1&page_size=1000&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
                 .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
 
-        String result = service.downloadPath(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
+        String result = service.downloadPath(new ParseRequest("magnet:?xt=urn:btih:test"));
 
         assertEquals("/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务", result);
     }
@@ -279,7 +277,7 @@ class OfflineDownloadServiceTest {
         when(restTemplate.exchange(eq("https://clouddownload.115.com/web/?ac=task_lists&page=2&page_size=1000&stat=11"), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
                 .thenReturn(textHtmlJson(taskListResponse("magnet:?xt=urn:btih:test", "完成任务", 2, true)));
 
-        String result = service.downloadPath(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
+        String result = service.downloadPath(new ParseRequest("magnet:?xt=urn:btih:test"));
 
         assertEquals("/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务", result);
     }
@@ -294,7 +292,7 @@ class OfflineDownloadServiceTest {
         when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
                 .thenReturn(Optional.of(completedTask("/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务")));
 
-        String result = service.downloadPath(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
+        String result = service.downloadPath(new ParseRequest("magnet:?xt=urn:btih:test"));
 
         assertEquals("/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务", result);
         verify(restTemplate, never()).exchange(eq("https://115.com/?ct=clouddownload&ac=space"), any(), any(), eq(String.class));
@@ -310,7 +308,7 @@ class OfflineDownloadServiceTest {
         when(offlineDownloadTaskRepository.findFirstByAccountIdAndUrlHashOrderByUpdatedTimeDesc(eq(12), any()))
                 .thenReturn(Optional.of(completedTask("/115云盘/🈲我的115云盘/alist-tvbox-offline/完成任务", "完成任务")));
 
-        String result = service.downloadPath(new OfflineDownloadRequest("magnet:?xt=urn:btih:test"));
+        String result = service.downloadPath(new ParseRequest("magnet:?xt=urn:btih:test"));
 
         assertEquals("/115云盘/新115账号名/alist-tvbox-offline/完成任务", result);
         verify(restTemplate, never()).exchange(eq("https://115.com/?ct=clouddownload&ac=space"), any(), any(), eq(String.class));

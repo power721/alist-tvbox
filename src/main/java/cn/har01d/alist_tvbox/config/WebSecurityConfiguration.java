@@ -31,6 +31,7 @@ public class WebSecurityConfiguration {
                                 "/tgs/**",
                                 "/tv/**",
                                 "/dav/**",
+                                "/parse/**",
                                 "/ali/access_token",
                                 "/api/alist/status",
                                 "/api/profiles",

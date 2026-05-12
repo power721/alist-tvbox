@@ -1,46 +1,46 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.dto.ParseRequest;
+import cn.har01d.alist_tvbox.dto.ShareLink;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-
-import java.net.HttpURLConnection;
 
 @Slf4j
 @Service
 public class ParseService {
-    private final RestTemplate restTemplate;
+    private final TvBoxService tvBoxService;
+    private final OfflineDownloadService offlineDownloadService;
+    private final ShareService shareService;
 
-    public ParseService(RestTemplateBuilder builder) {
-        restTemplate = builder
-                .defaultHeader(HttpHeaders.ACCEPT, "*/*")
-                .defaultHeader(HttpHeaders.USER_AGENT, Constants.USER_AGENT)
-                .requestFactory(() -> new SimpleClientHttpRequestFactory() {
-                    @Override
-                    protected void prepareConnection(HttpURLConnection connection, String httpMethod) {
-                        connection.setInstanceFollowRedirects(false);
-                    }
-                }).build();
+    public ParseService(TvBoxService tvBoxService, OfflineDownloadService offlineDownloadService, ShareService shareService) {
+        this.tvBoxService = tvBoxService;
+        this.offlineDownloadService = offlineDownloadService;
+        this.shareService = shareService;
     }
 
-    public String parse(String url) {
-        log.info("parse url: {}", url);
-        String result = url;
-
-        if (url.contains("/redirect")) {
-            ResponseEntity<Void> response = restTemplate.getForEntity(url, Void.class);
-            String location = response.getHeaders().getFirst(HttpHeaders.LOCATION);
-            if (location != null) {
-                result = location;
-            }
-            log.info("result: {}", result);
+    public Object parse(ParseRequest request, String ac) {
+        if (StringUtils.isBlank(request.url())) {
+            throw new BadRequestException("url is required");
         }
+        if (request.url().startsWith("http")) {
+            return drive(request.url(), ac);
+        }
+        OfflineDownloadService.DownloadTarget target = offlineDownloadService.downloadTarget(request);
+        String targetPath = target.path();
+        if (target.folder()) {
+            targetPath += "/~playlist";
+        }
+        return tvBoxService.getDetail(ac, "1$" + targetPath);
+    }
 
-        return result;
+    public MovieList drive(String tid, String ac) {
+        ShareLink share = new ShareLink();
+        share.setLink(tid);
+        String path = shareService.add(share);
+
+        return tvBoxService.getDetail(ac, "1$" + path + "/~playlist");
     }
 }

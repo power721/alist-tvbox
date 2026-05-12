@@ -1,6 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
+import cn.har01d.alist_tvbox.dto.ParseRequest;
 import cn.har01d.alist_tvbox.service.OfflineDownloadService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
@@ -25,14 +25,14 @@ public class PublicOfflineDownloadController {
     }
 
     @PostMapping("/offline_download")
-    public Object download(@RequestBody OfflineDownloadRequest request,
+    public Object download(@RequestBody ParseRequest request,
                            @RequestParam(required = false, defaultValue = "") String ac) {
         return download("", request, ac);
     }
 
     @PostMapping("/offline_download/{token}")
     public Object download(@PathVariable String token,
-                           @RequestBody OfflineDownloadRequest request,
+                           @RequestBody ParseRequest request,
                            @RequestParam(required = false, defaultValue = "") String ac) {
         subscriptionService.checkToken(token);
 

@@ -2,7 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
-import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
+import cn.har01d.alist_tvbox.dto.ParseRequest;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
@@ -983,7 +983,7 @@ public class ShareService {
     public String add(ShareLink dto) {
         String link = StringUtils.trimToEmpty(URLDecoder.decode(dto.getLink(), StandardCharsets.UTF_8));
         if (isOfflineDownloadLink(link)) {
-            return offlineDownloadService.downloadPath(new OfflineDownloadRequest(link));
+            return offlineDownloadService.downloadPath(new ParseRequest(link));
         }
 
         Share share = new Share();

@@ -8,6 +8,7 @@ import types
 from abc import ABCMeta, abstractmethod
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 import requests
@@ -98,15 +99,15 @@ class _FallbackSpider(metaclass=ABCMeta):
         )
 
     def fetch(
-        self,
-        url,
-        params=None,
-        cookies=None,
-        headers=None,
-        timeout=5,
-        verify=True,
-        stream=False,
-        allow_redirects=True,
+            self,
+            url,
+            params=None,
+            cookies=None,
+            headers=None,
+            timeout=5,
+            verify=True,
+            stream=False,
+            allow_redirects=True,
     ):
         rsp = requests.get(
             url,
@@ -122,17 +123,17 @@ class _FallbackSpider(metaclass=ABCMeta):
         return rsp
 
     def post(
-        self,
-        url,
-        params=None,
-        data=None,
-        json=None,
-        cookies=None,
-        headers=None,
-        timeout=5,
-        verify=True,
-        stream=False,
-        allow_redirects=True,
+            self,
+            url,
+            params=None,
+            data=None,
+            json=None,
+            cookies=None,
+            headers=None,
+            timeout=5,
+            verify=True,
+            stream=False,
+            allow_redirects=True,
     ):
         rsp = requests.post(
             url,
@@ -180,6 +181,8 @@ except Exception:
 class Spider(HostSpider):
     PUBLIC_KEY_XOR = 23
     MASTER_SECRET_XOR = 41
+    DETAIL_PREFIX = "atvp_detail:"
+    PUSH_PREFIX = "push://"
     _public_key_chunks = [
         "N0dCVVteVDdcUk46Ojo6Og==",
         "ZCBTJG0vKh06Ojo6OlJZUw==",
@@ -199,10 +202,18 @@ class Spider(HostSpider):
         super().__init__()
         self.name = "Atvp"
         self._inner = None
+        self._backend_api = ""
+        self._vod_token = ""
+        self._localProxyConfig = {}
+        self._detail_result_cache = {}
 
     def init(self, extend=""):
         self.extend = extend or ""
+        payload = self._decode_ext_payload(self.extend)
         source, inner_extend = self._split_ext(self.extend)
+        self._backend_api = self._resolve_backend_api(source, payload)
+        self._vod_token = self._resolve_vod_token(payload)
+        self._localProxyConfig = payload.get("local_proxy_config")
         package_text = self._load_source(source)
         source_text = self._decrypt_secspider_source(package_text)
         spider_cls = self._load_inner_spider_class(source_text)
@@ -214,12 +225,99 @@ class Spider(HostSpider):
             return self._inner.getName()
         return self.name
 
+    def _category_mode_enabled(self):
+        if self._inner is None:
+            return False
+        return bool(getattr(self._inner, "backend_parse", False))
+
     def _split_ext(self, extend):
         raw = str(extend or "").strip()
+        payload = self._decode_ext_payload(raw)
+        if payload is not None:
+            source = str(payload.get("source") or payload.get("api") or "").strip()
+            return source, self._compose_inner_extend(payload)
         if "@@" not in raw:
             return raw, ""
         source, inner = raw.split("@@", 1)
         return source.strip(), inner
+
+    def _decode_ext_payload(self, extend):
+        raw = str(extend or "").strip()
+        if not raw:
+            return None
+        try:
+            decoded = base64.b64decode(raw).decode("utf-8")
+            payload = json.loads(decoded)
+        except Exception:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        return payload if payload.get("source") or payload.get("api") else None
+
+    def _compose_inner_extend(self, payload):
+        data_value = payload.get("data")
+        token_value = str(payload.get("token") or "").strip()
+        proxy_value = str(payload.get("local_proxy_config") or "").strip()
+
+        extras = {}
+        if token_value:
+            extras["token"] = token_value
+        if proxy_value:
+            extras["local_proxy_config"] = proxy_value
+
+        if data_value is None or data_value == "":
+            return json.dumps(extras, ensure_ascii=False, separators=(",", ":")) if extras else ""
+
+        if isinstance(data_value, dict):
+            merged = dict(data_value)
+            merged.update(extras)
+            return json.dumps(merged, ensure_ascii=False, separators=(",", ":"))
+
+        data_text = str(data_value)
+        if not extras:
+            return data_text
+
+        try:
+            parsed = json.loads(data_text)
+        except Exception:
+            parsed = None
+
+        if isinstance(parsed, dict):
+            merged = dict(parsed)
+            merged.update(extras)
+            return json.dumps(merged, ensure_ascii=False, separators=(",", ":"))
+
+        payload_text = {"data": data_text}
+        payload_text.update(extras)
+        return json.dumps(payload_text, ensure_ascii=False, separators=(",", ":"))
+
+    def _resolve_backend_api(self, source, payload):
+        explicit_api = ""
+        if isinstance(payload, dict) and payload.get("source"):
+            explicit_api = str(payload.get("api") or "").strip()
+        if explicit_api:
+            return explicit_api.rstrip("/")
+        remote_source = str(source or "").strip()
+        if not self._is_remote_source(remote_source):
+            return ""
+        parsed = urlsplit(remote_source)
+        if not parsed.scheme or not parsed.netloc:
+            return ""
+        return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+    def _resolve_vod_token(self, payload):
+        if not isinstance(payload, dict):
+            return ""
+        token = str(payload.get("token") or "").strip()
+        return "" if token == "-" else token
+
+    def _build_backend_endpoint(self, path):
+        backend_api = str(self._backend_api or "").rstrip("/")
+        if not backend_api:
+            raise ValueError(f"Atvp {path} backend api is empty")
+        token = str(self._vod_token or "").strip()
+        suffix = f"/{token}" if token else ""
+        return f"{backend_api}/{path}{suffix}"
 
     def _is_remote_source(self, source):
         value = str(source or "").strip().lower()
@@ -293,9 +391,9 @@ class Spider(HostSpider):
         if headers["format"] != "secspider/1":
             raise ValueError("Atvp unsupported secspider format")
         if (
-            headers["alg"] != "aes-256-gcm"
-            or headers["wrap"] != "hkdf-aes-keywrap"
-            or headers["sign"] != "ed25519"
+                headers["alg"] != "aes-256-gcm"
+                or headers["wrap"] != "hkdf-aes-keywrap"
+                or headers["sign"] != "ed25519"
         ):
             raise ValueError("Atvp unsupported secspider algorithm suite")
         return headers, payload
@@ -384,6 +482,156 @@ class Spider(HostSpider):
             raise RuntimeError("Atvp spider is not initialized")
         return self._inner
 
+    def _decode_parse(self, vod_id):
+        value = str(vod_id or "").strip()
+        if (value.startswith("http://") or value.startswith("https://")
+                or value.startswith("magnet:") or value.startswith("ed2k:")):
+            return value
+        return None
+
+    def _encode_category_id(self, vod_id):
+        return self.DETAIL_PREFIX + vod_id
+
+    def _parse(self, share_url):
+        api = self._build_backend_endpoint("parse")
+        rsp = self.post(api, json={"url": share_url}, params={"ac": "play"}, timeout=10)
+        if rsp.status_code != 200:
+            return self.PUSH_PREFIX + share_url
+        body = str(rsp.text or "")
+        if rsp.status_code != 200 or not body.strip():
+            raise ValueError(f"Atvp parse failed: {share_url}")
+        parsed_result = json.loads(body)
+        return self._merge_cached_detail_result(share_url, parsed_result)
+
+    def _cache_detail_result(self, detail_result):
+        vod_list = detail_result.get("list") if isinstance(detail_result, dict) else None
+        if not isinstance(vod_list, list) or len(vod_list) != 1:
+            return
+
+        vod = vod_list[0]
+        if not isinstance(vod, dict):
+            return
+
+        for url_group in str(vod.get("vod_play_url") or "").split("$$$"):
+            _, _, target = str(url_group or "").partition("$")
+            share_url = self._decode_parse(target)
+            if share_url is None:
+                continue
+            self._detail_result_cache[share_url] = dict(vod)
+
+    def _merge_cached_detail_vod(self, cached_vod, parsed_vod):
+        merged = dict(parsed_vod)
+        for key in (
+                "vod_name",
+                "vod_pic",
+                "vod_year",
+                "vod_director",
+                "vod_actor",
+                "vod_area",
+                "vod_lang",
+                "type_name",
+                "vod_douban_score",
+                "vod_content",
+        ):
+            value = cached_vod.get(key)
+            if value not in (None, "") and key not in merged:
+                merged[key] = value
+        merged["vod_content"] = cached_vod.get("vod_content")
+        return merged
+
+    def _merge_cached_detail_result(self, share_url, parsed_result):
+        cached_vod = self._detail_result_cache.get(str(share_url or "").strip())
+        vod_list = parsed_result.get("list") if isinstance(parsed_result, dict) else None
+        if not isinstance(cached_vod, dict) or not isinstance(vod_list, list):
+            return parsed_result
+
+        payload = dict(parsed_result)
+        payload["list"] = [
+            self._merge_cached_detail_vod(cached_vod, vod)
+            if isinstance(vod, dict) else vod
+            for vod in vod_list
+        ]
+        return payload
+
+    def _play(self, play_id):
+        rsp = self.fetch(
+            self._build_backend_endpoint("play"),
+            params={"id": str(play_id or "")},
+            timeout=10,
+        )
+        body = str(rsp.text or "")
+        if rsp.status_code != 200 or not body.strip():
+            raise ValueError(f"Atvp play failed: {play_id}")
+        # proxy = self.post("http://localhost:5000/player", json={"playerContent": body, "taskSeed": play_id, "localProxyConfig": self._localProxyConfig}, timeout=10)
+        # if proxy.status_code == 200:
+        #     return proxy.json()
+        return json.loads(body)
+
+    def _split_detail_to_vods(self, source_id):
+        detail_result = self._require_inner().detailContent([source_id])
+        self._cache_detail_result(detail_result)
+        vod_list = detail_result.get("list") if isinstance(detail_result, dict) else None
+        if not isinstance(vod_list, list) or len(vod_list) != 1:
+            return None
+
+        vod = vod_list[0]
+        if not isinstance(vod, dict):
+            return None
+
+        play_from_value = str(vod.get("vod_play_from") or "")
+        play_url_value = str(vod.get("vod_play_url") or "")
+        if not play_from_value or not play_url_value:
+            return None
+
+        from_groups = play_from_value.split("$$$")
+        url_groups = play_url_value.split("$$$")
+        if len(from_groups) != len(url_groups):
+            return None
+
+        items = []
+        for index, (from_group, url_group) in enumerate(zip(from_groups, url_groups), start=1):
+            label, _, target = str(url_group or "").partition("$")
+            if target.startswith(self.PUSH_PREFIX):
+                target = target[len(self.PUSH_PREFIX):]
+            line_name = from_group or label
+            item = {
+                "vod_id": target,
+                "vod_name": line_name,
+                "vod_pic": vod.get("vod_pic", ""),
+                "vod_remarks": vod.get("vod_remarks", ""),
+                "vod_tag": "file",
+            }
+            items.append(item)
+        vod = {
+            "list": items,
+            "page": 1,
+            "pagecount": 1,
+            "limit": len(items),
+            "total": len(items),
+        }
+        return vod
+
+    def _normalize_category_content(self, result):
+        if not isinstance(result, dict):
+            return result
+        vod_list = result.get("list")
+        if not isinstance(vod_list, list):
+            return result
+
+        normalized = []
+        for vod in vod_list:
+            if not isinstance(vod, dict):
+                normalized.append(vod)
+                continue
+            item = dict(vod)
+            item["vod_id"] = self._encode_category_id(item.get("vod_id", ""))
+            item["vod_tag"] = "folder"
+            normalized.append(item)
+
+        payload = dict(result)
+        payload["list"] = normalized
+        return payload
+
     def homeContent(self, filter):
         return self._require_inner().homeContent(filter)
 
@@ -391,13 +639,26 @@ class Spider(HostSpider):
         return self._require_inner().homeVideoContent()
 
     def categoryContent(self, tid, pg, filter, extend):
-        return self._require_inner().categoryContent(tid, pg, filter, extend)
+        print('categoryContent', tid, pg, filter, extend)
+        if not self._category_mode_enabled():
+            return self._require_inner().categoryContent(tid, pg, filter, extend)
+        if tid.startswith(self.DETAIL_PREFIX):
+            tid = tid[len(self.DETAIL_PREFIX):]
+            return self._split_detail_to_vods(tid)
+        result = self._require_inner().categoryContent(tid, pg, filter, extend)
+        return self._normalize_category_content(result)
 
     def detailContent(self, ids):
+        print('detailContent', ids)
+        if isinstance(ids, (list, tuple)) and len(ids) == 1:
+            share_url = self._decode_parse(ids[0])
+            if share_url is not None:
+                return self._parse(share_url)
         return self._require_inner().detailContent(ids)
 
     def searchContent(self, key, quick, pg="1"):
-        return self._require_inner().searchContent(key, quick, pg)
+        print('searchContent', key, quick, pg)
+        return self._require_inner().searchContent(key, quick, int(pg))
 
     def _is_qqmusic_qrc_xml(self, text):
         value = str(text or "").strip()
@@ -407,7 +668,6 @@ class Spider(HostSpider):
         value = str(xml_text or "").strip()
         if not value:
             return ""
-        raw = ""
         match = re.search(r'<Lyric_1\b[^>]*\bLyricContent="(.*?)"\s*/>', value, re.S)
         if match:
             raw = match.group(1)
@@ -476,6 +736,10 @@ class Spider(HostSpider):
         return payload
 
     def playerContent(self, flag, id, vipFlags):
+        print('playerContent', flag, id, vipFlags)
+        vid = str(id)
+        if vid.startswith("1@"):
+            return self._play(vid)
         result = self._require_inner().playerContent(flag, id, vipFlags)
         return self._normalize_player_content(result)
 

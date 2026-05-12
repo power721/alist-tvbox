@@ -4,7 +4,7 @@ import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigRequest;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigDto;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadQuotaResponse;
-import cn.har01d.alist_tvbox.dto.OfflineDownloadRequest;
+import cn.har01d.alist_tvbox.dto.ParseRequest;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.OfflineDownloadTask;
@@ -129,11 +129,11 @@ public class OfflineDownloadService {
         );
     }
 
-    public String downloadPath(OfflineDownloadRequest request) {
+    public String downloadPath(ParseRequest request) {
         return downloadTarget(request).path();
     }
 
-    public DownloadTarget downloadTarget(OfflineDownloadRequest request) {
+    public DownloadTarget downloadTarget(ParseRequest request) {
         validateUrl(request.url());
         StoredConfig config = loadEnabledConfig();
         DriverAccount account = getAccount(config.accountId(), normalizeDriverType(config.driverType()));

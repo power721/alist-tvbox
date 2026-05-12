@@ -1147,7 +1147,7 @@ public class SubscriptionService {
             }
         }
 
-        addPluginSites(config, id);
+        addPluginSites(config, id, token);
     }
 
     public Map<String, Boolean> getCapabilities() {
@@ -1171,8 +1171,8 @@ public class SubscriptionService {
     }
 
     private Map<String, Object> buildSite(String token, String uid, String key, String name) throws IOException {
-        Map<String, Object> site = new HashMap<>();
         String url = readHostAddress("");
+        Map<String, Object> site = new HashMap<>();
         site.put("key", key);
         site.put("api", key);
         site.put("name", name);
@@ -1200,14 +1200,18 @@ public class SubscriptionService {
         return site;
     }
 
-    private void addPluginSites(Map<String, Object> config, int index) {
+    private void addPluginSites(Map<String, Object> config, int index, String token) {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         for (Plugin plugin : pluginRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()) {
-            sites.add(index++, buildPluginSite(plugin));
+            try {
+                sites.add(index++, buildPluginSite(plugin, token));
+            } catch (JsonProcessingException e) {
+                log.warn("add plugin failed: {}", plugin.getName(), e);
+            }
         }
     }
 
-    private Map<String, Object> buildPluginSite(Plugin plugin) {
+    private Map<String, Object> buildPluginSite(Plugin plugin, String token) throws JsonProcessingException {
         Map<String, Object> site = new HashMap<>();
         site.put("filterable", 1);
         site.put("quickSearch", 1);
@@ -1217,10 +1221,20 @@ public class SubscriptionService {
         site.put("type", 3);
         site.put("key", plugin.getName());
         site.put("searchable", 1);
-        String ext = readHostAddress("") + "/plugins/" + getCurrentOrFirstToken() + "/" + plugin.getId() + ".txt";
+        Map<String, Object> map = new HashMap<>();
+        String url = readHostAddress("");
+        map.put("api", url);
+        String jar = url + "/spring.jar";
+        site.put("jar", jar);
+        String source = readHostAddress("") + "/plugins/" + getCurrentOrFirstToken() + "/" + plugin.getId() + ".txt";
+        map.put("source", source);
+        map.put("token", token.isBlank() ? "-" : token);
+        map.put("local_proxy_config", readLocalProxyConfig());
         if (StringUtils.isNotBlank(plugin.getExtend())) {
-            ext += "@@" + plugin.getExtend();
+            map.put("data", plugin.getExtend());
         }
+        String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
+        ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
         return site;
     }
