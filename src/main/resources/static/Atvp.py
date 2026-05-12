@@ -514,6 +514,8 @@ class Spider(HostSpider):
 
         for url_group in str(vod.get("vod_play_url") or "").split("$$$"):
             _, _, target = str(url_group or "").partition("$")
+            if target.startswith(self.PUSH_PREFIX):
+                target = target[len(self.PUSH_PREFIX):]
             share_url = self._decode_parse(target)
             if share_url is None:
                 continue
@@ -612,6 +614,7 @@ class Spider(HostSpider):
         return vod
 
     def _normalize_category_content(self, result):
+        print(result)
         if not isinstance(result, dict):
             return result
         vod_list = result.get("list")

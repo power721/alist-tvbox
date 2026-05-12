@@ -307,6 +307,19 @@
         </el-form-item>
       </el-form>
 
+      <el-form :inline="true" :model="pluginImportForm">
+        <el-form-item label="仓库地址" required>
+          <el-input
+            v-model="pluginImportForm.url"
+            style="width: 460px"
+            placeholder="https://github.com/xxx/tvbox 或 spiders.json 地址"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="importPlugins">导入仓库插件</el-button>
+        </el-form-item>
+      </el-form>
+
       <el-table :data="plugins" row-key="id" id="plugins-table" border style="width: 100%">
         <el-table-column label="顺序" width="80">
           <template #default="scope">
@@ -448,6 +461,9 @@ const pluginForm = ref<Plugin>({
   lastCheckedAt: '',
   lastError: ''
 })
+const pluginImportForm = ref({
+  url: ''
+})
 let timer = 0
 let pluginSortable: Sortable | null = null
 
@@ -577,6 +593,7 @@ const loadPlugins = () => {
 const showPlugins = () => {
   pluginVisible.value = true
   resetPluginForm()
+  pluginImportForm.value.url = ''
   loadPlugins()
 }
 
@@ -587,6 +604,17 @@ const addPlugin = () => {
   }).then(() => {
     ElMessage.success('添加成功')
     resetPluginForm()
+    loadPlugins()
+  })
+}
+
+const importPlugins = () => {
+  axios.post('/api/plugins/import', {
+    url: pluginImportForm.value.url
+  }).then(({data}) => {
+    const action = data.failedCount > 0 ? ElMessage.warning : ElMessage.success
+    action(`导入完成，新增 ${data.createdCount}，刷新 ${data.refreshedCount}，跳过 ${data.skippedCount}，失败 ${data.failedCount}`)
+    pluginImportForm.value.url = ''
     loadPlugins()
   })
 }

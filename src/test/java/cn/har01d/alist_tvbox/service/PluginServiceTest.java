@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import cn.har01d.alist_tvbox.entity.Plugin;
 import cn.har01d.alist_tvbox.entity.PluginRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
@@ -17,6 +18,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
@@ -31,12 +33,14 @@ class PluginServiceTest {
     @Mock
     private RestTemplateBuilder builder;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     private PluginService pluginService;
 
     @BeforeEach
     void setUp() {
         when(builder.build()).thenReturn(restTemplate);
-        pluginService = new PluginService(pluginRepository, builder);
+        pluginService = new PluginService(pluginRepository, builder, objectMapper);
     }
 
     @Test
@@ -188,5 +192,104 @@ class PluginServiceTest {
 
         assertThat(second.getSortOrder()).isEqualTo(1);
         assertThat(first.getSortOrder()).isEqualTo(2);
+    }
+
+    @Test
+    void importFromSpidersJsonShouldRefreshExistingPluginsAndCreateNewOnes() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders.json";
+        String firstPlugin = "https://example.com/a.txt";
+        String secondPlugin = "https://example.com/b.txt";
+        String payload = """
+                [
+                  "https://example.com/a.txt",
+                  "https://example.com/a.txt",
+                  "https://example.com/b.txt"
+                ]
+                """;
+        Plugin existing = new Plugin();
+        existing.setId(7);
+        existing.setName("a");
+        existing.setSourceName("a");
+        existing.setUrl(firstPlugin);
+        existing.setContent("old-a");
+
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn(payload);
+        when(pluginRepository.findByUrl(firstPlugin)).thenReturn(Optional.of(existing));
+        when(pluginRepository.findByUrl(secondPlugin)).thenReturn(Optional.empty());
+        when(restTemplate.getForObject(URI.create(firstPlugin), String.class)).thenReturn("new-a");
+        when(restTemplate.getForObject(URI.create(secondPlugin), String.class)).thenReturn("body-b");
+        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of(existing));
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.sourceUrl()).isEqualTo(sourceUrl);
+        assertThat(result.createdCount()).isEqualTo(1);
+        assertThat(result.refreshedCount()).isEqualTo(1);
+        assertThat(result.skippedCount()).isEqualTo(1);
+        assertThat(result.failedCount()).isEqualTo(0);
+        assertThat(result.created()).containsExactly("b");
+        assertThat(result.refreshed()).containsExactly("a");
+        assertThat(result.skipped()).containsExactly(firstPlugin);
+        assertThat(existing.getContent()).isEqualTo("new-a");
+    }
+
+    @Test
+    void importFromRepositoryUrlShouldResolveRootSpidersJson() {
+        String repositoryUrl = "https://github.com/har01d5/tvbox";
+        String resolvedUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders.json";
+        String pluginUrl = "https://example.com/demo.txt";
+
+        when(restTemplate.getForObject(URI.create(resolvedUrl), String.class)).thenReturn("[\"" + pluginUrl + "\"]");
+        when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.empty());
+        when(restTemplate.getForObject(URI.create(pluginUrl), String.class)).thenReturn("body");
+        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of());
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(repositoryUrl);
+
+        assertThat(result.sourceUrl()).isEqualTo(resolvedUrl);
+        assertThat(result.created()).containsExactly("demo");
+    }
+
+    @Test
+    void importFromSourceShouldRejectUnsupportedUrl() {
+        assertThatThrownBy(() -> pluginService.importFromSource("https://example.com/list.json"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("不支持");
+    }
+
+    @Test
+    void importFromSpidersJsonShouldReportFailedRefreshes() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders.json";
+        String pluginUrl = "https://example.com/a.txt";
+        Plugin existing = new Plugin();
+        existing.setId(8);
+        existing.setName("a");
+        existing.setSourceName("a");
+        existing.setUrl(pluginUrl);
+        existing.setContent("stable");
+
+        when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.of(existing));
+        when(restTemplate.getForObject(any(URI.class), eq(String.class))).thenAnswer(invocation -> {
+            URI uri = invocation.getArgument(0);
+            if (URI.create(sourceUrl).equals(uri)) {
+                return "[\"" + pluginUrl + "\"]";
+            }
+            if (URI.create(pluginUrl).equals(uri)) {
+                throw new RuntimeException("404");
+            }
+            return null;
+        });
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.createdCount()).isEqualTo(0);
+        assertThat(result.refreshedCount()).isEqualTo(0);
+        assertThat(result.failedCount()).isEqualTo(1);
+        assertThat(result.failed().getFirst()).contains(pluginUrl);
+        assertThat(existing.getContent()).isEqualTo("stable");
+        assertThat(existing.getLastError()).contains("插件地址不可访问");
     }
 }

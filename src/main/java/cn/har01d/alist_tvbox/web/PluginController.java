@@ -19,6 +19,9 @@ import java.util.List;
 public class PluginController {
     private final PluginService pluginService;
 
+    private record PluginImportRequest(String url) {
+    }
+
     public PluginController(PluginService pluginService) {
         this.pluginService = pluginService;
     }
@@ -33,6 +36,11 @@ public class PluginController {
     @PostMapping
     public Plugin create(@RequestBody Plugin plugin) {
         return pluginService.create(plugin);
+    }
+
+    @PostMapping("/import")
+    public PluginService.ImportResult importPlugins(@RequestBody PluginImportRequest request) {
+        return pluginService.importFromSource(request.url());
     }
 
     @PutMapping("/{id}")
