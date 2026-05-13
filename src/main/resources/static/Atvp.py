@@ -215,6 +215,7 @@ class Spider(HostSpider):
         self._vod_token = ""
         self._localProxyConfig = {}
         self._detail_result_cache = {}
+        self._play_context_cache = {}
         self._filters = []
 
     def init(self, extend=""):
@@ -663,7 +664,10 @@ class Spider(HostSpider):
         parsed_result = json.loads(body)
         parsed_result = self._merge_cached_detail_result(share_url, parsed_result)
         parsed_result = self._run_filters("parse", parsed_result, {"share_url": share_url})
-        return self._run_filters("detail", parsed_result, {"share_url": share_url, "source": "parse"})
+        parsed_result = self._run_filters("detail", parsed_result, {"share_url": share_url, "source": "parse"})
+        self._cache_detail_result(parsed_result)
+        self._cache_play_context(parsed_result)
+        return parsed_result
 
     def _cache_detail_result(self, detail_result):
         vod_list = detail_result.get("list") if isinstance(detail_result, dict) else None
@@ -682,6 +686,69 @@ class Spider(HostSpider):
             if share_url is None:
                 continue
             self._detail_result_cache[share_url] = dict(vod)
+
+    def _cache_play_context(self, detail_result):
+        vod_list = detail_result.get("list") if isinstance(detail_result, dict) else None
+        if not isinstance(vod_list, list):
+            return
+
+        for vod in vod_list:
+            if not isinstance(vod, dict):
+                continue
+            vod_name = str(vod.get("vod_name") or "").strip()
+            from_groups = str(vod.get("vod_play_from") or "").split("$$$")
+            url_groups = str(vod.get("vod_play_url") or "").split("$$$")
+            for group_index, url_group in enumerate(url_groups):
+                play_from = from_groups[group_index] if group_index < len(from_groups) else ""
+                for episode_index, episode in enumerate(str(url_group or "").split("#"), start=1):
+                    label, _, target = str(episode or "").partition("$")
+                    play_id = str(target or label or "").strip()
+                    if not play_id:
+                        continue
+                    episode_name = str(label or "").strip()
+                    context = {
+                        "vod_name": vod_name,
+                        "vod_pic": vod.get("vod_pic", ""),
+                        "vod_year": vod.get("vod_year", ""),
+                        "vod_remarks": vod.get("vod_remarks", ""),
+                        "type_name": vod.get("type_name", ""),
+                        "episode_name": episode_name,
+                        "episode_index": episode_index,
+                        "play_from": play_from,
+                        "play_id": play_id,
+                    }
+                    self._remember_play_context(play_id, context)
+
+    def _remember_play_context(self, play_id, context):
+        value = str(play_id or "").strip()
+        if not value:
+            return
+        self._play_context_cache[value] = dict(context)
+        if value.startswith(self.PUSH_PREFIX):
+            self._play_context_cache[value[len(self.PUSH_PREFIX):]] = dict(context)
+
+    def _lookup_play_context(self, play_id):
+        value = str(play_id or "").strip()
+        if not value:
+            return {}
+        context = self._play_context_cache.get(value)
+        if context is None and value.startswith(self.PUSH_PREFIX):
+            context = self._play_context_cache.get(value[len(self.PUSH_PREFIX):])
+        if context is None:
+            return {}
+        return dict(context)
+
+    def _build_player_context(self, flag=None, play_id=None, vip_flags=None):
+        context = {
+            "flag": flag,
+            "id": play_id,
+            "vipFlags": vip_flags,
+        }
+        play_context = self._lookup_play_context(play_id)
+        if play_context:
+            context.update(play_context)
+            context["play"] = play_context
+        return context
 
     def _merge_cached_detail_vod(self, cached_vod, parsed_vod):
         merged = dict(parsed_vod)
@@ -729,12 +796,13 @@ class Spider(HostSpider):
         # proxy = self.post("http://localhost:5000/player", json={"playerContent": body, "taskSeed": play_id, "localProxyConfig": self._localProxyConfig}, timeout=10)
         # if proxy.status_code == 200:
         #     return proxy.json()
-        return self._run_filters("play", json.loads(body), {"id": play_id})
+        return self._run_filters("play", json.loads(body), self._build_player_context(play_id=play_id))
 
     def _split_detail_to_vods(self, source_id):
         detail_result = self._require_inner().detailContent([source_id])
         detail_result = self._run_filters("detail", detail_result, {"ids": [source_id], "source": "category"})
         self._cache_detail_result(detail_result)
+        self._cache_play_context(detail_result)
         vod_list = detail_result.get("list") if isinstance(detail_result, dict) else None
         if not isinstance(vod_list, list) or len(vod_list) != 1:
             return None
@@ -820,7 +888,10 @@ class Spider(HostSpider):
             if share_url is not None:
                 return self._parse(share_url)
         result = self._require_inner().detailContent(ids)
-        return self._run_filters("detail", result, {"ids": ids})
+        result = self._run_filters("detail", result, {"ids": ids})
+        self._cache_detail_result(result)
+        self._cache_play_context(result)
+        return result
 
     def searchContent(self, key, quick, pg="1"):
         print('searchContent', key, quick, pg)
@@ -912,7 +983,7 @@ class Spider(HostSpider):
         else:
             result = self._require_inner().playerContent(flag, id, vipFlags)
             result = self._normalize_player_content(result)
-        return self._run_filters("player", result, {"flag": flag, "id": id, "vipFlags": vipFlags})
+        return self._run_filters("player", result, self._build_player_context(flag, id, vipFlags))
 
     def liveContent(self, url):
         return self._require_inner().liveContent(url)
