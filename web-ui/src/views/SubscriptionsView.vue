@@ -403,6 +403,24 @@
             <el-option v-for="item in filterStageOptions" :key="item.value" :label="item.label" :value="item.value"/>
           </el-select>
         </el-form-item>
+        <el-form-item label="作用范围">
+          <el-select v-model="pluginFilterForm.pluginScope" style="width: 120px" @change="changePluginFilterScope(pluginFilterForm)">
+            <el-option v-for="item in pluginFilterScopeOptions" :key="item.value" :label="item.label" :value="item.value"/>
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="pluginFilterForm.pluginScope !== 'all'" label="插件" required>
+          <el-select
+            v-model="pluginFilterForm.pluginIdList"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            style="width: 260px"
+            placeholder="请选择插件"
+          >
+            <el-option v-for="item in plugins" :key="item.id" :label="pluginOptionLabel(item)" :value="item.id"/>
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="addPluginFilter">添加过滤器</el-button>
         </el-form-item>
@@ -451,6 +469,28 @@
             <el-select v-model="scope.row.stageList" multiple collapse-tags placeholder="请选择拦截点" @change="updatePluginFilter(scope.row)">
               <el-option v-for="item in filterStageOptions" :key="item.value" :label="item.label" :value="item.value"/>
             </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="作用范围" width="390">
+          <template #default="scope">
+            <div class="plugin-filter-scope">
+              <el-select v-model="scope.row.pluginScope" style="width: 100px" @change="changePluginFilterScope(scope.row, true)">
+                <el-option v-for="item in pluginFilterScopeOptions" :key="item.value" :label="item.label" :value="item.value"/>
+              </el-select>
+              <el-select
+                v-if="scope.row.pluginScope !== 'all'"
+                v-model="scope.row.pluginIdList"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                filterable
+                style="width: 250px"
+                placeholder="请选择插件"
+                @change="updatePluginFilter(scope.row)"
+              >
+                <el-option v-for="item in plugins" :key="item.id" :label="pluginOptionLabel(item)" :value="item.id"/>
+              </el-select>
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="extend" label="扩展配置" width="220">
@@ -524,6 +564,9 @@ interface PluginFilter {
   stageList: string[]
   extend: string
   errorStrategy: string
+  pluginScope: string
+  pluginIds: string
+  pluginIdList: number[]
   sourceName: string
   lastCheckedAt: string
   lastError: string
@@ -537,6 +580,11 @@ const filterStageOptions = [
   {label: '播放', value: 'player'},
   {label: '后端播放', value: 'play'},
   {label: '弹幕', value: 'danmaku'},
+]
+const pluginFilterScopeOptions = [
+  {label: '全局', value: 'all'},
+  {label: '仅对', value: 'include'},
+  {label: '除外', value: 'exclude'},
 ]
 const tgPhase = ref(0)
 const tgPhone = ref('')
@@ -631,6 +679,9 @@ const pluginFilterForm = ref<PluginFilter>({
   stageList: [],
   extend: '',
   errorStrategy: 'skip',
+  pluginScope: 'all',
+  pluginIds: '',
+  pluginIdList: [],
   sourceName: '',
   lastCheckedAt: '',
   lastError: ''
@@ -738,11 +789,27 @@ const parsePluginFilterStages = (value: string) => {
     .filter(item => item)
 }
 
+const parsePluginFilterPluginIds = (value: string) => {
+  return (value || '')
+    .split(',')
+    .map(item => Number(item.trim()))
+    .filter(item => Number.isInteger(item) && item > 0)
+}
+
+const normalizePluginFilterScope = (value: string) => {
+  return value === 'include' || value === 'exclude' ? value : 'all'
+}
+
 const normalizePluginFilter = (value: PluginFilter) => {
+  const pluginScope = normalizePluginFilterScope(value.pluginScope)
   return {
     ...value,
     stages: value.stages || '',
     stageList: value.stageList || parsePluginFilterStages(value.stages),
+    // 全局模式不需要保留选择器值，避免界面显示历史残留
+    pluginScope,
+    pluginIds: value.pluginIds || '',
+    pluginIdList: pluginScope === 'all' ? [] : value.pluginIdList || parsePluginFilterPluginIds(value.pluginIds),
     errorStrategy: value.errorStrategy || 'skip'
   }
 }
@@ -754,6 +821,15 @@ const getPluginFilterStageList = (filter: PluginFilter) => {
   return parsePluginFilterStages(filter.stages)
 }
 
+const getPluginFilterPluginIdList = (filter: PluginFilter) => {
+  if (Array.isArray(filter.pluginIdList)) {
+    return filter.pluginIdList
+      .map(item => Number(item))
+      .filter(item => Number.isInteger(item) && item > 0)
+  }
+  return parsePluginFilterPluginIds(filter.pluginIds)
+}
+
 const validatePluginFilter = (filter: PluginFilter) => {
   if (!filter.url.trim()) {
     ElMessage.warning('请输入过滤器地址')
@@ -763,11 +839,18 @@ const validatePluginFilter = (filter: PluginFilter) => {
     ElMessage.warning('请选择拦截点')
     return false
   }
+  if (normalizePluginFilterScope(filter.pluginScope) !== 'all' && getPluginFilterPluginIdList(filter).length === 0) {
+    ElMessage.warning('请选择关联插件')
+    return false
+  }
   return true
 }
 
 const pluginFilterPayload = (filter: PluginFilter) => {
   const stageList = getPluginFilterStageList(filter)
+  const pluginScope = normalizePluginFilterScope(filter.pluginScope)
+  // 只把当前模式需要的插件 ID 回写给后端
+  const pluginIdList = pluginScope === 'all' ? [] : getPluginFilterPluginIdList(filter)
   const payload = {
     name: filter.name,
     url: filter.url,
@@ -775,7 +858,9 @@ const pluginFilterPayload = (filter: PluginFilter) => {
     sortOrder: filter.sortOrder,
     stages: stageList.join(','),
     extend: filter.extend,
-    errorStrategy: filter.errorStrategy
+    errorStrategy: filter.errorStrategy,
+    pluginScope,
+    pluginIds: pluginIdList.join(',')
   }
   if (filter.id) {
     return {
@@ -798,10 +883,32 @@ const resetPluginFilterForm = () => {
     stageList: [],
     extend: '',
     errorStrategy: 'skip',
+    pluginScope: 'all',
+    pluginIds: '',
+    pluginIdList: [],
     sourceName: '',
     lastCheckedAt: '',
     lastError: ''
   }
+}
+
+const changePluginFilterScope = (filter: PluginFilter, save = false) => {
+  filter.pluginScope = normalizePluginFilterScope(filter.pluginScope)
+  if (filter.pluginScope === 'all') {
+    filter.pluginIdList = []
+    if (save) {
+      updatePluginFilter(filter)
+    }
+    return
+  }
+  // 列表行切换到仅对/除外时，先等用户选完插件再保存，避免立即触发校验提示
+  if (save && getPluginFilterPluginIdList(filter).length > 0) {
+    updatePluginFilter(filter)
+  }
+}
+
+const pluginOptionLabel = (plugin: Plugin) => {
+  return `${plugin.name || plugin.sourceName || plugin.url} #${plugin.id}`
 }
 
 const padTimePart = (value: number) => value.toString().padStart(2, '0')
@@ -902,6 +1009,7 @@ const showPluginFilters = () => {
   pluginFilterVisible.value = true
   resetPluginFilterForm()
   selectedPluginFilterIds.value = []
+  loadPlugins()
   loadPluginFilters()
 }
 
@@ -1236,6 +1344,11 @@ onUnmounted(() => {
 
 .pointer {
   cursor: move;
+}
+
+.plugin-filter-scope {
+  display: flex;
+  gap: 8px;
 }
 
 .json pre {

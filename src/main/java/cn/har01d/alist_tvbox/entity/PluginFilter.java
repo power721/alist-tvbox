@@ -45,6 +45,14 @@ public class PluginFilter {
     @Column(name = "error_strategy")
     private String errorStrategy = "skip";
 
+    // all=全局生效，include=仅对指定插件生效，exclude=对指定插件不生效
+    @Column(name = "plugin_scope")
+    private String pluginScope = "all";
+
+    // 逗号分隔的插件 ID 列表，仅在 include / exclude 模式下使用
+    @Column(name = "plugin_ids")
+    private String pluginIds = "";
+
     @Column(name = "source_name")
     private String sourceName;
 
