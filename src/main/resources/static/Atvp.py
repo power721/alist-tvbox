@@ -765,9 +765,8 @@ class Spider(HostSpider):
                 "vod_content",
         ):
             value = cached_vod.get(key)
-            if value not in (None, "") and key not in merged:
+            if value not in (None, ""):
                 merged[key] = value
-        merged["vod_content"] = cached_vod.get("vod_content")
         return merged
 
     def _merge_cached_detail_result(self, share_url, parsed_result):
