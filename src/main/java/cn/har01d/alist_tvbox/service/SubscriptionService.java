@@ -12,6 +12,8 @@ import cn.har01d.alist_tvbox.entity.EmbyRepository;
 import cn.har01d.alist_tvbox.entity.FeiniuRepository;
 import cn.har01d.alist_tvbox.entity.JellyfinRepository;
 import cn.har01d.alist_tvbox.entity.Plugin;
+import cn.har01d.alist_tvbox.entity.PluginFilter;
+import cn.har01d.alist_tvbox.entity.PluginFilterRepository;
 import cn.har01d.alist_tvbox.entity.PluginRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -96,6 +98,7 @@ public class SubscriptionService {
     private final FeiniuRepository feiniuRepository;
     private final JellyfinRepository jellyfinRepository;
     private final PluginRepository pluginRepository;
+    private final PluginFilterRepository pluginFilterRepository;
     private final AListLocalService aListLocalService;
     private final ConfigFileService configFileService;
     private final TenantService tenantService;
@@ -122,6 +125,7 @@ public class SubscriptionService {
                                FeiniuRepository feiniuRepository,
                                JellyfinRepository jellyfinRepository,
                                PluginRepository pluginRepository,
+                               PluginFilterRepository pluginFilterRepository,
                                AListLocalService aListLocalService,
                                ConfigFileService configFileService,
                                TenantService tenantService,
@@ -145,6 +149,7 @@ public class SubscriptionService {
         this.feiniuRepository = feiniuRepository;
         this.jellyfinRepository = jellyfinRepository;
         this.pluginRepository = pluginRepository;
+        this.pluginFilterRepository = pluginFilterRepository;
         this.aListLocalService = aListLocalService;
         this.configFileService = configFileService;
         this.tenantService = tenantService;
@@ -1233,10 +1238,58 @@ public class SubscriptionService {
         if (StringUtils.isNotBlank(plugin.getExtend())) {
             map.put("data", plugin.getExtend());
         }
-        String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
+        List<Map<String, Object>> filters = buildPluginFilters();
+        if (!filters.isEmpty()) {
+            map.put("filters", filters);
+        }
+        String ext = objectMapper.writeValueAsString(map);
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
         return site;
+    }
+
+    private List<Map<String, Object>> buildPluginFilters() {
+        List<Map<String, Object>> filters = new ArrayList<>();
+        String token = getCurrentOrFirstToken();
+        String address = readHostAddress("");
+        for (PluginFilter filter : pluginFilterRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()) {
+            List<String> stages = parsePluginFilterStages(filter.getStages());
+            if (stages.isEmpty()) {
+                continue;
+            }
+            Map<String, Object> map = new HashMap<>();
+            map.put("name", filter.getName());
+            map.put("source", address + "/plugin-filters/" + token + "/" + filter.getId() + ".py?v=" + getPluginFilterRevision(filter));
+            map.put("stages", stages);
+            map.put("error_strategy", StringUtils.defaultIfBlank(filter.getErrorStrategy(), "skip"));
+            if (StringUtils.isNotBlank(filter.getExtend())) {
+                map.put("data", filter.getExtend());
+            }
+            filters.add(map);
+        }
+        return filters;
+    }
+
+    private String getPluginFilterRevision(PluginFilter filter) {
+        if (filter.getLastCheckedAt() != null) {
+            return String.valueOf(filter.getLastCheckedAt().toInstant().toEpochMilli());
+        }
+        if (filter.getVersion() != null) {
+            return String.valueOf(filter.getVersion());
+        }
+        return String.valueOf(filter.getId());
+    }
+
+    private List<String> parsePluginFilterStages(String stages) {
+        if (StringUtils.isBlank(stages)) {
+            return List.of();
+        }
+        List<String> list = Arrays.stream(stages.split(","))
+                .map(StringUtils::trimToEmpty)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .collect(Collectors.toList());
+        return list;
     }
 
     private String loadConfigJson(String url) {

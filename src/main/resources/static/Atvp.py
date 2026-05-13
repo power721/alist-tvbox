@@ -1,6 +1,7 @@
 # coding=utf-8
 import base64
 import html
+import inspect
 import json
 import os
 import re
@@ -178,6 +179,14 @@ except Exception:
     HostSpider = _FallbackSpider
 
 
+class _ModuleFilter:
+    def __init__(self, module):
+        self._module = module
+
+    def __getattr__(self, name):
+        return getattr(self._module, name)
+
+
 class Spider(HostSpider):
     PUBLIC_KEY_XOR = 23
     MASTER_SECRET_XOR = 41
@@ -206,6 +215,7 @@ class Spider(HostSpider):
         self._vod_token = ""
         self._localProxyConfig = {}
         self._detail_result_cache = {}
+        self._filters = []
 
     def init(self, extend=""):
         self.extend = extend or ""
@@ -218,7 +228,9 @@ class Spider(HostSpider):
         source_text = self._decrypt_secspider_source(package_text)
         spider_cls = self._load_inner_spider_class(source_text)
         self._inner = spider_cls()
-        return self._inner.init(inner_extend)
+        result = self._inner.init(inner_extend)
+        self._filters = self._load_filters(payload)
+        return result
 
     def getName(self):
         if self._inner is not None and hasattr(self._inner, "getName"):
@@ -477,6 +489,154 @@ class Spider(HostSpider):
             raise ValueError("Atvp inner source does not export Spider")
         return spider_cls
 
+    def _load_filter_source(self, source):
+        target = str(source or "").strip()
+        if not target:
+            raise ValueError("Atvp filter source is empty")
+        if self._is_remote_source(target):
+            rsp = self.fetch(target, timeout=10)
+            body = str(rsp.text or "")
+            if rsp.status_code != 200 or not body.strip():
+                raise ValueError(f"Atvp filter remote source load failed: {target}")
+            return body
+        path = Path(target)
+        if not path.is_file():
+            raise ValueError(f"Atvp filter local source not found: {target}")
+        return path.read_text(encoding="utf-8")
+
+    def _load_filter_instance(self, source, index):
+        source_text = self._load_filter_source(source)
+        module = types.ModuleType(f"atvp_filter_{index}")
+        module.__file__ = f"<atvp-filter-{index}>"
+        exec(compile(source_text, module.__file__, "exec"), module.__dict__)
+        filter_cls = getattr(module, "Filter", None) or getattr(module, "Decorator", None)
+        if filter_cls is not None:
+            return filter_cls()
+        return _ModuleFilter(module)
+
+    def _normalize_filter_stages(self, stages):
+        if isinstance(stages, (list, tuple, set)):
+            values = stages
+        else:
+            values = str(stages or "").split(",")
+        result = []
+        for value in values:
+            stage = str(value or "").strip()
+            if stage and stage not in result:
+                result.append(stage)
+        return result or ["detail"]
+
+    def _filter_supports(self, filter_item, stage):
+        stages = filter_item.get("stages") or []
+        return "all" in stages or stage in stages
+
+    def _filter_method(self, instance, stage):
+        names = {
+            "detail": ("detail", "detailContent"),
+            "parse": ("parse",),
+            "play": ("play",),
+            "player": ("player", "playerContent"),
+            "danmaku": ("danmaku",),
+            "init": ("init",),
+        }.get(stage, (stage,))
+        for name in names:
+            method = getattr(instance, name, None)
+            if callable(method):
+                return method
+        return None
+
+    def _invoke_filter_callable(self, func, *args):
+        try:
+            signature = inspect.signature(func)
+        except (TypeError, ValueError):
+            return func(*args)
+
+        positional = [
+            param
+            for param in signature.parameters.values()
+            if param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        ]
+        has_varargs = any(param.kind == inspect.Parameter.VAR_POSITIONAL for param in signature.parameters.values())
+        if has_varargs:
+            return func(*args)
+        return func(*args[:len(positional)])
+
+    def _filter_label(self, filter_item):
+        return str(filter_item.get("name") or filter_item.get("source") or "unknown")
+
+    def _build_filter_context(self, stage, filter_item=None, context=None):
+        payload = {
+            "stage": stage,
+            "api": self._backend_api,
+            "token": self._vod_token,
+            "local_proxy_config": self._localProxyConfig,
+        }
+        if filter_item is not None:
+            payload["filter"] = {
+                "name": filter_item.get("name"),
+                "source": filter_item.get("source"),
+                "stages": filter_item.get("stages"),
+            }
+        if isinstance(context, dict):
+            payload.update(context)
+        return payload
+
+    def _init_filter(self, filter_item):
+        method = self._filter_method(filter_item["instance"], "init")
+        if method is None:
+            return
+        context = self._build_filter_context("init", filter_item)
+        self._invoke_filter_callable(method, filter_item.get("data", ""), context)
+
+    def _load_filters(self, payload):
+        filters = payload.get("filters") if isinstance(payload, dict) else None
+        if not isinstance(filters, list):
+            return []
+
+        result = []
+        for index, entry in enumerate(filters, start=1):
+            if not isinstance(entry, dict):
+                continue
+            source = str(entry.get("source") or "").strip()
+            if not source:
+                continue
+            try:
+                filter_item = {
+                    "name": str(entry.get("name") or ""),
+                    "source": source,
+                    "stages": self._normalize_filter_stages(entry.get("stages")),
+                    "data": entry.get("data", ""),
+                    "error_strategy": str(entry.get("error_strategy") or entry.get("errorStrategy") or "skip").strip(),
+                    "instance": self._load_filter_instance(source, index),
+                }
+                self._init_filter(filter_item)
+                result.append(filter_item)
+            except Exception as e:
+                self.log(f"Atvp filter load failed: {source} {e}")
+        return result
+
+    def _run_filters(self, stage, result, context=None):
+        output = result
+        for filter_item in self._filters:
+            if not self._filter_supports(filter_item, stage):
+                continue
+            method = self._filter_method(filter_item["instance"], stage)
+            if method is None:
+                continue
+            try:
+                value = self._invoke_filter_callable(
+                    method,
+                    output,
+                    self._build_filter_context(stage, filter_item, context),
+                )
+                if value is not None:
+                    output = value
+            except Exception as e:
+                self.log(f"Atvp filter {stage} failed: {self._filter_label(filter_item)} {e}")
+                if filter_item.get("error_strategy") == "strict":
+                    raise
+        return output
+
     def _require_inner(self):
         if self._inner is None:
             raise RuntimeError("Atvp spider is not initialized")
@@ -501,7 +661,9 @@ class Spider(HostSpider):
         if rsp.status_code != 200 or not body.strip():
             raise ValueError(f"Atvp parse failed: {share_url}")
         parsed_result = json.loads(body)
-        return self._merge_cached_detail_result(share_url, parsed_result)
+        parsed_result = self._merge_cached_detail_result(share_url, parsed_result)
+        parsed_result = self._run_filters("parse", parsed_result, {"share_url": share_url})
+        return self._run_filters("detail", parsed_result, {"share_url": share_url, "source": "parse"})
 
     def _cache_detail_result(self, detail_result):
         vod_list = detail_result.get("list") if isinstance(detail_result, dict) else None
@@ -567,10 +729,11 @@ class Spider(HostSpider):
         # proxy = self.post("http://localhost:5000/player", json={"playerContent": body, "taskSeed": play_id, "localProxyConfig": self._localProxyConfig}, timeout=10)
         # if proxy.status_code == 200:
         #     return proxy.json()
-        return json.loads(body)
+        return self._run_filters("play", json.loads(body), {"id": play_id})
 
     def _split_detail_to_vods(self, source_id):
         detail_result = self._require_inner().detailContent([source_id])
+        detail_result = self._run_filters("detail", detail_result, {"ids": [source_id], "source": "category"})
         self._cache_detail_result(detail_result)
         vod_list = detail_result.get("list") if isinstance(detail_result, dict) else None
         if not isinstance(vod_list, list) or len(vod_list) != 1:
@@ -656,7 +819,8 @@ class Spider(HostSpider):
             share_url = self._decode_parse(ids[0])
             if share_url is not None:
                 return self._parse(share_url)
-        return self._require_inner().detailContent(ids)
+        result = self._require_inner().detailContent(ids)
+        return self._run_filters("detail", result, {"ids": ids})
 
     def searchContent(self, key, quick, pg="1"):
         print('searchContent', key, quick, pg)
@@ -744,9 +908,11 @@ class Spider(HostSpider):
         print('playerContent', flag, id, vipFlags)
         vid = str(id)
         if vid.startswith("1@"):
-            return self._play(vid)
-        result = self._require_inner().playerContent(flag, id, vipFlags)
-        return self._normalize_player_content(result)
+            result = self._play(vid)
+        else:
+            result = self._require_inner().playerContent(flag, id, vipFlags)
+            result = self._normalize_player_content(result)
+        return self._run_filters("player", result, {"flag": flag, "id": id, "vipFlags": vipFlags})
 
     def liveContent(self, url):
         return self._require_inner().liveContent(url)
@@ -787,9 +953,26 @@ class Spider(HostSpider):
 
     def danmaku(self):
         inner = self._require_inner()
+        enabled = False
         if hasattr(inner, "danmaku"):
-            return inner.danmaku()
-        return False
+            enabled = bool(inner.danmaku())
+        context = self._build_filter_context("danmaku")
+        for filter_item in self._filters:
+            if not self._filter_supports(filter_item, "danmaku"):
+                continue
+            method = self._filter_method(filter_item["instance"], "danmaku")
+            if method is None:
+                enabled = True
+                continue
+            try:
+                value = self._invoke_filter_callable(method, context)
+                if value is not None:
+                    enabled = enabled or bool(value)
+            except Exception as e:
+                self.log(f"Atvp filter danmaku failed: {self._filter_label(filter_item)} {e}")
+                if filter_item.get("error_strategy") == "strict":
+                    raise
+        return enabled
 
     def getManagerActions(self):
         inner = self._require_inner()

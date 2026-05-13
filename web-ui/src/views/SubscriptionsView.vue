@@ -4,6 +4,7 @@
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
       <el-button @click="showPlugins">插件管理</el-button>
+      <el-button @click="showPluginFilters">过滤器管理</el-button>
       <el-button @click="showScan">同步影视</el-button>
       <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
@@ -389,6 +390,101 @@
       </el-table>
     </el-dialog>
 
+    <el-dialog v-model="pluginFilterVisible" title="过滤器管理" fullscreen>
+      <el-form :inline="true" :model="pluginFilterForm">
+        <el-form-item label="过滤器地址" required>
+          <el-input v-model="pluginFilterForm.url" style="width: 460px" placeholder="https://example.com/filter.py"/>
+        </el-form-item>
+        <el-form-item label="名称">
+          <el-input v-model="pluginFilterForm.name" style="width: 180px" placeholder="留空用文件名"/>
+        </el-form-item>
+        <el-form-item label="拦截点" required>
+          <el-select v-model="pluginFilterForm.stageList" multiple collapse-tags style="width: 260px" placeholder="请选择拦截点">
+            <el-option v-for="item in filterStageOptions" :key="item.value" :label="item.label" :value="item.value"/>
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="addPluginFilter">添加过滤器</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-form :inline="true">
+        <el-form-item>
+          <el-button type="danger" :disabled="selectedPluginFilterIds.length === 0" @click="deleteSelectedPluginFilters">
+            批量删除
+          </el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-table
+        :data="pluginFilters"
+        row-key="id"
+        id="plugin-filters-table"
+        border
+        style="width: 100%"
+        @selection-change="onPluginFilterSelectionChange"
+      >
+        <el-table-column type="selection" width="55"/>
+        <el-table-column label="顺序" width="80">
+          <template #default="scope">
+            <span class="pointer">{{ scope.row.sortOrder }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="name" label="名称" width="180">
+          <template #default="scope">
+            <el-input v-model="scope.row.name" @change="updatePluginFilter(scope.row)"/>
+          </template>
+        </el-table-column>
+        <el-table-column prop="url" label="地址">
+          <template #default="scope">
+            <a :href="scope.row.url" target="_blank">{{ scope.row.url }}</a>
+          </template>
+        </el-table-column>
+        <el-table-column prop="version" label="版本" width="90"/>
+        <el-table-column prop="enabled" label="启用" width="90">
+          <template #default="scope">
+            <el-switch v-model="scope.row.enabled" @change="updatePluginFilter(scope.row)"/>
+          </template>
+        </el-table-column>
+        <el-table-column label="拦截点" width="260">
+          <template #default="scope">
+            <el-select v-model="scope.row.stageList" multiple collapse-tags placeholder="请选择拦截点" @change="updatePluginFilter(scope.row)">
+              <el-option v-for="item in filterStageOptions" :key="item.value" :label="item.label" :value="item.value"/>
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column prop="extend" label="扩展配置" width="220">
+          <template #default="scope">
+            <el-input v-model="scope.row.extend" @change="updatePluginFilter(scope.row)"/>
+          </template>
+        </el-table-column>
+        <el-table-column prop="errorStrategy" label="错误策略" width="120">
+          <template #default="scope">
+            <el-select v-model="scope.row.errorStrategy" @change="updatePluginFilter(scope.row)">
+              <el-option label="跳过" value="skip"/>
+              <el-option label="中断" value="strict"/>
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近检查" width="180">
+          <template #default="scope">
+            <span>{{ formatPluginCheckedAt(scope.row.lastCheckedAt) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="lastError" label="状态" width="180">
+          <template #default="scope">
+            <span>{{ scope.row.lastError || '正常' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="160">
+          <template #default="scope">
+            <el-button link type="primary" @click="refreshPluginFilter(scope.row.id)">刷新</el-button>
+            <el-button link type="danger" @click="deletePluginFilter(scope.row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -417,8 +513,31 @@ interface Plugin {
   lastError: string
 }
 
+interface PluginFilter {
+  id: number
+  name: string
+  url: string
+  enabled: boolean
+  sortOrder: number
+  version: number | null
+  stages: string
+  stageList: string[]
+  extend: string
+  errorStrategy: string
+  sourceName: string
+  lastCheckedAt: string
+  lastError: string
+}
+
 const PLUGIN_REPO_URL_KEY = 'plugin_repo_url'
 const currentUrl = window.location.origin
+const filterStageOptions = [
+  {label: '详情', value: 'detail'},
+  {label: '解析详情', value: 'parse'},
+  {label: '播放', value: 'player'},
+  {label: '后端播放', value: 'play'},
+  {label: '弹幕', value: 'danmaku'},
+]
 const tgPhase = ref(0)
 const tgPhone = ref('')
 const tgCode = ref('')
@@ -442,6 +561,7 @@ const detailVisible = ref(false)
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const pluginVisible = ref(false)
+const pluginFilterVisible = ref(false)
 const importingPlugins = ref(false)
 const tgVisible = ref(false)
 const scanVisible = ref(false)
@@ -480,6 +600,7 @@ const user = ref({
   phone: ''
 })
 const plugins = ref<Plugin[]>([])
+const pluginFilters = ref<PluginFilter[]>([])
 const pluginForm = ref<Plugin>({
   id: 0,
   name: '',
@@ -499,8 +620,25 @@ const pluginSettingsForm = ref({
   githubProxy: ''
 })
 const selectedPluginIds = ref<number[]>([])
+const pluginFilterForm = ref<PluginFilter>({
+  id: 0,
+  name: '',
+  url: '',
+  enabled: true,
+  sortOrder: 0,
+  version: null,
+  stages: '',
+  stageList: [],
+  extend: '',
+  errorStrategy: 'skip',
+  sourceName: '',
+  lastCheckedAt: '',
+  lastError: ''
+})
+const selectedPluginFilterIds = ref<number[]>([])
 let timer = 0
 let pluginSortable: Sortable | null = null
+let pluginFilterSortable: Sortable | null = null
 
 const handleLogin = () => {
   axios.get('/api/telegram/user').then(({data}) => {
@@ -593,6 +731,79 @@ const resetPluginForm = () => {
   }
 }
 
+const parsePluginFilterStages = (value: string) => {
+  return (value || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(item => item)
+}
+
+const normalizePluginFilter = (value: PluginFilter) => {
+  return {
+    ...value,
+    stages: value.stages || '',
+    stageList: value.stageList || parsePluginFilterStages(value.stages),
+    errorStrategy: value.errorStrategy || 'skip'
+  }
+}
+
+const getPluginFilterStageList = (filter: PluginFilter) => {
+  if (Array.isArray(filter.stageList)) {
+    return filter.stageList.map(item => item.trim()).filter(item => item)
+  }
+  return parsePluginFilterStages(filter.stages)
+}
+
+const validatePluginFilter = (filter: PluginFilter) => {
+  if (!filter.url.trim()) {
+    ElMessage.warning('请输入过滤器地址')
+    return false
+  }
+  if (getPluginFilterStageList(filter).length === 0) {
+    ElMessage.warning('请选择拦截点')
+    return false
+  }
+  return true
+}
+
+const pluginFilterPayload = (filter: PluginFilter) => {
+  const stageList = getPluginFilterStageList(filter)
+  const payload = {
+    name: filter.name,
+    url: filter.url,
+    enabled: filter.enabled,
+    sortOrder: filter.sortOrder,
+    stages: stageList.join(','),
+    extend: filter.extend,
+    errorStrategy: filter.errorStrategy
+  }
+  if (filter.id) {
+    return {
+      ...payload,
+      id: filter.id
+    }
+  }
+  return payload
+}
+
+const resetPluginFilterForm = () => {
+  pluginFilterForm.value = {
+    id: 0,
+    name: '',
+    url: '',
+    enabled: true,
+    sortOrder: 0,
+    version: null,
+    stages: '',
+    stageList: [],
+    extend: '',
+    errorStrategy: 'skip',
+    sourceName: '',
+    lastCheckedAt: '',
+    lastError: ''
+  }
+}
+
 const padTimePart = (value: number) => value.toString().padStart(2, '0')
 
 const formatPluginCheckedAt = (value: string) => {
@@ -632,10 +843,43 @@ const enablePluginRowDrop = () => {
   })
 }
 
+const enablePluginFilterRowDrop = () => {
+  const tbody = document.querySelector('#plugin-filters-table .el-table__body-wrapper tbody') as HTMLElement
+  if (!tbody) {
+    return
+  }
+  pluginFilterSortable?.destroy()
+  pluginFilterSortable = Sortable.create(tbody, {
+    animation: 300,
+    draggable: '.el-table__row',
+    onEnd: ({oldIndex, newIndex}) => {
+      if (oldIndex == null || newIndex == null || oldIndex === newIndex) {
+        return
+      }
+      const row = pluginFilters.value.splice(oldIndex, 1)[0]
+      pluginFilters.value.splice(newIndex, 0, row)
+      pluginFilters.value.forEach((item, index) => {
+        item.sortOrder = index + 1
+      })
+      axios.post('/api/plugin-filters/reorder', pluginFilters.value.map(item => item.id)).then(() => {
+        ElMessage.success('排序已更新')
+        loadPluginFilters()
+      })
+    }
+  })
+}
+
 const loadPlugins = () => {
   axios.get('/api/plugins').then(({data}) => {
     plugins.value = data
     nextTick(() => enablePluginRowDrop())
+  })
+}
+
+const loadPluginFilters = () => {
+  axios.get('/api/plugin-filters').then(({data}) => {
+    pluginFilters.value = data.map((item: PluginFilter) => normalizePluginFilter(item))
+    nextTick(() => enablePluginFilterRowDrop())
   })
 }
 
@@ -654,6 +898,13 @@ const showPlugins = () => {
   loadPluginSettings()
 }
 
+const showPluginFilters = () => {
+  pluginFilterVisible.value = true
+  resetPluginFilterForm()
+  selectedPluginFilterIds.value = []
+  loadPluginFilters()
+}
+
 const addPlugin = () => {
   axios.post('/api/plugins', {
     url: pluginForm.value.url,
@@ -662,6 +913,17 @@ const addPlugin = () => {
     ElMessage.success('添加成功')
     resetPluginForm()
     loadPlugins()
+  })
+}
+
+const addPluginFilter = () => {
+  if (!validatePluginFilter(pluginFilterForm.value)) {
+    return
+  }
+  axios.post('/api/plugin-filters', pluginFilterPayload(pluginFilterForm.value)).then(() => {
+    ElMessage.success('添加成功')
+    resetPluginFilterForm()
+    loadPluginFilters()
   })
 }
 
@@ -706,9 +968,33 @@ const deleteSelectedPlugins = () => {
   })
 }
 
+const onPluginFilterSelectionChange = (rows: PluginFilter[]) => {
+  selectedPluginFilterIds.value = rows.map(item => item.id)
+}
+
+const deleteSelectedPluginFilters = () => {
+  axios.post('/api/plugin-filters/delete-batch', {
+    ids: selectedPluginFilterIds.value
+  }).then(({data}) => {
+    ElMessage.success(`已删除 ${data} 个过滤器`)
+    selectedPluginFilterIds.value = []
+    loadPluginFilters()
+  })
+}
+
 const updatePlugin = (plugin: Plugin) => {
   axios.put('/api/plugins/' + plugin.id, plugin).then(({data}) => {
     Object.assign(plugin, data)
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePluginFilter = (filter: PluginFilter) => {
+  if (!validatePluginFilter(filter)) {
+    return
+  }
+  axios.put('/api/plugin-filters/' + filter.id, pluginFilterPayload(filter)).then(({data}) => {
+    Object.assign(filter, normalizePluginFilter(data))
     ElMessage.success('更新成功')
   })
 }
@@ -723,10 +1009,27 @@ const refreshPlugin = (id: number) => {
   })
 }
 
+const refreshPluginFilter = (id: number) => {
+  axios.post('/api/plugin-filters/' + id + '/refresh').then(({data}) => {
+    const index = pluginFilters.value.findIndex(item => item.id === id)
+    if (index >= 0) {
+      pluginFilters.value[index] = normalizePluginFilter(data)
+    }
+    ElMessage.success('刷新完成')
+  })
+}
+
 const deletePlugin = (id: number) => {
   axios.delete('/api/plugins/' + id).then(() => {
     ElMessage.success('删除成功')
     loadPlugins()
+  })
+}
+
+const deletePluginFilter = (id: number) => {
+  axios.delete('/api/plugin-filters/' + id).then(() => {
+    ElMessage.success('删除成功')
+    loadPluginFilters()
   })
 }
 
@@ -918,6 +1221,7 @@ onMounted(() => {
 onUnmounted(() => {
   clearInterval(timer)
   pluginSortable?.destroy()
+  pluginFilterSortable?.destroy()
 })
 </script>
 
