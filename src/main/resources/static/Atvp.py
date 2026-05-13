@@ -692,12 +692,14 @@ class Spider(HostSpider):
         if not isinstance(vod_list, list):
             return
 
+        total = 0
         for vod in vod_list:
             if not isinstance(vod, dict):
                 continue
             vod_name = str(vod.get("vod_name") or "").strip()
             from_groups = str(vod.get("vod_play_from") or "").split("$$$")
             url_groups = str(vod.get("vod_play_url") or "").split("$$$")
+            cached_count = 0
             for group_index, url_group in enumerate(url_groups):
                 play_from = from_groups[group_index] if group_index < len(from_groups) else ""
                 for episode_index, episode in enumerate(str(url_group or "").split("#"), start=1):
@@ -718,6 +720,15 @@ class Spider(HostSpider):
                         "play_id": play_id,
                     }
                     self._remember_play_context(play_id, context)
+                    cached_count += 1
+            if cached_count:
+                total += cached_count
+                self.log(
+                    "Atvp filter play context cached: "
+                    f"vod_name={vod_name or '-'}, count={cached_count}"
+                )
+        if total:
+            self.log(f"Atvp filter play context cache ready: total={total}")
 
     def _remember_play_context(self, play_id, context):
         value = str(play_id or "").strip()
@@ -735,8 +746,16 @@ class Spider(HostSpider):
         if context is None and value.startswith(self.PUSH_PREFIX):
             context = self._play_context_cache.get(value[len(self.PUSH_PREFIX):])
         if context is None:
+            if self._filters:
+                self.log(f"Atvp filter play context missing: id={self._short_log_value(value)}")
             return {}
         return dict(context)
+
+    def _short_log_value(self, value, limit=80):
+        text = str(value or "")
+        if len(text) <= limit:
+            return text
+        return text[:limit] + "..."
 
     def _build_player_context(self, flag=None, play_id=None, vip_flags=None):
         context = {
@@ -748,6 +767,12 @@ class Spider(HostSpider):
         if play_context:
             context.update(play_context)
             context["play"] = play_context
+            self.log(
+                "Atvp filter play context resolved: "
+                f"vod_name={play_context.get('vod_name') or '-'}, "
+                f"episode={play_context.get('episode_name') or '-'}, "
+                f"play_from={play_context.get('play_from') or '-'}"
+            )
         return context
 
     def _merge_cached_detail_vod(self, cached_vod, parsed_vod):
