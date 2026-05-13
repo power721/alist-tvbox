@@ -95,13 +95,16 @@ public class BiliCookieRefreshService {
                     .map(JsonNode::asLong)
                     .orElse(System.currentTimeMillis());
             String correspondPath = BiliCookieRefreshUtils.getCorrespondPath(timestamp);
-            ResponseEntity<String> correspondResponse = restTemplate.exchange(
+            ResponseEntity<byte[]> correspondResponse = restTemplate.exchange(
                     String.format(CORRESPOND_API, correspondPath),
                     HttpMethod.GET,
                     new HttpEntity<>(buildHeaders(cookie, false)),
-                    String.class
+                    byte[].class
             );
-            String html = correspondResponse.getBody();
+            String html = BiliCookieRefreshUtils.decodeHtml(
+                    correspondResponse.getBody(),
+                    correspondResponse.getHeaders().getFirst(HttpHeaders.CONTENT_ENCODING)
+            );
             String refreshCsrf = BiliCookieRefreshUtils.extractRefreshCsrf(html);
             if (StringUtils.isBlank(refreshCsrf)) {
                 log.warn("B站 Cookie 刷新失败：未获取到 refresh_csrf，status={}，body={}",

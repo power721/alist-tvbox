@@ -8,6 +8,9 @@ import org.jsoup.nodes.Element;
 import javax.crypto.Cipher;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PublicKey;
@@ -18,6 +21,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.InflaterInputStream;
 
 public final class BiliCookieRefreshUtils {
     private static final String PUBLIC_KEY = """
@@ -54,6 +59,21 @@ public final class BiliCookieRefreshUtils {
             }
         }
         return null;
+    }
+
+    public static String decodeHtml(byte[] body, String contentEncoding) throws IOException {
+        if (body == null || body.length == 0) {
+            return "";
+        }
+        InputStream inputStream = new ByteArrayInputStream(body);
+        if (StringUtils.containsIgnoreCase(contentEncoding, "gzip")) {
+            inputStream = new GZIPInputStream(inputStream);
+        } else if (StringUtils.containsIgnoreCase(contentEncoding, "deflate")) {
+            inputStream = new InflaterInputStream(inputStream);
+        }
+        try (InputStream stream = inputStream) {
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     public static String ensureBuvid3(String cookieHeader) {

@@ -1234,7 +1234,8 @@ public class SubscriptionService {
         String source = readHostAddress("") + "/plugins/" + getCurrentOrFirstToken() + "/" + plugin.getId() + ".txt";
         map.put("source", source);
         map.put("token", token.isBlank() ? "-" : token);
-        map.put("local_proxy_config", readLocalProxyConfig());
+        map.put("local_proxy_config", new HashMap<>());
+//        map.put("local_proxy_config", readLocalProxyConfig());
         if (StringUtils.isNotBlank(plugin.getExtend())) {
             map.put("data", plugin.getExtend());
         }

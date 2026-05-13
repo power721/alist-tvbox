@@ -59,15 +59,54 @@ test_parse_nodes_rejects_bad_payload() {
   assert_eq "" "$actual" "parse_nodes_from_payload should emit nothing for unusable payloads"
 }
 
-test_discover_nodes_falls_back_to_pool() {
+test_discover_nodes_uses_embedded_payload_without_curl() {
   local actual expected
   curl() {
-    return 22
+    printf 'ASSERT FAIL: discover_nodes should not call curl\n' >&2
+    exit 1
   }
 
   actual="$(discover_nodes)"
-  expected=$'默认节点\tgh.llkk.cc\n备用节点\tgh-proxy.org\n备用节点\thk.gh-proxy.org\n备用节点\tcdn.gh-proxy.org\n备用节点\tedgeone.gh-proxy.org\n备用节点\tgh.felicity.ac.cn'
-  assert_eq "$expected" "$actual" "discover_nodes should return the full fallback pool when API discovery fails"
+  expected="$(
+    {
+      parse_nodes_from_payload "$(embedded_nodes_payload)"
+      fallback_nodes
+    } | awk -F '\t' 'NF > 0 && !seen[$2]++'
+  )"
+  assert_eq "$expected" "$actual" "discover_nodes should merge fallback nodes into the embedded list without duplicates"
+}
+
+test_discover_nodes_excludes_removed_hosts() {
+  local output removed_hosts host
+  output="$(discover_nodes)"
+  removed_hosts=(
+    ghpr.cc
+    gh-proxy.net
+    ghproxy.net
+    git.669966.xyz
+    g.blfrp.cn
+    gh.927223.xyz
+    gh.bugdey.us.kg
+    github.ednovas.xyz
+    github.xxlab.tech
+    proxy.yaoyaoling.net
+    gh.monlor.com
+    gh.ddlc.top
+    gh.catmak.name
+    free.cn.eu.org
+    ghpxy.hwinzniej.top
+    j.1win.ggff.net
+    github.geekery.cn
+    gp.zkitefly.eu.org
+    ghp.keleyaa.com
+  )
+
+  for host in "${removed_hosts[@]}"; do
+    if [[ "$output" == *$'\t'"$host"$'\n'* ]] || [[ "$output" == *$'\t'"$host" ]]; then
+      printf 'ASSERT FAIL: discover_nodes should exclude removed host [%s]\n' "$host" >&2
+      exit 1
+    fi
+  done
 }
 
 test_parse_curl_success_metrics() {
@@ -91,6 +130,14 @@ test_print_success_table() {
   output="$(print_success_table "$rows")"
   [[ "$output" == *"Success Nodes"* ]] || {
     printf 'ASSERT FAIL: print_success_table should print section title\n' >&2
+    exit 1
+  }
+  [[ "$output" != *"Label"* ]] || {
+    printf 'ASSERT FAIL: print_success_table should not print the Label column\n' >&2
+    exit 1
+  }
+  [[ "$output" != *"默认节点"* ]] || {
+    printf 'ASSERT FAIL: print_success_table should not print label values in rows\n' >&2
     exit 1
   }
   [[ "$output" == *"gh.llkk.cc"* ]] || {
@@ -132,6 +179,10 @@ test_render_json_report() {
     printf 'ASSERT FAIL: render_json_report should include target_url\n' >&2
     exit 1
   }
+  [[ "$output" == *'"discovery_api": "embedded://gh-proxy-nodes-2026-05-12"'* ]] || {
+    printf 'ASSERT FAIL: render_json_report should include embedded discovery source\n' >&2
+    exit 1
+  }
   [[ "$output" == *'"host": "gh.llkk.cc"'* ]] || {
     printf 'ASSERT FAIL: render_json_report should include success host\n' >&2
     exit 1
@@ -148,7 +199,8 @@ test_fallback_nodes
 test_sort_success_rows
 test_parse_nodes_with_jq_or_python
 test_parse_nodes_rejects_bad_payload
-test_discover_nodes_falls_back_to_pool
+test_discover_nodes_uses_embedded_payload_without_curl
+test_discover_nodes_excludes_removed_hosts
 test_parse_curl_success_metrics
 test_parse_curl_failure_metrics
 test_print_success_table
