@@ -347,7 +347,7 @@
         <el-table-column type="selection" width="55"/>
         <el-table-column label="顺序" width="80">
           <template #default="scope">
-            <span :class="pluginDragEnabled ? 'pointer' : 'order-text'">{{ scope.row.sortOrder }}</span>
+            <span class="pointer">{{ scope.row.sortOrder }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="name" label="名称" width="180">
@@ -445,7 +445,7 @@
         <el-table-column type="selection" width="55"/>
         <el-table-column label="顺序" width="80">
           <template #default="scope">
-            <span :class="pluginDragEnabled ? 'pointer' : 'order-text'">{{ scope.row.sortOrder }}</span>
+            <span class="pointer">{{ scope.row.sortOrder }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="name" label="名称" width="180">
@@ -493,11 +493,6 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="extend" label="扩展配置" width="220">
-          <template #default="scope">
-            <el-input v-model="scope.row.extend" @change="updatePluginFilter(scope.row)"/>
-          </template>
-        </el-table-column>
         <el-table-column prop="errorStrategy" label="错误策略" width="120">
           <template #default="scope">
             <el-select v-model="scope.row.errorStrategy" @change="updatePluginFilter(scope.row)">
@@ -516,13 +511,82 @@
             <span>{{ scope.row.lastError || '正常' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160">
+        <el-table-column label="操作" width="220">
           <template #default="scope">
+            <el-button link type="primary" @click="openPluginFilterConfig(scope.row)">配置</el-button>
             <el-button link type="primary" @click="refreshPluginFilter(scope.row.id)">刷新</el-button>
             <el-button link type="danger" @click="deletePluginFilter(scope.row.id)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="pluginFilterConfigVisible" title="过滤器配置" width="860px" destroy-on-close>
+      <div v-if="pluginFilterConfigTarget" class="filter-config-dialog">
+        <div class="filter-config-header">
+          <div class="filter-config-title">{{ pluginFilterConfigTarget.name || pluginFilterConfigTarget.sourceName || pluginFilterConfigTarget.url }}</div>
+          <div class="filter-config-subtitle">
+            <span v-if="pluginFilterConfigSchema.description">{{ pluginFilterConfigSchema.description }}</span>
+            <span v-if="pluginFilterConfigSchema.source">来源：{{ pluginFilterSchemaSourceLabel(pluginFilterConfigSchema.source) }}</span>
+          </div>
+        </div>
+
+        <el-alert
+          v-if="pluginFilterConfigError"
+          type="warning"
+          :closable="false"
+          :title="pluginFilterConfigError"
+          style="margin-bottom: 12px"
+        />
+
+        <el-tabs v-model="pluginFilterConfigMode">
+          <el-tab-pane label="表单编辑" name="form">
+            <div v-if="pluginFilterConfigSchema.fields.length" class="filter-config-form">
+              <PluginFilterConfigFieldEditor
+                v-for="field in pluginFilterConfigSchema.fields"
+                :key="field.key"
+                :field="field"
+                :model-value="pluginFilterConfigObject"
+                @update:model-value="onPluginFilterConfigObjectChange"
+              />
+            </div>
+            <el-empty v-else description="未识别到预设字段，可直接在 JSON 模式编辑"/>
+
+            <div class="filter-config-extra">
+              <div class="filter-config-extra-header">
+                <span>额外字段</span>
+                <el-button v-if="pluginFilterConfigSchema.allowAdditional" link type="primary" @click="addPluginFilterExtraEntry">添加字段</el-button>
+              </div>
+              <div v-if="pluginFilterConfigExtras.length" class="filter-config-extra-list">
+                <div v-for="(item, index) in pluginFilterConfigExtras" :key="`${index}-${item.key}`" class="filter-config-extra-row">
+                  <el-input v-model="item.key" placeholder="key"/>
+                  <el-input v-model="item.value" placeholder="value / JSON"/>
+                  <el-button link type="danger" @click="removePluginFilterExtraEntry(index)">删除</el-button>
+                </div>
+              </div>
+              <div v-else-if="!pluginFilterConfigSchema.allowAdditional" class="filter-config-extra-empty">当前过滤器未开放额外字段，建议只填写已声明的配置项。</div>
+              <div v-else class="filter-config-extra-empty">如果过滤器支持更多自定义参数，可以在这里补充声明外的字段。</div>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="JSON 编辑" name="json">
+            <el-input
+              v-model="pluginFilterConfigJson"
+              type="textarea"
+              :rows="22"
+              placeholder="{&#10;  &quot;key&quot;: &quot;value&quot;&#10;}"
+            />
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="pluginFilterConfigVisible = false">取消</el-button>
+          <el-button @click="syncPluginFilterConfigJsonFromForm">同步到 JSON</el-button>
+          <el-button type="primary" @click="savePluginFilterConfig">保存配置</el-button>
+        </span>
+      </template>
     </el-dialog>
 
   </div>
@@ -534,7 +598,7 @@ import axios from "axios"
 import {ElMessage} from "element-plus";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
-import {isPluginDragEnabledForUserAgent} from "@/utils/pluginDragSupport.mjs";
+import PluginFilterConfigFieldEditor from "@/components/PluginFilterConfigFieldEditor.vue";
 
 interface Sub {
   sid: '',
@@ -571,6 +635,33 @@ interface PluginFilter {
   sourceName: string
   lastCheckedAt: string
   lastError: string
+  configSchema?: PluginFilterConfigSchema
+}
+
+interface PluginFilterConfigField {
+  key: string
+  label: string
+  type: string
+  required: boolean
+  description: string
+  defaultValue?: any
+  placeholder: string
+  aliases: string[]
+  children: PluginFilterConfigField[]
+}
+
+interface PluginFilterConfigSchema {
+  source: string
+  description: string
+  allowAdditional: boolean
+  singleValueKey: string
+  example: string
+  fields: PluginFilterConfigField[]
+}
+
+interface PluginFilterExtraEntry {
+  key: string
+  value: string
 }
 
 const PLUGIN_REPO_URL_KEY = 'plugin_repo_url'
@@ -611,6 +702,7 @@ const formVisible = ref(false)
 const dialogVisible = ref(false)
 const pluginVisible = ref(false)
 const pluginFilterVisible = ref(false)
+const pluginFilterConfigVisible = ref(false)
 const importingPlugins = ref(false)
 const tgVisible = ref(false)
 const scanVisible = ref(false)
@@ -685,10 +777,24 @@ const pluginFilterForm = ref<PluginFilter>({
   pluginIdList: [],
   sourceName: '',
   lastCheckedAt: '',
-  lastError: ''
+  lastError: '',
+  configSchema: undefined
 })
 const selectedPluginFilterIds = ref<number[]>([])
-const pluginDragEnabled = ref(isPluginDragEnabledForUserAgent(window.navigator.userAgent))
+const pluginFilterConfigTarget = ref<PluginFilter | null>(null)
+const pluginFilterConfigSchema = ref<PluginFilterConfigSchema>({
+  source: 'none',
+  description: '',
+  allowAdditional: true,
+  singleValueKey: '',
+  example: '',
+  fields: []
+})
+const pluginFilterConfigMode = ref('form')
+const pluginFilterConfigJson = ref('{}')
+const pluginFilterConfigObject = ref<Record<string, any>>({})
+const pluginFilterConfigExtras = ref<PluginFilterExtraEntry[]>([])
+const pluginFilterConfigError = ref('')
 let timer = 0
 let pluginSortable: Sortable | null = null
 let pluginFilterSortable: Sortable | null = null
@@ -812,7 +918,45 @@ const normalizePluginFilter = (value: PluginFilter) => {
     pluginScope,
     pluginIds: value.pluginIds || '',
     pluginIdList: pluginScope === 'all' ? [] : value.pluginIdList || parsePluginFilterPluginIds(value.pluginIds),
-    errorStrategy: value.errorStrategy || 'skip'
+    errorStrategy: value.errorStrategy || 'skip',
+    configSchema: normalizePluginFilterConfigSchema(value.configSchema)
+  }
+}
+
+const normalizePluginFilterConfigSchema = (schema?: PluginFilterConfigSchema): PluginFilterConfigSchema => {
+  return {
+    source: schema?.source || 'none',
+    description: schema?.description || '',
+    allowAdditional: schema?.allowAdditional !== false,
+    singleValueKey: schema?.singleValueKey || '',
+    example: schema?.example || '',
+    fields: Array.isArray(schema?.fields)
+      ? schema!.fields.map(field => normalizePluginFilterConfigField(field))
+      : []
+  }
+}
+
+const pluginFilterSchemaSourceLabel = (source: string) => {
+  if (source === 'declared') {
+    return '过滤器脚本声明'
+  }
+  if (source === 'none') {
+    return '未声明'
+  }
+  return source || '未知'
+}
+
+const normalizePluginFilterConfigField = (field: PluginFilterConfigField): PluginFilterConfigField => {
+  return {
+    key: field?.key || '',
+    label: field?.label || '',
+    type: field?.type || 'string',
+    required: !!field?.required,
+    description: field?.description || '',
+    defaultValue: field?.defaultValue,
+    placeholder: field?.placeholder || '',
+    aliases: Array.isArray(field?.aliases) ? field.aliases : [],
+    children: Array.isArray(field?.children) ? field.children.map(item => normalizePluginFilterConfigField(item)) : []
   }
 }
 
@@ -890,8 +1034,225 @@ const resetPluginFilterForm = () => {
     pluginIdList: [],
     sourceName: '',
     lastCheckedAt: '',
-    lastError: ''
+    lastError: '',
+    configSchema: undefined
   }
+}
+
+const parsePluginFilterExtend = (extend: string) => {
+  const text = (extend || '').trim()
+  if (!text) {
+    return {}
+  }
+  try {
+    const parsed = JSON.parse(text)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return null
+  }
+}
+
+const stringifyPluginFilterExtend = (value: Record<string, any>) => {
+  const keys = Object.keys(value).filter(key => key && value[key] !== undefined && value[key] !== '')
+  if (keys.length === 0) {
+    return ''
+  }
+  return JSON.stringify(value, null, 2)
+}
+
+const cloneJsonValue = <T>(value: T): T => JSON.parse(JSON.stringify(value))
+
+const getDeclaredFieldKeys = (schema: PluginFilterConfigSchema) => {
+  const keys = schema.fields.flatMap(field => [field.key, ...(field.aliases || [])])
+  return keys.filter(key => key)
+}
+
+const onPluginFilterConfigObjectChange = (value: Record<string, any>) => {
+  pluginFilterConfigObject.value = value
+}
+
+const getObjectAtPath = (root: Record<string, any>, path: string[]) => {
+  let current: any = root
+  for (const segment of path) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return {}
+    }
+    current = current[segment]
+  }
+  return current && typeof current === 'object' && !Array.isArray(current) ? current : {}
+}
+
+const fieldValueByAliases = (field: PluginFilterConfigField, container: Record<string, any>) => {
+  const keys = [field.key, ...(field.aliases || [])].filter(Boolean)
+  for (const key of keys) {
+    const value = container[key]
+    if (value !== undefined && value !== null) {
+      return value
+    }
+  }
+  return field.defaultValue
+}
+
+const rebuildPluginFilterConfigExtras = () => {
+  const declared = new Set(getDeclaredFieldKeys(pluginFilterConfigSchema.value))
+  pluginFilterConfigExtras.value = Object.entries(pluginFilterConfigObject.value)
+    .filter(([key]) => !declared.has(key))
+    .map(([key, value]) => ({
+      key,
+      value: typeof value === 'string' ? value : JSON.stringify(value)
+    }))
+}
+
+const validatePluginFilterConfigObject = () => {
+  const validateFields = (fields: PluginFilterConfigField[], container: Record<string, any>, path: string[] = []): string => {
+    for (const field of fields) {
+      const currentPath = [...path, field.label || field.key]
+      const value = fieldValueByAliases(field, container)
+      if (field.type === 'object' && field.children?.length) {
+        const nested = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+        const hasNestedValue = Object.keys(nested).length > 0
+        if (field.required && !hasNestedValue) {
+          return currentPath.join(' / ')
+        }
+        const nestedRequiredPath = validateFields(field.children, nested, currentPath)
+        if (nestedRequiredPath) {
+          return nestedRequiredPath
+        }
+        continue
+      }
+      if (!field.required) {
+        continue
+      }
+      if (value === undefined || value === null || value === '') {
+        return currentPath.join(' / ')
+      }
+    }
+    return ''
+  }
+
+  const invalidPath = validateFields(pluginFilterConfigSchema.value.fields, pluginFilterConfigObject.value)
+  if (invalidPath) {
+    ElMessage.warning(`请填写 ${invalidPath}`)
+    return false
+  }
+  return true
+}
+
+const syncPluginFilterConfigJsonFromForm = () => {
+  const declared = new Set(getDeclaredFieldKeys(pluginFilterConfigSchema.value))
+  const nextValue: Record<string, any> = {}
+  for (const field of pluginFilterConfigSchema.value.fields) {
+    const value = fieldValueByAliases(field, pluginFilterConfigObject.value)
+    if (value !== undefined && value !== null && value !== '') {
+      nextValue[field.key] = cloneJsonValue(value)
+    }
+  }
+  for (const item of pluginFilterConfigExtras.value) {
+    const key = (item.key || '').trim()
+    if (!key || declared.has(key)) {
+      continue
+    }
+    const raw = (item.value || '').trim()
+    if (!raw) {
+      continue
+    }
+    try {
+      nextValue[key] = JSON.parse(raw)
+    } catch {
+      nextValue[key] = raw
+    }
+  }
+  pluginFilterConfigObject.value = nextValue
+  pluginFilterConfigJson.value = stringifyPluginFilterExtend(nextValue) || '{}'
+  pluginFilterConfigError.value = ''
+}
+
+const syncPluginFilterConfigFormFromJson = () => {
+  try {
+    const parsed = pluginFilterConfigJson.value.trim() ? JSON.parse(pluginFilterConfigJson.value) : {}
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      pluginFilterConfigError.value = '配置必须是 JSON 对象'
+      return false
+    }
+    pluginFilterConfigObject.value = cloneJsonValue(parsed)
+    rebuildPluginFilterConfigExtras()
+    pluginFilterConfigError.value = ''
+    return true
+  } catch {
+    pluginFilterConfigError.value = 'JSON 格式不正确，请先修正后再保存'
+    return false
+  }
+}
+
+const addPluginFilterExtraEntry = () => {
+  pluginFilterConfigExtras.value.push({key: '', value: ''})
+}
+
+const removePluginFilterExtraEntry = (index: number) => {
+  pluginFilterConfigExtras.value.splice(index, 1)
+}
+
+const ensurePluginFilterConfigSchema = async (filter: PluginFilter) => {
+  if (filter.configSchema?.fields?.length || filter.configSchema?.description) {
+    pluginFilterConfigSchema.value = normalizePluginFilterConfigSchema(filter.configSchema)
+    return
+  }
+  if (!filter.id) {
+    pluginFilterConfigSchema.value = normalizePluginFilterConfigSchema(undefined)
+    return
+  }
+  const {data} = await axios.get(`/api/plugin-filters/${filter.id}/config-schema`)
+  filter.configSchema = normalizePluginFilterConfigSchema(data)
+  pluginFilterConfigSchema.value = filter.configSchema
+}
+
+const openPluginFilterConfig = async (filter: PluginFilter) => {
+  pluginFilterConfigTarget.value = filter
+  pluginFilterConfigVisible.value = true
+  pluginFilterConfigMode.value = 'form'
+  pluginFilterConfigError.value = ''
+  await ensurePluginFilterConfigSchema(filter)
+  const parsed = parsePluginFilterExtend(filter.extend)
+  if (parsed === null) {
+    if (pluginFilterConfigSchema.value.singleValueKey) {
+      pluginFilterConfigObject.value = {
+        [pluginFilterConfigSchema.value.singleValueKey]: filter.extend
+      }
+      pluginFilterConfigJson.value = stringifyPluginFilterExtend(pluginFilterConfigObject.value) || '{}'
+      rebuildPluginFilterConfigExtras()
+      pluginFilterConfigError.value = '已将纯文本配置自动映射为表单字段。'
+      return
+    }
+    pluginFilterConfigObject.value = {}
+    pluginFilterConfigJson.value = filter.extend || ''
+    pluginFilterConfigMode.value = 'json'
+    pluginFilterConfigError.value = '当前扩展配置不是标准 JSON，对话框已切换到 JSON 模式。'
+    pluginFilterConfigExtras.value = []
+    return
+  }
+  pluginFilterConfigObject.value = cloneJsonValue(parsed)
+  pluginFilterConfigJson.value = stringifyPluginFilterExtend(parsed) || '{}'
+  rebuildPluginFilterConfigExtras()
+}
+
+const savePluginFilterConfig = async () => {
+  if (!pluginFilterConfigTarget.value) {
+    return
+  }
+  if (pluginFilterConfigMode.value === 'json' && !syncPluginFilterConfigFormFromJson()) {
+    return
+  }
+  if (!validatePluginFilterConfigObject()) {
+    return
+  }
+  if (pluginFilterConfigMode.value === 'form') {
+    syncPluginFilterConfigJsonFromForm()
+  } else {
+    pluginFilterConfigJson.value = stringifyPluginFilterExtend(pluginFilterConfigObject.value) || '{}'
+  }
+  pluginFilterConfigTarget.value.extend = pluginFilterConfigJson.value === '{}' ? '' : pluginFilterConfigJson.value
+  updatePluginFilter(pluginFilterConfigTarget.value)
+  pluginFilterConfigVisible.value = false
 }
 
 const changePluginFilterScope = (filter: PluginFilter, save = false) => {
@@ -927,11 +1288,6 @@ const formatPluginCheckedAt = (value: string) => {
 }
 
 const enablePluginRowDrop = () => {
-  if (!pluginDragEnabled.value) {
-    pluginSortable?.destroy()
-    pluginSortable = null
-    return
-  }
   const tbody = document.querySelector('#plugins-table .el-table__body-wrapper tbody') as HTMLElement
   if (!tbody) {
     return
@@ -958,11 +1314,6 @@ const enablePluginRowDrop = () => {
 }
 
 const enablePluginFilterRowDrop = () => {
-  if (!pluginDragEnabled.value) {
-    pluginFilterSortable?.destroy()
-    pluginFilterSortable = null
-    return
-  }
   const tbody = document.querySelector('#plugin-filters-table .el-table__body-wrapper tbody') as HTMLElement
   if (!tbody) {
     return
@@ -1115,6 +1466,9 @@ const updatePluginFilter = (filter: PluginFilter) => {
   }
   axios.put('/api/plugin-filters/' + filter.id, pluginFilterPayload(filter)).then(({data}) => {
     Object.assign(filter, normalizePluginFilter(data))
+    if (pluginFilterConfigTarget.value?.id === filter.id) {
+      pluginFilterConfigTarget.value = filter
+    }
     ElMessage.success('更新成功')
   })
 }
@@ -1358,13 +1712,71 @@ onUnmounted(() => {
   cursor: move;
 }
 
-.order-text {
-  cursor: default;
-}
-
 .plugin-filter-scope {
   display: flex;
   gap: 8px;
+}
+
+.filter-config-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.filter-config-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-config-title {
+  font-size: 16px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.filter-config-subtitle {
+  color: var(--el-text-color-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.filter-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.filter-config-extra {
+  border-top: 1px solid var(--el-border-color-lighter);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.filter-config-extra-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.filter-config-extra-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.filter-config-extra-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 180px 1fr 60px;
+}
+
+.filter-config-extra-empty {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 .json pre {

@@ -8,6 +8,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.TableGenerator;
+import jakarta.persistence.Transient;
+import cn.har01d.alist_tvbox.model.PluginFilterConfigSchema;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -68,4 +70,8 @@ public class PluginFilter {
 
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
+
+    // 运行时临时字段，不入库。用于前端生成可视化配置表单。
+    @Transient
+    private PluginFilterConfigSchema configSchema;
 }

@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.PluginFilter;
+import cn.har01d.alist_tvbox.model.PluginFilterConfigSchema;
 import cn.har01d.alist_tvbox.service.PluginFilterService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,6 +51,11 @@ public class PluginFilterController {
     @PostMapping("/{id}/refresh")
     public PluginFilter refresh(@PathVariable Integer id) {
         return pluginFilterService.refresh(id);
+    }
+
+    @GetMapping("/{id}/config-schema")
+    public PluginFilterConfigSchema configSchema(@PathVariable Integer id) {
+        return pluginFilterService.readConfigSchema(id);
     }
 
     @PostMapping("/reorder")
