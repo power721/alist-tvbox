@@ -27,6 +27,9 @@ public class PluginFilterService {
     private static final Pattern FILTER_VERSION = Pattern.compile("(?m)^\\s*//@version:(\\d+)\\s*$");
     private static final String GITHUB_PROXY = "github_proxy";
     private static final String STRICT = "strict";
+    private static final String SCOPE_ALL = "all";
+    private static final String SCOPE_INCLUDE = "include";
+    private static final String SCOPE_EXCLUDE = "exclude";
 
     private final PluginFilterRepository pluginFilterRepository;
     private final SettingRepository settingRepository;
@@ -56,6 +59,10 @@ public class PluginFilterService {
         filter.setSortOrder((int) pluginFilterRepository.count() + 1);
         filter.setStages(normalizeStages(filter.getStages()));
         filter.setErrorStrategy(normalizeErrorStrategy(filter.getErrorStrategy()));
+        // 统一收敛作用范围字段，避免前端传入空值或非法值
+        String pluginScope = normalizePluginScope(filter.getPluginScope());
+        filter.setPluginScope(pluginScope);
+        filter.setPluginIds(normalizePluginIds(pluginScope, filter.getPluginIds()));
         filter.setLastCheckedAt(OffsetDateTime.now());
         filter.setLastError("");
         return pluginFilterRepository.save(filter);
@@ -77,6 +84,10 @@ public class PluginFilterService {
         filter.setStages(normalizeStages(input.getStages()));
         filter.setExtend(input.getExtend());
         filter.setErrorStrategy(normalizeErrorStrategy(input.getErrorStrategy()));
+        // 更新时和创建时保持相同的作用范围归一化规则
+        String pluginScope = normalizePluginScope(input.getPluginScope());
+        filter.setPluginScope(pluginScope);
+        filter.setPluginIds(normalizePluginIds(pluginScope, input.getPluginIds()));
         return pluginFilterRepository.save(filter);
     }
 
@@ -233,6 +244,32 @@ public class PluginFilterService {
 
     private String normalizeErrorStrategy(String errorStrategy) {
         return STRICT.equals(errorStrategy) ? STRICT : "skip";
+    }
+
+    private String normalizePluginScope(String pluginScope) {
+        if (StringUtils.isBlank(pluginScope) || SCOPE_ALL.equals(pluginScope)) {
+            return SCOPE_ALL;
+        }
+        if (SCOPE_INCLUDE.equals(pluginScope) || SCOPE_EXCLUDE.equals(pluginScope)) {
+            return pluginScope;
+        }
+        throw new BadRequestException("过滤器插件作用范围不正确");
+    }
+
+    private String normalizePluginIds(String pluginScope, String pluginIds) {
+        // 全局模式不保留关联插件，避免历史配置残留影响后续判断
+        if (SCOPE_ALL.equals(pluginScope)) {
+            return "";
+        }
+        String value = Arrays.stream(StringUtils.defaultString(pluginIds).split(","))
+                .map(StringUtils::trimToEmpty)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .collect(Collectors.joining(","));
+        if (StringUtils.isBlank(value)) {
+            throw new BadRequestException("请选择关联插件");
+        }
+        return value;
     }
 
     private void applyDownloadedFilter(PluginFilter filter, DownloadedFilter downloadedFilter, boolean updateName) {

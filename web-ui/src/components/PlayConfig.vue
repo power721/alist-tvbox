@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // @ts-nocheck
 import {VueDraggable} from "vue-draggable-plus";
-import {onMounted, ref} from "vue";
+import {onMounted, onUnmounted, ref} from "vue";
 import axios from "axios";
 import {ElMessage} from "element-plus";
 import Sortable from "sortablejs";
 import {Check, Close} from "@element-plus/icons-vue";
+import {isPluginDragEnabledForUserAgent} from "@/utils/pluginDragSupport.mjs";
 
 interface Channel {
   id: number | null
@@ -158,6 +159,8 @@ const updateOrder = () => {
 
 const changed = ref(false)
 const tableKey = ref(0)
+const channelDragEnabled = isPluginDragEnabledForUserAgent(window.navigator.userAgent)
+let channelSortable: Sortable | null = null
 
 const tableRowClassName = ({row}: {
   row: Channel
@@ -174,8 +177,14 @@ const treeToTile = (treeData: Channel[]) => {
 }
 
 const rowDrop = () => {
+  if (!channelDragEnabled) {
+    channelSortable?.destroy()
+    channelSortable = null
+    return
+  }
   const tbody = document.querySelector("#channels tbody") as HTMLElement;
-  Sortable.create(tbody, {
+  channelSortable?.destroy()
+  channelSortable = Sortable.create(tbody, {
     animation: 500,
     handle: ".el-table__row",
     draggable: ".el-table__row",
@@ -325,6 +334,10 @@ onMounted(() => {
     tgTimeout.value = +data.tg_timeout
   })
 })
+
+onUnmounted(() => {
+  channelSortable?.destroy()
+})
 </script>
 
 <template>
@@ -395,7 +408,7 @@ onMounted(() => {
     </el-tab-pane>
     <el-tab-pane label="频道管理" name="second">
       <el-row justify="end">
-        <span style="margin-right: 16px">可以拖动行排序</span>
+        <span style="margin-right: 16px" v-if="channelDragEnabled">可以拖动行排序</span>
         <el-button @click="loadChannels">刷新</el-button>
         <el-popconfirm @confirm="reload" title="是否从配置文件加载全部频道？">
           <template #reference>
@@ -415,7 +428,7 @@ onMounted(() => {
                 style="width: 100%">
         <el-table-column prop="order" label="顺序" width="60">
           <template #default="scope">
-            <span class="pointer">{{ scope.row.order }}</span>
+            <span :class="channelDragEnabled ? 'pointer' : 'order-text'">{{ scope.row.order }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="id" label="ID" width="120"/>
@@ -531,5 +544,9 @@ onMounted(() => {
 
 .pointer {
   cursor: pointer;
+}
+
+.order-text {
+  cursor: default;
 }
 </style>
