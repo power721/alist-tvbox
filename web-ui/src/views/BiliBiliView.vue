@@ -16,7 +16,7 @@
 
     <h1>分类列表</h1>
     <el-row justify="end">
-      <span style="margin-right: 16px">可以拖动行排序</span>
+      <span style="margin-right: 16px" v-if="channelDragEnabled">可以拖动行排序</span>
       <el-button @click="load">刷新</el-button>
       <el-button type="primary" :disabled="!changed" @click="handleSave">保存</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
@@ -30,7 +30,7 @@
               style="width: 100%">
       <el-table-column prop="order" label="顺序" sortable width="100">
         <template #default="scope">
-          <span class="pointer">{{ scope.row.order }}</span>
+          <span :class="channelDragEnabled ? 'pointer' : 'order-text'">{{ scope.row.order }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="id" label="ID" sortable width="100"/>
@@ -218,6 +218,7 @@ import Sortable from "sortablejs"
 import {Check, Close} from '@element-plus/icons-vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
+import {isPluginDragEnabledForUserAgent} from "@/utils/pluginDragSupport.mjs";
 
 const columns = [
   {title: "ID", key: "id", dataKey: "id"},
@@ -273,6 +274,8 @@ const settingVisible = ref(false)
 const loginVisible = ref(false)
 const changed = ref(false)
 const tableKey = ref(0)
+const channelDragEnabled = isPluginDragEnabledForUserAgent(window.navigator.userAgent)
+let channelSortable: Sortable | null = null
 const form = ref<Nav>({
   id: 0,
   name: '',
@@ -302,8 +305,14 @@ const treeToTile = (treeData: Nav[]) => {
 }
 
 const rowDrop = () => {
+  if (!channelDragEnabled) {
+    channelSortable?.destroy()
+    channelSortable = null
+    return
+  }
   const tbody = document.querySelector(".el-table__body-wrapper tbody") as HTMLElement;
-  Sortable.create(tbody, {
+  channelSortable?.destroy()
+  channelSortable = Sortable.create(tbody, {
     animation: 500,
     handle: ".el-table__row",
     draggable: ".el-table__row",
@@ -643,5 +652,9 @@ onMounted(() => {
 
 .pointer {
   cursor: pointer;
+}
+
+.order-text {
+  cursor: default;
 }
 </style>
