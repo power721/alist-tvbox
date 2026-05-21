@@ -1915,7 +1915,7 @@ public class TvBoxService {
         movieDetail.setVod_name(fsDetail.getName());
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(site.getName());
-        if ("detail".equals(ac) || "web".equals(ac)) {
+        if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
             depth = 1;
             movieDetail.setType(9);
         } else {
