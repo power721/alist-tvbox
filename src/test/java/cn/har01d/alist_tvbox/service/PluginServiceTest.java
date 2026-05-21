@@ -45,6 +45,8 @@ class PluginServiceTest {
     private RestTemplateBuilder builder;
     @Mock
     private PlatformTransactionManager transactionManager;
+    @Mock
+    private SubscriptionSourceService subscriptionSourceService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -54,7 +56,8 @@ class PluginServiceTest {
     void setUp() {
         when(builder.build()).thenReturn(restTemplate);
         lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(new SimpleTransactionStatus());
-        pluginService = new PluginService(pluginRepository, settingRepository, builder, objectMapper, new TransactionTemplate(transactionManager));
+        lenient().when(subscriptionSourceService.nextSortOrder()).thenReturn(1);
+        pluginService = new PluginService(pluginRepository, settingRepository, builder, objectMapper, new TransactionTemplate(transactionManager), subscriptionSourceService);
     }
 
     @Test
@@ -64,7 +67,7 @@ class PluginServiceTest {
 
         when(pluginRepository.findByUrl(plugin.getUrl())).thenReturn(Optional.empty());
         when(restTemplate.getForObject(URI.create(plugin.getUrl()), String.class)).thenReturn("//@version:4\nplugin-body");
-        when(pluginRepository.count()).thenReturn(0L);
+        when(subscriptionSourceService.nextSortOrder()).thenReturn(1);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> {
             Plugin saved = invocation.getArgument(0);
             if (saved.getId() == null) {
@@ -205,14 +208,10 @@ class PluginServiceTest {
         third.setSortOrder(3);
 
         when(pluginRepository.findById(22)).thenReturn(Optional.of(deleted));
-        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of(first, third));
-        when(pluginRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
-
         pluginService.delete(22);
 
         assertThat(first.getSortOrder()).isEqualTo(1);
-        assertThat(third.getSortOrder()).isEqualTo(2);
-        verify(pluginRepository).saveAll(List.of(first, third));
+        verify(subscriptionSourceService).normalizeSortOrders();
     }
 
     @Test
@@ -244,15 +243,10 @@ class PluginServiceTest {
         remainingSecond.setSortOrder(6);
 
         when(pluginRepository.findAllById(List.of(1, 2))).thenReturn(List.of(first, second));
-        when(pluginRepository.findAllByOrderBySortOrderAscIdAsc()).thenReturn(List.of(remainingFirst, remainingSecond));
-        when(pluginRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
-
         int deleted = pluginService.deleteBatch(List.of(1, 2));
 
         assertThat(deleted).isEqualTo(2);
-        assertThat(remainingFirst.getSortOrder()).isEqualTo(1);
-        assertThat(remainingSecond.getSortOrder()).isEqualTo(2);
-        verify(pluginRepository).saveAll(List.of(remainingFirst, remainingSecond));
+        verify(subscriptionSourceService).normalizeSortOrders();
     }
 
     @Test
@@ -299,7 +293,6 @@ class PluginServiceTest {
         when(restTemplate.getForObject(URI.create(firstPlugin), String.class)).thenReturn("new-a");
         when(restTemplate.getForObject(URI.create(secondPlugin), String.class)).thenReturn("body-b");
         when(pluginRepository.findById(7)).thenReturn(Optional.of(existing));
-        when(pluginRepository.count()).thenReturn(1L);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
@@ -324,7 +317,6 @@ class PluginServiceTest {
         when(restTemplate.getForObject(URI.create(resolvedUrl), String.class)).thenReturn("[\"" + pluginUrl + "\"]");
         when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.empty());
         when(restTemplate.getForObject(URI.create(pluginUrl), String.class)).thenReturn("body");
-        when(pluginRepository.count()).thenReturn(0L);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PluginService.ImportResult result = pluginService.importFromSource(repositoryUrl);
@@ -343,7 +335,6 @@ class PluginServiceTest {
         when(settingRepository.findById("github_proxy")).thenReturn(Optional.of(new Setting("github_proxy", "https://gh-proxy.org/")));
         when(pluginRepository.findByUrl(url)).thenReturn(Optional.empty());
         when(restTemplate.getForObject(URI.create(proxiedUrl), String.class)).thenReturn("body");
-        when(pluginRepository.count()).thenReturn(0L);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Plugin saved = pluginService.create(plugin);
@@ -361,7 +352,6 @@ class PluginServiceTest {
         when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn("[\"py/demo.txt\"]");
         when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.empty());
         when(restTemplate.getForObject(URI.create(pluginUrl), String.class)).thenReturn("body");
-        when(pluginRepository.count()).thenReturn(0L);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
@@ -386,7 +376,6 @@ class PluginServiceTest {
         when(pluginRepository.findByUrl(absolutePluginUrl)).thenReturn(Optional.empty());
         when(restTemplate.getForObject(URI.create(relativePluginUrl), String.class)).thenReturn("//@version:1\nrelative-body");
         when(restTemplate.getForObject(URI.create(absolutePluginUrl), String.class)).thenReturn("//@version:2\nabsolute-body");
-        when(pluginRepository.count()).thenReturn(0L, 1L);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
@@ -407,7 +396,6 @@ class PluginServiceTest {
         when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn(payload);
         when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.empty());
         when(restTemplate.getForObject(URI.create(pluginUrl), String.class)).thenReturn("//@version:1\ninvalid-body");
-        when(pluginRepository.count()).thenReturn(0L);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);

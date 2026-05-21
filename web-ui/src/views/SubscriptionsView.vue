@@ -3,7 +3,7 @@
     <h1>订阅列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
-      <el-button @click="showPlugins">插件管理</el-button>
+      <el-button @click="showPlugins">订阅源管理</el-button>
       <el-button @click="showPluginFilters">过滤器管理</el-button>
       <el-button @click="showScan">同步影视</el-button>
       <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
@@ -295,7 +295,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="pluginVisible" title="插件管理" fullscreen>
+    <el-dialog v-model="pluginVisible" title="订阅源管理" fullscreen>
       <el-form :inline="true" :model="pluginForm">
         <el-form-item label="插件地址" required>
           <el-input v-model="pluginForm.url" style="width: 460px" placeholder="https://example.com/plugin.txt"/>
@@ -343,32 +343,33 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="plugins" row-key="id" id="plugins-table" border style="width: 100%" @selection-change="onPluginSelectionChange">
-        <el-table-column type="selection" width="55"/>
+      <el-table :data="managedSources" row-key="id" id="plugins-table" border style="width: 100%" @selection-change="onPluginSelectionChange">
+        <el-table-column type="selection" width="55" :selectable="isSourceDeletable"/>
         <el-table-column label="顺序" width="80">
           <template #default="scope">
             <span class="pointer">{{ scope.row.sortOrder }}</span>
           </template>
         </el-table-column>
+        <el-table-column label="类型" width="90">
+          <template #default="scope">
+            <span>{{ scope.row.builtin ? '内置' : '插件' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="名称" width="180">
           <template #default="scope">
-            <el-input v-model="scope.row.name" @change="updatePlugin(scope.row)"/>
+            <el-input v-model="scope.row.name" @change="updateSource(scope.row)"/>
           </template>
         </el-table-column>
         <el-table-column prop="url" label="地址">
           <template #default="scope">
-            <a :href="scope.row.url" target="_blank">{{ scope.row.url }}</a>
+            <a v-if="scope.row.url" :href="scope.row.url" target="_blank">{{ scope.row.url }}</a>
+            <span v-else>内置源</span>
           </template>
         </el-table-column>
         <el-table-column prop="version" label="版本" width="90"/>
         <el-table-column prop="enabled" label="启用" width="90">
           <template #default="scope">
-            <el-switch v-model="scope.row.enabled" @change="updatePlugin(scope.row)"/>
-          </template>
-        </el-table-column>
-        <el-table-column prop="extend" label="扩展配置" width="220">
-          <template #default="scope">
-            <el-input v-model="scope.row.extend" @change="updatePlugin(scope.row)"/>
+            <el-switch v-model="scope.row.enabled" @change="updateSource(scope.row)"/>
           </template>
         </el-table-column>
         <el-table-column label="最近检查" width="180">
@@ -383,11 +384,28 @@
         </el-table-column>
         <el-table-column label="操作" width="160">
           <template #default="scope">
-            <el-button link type="primary" @click="refreshPlugin(scope.row.id)">刷新</el-button>
-            <el-button link type="danger" @click="deletePlugin(scope.row.id)">删除</el-button>
+            <el-button v-if="scope.row.extendable" link type="primary" @click="openSourceExtendDialog(scope.row)">配置</el-button>
+            <el-button v-if="scope.row.refreshable" link type="primary" @click="refreshPlugin(scope.row.pluginId)">刷新</el-button>
+            <el-button v-if="scope.row.deletable" link type="danger" @click="deletePlugin(scope.row.pluginId)">删除</el-button>
+            <span v-if="!scope.row.extendable && !scope.row.refreshable && !scope.row.deletable">-</span>
           </template>
         </el-table-column>
       </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="sourceExtendVisible" title="扩展配置" width="720px">
+      <el-input
+        v-model="sourceExtendText"
+        type="textarea"
+        :rows="18"
+        placeholder="输入扩展配置文本"
+      />
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="sourceExtendVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveSourceExtend">保存配置</el-button>
+        </span>
+      </template>
     </el-dialog>
 
     <el-dialog v-model="pluginFilterVisible" title="过滤器管理" fullscreen>
@@ -618,6 +636,25 @@ interface Plugin {
   lastError: string
 }
 
+interface ManagedSource {
+  id: string
+  builtin: boolean
+  pluginId: number | null
+  key: string
+  name: string
+  sourceName: string
+  url: string
+  enabled: boolean
+  sortOrder: number
+  version: number | null
+  extend: string
+  lastCheckedAt: string
+  lastError: string
+  deletable: boolean
+  refreshable: boolean
+  extendable: boolean
+}
+
 interface PluginFilter {
   id: number
   name: string
@@ -703,6 +740,7 @@ const dialogVisible = ref(false)
 const pluginVisible = ref(false)
 const pluginFilterVisible = ref(false)
 const pluginFilterConfigVisible = ref(false)
+const sourceExtendVisible = ref(false)
 const importingPlugins = ref(false)
 const tgVisible = ref(false)
 const scanVisible = ref(false)
@@ -741,6 +779,7 @@ const user = ref({
   phone: ''
 })
 const plugins = ref<Plugin[]>([])
+const managedSources = ref<ManagedSource[]>([])
 const pluginFilters = ref<PluginFilter[]>([])
 const pluginForm = ref<Plugin>({
   id: 0,
@@ -761,6 +800,8 @@ const pluginSettingsForm = ref({
   githubProxy: ''
 })
 const selectedPluginIds = ref<number[]>([])
+const sourceExtendTarget = ref<ManagedSource | null>(null)
+const sourceExtendText = ref('')
 const pluginFilterForm = ref<PluginFilter>({
   id: 0,
   name: '',
@@ -1300,14 +1341,14 @@ const enablePluginRowDrop = () => {
       if (oldIndex == null || newIndex == null || oldIndex === newIndex) {
         return
       }
-      const row = plugins.value.splice(oldIndex, 1)[0]
-      plugins.value.splice(newIndex, 0, row)
-      plugins.value.forEach((item, index) => {
+      const row = managedSources.value.splice(oldIndex, 1)[0]
+      managedSources.value.splice(newIndex, 0, row)
+      managedSources.value.forEach((item, index) => {
         item.sortOrder = index + 1
       })
-      axios.post('/api/plugins/reorder', plugins.value.map(item => item.id)).then(() => {
+      axios.post('/api/subscription-sources/reorder', managedSources.value.map(item => item.id)).then(() => {
         ElMessage.success('排序已更新')
-        loadPlugins()
+        loadManagedSources()
       })
     }
   })
@@ -1342,6 +1383,12 @@ const enablePluginFilterRowDrop = () => {
 const loadPlugins = () => {
   axios.get('/api/plugins').then(({data}) => {
     plugins.value = data
+  })
+}
+
+const loadManagedSources = () => {
+  axios.get('/api/subscription-sources').then(({data}) => {
+    managedSources.value = data
     nextTick(() => enablePluginRowDrop())
   })
 }
@@ -1364,7 +1411,7 @@ const showPlugins = () => {
   resetPluginForm()
   pluginImportForm.value.url = localStorage.getItem(PLUGIN_REPO_URL_KEY) || ''
   selectedPluginIds.value = []
-  loadPlugins()
+  loadManagedSources()
   loadPluginSettings()
 }
 
@@ -1383,7 +1430,7 @@ const addPlugin = () => {
   }).then(() => {
     ElMessage.success('添加成功')
     resetPluginForm()
-    loadPlugins()
+    loadManagedSources()
   })
 }
 
@@ -1410,7 +1457,7 @@ const importPlugins = async () => {
     })
     const action = data.failedCount > 0 ? ElMessage.warning : ElMessage.success
     action(`导入完成，新增 ${data.createdCount}，刷新 ${data.refreshedCount}，跳过 ${data.skippedCount}，失败 ${data.failedCount}`)
-    loadPlugins()
+    loadManagedSources()
   } finally {
     importingPlugins.value = false
   }
@@ -1425,8 +1472,14 @@ const saveGithubProxy = () => {
   })
 }
 
-const onPluginSelectionChange = (rows: Plugin[]) => {
-  selectedPluginIds.value = rows.map(item => item.id)
+const isSourceDeletable = (row: ManagedSource) => {
+  return row.deletable
+}
+
+const onPluginSelectionChange = (rows: ManagedSource[]) => {
+  selectedPluginIds.value = rows
+    .filter(item => item.pluginId != null)
+    .map(item => item.pluginId as number)
 }
 
 const deleteSelectedPlugins = () => {
@@ -1435,7 +1488,7 @@ const deleteSelectedPlugins = () => {
   }).then(({data}) => {
     ElMessage.success(`已删除 ${data} 个插件`)
     selectedPluginIds.value = []
-    loadPlugins()
+    loadManagedSources()
   })
 }
 
@@ -1453,11 +1506,30 @@ const deleteSelectedPluginFilters = () => {
   })
 }
 
-const updatePlugin = (plugin: Plugin) => {
-  axios.put('/api/plugins/' + plugin.id, plugin).then(({data}) => {
-    Object.assign(plugin, data)
+const updateSource = (source: ManagedSource) => {
+  axios.put('/api/subscription-sources/' + source.id, {
+    name: source.name,
+    enabled: source.enabled,
+    extend: source.extend
+  }).then(({data}) => {
+    Object.assign(source, data)
     ElMessage.success('更新成功')
   })
+}
+
+const openSourceExtendDialog = (source: ManagedSource) => {
+  sourceExtendTarget.value = source
+  sourceExtendText.value = source.extend || ''
+  sourceExtendVisible.value = true
+}
+
+const saveSourceExtend = () => {
+  if (!sourceExtendTarget.value) {
+    return
+  }
+  sourceExtendTarget.value.extend = sourceExtendText.value
+  updateSource(sourceExtendTarget.value)
+  sourceExtendVisible.value = false
 }
 
 const updatePluginFilter = (filter: PluginFilter) => {
@@ -1473,12 +1545,12 @@ const updatePluginFilter = (filter: PluginFilter) => {
   })
 }
 
-const refreshPlugin = (id: number) => {
-  axios.post('/api/plugins/' + id + '/refresh').then(({data}) => {
-    const index = plugins.value.findIndex(item => item.id === id)
-    if (index >= 0) {
-      plugins.value[index] = data
-    }
+const refreshPlugin = (id: number | null) => {
+  if (id == null) {
+    return
+  }
+  axios.post('/api/plugins/' + id + '/refresh').then(() => {
+    loadManagedSources()
     ElMessage.success('刷新完成')
   })
 }
@@ -1493,10 +1565,13 @@ const refreshPluginFilter = (id: number) => {
   })
 }
 
-const deletePlugin = (id: number) => {
+const deletePlugin = (id: number | null) => {
+  if (id == null) {
+    return
+  }
   axios.delete('/api/plugins/' + id).then(() => {
     ElMessage.success('删除成功')
-    loadPlugins()
+    loadManagedSources()
   })
 }
 
