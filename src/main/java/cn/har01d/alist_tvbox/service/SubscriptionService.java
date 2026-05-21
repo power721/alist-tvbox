@@ -104,6 +104,7 @@ public class SubscriptionService {
     private final TenantService tenantService;
     private final UserService userService;
     private final FileDownloader fileDownloader;
+    private final SubscriptionSourceService subscriptionSourceService;
 
     private final OkHttpClient okHttpClient = new OkHttpClient();
     private final ThreadLocal<String> currentToken = new ThreadLocal<>();
@@ -130,7 +131,8 @@ public class SubscriptionService {
                                ConfigFileService configFileService,
                                TenantService tenantService,
                                UserService userService,
-                               FileDownloader fileDownloader) {
+                               FileDownloader fileDownloader,
+                               SubscriptionSourceService subscriptionSourceService) {
         this.environment = environment;
         this.appProperties = appProperties;
         this.restTemplate = builder
@@ -155,6 +157,7 @@ public class SubscriptionService {
         this.tenantService = tenantService;
         this.userService = userService;
         this.fileDownloader = fileDownloader;
+        this.subscriptionSourceService = subscriptionSourceService;
     }
 
     @PostConstruct
@@ -1045,114 +1048,26 @@ public class SubscriptionService {
     private void addSite(String token, Map<String, Object> config) {
         int id = 0;
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
-
         String uid = generateUid();
-        try {
-            Site site1 = siteRepository.findById(1).orElse(null);
-            if (site1 != null) {
-                Map<String, Object> site = buildSite(token, uid, "csp_XiaoYa", site1.getName());
-                sites.add(id++, site);
-                log.debug("add XiaoYa site: {}", site);
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            String key = "Alist";
-            Map<String, Object> site = buildSite(token, uid, "csp_AList", "AList");
-            sites.removeIf(item -> key.equals(item.get("key")));
-            sites.add(id++, site);
-            log.debug("add AList site: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            Map<String, Object> site = buildSite(token, uid, "csp_BiliBili", "BiliBili");
-            sites.add(id++, site);
-            log.debug("add BiliBili site: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            if (embyRepository.count() > 0) {
-                Map<String, Object> site = buildSite(token, uid, "csp_Emby", "Emby");
-                sites.add(id++, site);
-                log.debug("add Emby site: {}", site);
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            if (jellyfinRepository.count() > 0) {
-                Map<String, Object> site = buildSite(token, uid, "csp_Jellyfin", "Jellyfin");
-                sites.add(id++, site);
-                log.debug("add Jellyfin site: {}", site);
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            if (feiniuRepository.count() > 0) {
-                Map<String, Object> site = buildSite(token, uid, "csp_FeiNiu", "飞牛影视");
-                sites.add(id++, site);
-                log.debug("add 飞牛影视 site: {}", site);
-            }
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            Map<String, Object> site = buildSite(token, uid, "csp_Live", "网络直播");
-            sites.add(id++, site);
-            log.debug("add Live site: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        try {
-            Map<String, Object> site = buildSite(token, uid, "csp_TgDouBan", "电报豆瓣");
-            site.put("searchable", 0);
-            site.put("quickSearch", 0);
-            sites.add(id++, site);
-            log.debug("add TG DouBan: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        if (appProperties.isTgLogin() || StringUtils.isNotBlank(appProperties.getTgSearch())) {
+        for (SubscriptionSourceService.SubscriptionSourceRef source : subscriptionSourceService.findEnabledSources()) {
             try {
-                Map<String, Object> site = buildSite(token, uid, "csp_TgSearch", "电报搜索");
-                sites.add(id++, site);
-                log.debug("add TG search: {}", site);
+                if (source.builtin()) {
+                    Map<String, Object> site = buildSite(token, uid, source.siteKey(), source.name());
+                    if ("csp_AList".equals(source.siteKey())) {
+                        sites.removeIf(item -> "Alist".equals(item.get("key")));
+                    } else if ("csp_TgDouBan".equals(source.siteKey())) {
+                        site.put("searchable", 0);
+                        site.put("quickSearch", 0);
+                    }
+                    sites.add(id++, site);
+                    log.debug("add builtin source {}: {}", source.siteKey(), site);
+                } else if (source.plugin() != null) {
+                    sites.add(id++, buildPluginSite(source.plugin(), token));
+                }
             } catch (Exception e) {
-                log.warn("", e);
+                log.warn("add source failed: {}", source.id(), e);
             }
         }
-
-        try {
-            Map<String, Object> site = buildSite(token, uid, "csp_TgWeb", "电报网页");
-            sites.add(id++, site);
-            log.debug("add TG web: {}", site);
-        } catch (Exception e) {
-            log.warn("", e);
-        }
-
-        if (StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
-            try {
-                Map<String, Object> site = buildSite(token, uid, "csp_FishPanSou", "鱼佬盘搜");
-                sites.add(id++, site);
-                log.debug("add Pansou: {}", site);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-
-        addPluginSites(config, id, token);
     }
 
     public Map<String, Boolean> getCapabilities() {
@@ -1203,17 +1118,6 @@ public class SubscriptionService {
             site.put("style", style);
         }
         return site;
-    }
-
-    private void addPluginSites(Map<String, Object> config, int index, String token) {
-        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
-        for (Plugin plugin : pluginRepository.findByEnabledTrueOrderBySortOrderAscIdAsc()) {
-            try {
-                sites.add(index++, buildPluginSite(plugin, token));
-            } catch (JsonProcessingException e) {
-                log.warn("add plugin failed: {}", plugin.getName(), e);
-            }
-        }
     }
 
     private Map<String, Object> buildPluginSite(Plugin plugin, String token) throws JsonProcessingException {

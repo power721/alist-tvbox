@@ -37,18 +37,21 @@ public class PluginService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private final SubscriptionSourceService subscriptionSourceService;
 
     @Autowired
     public PluginService(PluginRepository pluginRepository,
                          SettingRepository settingRepository,
                          RestTemplateBuilder builder,
                          ObjectMapper objectMapper,
-                         TransactionTemplate transactionTemplate) {
+                         TransactionTemplate transactionTemplate,
+                         SubscriptionSourceService subscriptionSourceService) {
         this.pluginRepository = pluginRepository;
         this.settingRepository = settingRepository;
         this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
         this.transactionTemplate = transactionTemplate;
+        this.subscriptionSourceService = subscriptionSourceService;
     }
 
     public record ImportResult(
@@ -83,7 +86,7 @@ public class PluginService {
         validateUrlUniqueness(plugin.getUrl(), null);
         applyDownloadedPlugin(plugin, downloadPluginData(plugin.getUrl()), false);
         plugin.setEnabled(true);
-        plugin.setSortOrder((int) pluginRepository.count() + 1);
+        plugin.setSortOrder(subscriptionSourceService.nextSortOrder());
         plugin.setLastCheckedAt(OffsetDateTime.now());
         plugin.setLastError("");
         return pluginRepository.save(plugin);
@@ -198,7 +201,7 @@ public class PluginService {
     public void delete(Integer id) {
         Plugin plugin = pluginRepository.findById(id).orElseThrow(NotFoundException::new);
         pluginRepository.delete(plugin);
-        normalizeSortOrder();
+        subscriptionSourceService.normalizeSortOrders();
     }
 
     @Transactional
@@ -208,17 +211,8 @@ public class PluginService {
         }
         List<Plugin> plugins = pluginRepository.findAllById(ids);
         pluginRepository.deleteAll(plugins);
-        normalizeSortOrder();
+        subscriptionSourceService.normalizeSortOrders();
         return plugins.size();
-    }
-
-    private void normalizeSortOrder() {
-        List<Plugin> plugins = pluginRepository.findAllByOrderBySortOrderAscIdAsc();
-        int order = 1;
-        for (Plugin plugin : plugins) {
-            plugin.setSortOrder(order++);
-        }
-        pluginRepository.saveAll(plugins);
     }
 
     private Plugin createImportedPlugin(String url, DownloadedPlugin downloadedPlugin, boolean enabled) {
@@ -227,7 +221,7 @@ public class PluginService {
         validateUrlUniqueness(url, null);
         applyDownloadedPlugin(plugin, downloadedPlugin, false);
         plugin.setEnabled(enabled);
-        plugin.setSortOrder((int) pluginRepository.count() + 1);
+        plugin.setSortOrder(subscriptionSourceService.nextSortOrder());
         plugin.setLastCheckedAt(OffsetDateTime.now());
         plugin.setLastError("");
         return pluginRepository.save(plugin);
