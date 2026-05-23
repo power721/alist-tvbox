@@ -197,7 +197,7 @@ class Spider(HostSpider):
         source, inner_extend = self._split_ext(self.extend)
         self._backend_api = self._resolve_backend_api(source, payload)
         self._vod_token = self._resolve_vod_token(payload)
-        self._localProxyConfig = payload.get("local_proxy_config")
+        self._localProxyConfig = payload.get("local_proxy_config") if isinstance(payload, dict) else {}
         package_text = self._load_source(source)
         source_text = self._decrypt_secspider_source(package_text)
         spider_cls = self._load_inner_spider_class(source_text)
@@ -385,11 +385,15 @@ class Spider(HostSpider):
         return headers, payload
 
     def _build_signing_bytes(self, headers, payload_b64):
-        return "\n".join(
+        lines = [
+            f"//@name:{headers['name']}",
+            f"//@version:{headers['version']}",
+            f"//@remark:{headers['remark']}",
+        ]
+        if "id" in headers:
+            lines.append(f"//@id:{headers['id']}")
+        lines.extend(
             [
-                f"//@name:{headers['name']}",
-                f"//@version:{headers['version']}",
-                f"//@remark:{headers['remark']}",
                 f"//@format:{headers['format']}",
                 f"//@alg:{headers['alg']}",
                 f"//@wrap:{headers['wrap']}",
@@ -400,7 +404,8 @@ class Spider(HostSpider):
                 f"//@hash:{headers['hash']}",
                 f"payload.base64:{payload_b64}",
             ]
-        ).encode("utf-8")
+        )
+        return "\n".join(lines).encode("utf-8")
 
     def _verify_signature(self, headers, payload_b64, public_key_text):
         from Crypto.Signature import eddsa
