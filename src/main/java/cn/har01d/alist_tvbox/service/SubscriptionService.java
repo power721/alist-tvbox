@@ -1058,6 +1058,11 @@ public class SubscriptionService {
                     } else if ("csp_TgDouBan".equals(source.siteKey())) {
                         site.put("searchable", 0);
                         site.put("quickSearch", 0);
+                    } else if ("csp_Push".equals(source.siteKey())) {
+                        site.put("key", "push_agent");
+                        site.put("searchable", 0);
+                        site.put("quickSearch", 0);
+                        sites.removeIf(item -> "push_agent".equals(item.get("key")));
                     }
                     sites.add(id++, site);
                     log.debug("add builtin source {}: {}", source.siteKey(), site);
