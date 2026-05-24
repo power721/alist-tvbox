@@ -308,6 +308,7 @@ public class SubscriptionSourceService {
         if (StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
             definitions.add(new BuiltinDefinition("csp_FishPanSou", "鱼佬盘搜", order));
         }
+        definitions.add(new BuiltinDefinition("csp_Push", "推送", order++));
         return definitions;
     }
 
