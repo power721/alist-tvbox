@@ -1126,20 +1126,21 @@ public class SubscriptionService {
         site.put("quickSearch", 1);
         site.put("name", plugin.getName());
         site.put("changeable", 0);
-        site.put("api", readHostAddress("") + "/Atvp.py");
+        String url = readHostAddress("");
+        site.put("api", "csp_PyProxy");
         site.put("type", 3);
         site.put("key", plugin.getName());
         site.put("searchable", 1);
-        Map<String, Object> map = new HashMap<>();
-        String url = readHostAddress("");
-        map.put("api", url);
         String jar = url + "/spring.jar";
         site.put("jar", jar);
+
+        Map<String, Object> localProxyConfig = readLocalProxyConfig();
+        Map<String, Object> map = new HashMap<>();
+        map.put("api", url);
         String source = readHostAddress("") + "/plugins/" + getCurrentOrFirstToken() + "/" + plugin.getId() + ".txt";
         map.put("source", source);
         map.put("token", token.isBlank() ? "-" : token);
-        map.put("local_proxy_config", new HashMap<>());
-//        map.put("local_proxy_config", readLocalProxyConfig());
+        map.put("local_proxy_config", localProxyConfig);
         if (StringUtils.isNotBlank(plugin.getExtend())) {
             map.put("data", plugin.getExtend());
         }
@@ -1150,7 +1151,12 @@ public class SubscriptionService {
         }
         String ext = objectMapper.writeValueAsString(map);
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
-        site.put("ext", ext);
+
+        Map<String, Object> proxyExt = new HashMap<>();
+        proxyExt.put("py_api", url + "/Atvp.py");
+        proxyExt.put("py_ext", ext);
+        proxyExt.put("local_proxy_config", localProxyConfig);
+        site.put("ext", proxyExt);
         return site;
     }
 

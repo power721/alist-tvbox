@@ -236,6 +236,29 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
 
 站点名称可以加前缀，通过订阅URL前面加前缀，使用`@`分割。比如：`饭@http://饭太硬.top/tv,菜@https://tv.菜妮丝.top`
 
+#### Python爬虫插件
+订阅页面添加的 Python 爬虫插件会通过内置 `spring.jar` 里的 `csp_PyProxy` 加载，不再直接把站点 `api` 指向 `Atvp.py`。
+
+生成后的站点结构类似：
+```json
+{
+  "key": "YouTube",
+  "name": "YouTube",
+  "type": 3,
+  "api": "csp_PyProxy",
+  "jar": "ATV_ADDRESS/spring.jar",
+  "ext": {
+    "py_api": "ATV_ADDRESS/Atvp.py",
+    "py_ext": "原来传给 Atvp.py 的 base64 ext",
+    "local_proxy_config": {
+      "ALI": { "enabled": true, "concurrency": 20, "chunk_size": 1024 }
+    }
+  }
+}
+```
+
+`local_proxy_config` 也会写入 `py_ext` 内层，兼容 Python 爬虫读取。配置为 `{}` 或对应网盘类型未开启时，不会启用播放加速代理。
+
 替换功能：
 
 在配置页面->高级设置里面找到阿里Token地址，然后在订阅-定制里面自替换token。

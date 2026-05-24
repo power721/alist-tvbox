@@ -83,3 +83,24 @@ e.g.: disable 2 sites by key, change 1 site name by key, add new site.
   }
 }
 ```
+
+### Python Spider Plugins
+Python spider plugins are loaded through `csp_PyProxy` from the bundled `spring.jar`. The original Python entry and ext are wrapped like this:
+```json
+{
+  "key": "YouTube",
+  "name": "YouTube",
+  "type": 3,
+  "api": "csp_PyProxy",
+  "jar": "ATV_ADDRESS/spring.jar",
+  "ext": {
+    "py_api": "ATV_ADDRESS/Atvp.py",
+    "py_ext": "original base64 ext for Atvp.py",
+    "local_proxy_config": {
+      "ALI": { "enabled": true, "concurrency": 20, "chunk_size": 1024 }
+    }
+  }
+}
+```
+
+`local_proxy_config` is also included inside `py_ext` for Python-side compatibility. If it remains `{}`, local proxy acceleration is not enabled.

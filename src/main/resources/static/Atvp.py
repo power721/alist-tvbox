@@ -845,7 +845,7 @@ class Spider(HostSpider):
     def _play(self, play_id):
         rsp = self.fetch(
             self._build_backend_endpoint("play"),
-            params={"id": str(play_id or "")},
+            params={"id": str(play_id or ""), "type": "client-proxy"},
             timeout=10,
         )
         body = str(rsp.text or "")
