@@ -1142,6 +1142,7 @@ public class SubscriptionService {
         Map<String, Object> localProxyConfig = readLocalProxyConfig();
         Map<String, Object> map = new HashMap<>();
         map.put("api", url);
+        //map.put("loader", url + "/Atvp.py");
         String source = readHostAddress("") + "/plugins/" + getCurrentOrFirstToken() + "/" + plugin.getId() + ".txt";
         map.put("source", source);
         map.put("token", token.isBlank() ? "-" : token);
@@ -1156,12 +1157,7 @@ public class SubscriptionService {
         }
         String ext = objectMapper.writeValueAsString(map);
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
-
-        Map<String, Object> proxyExt = new HashMap<>();
-        proxyExt.put("py_api", url + "/Atvp.py");
-        proxyExt.put("py_ext", ext);
-        proxyExt.put("local_proxy_config", localProxyConfig);
-        site.put("ext", proxyExt);
+        site.put("ext", ext);
         return site;
     }
 

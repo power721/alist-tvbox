@@ -93,14 +93,8 @@ Python spider plugins are loaded through `csp_PyProxy` from the bundled `spring.
   "type": 3,
   "api": "csp_PyProxy",
   "jar": "ATV_ADDRESS/spring.jar",
-  "ext": {
-    "py_api": "ATV_ADDRESS/Atvp.py",
-    "py_ext": "original base64 ext for Atvp.py",
-    "local_proxy_config": {
-      "ALI": { "enabled": true, "concurrency": 20, "chunk_size": 1024 }
-    }
-  }
+  "ext": "base64({\"loader\":\"ATV_ADDRESS/Atvp.py\",\"api\":\"ATV_ADDRESS\",\"source\":\"...\",\"token\":\"...\",\"local_proxy_config\":{\"ALI\":{\"enabled\":true,\"concurrency\":20,\"chunk_size\":1024}}})"
 }
 ```
 
-`local_proxy_config` is also included inside `py_ext` for Python-side compatibility. If it remains `{}`, local proxy acceleration is not enabled.
+`loader`, `local_proxy_config`, and the rest of the Python-side config are all encoded into `ext`. If `local_proxy_config` remains `{}`, local proxy acceleration is not enabled.

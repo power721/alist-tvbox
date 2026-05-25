@@ -247,17 +247,11 @@ tvbox/my.json和juhe.json不能在TvBox直接使用，请使用订阅地址！
   "type": 3,
   "api": "csp_PyProxy",
   "jar": "ATV_ADDRESS/spring.jar",
-  "ext": {
-    "py_api": "ATV_ADDRESS/Atvp.py",
-    "py_ext": "原来传给 Atvp.py 的 base64 ext",
-    "local_proxy_config": {
-      "ALI": { "enabled": true, "concurrency": 20, "chunk_size": 1024 }
-    }
-  }
+  "ext": "base64({\"loader\":\"ATV_ADDRESS/Atvp.py\",\"api\":\"ATV_ADDRESS\",\"source\":\"...\",\"token\":\"...\",\"local_proxy_config\":{\"ALI\":{\"enabled\":true,\"concurrency\":20,\"chunk_size\":1024}}})"
 }
 ```
 
-`local_proxy_config` 也会写入 `py_ext` 内层，兼容 Python 爬虫读取。配置为 `{}` 或对应网盘类型未开启时，不会启用播放加速代理。
+`loader`、`local_proxy_config` 和其他 Python 侧配置都会一起编码进 `ext`。配置为 `{}` 或对应网盘类型未开启时，不会启用播放加速代理。
 
 替换功能：
 
