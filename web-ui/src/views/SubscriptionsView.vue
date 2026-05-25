@@ -326,6 +326,11 @@
       <el-progress v-if="importingPlugins" :percentage="100" :indeterminate="true" :duration="5"/>
 
       <el-form :inline="true" :model="pluginSettingsForm">
+        <el-form-item label="插件运行模式">
+          <el-select v-model="pluginSettingsForm.pluginRunMode" style="width: 160px">
+            <el-option v-for="item in pluginRunModeOptions" :key="item.value" :label="item.label" :value="item.value"/>
+          </el-select>
+        </el-form-item>
         <el-form-item label="GitHub代理">
           <el-input
             v-model="pluginSettingsForm.githubProxy"
@@ -334,7 +339,7 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="saveGithubProxy">保存代理</el-button>
+          <el-button type="primary" @click="savePluginSettings">保存设置</el-button>
         </el-form-item>
         <el-form-item>
           <el-button type="danger" :disabled="selectedPluginIds.length === 0" @click="deleteSelectedPlugins">
@@ -715,6 +720,10 @@ const pluginFilterScopeOptions = [
   {label: '仅对', value: 'include'},
   {label: '除外', value: 'exclude'},
 ]
+const pluginRunModeOptions = [
+  {label: 'Java代理', value: 'java'},
+  {label: '原生Python', value: 'python'},
+]
 const tgPhase = ref(0)
 const tgPhone = ref('')
 const tgCode = ref('')
@@ -797,7 +806,8 @@ const pluginImportForm = ref({
   url: localStorage.getItem(PLUGIN_REPO_URL_KEY) || ''
 })
 const pluginSettingsForm = ref({
-  githubProxy: ''
+  githubProxy: '',
+  pluginRunMode: 'java'
 })
 const selectedPluginIds = ref<number[]>([])
 const sourceExtendTarget = ref<ManagedSource | null>(null)
@@ -1404,6 +1414,9 @@ const loadPluginSettings = () => {
   axios.get('/api/settings/github_proxy').then(({data}) => {
     pluginSettingsForm.value.githubProxy = data?.value || ''
   })
+  axios.get('/api/settings/plugin_run_mode').then(({data}) => {
+    pluginSettingsForm.value.pluginRunMode = data?.value || 'java'
+  })
 }
 
 const showPlugins = () => {
@@ -1463,12 +1476,18 @@ const importPlugins = async () => {
   }
 }
 
-const saveGithubProxy = () => {
-  axios.post('/api/settings', {
-    name: 'github_proxy',
-    value: pluginSettingsForm.value.githubProxy
-  }).then(() => {
-    ElMessage.success('GitHub 代理已保存')
+const savePluginSettings = () => {
+  Promise.all([
+    axios.post('/api/settings', {
+      name: 'github_proxy',
+      value: pluginSettingsForm.value.githubProxy
+    }),
+    axios.post('/api/settings', {
+      name: 'plugin_run_mode',
+      value: pluginSettingsForm.value.pluginRunMode
+    })
+  ]).then(() => {
+    ElMessage.success('订阅源设置已保存')
   })
 }
 

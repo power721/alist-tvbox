@@ -83,6 +83,9 @@ import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 @Service
 @SuppressWarnings("unchecked")
 public class SubscriptionService {
+    private static final String PLUGIN_RUN_MODE = "plugin_run_mode";
+    private static final String PLUGIN_RUN_MODE_PYTHON = "python";
+
     private final Environment environment;
     private final AppProperties appProperties;
     private final RestTemplate restTemplate;
@@ -1095,6 +1098,14 @@ public class SubscriptionService {
         return new HashMap<>(AppProperties.copyLocalProxyConfig(config));
     }
 
+    private boolean isNativePythonPluginRunMode() {
+        return settingRepository.findById(PLUGIN_RUN_MODE)
+                .map(Setting::getValue)
+                .map(StringUtils::trimToEmpty)
+                .map(PLUGIN_RUN_MODE_PYTHON::equalsIgnoreCase)
+                .orElse(false);
+    }
+
     private Map<String, Object> buildSite(String token, String uid, String key, String name) throws IOException {
         String url = readHostAddress("");
         Map<String, Object> site = new HashMap<>();
@@ -1132,21 +1143,21 @@ public class SubscriptionService {
         site.put("name", plugin.getName());
         site.put("changeable", 0);
         String url = readHostAddress("");
-        site.put("api", "csp_PyProxy");
+        boolean nativePython = isNativePythonPluginRunMode();
+        site.put("api", nativePython ? url + "/Atvp.py" : "csp_PyProxy");
         site.put("type", 3);
         site.put("key", plugin.getName());
         site.put("searchable", 1);
         String jar = url + "/spring.jar";
         site.put("jar", jar);
 
-        Map<String, Object> localProxyConfig = readLocalProxyConfig();
         Map<String, Object> map = new HashMap<>();
         map.put("api", url);
         //map.put("loader", url + "/Atvp.py");
         String source = readHostAddress("") + "/plugins/" + getCurrentOrFirstToken() + "/" + plugin.getId() + ".txt";
         map.put("source", source);
         map.put("token", token.isBlank() ? "-" : token);
-        map.put("local_proxy_config", localProxyConfig);
+        map.put("local_proxy_config", nativePython ? new HashMap<>() : readLocalProxyConfig());
         if (StringUtils.isNotBlank(plugin.getExtend())) {
             map.put("data", plugin.getExtend());
         }

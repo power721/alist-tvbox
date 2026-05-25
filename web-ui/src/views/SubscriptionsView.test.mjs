@@ -16,3 +16,9 @@ test('edits source extend with dialog button instead of inline table input', () 
 test('reorders unified subscription sources instead of plugin-only list', () => {
   assert.equal(viewSource.includes("/api/subscription-sources/reorder"), true)
 })
+
+test('exposes plugin run mode settings in subscription source manager', () => {
+  assert.equal(viewSource.includes('plugin_run_mode'), true)
+  assert.equal(viewSource.includes('原生Python'), true)
+  assert.equal(viewSource.includes('Java代理'), true)
+})
