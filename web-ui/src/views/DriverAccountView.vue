@@ -27,6 +27,7 @@
           <span v-else-if="scope.row.type=='PAN139'">移动云盘</span>
           <span v-else-if="scope.row.type=='PAN123'">123网盘</span>
           <span v-else-if="scope.row.type=='BAIDU'">百度网盘</span>
+          <span v-else-if="scope.row.type=='GUANGYA'">光鸭网盘</span>
         </template>
       </el-table-column>
       <el-table-column prop="name" label="名称" sortable width="200"/>
@@ -93,6 +94,7 @@
             <el-radio label="PAN139" size="large">移动云盘</el-radio>
             <el-radio label="PAN123" size="large">123网盘</el-radio>
             <el-radio label="BAIDU" size="large">百度网盘</el-radio>
+            <el-radio label="GUANGYA" size="large">光鸭网盘</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="Cookie" required v-if="supportCookie(form.type)">
@@ -140,6 +142,10 @@
           <el-input v-model="form.token"/>
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
+          <el-input v-model="form.token" type="textarea" :rows="3"/>
+          <el-button type="primary" @click="showQrCode">扫码获取</el-button>
+        </el-form-item>
+        <el-form-item label="Token" v-if="form.type=='GUANGYA'" required>
           <el-input v-model="form.token" type="textarea" :rows="3"/>
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
@@ -448,6 +454,8 @@ const form = ref({
     page_size: 1000,
     limit_rate: 2,
     access_token: '',
+    refresh_token: '',
+    device_id: '',
     delete_code: '',
     cloud_id: '',
     link_method: 'download',
@@ -603,6 +611,8 @@ const handleAdd = () => {
       page_size: 1000,
       limit_rate: 2,
       access_token: '',
+      refresh_token: '',
+      device_id: '',
       delete_code: '',
       cloud_id: '',
       link_method: 'download',
@@ -751,6 +761,9 @@ const getTypeName = (type: string) => {
   if (type == 'BAIDU') {
     return '百度网盘'
   }
+  if (type == 'GUANGYA') {
+    return '光鸭网盘'
+  }
   return '未知'
 }
 
@@ -781,6 +794,8 @@ const fullPath = (share: any) => {
     return '/我的123网盘/' + path
   } else if (share.type == 'BAIDU') {
     return '/我的百度网盘/' + path
+  } else if (share.type == 'GUANGYA') {
+    return '/我的光鸭网盘/' + path
   } else {
     return '/网盘/' + path
   }
@@ -891,6 +906,11 @@ const getRefreshToken = () => {
       form.value.cookie = data.cookie
     } else {
       form.value.token = data.token
+    }
+    if (qrType.value == 'GUANGYA' && data.addition) {
+      form.value.addition.access_token = data.addition.access_token || data.token || ''
+      form.value.addition.refresh_token = data.addition.refresh_token || ''
+      form.value.addition.device_id = data.addition.device_id || ''
     }
     if (!form.value.name) {
       form.value.name = data.name
