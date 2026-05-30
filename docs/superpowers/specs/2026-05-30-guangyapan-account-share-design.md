@@ -11,6 +11,7 @@
 - Save GuangYaPan account tokens and device id in `DriverAccount` data and generate the matching AList/OpenList storage addition.
 - Add GuangYaPan share-link parsing and share storage generation.
 - Add frontend labels, mount-path previews, QR-login support, and share-link display for GuangYaPan.
+- Use the downloaded GuangYaPan logo asset at `web-ui/public/guangya.webp` wherever the UI shows provider icons.
 - Add focused backend tests for parsing and storage addition generation.
 
 Out of scope:
@@ -175,6 +176,7 @@ No password handling is required for GuangYaPan share links based on the referen
 Update `DriverAccountView.vue`:
 
 - Add `GUANGYA` option label `光鸭网盘`.
+- Use `/guangya.webp` as the GuangYaPan provider icon when the account UI renders provider logos.
 - Show mount path preview `/我的光鸭网盘/<name>`.
 - Enable the existing QR-code login button for `GUANGYA`.
 - On QR polling success:
@@ -189,6 +191,7 @@ Update `DriverAccountView.vue`:
 Update `SharesView.vue`:
 
 - Add type label `光鸭分享` for type `12`.
+- Use `/guangya.webp` as the GuangYaPan share icon when the share UI renders provider logos.
 - Add mount-path prefix `/我的光鸭分享/`.
 - Add share-link rendering for type `12`.
 - Add driver display label for `GuangYaPanShare`.
