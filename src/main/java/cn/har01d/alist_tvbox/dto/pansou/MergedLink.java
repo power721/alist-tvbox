@@ -10,4 +10,5 @@ public class MergedLink {
     private String password;
     private String note;
     private Instant datetime;
+    private String source;
 }

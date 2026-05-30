@@ -91,6 +91,9 @@ public class SettingService {
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
         appProperties.setPanSouUrl(settingRepository.findById("pan_sou_url").map(Setting::getValue).orElse(""));
         appProperties.setPanSouSource(settingRepository.findById("pan_sou_source").map(Setting::getValue).orElse("all"));
+        appProperties.setPanSouChannels(settingRepository.findById("pan_sou_channels").map(Setting::getValue).map(this::normalizePanSouChannels).orElse("custom"));
+        appProperties.setPanSouUsername(settingRepository.findById("pan_sou_username").map(Setting::getValue).orElse(""));
+        appProperties.setPanSouPassword(settingRepository.findById("pan_sou_password").map(Setting::getValue).orElse(""));
         appProperties.setTgSortField(settingRepository.findById("tg_sort_field").map(Setting::getValue).orElse("time"));
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(72));
         appProperties.setValidateSharesInterval(settingRepository.findById("validateSharesInterval").map(Setting::getValue).map(Integer::parseInt).orElse(4));
@@ -116,7 +119,7 @@ public class SettingService {
             appProperties.setTgDriverOrder(orders);
             settingRepository.save(new Setting("tgDriverOrder", String.join(",", orders)));
         } else {
-            appProperties.setTgDriverOrder(Arrays.asList(value.split(",")));
+            appProperties.setTgDriverOrder(normalizeTgDrivers(value));
         }
         value = settingRepository.findById("tg_timeout").map(Setting::getValue).orElse("");
         if (StringUtils.isBlank(value)) {
@@ -264,6 +267,7 @@ public class SettingService {
         }
         if ("tgDriverOrder".equals(setting.getName())) {
             String value = StringUtils.isBlank(setting.getValue()) ? Constants.TG_DRIVERS : setting.getValue();
+            value = String.join(",", normalizeTgDrivers(value));
             setting.setValue(value);
             appProperties.setTgDriverOrder(Arrays.stream(value.split(",")).toList());
         }
@@ -287,6 +291,17 @@ public class SettingService {
         }
         if ("pan_sou_source".equals(setting.getName())) {
             appProperties.setPanSouSource(setting.getValue());
+        }
+        if ("pan_sou_channels".equals(setting.getName())) {
+            String value = normalizePanSouChannels(setting.getValue());
+            setting.setValue(value);
+            appProperties.setPanSouChannels(value);
+        }
+        if ("pan_sou_username".equals(setting.getName())) {
+            appProperties.setPanSouUsername(setting.getValue());
+        }
+        if ("pan_sou_password".equals(setting.getName())) {
+            appProperties.setPanSouPassword(setting.getValue());
         }
         if ("panSouPlugins".equals(setting.getName())) {
             appProperties.setPanSouPlugins(Arrays.asList(setting.getValue().split(",")));
@@ -330,6 +345,27 @@ public class SettingService {
                 .filter(StringUtils::isNotBlank)
                 .map(this::parseLocalProxyConfig)
                 .orElseGet(AppProperties::defaultLocalProxyConfig);
+    }
+
+    private List<String> normalizeTgDrivers(String value) {
+        List<String> drivers = new ArrayList<>(Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .toList());
+        for (String driver : Constants.TG_DRIVERS.split(",")) {
+            if (!drivers.contains(driver)) {
+                drivers.add(driver);
+            }
+        }
+        return drivers;
+    }
+
+    private String normalizePanSouChannels(String value) {
+        return switch (value) {
+            case "project", "pansou" -> value;
+            default -> "custom";
+        };
     }
 
     private Map<String, Map<String, Object>> parseLocalProxyConfig(String value) {

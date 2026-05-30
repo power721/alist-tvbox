@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.dto.tg;
 
 import cn.har01d.alist_tvbox.dto.pansou.Link;
+import cn.har01d.alist_tvbox.dto.pansou.MergedLink;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 import org.slf4j.Logger;
@@ -74,6 +75,15 @@ public class Message {
         this.type = parseType(link.getUrl());
         this.name = message.getTitle();
         this.channel = message.getChannel();
+    }
+
+    public Message(String type, MergedLink link) {
+        this.time = link.getDatetime() == null ? Instant.now() : link.getDatetime();
+        this.content = link.getNote();
+        this.link = link.getUrl();
+        this.type = type;
+        this.name = link.getNote();
+        this.channel = link.getSource();
     }
 
     public String toPgString() {
@@ -156,6 +166,12 @@ public class Message {
     }
 
     private static String parseType(String link) {
+        if (link.startsWith("magnet:")) {
+            return "magnet";
+        }
+        if (link.startsWith("ed2k:")) {
+            return "ed2k";
+        }
         if (link.contains("alipan.com") || link.contains("aliyundrive.com")) {
             return "0";
         }
