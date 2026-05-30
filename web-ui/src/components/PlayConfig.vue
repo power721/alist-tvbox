@@ -35,6 +35,8 @@ const panSouProjectChannelsCount = ref(0)
 const panSouBuiltinChannelsCount = ref(0)
 const panSouPluginCount = ref(0)
 const panSouPlugins = ref([])
+const panSouLinkCheckEnabled = ref(false)
+const panSouLinkCheckMaxCount = ref(30)
 const plugins = ref([])
 const tgSortField = ref('time')
 const tgTimeout = ref(3000)
@@ -187,6 +189,13 @@ const updatePanSouChannels = () => {
 const updatePanSouAuth = () => {
   axios.post('/api/settings', {name: 'pan_sou_username', value: panSouUsername.value}).then()
   axios.post('/api/settings', {name: 'pan_sou_password', value: panSouPassword.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePanSouLinkCheck = () => {
+  axios.post('/api/settings', {name: 'pan_sou_link_check_enabled', value: panSouLinkCheckEnabled.value}).then()
+  axios.post('/api/settings', {name: 'pan_sou_link_check_max_count', value: panSouLinkCheckMaxCount.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -386,6 +395,8 @@ onMounted(() => {
     }
     panSouSource.value = data.pan_sou_source || 'all'
     panSouChannels.value = data.pan_sou_channels || 'custom'
+    panSouLinkCheckEnabled.value = data.pan_sou_link_check_enabled === 'true'
+    panSouLinkCheckMaxCount.value = +(data.pan_sou_link_check_max_count || 30)
     tgSortField.value = data.tg_sort_field || 'time'
     tgDriverOrder.value = normalizeDriverOrder(data.tgDriverOrder || '')
     if (data.tg_drivers && data.tg_drivers.length) {
@@ -457,6 +468,17 @@ onUnmounted(() => {
           <el-button type="primary" @click="updatePlugins">更新</el-button>
           <span class="hint">已启用插件 {{ panSouPluginCount }} 个</span>
           <span class="hint">留空使用全部插件搜索</span>
+        </el-form-item>
+        <el-form-item label="链接检测" v-if="panSouUrl">
+          <el-switch v-model="panSouLinkCheckEnabled"/>
+          <span class="hint">自动检查盘搜搜索结果的有效性</span>
+        </el-form-item>
+        <el-form-item label="检测数量上限" v-if="panSouUrl">
+          <el-input-number v-model="panSouLinkCheckMaxCount" :min="0" :max="500"/>
+          <span class="hint">仅当网盘结果数量小于等于该值时检查，磁力和ED2K不计算数量</span>
+        </el-form-item>
+        <el-form-item v-if="panSouUrl">
+          <el-button type="primary" @click="updatePanSouLinkCheck">更新</el-button>
         </el-form-item>
         <el-form-item label="网盘顺序">
           <el-checkbox-group v-model="tgDrivers">

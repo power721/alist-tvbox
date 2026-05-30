@@ -30,6 +30,8 @@ public class Message {
     private String type;
     private String link;
     private String cover;
+    private String validityState;
+    private String validitySummary;
 
     public Message() {
     }

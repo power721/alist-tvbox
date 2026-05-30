@@ -40,7 +40,10 @@ public class AppProperties {
     private String panSouChannels = "custom";
     private String panSouUsername;
     private String panSouPassword;
+    private Boolean panSouAuthEnabled;
     private List<String> panSouPlugins;
+    private boolean panSouLinkCheckEnabled;
+    private int panSouLinkCheckMaxCount = 30;
     private String systemId;
     private int tgTimeout = 5000;
     private int tempShareExpiration = 72;
