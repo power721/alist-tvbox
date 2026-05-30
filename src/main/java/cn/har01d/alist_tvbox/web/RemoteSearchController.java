@@ -37,6 +37,11 @@ public class RemoteSearchController {
         return remoteSearchService.getPanSouInfo();
     }
 
+    @PostMapping("/api/pansou/check/links")
+    public ObjectNode checkPanSouLinks(@RequestBody ObjectNode request) {
+        return remoteSearchService.checkPanSouLinks(request);
+    }
+
     @GetMapping("/pansou")
     public Object pansou(String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
         return pansou("", id, t, wd, pg);

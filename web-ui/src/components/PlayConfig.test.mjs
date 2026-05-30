@@ -39,3 +39,14 @@ test('play config displays PanSou plugin count', () => {
   assert.equal(componentSource.includes(`panSouPluginCount.value = data.plugin_count || plugins.value.length`), true)
   assert.equal(componentSource.includes(`已启用插件 {{ panSouPluginCount }} 个`), true)
 })
+
+test('play config exposes backend PanSou link check settings', () => {
+  assert.equal(componentSource.includes(`const panSouLinkCheckEnabled = ref(false)`), true)
+  assert.equal(componentSource.includes(`const panSouLinkCheckMaxCount = ref(30)`), true)
+  assert.equal(componentSource.includes(`{name: 'pan_sou_link_check_enabled', value: panSouLinkCheckEnabled.value}`), true)
+  assert.equal(componentSource.includes(`{name: 'pan_sou_link_check_max_count', value: panSouLinkCheckMaxCount.value}`), true)
+  assert.equal(componentSource.includes(`panSouLinkCheckEnabled.value = data.pan_sou_link_check_enabled === 'true'`), true)
+  assert.equal(componentSource.includes(`panSouLinkCheckMaxCount.value = +(data.pan_sou_link_check_max_count || 30)`), true)
+  assert.equal(componentSource.includes(`label="链接检测"`), true)
+  assert.equal(componentSource.includes(`自动检查盘搜搜索结果的有效性`), true)
+})

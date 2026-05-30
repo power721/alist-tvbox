@@ -15,6 +15,7 @@ import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -25,6 +26,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -39,11 +41,15 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class RemoteSearchService {
+    private static final String CHECK_STATE_BAD = "bad";
+    private static final String CHECK_STATE_UNCERTAIN = "uncertain";
+
     private final AppProperties appProperties;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -54,6 +60,7 @@ public class RemoteSearchService {
     private List<String> panSouDefaultChannels;
     private List<String> panSouBuiltinChannels;
     private String panSouToken;
+    private String checkedPanSouUrl;
 
     public RemoteSearchService(AppProperties appProperties,
                                RestTemplateBuilder restTemplateBuilder,
@@ -71,15 +78,55 @@ public class RemoteSearchService {
         this.offlineDownloadService = offlineDownloadService;
     }
 
+    @PostConstruct
+    public void setup() {
+        refreshPanSouInfoAsync();
+    }
+
     public ObjectNode getPanSouInfo() {
-        ObjectNode info = restTemplate.getForObject(appProperties.getPanSouUrl() + "/api/health", ObjectNode.class);
+        String url = appProperties.getPanSouUrl();
+        ObjectNode info = restTemplate.getForObject(url + "/api/health", ObjectNode.class);
         if (info != null) {
+            checkedPanSouUrl = StringUtils.defaultString(url);
+            updatePanSouAuthEnabled(info);
             info.put("project_channels_count", getProjectChannels().size());
         }
         return info;
     }
 
+    public void refreshPanSouInfoAsync() {
+        String url = appProperties.getPanSouUrl();
+        checkedPanSouUrl = StringUtils.defaultString(url);
+        if (StringUtils.isBlank(url)) {
+            appProperties.setPanSouAuthEnabled(null);
+            return;
+        }
+        appProperties.setPanSouAuthEnabled(null);
+        CompletableFuture.runAsync(() -> {
+            try {
+                getPanSouInfo();
+            } catch (Exception e) {
+                log.warn("check PanSou health failed: {}", url, e);
+                appProperties.setPanSouAuthEnabled(null);
+            }
+        });
+    }
+
+    private void refreshPanSouInfoIfUrlChanged() {
+        String url = appProperties.getPanSouUrl();
+        if (checkedPanSouUrl != null && !StringUtils.equals(StringUtils.defaultString(url), checkedPanSouUrl)) {
+            refreshPanSouInfoAsync();
+        }
+    }
+
+    private void updatePanSouAuthEnabled(ObjectNode info) {
+        if (info.has("auth_enabled")) {
+            appProperties.setPanSouAuthEnabled(info.get("auth_enabled").asBoolean(false));
+        }
+    }
+
     public MovieList pansou(String keyword) {
+        long start = System.currentTimeMillis();
         var result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
@@ -99,6 +146,12 @@ public class RemoteSearchService {
                 movieDetail.setVod_pic(message.getCover());
             }
             movieDetail.setVod_remarks(getTypeName(message.getType()));
+            movieDetail.setVod_play_from(message.getChannel());
+            if (message.getTime() != null) {
+                movieDetail.setVod_time(message.getTime().toString());
+            }
+            movieDetail.setValidity_state(message.getValidityState());
+            movieDetail.setValidity_summary(message.getValiditySummary());
             list.add(movieDetail);
         }
 
@@ -106,7 +159,8 @@ public class RemoteSearchService {
         result.setTotal(list.size());
         result.setLimit(list.size());
 
-        log.info("Search {} get {} results from PanSou.", keyword, result.getTotal());
+        long end = System.currentTimeMillis();
+        log.info("Search {} get {} results from PanSou elapsed {} ms.", keyword, result.getTotal(), end - start);
         return result;
     }
 
@@ -137,7 +191,7 @@ public class RemoteSearchService {
             List<Message> messages = new ArrayList<>();
             addMergedMessages(response.getSearchResponse().getMergedByType(), keyword, offlineDownloadEnabled, messages);
             if (!messages.isEmpty()) {
-                return messages.stream().sorted(comparator()).distinct().toList();
+                return filterInvalidPanSouLinks(messages.stream().sorted(comparator()).distinct().toList());
             }
 
             List<SearchResult> results = response.getSearchResponse().getResults();
@@ -164,23 +218,140 @@ public class RemoteSearchService {
                     }
                 }
             }
-            return messages.stream().sorted(comparator()).distinct().toList();
+            return filterInvalidPanSouLinks(messages.stream().sorted(comparator()).distinct().toList());
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
     }
 
+    private List<Message> filterInvalidPanSouLinks(List<Message> messages) {
+        if (!appProperties.isPanSouLinkCheckEnabled() || messages.isEmpty()) {
+            return messages;
+        }
+        List<Message> checkable = messages.stream()
+                .filter(message -> !isOfflineDownloadType(message.getType()))
+                .filter(message -> StringUtils.isNotBlank(getPanSouCloudType(message.getType())))
+                .toList();
+        if (checkable.isEmpty() || checkable.size() > appProperties.getPanSouLinkCheckMaxCount()) {
+            return messages;
+        }
+
+        Map<String, String> states = new java.util.HashMap<>();
+        Map<String, String> summaries = new java.util.HashMap<>();
+        Map<String, List<Message>> groups = checkable.stream()
+                .collect(Collectors.groupingBy(message -> getPanSouCloudType(message.getType())));
+        List<CompletableFuture<ObjectNode>> futures = groups.entrySet().stream()
+                .map(entry -> CompletableFuture.supplyAsync(() -> {
+                    long startedAt = System.currentTimeMillis();
+                    try {
+                        ObjectNode response = checkPanSouLinks(buildPanSouLinkCheckRequest(entry.getKey(), entry.getValue()));
+                        logPanSouLinkCheck(entry.getKey(), entry.getValue().size(), response, startedAt);
+                        return response;
+                    } catch (Exception e) {
+                        log.warn("check PanSou search links failed: {}", entry.getKey(), e);
+                        return null;
+                    }
+                }))
+                .toList();
+        for (CompletableFuture<ObjectNode> future : futures) {
+            ObjectNode response = future.join();
+            if (response == null || !response.has("results") || !response.get("results").isArray()) {
+                continue;
+            }
+            response.get("results").forEach(result -> {
+                if (result.has("url") && result.has("state")) {
+                    String url = result.get("url").asText();
+                    states.put(url, result.get("state").asText());
+                    if (result.has("summary")) {
+                        summaries.put(url, result.get("summary").asText());
+                    }
+                }
+            });
+        }
+        if (states.isEmpty()) {
+            return messages;
+        }
+        return messages.stream()
+                .filter(message -> !isInvalidPanSouCheckState(states.get(message.getLink())))
+                .peek(message -> {
+                    if (states.containsKey(message.getLink())) {
+                        String state = states.get(message.getLink());
+                        message.setValidityState(state);
+                        message.setValiditySummary(StringUtils.defaultIfBlank(summaries.get(message.getLink()), getPanSouLinkStateSummary(state)));
+                    }
+                })
+                .toList();
+    }
+
+    private boolean isInvalidPanSouCheckState(String state) {
+        return CHECK_STATE_BAD.equals(state) || CHECK_STATE_UNCERTAIN.equals(state);
+    }
+
+    private String getPanSouLinkStateSummary(String state) {
+        if ("locked".equals(state)) {
+            return "链接受限";
+        }
+        return "链接有效";
+    }
+
+    private ObjectNode buildPanSouLinkCheckRequest(String diskType, List<Message> messages) {
+        ObjectNode request = objectMapper.createObjectNode();
+        ArrayNode items = request.putArray("items");
+        for (Message message : messages) {
+            items.addObject()
+                    .put("disk_type", diskType)
+                    .put("url", message.getLink());
+        }
+        request.put("view_token", "pansou-search-" + diskType + "-" + System.currentTimeMillis());
+        return request;
+    }
+
+    private void logPanSouLinkCheck(String diskType, int inputCount, ObjectNode response, long startedAt) {
+        long validCount = 0;
+        if (response != null && response.has("results") && response.get("results").isArray()) {
+            for (var result : response.get("results")) {
+                if (result.has("state") && "ok".equals(result.get("state").asText())) {
+                    validCount++;
+                }
+            }
+        }
+        log.info("检测{}网盘链接{}条，{}条有效，耗时{}ms", diskType, inputCount, validCount, System.currentTimeMillis() - startedAt);
+    }
+
     private String searchPanSou(String url, SearchRequest request) {
-        if (!hasPanSouCredentials()) {
+        if (!shouldUsePanSouAuth()) {
+            return restTemplate.postForObject(url, request, String.class);
+        }
+        String token = getPanSouToken();
+        if (StringUtils.isBlank(token)) {
             return restTemplate.postForObject(url, request, String.class);
         }
         HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(getPanSouToken());
+        headers.setBearerAuth(token);
         return restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(request, headers), String.class).getBody();
+    }
+
+    public ObjectNode checkPanSouLinks(ObjectNode request) {
+        String url = appProperties.getPanSouUrl() + "/api/check/links";
+        if (!shouldUsePanSouAuth()) {
+            return restTemplate.postForObject(url, request, ObjectNode.class);
+        }
+        String token = getPanSouToken();
+        if (StringUtils.isBlank(token)) {
+            return restTemplate.postForObject(url, request, ObjectNode.class);
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        return restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(request, headers), ObjectNode.class).getBody();
     }
 
     private boolean hasPanSouCredentials() {
         return StringUtils.isNoneBlank(appProperties.getPanSouUsername(), appProperties.getPanSouPassword());
+    }
+
+    private boolean shouldUsePanSouAuth() {
+        refreshPanSouInfoIfUrlChanged();
+        return hasPanSouCredentials() && Boolean.TRUE.equals(appProperties.getPanSouAuthEnabled());
     }
 
     private String getPanSouToken() {
@@ -190,7 +361,17 @@ public class RemoteSearchService {
         Map<String, String> body = Map.of(
                 "username", appProperties.getPanSouUsername(),
                 "password", appProperties.getPanSouPassword());
-        Map<?, ?> response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/auth/login", body, Map.class);
+        Map<?, ?> response;
+        try {
+            response = restTemplate.postForObject(appProperties.getPanSouUrl() + "/api/auth/login", body, Map.class);
+        } catch (HttpClientErrorException.Forbidden e) {
+            if (e.getResponseBodyAsString().contains("认证功能未启用")) {
+                log.info("PanSou auth is disabled, use unauthenticated requests");
+                appProperties.setPanSouAuthEnabled(false);
+                return "";
+            }
+            throw e;
+        }
         if (response == null || response.get("token") == null) {
             throw new IllegalStateException("PanSou login failed");
         }

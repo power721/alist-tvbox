@@ -818,6 +818,8 @@ const options = [
   {label: '迅雷', value: '2'},
   {label: '移动', value: '6'},
   {label: 'PikPak', value: '1'},
+  {label: '磁力', value: 'magnet'},
+  {label: 'ED2K', value: 'ed2k'},
 ]
 const sortOrders = [
   {
@@ -1020,6 +1022,12 @@ const getShareType = (type: string) => {
   }
   if (type == '10') {
     return '🐌'
+  }
+  if (type == 'magnet') {
+    return '🧲'
+  }
+  if (type == 'ed2k') {
+    return '🔗'
   }
   return ''
 }

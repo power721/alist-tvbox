@@ -94,6 +94,8 @@ public class SettingService {
         appProperties.setPanSouChannels(settingRepository.findById("pan_sou_channels").map(Setting::getValue).map(this::normalizePanSouChannels).orElse("custom"));
         appProperties.setPanSouUsername(settingRepository.findById("pan_sou_username").map(Setting::getValue).orElse(""));
         appProperties.setPanSouPassword(settingRepository.findById("pan_sou_password").map(Setting::getValue).orElse(""));
+        appProperties.setPanSouLinkCheckEnabled(settingRepository.findById("pan_sou_link_check_enabled").map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setPanSouLinkCheckMaxCount(settingRepository.findById("pan_sou_link_check_max_count").map(Setting::getValue).map(Integer::parseInt).orElse(30));
         appProperties.setTgSortField(settingRepository.findById("tg_sort_field").map(Setting::getValue).orElse("time"));
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(72));
         appProperties.setValidateSharesInterval(settingRepository.findById("validateSharesInterval").map(Setting::getValue).map(Integer::parseInt).orElse(4));
@@ -302,6 +304,14 @@ public class SettingService {
         }
         if ("pan_sou_password".equals(setting.getName())) {
             appProperties.setPanSouPassword(setting.getValue());
+        }
+        if ("pan_sou_link_check_enabled".equals(setting.getName())) {
+            appProperties.setPanSouLinkCheckEnabled("true".equals(setting.getValue()));
+        }
+        if ("pan_sou_link_check_max_count".equals(setting.getName())) {
+            int value = Math.max(0, Integer.parseInt(setting.getValue()));
+            setting.setValue(String.valueOf(value));
+            appProperties.setPanSouLinkCheckMaxCount(value);
         }
         if ("panSouPlugins".equals(setting.getName())) {
             appProperties.setPanSouPlugins(Arrays.asList(setting.getValue().split(",")));
