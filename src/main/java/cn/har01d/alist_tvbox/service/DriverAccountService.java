@@ -12,6 +12,7 @@ import cn.har01d.alist_tvbox.entity.ShareRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.storage.BaiduNetdisk;
+import cn.har01d.alist_tvbox.storage.GuangYaPan;
 import cn.har01d.alist_tvbox.storage.Pan115;
 import cn.har01d.alist_tvbox.storage.Pan123;
 import cn.har01d.alist_tvbox.storage.Pan139;
@@ -34,12 +35,15 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +55,9 @@ import java.util.regex.Pattern;
 @Service
 public class DriverAccountService {
     public static final int IDX = 4000;
+    private static final String GY_ACCOUNT_API = "https://account.guangyapan.com";
+    private static final String GY_CLIENT_ID = "aMe-8VSlkrbQXpUR";
+    private static final String GY_DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
     private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139, DriverType.BAIDU);
     private static final Set<DriverType> COOKIE_TYPES = Set.of(DriverType.PAN115, DriverType.QUARK, DriverType.UC, DriverType.CLOUD189);
     private final PanAccountRepository panAccountRepository;
@@ -267,6 +274,8 @@ public class DriverAccountService {
             storage = new Pan115(account);
         } else if (account.getType() == DriverType.OPEN115) {
             //storage = new Open115(account);
+        } else if (account.getType() == DriverType.GUANGYA) {
+            storage = new GuangYaPan(account);
         } else if (account.getType() == DriverType.BAIDU) {
             storage = new BaiduNetdisk(account);
         }
@@ -406,11 +415,18 @@ public class DriverAccountService {
             if (dto.getToken().startsWith("Basic ")) {
                 dto.setToken(dto.getToken().substring(6).trim());
             }
+        } else if (dto.getType() == DriverType.GUANGYA) {
+            Map<String, Object> addition = readAddition(dto.getAddition());
+            String accessToken = StringUtils.defaultIfBlank(dto.getToken(), text(addition.get("access_token")));
+            String refreshToken = text(addition.get("refresh_token"));
+            if (StringUtils.isBlank(accessToken) && StringUtils.isBlank(refreshToken)) {
+                throw new BadRequestException("Token不能为空");
+            }
         } else if (StringUtils.isBlank(dto.getCookie()) && StringUtils.isBlank(dto.getToken())) {
             throw new BadRequestException("Cookie和Token不能同时为空");
         }
         if (StringUtils.isBlank(dto.getFolder())) {
-            if (dto.getType() == DriverType.QUARK || dto.getType() == DriverType.UC || dto.getType() == DriverType.QUARK_TV || dto.getType() == DriverType.UC_TV || dto.getType() == DriverType.PAN115 || dto.getType() == DriverType.OPEN115 || dto.getType() == DriverType.PAN123) {
+            if (dto.getType() == DriverType.QUARK || dto.getType() == DriverType.UC || dto.getType() == DriverType.QUARK_TV || dto.getType() == DriverType.UC_TV || dto.getType() == DriverType.PAN115 || dto.getType() == DriverType.OPEN115 || dto.getType() == DriverType.PAN123 || dto.getType() == DriverType.GUANGYA) {
                 dto.setFolder("0");
             } else if (dto.getType() == DriverType.CLOUD189) {
                 dto.setFolder("-11");
@@ -487,11 +503,37 @@ public class DriverAccountService {
         if (DriverType.UC.name().equals(type)) {
             return getUcQr();
         }
+        if (DriverType.GUANGYA.name().equals(type)) {
+            return getGuangYaQr();
+        }
         QuarkUCTV driver = drivers.get(type);
         if (driver == null) {
             throw new BadRequestException("不支持的类型");
         }
         return driver.getLoginCode();
+    }
+
+    private QuarkUCTV.LoginResponse getGuangYaQr() throws IOException {
+        String deviceId = createGuangYaDeviceId();
+        HttpHeaders headers = guangYaHeaders(deviceId);
+        Map<String, Object> body = Map.of("scope", "user", "client_id", GY_CLIENT_ID);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+        ObjectNode json = restTemplate.postForObject(GY_ACCOUNT_API + "/v1/auth/device/code", entity, ObjectNode.class);
+        if (json == null) {
+            throw new BadRequestException("二维码生成失败: empty response");
+        }
+        String deviceCode = json.path("device_code").asText("");
+        String verifyUrl = json.path("verification_uri_complete").asText(json.path("verification_url").asText(""));
+        int expiresIn = json.path("expires_in").asInt(120);
+        if (StringUtils.isAnyBlank(deviceCode, verifyUrl)) {
+            String error = StringUtils.defaultIfBlank(json.path("error_description").asText(), json.path("message").asText("invalid response"));
+            throw new BadRequestException("二维码生成失败: " + error);
+        }
+
+        var res = new QuarkUCTV.LoginResponse();
+        res.setQrData(Utils.getQrCode(verifyUrl));
+        res.setQueryToken(encodeGuangYaSession(deviceCode, deviceId, expiresIn));
+        return res;
     }
 
     private QuarkUCTV.LoginResponse getQuarkQr() throws IOException {
@@ -523,6 +565,9 @@ public class DriverAccountService {
         if (DriverType.UC.name().equals(type)) {
             return getUcCookie(queryToken);
         }
+        if (DriverType.GUANGYA.name().equals(type)) {
+            return getGuangYaToken(queryToken);
+        }
         QuarkUCTV driver = drivers.get(type);
         if (driver == null) {
             throw new BadRequestException("不支持的类型");
@@ -532,6 +577,115 @@ public class DriverAccountService {
         var info = new AccountInfo();
         info.setToken(token);
         return info;
+    }
+
+    private AccountInfo getGuangYaToken(String queryToken) {
+        Map<String, Object> session = decodeGuangYaSession(queryToken);
+        if (session.isEmpty()) {
+            throw new BadRequestException("二维码无效或已过期！");
+        }
+        String deviceCode = text(session.get("device_code"));
+        String deviceId = text(session.get("device_id"));
+        HttpHeaders headers = guangYaHeaders(deviceId);
+        Map<String, Object> body = Map.of(
+                "grant_type", GY_DEVICE_GRANT,
+                "device_code", deviceCode,
+                "client_id", GY_CLIENT_ID
+        );
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+        ObjectNode json = restTemplate.postForObject(GY_ACCOUNT_API + "/v1/auth/token", entity, ObjectNode.class);
+        if (json == null) {
+            throw new BadRequestException("等待用户扫码...");
+        }
+
+        String accessToken = json.path("access_token").asText(json.path("accessToken").asText(""));
+        String refreshToken = json.path("refresh_token").asText(json.path("refreshToken").asText(""));
+        if (StringUtils.isNotBlank(accessToken) || StringUtils.isNotBlank(refreshToken)) {
+            var info = new AccountInfo();
+            info.setToken(accessToken);
+            info.getAddition().put("access_token", accessToken);
+            info.getAddition().put("refresh_token", refreshToken);
+            info.getAddition().put("device_id", deviceId);
+            return info;
+        }
+
+        String error = json.path("error").asText("");
+        if ("access_denied".equals(error)) {
+            throw new BadRequestException("用户已取消扫码");
+        }
+        if (error.contains("expired") || "invalid_grant".equals(error)) {
+            throw new BadRequestException("二维码无效或已过期！");
+        }
+        throw new BadRequestException("等待用户扫码...");
+    }
+
+    private HttpHeaders guangYaHeaders(String deviceId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE + ", text/plain, */*");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Client-Id", GY_CLIENT_ID);
+        headers.set("X-Client-Version", "0.0.1");
+        headers.set("X-Device-Id", deviceId);
+        headers.set("X-Device-Model", "chrome%2F147.0.0.0");
+        headers.set("X-Device-Name", "PC-Chrome");
+        headers.set("X-Device-Sign", "wdi10." + deviceId + "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+        headers.set("X-Net-Work-Type", "NONE");
+        headers.set("X-OS-Version", "Win32");
+        headers.set("X-Platform-Version", "1");
+        headers.set("X-Protocol-Version", "301");
+        headers.set("X-Provider-Name", "NONE");
+        headers.set("X-SDK-Version", "9.0.2");
+        return headers;
+    }
+
+    private String encodeGuangYaSession(String deviceCode, String deviceId, int expiresIn) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("device_code", deviceCode);
+        node.put("device_id", deviceId);
+        node.put("expire_time", System.currentTimeMillis() + Math.max(1000, expiresIn * 1000L));
+        try {
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(objectMapper.writeValueAsBytes(node));
+        } catch (Exception e) {
+            throw new BadRequestException(e);
+        }
+    }
+
+    private Map<String, Object> decodeGuangYaSession(String queryToken) {
+        if (StringUtils.isBlank(queryToken)) {
+            return Map.of();
+        }
+        try {
+            byte[] bytes = Base64.getUrlDecoder().decode(queryToken);
+            Map<String, Object> data = objectMapper.readValue(bytes, Map.class);
+            Number expireTime = (Number) data.get("expire_time");
+            if (expireTime == null || expireTime.longValue() < System.currentTimeMillis()) {
+                return Map.of();
+            }
+            return data;
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    private String createGuangYaDeviceId() {
+        byte[] bytes = new byte[16];
+        new SecureRandom().nextBytes(bytes);
+        StringBuilder sb = new StringBuilder(32);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+
+    private static Map<String, Object> readAddition(String addition) {
+        if (StringUtils.isBlank(addition)) {
+            return Map.of();
+        }
+        return Utils.readJson(addition);
+    }
+
+    private static String text(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
     }
 
     private AccountInfo getQuarkCookie(String token) {
