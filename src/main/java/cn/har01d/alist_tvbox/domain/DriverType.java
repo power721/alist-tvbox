@@ -12,6 +12,7 @@ public enum DriverType {
     UC_TV,
     OPEN115,
     BAIDU,
+    GUANGYA,
     ALI,
     OTHER5,
     OTHER6,
