@@ -63,6 +63,7 @@ public class AppProperties {
         map.put("PAN123", localProxyItem(true, 4, 256));
         map.put("PAN139", localProxyItem(true, 4, 256));
         map.put("BAIDU", localProxyItem(true, 5, 2048));
+        map.put("GUANGYA", localProxyItem(true, 4, 1024));
         return map;
     }
 

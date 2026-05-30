@@ -396,7 +396,7 @@ import clipBorad from "vue-clipboard3";
 
 let {toClipboard} = clipBorad();
 
-type CloudDriveType = 'ALI' | 'QUARK' | 'UC' | 'PAN115' | 'PAN123' | 'PAN139' | 'BAIDU'
+type CloudDriveType = 'ALI' | 'QUARK' | 'UC' | 'PAN115' | 'PAN123' | 'PAN139' | 'BAIDU' | 'GUANGYA'
 
 type LocalProxyItem = {
   enabled: boolean
@@ -442,6 +442,7 @@ const driveTypes: Array<{ key: CloudDriveType; label: string }> = [
   {key: 'PAN123', label: '123网盘'},
   {key: 'PAN139', label: '移动云盘'},
   {key: 'BAIDU', label: '百度网盘'},
+  {key: 'GUANGYA', label: '光鸭网盘'},
 ]
 const form = ref({
   id: 0,
@@ -484,6 +485,7 @@ const defaultLocalProxyConfig = (): LocalProxyConfig => ({
   PAN123: {enabled: true, concurrency: 4, chunk_size: 256},
   PAN139: {enabled: true, concurrency: 4, chunk_size: 256},
   BAIDU: {enabled: true, concurrency: 5, chunk_size: 2048},
+  GUANGYA: {enabled: true, concurrency: 4, chunk_size: 1024},
 })
 const localProxyConfig = ref<LocalProxyConfig>(defaultLocalProxyConfig())
 const offlineDownloadConfig = ref<OfflineDownloadConfig>({
@@ -595,6 +597,7 @@ const supportProxy = (type: string) => {
     || type == 'UC_TV'
     || type == 'BAIDU'
     || type == 'PAN139'
+    || type == 'GUANGYA'
 }
 
 const handleAdd = () => {

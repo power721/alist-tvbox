@@ -260,6 +260,7 @@
           <el-radio :label="2" size="large">迅雷分享</el-radio>
           <el-radio :label="3" size="large">123分享</el-radio>
           <el-radio :label="10" size="large">百度分享</el-radio>
+          <el-radio :label="12" size="large">光鸭分享</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
           <el-radio :label="11" size="large">STRM存储</el-radio>
         </el-radio-group>
@@ -322,6 +323,7 @@
           <el-radio :label="2" size="large">迅雷分享</el-radio>
           <el-radio :label="3" size="large">123分享</el-radio>
           <el-radio :label="10" size="large">百度分享</el-radio>
+          <el-radio :label="12" size="large">光鸭分享</el-radio>
           <el-radio :label="11" size="large">STRM存储</el-radio>
         </el-radio-group>
       </el-form-item>
@@ -378,6 +380,7 @@
         <el-radio :label="2" size="large">迅雷分享</el-radio>
         <el-radio :label="3" size="large">123分享</el-radio>
         <el-radio :label="10" size="large">百度分享</el-radio>
+        <el-radio :label="12" size="large">光鸭分享</el-radio>
         <el-radio :label="11" size="large">STRM</el-radio>
       </el-radio-group>
     </el-form-item>

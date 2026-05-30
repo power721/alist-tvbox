@@ -87,6 +87,12 @@ class ShareServiceGuangYaTest {
         assertEquals("1894369771769081942_aeWVzywV3ZOZly47", share.getShareId());
 
         share = new Share();
+        share.setShareId("https://www.guangyapan.com/s/1901811855301689412_aeWVVxu726g3waa-#/share");
+        assertTrue(shareService.parseLink(share));
+        assertEquals(12, share.getType());
+        assertEquals("1901811855301689412_aeWVVxu726g3waa-", share.getShareId());
+
+        share = new Share();
         share.setShareId("1894369771769081942_aeWVzywV3ZOZly47");
         assertTrue(shareService.parseLink(share));
         assertEquals(12, share.getType());

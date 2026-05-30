@@ -179,6 +179,8 @@ const diskTypeMap: Record<string, string> = {
   '115': '115',
   '迅雷': 'xunlei',
   '123': '123',
+  '光鸭': 'guangya',
+  '光鸭网盘': 'guangya',
 }
 
 const panSouItems = computed(() => config.value?.list || [])
