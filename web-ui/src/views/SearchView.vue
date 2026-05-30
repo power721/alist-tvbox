@@ -8,7 +8,7 @@
 
     <div>
       <el-input v-model="keyword" @change="search"/>
-      <el-button type="primary" @click="search" :disabled="!keyword">搜索</el-button>
+      <el-button type="primary" @click="search" :disabled="!keyword || searching">搜索</el-button>
       <el-button type="primary" @click="showDialog" v-if="store.admin">设置</el-button>
     </div>
 
@@ -47,22 +47,22 @@
       <el-table-column prop="vod_remarks" label="评分" width="100"/>
     </el-table>
 
-    <el-table v-if="(type=='6')&&config" :data="config.list" border style="width: 100%">
-      <el-table-column prop="vod_name" label="名称">
+    <el-table v-if="(type=='6')&&config" :data="config.list" border style="width: 100%" v-loading="searching">
+      <el-table-column prop="vod_name" label="名称" sortable>
         <template #default="scope">
           <a :href="'/#/vod?link='+scope.row.vod_id" target="_blank">
             {{ scope.row.vod_name }}
           </a>
         </template>
       </el-table-column>
-      <el-table-column prop="vod_id" label="链接" width="350">
+      <el-table-column prop="vod_id" label="链接" width="350" sortable>
         <template #default="scope">
           <a :href="decodeURIComponent(scope.row.vod_id)" target="_blank">
             {{ decodeURIComponent(scope.row.vod_id) }}
           </a>
         </template>
       </el-table-column>
-      <el-table-column prop="vod_remarks" label="类型" width="100"/>
+      <el-table-column prop="vod_remarks" label="类型" width="100" sortable/>
     </el-table>
 
     <h2 v-if="type!='6'">API返回数据</h2>
@@ -104,6 +104,7 @@ import {store} from "@/services/store";
 const type = ref(localStorage.getItem("search_type") || '1');
 const keyword = ref('')
 const config = ref<any>('')
+const searching = ref(false)
 const dialogVisible = ref(false)
 const currentUrl = window.location.origin
 const form = ref({
@@ -133,13 +134,19 @@ const getPath = (type: string) => {
 }
 
 const search = function () {
+  if (searching.value) {
+    return
+  }
   localStorage.setItem('search_type', type.value)
   if (!keyword.value) {
     return
   }
+  searching.value = true
   config.value = ''
   axios.get(getPath(type.value) + '/' + store.token + '?ac=web&wd=' + keyword.value.trim()).then(({data}) => {
     config.value = data
+  }).finally(() => {
+    searching.value = false
   })
 }
 

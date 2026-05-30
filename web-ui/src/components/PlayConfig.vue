@@ -27,14 +27,22 @@ const tgWebChannels = ref('')
 const tgSearch = ref('')
 const panSouUrl = ref('')
 const panSouSource = ref('all')
+const panSouChannels = ref('custom')
+const panSouAuthEnabled = ref(false)
+const panSouUsername = ref('')
+const panSouPassword = ref('')
+const panSouProjectChannelsCount = ref(0)
+const panSouBuiltinChannelsCount = ref(0)
+const panSouPluginCount = ref(0)
 const panSouPlugins = ref([])
 const plugins = ref([])
 const tgSortField = ref('time')
 const tgTimeout = ref(3000)
 const channels = ref<Channel[]>([])
 const activeRows = ref<Channel[]>([])
-const tgDrivers = ref('9,10,5,7,8,3,2,0,6,1'.split(','))
-const tgDriverOrder = ref('9,10,5,7,8,3,2,0,6,1'.split(','))
+const defaultDriverOrder = '9,10,5,7,8,3,2,0,6,1,magnet,ed2k'.split(',')
+const tgDrivers = ref([...defaultDriverOrder])
+const tgDriverOrder = ref([...defaultDriverOrder])
 const formVisible = ref(false)
 const dialogTitle = ref('')
 const form = ref<Channel>({
@@ -62,6 +70,8 @@ const options = [
   {label: '迅雷', value: '2'},
   {label: '移动', value: '6'},
   {label: 'PikPak', value: '1'},
+  {label: '磁力', value: 'magnet'},
+  {label: 'ED2K', value: 'ed2k'},
 ]
 
 const options2 = [
@@ -91,10 +101,54 @@ const sources = [
   {label: '插件', value: 'plugin'},
 ]
 
+const panSouChannelLists = [
+  {label: '自定义', value: 'custom'},
+  {label: '项目内置', value: 'project'},
+  {label: '盘搜内置', value: 'pansou'},
+]
+
 const activeName = ref('basic')
 
 const getTypeName = (id: number) => {
   return options2.find(e => e.value === id)?.label
+}
+
+const normalizeDriverOrder = (value: string) => {
+  const ids = value.split(',').map(e => e.trim()).filter(e => e)
+  defaultDriverOrder.forEach(e => {
+    if (!ids.includes(e)) {
+      ids.push(e)
+    }
+  })
+  return ids.map(e => {
+    return {
+      id: e,
+      name: options.find(o => o.value === e)?.label || e
+    }
+  })
+}
+
+const loadPanSouInfo = () => {
+  return axios.get('/api/pansou').then(({data}) => {
+    plugins.value = data.plugins || []
+    panSouPluginCount.value = data.plugin_count || plugins.value.length
+    panSouAuthEnabled.value = data.auth_enabled === true
+    panSouProjectChannelsCount.value = data.project_channels_count || 0
+    panSouBuiltinChannelsCount.value = data.channels_count || data.channels?.length || 0
+  })
+}
+
+const getPanSouChannelCount = (value: string) => {
+  if (value === 'custom') {
+    return channels.value.filter(e => e.enabled && e.valid).length
+  }
+  if (value === 'project') {
+    return panSouProjectChannelsCount.value
+  }
+  if (value === 'pansou') {
+    return panSouBuiltinChannelsCount.value
+  }
+  return 0
 }
 
 const updateTgTimeout = () => {
@@ -113,15 +167,26 @@ const updateTgSearch = () => {
 const updatePanSouUrl = () => {
   axios.post('/api/settings', {name: 'pan_sou_url', value: panSouUrl.value}).then(({data}) => {
     panSouUrl.value = data.value
-    axios.get('/api/pansou').then(({data}) => {
-      plugins.value = data.plugins
-    })
+    loadPanSouInfo()
     ElMessage.success('更新成功')
   })
 }
 
 const updatePanSouSource = () => {
   axios.post('/api/settings', {name: 'pan_sou_source', value: panSouSource.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePanSouChannels = () => {
+  axios.post('/api/settings', {name: 'pan_sou_channels', value: panSouChannels.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePanSouAuth = () => {
+  axios.post('/api/settings', {name: 'pan_sou_username', value: panSouUsername.value}).then()
+  axios.post('/api/settings', {name: 'pan_sou_password', value: panSouPassword.value}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -312,21 +377,17 @@ onMounted(() => {
     tgSearch.value = data.tg_search
     panSouUrl.value = data.pan_sou_url
     if (panSouUrl.value) {
-      axios.get('/api/pansou').then(({data}) => {
-        plugins.value = data.plugins
-      })
+      loadPanSouInfo()
     }
+    panSouUsername.value = data.pan_sou_username
+    panSouPassword.value = data.pan_sou_password
     if (data.panSouPlugins && data.panSouPlugins.length) {
       panSouPlugins.value = data.panSouPlugins.split(',')
     }
     panSouSource.value = data.pan_sou_source || 'all'
+    panSouChannels.value = data.pan_sou_channels || 'custom'
     tgSortField.value = data.tg_sort_field || 'time'
-    tgDriverOrder.value = data.tgDriverOrder.split(',').map(e => {
-      return {
-        id: e,
-        name: options.find(o => o.value === e)?.label
-      }
-    })
+    tgDriverOrder.value = normalizeDriverOrder(data.tgDriverOrder || '')
     if (data.tg_drivers && data.tg_drivers.length) {
       tgDrivers.value = data.tg_drivers.split(',')
     }
@@ -355,7 +416,17 @@ onUnmounted(() => {
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updatePanSouUrl">更新</el-button>
-          <a class="hint" target="_blank" href="https://github.com/fish2018/pansou">部署</a>
+          <a class="hint" target="_blank" title="部署纯后端" href="https://github.com/fish2018/pansou">部署</a>
+          <a class="hint" target="_blank" title="部署前端后端" href="https://github.com/fish2018/pansou-web">部署</a>
+        </el-form-item>
+        <el-form-item label="PanSou用户名" v-if="panSouUrl && panSouAuthEnabled">
+          <el-input v-model="panSouUsername"/>
+        </el-form-item>
+        <el-form-item label="PanSou密码" v-if="panSouUrl && panSouAuthEnabled">
+          <el-input v-model="panSouPassword" type="password" show-password/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updatePanSouAuth" v-if="panSouUrl && panSouAuthEnabled">更新</el-button>
         </el-form-item>
         <el-form-item label="PanSou数据源" v-if="panSouUrl">
           <el-radio-group v-model="panSouSource" class="ml-4">
@@ -367,6 +438,16 @@ onUnmounted(() => {
         <el-form-item>
           <el-button type="primary" @click="updatePanSouSource" v-if="panSouUrl">更新</el-button>
         </el-form-item>
+        <el-form-item label="PanSou频道列表" v-if="panSouUrl">
+          <el-radio-group v-model="panSouChannels" class="ml-4">
+            <el-radio size="large" v-for="item in panSouChannelLists" :key="item.value" :value="item.value">
+              {{ item.label }}({{ getPanSouChannelCount(item.value) }})
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updatePanSouChannels" v-if="panSouUrl">更新</el-button>
+        </el-form-item>
         <el-form-item label="PanSou插件" v-if="panSouUrl">
           <el-checkbox-group v-model="panSouPlugins">
             <el-checkbox v-for="item in plugins" :label="item" :value="item" :key="item"/>
@@ -374,6 +455,7 @@ onUnmounted(() => {
         </el-form-item>
         <el-form-item v-if="panSouUrl">
           <el-button type="primary" @click="updatePlugins">更新</el-button>
+          <span class="hint">已启用插件 {{ panSouPluginCount }} 个</span>
           <span class="hint">留空使用全部插件搜索</span>
         </el-form-item>
         <el-form-item label="网盘顺序">

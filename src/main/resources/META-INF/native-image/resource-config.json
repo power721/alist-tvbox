@@ -5,6 +5,7 @@
       {"pattern": "shares.txt"},
       {"pattern": "115_shares.txt"},
       {"pattern": "channels.json"},
+      {"pattern": "channels.txt"},
       {"pattern": "countries.json"}
     ]
   }

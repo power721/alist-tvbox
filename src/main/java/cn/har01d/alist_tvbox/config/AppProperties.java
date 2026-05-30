@@ -37,6 +37,9 @@ public class AppProperties {
     private boolean tgLogin;
     private String panSouUrl;
     private String panSouSource = "all";
+    private String panSouChannels = "custom";
+    private String panSouUsername;
+    private String panSouPassword;
     private List<String> panSouPlugins;
     private String systemId;
     private int tgTimeout = 5000;

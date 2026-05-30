@@ -9,3 +9,33 @@ test('play config channel management gates drag sorting by mobile browser detect
   assert.equal(componentSource.includes('v-if="channelDragEnabled"'), true)
   assert.equal(componentSource.includes('if (!channelDragEnabled) {'), true)
 })
+
+test('play config exposes PanSou channel list selector', () => {
+  assert.equal(componentSource.includes(`const panSouChannels = ref('custom')`), true)
+  assert.equal(componentSource.includes(`{label: '自定义', value: 'custom'}`), true)
+  assert.equal(componentSource.includes(`{label: '项目内置', value: 'project'}`), true)
+  assert.equal(componentSource.includes(`{label: '盘搜内置', value: 'pansou'}`), true)
+  assert.equal(componentSource.includes(`getPanSouChannelCount(item.value)`), true)
+  assert.equal(componentSource.includes(`{name: 'pan_sou_channels', value: panSouChannels.value}`), true)
+  assert.equal(componentSource.includes(`panSouChannels.value = data.pan_sou_channels || 'custom'`), true)
+})
+
+test('play config includes magnet and ed2k in disk order settings', () => {
+  assert.equal(componentSource.includes(`{label: '磁力', value: 'magnet'}`), true)
+  assert.equal(componentSource.includes(`{label: 'ED2K', value: 'ed2k'}`), true)
+  assert.equal(componentSource.includes(`normalizeDriverOrder(data.tgDriverOrder || '')`), true)
+})
+
+test('play config exposes PanSou credentials only when auth is enabled', () => {
+  assert.equal(componentSource.includes(`const panSouAuthEnabled = ref(false)`), true)
+  assert.equal(componentSource.includes(`panSouAuthEnabled.value = data.auth_enabled === true`), true)
+  assert.equal(componentSource.includes(`{name: 'pan_sou_username', value: panSouUsername.value}`), true)
+  assert.equal(componentSource.includes(`{name: 'pan_sou_password', value: panSouPassword.value}`), true)
+  assert.equal(componentSource.includes(`v-if="panSouUrl && panSouAuthEnabled"`), true)
+})
+
+test('play config displays PanSou plugin count', () => {
+  assert.equal(componentSource.includes(`const panSouPluginCount = ref(0)`), true)
+  assert.equal(componentSource.includes(`panSouPluginCount.value = data.plugin_count || plugins.value.length`), true)
+  assert.equal(componentSource.includes(`已启用插件 {{ panSouPluginCount }} 个`), true)
+})
