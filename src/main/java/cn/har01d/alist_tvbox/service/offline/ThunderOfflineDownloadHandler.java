@@ -17,6 +17,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -35,9 +36,25 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
 
     private static final String SIGNIN_URL = AUTH_BASE + "/v1/auth/signin";
     private static final String TOKEN_URL = AUTH_BASE + "/v1/auth/token";
+    private static final String CAPTCHA_INIT_URL = AUTH_BASE + "/v1/shield/captcha/init";
     private static final String FILES_URL = API_BASE + "/files";
     private static final String TASKS_URL = API_BASE + "/tasks";
     private static final String ABOUT_URL = API_BASE + "/about";
+
+    private static final String[] ALGORITHMS = {
+            "Cw4kArmKJ/aOiFTxnQ0ES+D4mbbrIUsFn",
+            "HIGg0Qfbpm5ThZ/RJfjoao4YwgT9/M",
+            "u/PUD",
+            "OlAm8tPkOF1qO5bXxRN2iFttuDldrg",
+            "FFIiM6sFhWhU7tIMVUKOF7CUv/KzgwwV8FE",
+            "yN",
+            "4m5mglrIHksI6wYdq",
+            "LXEfS7",
+            "T+p+C+F2yjgsUtiXWU/cMNYEtJI4pq7GofW",
+            "14BrGIEMXkbvFvZ49nDUfVCRcHYFOJ1BP1Y",
+            "kWIH3Row",
+            "RAmRTKNCjucPWC",
+    };
 
     private final DriverAccountRepository driverAccountRepository;
     private final RestTemplate restTemplate;
@@ -61,7 +78,7 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
         String parentId = requireParentFolderId(account);
 
         ObjectNode listResult = exchangeWithRetry(account,
-                FILES_URL + "?parent_id=" + parentId + "&page_token=&space=&filters=%7B%22trashed%22%3A%7B%22eq%22%3Afalse%7D%7D",
+                FILES_URL + "?parent_id=" + parentId + "&page_token=",
                 HttpMethod.GET, null);
         log.debug("list files response: {}", listResult);
 
@@ -79,7 +96,6 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
         createBody.put("kind", "drive#folder");
         createBody.put("name", "alist-tvbox-offline");
         createBody.put("parent_id", parentId);
-        createBody.put("space", "");
 
         ObjectNode created = exchangeWithRetry(account, FILES_URL, HttpMethod.POST, createBody);
         String folderId = created.path("file").path("id").asText("");
@@ -98,7 +114,6 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
         createBody.put("kind", "drive#file");
         createBody.put("parent_id", folderId);
         createBody.put("upload_type", "UPLOAD_TYPE_URL");
-        createBody.put("space", "");
 
         ObjectNode urlObj = createBody.putObject("url");
         urlObj.put("url", url);
@@ -120,7 +135,7 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
 
         for (int i = 0; i < 30; i++) {
             ObjectNode taskList = exchangeWithRetry(account,
-                    TASKS_URL + "?type=offline&limit=10000&page_token=&space=default%2F*",
+                    TASKS_URL + "?type=offline&limit=10000&page_token=",
                     HttpMethod.GET, null);
 
             ObjectNode found = findTaskInList(taskList, taskId);
@@ -188,7 +203,19 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
         }
         String captchaToken = account.getCookie();
         String deviceId = getDeviceId(account);
-        return exchange(url, method, token, captchaToken, deviceId, body);
+        try {
+            return exchange(url, method, token, captchaToken, deviceId, body);
+        } catch (HttpClientErrorException.BadRequest e) {
+            String respBody = e.getResponseBodyAsString();
+            if (respBody.contains("captcha_invalid")) {
+                log.info("thunder captcha token expired, refreshing for accountId={}", account.getId());
+                String newCaptchaToken = refreshCaptchaToken(captchaToken, deviceId, getAction(method, url), getUserIdFromToken(token));
+                account.setCookie(newCaptchaToken);
+                driverAccountRepository.save(account);
+                return exchange(url, method, token, newCaptchaToken, deviceId, body);
+            }
+            throw new BadRequestException("迅雷云盘接口错误: " + respBody);
+        }
     }
 
     private ObjectNode exchange(String url, HttpMethod method, String token, String captchaToken, String deviceId, ObjectNode body) {
@@ -201,11 +228,88 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
         headers.set("x-client-id", CLIENT_ID);
         headers.set("x-client-version", CLIENT_VERSION);
         headers.set("x-device-id", deviceId);
+        headers.set("X-Space-Authorization", "");
 
         HttpEntity<?> entity = body != null ? new HttpEntity<>(body.toString(), headers) : new HttpEntity<>(headers);
         log.debug("exchange: {}", entity);
         ResponseEntity<String> response = restTemplate.exchange(url, method, entity, String.class);
         return parseJsonBody(response.getBody(), url);
+    }
+
+    private String refreshCaptchaToken(String currentCaptchaToken, String deviceId, String action, String userId) {
+        long timestamp = System.currentTimeMillis();
+        String captchaSign = getCaptchaSign(deviceId, timestamp);
+
+        ObjectNode meta = objectMapper.createObjectNode();
+        meta.put("client_version", CLIENT_VERSION);
+        meta.put("package_name", PACKAGE_NAME);
+        meta.put("user_id", userId);
+        meta.put("timestamp", String.valueOf(timestamp));
+        meta.put("captcha_sign", captchaSign);
+
+        ObjectNode requestBody = objectMapper.createObjectNode();
+        requestBody.put("action", action);
+        requestBody.put("captcha_token", currentCaptchaToken);
+        requestBody.put("client_id", CLIENT_ID);
+        requestBody.put("device_id", deviceId);
+        requestBody.set("meta", meta);
+        requestBody.put("redirect_uri", "xlaccsdk01://xunlei.com/callback?state=harbor");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set(HttpHeaders.ACCEPT, "application/json;charset=UTF-8");
+        headers.set(HttpHeaders.USER_AGENT, buildUserAgent());
+        headers.set("x-device-id", deviceId);
+        headers.set("x-client-id", CLIENT_ID);
+        headers.set("x-client-version", CLIENT_VERSION);
+
+        HttpEntity<String> entity = new HttpEntity<>(requestBody.toString(), headers);
+        ResponseEntity<String> response = restTemplate.exchange(CAPTCHA_INIT_URL, HttpMethod.POST, entity, String.class);
+        ObjectNode json = parseJsonBody(response.getBody(), CAPTCHA_INIT_URL);
+
+        String newCaptchaToken = json.path("captcha_token").asText("");
+        if (StringUtils.isBlank(newCaptchaToken)) {
+            throw new BadRequestException("迅雷云盘刷新验证码Token失败");
+        }
+        log.info("thunder captcha token refreshed");
+        return newCaptchaToken;
+    }
+
+    private String getCaptchaSign(String deviceId, long timestamp) {
+        String str = CLIENT_ID + CLIENT_VERSION + PACKAGE_NAME + deviceId + timestamp;
+        for (String algorithm : ALGORITHMS) {
+            str = Utils.md5(str + algorithm);
+        }
+        return "1." + str;
+    }
+
+    private String getAction(HttpMethod method, String url) {
+        int schemeEnd = url.indexOf("://");
+        if (schemeEnd < 0) {
+            return method.name() + ":" + url;
+        }
+        int pathStart = url.indexOf('/', schemeEnd + 3);
+        if (pathStart < 0) {
+            return method.name() + ":/";
+        }
+        String path = url.substring(pathStart);
+        int queryStart = path.indexOf('?');
+        if (queryStart >= 0) {
+            path = path.substring(0, queryStart);
+        }
+        return method.name() + ":" + path;
+    }
+
+    private String getUserIdFromToken(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) return "";
+            String payload = new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
+            ObjectNode json = (ObjectNode) objectMapper.readTree(payload);
+            return json.path("sub").asText("");
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private String buildUserAgent() {
