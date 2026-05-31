@@ -149,6 +149,7 @@
           <el-input v-model="form.token" type="textarea" :rows="3"/>
           <a href="https://www.guangyapan.com/" target="_blank">光鸭云盘</a>
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
+          <el-button class="hint" type="primary" @click="getTokenInfo" v-if="form.token">校验Token</el-button>
         </el-form-item>
         <el-form-item label="认证令牌" v-if="form.type=='BAIDU'">
           <el-input v-model="form.addition.access_token" @change="fixBaiduToken"/>
@@ -878,6 +879,23 @@ const getInfo = () => {
       }
     } else {
       ElMessage.error('Cookie无效')
+    }
+  })
+}
+
+const getTokenInfo = () => {
+  if (!form.value.token) {
+    return
+  }
+  const data = Object.assign({}, form.value, {addition: JSON.stringify(form.value.addition)})
+  axios.post('/api/pan/accounts/-/info', data).then(({data}) => {
+    if (data && data.name) {
+      ElMessage.success('Token有效：' + data.name)
+      if (!form.value.name) {
+        form.value.name = data.name
+      }
+    } else {
+      ElMessage.error('Token无效')
     }
   })
 }

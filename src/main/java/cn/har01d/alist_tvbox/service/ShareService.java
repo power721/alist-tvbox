@@ -495,6 +495,8 @@ public class ShareService {
             fileName = "baidu_shares.txt";
         } else if (type == 11) {
             fileName = "strm_shares.txt";
+        } else if (type == 12) {
+            fileName = "duck_shares.txt";
         }
 
         for (Share share : list) {
@@ -739,8 +741,7 @@ public class ShareService {
     private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)提取码[:：](\\w+)");
     private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)(?:\\.html)?(?:\\??提取码[:：](\\w+))?");
     private static final Pattern SHARE_GUANGYA_LINK = Pattern.compile("https://(?:www\\.)?guangyapan\\.com/s/([A-Za-z0-9_-]+)");
-    private static final Pattern SHARE_GUANGYA_ID = Pattern.compile("^[A-Za-z0-9]+_[A-Za-z0-9_-]+$");
-    public static final Pattern PASSWORD = Pattern.compile("(?:密码|提取码|验证码|访问码|分享密码|密钥|pwd|password|share_pwd|pass_code|#)[=:：\\s]*([a-zA-Z0-9]{1,4})");
+    public static final Pattern PASSWORD = Pattern.compile("(?:密码|提取码|验证码|访问码|分享密码|密钥|pwd|password|code|share_pwd|pass_code|#)[=:：\\s]*([a-zA-Z0-9]{1,4})");
 
     public String getLinkByPath(String path) {
         String tid = path.split("/temp/")[1];
@@ -758,6 +759,7 @@ public class ShareService {
             case "8" -> "https://115.com/s/" + id;
             case "9" -> "https://cloud.189.cn/t/" + id;
             case "10" -> "https://pan.baidu.com/s/" + id;
+            case "12" -> "https://www.guangyapan.com/s/" + id;
             default -> throw new IllegalArgumentException("Unexpected type: " + parts[0]);
         };
         if (parts.length > 2) {
@@ -798,12 +800,6 @@ public class ShareService {
                 if (parts.length > 2) {
                     share.setPassword(parts[2]);
                 }
-                return true;
-            }
-            if (SHARE_GUANGYA_ID.matcher(url).matches()) {
-                share.setType(12);
-                share.setShareId(url);
-                share.setPassword("");
                 return true;
             }
             return false;
@@ -950,7 +946,7 @@ public class ShareService {
         if (m.find()) {
             share.setType(12);
             share.setShareId(m.group(1));
-            share.setPassword("");
+            share.setPassword(parsePassword(url));
             return true;
         }
 

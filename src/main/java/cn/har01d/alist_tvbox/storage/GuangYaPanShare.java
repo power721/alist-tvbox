@@ -7,6 +7,7 @@ public class GuangYaPanShare extends Storage {
     public GuangYaPanShare(Share share) {
         super(share, "GuangYaPanShare");
         addAddition("share_id", share.getShareId());
+        addAddition("share_pwd", share.getPassword());
         if (StringUtils.isNotBlank(share.getCookie())) {
             addAddition("device_id", share.getCookie().trim());
         }

@@ -780,6 +780,7 @@ public class DriverAccountService {
             case QUARK, QUARK_TV -> getQuarkUserInfo(account);
             case UC, UC_TV -> getUcUserInfo(account);
             case CLOUD189 -> get189UserInfo(account);
+            case GUANGYA -> getGuangYaUserInfo(account);
             default -> null;
         };
     }
@@ -856,6 +857,25 @@ public class DriverAccountService {
         json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
         info.setId(String.valueOf(json.get("data").get("uid").asLong()));
         info.setName(json.get("data").get("nickname").asText());
+        return info;
+    }
+
+    private AccountInfo getGuangYaUserInfo(DriverAccount account) {
+        Map<String, Object> addition = readAddition(account.getAddition());
+        String accessToken = StringUtils.defaultIfBlank(account.getToken(), text(addition.get("access_token")));
+        if (StringUtils.isBlank(accessToken)) {
+            return null;
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set(HttpHeaders.REFERER, "https://www.guangyapan.com/");
+        HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+        String url = GY_ACCOUNT_API + "/v1/user/me";
+        var json = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+        var info = new AccountInfo();
+        info.setName(json.get("name").asText());
+        info.setId(json.get("sub").asText());
         return info;
     }
 

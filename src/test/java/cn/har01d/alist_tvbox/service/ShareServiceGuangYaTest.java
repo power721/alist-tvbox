@@ -93,10 +93,11 @@ class ShareServiceGuangYaTest {
         assertEquals("1901811855301689412_aeWVVxu726g3waa-", share.getShareId());
 
         share = new Share();
-        share.setShareId("1894369771769081942_aeWVzywV3ZOZly47");
+        share.setShareId("https://www.guangyapan.com/s/1907798321501487148_aeXdsJwocgzRgE62?code=ujzm");
         assertTrue(shareService.parseLink(share));
         assertEquals(12, share.getType());
-        assertEquals("1894369771769081942_aeWVzywV3ZOZly47", share.getShareId());
+        assertEquals("1907798321501487148_aeXdsJwocgzRgE62", share.getShareId());
+        assertEquals("ujzm", share.getPassword());
 
         share = new Share();
         share.setShareId("not-a-valid-guangya-share");
