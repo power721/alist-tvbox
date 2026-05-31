@@ -66,6 +66,9 @@
         <a v-else-if="scope.row.type == 10" :href="getShareLink(scope.row)" target="_blank">
           https://pan.baidu.com/s/{{ scope.row.shareId }}
         </a>
+        <a v-else-if="scope.row.type == 12" :href="getShareLink(scope.row)" target="_blank">
+          https://www.guangyapan.com/s/{{ scope.row.shareId }}
+        </a>
       </template>
     </el-table-column>
     <el-table-column prop="password" label="密码" width="120" />
@@ -82,6 +85,7 @@
         <span v-else-if="scope.row.type == 3">123分享</span>
         <span v-else-if="scope.row.type == 10">百度分享</span>
         <span v-else-if="scope.row.type == 11">STRM存储</span>
+        <span v-else-if="scope.row.type == 12">光鸭分享</span>
         <span v-else>阿里分享</span>
       </template>
     </el-table-column>
@@ -139,6 +143,7 @@
         <span v-else-if="scope.row.driver == 'ThunderShare'">迅雷分享</span>
         <span v-else-if="scope.row.driver == '123PanShare'">123分享</span>
         <span v-else-if="scope.row.driver == 'BaiduShare'">百度分享</span>
+        <span v-else-if="scope.row.driver == 'GuangYaPanShare'">光鸭分享</span>
         <span v-else-if="scope.row.driver == 'Local'">本地存储</span>
         <span v-else-if="scope.row.driver == 'Alias'">别名</span>
         <span v-else>{{ scope.row.driver }}</span>
@@ -255,6 +260,7 @@
           <el-radio :label="2" size="large">迅雷分享</el-radio>
           <el-radio :label="3" size="large">123分享</el-radio>
           <el-radio :label="10" size="large">百度分享</el-radio>
+          <el-radio :label="12" size="large">光鸭分享</el-radio>
           <el-radio :label="4" size="large">本地存储</el-radio>
           <el-radio :label="11" size="large">STRM存储</el-radio>
         </el-radio-group>
@@ -317,6 +323,7 @@
           <el-radio :label="2" size="large">迅雷分享</el-radio>
           <el-radio :label="3" size="large">123分享</el-radio>
           <el-radio :label="10" size="large">百度分享</el-radio>
+          <el-radio :label="12" size="large">光鸭分享</el-radio>
           <el-radio :label="11" size="large">STRM存储</el-radio>
         </el-radio-group>
       </el-form-item>
@@ -373,6 +380,7 @@
         <el-radio :label="2" size="large">迅雷分享</el-radio>
         <el-radio :label="3" size="large">123分享</el-radio>
         <el-radio :label="10" size="large">百度分享</el-radio>
+        <el-radio :label="12" size="large">光鸭分享</el-radio>
         <el-radio :label="11" size="large">STRM</el-radio>
       </el-radio-group>
     </el-form-item>
@@ -439,6 +447,7 @@ const options = [
   { label: '123', value: 3 },
   { label: '天翼', value: 9 },
   { label: '百度', value: 10 },
+  { label: '光鸭', value: 12 },
   { label: '迅雷', value: 2 },
   { label: '移动', value: 6 },
   { label: 'PikPak', value: 1 },
@@ -644,6 +653,8 @@ const fullPath = (share: any) => {
     return '/我的123分享/' + path
   } else if (share.type == 10) {
     return '/我的百度分享/' + path
+  } else if (share.type == 12) {
+    return '/我的光鸭分享/' + path
   } else if (share.type == 4) {
     return path
   } else if (share.type == 11) {
@@ -691,13 +702,15 @@ const getShareLink = (shareInfo: ShareInfo) => {
     url = 'https://www.123pan.com/s/' + shareInfo.shareId
   } else if (shareInfo.type == 10) {
     url = 'https://pan.baidu.com/s/' + shareInfo.shareId
+  } else if (shareInfo.type == 12) {
+    url = 'https://www.guangyapan.com/s/' + shareInfo.shareId
   } else {
     url = 'https://www.alipan.com/s/' + shareInfo.shareId
     if (shareInfo.folderId) {
       url = url + '/folder/' + shareInfo.folderId
     }
   }
-  if (shareInfo.password) {
+  if (shareInfo.password && shareInfo.type != 12) {
     if (shareInfo.type == 1 || shareInfo.type == 2 || shareInfo.type == 10) {
       url = url + '?pwd=' + shareInfo.password
     } else {

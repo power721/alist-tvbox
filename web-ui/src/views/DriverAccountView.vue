@@ -27,6 +27,7 @@
           <span v-else-if="scope.row.type=='PAN139'">移动云盘</span>
           <span v-else-if="scope.row.type=='PAN123'">123网盘</span>
           <span v-else-if="scope.row.type=='BAIDU'">百度网盘</span>
+          <span v-else-if="scope.row.type=='GUANGYA'">光鸭云盘</span>
         </template>
       </el-table-column>
       <el-table-column prop="name" label="名称" sortable width="200"/>
@@ -93,6 +94,7 @@
             <el-radio label="PAN139" size="large">移动云盘</el-radio>
             <el-radio label="PAN123" size="large">123网盘</el-radio>
             <el-radio label="BAIDU" size="large">百度网盘</el-radio>
+            <el-radio label="GUANGYA" size="large">光鸭云盘</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="Cookie" required v-if="supportCookie(form.type)">
@@ -142,6 +144,12 @@
         <el-form-item label="Token" v-if="form.type=='QUARK_TV'||form.type=='UC_TV'" required>
           <el-input v-model="form.token" type="textarea" :rows="3"/>
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
+        </el-form-item>
+        <el-form-item label="Token" v-if="form.type=='GUANGYA'" required>
+          <el-input v-model="form.token" type="textarea" :rows="3"/>
+          <a href="https://www.guangyapan.com/" target="_blank">光鸭云盘</a>
+          <el-button type="primary" @click="showQrCode">扫码获取</el-button>
+          <el-button class="hint" type="primary" @click="getTokenInfo" v-if="form.token">校验Token</el-button>
         </el-form-item>
         <el-form-item label="认证令牌" v-if="form.type=='BAIDU'">
           <el-input v-model="form.addition.access_token" @change="fixBaiduToken"/>
@@ -295,6 +303,8 @@
         <el-form-item label="网盘类型">
           <el-select v-model="offlineDownloadConfig.driverType" :disabled="!offlineDownloadConfig.enabled">
             <el-option label="115云盘" value="PAN115"/>
+            <el-option label="光鸭云盘" value="GUANGYA"/>
+            <el-option label="迅雷云盘" value="THUNDER"/>
           </el-select>
         </el-form-item>
         <el-form-item label="网盘账号">
@@ -314,7 +324,7 @@
         <el-form-item label="当前挂载目录">
           <el-input :model-value="offlineMountFolder" readonly/>
         </el-form-item>
-        <el-form-item v-if="offlineQuotaText" label="115本月配额">
+        <el-form-item v-if="offlineQuotaText" label="配额信息">
           <span>{{ offlineQuotaText }}</span>
         </el-form-item>
       </el-form>
@@ -390,7 +400,7 @@ import clipBorad from "vue-clipboard3";
 
 let {toClipboard} = clipBorad();
 
-type CloudDriveType = 'ALI' | 'QUARK' | 'UC' | 'PAN115' | 'PAN123' | 'PAN139' | 'BAIDU'
+type CloudDriveType = 'ALI' | 'QUARK' | 'UC' | 'PAN115' | 'PAN123' | 'PAN139' | 'BAIDU' | 'GUANGYA'
 
 type LocalProxyItem = {
   enabled: boolean
@@ -402,14 +412,16 @@ type LocalProxyConfig = Record<CloudDriveType, LocalProxyItem>
 
 type OfflineDownloadConfig = {
   enabled: boolean
-  driverType: 'PAN115'
+  driverType: string
   accountId: number | null
 }
 
 type OfflineDownloadQuota = {
+  supported: boolean
   surplus: number
   count: number
   used: number
+  displayText: string
 } | null
 
 type DriverAccountItem = {
@@ -436,6 +448,7 @@ const driveTypes: Array<{ key: CloudDriveType; label: string }> = [
   {key: 'PAN123', label: '123网盘'},
   {key: 'PAN139', label: '移动云盘'},
   {key: 'BAIDU', label: '百度网盘'},
+  {key: 'GUANGYA', label: '光鸭云盘'},
 ]
 const form = ref({
   id: 0,
@@ -448,6 +461,8 @@ const form = ref({
     page_size: 1000,
     limit_rate: 2,
     access_token: '',
+    refresh_token: '',
+    device_id: '',
     delete_code: '',
     cloud_id: '',
     link_method: 'download',
@@ -476,6 +491,7 @@ const defaultLocalProxyConfig = (): LocalProxyConfig => ({
   PAN123: {enabled: true, concurrency: 4, chunk_size: 256},
   PAN139: {enabled: true, concurrency: 4, chunk_size: 256},
   BAIDU: {enabled: true, concurrency: 5, chunk_size: 2048},
+  GUANGYA: {enabled: true, concurrency: 10, chunk_size: 256},
 })
 const localProxyConfig = ref<LocalProxyConfig>(defaultLocalProxyConfig())
 const offlineDownloadConfig = ref<OfflineDownloadConfig>({
@@ -492,8 +508,11 @@ const offlineMountFolder = computed(() => {
   return account ? fullPath(account) : ''
 })
 const offlineQuotaText = computed(() => {
-  if (!offlineDownloadQuota.value) {
+  if (!offlineDownloadQuota.value || !offlineDownloadQuota.value.supported) {
     return ''
+  }
+  if (offlineDownloadQuota.value.displayText) {
+    return offlineDownloadQuota.value.displayText
   }
   return `本月配额：剩${offlineDownloadQuota.value.surplus}/总${offlineDownloadQuota.value.count}个`
 })
@@ -501,7 +520,7 @@ const offlineQuotaText = computed(() => {
 watch(() => offlineDownloadConfig.value.driverType, () => {
   const exists = offlineAccounts.value.some((item) => item.id === offlineDownloadConfig.value.accountId)
   if (!exists) {
-    offlineDownloadConfig.value.accountId = null
+    offlineDownloadConfig.value.accountId = offlineAccounts.value.length > 0 ? offlineAccounts.value[0].id : null
   }
 })
 
@@ -587,6 +606,7 @@ const supportProxy = (type: string) => {
     || type == 'UC_TV'
     || type == 'BAIDU'
     || type == 'PAN139'
+    || type == 'GUANGYA'
 }
 
 const handleAdd = () => {
@@ -603,6 +623,8 @@ const handleAdd = () => {
       page_size: 1000,
       limit_rate: 2,
       access_token: '',
+      refresh_token: '',
+      device_id: '',
       delete_code: '',
       cloud_id: '',
       link_method: 'download',
@@ -652,7 +674,7 @@ const loadOfflineDownloadConfig = async () => {
   const {data} = await axios.get('/api/offline_download/config')
   offlineDownloadConfig.value = {
     enabled: !!data?.enabled,
-    driverType: 'PAN115',
+    driverType: data?.driverType ?? 'PAN115',
     accountId: data?.accountId ?? null,
   }
 }
@@ -665,9 +687,11 @@ const loadOfflineDownloadQuota = async () => {
 
   await axios.get('/api/offline_download/quota').then(({data}) => {
     offlineDownloadQuota.value = {
+      supported: data?.supported ?? true,
       surplus: data?.surplus ?? 0,
       count: data?.count ?? 0,
       used: data?.used ?? 0,
+      displayText: data?.displayText ?? '',
     }
   }).catch(() => {
     offlineDownloadQuota.value = null
@@ -751,6 +775,9 @@ const getTypeName = (type: string) => {
   if (type == 'BAIDU') {
     return '百度网盘'
   }
+  if (type == 'GUANGYA') {
+    return '光鸭云盘'
+  }
   return '未知'
 }
 
@@ -781,6 +808,8 @@ const fullPath = (share: any) => {
     return '/我的123网盘/' + path
   } else if (share.type == 'BAIDU') {
     return '/我的百度网盘/' + path
+  } else if (share.type == 'GUANGYA') {
+    return '/我的光鸭云盘/' + path
   } else {
     return '/网盘/' + path
   }
@@ -863,6 +892,23 @@ const getInfo = () => {
   })
 }
 
+const getTokenInfo = () => {
+  if (!form.value.token) {
+    return
+  }
+  const data = Object.assign({}, form.value, {addition: JSON.stringify(form.value.addition)})
+  axios.post('/api/pan/accounts/-/info', data).then(({data}) => {
+    if (data && data.name) {
+      ElMessage.success('Token有效：' + data.name)
+      if (!form.value.name) {
+        form.value.name = data.name
+      }
+    } else {
+      ElMessage.error('Token无效')
+    }
+  })
+}
+
 const copyLink = () => {
   const url = 'https://openapi.baidu.com/oauth/2.0/authorize?response_type=token&scope=basic,netdisk&client_id=IlLqBbU3GjQ0t46TRwFateTprHWl39zF&redirect_uri=oob&confirm_login=0'
   toClipboard(url).then(() => {
@@ -891,6 +937,11 @@ const getRefreshToken = () => {
       form.value.cookie = data.cookie
     } else {
       form.value.token = data.token
+    }
+    if (qrType.value == 'GUANGYA' && data.addition) {
+      form.value.addition.access_token = data.addition.access_token || data.token || ''
+      form.value.addition.refresh_token = data.addition.refresh_token || ''
+      form.value.addition.device_id = data.addition.device_id || ''
     }
     if (!form.value.name) {
       form.value.name = data.name

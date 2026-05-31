@@ -26,7 +26,7 @@ public final class Constants {
     public static final String COLLECTION = "collection";
     public static final String LIST = "list";
 
-    public static final String TG_DRIVERS = "9,10,5,7,8,3,2,0,6,1,magnet,ed2k";
+    public static final String TG_DRIVERS = "9,10,5,7,8,3,2,0,6,1,12,magnet,ed2k";
 
     public static final String ACCESS_TOKEN = "access_token";
     public static final String REFRESH_TOKEN = "refresh_token";

@@ -26,6 +26,7 @@ import cn.har01d.alist_tvbox.storage.AList;
 import cn.har01d.alist_tvbox.storage.Alias;
 import cn.har01d.alist_tvbox.storage.AliyunShare;
 import cn.har01d.alist_tvbox.storage.BaiduShare;
+import cn.har01d.alist_tvbox.storage.GuangYaPanShare;
 import cn.har01d.alist_tvbox.storage.Local;
 import cn.har01d.alist_tvbox.storage.OpenList;
 import cn.har01d.alist_tvbox.storage.Pan115Share;
@@ -494,6 +495,8 @@ public class ShareService {
             fileName = "baidu_shares.txt";
         } else if (type == 11) {
             fileName = "strm_shares.txt";
+        } else if (type == 12) {
+            fileName = "duck_shares.txt";
         }
 
         for (Share share : list) {
@@ -584,6 +587,8 @@ public class ShareService {
             storage = new Pan139Share(share);
         } else if (share.getType() == 10) {
             storage = new BaiduShare(share);
+        } else if (share.getType() == 12) {
+            storage = new GuangYaPanShare(share);
         } else if (share.getType() == 11) {
             storage = new StrmStorage(share);
         }
@@ -735,7 +740,8 @@ public class ShareService {
     private static final Pattern SHARE_ALI_LINK2 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([\\w-]+)(?:\\?password=(\\w+))?");
     private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)提取码[:：](\\w+)");
     private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)(?:\\.html)?(?:\\??提取码[:：](\\w+))?");
-    public static final Pattern PASSWORD = Pattern.compile("(?:密码|提取码|验证码|访问码|分享密码|密钥|pwd|password|share_pwd|pass_code|#)[=:：\\s]*([a-zA-Z0-9]{1,4})");
+    private static final Pattern SHARE_GUANGYA_LINK = Pattern.compile("https://(?:www\\.)?guangyapan\\.com/s/([A-Za-z0-9_-]+)");
+    public static final Pattern PASSWORD = Pattern.compile("(?:密码|提取码|验证码|访问码|分享密码|密钥|pwd|password|code|share_pwd|pass_code|#)[=:：\\s]*([a-zA-Z0-9]{1,4})");
 
     public String getLinkByPath(String path) {
         String tid = path.split("/temp/")[1];
@@ -753,6 +759,7 @@ public class ShareService {
             case "8" -> "https://115.com/s/" + id;
             case "9" -> "https://cloud.189.cn/t/" + id;
             case "10" -> "https://pan.baidu.com/s/" + id;
+            case "12" -> "https://www.guangyapan.com/s/" + id;
             default -> throw new IllegalArgumentException("Unexpected type: " + parts[0]);
         };
         if (parts.length > 2) {
@@ -934,6 +941,15 @@ public class ShareService {
             share.setPassword(parsePassword(url));
             return true;
         }
+
+        m = SHARE_GUANGYA_LINK.matcher(url);
+        if (m.find()) {
+            share.setType(12);
+            share.setShareId(m.group(1));
+            share.setPassword(parsePassword(url));
+            return true;
+        }
+
         return false;
     }
 

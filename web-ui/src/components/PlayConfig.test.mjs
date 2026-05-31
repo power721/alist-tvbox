@@ -21,6 +21,9 @@ test('play config exposes PanSou channel list selector', () => {
 })
 
 test('play config includes magnet and ed2k in disk order settings', () => {
+  assert.equal(componentSource.includes(`const defaultDriverOrder = '9,10,5,7,8,3,2,0,6,1,12,magnet,ed2k'.split(',')`), true)
+  assert.equal(componentSource.includes(`{label: '光鸭', value: '12'}`), true)
+  assert.equal(componentSource.includes(`{label: '光鸭', value: 12}`), true)
   assert.equal(componentSource.includes(`{label: '磁力', value: 'magnet'}`), true)
   assert.equal(componentSource.includes(`{label: 'ED2K', value: 'ed2k'}`), true)
   assert.equal(componentSource.includes(`normalizeDriverOrder(data.tgDriverOrder || '')`), true)

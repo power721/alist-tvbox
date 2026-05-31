@@ -1425,6 +1425,7 @@ public class TvBoxService {
             case "139Yun", "Yun139Share" -> DriverType.PAN139;
             case "189CloudPC", "189Share" -> DriverType.CLOUD189;
             case "AliyunShare", "AliyundriveOpen" -> DriverType.ALI;
+            case "GuangYaPan", "GuangYaPanShare" -> DriverType.GUANGYA;
             default -> DriverType.UNKNOWN;
         };
         if ("AliyunShare".equals(fsDetail.getProvider()) && fsDetail.getRawUrl().contains("115cdn.net")) {

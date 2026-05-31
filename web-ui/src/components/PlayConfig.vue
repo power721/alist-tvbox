@@ -42,7 +42,7 @@ const tgSortField = ref('time')
 const tgTimeout = ref(3000)
 const channels = ref<Channel[]>([])
 const activeRows = ref<Channel[]>([])
-const defaultDriverOrder = '9,10,5,7,8,3,2,0,6,1,magnet,ed2k'.split(',')
+const defaultDriverOrder = '9,10,5,7,8,3,2,0,6,1,12,magnet,ed2k'.split(',')
 const tgDrivers = ref([...defaultDriverOrder])
 const tgDriverOrder = ref([...defaultDriverOrder])
 const formVisible = ref(false)
@@ -72,6 +72,7 @@ const options = [
   {label: '迅雷', value: '2'},
   {label: '移动', value: '6'},
   {label: 'PikPak', value: '1'},
+  {label: '光鸭', value: '12'},
   {label: '磁力', value: 'magnet'},
   {label: 'ED2K', value: 'ed2k'},
 ]
@@ -88,6 +89,7 @@ const options2 = [
   {label: '迅雷', value: 2},
   {label: '移动', value: 6},
   {label: 'PikPak', value: 1},
+  {label: '光鸭', value: 12},
 ]
 
 const orders = [
