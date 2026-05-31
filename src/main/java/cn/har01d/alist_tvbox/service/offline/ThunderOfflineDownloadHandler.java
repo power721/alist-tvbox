@@ -151,6 +151,7 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
                     }
                     boolean isFolder = "drive#folder".equals(found.path("reference_resource").path("kind").asText(""));
                     log.info("thunder task completed: taskId={}, name={}", taskId, name);
+                    sleepOneSecond();
                     return new TaskResult(name, "", isFolder);
                 }
                 if ("PHASE_TYPE_ERROR".equals(phase)) {
