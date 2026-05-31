@@ -303,6 +303,7 @@
         <el-form-item label="网盘类型">
           <el-select v-model="offlineDownloadConfig.driverType" :disabled="!offlineDownloadConfig.enabled">
             <el-option label="115云盘" value="PAN115"/>
+            <el-option label="光鸭云盘" value="GUANGYA"/>
           </el-select>
         </el-form-item>
         <el-form-item label="网盘账号">
@@ -322,7 +323,7 @@
         <el-form-item label="当前挂载目录">
           <el-input :model-value="offlineMountFolder" readonly/>
         </el-form-item>
-        <el-form-item v-if="offlineQuotaText" label="115本月配额">
+        <el-form-item v-if="offlineQuotaText" label="配额信息">
           <span>{{ offlineQuotaText }}</span>
         </el-form-item>
       </el-form>
@@ -410,14 +411,16 @@ type LocalProxyConfig = Record<CloudDriveType, LocalProxyItem>
 
 type OfflineDownloadConfig = {
   enabled: boolean
-  driverType: 'PAN115'
+  driverType: string
   accountId: number | null
 }
 
 type OfflineDownloadQuota = {
+  supported: boolean
   surplus: number
   count: number
   used: number
+  displayText: string
 } | null
 
 type DriverAccountItem = {
@@ -504,8 +507,11 @@ const offlineMountFolder = computed(() => {
   return account ? fullPath(account) : ''
 })
 const offlineQuotaText = computed(() => {
-  if (!offlineDownloadQuota.value) {
+  if (!offlineDownloadQuota.value || !offlineDownloadQuota.value.supported) {
     return ''
+  }
+  if (offlineDownloadQuota.value.displayText) {
+    return offlineDownloadQuota.value.displayText
   }
   return `本月配额：剩${offlineDownloadQuota.value.surplus}/总${offlineDownloadQuota.value.count}个`
 })
@@ -513,7 +519,7 @@ const offlineQuotaText = computed(() => {
 watch(() => offlineDownloadConfig.value.driverType, () => {
   const exists = offlineAccounts.value.some((item) => item.id === offlineDownloadConfig.value.accountId)
   if (!exists) {
-    offlineDownloadConfig.value.accountId = null
+    offlineDownloadConfig.value.accountId = offlineAccounts.value.length > 0 ? offlineAccounts.value[0].id : null
   }
 })
 
@@ -667,7 +673,7 @@ const loadOfflineDownloadConfig = async () => {
   const {data} = await axios.get('/api/offline_download/config')
   offlineDownloadConfig.value = {
     enabled: !!data?.enabled,
-    driverType: 'PAN115',
+    driverType: data?.driverType ?? 'PAN115',
     accountId: data?.accountId ?? null,
   }
 }
@@ -680,9 +686,11 @@ const loadOfflineDownloadQuota = async () => {
 
   await axios.get('/api/offline_download/quota').then(({data}) => {
     offlineDownloadQuota.value = {
+      supported: data?.supported ?? true,
       surplus: data?.surplus ?? 0,
       count: data?.count ?? 0,
       used: data?.used ?? 0,
+      displayText: data?.displayText ?? '',
     }
   }).catch(() => {
     offlineDownloadQuota.value = null

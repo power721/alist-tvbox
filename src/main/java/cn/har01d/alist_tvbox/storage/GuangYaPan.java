@@ -9,6 +9,7 @@ import java.util.Map;
 public class GuangYaPan extends Storage {
     public GuangYaPan(DriverAccount account) {
         super(account, "GuangYaPan");
+        setCustomCachePolicies("/alist-tvbox-offline:0");
         Map<String, Object> addition = readAddition(account.getAddition());
         String accessToken = StringUtils.defaultIfBlank(account.getToken(), text(addition.get("access_token")));
         addAddition("root_folder_id", StringUtils.defaultIfBlank(account.getFolder(), "0"));

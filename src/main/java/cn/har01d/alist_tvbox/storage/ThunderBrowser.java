@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.entity.DriverAccount;
 public class ThunderBrowser extends Storage {
     public ThunderBrowser(DriverAccount account) {
         super(account, "ThunderBrowser");
+        setCustomCachePolicies("/alist-tvbox-offline:0");
         addAddition("username", account.getUsername());
         addAddition("password", account.getPassword());
         addAddition("safe_password", account.getSafePassword());

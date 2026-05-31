@@ -50,13 +50,13 @@ class OfflineDownloadControllerTest {
 
     @Test
     void shouldGetOfflineDownloadQuota() throws Exception {
-        when(offlineDownloadService.getQuota()).thenReturn(new OfflineDownloadQuotaResponse(1371, 1500, 129));
+        when(offlineDownloadService.getQuota()).thenReturn(new OfflineDownloadQuotaResponse(true, 1371, 1500, ""));
 
         mockMvc.perform(get("/api/offline_download/quota"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supported").value(true))
                 .andExpect(jsonPath("$.surplus").value(1371))
-                .andExpect(jsonPath("$.count").value(1500))
-                .andExpect(jsonPath("$.used").value(129));
+                .andExpect(jsonPath("$.count").value(1500));
     }
 
     @Test
