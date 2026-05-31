@@ -304,6 +304,7 @@
           <el-select v-model="offlineDownloadConfig.driverType" :disabled="!offlineDownloadConfig.enabled">
             <el-option label="115云盘" value="PAN115"/>
             <el-option label="光鸭云盘" value="GUANGYA"/>
+            <el-option label="迅雷云盘" value="THUNDER"/>
           </el-select>
         </el-form-item>
         <el-form-item label="网盘账号">
