@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -16,25 +17,27 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @Component
 public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
-    private static final String API_BASE = "https://api-pan.xunlei.com";
+    private static final String API_BASE = "https://x-api-pan.xunlei.com/drive/v1";
     private static final String AUTH_BASE = "https://xluser-ssl.xunlei.com";
-    private static final String CLIENT_ID = "Xqp0kJBXWhwaTpB6";
+    private static final String CLIENT_ID = "ZUBzD9J_XPXfn7f7";
+    private static final String CLIENT_VERSION = "1.40.0.7208";
+    private static final String PACKAGE_NAME = "com.xunlei.browser";
+    private static final String SDK_VERSION = "509300";
+    private static final String APPID = "22062";
 
     private static final String SIGNIN_URL = AUTH_BASE + "/v1/auth/signin";
     private static final String TOKEN_URL = AUTH_BASE + "/v1/auth/token";
-    private static final String FILES_URL = API_BASE + "/drive/v1/files";
-    private static final String TASKS_URL = API_BASE + "/drive/v1/tasks";
-    private static final String ABOUT_URL = API_BASE + "/drive/v1/about";
+    private static final String FILES_URL = API_BASE + "/files";
+    private static final String TASKS_URL = API_BASE + "/tasks";
+    private static final String ABOUT_URL = API_BASE + "/about";
 
     private final DriverAccountRepository driverAccountRepository;
     private final RestTemplate restTemplate;
@@ -58,7 +61,7 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
         String parentId = requireParentFolderId(account);
 
         ObjectNode listResult = exchangeWithRetry(account,
-                FILES_URL + "?parent_id=" + parentId + "&page_token=&limit=100",
+                FILES_URL + "?parent_id=" + parentId + "&page_token=&space=&filters=%7B%22trashed%22%3A%7B%22eq%22%3Afalse%7D%7D",
                 HttpMethod.GET, null);
         log.debug("list files response: {}", listResult);
 
@@ -76,6 +79,7 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
         createBody.put("kind", "drive#folder");
         createBody.put("name", "alist-tvbox-offline");
         createBody.put("parent_id", parentId);
+        createBody.put("space", "");
 
         ObjectNode created = exchangeWithRetry(account, FILES_URL, HttpMethod.POST, createBody);
         String folderId = created.path("file").path("id").asText("");
@@ -91,22 +95,16 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
         log.info("submitting thunder offline download: accountId={}, folderId={}", account.getId(), folderId);
 
         ObjectNode createBody = objectMapper.createObjectNode();
-        createBody.put("upload_type", "UPLOAD_TYPE_URL");
         createBody.put("kind", "drive#file");
         createBody.put("parent_id", folderId);
-        createBody.put("name", url);
-        createBody.put("hash", "");
-        createBody.put("size", 0);
-        createBody.put("unionId", "");
+        createBody.put("upload_type", "UPLOAD_TYPE_URL");
+        createBody.put("space", "");
 
         ObjectNode urlObj = createBody.putObject("url");
         urlObj.put("url", url);
-        urlObj.putArray("files");
 
-        ObjectNode params = createBody.putObject("params");
-        params.put("require_links", "false");
-
-        ObjectNode createResult = exchangeWithRetry(account, FILES_URL, HttpMethod.POST, createBody);
+        ObjectNode createResult = exchangeWithRetry(account,
+                FILES_URL + "?_from=cloudadd/", HttpMethod.POST, createBody);
         log.debug("create task result: {}", createResult);
 
         ObjectNode task = createResult.path("task").isObject() ? (ObjectNode) createResult.path("task") : null;
@@ -122,7 +120,7 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
 
         for (int i = 0; i < 30; i++) {
             ObjectNode taskList = exchangeWithRetry(account,
-                    TASKS_URL + "?limit=100&phaseCheck=false&page_token=&type=offline",
+                    TASKS_URL + "?type=offline&limit=10000&page_token=&space=default%2F*",
                     HttpMethod.GET, null);
 
             ObjectNode found = findTaskInList(taskList, taskId);
@@ -184,134 +182,45 @@ public class ThunderOfflineDownloadHandler implements OfflineDownloadHandler {
     }
 
     private ObjectNode exchangeWithRetry(DriverAccount account, String url, HttpMethod method, ObjectNode body) {
-        String token = getAccessToken(account);
-        String deviceId = getDeviceId(account);
-        try {
-            return exchange(url, method, token, deviceId, body);
-        } catch (HttpClientErrorException.Unauthorized e) {
-            log.info("thunder token expired, refreshing for accountId={}", account.getId());
-            String newToken = refreshToken(account);
-            return exchange(url, method, newToken, deviceId, body);
+        String token = account.getToken();
+        if (StringUtils.isBlank(token)) {
+            throw new BadRequestException("迅雷云盘Token为空，请先配置账号Token");
         }
+        String captchaToken = account.getCookie();
+        String deviceId = getDeviceId(account);
+        return exchange(url, method, token, captchaToken, deviceId, body);
     }
 
-    private ObjectNode exchange(String url, HttpMethod method, String token, String deviceId, ObjectNode body) {
+    private ObjectNode exchange(String url, HttpMethod method, String token, String captchaToken, String deviceId, ObjectNode body) {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + token);
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set(HttpHeaders.ACCEPT, "*/*");
-        headers.set(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
+        headers.set(HttpHeaders.ACCEPT, "application/json;charset=UTF-8");
+        headers.set(HttpHeaders.USER_AGENT, buildUserAgent());
+        headers.set("X-Captcha-Token", captchaToken);
         headers.set("x-client-id", CLIENT_ID);
+        headers.set("x-client-version", CLIENT_VERSION);
         headers.set("x-device-id", deviceId);
 
         HttpEntity<?> entity = body != null ? new HttpEntity<>(body.toString(), headers) : new HttpEntity<>(headers);
+        log.debug("exchange: {}", entity);
         ResponseEntity<String> response = restTemplate.exchange(url, method, entity, String.class);
         return parseJsonBody(response.getBody(), url);
     }
 
-    private String getAccessToken(DriverAccount account) {
-        if (StringUtils.isNotBlank(account.getToken())) {
-            return account.getToken().trim();
-        }
-        return authenticate(account);
+    private String buildUserAgent() {
+        return String.format("ANDROID-%s/%s networkType/WIFI appid/%s deviceName/Xiaomi_M2004j7ac deviceModel/M2004J7AC OSVersion/13 protocolVersion/301 platformversion/10 sdkVersion/%s Oauth2Client/0.9 (Linux 4_9_337-perf-sn-uotan-gd9d488809c3d) (JAVA 0)",
+                PACKAGE_NAME, CLIENT_VERSION, APPID, SDK_VERSION);
     }
 
     private String getDeviceId(DriverAccount account) {
         String deviceId = getAdditionField(account, "device_id");
         if (StringUtils.isBlank(deviceId)) {
-            deviceId = UUID.randomUUID().toString().replace("-", "");
+            deviceId = Utils.md5(account.getUsername() + account.getPassword());
             setAdditionField(account, "device_id", deviceId);
             driverAccountRepository.save(account);
         }
         return deviceId;
-    }
-
-    private String authenticate(DriverAccount account) {
-        if (StringUtils.isBlank(account.getUsername()) || StringUtils.isBlank(account.getPassword())) {
-            throw new BadRequestException("迅雷云盘用户名或密码不能为空，请先配置账号");
-        }
-
-        String deviceId = getDeviceId(account);
-
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("captcha_token", "");
-        body.put("client_id", CLIENT_ID);
-        body.put("device_id", deviceId);
-        body.put("username", account.getUsername());
-        body.put("password", account.getPassword());
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set(HttpHeaders.ACCEPT, "*/*");
-        headers.set(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
-
-        HttpEntity<String> entity = new HttpEntity<>(body.toString(), headers);
-        ResponseEntity<String> response = restTemplate.exchange(SIGNIN_URL, HttpMethod.POST, entity, String.class);
-        ObjectNode json = parseJsonBody(response.getBody(), SIGNIN_URL);
-
-        String accessToken = json.path("token").path("access_token").asText("");
-        String refreshTokenValue = json.path("token").path("refresh_token").asText("");
-
-        if (StringUtils.isBlank(accessToken)) {
-            accessToken = json.path("access_token").asText("");
-            refreshTokenValue = json.path("refresh_token").asText("");
-        }
-
-        if (StringUtils.isBlank(accessToken)) {
-            String message = json.path("error_msg").asText("");
-            if (StringUtils.isBlank(message)) {
-                message = json.path("message").asText("迅雷云盘登录失败");
-            }
-            throw new BadRequestException("迅雷云盘登录失败: " + message);
-        }
-
-        account.setToken(accessToken);
-        setAdditionField(account, "refresh_token", refreshTokenValue);
-        driverAccountRepository.save(account);
-        log.info("thunder authenticated for accountId={}", account.getId());
-        return accessToken;
-    }
-
-    private String refreshToken(DriverAccount account) {
-        String refreshTokenValue = getAdditionField(account, "refresh_token");
-        if (StringUtils.isBlank(refreshTokenValue)) {
-            return authenticate(account);
-        }
-
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("client_id", CLIENT_ID);
-        body.put("grant_type", "refresh_token");
-        body.put("refresh_token", refreshTokenValue);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set(HttpHeaders.ACCEPT, "*/*");
-        headers.set(HttpHeaders.USER_AGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36");
-
-        HttpEntity<String> entity = new HttpEntity<>(body.toString(), headers);
-        ResponseEntity<String> response = restTemplate.exchange(TOKEN_URL, HttpMethod.POST, entity, String.class);
-        ObjectNode json = parseJsonBody(response.getBody(), TOKEN_URL);
-
-        String accessToken = json.path("token").path("access_token").asText("");
-        String newRefreshToken = json.path("token").path("refresh_token").asText("");
-
-        if (StringUtils.isBlank(accessToken)) {
-            accessToken = json.path("access_token").asText("");
-            newRefreshToken = json.path("refresh_token").asText("");
-        }
-
-        if (StringUtils.isBlank(accessToken)) {
-            log.warn("thunder token refresh failed, re-authenticating for accountId={}", account.getId());
-            return authenticate(account);
-        }
-
-        account.setToken(accessToken);
-        if (StringUtils.isNotBlank(newRefreshToken)) {
-            setAdditionField(account, "refresh_token", newRefreshToken);
-        }
-        driverAccountRepository.save(account);
-        log.info("thunder token refreshed for accountId={}", account.getId());
-        return accessToken;
     }
 
     private String getAdditionField(DriverAccount account, String field) {

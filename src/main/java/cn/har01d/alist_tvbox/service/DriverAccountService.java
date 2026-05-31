@@ -58,7 +58,7 @@ public class DriverAccountService {
     private static final String GY_ACCOUNT_API = "https://account.guangyapan.com";
     private static final String GY_CLIENT_ID = "aMe-8VSlkrbQXpUR";
     private static final String GY_DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
-    private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139, DriverType.BAIDU);
+    private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139, DriverType.BAIDU, DriverType.THUNDER);
     private static final Set<DriverType> COOKIE_TYPES = Set.of(DriverType.PAN115, DriverType.QUARK, DriverType.UC, DriverType.CLOUD189);
     private final PanAccountRepository panAccountRepository;
     private final DriverAccountRepository driverAccountRepository;
@@ -319,7 +319,10 @@ public class DriverAccountService {
     public void updateToken(Integer id, DriverAccount dto) {
         log.debug("update token: {} {}", id - IDX, dto);
         var account = get(id - IDX);
-        if (TOKEN_TYPES.contains(account.getType())) {
+        if (account.getType() == DriverType.THUNDER) {
+            account.setToken(dto.getToken());
+            account.setCookie(dto.getCookie());
+        } else if (TOKEN_TYPES.contains(account.getType())) {
             account.setToken(dto.getToken());
         } else {
             account.setCookie(dto.getToken());
