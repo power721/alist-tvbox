@@ -149,7 +149,7 @@ public class Storage {
         } else if (account.getType() == DriverType.BAIDU) {
             return "/我的百度网盘/" + account.getName();
         } else if (account.getType() == DriverType.GUANGYA) {
-            return "/我的光鸭网盘/" + account.getName();
+            return "/我的光鸭云盘/" + account.getName();
         }
         return "/网盘" + account.getName();
         // cn.har01d.alist_tvbox.service.TvBoxService.addMyFavorite

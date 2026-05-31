@@ -41,7 +41,7 @@ test('PanSou search result page can check visible link validity', () => {
   assert.equal(componentSource.includes(`const checkingLinks = ref(false)`), true)
   assert.equal(componentSource.includes(`const diskTypeMap`), true)
   assert.equal(componentSource.includes(`'光鸭': 'guangya'`), true)
-  assert.equal(componentSource.includes(`'光鸭网盘': 'guangya'`), true)
+  assert.equal(componentSource.includes(`'光鸭云盘': 'guangya'`), true)
   assert.equal(componentSource.includes(`axios.post('/api/pansou/check/links'`), true)
   assert.equal(componentSource.includes(`prop="validity_summary" label="有效性"`), true)
 })

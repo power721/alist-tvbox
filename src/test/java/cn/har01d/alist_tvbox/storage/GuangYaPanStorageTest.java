@@ -27,7 +27,7 @@ class GuangYaPanStorageTest {
 
         assertEquals(4007, storage.getId());
         assertEquals("GuangYaPan", storage.getDriver());
-        assertEquals("/我的光鸭网盘/main", storage.getPath());
+        assertEquals("/我的光鸭云盘/main", storage.getPath());
         assertEquals("root-folder", addition.get("root_folder_id").asText());
         assertEquals("access-token", addition.get("access_token").asText());
         assertEquals("refresh-token", addition.get("refresh_token").asText());

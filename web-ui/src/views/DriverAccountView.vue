@@ -27,7 +27,7 @@
           <span v-else-if="scope.row.type=='PAN139'">移动云盘</span>
           <span v-else-if="scope.row.type=='PAN123'">123网盘</span>
           <span v-else-if="scope.row.type=='BAIDU'">百度网盘</span>
-          <span v-else-if="scope.row.type=='GUANGYA'">光鸭网盘</span>
+          <span v-else-if="scope.row.type=='GUANGYA'">光鸭云盘</span>
         </template>
       </el-table-column>
       <el-table-column prop="name" label="名称" sortable width="200"/>
@@ -94,7 +94,7 @@
             <el-radio label="PAN139" size="large">移动云盘</el-radio>
             <el-radio label="PAN123" size="large">123网盘</el-radio>
             <el-radio label="BAIDU" size="large">百度网盘</el-radio>
-            <el-radio label="GUANGYA" size="large">光鸭网盘</el-radio>
+            <el-radio label="GUANGYA" size="large">光鸭云盘</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="Cookie" required v-if="supportCookie(form.type)">
@@ -147,6 +147,7 @@
         </el-form-item>
         <el-form-item label="Token" v-if="form.type=='GUANGYA'" required>
           <el-input v-model="form.token" type="textarea" :rows="3"/>
+          <a href="https://www.guangyapan.com/" target="_blank">光鸭云盘</a>
           <el-button type="primary" @click="showQrCode">扫码获取</el-button>
         </el-form-item>
         <el-form-item label="认证令牌" v-if="form.type=='BAIDU'">
@@ -442,7 +443,7 @@ const driveTypes: Array<{ key: CloudDriveType; label: string }> = [
   {key: 'PAN123', label: '123网盘'},
   {key: 'PAN139', label: '移动云盘'},
   {key: 'BAIDU', label: '百度网盘'},
-  {key: 'GUANGYA', label: '光鸭网盘'},
+  {key: 'GUANGYA', label: '光鸭云盘'},
 ]
 const form = ref({
   id: 0,
@@ -485,7 +486,7 @@ const defaultLocalProxyConfig = (): LocalProxyConfig => ({
   PAN123: {enabled: true, concurrency: 4, chunk_size: 256},
   PAN139: {enabled: true, concurrency: 4, chunk_size: 256},
   BAIDU: {enabled: true, concurrency: 5, chunk_size: 2048},
-  GUANGYA: {enabled: true, concurrency: 4, chunk_size: 1024},
+  GUANGYA: {enabled: true, concurrency: 10, chunk_size: 256},
 })
 const localProxyConfig = ref<LocalProxyConfig>(defaultLocalProxyConfig())
 const offlineDownloadConfig = ref<OfflineDownloadConfig>({
@@ -765,7 +766,7 @@ const getTypeName = (type: string) => {
     return '百度网盘'
   }
   if (type == 'GUANGYA') {
-    return '光鸭网盘'
+    return '光鸭云盘'
   }
   return '未知'
 }
@@ -798,7 +799,7 @@ const fullPath = (share: any) => {
   } else if (share.type == 'BAIDU') {
     return '/我的百度网盘/' + path
   } else if (share.type == 'GUANGYA') {
-    return '/我的光鸭网盘/' + path
+    return '/我的光鸭云盘/' + path
   } else {
     return '/网盘/' + path
   }
