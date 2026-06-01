@@ -603,11 +603,19 @@ public class SubscriptionService {
             config = overrideConfig(config, override);
         }
 
-        addSite(token, config);
+        int order = addSite(token, config);
+
+        if (StringUtils.isNotBlank(override)) {
+            fixSiteOrder(config, order);
+        }
 
         // should after overrideConfig
         handleWhitelist(config);
         removeBlacklist(config);
+
+        if (StringUtils.isBlank(sort)) {
+            sortSitesByOrder(config);
+        }
 
         try {
             replaceAliToken(config);
@@ -697,6 +705,36 @@ public class SubscriptionService {
         if (StringUtils.isNotBlank(sort)) {
             log.info("sort by filed {}", sort);
             list.sort(Comparator.comparing(a -> a.get(sort)));
+        } else {
+            List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+            int order = 2000;
+            for (Map<String, Object> site : sites) {
+                if (!site.containsKey("order")) {
+                    site.put("order", order);
+                    order += 2;
+                }
+            }
+        }
+    }
+
+    private void sortSitesByOrder(Map<String, Object> config) {
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        sites.sort(Comparator.comparing(a -> {
+            Integer order = (Integer) a.get("order");
+            if (order == null) {
+                order = 9000;
+            }
+            return order;
+        }));
+    }
+
+    private void fixSiteOrder(Map<String, Object> config, int order) {
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        for (Map<String, Object> site : sites) {
+            if (!site.containsKey("order")) {
+                site.put("order", order);
+                order += 2;
+            }
         }
     }
 
@@ -1048,14 +1086,16 @@ public class SubscriptionService {
         return UUID.randomUUID().toString().replace("-", "");
     }
 
-    private void addSite(String token, Map<String, Object> config) {
+    private int addSite(String token, Map<String, Object> config) {
         int id = 0;
+        int order = 1000;
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         String uid = generateUid();
         for (SubscriptionSourceService.SubscriptionSourceRef source : subscriptionSourceService.findEnabledSources()) {
             try {
                 if (source.builtin()) {
                     Map<String, Object> site = buildSite(token, uid, source.siteKey(), source.name());
+                    site.put("order", order);
                     if ("csp_AList".equals(source.siteKey())) {
                         sites.removeIf(item -> "Alist".equals(item.get("key")));
                     } else if ("csp_TgDouBan".equals(source.siteKey())) {
@@ -1070,12 +1110,16 @@ public class SubscriptionService {
                     sites.add(id++, site);
                     log.debug("add builtin source {}: {}", source.siteKey(), site);
                 } else if (source.plugin() != null) {
-                    sites.add(id++, buildPluginSite(source.plugin(), token));
+                    Map<String, Object> site = buildPluginSite(source.plugin(), token);
+                    site.put("order", order);
+                    sites.add(id++, site);
                 }
+                order += 2;
             } catch (Exception e) {
                 log.warn("add source failed: {}", source.id(), e);
             }
         }
+        return order;
     }
 
     public Map<String, Boolean> getCapabilities() {
