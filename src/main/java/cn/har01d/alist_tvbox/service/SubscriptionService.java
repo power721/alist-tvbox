@@ -707,11 +707,11 @@ public class SubscriptionService {
             list.sort(Comparator.comparing(a -> a.get(sort)));
         } else {
             List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
-            int order = 2000;
+            int order = 5000;
             for (Map<String, Object> site : sites) {
                 if (!site.containsKey("order")) {
                     site.put("order", order);
-                    order += 2;
+                    order += 10;
                 }
             }
         }
@@ -733,7 +733,7 @@ public class SubscriptionService {
         for (Map<String, Object> site : sites) {
             if (!site.containsKey("order")) {
                 site.put("order", order);
-                order += 2;
+                order += 10;
             }
         }
     }
@@ -1114,7 +1114,7 @@ public class SubscriptionService {
                     site.put("order", order);
                     sites.add(id++, site);
                 }
-                order += 2;
+                order += 10;
             } catch (Exception e) {
                 log.warn("add source failed: {}", source.id(), e);
             }
