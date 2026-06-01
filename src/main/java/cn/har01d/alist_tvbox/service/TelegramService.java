@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.dto.DoubanFilter;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.SearchResponse;
@@ -501,173 +502,124 @@ public class TelegramService {
     public CategoryList categoryDouban() {
         CategoryList result = new CategoryList();
         List<Category> list = new ArrayList<>();
+        List<FilterValue> doubanYears = buildDoubanYearValues();
+        List<FilterValue> sortTR = Arrays.asList(
+                new FilterValue("近期热度", "T"), new FilterValue("首播时间", "R"), new FilterValue("高分优先", "S"));
 
-        {
-            var category = new Category();
-            category.setType_id("hot_tv");
-            category.setType_name("热门电视剧");
-            category.setType_flag(0);
-            list.add(category);
-        }
+        // 热门电视剧
+        result.getFilters().put("hot_tv", List.of(
+                new Filter("type", "分类", Arrays.asList(
+                        new FilterValue("综合", "tv_hot"), new FilterValue("国产剧", "tv_domestic"),
+                        new FilterValue("欧美剧", "tv_american"), new FilterValue("日剧", "tv_japanese"),
+                        new FilterValue("韩剧", "tv_korean"), new FilterValue("动画", "tv_animation")
+                ))
+        ));
+        list.add(createCategory("hot_tv", "热门电视剧"));
 
-        {
-            var category = new Category();
-            category.setType_id("hot_movie");
-            category.setType_name("热门电影");
-            category.setType_flag(0);
-            list.add(category);
-        }
+        // 热门电影
+        result.getFilters().put("hot_movie", List.of(
+                new Filter("sort", "排序", Arrays.asList(
+                        new FilterValue("热度", "recommend"), new FilterValue("最新", "time"), new FilterValue("评分", "rank"))),
+                new Filter("region", "地区", Arrays.asList(
+                        new FilterValue("全部", "全部"), new FilterValue("华语", "华语"), new FilterValue("欧美", "欧美"),
+                        new FilterValue("韩国", "韩国"), new FilterValue("日本", "日本")))
+        ));
+        list.add(createCategory("hot_movie", "热门电影"));
 
-        {
-            var category = new Category();
-            category.setType_id("tv_domestic");
-            category.setType_name("国产剧");
-            category.setType_flag(0);
-            list.add(category);
-        }
+        // 动漫
+        result.getFilters().put("tv_animation", List.of(
+                new Filter("genre", "类型", Arrays.asList(
+                        new FilterValue("全部", ""), new FilterValue("热血", "热血"), new FilterValue("搞笑", "搞笑"),
+                        new FilterValue("恋爱", "恋爱"), new FilterValue("校园", "校园"), new FilterValue("科幻", "科幻"),
+                        new FilterValue("奇幻", "奇幻"), new FilterValue("悬疑", "悬疑"), new FilterValue("治愈", "治愈"),
+                        new FilterValue("运动", "运动"), new FilterValue("机甲", "机甲"), new FilterValue("少女", "少女"),
+                        new FilterValue("少年", "少年"))),
+                new Filter("region", "地区", Arrays.asList(
+                        new FilterValue("全部", ""), new FilterValue("日本", "日本"), new FilterValue("中国大陆", "中国大陆"),
+                        new FilterValue("美国", "美国"), new FilterValue("韩国", "韩国"), new FilterValue("英国", "英国"),
+                        new FilterValue("法国", "法国"))),
+                new Filter("sort", "排序", sortTR),
+                new Filter("year", "年代", doubanYears)
+        ));
+        list.add(createCategory("tv_animation", "动漫"));
 
-        {
-            var category = new Category();
-            category.setType_id("tv_american");
-            category.setType_name("欧美剧");
-            category.setType_flag(0);
-            list.add(category);
-        }
+        // 综艺
+        result.getFilters().put("tv_variety_show", List.of(
+                new Filter("type", "分类", Arrays.asList(
+                        new FilterValue("综合", "show_hot"), new FilterValue("国内", "show_domestic"),
+                        new FilterValue("国外", "show_foreign")))
+        ));
+        list.add(createCategory("tv_variety_show", "综艺"));
 
-        {
-            var category = new Category();
-            category.setType_id("tv_animation");
-            category.setType_name("动漫");
-            category.setType_flag(0);
-            list.add(category);
-        }
+        // 电影推荐
+        result.getFilters().put("suggestion_movie", List.of(
+                new Filter("genre", "类型", filters2),
+                new Filter("region", "地区", filters3),
+                new Filter("sort", "排序", sortTR),
+                new Filter("year", "年代", doubanYears)
+        ));
+        list.add(createCategory("suggestion_movie", "电影推荐"));
 
-        {
-            var category = new Category();
-            category.setType_id("tv_variety_show");
-            category.setType_name("综艺");
-            category.setType_flag(0);
-            list.add(category);
-        }
+        // 电视剧推荐
+        result.getFilters().put("suggestion_tv", List.of(
+                new Filter("genre", "类型", Arrays.asList(
+                        new FilterValue("不限", ""), new FilterValue("电视剧", "电视剧"), new FilterValue("综艺", "综艺"))),
+                new Filter("tvForm", "电视剧形式", Arrays.asList(
+                        new FilterValue("不限", ""), new FilterValue("喜剧", "喜剧"), new FilterValue("爱情", "爱情"),
+                        new FilterValue("悬疑", "悬疑"), new FilterValue("动画", "动画"), new FilterValue("武侠", "武侠"),
+                        new FilterValue("古装", "古装"), new FilterValue("家庭", "家庭"), new FilterValue("犯罪", "犯罪"),
+                        new FilterValue("科幻", "科幻"), new FilterValue("恐怖", "恐怖"), new FilterValue("历史", "历史"),
+                        new FilterValue("战争", "战争"), new FilterValue("动作", "动作"), new FilterValue("冒险", "冒险"),
+                        new FilterValue("传记", "传记"), new FilterValue("剧情", "剧情"), new FilterValue("奇幻", "奇幻"),
+                        new FilterValue("惊悚", "惊悚"), new FilterValue("灾难", "灾难"), new FilterValue("歌舞", "歌舞"),
+                        new FilterValue("音乐", "音乐"))),
+                new Filter("varietyForm", "综艺形式", Arrays.asList(
+                        new FilterValue("不限", ""), new FilterValue("真人秀", "真人秀"), new FilterValue("脱口秀", "脱口秀"),
+                        new FilterValue("音乐", "音乐"), new FilterValue("歌舞", "歌舞"))),
+                new Filter("region", "地区", filters3),
+                new Filter("sort", "排序", sortTR),
+                new Filter("year", "年代", doubanYears),
+                new Filter("platform", "平台", Arrays.asList(
+                        new FilterValue("全部", ""), new FilterValue("腾讯视频", "腾讯视频"), new FilterValue("爱奇艺", "爱奇艺"),
+                        new FilterValue("优酷", "优酷"), new FilterValue("湖南卫视", "湖南卫视"), new FilterValue("Netflix", "Netflix"),
+                        new FilterValue("HBO", "HBO"), new FilterValue("BBC", "BBC"), new FilterValue("NHK", "NHK"),
+                        new FilterValue("CBS", "CBS"), new FilterValue("NBC", "NBC"), new FilterValue("tvN", "tvN")))
+        ));
+        list.add(createCategory("suggestion_tv", "电视剧推荐"));
 
-        {
-            var category = new Category();
-            category.setType_id("tv_korean");
-            category.setType_name("韩剧");
-            category.setType_flag(0);
-            list.add(category);
-        }
+        // 电影榜单
+        result.getFilters().put("movie_rank", List.of(
+                new Filter("rank", "榜单", Arrays.asList(
+                        new FilterValue("豆瓣电影Top250", "movie_top250"), new FilterValue("实时热门电影", "movie_real_time_hotest"),
+                        new FilterValue("一周口碑电影榜", "movie_weekly_best")))
+        ));
+        list.add(createCategory("movie_rank", "电影榜单"));
 
-        {
-            var category = new Category();
-            category.setType_id("tv_japanese");
-            category.setType_name("日剧");
-            category.setType_flag(0);
-            list.add(category);
-        }
+        // 电视剧榜单
+        result.getFilters().put("tv_rank", List.of(
+                new Filter("rank", "榜单", Arrays.asList(
+                        new FilterValue("实时热门电视", "tv_real_time_hotest"), new FilterValue("华语口碑剧集榜", "tv_chinese_best_weekly"),
+                        new FilterValue("全球口碑剧集榜", "tv_global_best_weekly"), new FilterValue("国内口碑综艺榜", "show_chinese_best_weekly"),
+                        new FilterValue("国外口碑综艺榜", "show_global_best_weekly")))
+        ));
+        list.add(createCategory("tv_rank", "电视剧榜单"));
 
+        // 浏览
         {
-            var category = new Category();
-            category.setType_id("suggestion_movie");
-            category.setType_name("电影推荐");
-            category.setType_flag(0);
-            list.add(category);
-        }
-
-        {
-            var category = new Category();
-            category.setType_id("suggestion_tv");
-            category.setType_name("电视剧推荐");
-            category.setType_flag(0);
-            list.add(category);
-        }
-
-        {
-            var category = new Category();
-            category.setType_id("movie_top250");
-            category.setType_name("电影Top250");
-            category.setType_flag(0);
-            list.add(category);
-        }
-
-        {
-            var category = new Category();
-            category.setType_id("movie_real_time_hotest");
-            category.setType_name("实时热门电影");
-            category.setType_flag(0);
-            list.add(category);
-        }
-
-        {
-            var category = new Category();
-            category.setType_id("movie_weekly_best");
-            category.setType_name("一周口碑电影榜");
-            category.setType_flag(0);
-            list.add(category);
-        }
-
-        {
-            var category = new Category();
-            category.setType_id("tv_real_time_hotest");
-            category.setType_name("实时热门电视");
-            category.setType_flag(0);
-            list.add(category);
-        }
-
-        {
-            var category = new Category();
-            category.setType_id("tv_chinese_best_weekly");
-            category.setType_name("华语口碑剧集榜");
-            category.setType_flag(0);
-            list.add(category);
-        }
-
-        {
-            var category = new Category();
-            category.setType_id("tv_global_best_weekly");
-            category.setType_name("全球口碑剧集榜");
-            category.setType_flag(0);
-            list.add(category);
-        }
-
-        {
-            var category = new Category();
-            category.setType_id("show_chinese_best_weekly");
-            category.setType_name("国内口碑综艺榜");
-            category.setType_flag(0);
-            list.add(category);
-        }
-
-        {
-            var category = new Category();
-            category.setType_id("show_global_best_weekly");
-            category.setType_name("国外口碑综艺榜");
-            category.setType_flag(0);
-            list.add(category);
-        }
-
-        {
-            var category = new Category();
-            category.setType_id("local");
-            category.setType_name("浏览");
-            category.setType_flag(0);
-            list.add(category);
-            List<FilterValue> years = new ArrayList<>();
-            years.add(new FilterValue("全部", ""));
+            List<FilterValue> localYears = new ArrayList<>();
+            localYears.add(new FilterValue("全部", ""));
             int year = LocalDate.now().getYear();
             for (int i = 0; i < 20; ++i) {
-                years.add(new FilterValue(String.valueOf(year - i), String.valueOf(year - i)));
+                localYears.add(new FilterValue(String.valueOf(year - i), String.valueOf(year - i)));
             }
-            result.getFilters().put("local", List.of(new Filter("sort", "排序", filters), new Filter("genre", "类型", filters2), new Filter("region", "地区", filters3), new Filter("year", "年份", years)));
+            result.getFilters().put("local", List.of(
+                    new Filter("sort", "排序", filters), new Filter("genre", "类型", filters2),
+                    new Filter("region", "地区", filters3), new Filter("year", "年份", localYears)));
+            list.add(createCategory("local", "浏览"));
         }
 
-        {
-            var category = new Category();
-            category.setType_id("random");
-            category.setType_name("随便看看");
-            category.setType_flag(0);
-            list.add(category);
-        }
+        // 随便看看
+        list.add(createCategory("random", "随便看看"));
 
         result.setCategories(list);
         result.setTotal(result.getCategories().size());
@@ -677,38 +629,124 @@ public class TelegramService {
         return result;
     }
 
-    public MovieList listDouban(String type, String ac, String sort, Integer year, String genre, String region, int page, int size) {
+    private static Category createCategory(String id, String name) {
+        var category = new Category();
+        category.setType_id(id);
+        category.setType_name(name);
+        category.setType_flag(0);
+        return category;
+    }
+
+    private static List<FilterValue> buildDoubanYearValues() {
+        List<FilterValue> years = new ArrayList<>();
+        years.add(new FilterValue("全部", ""));
+        int year = LocalDate.now().getYear();
+        for (int i = 0; i < 10; ++i) {
+            years.add(new FilterValue(String.valueOf(year - i), String.valueOf(year - i)));
+        }
+        years.add(new FilterValue("2010年代", "2010年代"));
+        years.add(new FilterValue("2000年代", "2000年代"));
+        years.add(new FilterValue("90年代", "90年代"));
+        years.add(new FilterValue("更早", "更早"));
+        return years;
+    }
+
+    public MovieList listDouban(String type, String ac, DoubanFilter filter, int page, int size) {
         if (type.startsWith("s:")) {
             return searchMovies(type.substring(2), false, size);
         }
 
-        return getDoubanList(type, ac, sort, year, genre, region, page, size);
+        return getDoubanList(type, ac, filter, page, size);
     }
 
-    private MovieList getDoubanList(String type, String ac, String sort, Integer year, String genre, String region, int page, int size) {
-        String key = ac + "-" + type + "-" + page;
+    private MovieList getDoubanList(String type, String ac, DoubanFilter filter, int page, int size) {
+        String key = ac + "-" + type + "-" + page + (filter != null ? "-" + filter : "");
         MovieList result = douban.getIfPresent(key);
         if (result != null) {
             return result;
         }
 
-        if (type.equals("local")) {
-            return getLocalMovieList(ac, sort, year, genre, region, page, size);
+        if ("local".equals(type)) {
+            return getLocalMovieList(ac, filter, page, size);
         }
 
-        if (type.equals("random")) {
+        if ("random".equals(type)) {
             return getRandomMovie(ac, size);
         }
 
-        if (type.startsWith("suggestion_")) {
-            return getDoubanItems(type, ac, page, size);
+        // hot_tv / tv_variety_show: type filter switches collection
+        if ("hot_tv".equals(type) || "tv_variety_show".equals(type)) {
+            String collectionId = (filter != null && StringUtils.isNotBlank(filter.getType())) ? filter.getType() : type;
+            if (collectionId.equals(type)) {
+                result = getDoubanItems(type, ac, page, size);
+            } else {
+                result = getSubjectCollectionList(collectionId, ac, page, size);
+            }
+            douban.put(key, result);
+            return result;
         }
 
-        if (type.startsWith("hot_")) {
-            return getDoubanItems(type, ac, page, size);
+        // movie_rank / tv_rank: rank filter switches collection
+        if ("movie_rank".equals(type) || "tv_rank".equals(type)) {
+            String collectionId = (filter != null && StringUtils.isNotBlank(filter.getRank())) ? filter.getRank()
+                    : ("movie_rank".equals(type) ? "movie_top250" : "tv_real_time_hotest");
+            result = getSubjectCollectionList(collectionId, ac, page, size);
+            douban.put(key, result);
+            return result;
         }
 
-        result = new MovieList();
+        // hot_movie with sort/region → frodo hot_gaia API
+        if ("hot_movie".equals(type)) {
+            if (filter != null && (StringUtils.isNotBlank(filter.getSort()) || StringUtils.isNotBlank(filter.getRegion()))) {
+                result = getFrodoHotGaia(ac, filter, page, size);
+            } else {
+                result = getDoubanItems(type, ac, page, size);
+            }
+            douban.put(key, result);
+            return result;
+        }
+
+        // suggestion_movie with tag filters → frodo movie/recommend
+        if ("suggestion_movie".equals(type)) {
+            if (filter != null && filter.hasTagFilters()) {
+                result = getFrodoRecommend("movie", ac, filter, null, page, size);
+            } else {
+                result = getDoubanItems(type, ac, page, size);
+            }
+            douban.put(key, result);
+            return result;
+        }
+
+        // suggestion_tv with tag filters → frodo tv/recommend
+        if ("suggestion_tv".equals(type)) {
+            if (filter != null && filter.hasTagFilters()) {
+                result = getFrodoRecommend("tv", ac, filter, null, page, size);
+            } else {
+                result = getDoubanItems(type, ac, page, size);
+            }
+            douban.put(key, result);
+            return result;
+        }
+
+        // tv_animation with tag filters → frodo tv/recommend with "动画" prefix
+        if ("tv_animation".equals(type)) {
+            if (filter != null && filter.hasTagFilters()) {
+                result = getFrodoRecommend("tv", ac, filter, "动画", page, size);
+            } else {
+                result = getSubjectCollectionList(type, ac, page, size);
+            }
+            douban.put(key, result);
+            return result;
+        }
+
+        // Default: subject_collection
+        result = getSubjectCollectionList(type, ac, page, size);
+        douban.put(key, result);
+        return result;
+    }
+
+    private MovieList getSubjectCollectionList(String type, String ac, int page, int size) {
+        MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
         int start = (page - 1) * size;
@@ -732,9 +770,98 @@ public class TelegramService {
         result.setTotal(total);
         result.setPagecount((total + size - 1) / size);
 
-        douban.put(key, result);
         log.debug("list result: {}", result);
         return result;
+    }
+
+    private MovieList getFrodoHotGaia(String ac, DoubanFilter filter, int page, int size) {
+        int start = (page - 1) * size;
+        String sort = StringUtils.isNotBlank(filter.getSort()) ? filter.getSort() : "recommend";
+        String area = StringUtils.isNotBlank(filter.getRegion()) ? filter.getRegion() : "全部";
+        String url = "https://frodo.douban.com/api/v2/movie/hot_gaia?apikey=0ac44ae016490db2204ce0a042db2916"
+                + "&sort=" + sort + "&area=" + URLEncoder.encode(area, StandardCharsets.UTF_8)
+                + "&start=" + start + "&count=" + size;
+
+        return fetchFrodoItems(url, ac, "items");
+    }
+
+    private MovieList getFrodoRecommend(String category, String ac, DoubanFilter filter, String tagPrefix, int page, int size) {
+        int start = (page - 1) * size;
+        String sort = StringUtils.isNotBlank(filter.getSort()) ? filter.getSort() : "T";
+        String tags = buildTags(filter, tagPrefix);
+        String url = "https://frodo.douban.com/api/v2/" + category + "/recommend?apikey=0ac44ae016490db2204ce0a042db2916"
+                + "&sort=" + sort + "&tags=" + tags
+                + "&start=" + start + "&count=" + size;
+
+        return fetchFrodoItems(url, ac, "items");
+    }
+
+    private String buildTags(DoubanFilter filter, String prefix) {
+        StringBuilder sb = new StringBuilder();
+        if (prefix != null && !prefix.isEmpty()) {
+            sb.append(prefix);
+        }
+        appendTag(sb, filter.getGenre());
+        appendTag(sb, filter.getTvForm());
+        appendTag(sb, filter.getVarietyForm());
+        appendTag(sb, filter.getRegion());
+        appendTag(sb, filter.getYear());
+        appendTag(sb, filter.getPlatform());
+        return URLEncoder.encode(sb.toString(), StandardCharsets.UTF_8);
+    }
+
+    private void appendTag(StringBuilder sb, String value) {
+        if (value != null && !value.isEmpty()) {
+            if (sb.length() > 0) {
+                sb.append(",");
+            }
+            sb.append(value);
+        }
+    }
+
+    private MovieList fetchFrodoItems(String url, String ac, String itemsKey) {
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+        try {
+            HttpEntity<Void> httpEntity = buildFrodoHttpEntity();
+            log.debug("frodo request: {}", url);
+            var response = restTemplate.exchange(url, HttpMethod.GET, httpEntity, JsonNode.class);
+            JsonNode body = response.getBody();
+            if (body == null) {
+                result.setList(list);
+                return result;
+            }
+            int total = body.has("total") ? body.get("total").asInt() : 999;
+            ArrayNode items = (ArrayNode) body.get(itemsKey);
+            if (items != null) {
+                for (JsonNode item : items) {
+                    MovieDetail movieDetail = getMovieDetail(item);
+                    if ("web".equals(ac)) {
+                        fixCover(movieDetail);
+                        movieDetail.setCate(null);
+                    }
+                    list.add(movieDetail);
+                }
+            }
+            result.setList(list);
+            result.setLimit(list.size());
+            result.setTotal(total);
+            result.setPagecount((total + list.size() - 1) / list.size());
+        } catch (Exception e) {
+            log.warn("frodo API error: {}", e.getMessage());
+            result.setList(list);
+        }
+        log.debug("frodo result: {}", result);
+        return result;
+    }
+
+    private static HttpEntity<Void> buildFrodoHttpEntity() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Host", "frodo.douban.com");
+        headers.set("Connection", "Keep-Alive");
+        headers.set("Referer", "https://servicewechat.com/wx2f9b06c1de1ccfca/84/page-frame.html");
+        headers.set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36 MicroMessenger/7.0.9.501 NetType/WIFI MiniProgramEnv/Windows WindowsWechat");
+        return new HttpEntity<>(null, headers);
     }
 
     private void fixCover(MovieDetail movie) {
@@ -754,7 +881,18 @@ public class TelegramService {
         }
     }
 
-    private MovieList getLocalMovieList(String ac, String sort, Integer year, String genre, String region, int page, int size) {
+    private MovieList getLocalMovieList(String ac, DoubanFilter filter, int page, int size) {
+        String sort = filter != null ? filter.getSort() : null;
+        Integer year = null;
+        if (filter != null && StringUtils.isNotBlank(filter.getYear())) {
+            try {
+                year = Integer.parseInt(filter.getYear());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        String genre = filter != null ? filter.getGenre() : null;
+        String region = filter != null ? filter.getRegion() : null;
+
         MovieList result;
         result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
