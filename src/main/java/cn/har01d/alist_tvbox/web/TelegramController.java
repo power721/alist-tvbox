@@ -70,12 +70,12 @@ public class TelegramController {
     }
 
     @GetMapping("/tg-db")
-    public Object db(String id, String t, String ac, String wd, DoubanFilter filter, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) throws IOException {
-        return db("", id, t, ac, wd, filter, pg, size);
+    public Object db(String id, String t, String ac, String wd, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) throws IOException {
+        return db("", id, t, ac, wd, sort, year, genre, region, pg, size);
     }
 
     @GetMapping("/tg-db/{token}")
-    public Object db(@PathVariable String token, String id, String t, String ac, String wd, DoubanFilter filter, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) throws IOException {
+    public Object db(@PathVariable String token, String id, String t, String ac, String wd, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) throws IOException {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
             return telegramService.detail(id, ac, "");
@@ -83,7 +83,7 @@ public class TelegramController {
             if (t.equals("0")) {
                 t = "suggestion";
             }
-            return telegramService.listDouban(t, ac, filter, pg, size);
+            return telegramService.listDouban(t, ac, sort, year, genre, region, pg, size);
         } else if (StringUtils.isNotBlank(wd)) {
             return telegramService.searchDouban(wd, 20);
         }
