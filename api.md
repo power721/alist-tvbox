@@ -30,6 +30,9 @@
 | GET | `/vod/{token}` | TvBox API（带token）- 分类/搜索/详情 |
 | GET | `/m3u8` | M3U8播放列表（无token）            |
 | GET | `/m3u8/{token}` | M3U8播放列表（带token）            |
+| GET | `/open` | Open API（无token）            |
+| GET | `/open/{token}` | Open API（带token）            |
+| GET | `/node/{token}/{file}` | 获取节点文件                      |
 | GET | `/api/qr-code` | 获取二维码                       |
 | GET | `/tv/device` | 获取设备信息                      |
 | POST | `/tv/action` | 设备操作（同步等）                   |
@@ -45,7 +48,9 @@
 | GET | `/sub/{id}` | 获取订阅配置（无token）              |
 | GET | `/sub/{token}/{id}` | 获取订阅配置（带token）              |
 | GET | `/repo/{id}` | 获取多仓订阅配置（无token）            |
-| GET | `/repo/{token}/{id}` | 获取多仓订阅配置（带token）              |
+| GET | `/repo/{token}/{id}` | 获取多仓订阅配置（带token）            |
+| POST | `/api/cat/sync` | 同步猫影视配置                     |
+| GET | `/api/capabilities` | 获取系统能力列表                    |
 
 ---
 
@@ -175,6 +180,7 @@
 | GET | `/api/bilibili/check` | 检查登录 |
 | POST | `/api/bilibili/checkin` | 签到 |
 | POST | `/api/bilibili/cookie` | 更新Cookie |
+| POST | `/api/bilibili/refresh` | 刷新Cookie |
 | POST | `/api/bilibili/login` | 扫码登录 |
 
 ### EmbyController
@@ -242,9 +248,6 @@ Telegram集成
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| POST | `/api/telegram/reset` | 重置Telegram |
-| POST | `/api/telegram/login` | 登录Telegram |
-| POST | `/api/telegram/logout` | 登出Telegram |
 | GET | `/api/telegram/search` | 搜索消息 |
 | GET | `/tg-search` | Telegram搜索API（无token） |
 | GET | `/tg-search/{token}` | Telegram搜索API（带token） |
@@ -255,8 +258,6 @@ Telegram集成
 | POST | `/tgs` | 搜索PG格式（POST） |
 | GET | `/tgs/s/{id}` | 搜索Web（GET） |
 | POST | `/tgs/s/{id}` | 搜索Web（POST） |
-| GET | `/api/telegram/user` | 获取Telegram用户 |
-| GET | `/api/telegram/chats` | 获取所有聊天 |
 | GET | `/api/telegram/channels` | 列出频道 |
 | POST | `/api/telegram/resolveUsername` | 解析用户名 |
 | POST | `/api/telegram/channels` | 保存频道 |
@@ -264,7 +265,6 @@ Telegram集成
 | DELETE | `/api/telegram/channels/{id}` | 删除频道 |
 | POST | `/api/telegram/reloadChannels` | 重新加载频道 |
 | POST | `/api/telegram/validateChannels` | 验证频道 |
-| GET | `/api/telegram/history` | 获取聊天历史 |
 
 ### LiveController
 直播集成
@@ -283,6 +283,23 @@ Telegram集成
 |------|------|------|
 | GET | `/huya` | 虎牙API（无token） |
 | GET | `/huya/{token}` | 虎牙API（带token） |
+
+### FeiniuController
+飞牛影视集成
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/feiniu` | 列出飞牛服务器 |
+| POST | `/api/feiniu` | 创建飞牛服务器 |
+| GET | `/api/feiniu/{id}` | 获取飞牛服务器 |
+| POST | `/api/feiniu/{id}` | 更新飞牛服务器 |
+| DELETE | `/api/feiniu/{id}` | 删除飞牛服务器 |
+| GET | `/feiniu` | 飞牛API（无token）- 浏览/搜索/详情 |
+| GET | `/feiniu/{token}` | 飞牛API（带token） |
+| GET | `/feiniu-play` | 飞牛播放（无token） |
+| GET | `/feiniu-play/{token}` | 飞牛播放（带token） |
+| REQUEST | `/feiniu-proxy/{token}` | 飞牛代理 |
+| REQUEST | `/feiniu-img/{token}` | 飞牛图片代理 |
 
 ---
 
@@ -351,7 +368,15 @@ PikPak网盘
 |------|------|------|
 | GET | `/api/offline_download/config` | 获取离线下载配置 |
 | POST | `/api/offline_download/config` | 保存离线下载配置 |
-| POST | `/api/offline_download` | 提交115或迅雷云盘离线下载并同步返回播放列表 |
+| GET | `/api/offline_download/quota` | 获取网盘配额 |
+
+### PublicOfflineDownloadController
+离线下载（客户端API）
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/offline_download` | 提交离线下载（无token） |
+| POST | `/offline_download/{token}` | 提交离线下载（带token） |
 
 ---
 
@@ -365,6 +390,15 @@ PikPak网盘
 | POST | `/api/subscriptions` | 保存订阅 |
 | GET | `/api/subscriptions` | 列出所有订阅 |
 | DELETE | `/api/subscriptions/{id}` | 删除订阅 |
+
+### SubscriptionSourceController
+订阅源管理
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/subscription-sources` | 列出所有订阅源 |
+| PUT | `/api/subscription-sources/{id}` | 更新订阅源 |
+| POST | `/api/subscription-sources/reorder` | 调整订阅源顺序 |
 
 ### IndexController
 索引管理
@@ -462,7 +496,8 @@ AList别名管理
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| GET | `/parse` | 解析URL |
+| POST | `/parse` | 解析URL（无token） |
+| POST | `/parse/{token}` | 解析URL（带token） |
 
 ### RemoteSearchController
 远程搜索
@@ -470,6 +505,7 @@ AList别名管理
 | 方法 | 路径 | 描述 |
 |------|------|------|
 | GET | `/api/pansou` | 获取盘搜信息 |
+| POST | `/api/pansou/check/links` | 检测分享链接有效性 |
 | GET | `/pansou` | 盘搜API（无token） |
 | GET | `/pansou/{token}` | 盘搜API（带token） |
 | GET | `/tgsp` | 搜索PG（GET） |
@@ -491,6 +527,55 @@ PG令牌管理
 |------|------|------|
 | GET | `/pg/version` | 获取PG版本 |
 | GET | `/pg/lib/tokenm` | 获取PG令牌 |
+
+### PluginController
+Python爬虫插件管理
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/plugins` | 列出所有插件 |
+| POST | `/api/plugins` | 创建插件 |
+| POST | `/api/plugins/import` | 导入插件 |
+| PUT | `/api/plugins/{id}` | 更新插件 |
+| POST | `/api/plugins/{id}/refresh` | 刷新插件 |
+| POST | `/api/plugins/reorder` | 调整插件顺序 |
+| DELETE | `/api/plugins/{id}` | 删除插件 |
+| POST | `/api/plugins/delete-batch` | 批量删除插件 |
+
+### PluginContentController
+插件内容访问
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/plugins/{token}/{id}.txt` | 获取插件内容 |
+
+### PluginFilterController
+插件过滤器管理
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/plugin-filters` | 列出所有过滤器 |
+| POST | `/api/plugin-filters` | 创建过滤器 |
+| PUT | `/api/plugin-filters/{id}` | 更新过滤器 |
+| POST | `/api/plugin-filters/{id}/refresh` | 刷新过滤器 |
+| GET | `/api/plugin-filters/{id}/config-schema` | 获取过滤器配置结构 |
+| POST | `/api/plugin-filters/reorder` | 调整过滤器顺序 |
+| DELETE | `/api/plugin-filters/{id}` | 删除过滤器 |
+| POST | `/api/plugin-filters/delete-batch` | 批量删除过滤器 |
+
+### PluginFilterContentController
+过滤器内容访问
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/plugin-filters/{token}/{id}.py` | 获取过滤器内容 |
+
+### TvFanController
+TVFan配置
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/tvfan/config` | 获取TVFan配置 |
 
 ---
 
@@ -549,15 +634,16 @@ PG令牌管理
 
 ## 统计信息
 
-- **总Controller数量**: 40
-- **总API端点数量**: 约 300+
+- **总Controller数量**: 45
+- **总API端点数量**: 约 350+
 
 ---
 
 ## 备注
 
 1. 大部分 TvBox 客户端 API 支持无 token 和带 token 两种访问方式
-2. `/vod`、`/bilibili`、`/emby`、`/jellyfin`、`/live`、`/huya` 等接口支持统一的分类/搜索/详情查询模式
+2. `/vod`、`/bilibili`、`/emby`、`/jellyfin`、`/feiniu`、`/live`、`/huya` 等接口支持统一的分类/搜索/详情查询模式
 3. 带有 `{token}` 路径变量的端点会进行订阅令牌验证
 4. 分页接口支持 `Pageable` 参数（page, size, sort）
 5. 文件上传接口使用 `MultipartFile` 参数
+6. 插件和过滤器支持 Python 爬虫扩展
