@@ -26,7 +26,7 @@ import java.util.Map;
 @Service
 public class SubscriptionSourceService {
     private static final String BUILTIN_SETTINGS_KEY = "builtin_subscription_sources";
-    private static final String SORT_ORDER_MIGRATED_KEY = "subscription_source_sort_order_migrated";
+    private static final String SORT_ORDER_MIGRATED_KEY = "sub_source_order_migrated";
 
     private final AppProperties appProperties;
     private final PluginRepository pluginRepository;
@@ -75,10 +75,10 @@ public class SubscriptionSourceService {
     ) {
     }
 
-    public record ManagedSourceUpdate(String name, boolean enabled, String extend) {
+    public record ManagedSourceUpdate(String name, boolean enabled, String extend, Integer sortOrder) {
     }
 
-    public record SubscriptionSourceRef(String id, boolean builtin, String siteKey, String name, Plugin plugin) {
+    public record SubscriptionSourceRef(String id, boolean builtin, String siteKey, String name, Plugin plugin, int sortOrder) {
     }
 
     private record BuiltinDefinition(String siteKey, String defaultName, int defaultSortOrder) {
@@ -122,12 +122,24 @@ public class SubscriptionSourceService {
         if (settingRepository.existsByName(SORT_ORDER_MIGRATED_KEY)) {
             return;
         }
+        // Migrate builtin source sort orders to 1000-based scheme
+        Map<String, BuiltinSourceState> settings = readBuiltinSettings();
+        List<BuiltinDefinition> definitions = builtinDefinitions();
+        int builtinOrder = 1000;
+        for (BuiltinDefinition definition : definitions) {
+            BuiltinSourceState state = settings.computeIfAbsent(definition.siteKey(), ignored -> new BuiltinSourceState());
+            state.setSortOrder(builtinOrder);
+            builtinOrder += 10;
+        }
+        saveBuiltinSettings(settings);
+
+        // Migrate plugin sort orders
         List<Plugin> plugins = pluginRepository.findAllByOrderBySortOrderAscIdAsc();
-        int offset = builtinDefinitions().size();
         if (!plugins.isEmpty()) {
-            int order = offset + 1;
+            int order = builtinOrder;
             for (Plugin plugin : plugins) {
-                plugin.setSortOrder(order++);
+                plugin.setSortOrder(order);
+                order += 10;
             }
             pluginRepository.saveAll(plugins);
         }
@@ -148,7 +160,8 @@ public class SubscriptionSourceService {
                         item.source().builtin(),
                         item.source().key(),
                         item.source().name(),
-                        item.plugin()
+                        item.plugin(),
+                        item.source().sortOrder()
                 ))
                 .toList();
     }
@@ -164,7 +177,9 @@ public class SubscriptionSourceService {
             BuiltinSourceState state = settings.computeIfAbsent(siteKey, ignored -> new BuiltinSourceState());
             state.setName(StringUtils.trimToNull(update.name()));
             state.setEnabled(update.enabled());
-            if (state.getSortOrder() == null || state.getSortOrder() < 1) {
+            if (update.sortOrder() != null && update.sortOrder() > 0) {
+                state.setSortOrder(update.sortOrder());
+            } else if (state.getSortOrder() == null) {
                 state.setSortOrder(definition.defaultSortOrder());
             }
             saveBuiltinSettings(settings);
@@ -176,6 +191,9 @@ public class SubscriptionSourceService {
         plugin.setName(StringUtils.defaultIfBlank(StringUtils.trimToNull(update.name()), plugin.getSourceName()));
         plugin.setEnabled(update.enabled());
         plugin.setExtend(StringUtils.trimToEmpty(update.extend()));
+        if (update.sortOrder() != null && update.sortOrder() > 0) {
+            plugin.setSortOrder(update.sortOrder());
+        }
         pluginRepository.save(plugin);
         return buildPluginSource(plugin).source();
     }
@@ -183,20 +201,21 @@ public class SubscriptionSourceService {
     public void reorder(List<String> ids) {
         Map<String, BuiltinSourceState> settings = readBuiltinSettings();
         List<Plugin> plugins = new ArrayList<>();
-        int order = 1;
+        int order = 1000;
         for (String id : ids) {
             if (id.startsWith("builtin-")) {
                 String siteKey = id.substring("builtin-".length());
                 BuiltinSourceState state = settings.computeIfAbsent(siteKey, ignored -> new BuiltinSourceState());
-                state.setSortOrder(order++);
+                state.setSortOrder(order);
                 if (state.getEnabled() == null) {
                     state.setEnabled(true);
                 }
             } else {
                 Plugin plugin = pluginRepository.findById(parsePluginId(id)).orElseThrow(NotFoundException::new);
-                plugin.setSortOrder(order++);
+                plugin.setSortOrder(order);
                 plugins.add(plugin);
             }
+            order += 10;
         }
         if (!plugins.isEmpty()) {
             pluginRepository.saveAll(plugins);
@@ -209,10 +228,8 @@ public class SubscriptionSourceService {
     }
 
     public int nextSortOrder() {
-        return findAll().stream()
-                .mapToInt(ManagedSource::sortOrder)
-                .max()
-                .orElse(0) + 1;
+        int count = (int) findAll().stream().count();
+        return 1000 + 10 * count;
     }
 
     private List<ManagedSourceHolder> buildManagedSources() {
@@ -239,7 +256,7 @@ public class SubscriptionSourceService {
                 definition.defaultName(),
                 "",
                 state == null || state.getEnabled() == null || state.getEnabled(),
-                state == null || state.getSortOrder() == null || state.getSortOrder() < 1 ? definition.defaultSortOrder() : state.getSortOrder(),
+                state == null || state.getSortOrder() == null ? definition.defaultSortOrder() : state.getSortOrder(),
                 null,
                 "",
                 "",
@@ -283,32 +300,42 @@ public class SubscriptionSourceService {
 
     private List<BuiltinDefinition> builtinDefinitions() {
         List<BuiltinDefinition> definitions = new ArrayList<>();
-        int order = 1;
+        int order = 1000;
         Site xiaoya = siteRepository.findById(1).orElse(null);
         if (xiaoya != null) {
-            definitions.add(new BuiltinDefinition("csp_XiaoYa", xiaoya.getName(), order++));
+            definitions.add(new BuiltinDefinition("csp_XiaoYa", xiaoya.getName(), order));
+            order += 10;
         }
-        definitions.add(new BuiltinDefinition("csp_AList", "AList", order++));
-        definitions.add(new BuiltinDefinition("csp_BiliBili", "BiliBili", order++));
+        definitions.add(new BuiltinDefinition("csp_AList", "AList", order));
+        order += 10;
+        definitions.add(new BuiltinDefinition("csp_BiliBili", "BiliBili", order));
+        order += 10;
         if (embyRepository.count() > 0) {
-            definitions.add(new BuiltinDefinition("csp_Emby", "Emby", order++));
+            definitions.add(new BuiltinDefinition("csp_Emby", "Emby", order));
+            order += 10;
         }
         if (jellyfinRepository.count() > 0) {
-            definitions.add(new BuiltinDefinition("csp_Jellyfin", "Jellyfin", order++));
+            definitions.add(new BuiltinDefinition("csp_Jellyfin", "Jellyfin", order));
+            order += 10;
         }
         if (feiniuRepository.count() > 0) {
-            definitions.add(new BuiltinDefinition("csp_FeiNiu", "飞牛影视", order++));
+            definitions.add(new BuiltinDefinition("csp_FeiNiu", "飞牛影视", order));
+            order += 10;
         }
-        definitions.add(new BuiltinDefinition("csp_Live", "网络直播", order++));
-        definitions.add(new BuiltinDefinition("csp_TgDouBan", "电报豆瓣", order++));
+        definitions.add(new BuiltinDefinition("csp_Live", "网络直播", order));
+        order += 10;
+        definitions.add(new BuiltinDefinition("csp_TgDouBan", "电报豆瓣", order));
+        order += 10;
         if (appProperties.isTgLogin() || StringUtils.isNotBlank(appProperties.getTgSearch())) {
-            definitions.add(new BuiltinDefinition("csp_TgSearch", "电报搜索", order++));
+            definitions.add(new BuiltinDefinition("csp_TgSearch", "电报搜索", order));
+            order += 10;
         }
-        definitions.add(new BuiltinDefinition("csp_TgWeb", "电报网页", order++));
+        definitions.add(new BuiltinDefinition("csp_TgWeb", "电报网页", order));
+        order += 10;
         if (StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
             definitions.add(new BuiltinDefinition("csp_FishPanSou", "鱼佬盘搜", order));
         }
-        definitions.add(new BuiltinDefinition("csp_Push", "推送", order++));
+        definitions.add(new BuiltinDefinition("csp_Push", "推送", order));
         return definitions;
     }
 

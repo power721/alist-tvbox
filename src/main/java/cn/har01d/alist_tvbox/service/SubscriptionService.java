@@ -707,11 +707,11 @@ public class SubscriptionService {
             list.sort(Comparator.comparing(a -> a.get(sort)));
         } else {
             List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
-            int order = 2000;
+            int order = 5000;
             for (Map<String, Object> site : sites) {
                 if (!site.containsKey("order")) {
                     site.put("order", order);
-                    order += 2;
+                    order += 10;
                 }
             }
         }
@@ -733,7 +733,7 @@ public class SubscriptionService {
         for (Map<String, Object> site : sites) {
             if (!site.containsKey("order")) {
                 site.put("order", order);
-                order += 2;
+                order += 10;
             }
         }
     }
@@ -1088,14 +1088,13 @@ public class SubscriptionService {
 
     private int addSite(String token, Map<String, Object> config) {
         int id = 0;
-        int order = 1000;
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         String uid = generateUid();
         for (SubscriptionSourceService.SubscriptionSourceRef source : subscriptionSourceService.findEnabledSources()) {
             try {
                 if (source.builtin()) {
                     Map<String, Object> site = buildSite(token, uid, source.siteKey(), source.name());
-                    site.put("order", order);
+                    site.put("order", source.sortOrder());
                     if ("csp_AList".equals(source.siteKey())) {
                         sites.removeIf(item -> "Alist".equals(item.get("key")));
                     } else if ("csp_TgDouBan".equals(source.siteKey())) {
@@ -1111,15 +1110,14 @@ public class SubscriptionService {
                     log.debug("add builtin source {}: {}", source.siteKey(), site);
                 } else if (source.plugin() != null) {
                     Map<String, Object> site = buildPluginSite(source.plugin(), token);
-                    site.put("order", order);
+                    site.put("order", source.sortOrder());
                     sites.add(id++, site);
                 }
-                order += 2;
             } catch (Exception e) {
                 log.warn("add source failed: {}", source.id(), e);
             }
         }
-        return order;
+        return id;
     }
 
     public Map<String, Boolean> getCapabilities() {

@@ -350,9 +350,10 @@
 
       <el-table :data="managedSources" row-key="id" id="plugins-table" border style="width: 100%" @selection-change="onPluginSelectionChange">
         <el-table-column type="selection" width="55" :selectable="isSourceDeletable"/>
-        <el-table-column label="顺序" width="80">
+        <el-table-column label="顺序" width="120">
           <template #default="scope">
-            <span class="pointer">{{ scope.row.sortOrder }}</span>
+            <el-input-number v-model="scope.row.sortOrder" :min="0" :step="10" controls-position="right" style="width: 100px"
+                             @change="updateSource(scope.row)"/>
           </template>
         </el-table-column>
         <el-table-column label="类型" width="90">
@@ -847,7 +848,6 @@ const pluginFilterConfigObject = ref<Record<string, any>>({})
 const pluginFilterConfigExtras = ref<PluginFilterExtraEntry[]>([])
 const pluginFilterConfigError = ref('')
 let timer = 0
-let pluginSortable: Sortable | null = null
 let pluginFilterSortable: Sortable | null = null
 
 const handleLogin = () => {
@@ -1338,32 +1338,6 @@ const formatPluginCheckedAt = (value: string) => {
   return `${date.getFullYear()}-${padTimePart(date.getMonth() + 1)}-${padTimePart(date.getDate())} ${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}:${padTimePart(date.getSeconds())}`
 }
 
-const enablePluginRowDrop = () => {
-  const tbody = document.querySelector('#plugins-table .el-table__body-wrapper tbody') as HTMLElement
-  if (!tbody) {
-    return
-  }
-  pluginSortable?.destroy()
-  pluginSortable = Sortable.create(tbody, {
-    animation: 300,
-    draggable: '.el-table__row',
-    onEnd: ({oldIndex, newIndex}) => {
-      if (oldIndex == null || newIndex == null || oldIndex === newIndex) {
-        return
-      }
-      const row = managedSources.value.splice(oldIndex, 1)[0]
-      managedSources.value.splice(newIndex, 0, row)
-      managedSources.value.forEach((item, index) => {
-        item.sortOrder = index + 1
-      })
-      axios.post('/api/subscription-sources/reorder', managedSources.value.map(item => item.id)).then(() => {
-        ElMessage.success('排序已更新')
-        loadManagedSources()
-      })
-    }
-  })
-}
-
 const enablePluginFilterRowDrop = () => {
   const tbody = document.querySelector('#plugin-filters-table .el-table__body-wrapper tbody') as HTMLElement
   if (!tbody) {
@@ -1399,7 +1373,6 @@ const loadPlugins = () => {
 const loadManagedSources = () => {
   axios.get('/api/subscription-sources').then(({data}) => {
     managedSources.value = data
-    nextTick(() => enablePluginRowDrop())
   })
 }
 
@@ -1529,7 +1502,8 @@ const updateSource = (source: ManagedSource) => {
   axios.put('/api/subscription-sources/' + source.id, {
     name: source.name,
     enabled: source.enabled,
-    extend: source.extend
+    extend: source.extend,
+    sortOrder: source.sortOrder
   }).then(({data}) => {
     Object.assign(source, data)
     ElMessage.success('更新成功')
@@ -1788,7 +1762,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearInterval(timer)
-  pluginSortable?.destroy()
   pluginFilterSortable?.destroy()
 })
 </script>
