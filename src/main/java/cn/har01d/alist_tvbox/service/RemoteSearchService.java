@@ -178,7 +178,7 @@ public class RemoteSearchService {
         boolean offlineDownloadEnabled = offlineDownloadService.getConfig().enabled();
         if (StringUtils.isNotBlank(keyword)) {
 //            request.setFilter(new SearchRequest.Filter(List.of(keyword), List.of()));
-            request.setCloudTypes(getPanSouCloudTypes(offlineDownloadEnabled));
+            request.setCloudTypes(getPanSouCloudTypes());
         }
         if (!CollectionUtils.isEmpty(appProperties.getPanSouPlugins())) {
             request.setPlugins(appProperties.getPanSouPlugins());
@@ -241,19 +241,28 @@ public class RemoteSearchService {
         Map<String, String> summaries = new java.util.HashMap<>();
         Map<String, List<Message>> groups = checkable.stream()
                 .collect(Collectors.groupingBy(message -> getPanSouCloudType(message.getType())));
-        List<CompletableFuture<ObjectNode>> futures = groups.entrySet().stream()
-                .map(entry -> CompletableFuture.supplyAsync(() -> {
+        int batchSize = 10;
+        List<CompletableFuture<ObjectNode>> futures = new ArrayList<>();
+        for (var entry : groups.entrySet()) {
+            String diskType = entry.getKey();
+            List<Message> all = entry.getValue();
+            int batchTotal = (all.size() + batchSize - 1) / batchSize;
+            for (int i = 0; i < all.size(); i += batchSize) {
+                final List<Message> batch = all.subList(i, Math.min(i + batchSize, all.size()));
+                final int batchIndex = i / batchSize;
+                futures.add(CompletableFuture.supplyAsync(() -> {
                     long startedAt = System.currentTimeMillis();
                     try {
-                        ObjectNode response = checkPanSouLinks(buildPanSouLinkCheckRequest(entry.getKey(), entry.getValue()));
-                        logPanSouLinkCheck(entry.getKey(), entry.getValue().size(), response, startedAt);
+                        ObjectNode response = checkPanSouLinks(buildPanSouLinkCheckRequest(diskType, batch));
+                        logPanSouLinkCheck(diskType + (batchTotal > 1 ? "[" + batchIndex + "]" : ""), batch.size(), response, startedAt);
                         return response;
                     } catch (Exception e) {
-                        log.warn("check PanSou search links failed: {}", entry.getKey(), e);
+                        log.warn("check PanSou search links failed: {} batch {}", diskType, batchIndex, e);
                         return null;
                     }
-                }))
-                .toList();
+                }));
+            }
+        }
         for (CompletableFuture<ObjectNode> future : futures) {
             ObjectNode response = future.join();
             if (response == null || !response.has("results") || !response.get("results").isArray()) {
@@ -436,9 +445,9 @@ public class RemoteSearchService {
         }
         List<String> tgDrivers = appProperties.getTgDrivers();
         for (var entry : mergedByType.entrySet()) {
-            if (!offlineDownloadEnabled && isOfflineDownloadType(entry.getKey())) {
-                continue;
-            }
+//            if (!offlineDownloadEnabled && isOfflineDownloadType(entry.getKey())) {
+//                continue;
+//            }
             String messageType = getMessageType(entry.getKey());
             if (messageType == null || !isEnabledDriver(messageType, tgDrivers)) {
                 continue;
@@ -522,6 +531,14 @@ public class RemoteSearchService {
             case "ed2k" -> "ed2k";
             default -> null;
         };
+    }
+
+    private List<String> getPanSouCloudTypes() {
+        return new ArrayList<>(appProperties.getTgDrivers().stream()
+                .map(this::getPanSouCloudType)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .toList());
     }
 
     private List<String> getPanSouCloudTypes(boolean offlineDownloadEnabled) {
