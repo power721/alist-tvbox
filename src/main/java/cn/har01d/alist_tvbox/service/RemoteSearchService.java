@@ -232,6 +232,7 @@ public class RemoteSearchService {
                 .filter(message -> !isOfflineDownloadType(message.getType()))
                 .filter(message -> StringUtils.isNotBlank(getPanSouCloudType(message.getType())))
                 .toList();
+        log.debug("filterInvalidPanSouLinks totla={} checkable={} threashold={}", messages.size(), checkable.size(), appProperties.getPanSouLinkCheckMaxCount());
         if (checkable.isEmpty() || checkable.size() > appProperties.getPanSouLinkCheckMaxCount()) {
             return messages;
         }
