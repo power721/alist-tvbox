@@ -83,7 +83,21 @@ e.g.: disable 2 sites by key, change 1 site name by key, add new site.
   }
 }
 ```
-
+customize sites order by setting `order` field (lower value appears first). Built-in sources and plugins start from 1000, subscription sources start from 2000, sites without order default to 9000.
+```json
+{
+  "sites": [
+    {
+      "key": "豆瓣",
+      "order": 100
+    },
+    {
+      "key": "YouTube",
+      "order": 500
+    }
+  ]
+}
+```
 ### Python Spider Plugins
 Python spider plugins are loaded through `csp_PyProxy` from the bundled `spring.jar`. The original Python entry and ext are wrapped like this:
 ```json
