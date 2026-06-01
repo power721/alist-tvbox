@@ -1,7 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
-import cn.har01d.alist_tvbox.dto.DoubanFilter;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.SearchResponse;
@@ -508,7 +507,7 @@ public class TelegramService {
 
         // 热门电视剧
         result.getFilters().put("hot_tv", List.of(
-                new Filter("type", "分类", Arrays.asList(
+                new Filter("genre", "分类", Arrays.asList(
                         new FilterValue("综合", "tv_hot"), new FilterValue("国产剧", "tv_domestic"),
                         new FilterValue("欧美剧", "tv_american"), new FilterValue("日剧", "tv_japanese"),
                         new FilterValue("韩剧", "tv_korean"), new FilterValue("动画", "tv_animation")
@@ -545,7 +544,7 @@ public class TelegramService {
 
         // 综艺
         result.getFilters().put("tv_variety_show", List.of(
-                new Filter("type", "分类", Arrays.asList(
+                new Filter("genre", "分类", Arrays.asList(
                         new FilterValue("综合", "show_hot"), new FilterValue("国内", "show_domestic"),
                         new FilterValue("国外", "show_foreign")))
         ));
@@ -562,34 +561,16 @@ public class TelegramService {
 
         // 电视剧推荐
         result.getFilters().put("suggestion_tv", List.of(
-                new Filter("genre", "类型", Arrays.asList(
-                        new FilterValue("不限", ""), new FilterValue("电视剧", "电视剧"), new FilterValue("综艺", "综艺"))),
-                new Filter("tvForm", "电视剧形式", Arrays.asList(
-                        new FilterValue("不限", ""), new FilterValue("喜剧", "喜剧"), new FilterValue("爱情", "爱情"),
-                        new FilterValue("悬疑", "悬疑"), new FilterValue("动画", "动画"), new FilterValue("武侠", "武侠"),
-                        new FilterValue("古装", "古装"), new FilterValue("家庭", "家庭"), new FilterValue("犯罪", "犯罪"),
-                        new FilterValue("科幻", "科幻"), new FilterValue("恐怖", "恐怖"), new FilterValue("历史", "历史"),
-                        new FilterValue("战争", "战争"), new FilterValue("动作", "动作"), new FilterValue("冒险", "冒险"),
-                        new FilterValue("传记", "传记"), new FilterValue("剧情", "剧情"), new FilterValue("奇幻", "奇幻"),
-                        new FilterValue("惊悚", "惊悚"), new FilterValue("灾难", "灾难"), new FilterValue("歌舞", "歌舞"),
-                        new FilterValue("音乐", "音乐"))),
-                new Filter("varietyForm", "综艺形式", Arrays.asList(
-                        new FilterValue("不限", ""), new FilterValue("真人秀", "真人秀"), new FilterValue("脱口秀", "脱口秀"),
-                        new FilterValue("音乐", "音乐"), new FilterValue("歌舞", "歌舞"))),
+                new Filter("genre", "类型", filters2),
                 new Filter("region", "地区", filters3),
                 new Filter("sort", "排序", sortTR),
-                new Filter("year", "年代", doubanYears),
-                new Filter("platform", "平台", Arrays.asList(
-                        new FilterValue("全部", ""), new FilterValue("腾讯视频", "腾讯视频"), new FilterValue("爱奇艺", "爱奇艺"),
-                        new FilterValue("优酷", "优酷"), new FilterValue("湖南卫视", "湖南卫视"), new FilterValue("Netflix", "Netflix"),
-                        new FilterValue("HBO", "HBO"), new FilterValue("BBC", "BBC"), new FilterValue("NHK", "NHK"),
-                        new FilterValue("CBS", "CBS"), new FilterValue("NBC", "NBC"), new FilterValue("tvN", "tvN")))
+                new Filter("year", "年代", doubanYears)
         ));
         list.add(createCategory("suggestion_tv", "电视剧推荐"));
 
         // 电影榜单
         result.getFilters().put("movie_rank", List.of(
-                new Filter("rank", "榜单", Arrays.asList(
+                new Filter("genre", "榜单", Arrays.asList(
                         new FilterValue("豆瓣电影Top250", "movie_top250"), new FilterValue("实时热门电影", "movie_real_time_hotest"),
                         new FilterValue("一周口碑电影榜", "movie_weekly_best")))
         ));
@@ -597,7 +578,7 @@ public class TelegramService {
 
         // 电视剧榜单
         result.getFilters().put("tv_rank", List.of(
-                new Filter("rank", "榜单", Arrays.asList(
+                new Filter("genre", "榜单", Arrays.asList(
                         new FilterValue("实时热门电视", "tv_real_time_hotest"), new FilterValue("华语口碑剧集榜", "tv_chinese_best_weekly"),
                         new FilterValue("全球口碑剧集榜", "tv_global_best_weekly"), new FilterValue("国内口碑综艺榜", "show_chinese_best_weekly"),
                         new FilterValue("国外口碑综艺榜", "show_global_best_weekly")))
@@ -666,59 +647,58 @@ public class TelegramService {
         return years;
     }
 
-    public MovieList listDouban(String type, String ac, DoubanFilter filter, int page, int size) {
+    public MovieList listDouban(String type, String ac, String sort, Integer year, String genre, String region, int page, int size) {
         if (type.startsWith("s:")) {
             return searchMovies(type.substring(2), false, size);
         }
 
-        return getDoubanList(type, ac, filter, page, size);
+        return getDoubanList(type, ac, sort, year, genre, region, page, size);
     }
 
-    private MovieList getDoubanList(String type, String ac, DoubanFilter filter, int page, int size) {
-        String key = ac + "-" + type + "-" + page + (filter != null ? "-" + filter : "");
+    private MovieList getDoubanList(String type, String ac, String sort, Integer year, String genre, String region, int page, int size) {
+        String key = ac + "-" + type + "-" + page + "-" + sort + "-" + year + "-" + genre + "-" + region;
         MovieList result = douban.getIfPresent(key);
         if (result != null) {
             return result;
         }
 
         if ("local".equals(type)) {
-            return getLocalMovieList(ac, filter, page, size);
+            return getLocalMovieList(ac, sort, year, genre, region, page, size);
         }
 
         if ("random".equals(type)) {
             return getRandomMovie(ac, size);
         }
 
-        // hot_tv / tv_variety_show: type filter switches collection via frodo API
+        // hot_tv / tv_variety_show: genre as type filter switches collection
         if ("hot_tv".equals(type) || "tv_variety_show".equals(type)) {
-            String collectionId = (filter != null && StringUtils.isNotBlank(filter.getType())) ? filter.getType() : null;
+            String collectionId = StringUtils.isNotBlank(genre) ? genre : null;
             if (collectionId == null) {
-                // no filter: hot_tv → recent_hot/tv, tv_variety_show → show_hot via frodo
                 if ("hot_tv".equals(type)) {
                     result = getDoubanItems(type, ac, page, size);
                 } else {
-                    result = getFrodoSubjectCollection("show_hot", ac, page, size);
+                    result = getSubjectCollectionList("show_hot", ac, page, size);
                 }
             } else {
-                result = getFrodoSubjectCollection(collectionId, ac, page, size);
+                result = getSubjectCollectionList(collectionId, ac, page, size);
             }
             douban.put(key, result);
             return result;
         }
 
-        // movie_rank / tv_rank: rank filter switches collection via frodo API
+        // movie_rank / tv_rank: genre as rank filter switches collection
         if ("movie_rank".equals(type) || "tv_rank".equals(type)) {
-            String collectionId = (filter != null && StringUtils.isNotBlank(filter.getRank())) ? filter.getRank()
+            String collectionId = StringUtils.isNotBlank(genre) ? genre
                     : ("movie_rank".equals(type) ? "movie_top250" : "tv_real_time_hotest");
-            result = getFrodoSubjectCollection(collectionId, ac, page, size);
+            result = getSubjectCollectionList(collectionId, ac, page, size);
             douban.put(key, result);
             return result;
         }
 
-        // hot_movie with sort/region → frodo hot_gaia API
+        // hot_movie with sort/region → rexxar hot_gaia
         if ("hot_movie".equals(type)) {
-            if (filter != null && (StringUtils.isNotBlank(filter.getSort()) || StringUtils.isNotBlank(filter.getRegion()))) {
-                result = getFrodoHotGaia(ac, filter, page, size);
+            if (StringUtils.isNotBlank(sort) || StringUtils.isNotBlank(region)) {
+                result = getRexxarHotGaia(ac, sort, region, page, size);
             } else {
                 result = getDoubanItems(type, ac, page, size);
             }
@@ -726,10 +706,10 @@ public class TelegramService {
             return result;
         }
 
-        // suggestion_movie with tag filters → frodo movie/recommend
+        // suggestion_movie with tag filters → rexxar movie/recommend
         if ("suggestion_movie".equals(type)) {
-            if (filter != null && filter.hasTagFilters()) {
-                result = getFrodoRecommend("movie", ac, filter, null, page, size);
+            if (StringUtils.isNotBlank(genre) || StringUtils.isNotBlank(region) || year != null) {
+                result = getRexxarRecommend("movie", ac, sort, genre, region, year, null, null, page, size);
             } else {
                 result = getDoubanItems(type, ac, page, size);
             }
@@ -737,10 +717,10 @@ public class TelegramService {
             return result;
         }
 
-        // suggestion_tv with tag filters → frodo tv/recommend
+        // suggestion_tv with tag filters → rexxar tv/recommend
         if ("suggestion_tv".equals(type)) {
-            if (filter != null && filter.hasTagFilters()) {
-                result = getFrodoRecommend("tv", ac, filter, null, page, size);
+            if (StringUtils.isNotBlank(genre) || StringUtils.isNotBlank(region) || year != null) {
+                result = getRexxarRecommend("tv", ac, sort, genre, region, year, null, null, page, size);
             } else {
                 result = getDoubanItems(type, ac, page, size);
             }
@@ -748,10 +728,10 @@ public class TelegramService {
             return result;
         }
 
-        // tv_animation with tag filters → frodo tv/recommend with "动画" prefix
+        // tv_animation with tag filters → rexxar tv/recommend with "动画" prefix
         if ("tv_animation".equals(type)) {
-            if (filter != null && filter.hasTagFilters()) {
-                result = getFrodoRecommend("tv", ac, filter, "动画", page, size);
+            if (StringUtils.isNotBlank(genre) || StringUtils.isNotBlank(region)) {
+                result = getRexxarRecommend("tv", ac, sort, genre, region, year, null, "动画", page, size);
             } else {
                 result = getSubjectCollectionList(type, ac, page, size);
             }
@@ -794,44 +774,33 @@ public class TelegramService {
         return result;
     }
 
-    private MovieList getFrodoSubjectCollection(String collectionId, String ac, int page, int size) {
-        return getSubjectCollectionList(collectionId, ac, page, size);
-    }
-
-    private MovieList getFrodoHotGaia(String ac, DoubanFilter filter, int page, int size) {
+    private MovieList getRexxarHotGaia(String ac, String sort, String region, int page, int size) {
         int start = (page - 1) * size;
-        String sort = StringUtils.isNotBlank(filter.getSort()) ? filter.getSort() : "recommend";
-        String area = StringUtils.isNotBlank(filter.getRegion()) ? filter.getRegion() : "全部";
-        String url = "https://m.douban.com/rexxar/api/v2/movie/hot_gaia?sort=" + sort
+        String s = StringUtils.isNotBlank(sort) ? sort : "recommend";
+        String area = StringUtils.isNotBlank(region) ? region : "全部";
+        String url = "https://m.douban.com/rexxar/api/v2/movie/hot_gaia?sort=" + s
                 + "&area=" + URLEncoder.encode(area, StandardCharsets.UTF_8)
                 + "&start=" + start + "&count=" + size;
-
         return fetchRexxarItems(url, ac, "items");
     }
 
-    private MovieList getFrodoRecommend(String category, String ac, DoubanFilter filter, String tagPrefix, int page, int size) {
+    private MovieList getRexxarRecommend(String category, String ac, String sort, String genre,
+                                          String region, Integer year, String platform, String tagPrefix,
+                                          int page, int size) {
         int start = (page - 1) * size;
-        String sort = StringUtils.isNotBlank(filter.getSort()) ? filter.getSort() : "T";
-        String tags = buildTags(filter, tagPrefix);
-        String url = "https://m.douban.com/rexxar/api/v2/" + category + "/recommend"
-                + "?sort=" + sort + "&tags=" + tags
-                + "&start=" + start + "&count=" + size;
-
-        return fetchRexxarItems(url, ac, "items");
-    }
-
-    private String buildTags(DoubanFilter filter, String prefix) {
-        StringBuilder sb = new StringBuilder();
-        if (prefix != null && !prefix.isEmpty()) {
-            sb.append(prefix);
+        String s = StringUtils.isNotBlank(sort) ? sort : "T";
+        StringBuilder tags = new StringBuilder();
+        if (StringUtils.isNotBlank(tagPrefix)) {
+            tags.append(tagPrefix);
         }
-        appendTag(sb, filter.getGenre());
-        appendTag(sb, filter.getTvForm());
-        appendTag(sb, filter.getVarietyForm());
-        appendTag(sb, filter.getRegion());
-        appendTag(sb, filter.getYear());
-        appendTag(sb, filter.getPlatform());
-        return URLEncoder.encode(sb.toString(), StandardCharsets.UTF_8);
+        appendTag(tags, genre);
+        appendTag(tags, region);
+        appendTag(tags, year != null ? String.valueOf(year) : null);
+        appendTag(tags, platform);
+        String url = "https://m.douban.com/rexxar/api/v2/" + category + "/recommend"
+                + "?sort=" + s + "&tags=" + URLEncoder.encode(tags.toString(), StandardCharsets.UTF_8)
+                + "&start=" + start + "&count=" + size;
+        return fetchRexxarItems(url, ac, "items");
     }
 
     private void appendTag(StringBuilder sb, String value) {
@@ -900,18 +869,7 @@ public class TelegramService {
         }
     }
 
-    private MovieList getLocalMovieList(String ac, DoubanFilter filter, int page, int size) {
-        String sort = filter != null ? filter.getSort() : null;
-        Integer year = null;
-        if (filter != null && StringUtils.isNotBlank(filter.getYear())) {
-            try {
-                year = Integer.parseInt(filter.getYear());
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        String genre = filter != null ? filter.getGenre() : null;
-        String region = filter != null ? filter.getRegion() : null;
-
+    private MovieList getLocalMovieList(String ac, String sort, Integer year, String genre, String region, int page, int size) {
         MovieList result;
         result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();

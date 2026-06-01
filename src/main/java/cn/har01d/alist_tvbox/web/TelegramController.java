@@ -1,6 +1,5 @@
 package cn.har01d.alist_tvbox.web;
 
-import cn.har01d.alist_tvbox.dto.DoubanFilter;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
 import cn.har01d.alist_tvbox.entity.TelegramChannel;
