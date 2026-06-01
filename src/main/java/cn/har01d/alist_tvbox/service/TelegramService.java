@@ -625,6 +625,21 @@ public class TelegramService {
         result.setTotal(result.getCategories().size());
         result.setLimit(result.getCategories().size());
 
+        // 首页推荐: 实时热门
+        try {
+            String url = "https://m.douban.com/rexxar/api/v2/subject_collection/subject_real_time_hotest/items?os=linux&for_mobile=1&start=0&count=20&loc_id=108288&_=0";
+            HttpEntity<Void> httpEntity = buildHttpEntity();
+            var response = restTemplate.exchange(url, HttpMethod.GET, httpEntity, JsonNode.class);
+            ArrayNode items = (ArrayNode) response.getBody().get("subject_collection_items");
+            if (items != null) {
+                for (JsonNode item : items) {
+                    result.getList().add(getMovieDetail(item));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("fetch real_time_hotest error", e);
+        }
+
         log.debug("category result: {}", result);
         return result;
     }
@@ -674,23 +689,28 @@ public class TelegramService {
             return getRandomMovie(ac, size);
         }
 
-        // hot_tv / tv_variety_show: type filter switches collection
+        // hot_tv / tv_variety_show: type filter switches collection via frodo API
         if ("hot_tv".equals(type) || "tv_variety_show".equals(type)) {
-            String collectionId = (filter != null && StringUtils.isNotBlank(filter.getType())) ? filter.getType() : type;
-            if (collectionId.equals(type)) {
-                result = getDoubanItems(type, ac, page, size);
+            String collectionId = (filter != null && StringUtils.isNotBlank(filter.getType())) ? filter.getType() : null;
+            if (collectionId == null) {
+                // no filter: hot_tv → recent_hot/tv, tv_variety_show → show_hot via frodo
+                if ("hot_tv".equals(type)) {
+                    result = getDoubanItems(type, ac, page, size);
+                } else {
+                    result = getFrodoSubjectCollection("show_hot", ac, page, size);
+                }
             } else {
-                result = getSubjectCollectionList(collectionId, ac, page, size);
+                result = getFrodoSubjectCollection(collectionId, ac, page, size);
             }
             douban.put(key, result);
             return result;
         }
 
-        // movie_rank / tv_rank: rank filter switches collection
+        // movie_rank / tv_rank: rank filter switches collection via frodo API
         if ("movie_rank".equals(type) || "tv_rank".equals(type)) {
             String collectionId = (filter != null && StringUtils.isNotBlank(filter.getRank())) ? filter.getRank()
                     : ("movie_rank".equals(type) ? "movie_top250" : "tv_real_time_hotest");
-            result = getSubjectCollectionList(collectionId, ac, page, size);
+            result = getFrodoSubjectCollection(collectionId, ac, page, size);
             douban.put(key, result);
             return result;
         }
@@ -774,26 +794,30 @@ public class TelegramService {
         return result;
     }
 
+    private MovieList getFrodoSubjectCollection(String collectionId, String ac, int page, int size) {
+        return getSubjectCollectionList(collectionId, ac, page, size);
+    }
+
     private MovieList getFrodoHotGaia(String ac, DoubanFilter filter, int page, int size) {
         int start = (page - 1) * size;
         String sort = StringUtils.isNotBlank(filter.getSort()) ? filter.getSort() : "recommend";
         String area = StringUtils.isNotBlank(filter.getRegion()) ? filter.getRegion() : "全部";
-        String url = "https://frodo.douban.com/api/v2/movie/hot_gaia?apikey=0ac44ae016490db2204ce0a042db2916"
-                + "&sort=" + sort + "&area=" + URLEncoder.encode(area, StandardCharsets.UTF_8)
+        String url = "https://m.douban.com/rexxar/api/v2/movie/hot_gaia?sort=" + sort
+                + "&area=" + URLEncoder.encode(area, StandardCharsets.UTF_8)
                 + "&start=" + start + "&count=" + size;
 
-        return fetchFrodoItems(url, ac, "items");
+        return fetchRexxarItems(url, ac, "items");
     }
 
     private MovieList getFrodoRecommend(String category, String ac, DoubanFilter filter, String tagPrefix, int page, int size) {
         int start = (page - 1) * size;
         String sort = StringUtils.isNotBlank(filter.getSort()) ? filter.getSort() : "T";
         String tags = buildTags(filter, tagPrefix);
-        String url = "https://frodo.douban.com/api/v2/" + category + "/recommend?apikey=0ac44ae016490db2204ce0a042db2916"
-                + "&sort=" + sort + "&tags=" + tags
+        String url = "https://m.douban.com/rexxar/api/v2/" + category + "/recommend"
+                + "?sort=" + sort + "&tags=" + tags
                 + "&start=" + start + "&count=" + size;
 
-        return fetchFrodoItems(url, ac, "items");
+        return fetchRexxarItems(url, ac, "items");
     }
 
     private String buildTags(DoubanFilter filter, String prefix) {
@@ -819,12 +843,12 @@ public class TelegramService {
         }
     }
 
-    private MovieList fetchFrodoItems(String url, String ac, String itemsKey) {
+    private MovieList fetchRexxarItems(String url, String ac, String itemsKey) {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
         try {
-            HttpEntity<Void> httpEntity = buildFrodoHttpEntity();
-            log.debug("frodo request: {}", url);
+            HttpEntity<Void> httpEntity = buildHttpEntity();
+            log.debug("rexxar request: {}", url);
             var response = restTemplate.exchange(url, HttpMethod.GET, httpEntity, JsonNode.class);
             JsonNode body = response.getBody();
             if (body == null) {
@@ -835,33 +859,28 @@ public class TelegramService {
             ArrayNode items = (ArrayNode) body.get(itemsKey);
             if (items != null) {
                 for (JsonNode item : items) {
-                    MovieDetail movieDetail = getMovieDetail(item);
-                    if ("web".equals(ac)) {
-                        fixCover(movieDetail);
-                        movieDetail.setCate(null);
+                    try {
+                        MovieDetail movieDetail = getMovieDetail(item);
+                        if ("web".equals(ac)) {
+                            fixCover(movieDetail);
+                            movieDetail.setCate(null);
+                        }
+                        list.add(movieDetail);
+                    } catch (Exception e) {
+                        log.debug("skip item: {}", e.getMessage());
                     }
-                    list.add(movieDetail);
                 }
             }
             result.setList(list);
             result.setLimit(list.size());
             result.setTotal(total);
-            result.setPagecount((total + list.size() - 1) / list.size());
+            result.setPagecount(list.isEmpty() ? 0 : (total + list.size() - 1) / list.size());
         } catch (Exception e) {
-            log.warn("frodo API error: {}", e.getMessage());
+            log.warn("rexxar API error: {}", e.getMessage());
             result.setList(list);
         }
-        log.debug("frodo result: {}", result);
+        log.debug("rexxar result: {}", result);
         return result;
-    }
-
-    private static HttpEntity<Void> buildFrodoHttpEntity() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Host", "frodo.douban.com");
-        headers.set("Connection", "Keep-Alive");
-        headers.set("Referer", "https://servicewechat.com/wx2f9b06c1de1ccfca/84/page-frame.html");
-        headers.set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36 MicroMessenger/7.0.9.501 NetType/WIFI MiniProgramEnv/Windows WindowsWechat");
-        return new HttpEntity<>(null, headers);
     }
 
     private void fixCover(MovieDetail movie) {
@@ -1045,11 +1064,16 @@ public class TelegramService {
     }
 
     private static MovieDetail getMovieDetail(JsonNode item) {
-        double score = item.get("rating").get("value").asDouble();
+        JsonNode rating = item.get("rating");
+        double score = (rating != null && rating.has("value")) ? rating.get("value").asDouble() : 0;
+        String title = item.has("title") ? item.get("title").asText() : "";
+        JsonNode pic = item.get("pic");
+        String picUrl = (pic != null && pic.has("normal")) ? pic.get("normal").asText() : "";
+
         MovieDetail movieDetail = new MovieDetail();
-        movieDetail.setVod_id("s:" + item.get("title").asText());
-        movieDetail.setVod_name(item.get("title").asText());
-        movieDetail.setVod_pic(item.get("pic").get("normal").asText());
+        movieDetail.setVod_id("s:" + title);
+        movieDetail.setVod_name(title);
+        movieDetail.setVod_pic(picUrl);
         if (score > 0) {
             movieDetail.setVod_remarks(String.valueOf(score));
         }
