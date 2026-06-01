@@ -98,3 +98,10 @@ Python spider plugins are loaded through `csp_PyProxy` from the bundled `spring.
 ```
 
 `loader`, `local_proxy_config`, and the rest of the Python-side config are all encoded into `ext`. If `local_proxy_config` remains `{}`, local proxy acceleration is not enabled.
+
+# Features
+- Web management UI for AList-TvBox.
+- TvBox subscriptions and aggregated configurations.
+- Multiple AList, Emby, Jellyfin, Feiniu, BiliBili, YouTube, and live-stream sources.
+- Cloud drive accounts and shares for Aliyun, Baidu, Quark, UC, 115, 123, Tianyi, 139, Thunder, PikPak, and GuangYa.
+- Python spider plugin management, plugin filters, local proxy acceleration, and offline download for 115, GuangYa, and Thunder.

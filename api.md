@@ -362,7 +362,7 @@ PikPak网盘
 | GET | `/api/pan115/result` | 获取115结果 |
 
 ### OfflineDownloadController
-115/迅雷云盘离线下载
+115/光鸭/迅雷云盘离线下载
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
