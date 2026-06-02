@@ -223,8 +223,6 @@ public class UserService {
         if (user == null) {
             throw new NotFoundException("用户不存在");
         }
-        var sessions = sessionRepository.findAllByUsername(username);
-        sessionRepository.deleteAll(sessions);
 
         if (user.getRole() == Role.ADMIN && !username.equals(dto.getUsername())) {
             User other = userRepository.findByUsername(dto.getUsername());
@@ -234,7 +232,16 @@ public class UserService {
             user.setUsername(dto.getUsername());
         }
 
-        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        if (StringUtils.isNotBlank(dto.getPassword())) {
+            if (StringUtils.isBlank(dto.getOldPassword()) || !passwordEncoder.matches(dto.getOldPassword(), user.getPassword())) {
+                throw new BadRequestException("旧密码不正确");
+            }
+            user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        }
+
+        var sessions = sessionRepository.findAllByUsername(username);
+        sessionRepository.deleteAll(sessions);
+
         userRepository.save(user);
         usernames.remove(username);
         usernames.add(user.getUsername());
