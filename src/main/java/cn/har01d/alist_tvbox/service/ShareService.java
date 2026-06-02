@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
 import cn.har01d.alist_tvbox.entity.AListAliasRepository;
+import cn.har01d.alist_tvbox.entity.AccountRepository;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.MetaRepository;
@@ -96,6 +97,7 @@ public class ShareService {
     private final AListAliasRepository aliasRepository;
     private final SettingRepository settingRepository;
     private final SiteRepository siteRepository;
+    private final AccountRepository accountRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final AccountService accountService;
     private final AListLocalService aListLocalService;
@@ -117,6 +119,7 @@ public class ShareService {
                         AListAliasRepository aliasRepository,
                         SettingRepository settingRepository,
                         SiteRepository siteRepository,
+                        AccountRepository accountRepository,
                         DriverAccountRepository driverAccountRepository,
                         AListService aListService,
                         DriverAccountService driverAccountService,
@@ -134,6 +137,7 @@ public class ShareService {
         this.aliasRepository = aliasRepository;
         this.settingRepository = settingRepository;
         this.siteRepository = siteRepository;
+        this.accountRepository = accountRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.aListService = aListService;
         this.driverAccountService = driverAccountService;
@@ -735,30 +739,64 @@ public class ShareService {
 
         putCookie(result, "quark", driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("").trim());
         putCookie(result, "uc", driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).map(DriverAccount::getCookie).orElse("").trim());
-        putCookie(result, "115", driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("").trim());
-        putCookie(result, "189", driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).map(DriverAccount::getCookie).orElse("").trim());
         putCookie(result, "baidu", driverAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).map(DriverAccount::getCookie).orElse("").trim());
 
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).stream().findFirst().ifPresent(share -> putLogin(result, "189_login", share.getUsername(), share.getPassword()));
-        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).stream().findFirst().ifPresent(share -> putLogin(result, "123_login", share.getUsername(), share.getPassword()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).stream().findFirst().ifPresent(account -> {
+            ObjectNode node = result.putObject("189");
+            node.put("cookie", account.getCookie());
+            node.put("username", account.getUsername());
+            node.put("password", account.getPassword());
+        });
 
-        putToken(result, "115_delete_code", driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getAddition).map(e -> {
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).stream().findFirst().ifPresent(account -> {
+            ObjectNode node = result.putObject("123");
+            node.put("username", account.getUsername());
+            node.put("password", account.getPassword());
+        });
+
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK_TV).stream().findFirst().ifPresent(account -> {
+            ObjectNode node = result.putObject("quarkTv");
+            node.put("cookie", account.getCookie());
+            node.put("token", account.getToken());
+        });
+
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC_TV).stream().findFirst().ifPresent(account -> {
+            ObjectNode node = result.putObject("ucTv");
+            node.put("device_id", account.getUsername());
+            node.put("access_token", account.getPassword());
+            node.put("refresh_token", account.getToken());
+        });
+
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.THUNDER).stream().findFirst().ifPresent(account -> {
+            ObjectNode node = result.putObject("xunlei");
+            node.put("refresh_token", account.getCookie());
+            node.put("access_token", account.getToken());
             try {
-                return objectMapper.readTree(e).get("delete_code").asText();
+                String code = objectMapper.readTree(account.getAddition()).get("device_id").asText();
+                node.put("device_id", code);
             } catch (JsonProcessingException ex) {
-                return "";
+                // ignore
             }
-        }).orElse("").trim());
+        });
 
-        putToken(result, "ali", getAvailableAliRefreshToken(id));
-        putToken(result, "aliOpen", getAvailableAliOpenRefreshToken(id));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).ifPresent(account -> {
+            ObjectNode node = result.putObject("115");
+            node.put("cookie", account.getCookie());
+            try {
+                String code = objectMapper.readTree(account.getAddition()).get("delete_code").asText();
+                node.put("delete_code", code);
+            } catch (JsonProcessingException ex) {
+                // ignore
+            }
+        });
 
-        putCookie(result, "quarkTv", driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK_TV).map(DriverAccount::getCookie).orElse("").trim());
-        putToken(result, "quarkTvToken", driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK_TV).map(DriverAccount::getToken).orElse("").trim());
-        putCookie(result, "ucTv", driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC_TV).map(DriverAccount::getCookie).orElse("").trim());
-        putToken(result, "ucTvToken", driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC_TV).map(DriverAccount::getToken).orElse("").trim());
-        putCookie(result, "139", driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).map(DriverAccount::getCookie).orElse("").trim());
-        putToken(result, "139Token", driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).map(DriverAccount::getToken).orElse("").trim());
+        accountRepository.getFirstByMasterTrue().ifPresent(account -> {
+            ObjectNode node = result.putObject("ali");
+            node.put("refresh_token", account.getRefreshToken());
+            node.put("access_token", account.getAccessToken());
+        });
+
+        putToken(result, "139", driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).map(DriverAccount::getToken).orElse("").trim());
         putToken(result, "guangya", driverAccountRepository.findByTypeAndMasterTrue(DriverType.GUANGYA).map(DriverAccount::getToken).orElse("").trim());
         putCookie(result, "bili", settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(""));
         return result;
