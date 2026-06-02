@@ -152,6 +152,19 @@ public class UserService {
         return new UserToken(user.getId(), user.getUsername(), authorities, token);
     }
 
+    public String resetAdminPassword(String password) {
+        User admin = userRepository.findById(1).orElseThrow(() -> new NotFoundException("管理员不存在"));
+        String username = admin.getUsername();
+        sessionRepository.deleteAll(sessionRepository.findAllByUsername(username));
+        admin.setUsername("admin");
+        admin.setRole(Role.ADMIN);
+        admin.setPassword(passwordEncoder.encode(password));
+        userRepository.save(admin);
+        usernames.remove(username);
+        usernames.add(admin.getUsername());
+        return password;
+    }
+
     public List<User> list() {
         return userRepository.findAll();
     }
