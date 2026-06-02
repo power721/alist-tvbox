@@ -597,6 +597,8 @@ public class SubscriptionService {
             overrideConfig(config, fixUrl(url.trim()), prefix, getConfigData(url.trim()));
         }
 
+//        injectCookies(config);
+
         sortSites(config, sort);
 
         if (StringUtils.isNotBlank(override)) {
@@ -695,6 +697,42 @@ public class SubscriptionService {
                 }
                 if ("csp_Bili".equals(api) && map.containsKey("cookie")) {
                     map.put("cookie", settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(""));
+                }
+            }
+        }
+    }
+
+    private void injectCookies(Map<String, Object> config) {
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        List<Map<String, Object>> list = new ArrayList<>();
+        boolean tvFan = false;
+        for (Map<String, Object> site : sites) {
+            Object ext = site.get("ext");
+            if (ext instanceof String str) {
+                if (str.contains("Cloud-drive")) {
+                    tvFan = true;
+                }
+            } else if (ext instanceof Map map) {
+                if (map.containsKey("Cloud-drive")) {
+                    tvFan = true;
+                }
+            }
+            Object api = site.get("api");
+            if (api instanceof String str) {
+                if ("csp_BiliGuard".equals(str)) {
+                    list.add(site);
+                }
+            }
+        }
+
+        if (tvFan) {
+            String cookie = settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("");
+            for (Map<String, Object> site : list) {
+                Object ext = site.get("ext");
+                if (ext instanceof String json) {
+                     log.debug(json);
+                } else if (ext instanceof Map map) {
+                    map.put("cookie", cookie);
                 }
             }
         }
@@ -1091,10 +1129,11 @@ public class SubscriptionService {
         int order = 1000;
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         String uid = generateUid();
+        String secret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElseThrow();
         for (SubscriptionSourceService.SubscriptionSourceRef source : subscriptionSourceService.findEnabledSources()) {
             try {
                 if (source.builtin()) {
-                    Map<String, Object> site = buildSite(token, uid, source.siteKey(), source.name());
+                    Map<String, Object> site = buildSite(token, secret, uid, source.siteKey(), source.name());
                     site.put("order", order);
                     if ("csp_AList".equals(source.siteKey())) {
                         sites.removeIf(item -> "Alist".equals(item.get("key")));
@@ -1110,7 +1149,7 @@ public class SubscriptionService {
                     sites.add(id++, site);
                     log.debug("add builtin source {}: {}", source.siteKey(), site);
                 } else if (source.plugin() != null) {
-                    Map<String, Object> site = buildPluginSite(source.plugin(), token);
+                    Map<String, Object> site = buildPluginSite(source.plugin(), token, secret);
                     site.put("order", order);
                     sites.add(id++, site);
                 }
@@ -1150,7 +1189,7 @@ public class SubscriptionService {
                 .orElse(false);
     }
 
-    private Map<String, Object> buildSite(String token, String uid, String key, String name) throws IOException {
+    private Map<String, Object> buildSite(String token, String secret, String uid, String key, String name) throws IOException {
         String url = readHostAddress("");
         Map<String, Object> site = new HashMap<>();
         site.put("key", key);
@@ -1160,6 +1199,7 @@ public class SubscriptionService {
         Map<String, Object> map = new HashMap<>();
         map.put("api", url);
         map.put("token", token.isBlank() ? "-" : token);
+        map.put("secret", secret);
         map.put("uid", uid);
         map.put("local_proxy_config", readLocalProxyConfig());
         String ext = objectMapper.writeValueAsString(map).replaceAll("\\s", "");
@@ -1180,7 +1220,7 @@ public class SubscriptionService {
         return site;
     }
 
-    private Map<String, Object> buildPluginSite(Plugin plugin, String token) throws JsonProcessingException {
+    private Map<String, Object> buildPluginSite(Plugin plugin, String token, String secret) throws JsonProcessingException {
         Map<String, Object> site = new HashMap<>();
         site.put("filterable", 1);
         site.put("quickSearch", 1);
@@ -1201,6 +1241,7 @@ public class SubscriptionService {
         String source = readHostAddress("") + "/plugins/" + getCurrentOrFirstToken() + "/" + plugin.getId() + ".txt";
         map.put("source", source);
         map.put("token", token.isBlank() ? "-" : token);
+        map.put("secret", secret);
         map.put("local_proxy_config", nativePython ? new HashMap<>() : readLocalProxyConfig());
         if (StringUtils.isNotBlank(plugin.getExtend())) {
             map.put("data", plugin.getExtend());

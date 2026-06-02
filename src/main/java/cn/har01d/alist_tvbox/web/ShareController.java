@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.model.Response;
 import cn.har01d.alist_tvbox.service.ShareService;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,7 +29,6 @@ import java.util.List;
 @RestController
 public class ShareController {
     private final ShareService shareService;
-
     public ShareController(ShareService shareService) {
         this.shareService = shareService;
     }
@@ -91,6 +91,11 @@ public class ShareController {
     @GetMapping("/baidu/cookie/{id}")
     public String getBaiduCookie(@PathVariable String id) {
         return shareService.getBaiduCookie(id);
+    }
+
+    @GetMapping("/cookies/{id}")
+    public ObjectNode getCookies(@PathVariable String id) {
+        return shareService.getCookies(id);
     }
 
     @GetMapping("/api/storages")

@@ -2,8 +2,8 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
-import cn.har01d.alist_tvbox.dto.ParseRequest;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
+import cn.har01d.alist_tvbox.dto.ParseRequest;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.SharesDto;
 import cn.har01d.alist_tvbox.entity.AListAlias;
@@ -41,9 +41,11 @@ import cn.har01d.alist_tvbox.storage.ThunderShare;
 import cn.har01d.alist_tvbox.storage.UCShare;
 import cn.har01d.alist_tvbox.storage.UrlTree;
 import cn.har01d.alist_tvbox.util.Utils;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -80,6 +82,7 @@ import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
+import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
 
 @Slf4j
@@ -721,6 +724,82 @@ public class ShareService {
             return driverAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).map(DriverAccount::getCookie).orElse("").trim();
         }
         return "";
+    }
+
+    public ObjectNode getCookies(String id) {
+        String aliSecret = settingRepository.findById(ALI_SECRET).map(Setting::getValue).orElse("");
+        ObjectNode result = objectMapper.createObjectNode();
+        if (!aliSecret.equals(id)) {
+            return result;
+        }
+
+        putCookie(result, "quark", driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("").trim());
+        putCookie(result, "uc", driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).map(DriverAccount::getCookie).orElse("").trim());
+        putCookie(result, "115", driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getCookie).orElse("").trim());
+        putCookie(result, "189", driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).map(DriverAccount::getCookie).orElse("").trim());
+        putCookie(result, "baidu", driverAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).map(DriverAccount::getCookie).orElse("").trim());
+
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.CLOUD189).stream().findFirst().ifPresent(share -> putLogin(result, "189_login", share.getUsername(), share.getPassword()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).stream().findFirst().ifPresent(share -> putLogin(result, "123_login", share.getUsername(), share.getPassword()));
+
+        putToken(result, "115_delete_code", driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).map(DriverAccount::getAddition).map(e -> {
+            try {
+                return objectMapper.readTree(e).get("delete_code").asText();
+            } catch (JsonProcessingException ex) {
+                return "";
+            }
+        }).orElse("").trim());
+
+        putToken(result, "ali", getAvailableAliRefreshToken(id));
+        putToken(result, "aliOpen", getAvailableAliOpenRefreshToken(id));
+
+        putCookie(result, "quarkTv", driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK_TV).map(DriverAccount::getCookie).orElse("").trim());
+        putToken(result, "quarkTvToken", driverAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK_TV).map(DriverAccount::getToken).orElse("").trim());
+        putCookie(result, "ucTv", driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC_TV).map(DriverAccount::getCookie).orElse("").trim());
+        putToken(result, "ucTvToken", driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC_TV).map(DriverAccount::getToken).orElse("").trim());
+        putCookie(result, "139", driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).map(DriverAccount::getCookie).orElse("").trim());
+        putToken(result, "139Token", driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN139).map(DriverAccount::getToken).orElse("").trim());
+        putToken(result, "guangya", driverAccountRepository.findByTypeAndMasterTrue(DriverType.GUANGYA).map(DriverAccount::getToken).orElse("").trim());
+        putCookie(result, "bili", settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(""));
+        return result;
+    }
+
+    private String getAvailableAliRefreshToken(String id) {
+        try {
+            return accountService.getAliRefreshToken(id);
+        } catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    private String getAvailableAliOpenRefreshToken(String id) {
+        try {
+            return accountService.getAliOpenRefreshToken(id);
+        } catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    private void putCookie(ObjectNode result, String key, String cookie) {
+        if (StringUtils.isBlank(cookie)) {
+            return;
+        }
+        ObjectNode node = result.putObject(key);
+        node.put("cookie", cookie.trim());
+    }
+
+    private void putToken(ObjectNode result, String key, String token) {
+        if (StringUtils.isBlank(token)) {
+            return;
+        }
+        ObjectNode node = result.putObject(key);
+        node.put("token", token.trim());
+    }
+
+    private void putLogin(ObjectNode result, String key, String username, String password) {
+        ObjectNode node = result.putObject(key);
+        node.put("username", username.trim());
+        node.put("password", password.trim());
     }
 
     private static final Pattern SHARE_115_LINK = Pattern.compile("https://(?:115|115cdn|anxia).com/s/([\\w-]+)(?:\\?password=([\\w-]+))?");
