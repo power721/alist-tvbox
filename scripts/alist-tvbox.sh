@@ -638,29 +638,67 @@ show_version_menu() {
 
 reset_admin_password() {
   local container_name=$(get_container_name)
-  local cmd_file="${CONFIG[BASE_DIR]}/atv/credentials.txt"
-  local password=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c16; echo)
-
-  mkdir -p "$(dirname "$cmd_file")"
-
-  echo "admin" > "$cmd_file"
-  echo "$password" >> "$cmd_file"
-
   local status=$(check_container_status)
 
   if [[ "$status" == "running" ]]; then
-    echo -e "${YELLOW}正在重启容器使密码重置生效...${NC}"
-    docker restart "$container_name"
-    echo -e "${GREEN}管理员账号已重置为：admin${NC}"
-    echo -e "${GREEN}管理员密码已重置为：$password${NC}"
-    echo -e "${YELLOW}请尽快登录管理界面修改密码!${NC}"
+    local reset_token
+    reset_token="$(generate_admin_reset_token)"
+    echo -e "${YELLOW}正在通过容器内接口重置管理员密码...${NC}"
+    if ! write_admin_reset_token "$container_name" "$reset_token"; then
+      echo -e "${RED}密码重置失败：无法写入容器内重置令牌${NC}"
+      echo -e "${YELLOW}请查看日志：docker logs -f $container_name${NC}"
+      read -n 1 -s -r -p "按任意键继续..."
+      return
+    fi
+
+    local response
+    if response="$(call_admin_password_reset_api "$container_name" "$reset_token" 2>/dev/null)"; then
+      local password
+      password="$(parse_reset_password_response "$response")"
+      if [[ -n "$password" ]]; then
+        echo -e "${GREEN}管理员账号已重置为：admin${NC}"
+        echo -e "${GREEN}管理员密码已重置为：$password${NC}"
+        echo -e "${YELLOW}请尽快登录管理界面修改密码!${NC}"
+      else
+        echo -e "${RED}密码重置失败：接口返回内容无法解析${NC}"
+        echo -e "${YELLOW}返回内容：$response${NC}"
+      fi
+    else
+      echo -e "${RED}密码重置失败：无法调用容器内接口${NC}"
+      echo -e "${YELLOW}请查看日志：docker logs -f $container_name${NC}"
+    fi
   else
-    echo -e "${GREEN}管理员账号将在容器启动时重置为：admin${NC}"
-    echo -e "${GREEN}管理员密码将在容器启动时重置为：$password${NC}"
-    echo -e "${YELLOW}请启动容器后尽快登录管理界面修改密码!${NC}"
+    echo -e "${RED}容器未运行，无法通过本地接口重置管理员密码${NC}"
   fi
 
   read -n 1 -s -r -p "按任意键继续..."
+}
+
+parse_reset_password_response() {
+  local response="$1"
+  printf '%s' "$response" | tr -d '\n' | sed -n 's/.*"password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+}
+
+generate_admin_reset_token() {
+  local token=""
+  while [[ ${#token} -lt 32 ]]; do
+    token="${token}$(dd if=/dev/urandom bs=24 count=1 2>/dev/null | base64 | tr -dc 'A-Za-z0-9')"
+  done
+  printf '%s\n' "${token:0:32}"
+}
+
+write_admin_reset_token() {
+  local container_name="$1"
+  local reset_token="$2"
+
+  docker exec "$container_name" sh -lc "mkdir -p /data/atv && umask 077 && printf '%s' '$reset_token' > /data/atv/admin_reset_token"
+}
+
+call_admin_password_reset_api() {
+  local container_name="$1"
+  local reset_token="$2"
+
+  docker exec "$container_name" sh -lc "curl -fsS -X POST -H 'X-ADMIN-RESET-TOKEN: $reset_token' http://127.0.0.1:4567/api/local/admin/password"
 }
 
 # 管理自定义挂载目录
@@ -1260,9 +1298,14 @@ cli_mode() {
   esac
 }
 
-# 判断运行模式
-if [ $# -eq 0 ]; then
-  interactive_mode
-else
-  cli_mode "$@"
+main() {
+  if [ $# -eq 0 ]; then
+    interactive_mode
+  else
+    cli_mode "$@"
+  fi
+}
+
+if [[ "${ALIST_TVBOX_SOURCE_ONLY:-}" != "1" ]]; then
+  main "$@"
 fi

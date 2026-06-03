@@ -322,6 +322,9 @@ public class DriverAccountService {
         if (account.getType() == DriverType.THUNDER) {
             account.setToken(dto.getToken());
             account.setCookie(dto.getCookie());
+        } if (account.getType() == DriverType.UC_TV) {
+            account.setUsername(dto.getUsername());
+            account.setPassword(dto.getPassword());
         } else if (TOKEN_TYPES.contains(account.getType())) {
             account.setToken(dto.getToken());
         } else {

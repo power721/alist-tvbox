@@ -129,10 +129,17 @@
         <a :href="form.url" target="_blank">{{ form.url }}</a>
       </div>
       <h2>JSON数据</h2>
-      <el-scrollbar height="800px">
-        <json-viewer :value="jsonData" expanded copyable show-double-quotes :show-array-index="false"
-                     :expand-depth=5></json-viewer>
-      </el-scrollbar>
+      <el-tabs v-model="detailTab">
+        <el-tab-pane label="JSON" name="json">
+          <el-scrollbar height="800px">
+            <json-viewer :value="jsonData" expanded copyable show-double-quotes :show-array-index="false"
+                         :expand-depth=5></json-viewer>
+          </el-scrollbar>
+        </el-tab-pane>
+        <el-tab-pane label="Raw" name="raw">
+          <el-input type="textarea" :rows="35" :model-value="rawJsonData" readonly/>
+        </el-tab-pane>
+      </el-tabs>
       <div class="json"></div>
       <template #footer>
       <span class="dialog-footer">
@@ -616,7 +623,7 @@
 </template>
 
 <script setup lang="ts">
-import {nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
+import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
 import Sortable from "sortablejs";
@@ -744,6 +751,8 @@ const subscriptions = ref<Sub[]>([])
 const tokens = ref([])
 const devices = ref<Device[]>([])
 const detailVisible = ref(false)
+const detailTab = ref('json')
+const rawJsonData = computed(() => JSON.stringify(jsonData.value, null, 2))
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const pluginVisible = ref(false)

@@ -152,6 +152,19 @@ public class UserService {
         return new UserToken(user.getId(), user.getUsername(), authorities, token);
     }
 
+    public String resetAdminPassword(String password) {
+        User admin = userRepository.findById(1).orElseThrow(() -> new NotFoundException("管理员不存在"));
+        String username = admin.getUsername();
+        sessionRepository.deleteAll(sessionRepository.findAllByUsername(username));
+        admin.setUsername("admin");
+        admin.setRole(Role.ADMIN);
+        admin.setPassword(passwordEncoder.encode(password));
+        userRepository.save(admin);
+        usernames.remove(username);
+        usernames.add(admin.getUsername());
+        return password;
+    }
+
     public List<User> list() {
         return userRepository.findAll();
     }
@@ -210,8 +223,6 @@ public class UserService {
         if (user == null) {
             throw new NotFoundException("用户不存在");
         }
-        var sessions = sessionRepository.findAllByUsername(username);
-        sessionRepository.deleteAll(sessions);
 
         if (user.getRole() == Role.ADMIN && !username.equals(dto.getUsername())) {
             User other = userRepository.findByUsername(dto.getUsername());
@@ -221,7 +232,16 @@ public class UserService {
             user.setUsername(dto.getUsername());
         }
 
-        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        if (StringUtils.isNotBlank(dto.getPassword())) {
+            if (StringUtils.isBlank(dto.getOldPassword()) || !passwordEncoder.matches(dto.getOldPassword(), user.getPassword())) {
+                throw new BadRequestException("旧密码不正确");
+            }
+            user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        }
+
+        var sessions = sessionRepository.findAllByUsername(username);
+        sessionRepository.deleteAll(sessions);
+
         userRepository.save(user);
         usernames.remove(username);
         usernames.add(user.getUsername());
