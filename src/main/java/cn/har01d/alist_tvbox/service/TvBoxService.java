@@ -1998,13 +1998,9 @@ public class TvBoxService {
                             .toList();
                     subfolders = fsResponse.getFiles().stream().filter(e -> e.getType() == 1).map(FsInfo::getName).toList();
                 }
-                Map<String, Long> size = new HashMap<>();
-                Map<String, Integer> duration = new HashMap<>();
-                Map<String, String> time = new HashMap<>();
+                Map<String, FsInfo> map = new HashMap<>();
                 for (var file : files) {
-                    size.put(file.getName(), file.getSize());
-                    time.put(file.getName(), file.getModified());
-                    duration.put(file.getName(), file.getDuration());
+                    map.put(file.getName(), file);
                 }
                 List<String> fileNames = files.stream().map(FsInfo::getName).collect(Collectors.toList());
                 String prefix = Utils.getCommonPrefix(fileNames);
@@ -2019,7 +2015,7 @@ public class TvBoxService {
                 List<String> urls = new ArrayList<>();
                 for (String name : fileNames) {
                     String filepath = fixPath(path + "/" + folder + "/" + name);
-                    String title = fixName(name, prefix, suffix) + "(" + Utils.byte2size(size.get(name)) + ")";
+                    String title = fixName(name, prefix, suffix) + "(" + Utils.byte2size(map.get(name).getSize()) + ")";
                     if ("detail".equals(ac) || "web".equals(ac) || "gui".equals(ac)) {
                         Video item = new Video();
                         item.setName(name);
@@ -2029,9 +2025,9 @@ public class TvBoxService {
                             item.setTitle(title);
                         }
                         item.setPath(filepath);
-                        item.setTime(time.get(name));
-                        item.setDuration(duration.get(name));
-                        item.setSize(size.get(name));
+                        item.setTime(map.get(name).getModified());
+                        item.setDuration(map.get(name).getDuration());
+                        item.setSize(map.get(name).getSize());
                         String url = buildProxyUrl(site, filepath, item);
                         item.setUrl(url);
                         if ("detail".equals(ac)) {
