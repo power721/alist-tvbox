@@ -1037,7 +1037,7 @@ public class TvBoxService {
 
         Site site = getSite(tid);
         if (path.contains(PLAYLIST)) {
-            return getPlaylist("", site, path);
+            return getPlaylist("", site, path, 0);
         }
 
         if (!tenantService.valid(path)) {
@@ -1700,6 +1700,10 @@ public class TvBoxService {
     }
 
     public MovieList getDetail(String ac, String tid) {
+        return getDetail(ac, tid, 0);
+    }
+
+    public MovieList getDetail(String ac, String tid, Integer depth) {
         if (tid.contains("%24")) {
             tid = URLDecoder.decode(tid, StandardCharsets.UTF_8);
         }
@@ -1719,7 +1723,7 @@ public class TvBoxService {
         }
         updateShareTime(path);
         if (path.contains(PLAYLIST)) {
-            return getPlaylist(ac, site, path);
+            return getPlaylist(ac, site, path, depth);
         }
 
         MovieList result = new MovieList();
@@ -1886,6 +1890,10 @@ public class TvBoxService {
     }
 
     public MovieList getPlaylist(String ac, Site site, String path) {
+        return getPlaylist(ac, site, path, 0);
+    }
+
+    public MovieList getPlaylist(String ac, Site site, String path, Integer depth) {
         log.info("load playlist {}:{} {}", site.getId(), site.getName(), path);
         String newPath = getParent(path);
         if (!tenantService.valid(newPath)) {
@@ -1908,7 +1916,6 @@ public class TvBoxService {
             throw new BadRequestException("加载文件失败: " + newPath);
         }
 
-        int depth = 3;
         int pid = proxyService.generatePath(site, path);
         MovieDetail movieDetail = new MovieDetail();
         movieDetail.setPath(path);
@@ -1917,13 +1924,21 @@ public class TvBoxService {
         movieDetail.setVod_time(fsDetail.getModified());
         movieDetail.setVod_play_from(site.getName());
         if ("detail".equals(ac) || "web".equals(ac)) {
-            depth = 1;
             movieDetail.setType(9);
-        } else if ("gui".equals(ac)) {
-            depth = 3;
         } else {
             movieDetail.setVod_content(site.getName() + ":" + newPath);
         }
+
+        if (depth == null || depth == 0) {
+            if ("detail".equals(ac) || "web".equals(ac)) {
+                depth = 1;
+            } else if ("gui".equals(ac)) {
+                depth = 3;
+            } else {
+                depth = 3;
+            }
+        }
+
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(getListPic());
 
