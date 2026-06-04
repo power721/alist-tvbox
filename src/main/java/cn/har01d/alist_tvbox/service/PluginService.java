@@ -29,6 +29,7 @@ import java.util.regex.Pattern;
 @Service
 public class PluginService {
     private static final String PLUGIN_INDEX_FILE = "spiders_v2.json";
+    private static final Pattern PLUGIN_ID = Pattern.compile("(?m)^\\s*//@id:([^\\s]+)\\s*$");
     private static final Pattern PLUGIN_VERSION = Pattern.compile("(?m)^\\s*//@version:(\\d+)\\s*$");
     private static final String GITHUB_PROXY = "github_proxy";
 
@@ -67,10 +68,10 @@ public class PluginService {
     ) {
     }
 
-    private record ImportEntry(String url, Integer version, boolean valid) {
+    private record ImportEntry(String url, String externalId, Integer version, boolean valid) {
     }
 
-    private record DownloadedPlugin(String body, String sourceName, Integer version) {
+    private record DownloadedPlugin(String body, String sourceName, String externalId, Integer version) {
     }
 
     public List<Plugin> findAll() {
@@ -84,7 +85,8 @@ public class PluginService {
     @Transactional
     public Plugin create(Plugin plugin) {
         validateUrlUniqueness(plugin.getUrl(), null);
-        applyDownloadedPlugin(plugin, downloadPluginData(plugin.getUrl()), false);
+        applyDownloadedPlugin(plugin, downloadPluginData(plugin.getUrl()), null, false);
+        validateExternalIdUniqueness(plugin.getExternalId(), null);
         plugin.setEnabled(true);
         plugin.setSortOrder(subscriptionSourceService.nextSortOrder());
         plugin.setLastCheckedAt(OffsetDateTime.now());
@@ -99,7 +101,8 @@ public class PluginService {
         if (urlChanged) {
             validateUrlUniqueness(input.getUrl(), id);
             plugin.setUrl(input.getUrl());
-            applyDownloadedPlugin(plugin, downloadPluginData(input.getUrl()), shouldUpdateName(plugin));
+            applyDownloadedPlugin(plugin, downloadPluginData(input.getUrl()), null, shouldUpdateName(plugin));
+            validateExternalIdUniqueness(plugin.getExternalId(), id);
             plugin.setLastCheckedAt(OffsetDateTime.now());
             plugin.setLastError("");
         }
@@ -130,14 +133,19 @@ public class PluginService {
             if (normalizedPluginUrl == null) {
                 continue;
             }
-            if (!seen.add(normalizedPluginUrl)) {
+            String dedupeKey = StringUtils.trimToNull(entry.externalId());
+            if (dedupeKey == null) {
+                dedupeKey = normalizedPluginUrl;
+            }
+            if (!seen.add(dedupeKey)) {
                 skipped.add(normalizedPluginUrl);
                 continue;
             }
 
             try {
-                Plugin existing = pluginRepository.findByUrl(normalizedPluginUrl).orElse(null);
+                Plugin existing = findExistingPlugin(normalizedPluginUrl, entry.externalId());
                 if (existing != null && entry.version() != null && entry.version().equals(existing.getVersion())) {
+                    backfillImportMetadata(existing, normalizedPluginUrl, entry.externalId());
                     skipped.add(normalizedPluginUrl);
                     continue;
                 }
@@ -154,7 +162,8 @@ public class PluginService {
                 if (existing != null) {
                     Plugin plugin = transactionTemplate.execute(status -> {
                         Plugin current = pluginRepository.findById(existing.getId()).orElseThrow(NotFoundException::new);
-                        return refresh(current, downloadedPlugin);
+                        current.setUrl(normalizedPluginUrl);
+                        return refresh(current, downloadedPlugin, entry.externalId());
                     });
                     if (plugin != null && StringUtils.isBlank(plugin.getLastError())) {
                         refreshed.add(plugin.getName());
@@ -162,7 +171,7 @@ public class PluginService {
                         failed.add(normalizedPluginUrl + ": " + (plugin == null ? "刷新失败" : plugin.getLastError()));
                     }
                 } else {
-                    Plugin saved = transactionTemplate.execute(status -> createImportedPlugin(normalizedPluginUrl, downloadedPlugin, entry.valid()));
+                    Plugin saved = transactionTemplate.execute(status -> createImportedPlugin(normalizedPluginUrl, downloadedPlugin, entry.externalId(), entry.valid()));
                     if (saved != null) {
                         created.add(saved.getName());
                     }
@@ -215,11 +224,12 @@ public class PluginService {
         return plugins.size();
     }
 
-    private Plugin createImportedPlugin(String url, DownloadedPlugin downloadedPlugin, boolean enabled) {
+    private Plugin createImportedPlugin(String url, DownloadedPlugin downloadedPlugin, String entryExternalId, boolean enabled) {
         Plugin plugin = new Plugin();
         plugin.setUrl(url);
         validateUrlUniqueness(url, null);
-        applyDownloadedPlugin(plugin, downloadedPlugin, false);
+        applyDownloadedPlugin(plugin, downloadedPlugin, entryExternalId, false);
+        validateExternalIdUniqueness(plugin.getExternalId(), null);
         plugin.setEnabled(enabled);
         plugin.setSortOrder(subscriptionSourceService.nextSortOrder());
         plugin.setLastCheckedAt(OffsetDateTime.now());
@@ -228,8 +238,13 @@ public class PluginService {
     }
 
     private Plugin refresh(Plugin plugin, DownloadedPlugin downloadedPlugin) {
+        return refresh(plugin, downloadedPlugin, null);
+    }
+
+    private Plugin refresh(Plugin plugin, DownloadedPlugin downloadedPlugin, String entryExternalId) {
         try {
-            applyDownloadedPlugin(plugin, downloadedPlugin == null ? downloadPluginData(plugin.getUrl()) : downloadedPlugin, shouldUpdateName(plugin));
+            applyDownloadedPlugin(plugin, downloadedPlugin == null ? downloadPluginData(plugin.getUrl()) : downloadedPlugin, entryExternalId, shouldUpdateName(plugin));
+            validateExternalIdUniqueness(plugin.getExternalId(), plugin.getId());
             plugin.setLastError("");
         } catch (RuntimeException e) {
             plugin.setLastError(e.getMessage());
@@ -245,6 +260,27 @@ public class PluginService {
         return pluginRepository.save(plugin);
     }
 
+    private void backfillImportMetadata(Plugin existing, String url, String externalId) {
+        String id = StringUtils.trimToNull(externalId);
+        boolean urlChanged = !StringUtils.equals(existing.getUrl(), url);
+        boolean externalIdChanged = id != null && !StringUtils.equals(existing.getExternalId(), id);
+        if (!urlChanged && !externalIdChanged) {
+            return;
+        }
+        transactionTemplate.execute(status -> {
+            Plugin plugin = pluginRepository.findById(existing.getId()).orElseThrow(NotFoundException::new);
+            if (urlChanged) {
+                plugin.setUrl(url);
+            }
+            if (externalIdChanged) {
+                plugin.setExternalId(id);
+                validateExternalIdUniqueness(plugin.getExternalId(), plugin.getId());
+            }
+            pluginRepository.save(plugin);
+            return null;
+        });
+    }
+
     private boolean shouldUpdateName(Plugin plugin) {
         return StringUtils.isBlank(plugin.getName()) || StringUtils.equals(plugin.getName(), plugin.getSourceName());
     }
@@ -255,6 +291,29 @@ public class PluginService {
                 throw new BadRequestException("插件地址重复");
             }
         });
+    }
+
+    private void validateExternalIdUniqueness(String externalId, Integer currentId) {
+        String id = StringUtils.trimToNull(externalId);
+        if (id == null) {
+            return;
+        }
+        pluginRepository.findByExternalId(id).ifPresent(other -> {
+            if (currentId == null || !other.getId().equals(currentId)) {
+                throw new BadRequestException("插件ID重复");
+            }
+        });
+    }
+
+    private Plugin findExistingPlugin(String url, String externalId) {
+        String id = StringUtils.trimToNull(externalId);
+        if (id != null) {
+            Plugin existing = pluginRepository.findByExternalId(id).orElse(null);
+            if (existing != null) {
+                return existing;
+            }
+        }
+        return pluginRepository.findByUrl(url).orElse(null);
     }
 
     private String resolveImportSource(String url) {
@@ -316,7 +375,7 @@ public class PluginService {
 
     private DownloadedPlugin downloadPluginData(String url) {
         String body = downloadPlugin(url);
-        return new DownloadedPlugin(body, deriveSourceName(url), extractPluginVersion(body));
+        return new DownloadedPlugin(body, deriveSourceName(url), extractPluginId(body), extractPluginVersion(body));
     }
 
     private String downloadText(String url, String message) {
@@ -355,7 +414,7 @@ public class PluginService {
             List<ImportEntry> urls = new ArrayList<>();
             for (JsonNode node : root) {
                 if (node.isTextual()) {
-                    urls.add(new ImportEntry(resolvePluginUrl(sourceUrl, node.asText()), null, true));
+                    urls.add(new ImportEntry(resolvePluginUrl(sourceUrl, node.asText()), null, null, true));
                     continue;
                 }
                 if (node.isObject()) {
@@ -363,9 +422,10 @@ public class PluginService {
                     if (file == null) {
                         throw new BadRequestException(PLUGIN_INDEX_FILE + " 格式不正确");
                     }
+                    String externalId = StringUtils.trimToNull(node.path("id").asText(null));
                     Integer version = node.path("version").canConvertToInt() ? node.path("version").intValue() : null;
                     boolean valid = !node.has("valid") || node.path("valid").asBoolean(true);
-                    urls.add(new ImportEntry(resolvePluginUrl(sourceUrl, file), version, valid));
+                    urls.add(new ImportEntry(resolvePluginUrl(sourceUrl, file), externalId, version, valid));
                     continue;
                 }
                 throw new BadRequestException(PLUGIN_INDEX_FILE + " 格式不正确");
@@ -398,6 +458,17 @@ public class PluginService {
         return Integer.parseInt(matcher.group(1));
     }
 
+    private String extractPluginId(String body) {
+        if (StringUtils.isBlank(body)) {
+            return null;
+        }
+        Matcher matcher = PLUGIN_ID.matcher(body);
+        if (!matcher.find()) {
+            return null;
+        }
+        return StringUtils.trimToNull(matcher.group(1));
+    }
+
     private String buildRemoteUrl(String url) {
         if (!StringUtils.startsWith(url, "https://github.com/")) {
             return url;
@@ -411,13 +482,14 @@ public class PluginService {
         return StringUtils.appendIfMissing(proxy, "/") + url;
     }
 
-    private void applyDownloadedPlugin(Plugin plugin, DownloadedPlugin downloadedPlugin, boolean updateName) {
+    private void applyDownloadedPlugin(Plugin plugin, DownloadedPlugin downloadedPlugin, String entryExternalId, boolean updateName) {
         plugin.setSourceName(downloadedPlugin.sourceName());
         if (updateName) {
             plugin.setName(downloadedPlugin.sourceName());
         } else {
             plugin.setName(StringUtils.defaultIfBlank(plugin.getName(), downloadedPlugin.sourceName()));
         }
+        plugin.setExternalId(StringUtils.defaultIfBlank(downloadedPlugin.externalId(), entryExternalId));
         plugin.setContent(downloadedPlugin.body());
         plugin.setVersion(downloadedPlugin.version());
     }

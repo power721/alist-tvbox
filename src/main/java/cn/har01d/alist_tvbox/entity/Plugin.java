@@ -27,6 +27,9 @@ public class Plugin {
 
     private String name;
 
+    @Column(name = "external_id")
+    private String externalId;
+
     @Column(columnDefinition = "TEXT")
     private String url;
 

@@ -8,6 +8,8 @@ import java.util.Optional;
 public interface PluginRepository extends JpaRepository<Plugin, Integer> {
     Optional<Plugin> findByUrl(String url);
 
+    Optional<Plugin> findByExternalId(String externalId);
+
     List<Plugin> findAllByOrderBySortOrderAscIdAsc();
 
     List<Plugin> findByEnabledTrueOrderBySortOrderAscIdAsc();

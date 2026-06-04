@@ -66,7 +66,8 @@ class PluginServiceTest {
         plugin.setUrl("https://github.com/har01d5/tvbox/raw/refs/heads/master/py/4K%E6%8C%87%E5%8D%97.txt");
 
         when(pluginRepository.findByUrl(plugin.getUrl())).thenReturn(Optional.empty());
-        when(restTemplate.getForObject(URI.create(plugin.getUrl()), String.class)).thenReturn("//@version:4\nplugin-body");
+        when(pluginRepository.findByExternalId("c7070ad448464ec681f205fc849cf8a46621")).thenReturn(Optional.empty());
+        when(restTemplate.getForObject(URI.create(plugin.getUrl()), String.class)).thenReturn("//@id:c7070ad448464ec681f205fc849cf8a46621\n//@version:4\nplugin-body");
         when(subscriptionSourceService.nextSortOrder()).thenReturn(1);
         when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> {
             Plugin saved = invocation.getArgument(0);
@@ -80,7 +81,8 @@ class PluginServiceTest {
 
         assertThat(saved.getName()).isEqualTo("4K指南");
         assertThat(saved.getSourceName()).isEqualTo("4K指南");
-        assertThat(saved.getContent()).isEqualTo("//@version:4\nplugin-body");
+        assertThat(saved.getExternalId()).isEqualTo("c7070ad448464ec681f205fc849cf8a46621");
+        assertThat(saved.getContent()).isEqualTo("//@id:c7070ad448464ec681f205fc849cf8a46621\n//@version:4\nplugin-body");
         assertThat(saved.getVersion()).isEqualTo(4);
         assertThat(saved.isEnabled()).isTrue();
         assertThat(saved.getSortOrder()).isEqualTo(1);
@@ -384,6 +386,65 @@ class PluginServiceTest {
     }
 
     @Test
+    void importFromObjectSpidersJsonShouldRefreshExistingPluginByExternalId() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+        String oldPluginUrl = "https://example.com/old.txt";
+        String newPluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/new.txt";
+        String payload = """
+                [
+                  {"id": "c7070ad448464ec681f205fc849cf8a46621", "version": 2, "file": "py/new.txt"}
+                ]
+                """;
+        Plugin existing = new Plugin();
+        existing.setId(17);
+        existing.setExternalId("c7070ad448464ec681f205fc849cf8a46621");
+        existing.setName("old");
+        existing.setSourceName("old");
+        existing.setUrl(oldPluginUrl);
+        existing.setVersion(1);
+        existing.setContent("old-body");
+
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn(payload);
+        when(pluginRepository.findByExternalId("c7070ad448464ec681f205fc849cf8a46621")).thenReturn(Optional.of(existing));
+        when(pluginRepository.findById(17)).thenReturn(Optional.of(existing));
+        when(restTemplate.getForObject(URI.create(newPluginUrl), String.class)).thenReturn("//@id:c7070ad448464ec681f205fc849cf8a46621\n//@version:2\nnew-body");
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.createdCount()).isEqualTo(0);
+        assertThat(result.refreshed()).containsExactly("new");
+        assertThat(existing.getUrl()).isEqualTo(newPluginUrl);
+        assertThat(existing.getExternalId()).isEqualTo("c7070ad448464ec681f205fc849cf8a46621");
+        assertThat(existing.getContent()).contains("new-body");
+    }
+
+    @Test
+    void importFromObjectSpidersJsonShouldDeduplicateEntriesByExternalId() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+        String firstPluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/first.txt";
+        String secondPluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/second.txt";
+        String payload = """
+                [
+                  {"id": "c7070ad448464ec681f205fc849cf8a46621", "version": 1, "file": "py/first.txt"},
+                  {"id": "c7070ad448464ec681f205fc849cf8a46621", "version": 1, "file": "py/second.txt"}
+                ]
+                """;
+
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn(payload);
+        when(pluginRepository.findByExternalId("c7070ad448464ec681f205fc849cf8a46621")).thenReturn(Optional.empty());
+        when(pluginRepository.findByUrl(firstPluginUrl)).thenReturn(Optional.empty());
+        when(restTemplate.getForObject(URI.create(firstPluginUrl), String.class)).thenReturn("//@id:c7070ad448464ec681f205fc849cf8a46621\n//@version:1\nfirst-body");
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.created()).containsExactly("first");
+        assertThat(result.skipped()).containsExactly(secondPluginUrl);
+        verify(restTemplate, never()).getForObject(URI.create(secondPluginUrl), String.class);
+    }
+
+    @Test
     void importFromObjectSpidersJsonShouldCreateInvalidPluginAsDisabled() {
         String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
         String pluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/invalid.txt";
@@ -465,6 +526,37 @@ class PluginServiceTest {
         assertThat(result.refreshedCount()).isEqualTo(0);
         assertThat(result.skippedCount()).isEqualTo(1);
         assertThat(result.failedCount()).isEqualTo(0);
+        assertThat(existing.getContent()).isEqualTo("stable");
+        verify(restTemplate, never()).getForObject(URI.create(pluginUrl), String.class);
+    }
+
+    @Test
+    void importFromObjectSpidersJsonShouldBackfillExternalIdWhenVersionMatchesExistingUrl() {
+        String sourceUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+        String pluginUrl = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/relative.txt";
+        String payload = """
+                [
+                  {"id": "c7070ad448464ec681f205fc849cf8a46621", "version": 4, "file": "py/relative.txt"}
+                ]
+                """;
+        Plugin existing = new Plugin();
+        existing.setId(11);
+        existing.setName("relative");
+        existing.setSourceName("relative");
+        existing.setUrl(pluginUrl);
+        existing.setVersion(4);
+        existing.setContent("stable");
+
+        when(restTemplate.getForObject(URI.create(sourceUrl), String.class)).thenReturn(payload);
+        when(pluginRepository.findByExternalId("c7070ad448464ec681f205fc849cf8a46621")).thenReturn(Optional.empty());
+        when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.of(existing));
+        when(pluginRepository.findById(11)).thenReturn(Optional.of(existing));
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.skippedCount()).isEqualTo(1);
+        assertThat(existing.getExternalId()).isEqualTo("c7070ad448464ec681f205fc849cf8a46621");
         assertThat(existing.getContent()).isEqualTo("stable");
         verify(restTemplate, never()).getForObject(URI.create(pluginUrl), String.class);
     }
