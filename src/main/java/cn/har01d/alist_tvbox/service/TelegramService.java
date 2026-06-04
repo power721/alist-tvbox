@@ -975,13 +975,16 @@ public class TelegramService {
     public List<Message> search(String keyword, int size, boolean web, boolean cached) {
         List<Message> results = List.of();
         List<TelegramChannel> channels = list().stream().filter(TelegramChannel::isValid).filter(TelegramChannel::isEnabled).toList();
+        int searchedChannelCount = channels.size();
         if (web) {
             channels = channels.stream().filter(TelegramChannel::isWebAccess).toList();
+            searchedChannelCount = channels.size();
         } else {
             if (StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
                 List<String> ids = channels.stream()
                         .map(TelegramChannel::getUsername)
                         .toList();
+                searchedChannelCount = remoteSearchService.getSearchChannels(ids).size();
                 results = remoteSearchService.search(keyword, ids);
             } else if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
                 String search = channels.stream().map(TelegramChannel::getUsername).collect(Collectors.joining(","));
@@ -991,6 +994,7 @@ public class TelegramService {
 
         if (results.isEmpty()) {
             channels = channels.stream().filter(TelegramChannel::isWebAccess).toList();
+            searchedChannelCount = channels.size();
 
             List<Future<List<Message>>> futures = new ArrayList<>();
             for (var channel : channels) {
@@ -1017,7 +1021,7 @@ public class TelegramService {
                 .sorted(comparator())
                 .distinct()
                 .toList();
-        log.info("Search {} get {} results from {} channels.", keyword, list.size(), channels.size());
+        log.info("Search {} get {} results from {} channels.", keyword, list.size(), searchedChannelCount);
         return list;
     }
 

@@ -389,7 +389,7 @@ public class RemoteSearchService {
         return panSouToken;
     }
 
-    private List<String> getSearchChannels(List<String> channels) {
+    List<String> getSearchChannels(List<String> channels) {
         return switch (appProperties.getPanSouChannels()) {
             case "project" -> getProjectChannels();
             case "pansou" -> getPanSouBuiltinChannels();

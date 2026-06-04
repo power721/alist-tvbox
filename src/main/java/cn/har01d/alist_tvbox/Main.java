@@ -17,6 +17,17 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class Main {
+    private static final List<String> CUSTOM_REFLECTION_CLASSES = List.of(
+            "com.github.benmanes.caffeine.cache.SSMS",
+            "com.github.benmanes.caffeine.cache.SSMSA",
+            "com.github.benmanes.caffeine.cache.SSSW",
+            "com.github.benmanes.caffeine.cache.PSAMS",
+            "com.zaxxer.hikari.HikariConfig",
+            "org.sqlite.JDBC",
+            "org.sqlite.SQLiteConfig",
+            "org.sqlite.SQLiteConnection"
+    );
+
     public static void main(String[] args) throws IOException, ClassNotFoundException {
         Set<Class> classes = findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto");
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto.bili"));
@@ -47,14 +58,9 @@ public class Main {
             result.add(info);
         }
         addCollections(result);
-        result.add(addCustom("com.github.benmanes.caffeine.cache.SSMS"));
-        result.add(addCustom("com.github.benmanes.caffeine.cache.SSMSA"));
-        result.add(addCustom("com.github.benmanes.caffeine.cache.SSSW"));
-        result.add(addCustom("com.github.benmanes.caffeine.cache.PSAMS"));
-        result.add(addCustom("com.zaxxer.hikari.HikariConfig"));
-        result.add(addCustom("org.sqlite.JDBC"));
-        result.add(addCustom("org.sqlite.SQLiteConfig"));
-        result.add(addCustom("org.sqlite.SQLiteConnection"));
+        for (String name : CUSTOM_REFLECTION_CLASSES) {
+            result.add(addCustom(name));
+        }
         ObjectMapper objectMapper = new ObjectMapper();
         String json = objectMapper.writeValueAsString(result);
         System.out.println("Working Directory = " + System.getProperty("user.dir"));

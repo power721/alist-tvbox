@@ -11,6 +11,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.model.BuiltinSubscriptionSourceState;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -87,36 +88,6 @@ public class SubscriptionSourceService {
     private record ManagedSourceHolder(ManagedSource source, Plugin plugin) {
     }
 
-    private static class BuiltinSourceState {
-        private String name;
-        private Boolean enabled;
-        private Integer sortOrder;
-
-        public String getName() {
-            return name;
-        }
-
-        public void setName(String name) {
-            this.name = name;
-        }
-
-        public Boolean getEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(Boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public Integer getSortOrder() {
-            return sortOrder;
-        }
-
-        public void setSortOrder(Integer sortOrder) {
-            this.sortOrder = sortOrder;
-        }
-    }
-
     @PostConstruct
     void migratePluginSortOrders() {
         if (settingRepository.existsByName(SORT_ORDER_MIGRATED_KEY)) {
@@ -160,8 +131,8 @@ public class SubscriptionSourceService {
             if (definition == null) {
                 throw new NotFoundException("内置源不存在");
             }
-            Map<String, BuiltinSourceState> settings = readBuiltinSettings();
-            BuiltinSourceState state = settings.computeIfAbsent(siteKey, ignored -> new BuiltinSourceState());
+            Map<String, BuiltinSubscriptionSourceState> settings = readBuiltinSettings();
+            BuiltinSubscriptionSourceState state = settings.computeIfAbsent(siteKey, ignored -> new BuiltinSubscriptionSourceState());
             state.setName(StringUtils.trimToNull(update.name()));
             state.setEnabled(update.enabled());
             if (state.getSortOrder() == null || state.getSortOrder() < 1) {
@@ -181,13 +152,13 @@ public class SubscriptionSourceService {
     }
 
     public void reorder(List<String> ids) {
-        Map<String, BuiltinSourceState> settings = readBuiltinSettings();
+        Map<String, BuiltinSubscriptionSourceState> settings = readBuiltinSettings();
         List<Plugin> plugins = new ArrayList<>();
         int order = 1;
         for (String id : ids) {
             if (id.startsWith("builtin-")) {
                 String siteKey = id.substring("builtin-".length());
-                BuiltinSourceState state = settings.computeIfAbsent(siteKey, ignored -> new BuiltinSourceState());
+                BuiltinSubscriptionSourceState state = settings.computeIfAbsent(siteKey, ignored -> new BuiltinSubscriptionSourceState());
                 state.setSortOrder(order++);
                 if (state.getEnabled() == null) {
                     state.setEnabled(true);
@@ -216,7 +187,7 @@ public class SubscriptionSourceService {
     }
 
     private List<ManagedSourceHolder> buildManagedSources() {
-        Map<String, BuiltinSourceState> settings = readBuiltinSettings();
+        Map<String, BuiltinSubscriptionSourceState> settings = readBuiltinSettings();
         List<ManagedSourceHolder> sources = new ArrayList<>();
         for (BuiltinDefinition definition : builtinDefinitions()) {
             sources.add(buildBuiltinSource(definition, settings.get(definition.siteKey())));
@@ -229,7 +200,7 @@ public class SubscriptionSourceService {
         return sources;
     }
 
-    private ManagedSourceHolder buildBuiltinSource(BuiltinDefinition definition, BuiltinSourceState state) {
+    private ManagedSourceHolder buildBuiltinSource(BuiltinDefinition definition, BuiltinSubscriptionSourceState state) {
         ManagedSource source = new ManagedSource(
                 "builtin-" + definition.siteKey(),
                 true,
@@ -316,7 +287,7 @@ public class SubscriptionSourceService {
         return Integer.parseInt(id.substring("plugin-".length()));
     }
 
-    private Map<String, BuiltinSourceState> readBuiltinSettings() {
+    private Map<String, BuiltinSubscriptionSourceState> readBuiltinSettings() {
         return settingRepository.findById(BUILTIN_SETTINGS_KEY)
                 .map(Setting::getValue)
                 .filter(StringUtils::isNotBlank)
@@ -324,7 +295,7 @@ public class SubscriptionSourceService {
                 .orElseGet(HashMap::new);
     }
 
-    private Map<String, BuiltinSourceState> parseBuiltinSettings(String value) {
+    private Map<String, BuiltinSubscriptionSourceState> parseBuiltinSettings(String value) {
         try {
             return objectMapper.readValue(value, new TypeReference<>() {
             });
@@ -333,7 +304,7 @@ public class SubscriptionSourceService {
         }
     }
 
-    private void saveBuiltinSettings(Map<String, BuiltinSourceState> settings) {
+    private void saveBuiltinSettings(Map<String, BuiltinSubscriptionSourceState> settings) {
         try {
             settingRepository.save(new Setting(BUILTIN_SETTINGS_KEY, objectMapper.writeValueAsString(settings)));
         } catch (Exception e) {
