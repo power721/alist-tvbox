@@ -843,7 +843,7 @@ public class ShareService {
     private static final Pattern SHARE_115_LINK = Pattern.compile("https://(?:115|115cdn|anxia).com/s/([\\w-]+)(?:\\?password=([\\w-]+))?");
     private static final Pattern SHARE_XL_LINK = Pattern.compile("https://pan.xunlei.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
     private static final Pattern SHARE_BD_LINK1 = Pattern.compile("https://pan.baidu.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
-    private static final Pattern SHARE_BD_LINK2 = Pattern.compile("https://pan.baidu.com/share/init\\?surl=([\\w-]+)(?:&pwd=([\\w-]+))?");
+    private static final Pattern SHARE_BD_LINK2 = Pattern.compile("https://pan.baidu.com/(?:share|wap)/init\\?surl=([\\w-]+)(?:&pwd=([\\w-]+))?");
     private static final Pattern SHARE_PK_LINK = Pattern.compile("https://mypikpak.com/s/([\\w-]+)(?:\\?pwd=([\\w-]+))?");
     private static final Pattern SHARE_189_LINK1 = Pattern.compile("https://cloud.189.cn/web/share\\?code=([\\w-]+)");
     private static final Pattern SHARE_189_LINK2 = Pattern.compile("https://cloud.189.cn/t/([\\w-]+)(?:（访问码：(\\w+)）)?");

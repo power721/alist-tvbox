@@ -845,7 +845,7 @@ class Spider(HostSpider):
     def _play(self, play_id):
         rsp = self.fetch(
             self._build_backend_endpoint("play"),
-            params={"id": str(play_id or ""), "type": "client-proxy"},
+            params={"id": str(play_id or "")},
             timeout=10,
         )
         body = str(rsp.text or "")
@@ -924,8 +924,10 @@ class Spider(HostSpider):
                 normalized.append(vod)
                 continue
             item = dict(vod)
-            item["vod_id"] = self._encode_category_id(item.get("vod_id", ""))
-            item["vod_tag"] = "folder"
+            tag = item.get("vod_tag", "")
+            if tag != "folder":
+                item["vod_id"] = self._encode_category_id(item.get("vod_id", ""))
+                item["vod_tag"] = "folder"
             normalized.append(item)
 
         payload = dict(result)
@@ -933,10 +935,16 @@ class Spider(HostSpider):
         return payload
 
     def homeContent(self, filter):
-        return self._require_inner().homeContent(filter)
+        result = self._require_inner().homeContent(filter)
+        if not self._category_mode_enabled():
+            return result
+        return self._normalize_category_content(result)
 
     def homeVideoContent(self):
-        return self._require_inner().homeVideoContent()
+        result = self._require_inner().homeVideoContent()
+        if not self._category_mode_enabled():
+            return result
+        return self._normalize_category_content(result)
 
     def categoryContent(self, tid, pg, filter, extend):
         print('categoryContent', tid, pg, filter, extend)
