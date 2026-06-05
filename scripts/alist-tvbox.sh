@@ -166,10 +166,13 @@ check_existing_container() {
 }
 
 get_container_config() {
-    local container_name=$(get_container_name)
+    local container_name="${1:-$(get_container_name)}"
 
     # 获取镜像名称
     CONFIG["IMAGE_NAME"]=$(docker inspect --format '{{.Config.Image}}' "$container_name" 2>/dev/null)
+    local image_id
+    image_id=$(get_image_id_from_name "${CONFIG[IMAGE_NAME]}" || true)
+    [[ -n "$image_id" ]] && CONFIG["IMAGE_ID"]="$image_id"
 
     # 获取网络模式
     CONFIG["NETWORK"]=$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container_name" 2>/dev/null)
@@ -177,7 +180,9 @@ get_container_config() {
     # 获取端口映射（非 host 网络时）
     if [[ "${CONFIG[NETWORK]}" != "host" ]]; then
         CONFIG["PORT1"]=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "4567/tcp") 0).HostPort}}' "$container_name" 2>/dev/null || echo "4567")
-        CONFIG["PORT2"]=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "80/tcp") 0).HostPort}}' "$container_name" 2>/dev/null || echo "5344")
+        local alist_port_key
+        alist_port_key="$(get_alist_container_port "${CONFIG[IMAGE_NAME]}")"
+        CONFIG["PORT2"]=$(docker inspect --format "{{(index (index .NetworkSettings.Ports \"$alist_port_key\") 0).HostPort}}" "$container_name" 2>/dev/null || echo "5344")
     fi
 
     # 获取重启策略
@@ -188,6 +193,28 @@ get_container_config() {
     [[ -n "$mount_path" ]] && CONFIG["BASE_DIR"]="$mount_path"
 
     echo -e "${CYAN}已从现有容器加载配置${NC}"
+}
+
+get_image_id_from_name() {
+  local image="$1"
+  local key candidate
+  for key in "${!VERSIONS[@]}"; do
+    candidate="${VERSIONS[$key]%% - *}"
+    candidate="${candidate//[[:space:]]/}"
+    if [[ "$candidate" == "$image" || "${candidate}:latest" == "$image" || "$candidate" == "${image%:latest}" ]]; then
+      echo "$key"
+      return 0
+    fi
+  done
+  return 1
+}
+
+get_alist_container_port() {
+  local image="$1"
+  case "$image" in
+    *alist-tvbox*) echo "5244/tcp" ;;
+    *) echo "80/tcp" ;;
+  esac
 }
 
 # 加载配置
@@ -213,7 +240,12 @@ load_config() {
 
     echo -e "${CYAN}首次运行，正在检测现有容器...${NC}"
     if check_existing_container; then
-       get_container_config
+       get_container_config "$(get_container_name)"
+    else
+       local existing_status=$?
+       if [[ "$existing_status" -eq 1 ]]; then
+         get_container_config "$(get_opposite_container_name)"
+       fi
     fi
 
     mkdir -p "$(dirname "$CONFIG_FILE")"
@@ -310,56 +342,57 @@ check_image_update() {
 start_container() {
   local image="${CONFIG[IMAGE_NAME]}"
   local container_name=$(get_container_name)
-  local network_args=""
-  local port_args=""
-  local volume_args=""
+  local -a network_args=()
+  local -a port_args=()
+  local -a volume_args=()
   local aList_port=80
+
+  # 确保数据目录存在
+  mkdir -p "${CONFIG[BASE_DIR]}"
 
   [ "${CONFIG[GITHUB_PROXY]}" = "" ] || echo "${CONFIG[GITHUB_PROXY]}" > "${CONFIG[BASE_DIR]}/github_proxy.txt"
 
   if [[ "${CONFIG[IMAGE_NAME]}" == *"alist-tvbox"* ]]; then
     aList_port=5244
-    volume_args="-v ${CONFIG[BASE_DIR]}/alist:/opt/alist/data"
+    volume_args+=("-v" "${CONFIG[BASE_DIR]}/alist:/opt/alist/data")
   fi
 
   # 添加/www挂载选项
   if [[ "${CONFIG[MOUNT_WWW]}" == "true" ]]; then
-    volume_args="$volume_args -v ${CONFIG[BASE_DIR]}/www:/www"
+    volume_args+=("-v" "${CONFIG[BASE_DIR]}/www:/www")
     mkdir -p "${CONFIG[BASE_DIR]}/www"
   fi
 
   # 添加自定义挂载
   if [[ -f "${CONFIG[BASE_DIR]}/mounts.conf" ]]; then
     while IFS= read -r line; do
+      [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
       # 检查主机目录是否存在，不存在则创建
-      local host_dir=$(echo "$line" | cut -d':' -f1)
+      local host_dir="${line%%:*}"
       if [[ ! -e "$host_dir" ]]; then
         mkdir -p "$host_dir"
         echo -e "${YELLOW}已创建主机目录: $host_dir${NC}"
       fi
-      volume_args="$volume_args -v $line"
+      volume_args+=("-v" "$line")
     done < "${CONFIG[BASE_DIR]}/mounts.conf"
   fi
 
   if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
-    network_args="--network host"
+    network_args=("--network" "host")
     echo -e "${YELLOW}使用host网络模式${NC}"
   else
-    port_args="-p ${CONFIG[PORT1]}:4567 -p ${CONFIG[PORT2]}:${aList_port}"
+    port_args=("-p" "${CONFIG[PORT1]}:4567" "-p" "${CONFIG[PORT2]}:${aList_port}")
   fi
-
-  # 确保数据目录存在
-  mkdir -p "${CONFIG[BASE_DIR]}"
 
   docker run -d \
     --name "$container_name" \
-    $port_args \
-    $volume_args \
+    "${port_args[@]}" \
+    "${volume_args[@]}" \
     -e ALIST_PORT="${CONFIG[PORT2]}" \
     -e MEM_OPT="-Xmx512M" \
     -v "${CONFIG[BASE_DIR]}":/data \
     --restart="${CONFIG[RESTART]}" \
-    $network_args \
+    "${network_args[@]}" \
     "$image"
 }
 
@@ -370,8 +403,14 @@ show_access_info() {
 
   echo -e "\n${CYAN}============== 访问信息 ==============${NC}"
   echo -e "容器名称: ${GREEN}${container_name}${NC}"
-  echo -e "管理界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT1]}/${NC}"
-  echo -e "AList界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT2]}/${NC}"
+  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
+    echo -e "管理界面: ${GREEN}http://${ip:-localhost}:4567/${NC}"
+    echo -e "AList界面: ${GREEN}http://${ip:-localhost}:5234/${NC}"
+    echo -e "Nginx界面: ${GREEN}http://${ip:-localhost}:5678/${NC}"
+  else
+    echo -e "管理界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT1]}/${NC}"
+    echo -e "AList界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT2]}/${NC}"
+  fi
   echo -e "${CYAN}=======================================${NC}"
   if [[  "$#" -ge 1 && "$1" == "true" ]]; then
     local credentials="${CONFIG[BASE_DIR]}/initial_admin_credentials.txt"
@@ -518,28 +557,14 @@ check_update() {
   if [[ "$current_id" != "$new_id" ]]; then
     echo -e "${GREEN}检测到新版本镜像${NC}"
     if [[ "$auto_update" == true ]]; then
-      local container_name=$(get_container_name)
-      if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-        echo -e "${YELLOW}正在重启容器...${NC}"
-        docker rm -f "$container_name" >/dev/null
-      else
-        echo -e "${GREEN}正在启动容器...${NC}"
-      fi
-      start_container
+      replace_container
       return 0
     else
       read -p "检测到新版本，是否立即更新容器？[Y/n] " yn
       case $yn in
         [Nn]* ) ;;
         * )
-          local container_name=$(get_container_name)
-          if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-            echo -e "${YELLOW}正在重启容器...${NC}"
-            docker rm -f "$container_name" >/dev/null
-          else
-            echo -e "${GREEN}正在启动容器...${NC}"
-          fi
-          start_container
+          replace_container
           ;;
       esac
     fi
@@ -547,6 +572,18 @@ check_update() {
     echo -e "${YELLOW}当前已是最新版本${NC}"
     return 1
   fi
+}
+
+replace_container() {
+  local container_name
+  container_name=$(get_container_name)
+  if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    echo -e "${YELLOW}正在重建容器...${NC}"
+    docker rm -f "$container_name" >/dev/null
+  else
+    echo -e "${GREEN}正在启动容器...${NC}"
+  fi
+  start_container
 }
 
 # 显示版本选择菜单
@@ -790,49 +827,38 @@ remove_custom_mount() {
 
 # 重建容器使挂载生效
 recreate_container_for_mounts() {
-  local container_name=$(get_container_name)
-
-  if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-    echo -e "${YELLOW}正在重建容器使挂载配置生效...${NC}"
-    local was_running=$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null)
-
-    # 停止并删除现有容器
-    docker rm -f "$container_name" >/dev/null
-
-    # 重新创建容器
-    if [[ "$was_running" == "true" ]]; then
-      start_container
-      echo -e "${GREEN}容器已重建并启动!${NC}"
-    else
-      echo -e "${GREEN}容器已重建!${NC}"
-    fi
-  else
-    echo -e "${YELLOW}容器不存在，挂载配置将在下次启动时生效${NC}"
-  fi
+  recreate_existing_container "挂载配置" "容器不存在，挂载配置将在下次启动时生效"
 }
 
 # 重建容器使配置变更生效
 recreate_container_for_changes() {
+  recreate_existing_container "配置变更" "容器不存在，变更将在下次启动时生效"
+  sleep 1
+}
+
+recreate_existing_container() {
+  local reason="$1"
+  local missing_message="$2"
   local container_name=$(get_container_name)
 
   if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-    echo -e "${YELLOW}正在重建容器使配置变更生效...${NC}"
+    echo -e "${YELLOW}正在重建容器使${reason}生效...${NC}"
     local was_running=$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null)
 
     # 停止并删除现有容器
     docker rm -f "$container_name" >/dev/null
 
-    # 重新创建容器
+    # 重新创建容器；原来是停止状态时，创建后恢复为停止状态。
+    start_container
     if [[ "$was_running" == "true" ]]; then
-      start_container
       echo -e "${GREEN}容器已重建并启动!${NC}"
     else
+      docker stop "$container_name" >/dev/null
       echo -e "${GREEN}容器已重建!${NC}"
     fi
   else
-    echo -e "${YELLOW}容器不存在，变更将在下次启动时生效${NC}"
+    echo -e "${YELLOW}${missing_message}${NC}"
   fi
-  sleep 1
 }
 
 # 获取当前主机IP
@@ -1061,12 +1087,15 @@ show_config_menu() {
         ;;
       2)
         read -p "输入新的管理端口 [${CONFIG[PORT1]}]: " new_port
+        if [[ -z "$new_port" ]]; then
+            continue
+        fi
         if ! [[ "$new_port" =~ ^[0-9]+$ ]]; then
             echo -e "${RED}端口号必须是数字!${NC}"
             sleep 1
             continue
         fi
-        if [[ -n "$new_port" && "$new_port" != "${CONFIG[PORT1]}" ]]; then
+        if [[ "$new_port" != "${CONFIG[PORT1]}" ]]; then
           CONFIG[PORT1]="$new_port"
           save_config
           need_recreate=true
@@ -1074,12 +1103,15 @@ show_config_menu() {
         ;;
       3)
         read -p "输入新的AList端口 [${CONFIG[PORT2]}]: " new_port
+        if [[ -z "$new_port" ]]; then
+            continue
+        fi
         if ! [[ "$new_port" =~ ^[0-9]+$ ]]; then
             echo -e "${RED}端口号必须是数字!${NC}"
             sleep 1
             continue
         fi
-        if [[ -n "$new_port" && "$new_port" != "${CONFIG[PORT2]}" ]]; then
+        if [[ "$new_port" != "${CONFIG[PORT2]}" ]]; then
           CONFIG[PORT2]="$new_port"
           save_config
           need_recreate=true
