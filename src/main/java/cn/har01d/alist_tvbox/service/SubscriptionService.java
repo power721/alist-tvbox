@@ -1235,6 +1235,10 @@ public class SubscriptionService {
         String jar = url + "/spring.jar";
         site.put("jar", jar);
 
+        if ("8cdcaa4255534ca19aaa18948ea9c3524c1d".equals(plugin.getExternalId())) {
+            site.put("indexs", 1);
+        }
+
         Map<String, Object> map = new HashMap<>();
         map.put("api", url);
         //map.put("loader", url + "/Atvp.py");
