@@ -208,7 +208,7 @@
           <el-switch v-model="form.strmConfig.withoutUrl" />
         </el-form-item>
         <el-form-item label="带签名" label-width="140">
-          <el-switch v-model="form.strmConfig.withSign" />
+          <el-switch v-model="form.strmConfig.withSign" :disabled="aListLoginEnabled" />
         </el-form-item>
         <el-form-item label="保存STRM到本地" label-width="140">
           <el-switch v-model="form.strmConfig.saveStrmToLocal" />
@@ -403,8 +403,23 @@ import type { UploadInstance, UploadProps, UploadRawFile } from 'element-plus'
 const upload = ref<UploadInstance>()
 import accountService from "@/services/account.service";
 import { Search } from "@element-plus/icons-vue";
+import { store } from "@/services/store";
 
 const token = accountService.getToken()
+
+interface StrmConfig {
+  paths: string
+  siteUrl: string
+  pathPrefix: string
+  downloadFileTypes: string
+  filterFileTypes: string
+  encodePath: boolean
+  withoutUrl: boolean
+  withSign: boolean
+  saveStrmToLocal: boolean
+  saveStrmLocalPath: string
+  saveLocalMode: string
+}
 
 interface ShareInfo {
   id: string
@@ -415,19 +430,7 @@ interface ShareInfo {
   cookie: string
   status: string
   type: number
-  strmConfig?: {
-    paths: string
-    siteUrl: string
-    pathPrefix: string
-    downloadFileTypes: string
-    filterFileTypes: string
-    encodePath: boolean
-    withoutUrl: boolean
-    withSign: boolean
-    saveStrmToLocal: boolean
-    saveStrmLocalPath: string
-    saveLocalMode: string
-  }
+  strmConfig?: StrmConfig
 }
 
 interface Storage {
@@ -484,6 +487,33 @@ const dialogVisible = ref(false)
 const dialogVisible1 = ref(false)
 const updateAction = ref(false)
 const batch = ref(false)
+const aListLoginEnabled = ref(false)
+const detectedStrmSiteUrl = ref('')
+const applyStrmAutoSign = (strmConfig: StrmConfig) => {
+  if (aListLoginEnabled.value) {
+    strmConfig.withSign = true
+  }
+  return strmConfig
+}
+const applyStrmSiteUrl = (strmConfig: StrmConfig) => {
+  if (!strmConfig.siteUrl) {
+    strmConfig.siteUrl = detectedStrmSiteUrl.value
+  }
+  return strmConfig
+}
+const createStrmConfig = (encodePath = false) => applyStrmAutoSign({
+  paths: '',
+  siteUrl: detectedStrmSiteUrl.value,
+  pathPrefix: '/d',
+  downloadFileTypes: 'ass,srt,vtt,sub,strm',
+  filterFileTypes: 'mp4,mkv,flv,avi,wmv,ts,rmvb,webm,mp3,flac,aac,wav,ogg,m4a,wma,alac',
+  encodePath,
+  withoutUrl: false,
+  withSign: false,
+  saveStrmToLocal: false,
+  saveStrmLocalPath: '',
+  saveLocalMode: 'update'
+})
 const form = ref<ShareInfo>({
   id: '',
   path: '',
@@ -493,19 +523,7 @@ const form = ref<ShareInfo>({
   cookie: '',
   status: '',
   type: -1,
-  strmConfig: {
-    paths: '',
-    siteUrl: '',
-    pathPrefix: '/d',
-    downloadFileTypes: 'ass,srt,vtt,sub,strm',
-    filterFileTypes: 'mp4,mkv,flv,avi,wmv,ts,rmvb,webm,mp3,flac,aac,wav,ogg,m4a,wma,alac',
-    encodePath: true,
-    withoutUrl: false,
-    withSign: false,
-    saveStrmToLocal: false,
-    saveStrmLocalPath: '',
-    saveLocalMode: 'update'
-  }
+  strmConfig: createStrmConfig(true)
 })
 const sharesDto = ref({
   content: '',
@@ -529,19 +547,7 @@ const handleAdd = () => {
     cookie: '',
     status: '',
     type: 0,
-    strmConfig: {
-      paths: '',
-      siteUrl: '',
-      pathPrefix: '/d',
-      downloadFileTypes: 'ass,srt,vtt,sub,strm',
-      filterFileTypes: 'mp4,mkv,flv,avi,wmv,ts,rmvb,webm,mp3,flac,aac,wav,ogg,m4a,wma,alac',
-      encodePath: false,
-      withoutUrl: false,
-      withSign: false,
-      saveStrmToLocal: false,
-      saveStrmLocalPath: '',
-      saveLocalMode: 'update'
-    }
+    strmConfig: createStrmConfig()
   }
   formVisible.value = true
 }
@@ -550,26 +556,15 @@ const handleEdit = (data: ShareInfo) => {
   dialogTitle.value = '更新分享 - ' + data.id
   updateAction.value = true
   // Parse STRM config from folderId if it's STRM type
-  let strmConfig = {
-    paths: '',
-    siteUrl: '',
-    pathPrefix: '/d',
-    downloadFileTypes: 'ass,srt,vtt,sub,strm',
-    filterFileTypes: 'mp4,mkv,flv,avi,wmv,ts,rmvb,webm,mp3,flac,aac,wav,ogg,m4a,wma,alac',
-    encodePath: false,
-    withoutUrl: false,
-    withSign: false,
-    saveStrmToLocal: false,
-    saveStrmLocalPath: '',
-    saveLocalMode: 'update'
-  }
+  let strmConfig = createStrmConfig()
   if (data.type === 11 && data.cookie) {
     try {
-      strmConfig = JSON.parse(data.cookie)
+      strmConfig = applyStrmAutoSign({ ...createStrmConfig(), ...JSON.parse(data.cookie) })
     } catch (e) {
       ElMessage.error('解析STRM配置失败')
     }
   }
+  strmConfig = applyStrmSiteUrl(strmConfig)
   form.value = {
     id: data.id,
     path: data.path,
@@ -665,6 +660,9 @@ const fullPath = (share: any) => {
 }
 
 const handleConfirm = () => {
+  if (form.value.type === 11 && form.value.strmConfig) {
+    form.value.strmConfig = applyStrmSiteUrl(applyStrmAutoSign(form.value.strmConfig))
+  }
 
   // 如果是STRM存储，且保存到本地，且本地保存路径不以/开头，则自动补充/data/前缀
   if (
@@ -884,7 +882,56 @@ const handleSelectionStorages = (val: Storage[]) => {
   selectedStorages.value = val
 }
 
+const updateDetectedStrmSiteUrl = (url: string) => {
+  detectedStrmSiteUrl.value = url
+  if (form.value.type === 11 && form.value.strmConfig && !form.value.strmConfig.siteUrl) {
+    form.value.strmConfig.siteUrl = url
+  }
+}
+
+const loadBaseUrl = () => {
+  if (store.baseUrl) {
+    updateDetectedStrmSiteUrl(store.baseUrl)
+    return
+  }
+
+  const fallback = window.location.protocol + '//' + window.location.hostname + ':' + (store.hostmode ? 5678 : 5344)
+  updateDetectedStrmSiteUrl(fallback)
+
+  if (!store.admin) {
+    return
+  }
+
+  axios.get('/api/sites/1').then(({ data }) => {
+    let url = data.url
+    const re = /http:\/\/localhost:(\d+)/.exec(data.url)
+    if (re) {
+      url = window.location.protocol + '//' + window.location.hostname + ':' + re[1]
+      store.baseUrl = url
+      updateDetectedStrmSiteUrl(url)
+    } else if (data.url == 'http://localhost') {
+      axios.get('/api/alist/port').then(({ data }) => {
+        if (data) {
+          url = window.location.protocol + '//' + window.location.hostname + ':' + data
+          store.baseUrl = url
+          updateDetectedStrmSiteUrl(url)
+        }
+      })
+    } else {
+      store.baseUrl = url
+      updateDetectedStrmSiteUrl(url)
+    }
+  })
+}
+
 onMounted(() => {
+  axios.get('/api/settings').then(({ data }) => {
+    aListLoginEnabled.value = data.alist_login === 'true'
+    if (form.value.type === 11 && form.value.strmConfig) {
+      form.value.strmConfig = applyStrmAutoSign(form.value.strmConfig)
+    }
+  })
+  loadBaseUrl()
   loadShares(page.value)
   loadStorages(page1.value)
 })

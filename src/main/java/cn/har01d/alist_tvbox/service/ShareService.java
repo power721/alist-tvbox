@@ -82,6 +82,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
+import static cn.har01d.alist_tvbox.util.Constants.ALIST_LOGIN;
 import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
@@ -1258,15 +1259,36 @@ public class ShareService {
     }
 
     private void fixStrmConfig(Share share) {
-        // STRM 类型: 将 strmConfig 对象序列化到 cookie 字段
-        if (share.getType() == 11 && share.getStrmConfig() != null) {
-            try {
-                String jsonConfig = objectMapper.writeValueAsString(share.getStrmConfig());
-                share.setCookie(jsonConfig);
-            } catch (Exception e) {
-                log.warn("解析STRM配置失败", e);
-            }
+        if (share.getType() != 11) {
+            return;
         }
+
+        try {
+            JsonNode config = null;
+            if (share.getStrmConfig() != null) {
+                config = objectMapper.valueToTree(share.getStrmConfig());
+            } else if (StringUtils.isNotBlank(share.getCookie())) {
+                config = objectMapper.readTree(share.getCookie());
+            }
+
+            if (config == null) {
+                return;
+            }
+
+            if (isAListLoginEnabled() && config instanceof ObjectNode objectNode) {
+                objectNode.put("withSign", true);
+            }
+            share.setCookie(objectMapper.writeValueAsString(config));
+        } catch (Exception e) {
+            log.warn("解析STRM配置失败", e);
+        }
+    }
+
+    private boolean isAListLoginEnabled() {
+        return settingRepository.findById(ALIST_LOGIN)
+                .map(Setting::getValue)
+                .orElse("")
+                .equals("true");
     }
 
     private static void fixFolderId(Share share) {
