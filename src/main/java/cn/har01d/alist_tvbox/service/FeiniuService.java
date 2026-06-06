@@ -323,7 +323,7 @@ public class FeiniuService {
         Map<String, Object> result = new HashMap<>();
         result.put("url", playResult.url());
         result.put("subs", getSubtitles(site, token, streamList));
-        result.put("header", "{\"Cookie\":\"mode=relay; Trim-MC-token=" + token + "\",\"User-Agent\":\"" + StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT) + "\"}");
+        result.put("header", buildPlayHeader(site, token, playResult.externalDirectLink()));
         result.put("parse", 0);
         log.debug("result: {}", result);
         return result;
@@ -494,6 +494,11 @@ public class FeiniuService {
 
     private PlayUrlResult buildPlayUrl(Feiniu site, String token, JsonNode playInfo, JsonNode streamList, JsonNode streamInfo,
                                        String subToken, String baseUrl) {
+        PlayUrlResult directLinkResult = buildDirectLinkUrls(streamInfo);
+        if (!directLinkResult.isEmpty()) {
+            return directLinkResult;
+        }
+
         if (isDirectPlayable(streamInfo)) {
             return new PlayUrlResult(buildFallbackUrls(site, playInfo, streamList), fallbackPlayLink(site, playInfo));
         }
@@ -504,6 +509,37 @@ public class FeiniuService {
         }
 
         return new PlayUrlResult(buildFallbackUrls(site, playInfo, streamList), fallbackPlayLink(site, playInfo));
+    }
+
+    private String buildPlayHeader(Feiniu site, String token, boolean externalDirectLink) {
+        String userAgent = StringUtils.defaultIfBlank(site.getUserAgent(), Constants.USER_AGENT);
+        if (externalDirectLink) {
+            return "{\"User-Agent\":\"" + userAgent + "\"}";
+        }
+        return "{\"Cookie\":\"mode=relay; Trim-MC-token=" + token + "\",\"User-Agent\":\"" + userAgent + "\"}";
+    }
+
+    private PlayUrlResult buildDirectLinkUrls(JsonNode streamInfo) {
+        List<String> urls = new ArrayList<>();
+        if (streamInfo == null || streamInfo.isMissingNode() || streamInfo.isNull()) {
+            return new PlayUrlResult(urls, "", false);
+        }
+
+        String playLink = "";
+        JsonNode qualities = streamInfo.path("direct_link_qualities");
+        if (qualities.isArray()) {
+            for (JsonNode quality : qualities) {
+                String url = quality.path("url").asText("");
+                if (StringUtils.isBlank(url)) {
+                    continue;
+                }
+                if (StringUtils.isBlank(playLink)) {
+                    playLink = new URLWrapper(url).host();
+                }
+                addUrlPair(urls, StringUtils.defaultIfBlank(quality.path("resolution").asText(), "原画"), url);
+            }
+        }
+        return new PlayUrlResult(urls, playLink, !urls.isEmpty());
     }
 
     private PlayUrlResult buildTranscodeUrls(Feiniu site, String token, JsonNode playInfo, JsonNode streamInfo) {
@@ -921,7 +957,11 @@ public class FeiniuService {
     private record QualityOption(String resolution, long bitrate) {
     }
 
-    private record PlayUrlResult(List<String> url, String playLink) {
+    private record PlayUrlResult(List<String> url, String playLink, boolean externalDirectLink) {
+        private PlayUrlResult(List<String> url, String playLink) {
+            this(url, playLink, false);
+        }
+
         private boolean isEmpty() {
             return url == null || url.size() < 2 || url.size() % 2 != 0;
         }
