@@ -61,7 +61,8 @@ test('play config separates public private and telegram management tabs', () => 
   assert.equal(componentSource.includes(`'/api/telegram/private/channels'`), true)
   assert.equal(componentSource.includes(`'/api/telegram/private/channels/sync-list'`), true)
   assert.equal(componentSource.includes(`同步频道列表`), true)
-  assert.equal(componentSource.includes(`'/api/telegram/private/channels/sync'`), true)
+  assert.equal(componentSource.includes(`同步选中频道`), false)
+  assert.equal(componentSource.includes(`const syncPrivateChannels = () => {`), false)
 })
 
 test('play config highlights changed private channel rows like public channels', () => {
@@ -75,16 +76,36 @@ test('play config highlights changed private channel rows like public channels',
 })
 
 test('play config shows private channel visibility and row sync action', () => {
+  const webAccessColumns = componentSource.match(/label="网页访问"/g) || []
+
+  assert.equal(componentSource.includes(`web_access: boolean`), true)
+  assert.equal(componentSource.includes(`web_access_checked_at: string`), true)
   assert.equal(componentSource.includes(`const getPrivateChannelVisibilityName = (row: PrivateChannel) => {`), true)
   assert.equal(componentSource.includes(`return row.username ? '公开' : '私密'`), true)
   assert.equal(componentSource.includes(`label="公开状态"`), true)
   assert.equal(componentSource.includes(`{{ getPrivateChannelVisibilityName(scope.row) }}`), true)
+  assert.equal(webAccessColumns.length, 2)
+  assert.equal(componentSource.includes(`scope.row.web_access`), true)
+  assert.equal(componentSource.includes(`'https://t.me/s/'+scope.row.username`), true)
   assert.equal(componentSource.includes(`label="类型"`), true)
   assert.equal(componentSource.includes(`const syncPrivateChannel = (row: PrivateChannel) => {`), true)
   assert.equal(componentSource.includes("axios.post(`/api/telegram/private/channels/${row.id}/sync`)"), true)
   assert.equal(componentSource.includes('已同步 ${data?.messages || 0} 条消息，发现 ${data?.links || 0} 个链接'), true)
   assert.equal(componentSource.includes(`label="操作"`), true)
   assert.equal(componentSource.includes(`@click="syncPrivateChannel(scope.row)"`), true)
+  assert.equal(componentSource.includes(`const checkPrivateChannelWebAccess = (row: PrivateChannel) => {`), true)
+  assert.equal(componentSource.includes("axios.post(`/api/telegram/private/channels/${row.id}/web-access/check`)"), true)
+  assert.equal(componentSource.includes(`@click="checkPrivateChannelWebAccess(scope.row)"`), true)
+  assert.equal(componentSource.includes(`:disabled="!scope.row.username"`), true)
+  assert.equal(componentSource.includes(`const checkPrivateChannelsWebAccess = () => {`), true)
+  assert.equal(componentSource.includes(`'/api/telegram/private/channels/web-access/check'`), true)
+  assert.equal(componentSource.includes(`@click="checkPrivateChannelsWebAccess"`), true)
+  assert.equal(componentSource.includes(`批量检测`), true)
+  assert.equal(
+    componentSource.indexOf(`@click="checkPrivateChannelsWebAccess"`) <
+      componentSource.indexOf(`@click="savePrivateChannels"`),
+    true
+  )
 })
 
 test('play config filters private channels by keyword visibility and type', () => {

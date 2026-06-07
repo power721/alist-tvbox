@@ -85,6 +85,16 @@ public class TelegramController {
         return tgPrivateChannelService.syncChannel(id);
     }
 
+    @PostMapping("/api/telegram/private/channels/{id}/web-access/check")
+    public TgPrivateChannel checkPrivateChannelWebAccess(@PathVariable long id) {
+        return tgPrivateChannelService.checkWebAccess(id);
+    }
+
+    @PostMapping("/api/telegram/private/channels/web-access/check")
+    public List<TgPrivateChannel> checkPrivateChannelsWebAccess() {
+        return tgPrivateChannelService.checkWebAccess();
+    }
+
     @PostMapping("/api/telegram/private/channels/sync-list")
     public List<TgProviderAccountChannelSyncResponse> syncPrivateChannelList() {
         return tgPrivateChannelService.syncAccountChannels();

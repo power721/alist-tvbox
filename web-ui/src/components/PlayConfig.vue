@@ -30,6 +30,8 @@ interface PrivateChannel {
   type: string
   last_message_id: number
   last_sync_time: string
+  web_access: boolean
+  web_access_checked_at: string
   enabled: boolean
   changed: boolean
 }
@@ -505,14 +507,6 @@ const syncPrivateChannelList = () => {
   })
 }
 
-const syncPrivateChannels = () => {
-  axios.post('/api/telegram/private/channels/sync', {channel_ids: privateChannelIds()}).then(({data}) => {
-    const queued = data?.queued || 0
-    const skipped = data?.skipped || 0
-    ElMessage.success(`已同步 ${queued} 个频道，跳过 ${skipped} 个`)
-  })
-}
-
 const syncPrivateChannel = (row: PrivateChannel) => {
   axios.post(`/api/telegram/private/channels/${row.id}/sync`).then(({data}) => {
     if (data?.status) {
@@ -520,6 +514,36 @@ const syncPrivateChannel = (row: PrivateChannel) => {
       return
     }
     ElMessage.success(`已同步 ${data?.messages || 0} 条消息，发现 ${data?.links || 0} 个链接`)
+  })
+}
+
+const updatePrivateChannelWebAccess = (channel: PrivateChannel) => {
+  const row = privateChannels.value.find(e => e.id === channel.id)
+  if (!row) {
+    privateChannels.value.push(channel)
+    return
+  }
+  row.web_access = channel.web_access
+  row.web_access_checked_at = channel.web_access_checked_at
+}
+
+const checkPrivateChannelWebAccess = (row: PrivateChannel) => {
+  axios.post(`/api/telegram/private/channels/${row.id}/web-access/check`).then(({data}) => {
+    if (data) {
+      updatePrivateChannelWebAccess(data)
+    }
+    ElMessage.success('检测完成')
+  })
+}
+
+const checkPrivateChannelsWebAccess = () => {
+  privateChannelsLoading.value = true
+  axios.post('/api/telegram/private/channels/web-access/check').then(({data}) => {
+    const channels = data || []
+    channels.forEach(updatePrivateChannelWebAccess)
+    ElMessage.success('检测完成')
+  }).finally(() => {
+    privateChannelsLoading.value = false
   })
 }
 
@@ -810,7 +834,7 @@ onUnmounted(() => {
         </el-select>
         <el-button @click="syncPrivateChannelList" :loading="privateChannelsLoading">同步频道列表</el-button>
         <el-button @click="loadPrivateChannels">刷新</el-button>
-        <el-button @click="syncPrivateChannels" :disabled="!privateChannelIds().length">同步选中频道</el-button>
+        <el-button @click="checkPrivateChannelsWebAccess" :loading="privateChannelsLoading">批量检测</el-button>
         <el-button type="primary" :disabled="!privateChannelsChanged" @click="savePrivateChannels">保存</el-button>
       </el-row>
       <div class="space"></div>
@@ -834,6 +858,14 @@ onUnmounted(() => {
             {{ getPrivateChannelVisibilityName(scope.row) }}
           </template>
         </el-table-column>
+        <el-table-column prop="web_access" label="网页访问" width="100" sortable>
+          <template #default="scope">
+            <a :href="'https://t.me/s/'+scope.row.username" target="_blank" v-if="scope.row.web_access && scope.row.username">
+              web
+            </a>
+            <span v-else></span>
+          </template>
+        </el-table-column>
         <el-table-column prop="type" label="类型" width="120" sortable/>
         <el-table-column prop="last_message_id" label="最新消息" width="120" sortable/>
         <el-table-column prop="last_sync_time" label="同步时间" width="210" sortable>
@@ -846,9 +878,10 @@ onUnmounted(() => {
             <el-switch v-model="scope.row.enabled" @change="markPrivateChannelChanged(scope.row)"/>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="90">
+        <el-table-column fixed="right" label="操作" width="140">
           <template #default="scope">
             <el-button link type="primary" @click="syncPrivateChannel(scope.row)">同步</el-button>
+            <el-button link type="primary" :disabled="!scope.row.username" @click="checkPrivateChannelWebAccess(scope.row)">检测</el-button>
           </template>
         </el-table-column>
       </el-table>

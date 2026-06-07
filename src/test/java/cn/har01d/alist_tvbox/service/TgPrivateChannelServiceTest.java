@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannelSyncResponse;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderWebAccessCheckItem;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +22,9 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,13 +47,15 @@ class TgPrivateChannelServiceTest {
     void shouldMergeProviderChannelsWithEnabledSetting() {
         when(settingRepository.findById("tg_private_channel_ids")).thenReturn(Optional.of(new Setting("tg_private_channel_ids", "7,9")));
         when(tgProviderClient.channels()).thenReturn(List.of(
-                channel(7, "VIP 1"),
-                channel(8, "VIP 2")));
+                channel(7, "VIP 1", "vip7", true, "2026-06-07T12:05:00Z"),
+                channel(8, "VIP 2", "vip8", false, null)));
 
         List<TgPrivateChannel> channels = service.channels();
 
         assertThat(channels).extracting(TgPrivateChannel::id).containsExactly(7L, 8L);
         assertThat(channels.getFirst().enabled()).isTrue();
+        assertThat(channels.getFirst().webAccess()).isTrue();
+        assertThat(channels.getFirst().webAccessCheckedAt()).isEqualTo("2026-06-07T12:05:00Z");
         assertThat(channels.get(1).enabled()).isFalse();
     }
 
@@ -111,7 +116,59 @@ class TgPrivateChannelServiceTest {
         verify(tgProviderClient).syncChannel(7L);
     }
 
+    @Test
+    void shouldCheckSingleChannelWebAccessAndReturnPersistedChannel() {
+        when(tgProviderClient.checkChannelWebAccess(List.of(7L))).thenReturn(List.of(
+                new TgProviderWebAccessCheckItem(7, true, "2026-06-07T12:05:00Z")));
+        when(tgProviderClient.channel(7L)).thenReturn(channel(7, "VIP 1", "vip7", true, "2026-06-07T12:05:00Z"));
+        when(settingRepository.findById("tg_private_channel_ids")).thenReturn(Optional.of(new Setting("tg_private_channel_ids", "7")));
+
+        TgPrivateChannel result = service.checkWebAccess(7L);
+
+        assertThat(result.id()).isEqualTo(7);
+        assertThat(result.webAccess()).isTrue();
+        assertThat(result.webAccessCheckedAt()).isEqualTo("2026-06-07T12:05:00Z");
+        assertThat(result.enabled()).isTrue();
+        verify(tgProviderClient).checkChannelWebAccess(List.of(7L));
+    }
+
+    @Test
+    void shouldBatchCheckOnlyPublicPrivateChannelsAndReturnRefreshedList() {
+        TgProviderChannel publicChannel = channel(7, "VIP 1", "vip7", false, null);
+        TgProviderChannel privateChannel = channel(8, "Private", "", false, null);
+        TgProviderChannel checkedChannel = channel(7, "VIP 1", "vip7", true, "2026-06-07T12:05:00Z");
+        when(tgProviderClient.channels()).thenReturn(List.of(publicChannel, privateChannel), List.of(checkedChannel, privateChannel));
+        when(tgProviderClient.checkChannelWebAccess(List.of(7L))).thenReturn(List.of(
+                new TgProviderWebAccessCheckItem(7, true, "2026-06-07T12:05:00Z")));
+        when(settingRepository.findById("tg_private_channel_ids")).thenReturn(Optional.empty());
+
+        List<TgPrivateChannel> result = service.checkWebAccess();
+
+        assertThat(result).hasSize(2);
+        assertThat(result.getFirst().webAccess()).isTrue();
+        assertThat(result.getFirst().webAccessCheckedAt()).isEqualTo("2026-06-07T12:05:00Z");
+        assertThat(result.get(1).webAccess()).isFalse();
+        verify(tgProviderClient).checkChannelWebAccess(List.of(7L));
+    }
+
+    @Test
+    void shouldNotCallProviderBatchCheckWhenNoPublicPrivateChannelsExist() {
+        TgProviderChannel privateChannel = channel(8, "Private", "", false, null);
+        when(tgProviderClient.channels()).thenReturn(List.of(privateChannel));
+        when(settingRepository.findById("tg_private_channel_ids")).thenReturn(Optional.empty());
+
+        List<TgPrivateChannel> result = service.checkWebAccess();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().webAccess()).isFalse();
+        verify(tgProviderClient, never()).checkChannelWebAccess(any());
+    }
+
     private TgProviderChannel channel(long id, String title) {
-        return new TgProviderChannel(id, 1, 1000 + id, 2000 + id, title, "vip" + id, "channel", 0, null, null, null);
+        return channel(id, title, "vip" + id, false, null);
+    }
+
+    private TgProviderChannel channel(long id, String title, String username, boolean webAccess, String webAccessCheckedAt) {
+        return new TgProviderChannel(id, 1, 1000 + id, 2000 + id, title, username, "channel", 0, null, webAccess, webAccessCheckedAt, null, null);
     }
 }

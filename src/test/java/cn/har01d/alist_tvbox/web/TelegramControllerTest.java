@@ -133,13 +133,15 @@ class TelegramControllerTest {
 
     @Test
     void shouldExposePrivateChannelsAndSaveSelection() throws Exception {
-        TgPrivateChannel channel = new TgPrivateChannel(7, 1, 1001, "VIP", "vip_share", "channel", 88, "2026-06-07T12:00:00Z", true);
+        TgPrivateChannel channel = new TgPrivateChannel(7, 1, 1001, "VIP", "vip_share", "channel", 88, "2026-06-07T12:00:00Z", true, "2026-06-07T12:05:00Z", true);
         when(tgPrivateChannelService.channels()).thenReturn(List.of(channel));
         when(tgPrivateChannelService.saveChannels(new TgPrivateChannelSelectionRequest(List.of(7L)))).thenReturn(List.of(channel));
 
         mockMvc.perform(get("/api/telegram/private/channels"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(7))
+                .andExpect(jsonPath("$[0].web_access").value(true))
+                .andExpect(jsonPath("$[0].web_access_checked_at").value("2026-06-07T12:05:00Z"))
                 .andExpect(jsonPath("$[0].enabled").value(true));
 
         mockMvc.perform(put("/api/telegram/private/channels")
@@ -147,6 +149,26 @@ class TelegramControllerTest {
                         .content("{\"channel_ids\":[7]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].username").value("vip_share"));
+    }
+
+    @Test
+    void shouldCheckPrivateChannelWebAccess() throws Exception {
+        TgPrivateChannel channel = new TgPrivateChannel(7, 1, 1001, "VIP", "vip_share", "channel", 88, "2026-06-07T12:00:00Z", true, "2026-06-07T12:05:00Z", true);
+        when(tgPrivateChannelService.checkWebAccess(7L)).thenReturn(channel);
+        when(tgPrivateChannelService.checkWebAccess()).thenReturn(List.of(channel));
+
+        mockMvc.perform(post("/api/telegram/private/channels/7/web-access/check"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(7))
+                .andExpect(jsonPath("$.web_access").value(true));
+
+        mockMvc.perform(post("/api/telegram/private/channels/web-access/check"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(7))
+                .andExpect(jsonPath("$[0].web_access").value(true));
+
+        verify(tgPrivateChannelService).checkWebAccess(7L);
+        verify(tgPrivateChannelService).checkWebAccess();
     }
 
     @Test

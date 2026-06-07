@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannelSelectionRequest;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
 import cn.har01d.alist_tvbox.entity.Setting;
@@ -70,6 +71,27 @@ public class TgPrivateChannelService {
 
     public TgProviderChannelSyncResponse syncChannel(long channelId) {
         return tgProviderClient.syncChannel(channelId);
+    }
+
+    public TgPrivateChannel checkWebAccess(long channelId) {
+        tgProviderClient.checkChannelWebAccess(List.of(channelId));
+        return TgPrivateChannel.from(tgProviderClient.channel(channelId), enabledChannelIds().contains(channelId));
+    }
+
+    public List<TgPrivateChannel> checkWebAccess() {
+        Set<Long> enabled = enabledChannelIds();
+        List<TgProviderChannel> channels = tgProviderClient.channels();
+        List<Long> publicChannelIds = channels.stream()
+                .filter(channel -> StringUtils.isNotBlank(channel.username()))
+                .map(TgProviderChannel::id)
+                .toList();
+        if (!publicChannelIds.isEmpty()) {
+            tgProviderClient.checkChannelWebAccess(publicChannelIds);
+            channels = tgProviderClient.channels();
+        }
+        return channels.stream()
+                .map(channel -> TgPrivateChannel.from(channel, enabled.contains(channel.id())))
+                .toList();
     }
 
     public List<TgProviderAccountChannelSyncResponse> syncAccountChannels() {

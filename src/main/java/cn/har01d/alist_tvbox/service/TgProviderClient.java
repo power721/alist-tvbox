@@ -12,6 +12,7 @@ import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchItem;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderStatus;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderWebAccessCheckItem;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -98,6 +99,19 @@ public class TgProviderClient {
         JsonNode response = get(builder.build().encode().toUri(), JsonNode.class, "/api/channels");
         return parseItems(response, new TypeReference<>() {
         }, "channels");
+    }
+
+    public TgProviderChannel channel(long id) {
+        return get("/api/channels/" + id, TgProviderChannel.class);
+    }
+
+    public List<TgProviderWebAccessCheckItem> checkChannelWebAccess(Collection<Long> channelIds) {
+        if (channelIds == null || channelIds.isEmpty()) {
+            return List.of();
+        }
+        JsonNode response = post("/api/channels/web-access/check", Map.of("channel_ids", channelIds), JsonNode.class);
+        return parseItems(response, new TypeReference<>() {
+        }, "channel web access check");
     }
 
     public void deleteAccount(long id) {

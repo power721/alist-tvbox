@@ -8,6 +8,7 @@ import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderWebAccessCheckItem;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -121,7 +122,7 @@ class TgProviderClientTest {
         server.expect(once(), requestTo("http://127.0.0.1:6000/api/channels"))
                 .andExpect(method(GET))
                 .andRespond(withSuccess("""
-                        {"items":[{"id":7,"account_id":1,"telegram_channel_id":1001,"access_hash":2002,"title":"VIP","username":"vip_share","type":"channel","last_message_id":88,"last_sync_time":"2026-06-07T12:00:00Z","created_at":"2026-06-07T06:00:00Z","updated_at":"2026-06-07T12:00:00Z"}]}
+                        {"items":[{"id":7,"account_id":1,"telegram_channel_id":1001,"access_hash":2002,"title":"VIP","username":"vip_share","type":"channel","last_message_id":88,"last_sync_time":"2026-06-07T12:00:00Z","web_access":true,"web_access_checked_at":"2026-06-07T12:05:00Z","created_at":"2026-06-07T06:00:00Z","updated_at":"2026-06-07T12:00:00Z"}]}
                         """, MediaType.APPLICATION_JSON));
 
         List<TgProviderChannel> channels = client.channels();
@@ -131,6 +132,24 @@ class TgProviderClientTest {
         assertThat(channels.getFirst().accountId()).isEqualTo(1);
         assertThat(channels.getFirst().title()).isEqualTo("VIP");
         assertThat(channels.getFirst().username()).isEqualTo("vip_share");
+        assertThat(channels.getFirst().webAccess()).isTrue();
+        assertThat(channels.getFirst().webAccessCheckedAt()).isEqualTo("2026-06-07T12:05:00Z");
+        server.verify();
+    }
+
+    @Test
+    void shouldLoadSingleChannelById() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/channels/7"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("""
+                        {"id":7,"account_id":1,"telegram_channel_id":1001,"access_hash":2002,"title":"VIP","username":"vip_share","type":"channel","last_message_id":88,"last_sync_time":"2026-06-07T12:00:00Z","web_access":true,"web_access_checked_at":"2026-06-07T12:05:00Z","created_at":"2026-06-07T06:00:00Z","updated_at":"2026-06-07T12:00:00Z"}
+                        """, MediaType.APPLICATION_JSON));
+
+        TgProviderChannel channel = client.channel(7L);
+
+        assertThat(channel.id()).isEqualTo(7);
+        assertThat(channel.webAccess()).isTrue();
+        assertThat(channel.webAccessCheckedAt()).isEqualTo("2026-06-07T12:05:00Z");
         server.verify();
     }
 
@@ -238,6 +257,24 @@ class TgProviderClientTest {
 
         assertThat(response.messages()).isEqualTo(3);
         assertThat(response.links()).isEqualTo(2);
+        server.verify();
+    }
+
+    @Test
+    void shouldCheckWebAccessWithProviderRequestBody() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/channels/web-access/check"))
+                .andExpect(method(POST))
+                .andExpect(content().json("{\"channel_ids\":[7,9]}"))
+                .andRespond(withSuccess("""
+                        {"items":[{"channel_id":7,"web_access":true,"checked_at":"2026-06-07T12:05:00Z"},{"channel_id":9,"web_access":false,"checked_at":"2026-06-07T12:05:01Z"}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        List<TgProviderWebAccessCheckItem> items = client.checkChannelWebAccess(List.of(7L, 9L));
+
+        assertThat(items).hasSize(2);
+        assertThat(items.getFirst().channelId()).isEqualTo(7);
+        assertThat(items.getFirst().webAccess()).isTrue();
+        assertThat(items.getFirst().checkedAt()).isEqualTo("2026-06-07T12:05:00Z");
         server.verify();
     }
 }

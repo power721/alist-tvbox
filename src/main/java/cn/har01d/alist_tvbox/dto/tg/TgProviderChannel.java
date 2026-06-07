@@ -13,6 +13,8 @@ public record TgProviderChannel(long id,
                                 String type,
                                 @JsonProperty("last_message_id") long lastMessageId,
                                 @JsonProperty("last_sync_time") String lastSyncTime,
+                                @JsonProperty("web_access") boolean webAccess,
+                                @JsonProperty("web_access_checked_at") String webAccessCheckedAt,
                                 @JsonProperty("created_at") String createdAt,
                                 @JsonProperty("updated_at") String updatedAt) {
 }
