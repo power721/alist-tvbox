@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
@@ -31,6 +32,7 @@ public class TgProviderClient {
     private final ObjectMapper objectMapper;
     private final String baseUrl;
 
+    @Autowired
     public TgProviderClient(RestTemplateBuilder builder, AppProperties appProperties, ObjectMapper objectMapper) {
         Duration timeout = Duration.ofMillis(appProperties.getTgTimeout());
         this.restTemplate = builder
