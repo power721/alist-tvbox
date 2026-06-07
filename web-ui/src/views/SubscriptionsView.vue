@@ -7,7 +7,6 @@
       <el-button @click="showPluginFilters">过滤器管理</el-button>
       <el-button @click="showScan">同步影视</el-button>
       <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
-      <el-button @click="handleLogin">登录 Telegram</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
     </el-row>
     <div class="space"></div>
@@ -156,36 +155,6 @@
       <span class="dialog-footer">
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="danger" @click="deleteSub">删除</el-button>
-      </span>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="tgVisible" title="登录 Telegram" width="520px" @close="cancelLogin">
-      <el-form>
-        <el-form-item label="电话号码" label-width="120" required v-if="!user.id && tgPhase === 1">
-          <el-input v-model="tgPhone" autocomplete="off" placeholder="+8612345678901"/>
-          <el-button @click="sendTgPhone">发送验证码</el-button>
-        </el-form-item>
-        <el-form-item label="验证码" label-width="120" required v-if="!user.id && tgPhase === 3">
-          <el-input v-model="tgCode" autocomplete="off"/>
-          <el-button @click="sendTgCode">登录</el-button>
-        </el-form-item>
-        <el-form-item label="密码" label-width="120" required v-if="!user.id && tgPhase === 5">
-          <el-input v-model="tgPassword" type="password" show-password autocomplete="off"/>
-          <el-button @click="sendTgPassword">确认</el-button>
-        </el-form-item>
-        <div v-if="user.id">
-          <div>登录成功</div>
-          <div>用户ID： {{ user.id }}</div>
-          <div>用户名： {{ user.username }}</div>
-          <div>姓名： {{ user.first_name }} {{ user.last_name }}</div>
-          <div>电话： {{ user.phone }}</div>
-        </div>
-      </el-form>
-      <template #footer>
-      <span class="dialog-footer">
-        <el-button type="danger" @click="logout" v-if="user.id">退出登录</el-button>
-        <el-button @click="cancelLogin">取消</el-button>
       </span>
       </template>
     </el-dialog>
@@ -718,10 +687,6 @@ const pluginRunModeOptions = [
   {label: 'Java代理', value: 'java'},
   {label: '原生Python', value: 'python'},
 ]
-const tgPhase = ref(0)
-const tgPhone = ref('')
-const tgCode = ref('')
-const tgPassword = ref('')
 const base64QrCode = ref('')
 const token = ref('')
 const pgLocal = ref('')
@@ -746,7 +711,6 @@ const pluginFilterVisible = ref(false)
 const pluginFilterConfigVisible = ref(false)
 const sourceExtendVisible = ref(false)
 const importingPlugins = ref(false)
-const tgVisible = ref(false)
 const scanVisible = ref(false)
 const confirm = ref(false)
 const push = ref(false)
@@ -774,13 +738,6 @@ const form = ref({
   url: '',
   sort: '',
   override: ''
-})
-const user = ref({
-  id: 0,
-  username: '',
-  first_name: '',
-  last_name: '',
-  phone: ''
 })
 const plugins = ref<Plugin[]>([])
 const managedSources = ref<ManagedSource[]>([])
@@ -843,41 +800,6 @@ const pluginFilterConfigExtras = ref<PluginFilterExtraEntry[]>([])
 const pluginFilterConfigError = ref('')
 let pluginSortable: Sortable | null = null
 let pluginFilterSortable: Sortable | null = null
-
-const emptyTelegramUser = () => ({
-  id: 0,
-  username: '',
-  first_name: '',
-  last_name: '',
-  phone: ''
-})
-
-const loadTelegramUser = () => {
-  return axios.get('/api/telegram/user').then(({data}) => {
-    user.value = data || emptyTelegramUser()
-    tgPhase.value = user.value.id ? 0 : 1
-  })
-}
-
-const handleLogin = () => {
-  tgPhone.value = ''
-  tgCode.value = ''
-  tgPassword.value = ''
-  loadTelegramUser()
-  tgVisible.value = true
-}
-
-const cancelLogin = () => {
-  tgVisible.value = false
-}
-
-const logout = () => {
-  axios.post('/api/telegram/logout').then(() => {
-    ElMessage.success('退出登录成功')
-    user.value = emptyTelegramUser()
-    tgPhase.value = 1
-  })
-}
 
 const handleAdd = () => {
   dialogTitle.value = '添加订阅'
@@ -1673,44 +1595,6 @@ const deleteDevice = () => {
     confirm.value = false
     ElMessage.success('删除成功')
     loadDevices()
-  })
-}
-
-const sendTgPhone = () => {
-  if (!tgPhone.value) {
-    return
-  }
-  axios.post('/api/telegram/login/send-code', {phone: tgPhone.value}).then(() => {
-    tgPhase.value = 3
-    ElMessage.success('验证码已发送')
-  }, () => {
-    ElMessage.error('发送验证码失败')
-  })
-}
-
-const sendTgCode = () => {
-  if (!tgCode.value) {
-    return
-  }
-  axios.post('/api/telegram/login/sign-in', {phone: tgPhone.value, code: tgCode.value}).then(({data}) => {
-    if (data && data.password_required) {
-      tgPhase.value = 5
-      return
-    }
-    loadTelegramUser()
-  }, () => {
-    ElMessage.error('登录失败')
-  })
-}
-
-const sendTgPassword = () => {
-  if (!tgPassword.value) {
-    return
-  }
-  axios.post('/api/telegram/login/password', {phone: tgPhone.value, password: tgPassword.value}).then(() => {
-    loadTelegramUser()
-  }, () => {
-    ElMessage.error('密码验证失败')
   })
 }
 
