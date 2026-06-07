@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // @ts-nocheck
 import {VueDraggable} from "vue-draggable-plus";
-import {computed, onMounted, onUnmounted, ref} from "vue";
+import {computed, onMounted, onUnmounted, ref, watch} from "vue";
 import axios from "axios";
 import {ElMessage} from "element-plus";
 import Sortable from "sortablejs";
@@ -71,6 +71,7 @@ const privateChannelType = ref('all')
 const privateChannelsChanged = ref(false)
 const privateChannelsLoading = ref(false)
 const activeRows = ref<Channel[]>([])
+const activePrivateRows = ref<PrivateChannel[]>([])
 const tgPhase = ref(1)
 const tgPhone = ref('')
 const tgCode = ref('')
@@ -326,8 +327,16 @@ const updateOrder = () => {
 
 const changed = ref(false)
 const tableKey = ref(0)
+const privateTableKey = ref(0)
 const channelDragEnabled = isPluginDragEnabledForUserAgent(window.navigator.userAgent)
 let channelSortable: Sortable | null = null
+let privateChannelSortable: Sortable | null = null
+
+const privateChannelDragEnabled = computed(() => {
+  return channelDragEnabled && !privateChannelKeyword.value.trim()
+    && privateChannelVisibility.value === 'all'
+    && privateChannelType.value === 'all'
+})
 
 const tableRowClassName = ({row}: {
   row: Channel | PrivateChannel
@@ -344,7 +353,7 @@ const markPrivateChannelChanged = (row: PrivateChannel) => {
   privateChannelsChanged.value = true
 }
 
-const treeToTile = (treeData: Channel[]) => {
+const treeToTile = <T>(treeData: T[]) => {
   return [...treeData]
 }
 
@@ -392,6 +401,48 @@ const rowDrop = () => {
       changed.value = true
     },
   });
+}
+
+const privateRowDrop = () => {
+  if (!privateChannelDragEnabled.value) {
+    privateChannelSortable?.destroy()
+    privateChannelSortable = null
+    return
+  }
+  const tbody = document.querySelector("#private-channels tbody") as HTMLElement | null
+  if (!tbody) {
+    return
+  }
+  privateChannelSortable?.destroy()
+  privateChannelSortable = Sortable.create(tbody, {
+    animation: 500,
+    handle: ".el-table__row",
+    draggable: ".el-table__row",
+    onMove() {
+      activePrivateRows.value = treeToTile(filteredPrivateChannels.value)
+      return true
+    },
+    onEnd: (event: any) => {
+      let oldIndex = event.oldIndex
+      let newIndex = event.newIndex
+      const oldRow = activePrivateRows.value[oldIndex]
+      const newRow = activePrivateRows.value[newIndex]
+      if (!oldRow || oldIndex === newIndex || oldRow.id === newRow.id) {
+        return
+      }
+
+      activePrivateRows.value.splice(oldIndex, 1)
+      activePrivateRows.value.splice(newIndex, 0, oldRow)
+      privateChannels.value = activePrivateRows.value
+
+      privateTableKey.value = Math.random()
+      setTimeout(() => privateRowDrop(), 500)
+
+      oldRow.changed = true
+      newRow.changed = true
+      privateChannelsChanged.value = true
+    },
+  })
 }
 
 const handleAdd = () => {
@@ -479,6 +530,7 @@ const loadPrivateChannels = () => {
   return axios.get('/api/telegram/private/channels').then(({data}) => {
     privateChannels.value = data || []
     privateChannelsChanged.value = false
+    setTimeout(() => privateRowDrop(), 500)
   }).finally(() => {
     privateChannelsLoading.value = false
   })
@@ -492,6 +544,7 @@ const savePrivateChannels = () => {
   axios.put('/api/telegram/private/channels', {channel_ids: privateChannelIds()}).then(({data}) => {
     privateChannels.value = data || []
     privateChannelsChanged.value = false
+    setTimeout(() => privateRowDrop(), 500)
     ElMessage.success('保存成功')
   })
 }
@@ -604,6 +657,10 @@ const sendTgPassword = () => {
   })
 }
 
+watch([privateChannelKeyword, privateChannelVisibility, privateChannelType], () => {
+  setTimeout(() => privateRowDrop(), 0)
+})
+
 onMounted(() => {
   loadChannels().then(() => {
     rowDrop()
@@ -639,6 +696,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   channelSortable?.destroy()
+  privateChannelSortable?.destroy()
 })
 </script>
 
@@ -818,6 +876,7 @@ onUnmounted(() => {
     </el-tab-pane>
     <el-tab-pane label="我的频道" name="private-channels">
       <el-row class="private-channel-toolbar" justify="end">
+        <span style="margin-right: 16px" v-if="privateChannelDragEnabled">可以拖动行排序</span>
         <el-input class="private-channel-filter-keyword" v-model="privateChannelKeyword" clearable
                   placeholder="搜索频道"/>
         <el-select class="private-channel-filter-select" v-model="privateChannelVisibility" placeholder="公开状态">
@@ -842,7 +901,14 @@ onUnmounted(() => {
                 v-loading="privateChannelsLoading"
                 :row-class-name="tableRowClassName"
                 row-key="id"
+                id="private-channels"
+                :key="privateTableKey"
                 style="width: 100%">
+        <el-table-column label="顺序" width="60">
+          <template #default="scope">
+            <span :class="privateChannelDragEnabled ? 'pointer' : 'order-text'">{{ scope.$index + 1 }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="id" label="ID" width="90" sortable/>
         <el-table-column prop="account_id" label="账号" width="90" sortable/>
         <el-table-column prop="title" label="标题" sortable/>

@@ -75,6 +75,25 @@ test('play config highlights changed private channel rows like public channels',
   assert.equal(componentSource.includes(`@change="markPrivateChannelChanged(scope.row)"`), true)
 })
 
+test('play config lets desktop users drag private channels to define category order', () => {
+  assert.equal(componentSource.includes(`import {computed, onMounted, onUnmounted, ref, watch} from "vue";`), true)
+  assert.equal(componentSource.includes(`const activePrivateRows = ref<PrivateChannel[]>([])`), true)
+  assert.equal(componentSource.includes(`let privateChannelSortable: Sortable | null = null`), true)
+  assert.equal(componentSource.includes(`const privateChannelDragEnabled = computed(() => {`), true)
+  assert.equal(componentSource.includes(`return channelDragEnabled && !privateChannelKeyword.value.trim()`), true)
+  assert.equal(componentSource.includes(`const privateRowDrop = () => {`), true)
+  assert.equal(componentSource.includes(`if (!privateChannelDragEnabled.value) {`), true)
+  assert.equal(componentSource.includes(`privateChannelSortable?.destroy()`), true)
+  assert.equal(componentSource.includes(`document.querySelector("#private-channels tbody")`), true)
+  assert.equal(componentSource.includes(`activePrivateRows.value = treeToTile(filteredPrivateChannels.value)`), true)
+  assert.equal(componentSource.includes(`privateChannels.value = activePrivateRows.value`), true)
+  assert.equal(componentSource.includes(`setTimeout(() => privateRowDrop(), 500)`), true)
+  assert.equal(componentSource.includes(`watch([privateChannelKeyword, privateChannelVisibility, privateChannelType], () => {`), true)
+  assert.equal(componentSource.includes(`privateChannelSortable?.destroy()`), true)
+  assert.equal(componentSource.includes(`id="private-channels"`), true)
+  assert.equal(componentSource.includes(`v-if="privateChannelDragEnabled"`), true)
+})
+
 test('play config shows private channel visibility and row sync action', () => {
   const webAccessColumns = componentSource.match(/label="网页访问"/g) || []
 
@@ -109,7 +128,7 @@ test('play config shows private channel visibility and row sync action', () => {
 })
 
 test('play config filters private channels by keyword visibility and type', () => {
-  assert.equal(componentSource.includes(`import {computed, onMounted, onUnmounted, ref} from "vue";`), true)
+  assert.equal(componentSource.includes(`import {computed, onMounted, onUnmounted, ref, watch} from "vue";`), true)
   assert.equal(componentSource.includes(`const privateChannelKeyword = ref('')`), true)
   assert.equal(componentSource.includes(`const privateChannelVisibility = ref('all')`), true)
   assert.equal(componentSource.includes(`const privateChannelType = ref('all')`), true)

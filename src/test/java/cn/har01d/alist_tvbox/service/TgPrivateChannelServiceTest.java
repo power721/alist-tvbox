@@ -60,16 +60,16 @@ class TgPrivateChannelServiceTest {
     }
 
     @Test
-    void shouldSaveNormalizedEnabledChannelIds() {
+    void shouldSaveEnabledChannelIdsInRequestedOrder() {
         when(tgProviderClient.channels()).thenReturn(List.of(channel(7, "VIP 1"), channel(9, "VIP 2")));
-        when(settingRepository.findById("tg_private_channel_ids")).thenReturn(Optional.of(new Setting("tg_private_channel_ids", "7,9")));
+        when(settingRepository.findById("tg_private_channel_ids")).thenReturn(Optional.of(new Setting("tg_private_channel_ids", "9,7")));
 
         service.saveChannels(new TgPrivateChannelSelectionRequest(List.of(9L, 7L, 9L, 0L)));
 
         ArgumentCaptor<Setting> captor = ArgumentCaptor.forClass(Setting.class);
         verify(settingRepository).save(captor.capture());
         assertThat(captor.getValue().getName()).isEqualTo("tg_private_channel_ids");
-        assertThat(captor.getValue().getValue()).isEqualTo("7,9");
+        assertThat(captor.getValue().getValue()).isEqualTo("9,7");
     }
 
     @Test
@@ -162,6 +162,20 @@ class TgPrivateChannelServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().webAccess()).isFalse();
         verify(tgProviderClient, never()).checkChannelWebAccess(any());
+    }
+
+    @Test
+    void shouldListPrivateChannelCategoriesInSavedOrder() {
+        when(settingRepository.findById("tg_private_channel_ids")).thenReturn(Optional.of(new Setting("tg_private_channel_ids", "9,7")));
+        when(tgProviderClient.channels()).thenReturn(List.of(
+                channel(7, "VIP 1"),
+                channel(8, "VIP 2"),
+                channel(9, "VIP 3")));
+
+        var categories = service.category().getCategories();
+
+        assertThat(categories).extracting("type_id").containsExactly("9", "7", "type:5", "type:10");
+        assertThat(categories).extracting("type_name").containsExactly("VIP 3", "VIP 1", "夸克", "百度");
     }
 
     private TgProviderChannel channel(long id, String title) {

@@ -27,8 +27,10 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -49,9 +51,10 @@ public class TgPrivateChannelService {
 
     public List<TgPrivateChannel> channels() {
         Set<Long> enabled = enabledChannelIds();
-        return tgProviderClient.channels().stream()
+        List<TgPrivateChannel> channels = tgProviderClient.channels().stream()
                 .map(channel -> TgPrivateChannel.from(channel, enabled.contains(channel.id())))
                 .toList();
+        return orderChannels(channels, enabled);
     }
 
     public List<TgPrivateChannel> saveChannels(TgPrivateChannelSelectionRequest request) {
@@ -89,9 +92,10 @@ public class TgPrivateChannelService {
             tgProviderClient.checkChannelWebAccess(publicChannelIds);
             channels = tgProviderClient.channels();
         }
-        return channels.stream()
+        List<TgPrivateChannel> privateChannels = channels.stream()
                 .map(channel -> TgPrivateChannel.from(channel, enabled.contains(channel.id())))
                 .toList();
+        return orderChannels(privateChannels, enabled);
     }
 
     public List<TgProviderAccountChannelSyncResponse> syncAccountChannels() {
@@ -143,8 +147,11 @@ public class TgPrivateChannelService {
     public CategoryList category() {
         CategoryList result = new CategoryList();
         List<Category> categories = new ArrayList<>();
-        for (TgPrivateChannel channel : channels()) {
-            if (!channel.enabled()) {
+        Map<Long, TgPrivateChannel> channels = channels().stream()
+                .collect(Collectors.toMap(TgPrivateChannel::id, channel -> channel, (first, ignored) -> first));
+        for (Long channelId : enabledChannelIds()) {
+            TgPrivateChannel channel = channels.get(channelId);
+            if (channel == null) {
                 continue;
             }
             Category category = new Category();
@@ -166,17 +173,33 @@ public class TgPrivateChannelService {
         return result;
     }
 
+    private List<TgPrivateChannel> orderChannels(List<TgPrivateChannel> channels, Set<Long> enabled) {
+        Map<Long, TgPrivateChannel> byId = channels.stream()
+                .collect(Collectors.toMap(TgPrivateChannel::id, channel -> channel, (first, ignored) -> first));
+        List<TgPrivateChannel> ordered = new ArrayList<>();
+        for (Long channelId : enabled) {
+            TgPrivateChannel channel = byId.get(channelId);
+            if (channel != null) {
+                ordered.add(channel);
+            }
+        }
+        channels.stream()
+                .filter(channel -> !enabled.contains(channel.id()))
+                .forEach(ordered::add);
+        return ordered;
+    }
+
     private List<Message> collectMessages(Collection<Long> channelIds, int limit, ChannelMessageLoader loader) {
         if (channelIds == null || channelIds.isEmpty()) {
             return List.of();
         }
-        return channelIds.stream()
+        return channelIds.parallelStream()
                 .flatMap(channelId -> {
                     try {
                         return loader.load(channelId).stream();
                     } catch (RuntimeException e) {
                         log.warn("tg-provider private channel request failed: {}", channelId, e);
-                        return List.<Message>of().stream();
+                        return Stream.of();
                     }
                 })
                 .filter(message -> StringUtils.isNotBlank(message.getType()))
@@ -222,7 +245,6 @@ public class TgPrivateChannelService {
         return ids.stream()
                 .filter(id -> id != null && id > 0)
                 .distinct()
-                .sorted()
                 .toList();
     }
 
