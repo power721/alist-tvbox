@@ -46,6 +46,7 @@ public class AppProperties {
     private int panSouLinkCheckMaxCount = 30;
     private String systemId;
     private int tgTimeout = 5000;
+    private int tgWebAccessCheckTimeout = 120000;
     private int tempShareExpiration = 72;
     private int validateSharesInterval = 4;
     private Set<String> formats;

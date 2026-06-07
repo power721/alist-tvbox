@@ -42,6 +42,7 @@ public class TgProviderClient {
     private static final String DEFAULT_BASE_URL = "http://127.0.0.1:6000";
 
     private final RestTemplate restTemplate;
+    private final RestTemplate webAccessRestTemplate;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
     private final String baseUrl;
@@ -54,12 +55,22 @@ public class TgProviderClient {
                 .connectTimeout(timeout)
                 .readTimeout(timeout)
                 .build();
+        Duration webAccessTimeout = Duration.ofMillis(Math.max(appProperties.getTgTimeout(), appProperties.getTgWebAccessCheckTimeout()));
+        this.webAccessRestTemplate = builder
+                .connectTimeout(timeout)
+                .readTimeout(webAccessTimeout)
+                .build();
         this.objectMapper = objectMapper;
         this.baseUrl = DEFAULT_BASE_URL;
     }
 
     TgProviderClient(RestTemplate restTemplate, AppProperties appProperties, ObjectMapper objectMapper, String baseUrl) {
+        this(restTemplate, restTemplate, appProperties, objectMapper, baseUrl);
+    }
+
+    TgProviderClient(RestTemplate restTemplate, RestTemplate webAccessRestTemplate, AppProperties appProperties, ObjectMapper objectMapper, String baseUrl) {
         this.restTemplate = restTemplate;
+        this.webAccessRestTemplate = webAccessRestTemplate;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
         this.baseUrl = baseUrl;
@@ -109,7 +120,7 @@ public class TgProviderClient {
         if (channelIds == null || channelIds.isEmpty()) {
             return List.of();
         }
-        JsonNode response = post("/api/channels/web-access/check", Map.of("channel_ids", channelIds), JsonNode.class);
+        JsonNode response = post(webAccessRestTemplate, "/api/channels/web-access/check", Map.of("channel_ids", channelIds), JsonNode.class);
         return parseItems(response, new TypeReference<>() {
         }, "channel web access check");
     }
@@ -243,8 +254,12 @@ public class TgProviderClient {
     }
 
     private <T> T post(String path, Object body, Class<T> type) {
+        return post(restTemplate, path, body, type);
+    }
+
+    private <T> T post(RestTemplate client, String path, Object body, Class<T> type) {
         try {
-            return restTemplate.postForObject(baseUrl + path, body, type);
+            return client.postForObject(baseUrl + path, body, type);
         } catch (RestClientException e) {
             throw new TgProviderException("tg-provider request failed: " + path, e);
         }

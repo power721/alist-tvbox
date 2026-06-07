@@ -277,4 +277,30 @@ class TgProviderClientTest {
         assertThat(items.getFirst().checkedAt()).isEqualTo("2026-06-07T12:05:00Z");
         server.verify();
     }
+
+    @Test
+    void shouldUseDedicatedClientForWebAccessCheck() {
+        RestTemplate regularRestTemplate = new RestTemplate();
+        RestTemplate webAccessRestTemplate = new RestTemplate();
+        MockRestServiceServer regularServer = MockRestServiceServer.createServer(regularRestTemplate);
+        MockRestServiceServer webAccessServer = MockRestServiceServer.createServer(webAccessRestTemplate);
+        TgProviderClient providerClient = new TgProviderClient(
+                regularRestTemplate,
+                webAccessRestTemplate,
+                new AppProperties(),
+                new ObjectMapper(),
+                "http://127.0.0.1:6000");
+        webAccessServer.expect(once(), requestTo("http://127.0.0.1:6000/api/channels/web-access/check"))
+                .andExpect(method(POST))
+                .andExpect(content().json("{\"channel_ids\":[7]}"))
+                .andRespond(withSuccess("""
+                        {"items":[{"channel_id":7,"web_access":true,"checked_at":"2026-06-07T12:05:00Z"}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        List<TgProviderWebAccessCheckItem> items = providerClient.checkChannelWebAccess(List.of(7L));
+
+        assertThat(items.getFirst().webAccess()).isTrue();
+        regularServer.verify();
+        webAccessServer.verify();
+    }
 }
