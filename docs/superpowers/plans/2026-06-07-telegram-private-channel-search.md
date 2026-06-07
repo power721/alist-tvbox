@@ -22,7 +22,7 @@
 - Modify `src/main/java/cn/har01d/alist_tvbox/web/TelegramController.java`: split public/private search endpoints and add `/tgsc`.
 - Modify `src/main/resources/META-INF/native-image/reflect-config.json`: add new top-level DTOs.
 - Modify backend tests under `src/test/java/cn/har01d/alist_tvbox/service`, `src/test/java/cn/har01d/alist_tvbox/web`, and `src/test/java/cn/har01d/alist_tvbox/nativeimage`.
-- Modify `web-ui/src/views/SearchView.vue`: add search source tabs and private `/tgsc` search endpoint.
+- Modify `web-ui/src/views/SearchView.vue`: add `电报频道` as the eighth search type and map it to `/tgsc`.
 - Modify `web-ui/src/views/VodView.vue`: keep playback-page public Telegram search only.
 - Modify `web-ui/src/components/PlayConfig.vue`: rename public channel tab, add private channels tab, add Telegram management tab.
 - Modify `web-ui/src/views/SubscriptionsView.vue`: remove Telegram login UI and state.
@@ -1110,115 +1110,75 @@ git commit -m "build: register telegram private dtos for native"
 
 ---
 
-### Task 5: Add Search Source Tabs To `SearchView`
+### Task 5: Add Telegram Channel As The Eighth `SearchView` Type
 
 **Files:**
 - Modify: `web-ui/src/views/SearchView.test.mjs`
 - Modify: `web-ui/src/views/SearchView.vue`
-- Modify: `web-ui/src/views/VodView.test.mjs`
-- Modify: `web-ui/src/views/VodView.vue`
 
-- [ ] **Step 1: Add failing frontend source tests**
+- [ ] **Step 1: Add failing frontend source test**
 
 Append to `SearchView.test.mjs`:
 
 ```js
-test('search page exposes telegram channel search tab', () => {
-  assert.equal(componentSource.includes(`const searchMode = ref(localStorage.getItem("search_mode") || 'pansou')`), true)
-  assert.equal(componentSource.includes(`label="盘搜"`), true)
-  assert.equal(componentSource.includes(`label="电报频道"`), true)
-  assert.equal(componentSource.includes(`searchMode.value === 'telegram' ? '/tgsc' : getPath(type.value)`), true)
+test('search page exposes telegram channel as the eighth search type', () => {
+  assert.equal(componentSource.includes(`const searchMode = ref(`), false)
+  assert.equal(componentSource.includes(`<el-tabs v-model="searchMode"`), false)
+  assert.equal(componentSource.includes(`<el-radio label="8" size="large">电报频道</el-radio>`), true)
+  assert.equal(componentSource.includes(`} else if (type == '8') {`), true)
+  assert.equal(componentSource.includes(`return '/tgsc'`), true)
+  assert.equal(componentSource.includes(`<el-table v-if="(type=='8')&&config?.list?.length"`), true)
 })
 ```
 
-Replace the private-search expectation in `VodView.test.mjs` with a guard:
-
-```js
-test('vod page keeps telegram search tab out of player page', () => {
-  assert.equal(viewSource.includes(`const searchMode = ref('public')`), false)
-  assert.equal(viewSource.includes(`label="电报频道"`), false)
-  assert.equal(viewSource.includes(`searchMode.value === 'private' ? '/api/telegram/private/search' : '/api/telegram/search'`), false)
-  assert.equal(viewSource.includes(`axios.get('/api/telegram/search?wd=' + encodeURIComponent(keyword.value))`), true)
-})
-```
-
-- [ ] **Step 2: Run source tests and confirm they fail**
+- [ ] **Step 2: Run source test and confirm it fails**
 
 Run:
 
 ```bash
-node --test web-ui/src/views/SearchView.test.mjs web-ui/src/views/VodView.test.mjs
+node --test web-ui/src/views/SearchView.test.mjs
 ```
 
-Expected: FAIL because the new search-page source selector does not exist and the
-playback page still owns it.
+Expected: FAIL because the `电报频道` search type and `/tgsc` mapping do not exist.
 
-- [ ] **Step 3: Implement search mode state in `SearchView.vue`**
+- [ ] **Step 3: Add the eighth search type**
 
-Near the existing `keyword` state, add:
-
-```ts
-const searchMode = ref(localStorage.getItem("search_mode") || 'pansou')
-```
-
-Add:
-
-```ts
-const getSearchPath = () => searchMode.value === 'telegram' ? '/tgsc' : getPath(type.value)
-```
-
-In `search()`, persist `search_mode`, then choose the endpoint with the same expression
-and call `endpoint + '/' + store.token + '?ac=web&wd=' + encodeURIComponent(...)`.
-
-- [ ] **Step 4: Add the search tabs and telegram result table**
-
-At the top of `SearchView.vue`, add:
+Add `电报频道` to the existing search type radio group:
 
 ```vue
-<el-tabs v-model="searchMode" class="search-mode-tabs" @tab-change="handleSearchModeChange">
-  <el-tab-pane label="盘搜" name="pansou"/>
-  <el-tab-pane label="电报频道" name="telegram"/>
-</el-tabs>
+<el-radio label="8" size="large">电报频道</el-radio>
 ```
 
-Use `getSearchPath()` in the displayed API address. Show the existing type selector and
-PanSou actions only when `searchMode === 'pansou'`. Add a telegram result table for
-`searchMode === 'telegram' && config?.list?.length` that opens rows with
-`/#/vod?link=` plus `vod_id`.
+Update `getPath()`:
 
-- [ ] **Step 5: Add compact tab CSS**
-
-In the scoped style block, add:
-
-```css
-.search-mode-tabs {
-  margin-bottom: 4px;
-}
-
-::v-deep .search-mode-tabs .el-tabs__header {
-  margin: 0 0 4px;
-}
-
-::v-deep .search-mode-tabs .el-tabs__nav-wrap::after {
-  height: 1px;
-}
+```ts
+} else if (type == '8') {
+  return '/tgsc'
 ```
 
-- [ ] **Step 6: Run source test**
+- [ ] **Step 4: Add the telegram result table**
+
+```vue
+<el-table v-if="(type=='8')&&config?.list?.length" :data="config.list" border style="width: 100%" v-loading="searching">
+```
+
+Rows should open with `/#/vod?link=` plus `vod_id`. Keep PanSou actions limited to
+`type == '6'` and hide raw API JSON for both `type == '6'` and `type == '8'`.
+
+- [ ] **Step 5: Run source test**
 
 Run:
 
 ```bash
-node --test web-ui/src/views/SearchView.test.mjs web-ui/src/views/VodView.test.mjs
+node --test web-ui/src/views/SearchView.test.mjs
 ```
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit search-page changes**
+- [ ] **Step 6: Commit search-page changes**
 
 ```bash
-git add web-ui/src/views/SearchView.vue web-ui/src/views/SearchView.test.mjs \
-        web-ui/src/views/VodView.vue web-ui/src/views/VodView.test.mjs
+git add web-ui/src/views/SearchView.vue web-ui/src/views/SearchView.test.mjs
 git commit -m "feat: add telegram channel search tab"
 ```
 
