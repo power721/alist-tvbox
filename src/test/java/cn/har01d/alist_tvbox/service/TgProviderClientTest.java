@@ -1,6 +1,8 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +40,7 @@ class TgProviderClientTest {
                 .andExpect(content().json("{\"phone\":\"+8613800000000\"}"))
                 .andRespond(withSuccess("{\"status\":\"LOGIN_REQUIRED\"}", MediaType.APPLICATION_JSON));
 
-        TgProviderClient.LoginResponse response = client.sendCode("+8613800000000");
+        TgProviderLoginResponse response = client.sendCode("+8613800000000");
 
         assertThat(response.status()).isEqualTo("LOGIN_REQUIRED");
         server.verify();
@@ -52,7 +54,7 @@ class TgProviderClientTest {
                         [{"id":3,"username":"u","first_name":"First","last_name":"Last","phone":"+86138"}]
                         """, MediaType.APPLICATION_JSON));
 
-        List<TgProviderClient.Account> accounts = client.accounts();
+        List<TgProviderAccount> accounts = client.accounts();
 
         assertThat(accounts).hasSize(1);
         assertThat(accounts.getFirst().id()).isEqualTo(3);

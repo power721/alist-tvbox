@@ -2,8 +2,12 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.tg.Message;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderLink;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchItem;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchResponse;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderStatus;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -49,12 +53,12 @@ public class TgProviderClient {
         this.baseUrl = baseUrl;
     }
 
-    public Status status() {
-        return get("/api/status", Status.class);
+    public TgProviderStatus status() {
+        return get("/api/status", TgProviderStatus.class);
     }
 
-    public List<Account> accounts() {
-        Account[] accounts = get("/api/accounts", Account[].class);
+    public List<TgProviderAccount> accounts() {
+        TgProviderAccount[] accounts = get("/api/accounts", TgProviderAccount[].class);
         return accounts == null ? List.of() : List.of(accounts);
     }
 
@@ -66,31 +70,31 @@ public class TgProviderClient {
         }
     }
 
-    public LoginResponse sendCode(String phone) {
-        return post("/api/login/send-code", Map.of("phone", phone), LoginResponse.class);
+    public TgProviderLoginResponse sendCode(String phone) {
+        return post("/api/login/send-code", Map.of("phone", phone), TgProviderLoginResponse.class);
     }
 
-    public LoginResponse signIn(String phone, String code) {
-        return post("/api/login/sign-in", Map.of("phone", phone, "code", code), LoginResponse.class);
+    public TgProviderLoginResponse signIn(String phone, String code) {
+        return post("/api/login/sign-in", Map.of("phone", phone, "code", code), TgProviderLoginResponse.class);
     }
 
-    public Account password(String phone, String password) {
-        return post("/api/login/password", Map.of("phone", phone, "password", password), Account.class);
+    public TgProviderAccount password(String phone, String password) {
+        return post("/api/login/password", Map.of("phone", phone, "password", password), TgProviderAccount.class);
     }
 
     public List<Message> searchMessages(String keyword, int limit) {
-        SearchResponse response = search(keyword, limit);
+        TgProviderSearchResponse response = search(keyword, limit);
         if (response == null || response.items() == null) {
             return List.of();
         }
 
         List<Message> messages = new ArrayList<>();
-        for (SearchItem item : response.items()) {
+        for (TgProviderSearchItem item : response.items()) {
             String channel = StringUtils.defaultIfBlank(item.channelUsername(), item.channelTitle());
             if (item.links() == null) {
                 continue;
             }
-            for (ProviderLink link : item.links()) {
+            for (TgProviderLink link : item.links()) {
                 if (link == null || StringUtils.isBlank(link.url())) {
                     continue;
                 }
@@ -109,7 +113,7 @@ public class TgProviderClient {
         return messages;
     }
 
-    public SearchResponse search(String keyword, int limit) {
+    public TgProviderSearchResponse search(String keyword, int limit) {
         URI url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/api/search")
                 .queryParam("q", keyword)
                 .queryParam("limit", limit)
@@ -117,7 +121,7 @@ public class TgProviderClient {
                 .encode()
                 .toUri();
         try {
-            return restTemplate.getForObject(url, SearchResponse.class);
+            return restTemplate.getForObject(url, TgProviderSearchResponse.class);
         } catch (RestClientException e) {
             throw new TgProviderException("tg-provider request failed: /api/search", e);
         }
@@ -151,39 +155,5 @@ public class TgProviderClient {
         public TgProviderException(String message, Throwable cause) {
             super(message, cause);
         }
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Status(String status) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Account(long id,
-                          String username,
-                          @JsonProperty("first_name") String firstName,
-                          @JsonProperty("last_name") String lastName,
-                          String phone) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record LoginResponse(String status, @JsonProperty("password_required") boolean passwordRequired) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record SearchResponse(List<SearchItem> items) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record SearchItem(int id,
-                             @JsonProperty("telegram_message_id") Long telegramMessageId,
-                             String text,
-                             String date,
-                             @JsonProperty("channel_title") String channelTitle,
-                             @JsonProperty("channel_username") String channelUsername,
-                             List<ProviderLink> links) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ProviderLink(String type, String url, String password) {
     }
 }

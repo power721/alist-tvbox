@@ -2,6 +2,8 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.config.RestErrorHandler;
 import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TelegramService;
@@ -67,7 +69,7 @@ class TelegramControllerTest {
     @Test
     void shouldReturnFirstProviderAccountAsTelegramUser() throws Exception {
         when(tgProviderClient.accounts()).thenReturn(List.of(
-                new TgProviderClient.Account(9, "tester", "Test", "User", "+86138")));
+                new TgProviderAccount(9, "tester", "Test", "User", "+86138")));
 
         mockMvc.perform(get("/api/telegram/user"))
                 .andExpect(status().isOk())
@@ -80,8 +82,8 @@ class TelegramControllerTest {
 
     @Test
     void shouldProxyLoginRequestsToProvider() throws Exception {
-        when(tgProviderClient.sendCode("+86138")).thenReturn(new TgProviderClient.LoginResponse("LOGIN_REQUIRED", false));
-        when(tgProviderClient.signIn("+86138", "1234")).thenReturn(new TgProviderClient.LoginResponse("LOGIN_REQUIRED", true));
+        when(tgProviderClient.sendCode("+86138")).thenReturn(new TgProviderLoginResponse("LOGIN_REQUIRED", false));
+        when(tgProviderClient.signIn("+86138", "1234")).thenReturn(new TgProviderLoginResponse("LOGIN_REQUIRED", true));
 
         mockMvc.perform(post("/api/telegram/login/send-code")
                         .contentType(APPLICATION_JSON)
@@ -99,7 +101,7 @@ class TelegramControllerTest {
     @Test
     void shouldDeleteFirstAccountOnLogout() throws Exception {
         when(tgProviderClient.accounts()).thenReturn(List.of(
-                new TgProviderClient.Account(9, "tester", "Test", "User", "+86138")));
+                new TgProviderAccount(9, "tester", "Test", "User", "+86138")));
 
         mockMvc.perform(post("/api/telegram/logout"))
                 .andExpect(status().isOk());

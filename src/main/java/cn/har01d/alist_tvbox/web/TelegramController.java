@@ -2,6 +2,10 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
+import cn.har01d.alist_tvbox.dto.tg.TelegramLoginRequest;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderStatus;
 import cn.har01d.alist_tvbox.entity.TelegramChannel;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
@@ -61,7 +65,7 @@ public class TelegramController {
     }
 
     @GetMapping("/api/telegram/provider/status")
-    public TgProviderClient.Status providerStatus() {
+    public TgProviderStatus providerStatus() {
         return tgProviderClient.status();
     }
 
@@ -79,17 +83,17 @@ public class TelegramController {
     }
 
     @PostMapping("/api/telegram/login/send-code")
-    public TgProviderClient.LoginResponse sendCode(@RequestBody TelegramLoginRequest request) {
+    public TgProviderLoginResponse sendCode(@RequestBody TelegramLoginRequest request) {
         return tgProviderClient.sendCode(request.phone());
     }
 
     @PostMapping("/api/telegram/login/sign-in")
-    public TgProviderClient.LoginResponse signIn(@RequestBody TelegramLoginRequest request) {
+    public TgProviderLoginResponse signIn(@RequestBody TelegramLoginRequest request) {
         return tgProviderClient.signIn(request.phone(), request.code());
     }
 
     @PostMapping("/api/telegram/login/password")
-    public TgProviderClient.Account password(@RequestBody TelegramLoginRequest request) {
+    public TgProviderAccount password(@RequestBody TelegramLoginRequest request) {
         return tgProviderClient.password(request.phone(), request.password());
     }
 
@@ -104,7 +108,7 @@ public class TelegramController {
         }
     }
 
-    private Map<String, Object> toTelegramUser(TgProviderClient.Account account) {
+    private Map<String, Object> toTelegramUser(TgProviderAccount account) {
         return Map.of(
                 "id", account.id(),
                 "username", StringUtils.defaultString(account.username()),
@@ -115,9 +119,6 @@ public class TelegramController {
 
     private Map<String, Object> emptyTelegramUser() {
         return Map.of("id", 0, "username", "", "first_name", "", "last_name", "", "phone", "");
-    }
-
-    public record TelegramLoginRequest(String phone, String code, String password) {
     }
 
     @GetMapping("/tg-search")
