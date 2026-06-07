@@ -7,6 +7,7 @@
       <el-button @click="showPluginFilters">过滤器管理</el-button>
       <el-button @click="showScan">同步影视</el-button>
       <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
+      <el-button @click="handleLogin">登录 Telegram</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
     </el-row>
     <div class="space"></div>
@@ -159,45 +160,31 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="tgVisible" title="登陆Telegram" width="60%" @close="cancelLogin">
+    <el-dialog v-model="tgVisible" title="登录 Telegram" width="520px" @close="cancelLogin">
       <el-form>
-        <el-form-item label="登陆方式" label-width="140">
-          <el-radio-group v-model="tgAuthType" class="ml-4" @change="setAuthType">
-            <el-radio label="qr" size="large">二维码</el-radio>
-            <el-radio label="code" size="large">验证码</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <div v-if="tgAuthType=='qr'&&tgPhase==1&&base64QrCode!=''">
-          <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
-          <p>二维码30秒内有效。</p>
-          <el-form-item>
-            <el-button type="primary" @click="setScanned">我已经扫码</el-button>
-          </el-form-item>
-        </div>
-        <el-form-item label="电话号码" label-width="140" required v-if="tgAuthType=='code'&&tgPhase==1">
+        <el-form-item label="电话号码" label-width="120" required v-if="!user.id && tgPhase === 1">
           <el-input v-model="tgPhone" autocomplete="off" placeholder="+8612345678901"/>
-          <el-button @click="sendTgPhone">输入</el-button>
+          <el-button @click="sendTgPhone">发送验证码</el-button>
         </el-form-item>
-        <el-form-item label="验证码" label-width="140" required v-if="tgAuthType=='code'&&tgPhase==3">
+        <el-form-item label="验证码" label-width="120" required v-if="!user.id && tgPhase === 3">
           <el-input v-model="tgCode" autocomplete="off"/>
-          <el-button @click="sendTgCode">输入</el-button>
+          <el-button @click="sendTgCode">登录</el-button>
         </el-form-item>
-        <el-form-item label="密码" label-width="140" required v-if="tgPhase==5">
-          <el-input v-model="tgPassword" autocomplete="off"/>
-          <el-button @click="sendTgPassword">输入</el-button>
+        <el-form-item label="密码" label-width="120" required v-if="!user.id && tgPhase === 5">
+          <el-input v-model="tgPassword" type="password" show-password autocomplete="off"/>
+          <el-button @click="sendTgPassword">确认</el-button>
         </el-form-item>
         <div v-if="user.id">
-          <div>登陆成功</div>
+          <div>登录成功</div>
           <div>用户ID： {{ user.id }}</div>
           <div>用户名： {{ user.username }}</div>
           <div>姓名： {{ user.first_name }} {{ user.last_name }}</div>
+          <div>电话： {{ user.phone }}</div>
         </div>
       </el-form>
       <template #footer>
       <span class="dialog-footer">
-        <el-button type="primary" @click="login">登陆</el-button>
-        <el-button type="danger" @click="logout">退出登陆</el-button>
-        <!--        <el-button @click="reset">重置</el-button>-->
+        <el-button type="danger" @click="logout" v-if="user.id">退出登录</el-button>
         <el-button @click="cancelLogin">取消</el-button>
       </span>
       </template>
@@ -735,7 +722,6 @@ const tgPhase = ref(0)
 const tgPhone = ref('')
 const tgCode = ref('')
 const tgPassword = ref('')
-const tgAuthType = ref('qr')
 const base64QrCode = ref('')
 const token = ref('')
 const pgLocal = ref('')
@@ -855,69 +841,41 @@ const pluginFilterConfigJson = ref('{}')
 const pluginFilterConfigObject = ref<Record<string, any>>({})
 const pluginFilterConfigExtras = ref<PluginFilterExtraEntry[]>([])
 const pluginFilterConfigError = ref('')
-let timer = 0
 let pluginSortable: Sortable | null = null
 let pluginFilterSortable: Sortable | null = null
 
+const emptyTelegramUser = () => ({
+  id: 0,
+  username: '',
+  first_name: '',
+  last_name: '',
+  phone: ''
+})
+
+const loadTelegramUser = () => {
+  return axios.get('/api/telegram/user').then(({data}) => {
+    user.value = data || emptyTelegramUser()
+    tgPhase.value = user.value.id ? 0 : 1
+  })
+}
+
 const handleLogin = () => {
-  axios.get('/api/telegram/user').then(({data}) => {
-    user.value = data
-  })
-  axios.get('/api/settings/tg_auth_type').then(({data}) => {
-    tgAuthType.value = data.value || 'qr'
-  })
+  tgPhone.value = ''
+  tgCode.value = ''
+  tgPassword.value = ''
+  loadTelegramUser()
   tgVisible.value = true
 }
 
-const login = () => {
-  axios.post('/api/telegram/login')
-  timer = setInterval(() => {
-    axios.get('/api/settings/tg_phase').then(({data}) => {
-      tgPhase.value = +data.value
-      if (tgPhase.value > 8) {
-        clearInterval(timer)
-        axios.get('/api/telegram/user').then(({data}) => {
-          user.value = data
-        })
-      } else if (tgAuthType.value == 'qr' && tgPhase.value == 1 && !base64QrCode.value) {
-        loadQrCode()
-      }
-    })
-  }, 1000)
-  setTimeout(() => {
-    clearInterval(timer)
-  }, 120_000)
-}
-
-const loadQrCode = () => {
-  axios.get('/api/settings/tg_qr_img').then(({data}) => {
-    base64QrCode.value = data.value
-  })
-}
-
 const cancelLogin = () => {
-  clearInterval(timer)
   tgVisible.value = false
-}
-
-const reset = () => {
-  axios.post('/api/telegram/reset').then(() => {
-    ElMessage.success('重置成功')
-    clearInterval(timer)
-  })
 }
 
 const logout = () => {
   axios.post('/api/telegram/logout').then(() => {
-    ElMessage.success('退出登陆成功')
-    clearInterval(timer)
-    user.value = {
-      id: 0,
-      username: '',
-      first_name: '',
-      last_name: '',
-      phone: ''
-    }
+    ElMessage.success('退出登录成功')
+    user.value = emptyTelegramUser()
+    tgPhase.value = 1
   })
 }
 
@@ -1718,27 +1676,42 @@ const deleteDevice = () => {
   })
 }
 
-const setAuthType = () => {
-  base64QrCode.value = ''
-  axios.post('/api/settings', {name: 'tg_auth_type', value: tgAuthType.value})
-}
-
-const setScanned = () => {
-  axios.post('/api/settings', {name: 'tg_scanned', value: 'true'}).then(() => {
-    base64QrCode.value = ''
+const sendTgPhone = () => {
+  if (!tgPhone.value) {
+    return
+  }
+  axios.post('/api/telegram/login/send-code', {phone: tgPhone.value}).then(() => {
+    tgPhase.value = 3
+    ElMessage.success('验证码已发送')
+  }, () => {
+    ElMessage.error('发送验证码失败')
   })
 }
 
-const sendTgPhone = () => {
-  axios.post('/api/settings', {name: 'tg_phone', value: tgPhone.value})
-}
-
 const sendTgCode = () => {
-  axios.post('/api/settings', {name: 'tg_code', value: tgCode.value})
+  if (!tgCode.value) {
+    return
+  }
+  axios.post('/api/telegram/login/sign-in', {phone: tgPhone.value, code: tgCode.value}).then(({data}) => {
+    if (data && data.password_required) {
+      tgPhase.value = 5
+      return
+    }
+    loadTelegramUser()
+  }, () => {
+    ElMessage.error('登录失败')
+  })
 }
 
 const sendTgPassword = () => {
-  axios.post('/api/settings', {name: 'tg_password', value: tgPassword.value})
+  if (!tgPassword.value) {
+    return
+  }
+  axios.post('/api/telegram/login/password', {phone: tgPhone.value, password: tgPassword.value}).then(() => {
+    loadTelegramUser()
+  }, () => {
+    ElMessage.error('密码验证失败')
+  })
 }
 
 const handleConfirm = () => {
@@ -1788,15 +1761,11 @@ onMounted(() => {
     token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
     load()
     loadVersion()
-    axios.get('/api/settings/tg_phase').then(({data}) => {
-      tgPhase.value = data.value
-    })
   })
   loadDevices()
 })
 
 onUnmounted(() => {
-  clearInterval(timer)
   pluginSortable?.destroy()
   pluginFilterSortable?.destroy()
 })
