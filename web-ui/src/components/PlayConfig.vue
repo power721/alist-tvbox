@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // @ts-nocheck
 import {VueDraggable} from "vue-draggable-plus";
-import {onMounted, onUnmounted, ref} from "vue";
+import {computed, onMounted, onUnmounted, ref} from "vue";
 import axios from "axios";
 import {ElMessage} from "element-plus";
 import Sortable from "sortablejs";
@@ -63,6 +63,9 @@ const tgSortField = ref('time')
 const tgTimeout = ref(3000)
 const channels = ref<Channel[]>([])
 const privateChannels = ref<PrivateChannel[]>([])
+const privateChannelKeyword = ref('')
+const privateChannelVisibility = ref('all')
+const privateChannelType = ref('all')
 const privateChannelsChanged = ref(false)
 const privateChannelsLoading = ref(false)
 const activeRows = ref<Channel[]>([])
@@ -140,6 +143,12 @@ const panSouChannelLists = [
   {label: '盘搜内置', value: 'pansou'},
 ]
 
+const privateChannelVisibilityOptions = [
+  {label: '全部状态', value: 'all'},
+  {label: '公开', value: 'public'},
+  {label: '私密', value: 'private'},
+]
+
 const activeName = ref('basic')
 
 const getTypeName = (id: number) => {
@@ -149,6 +158,53 @@ const getTypeName = (id: number) => {
 const getPrivateChannelVisibilityName = (row: PrivateChannel) => {
   return row.username ? '公开' : '私密'
 }
+
+const formatTime = (t: string) => {
+  if (!t) {
+    return ""
+  }
+  const date = new Date(t);
+  return date.getFullYear() + '-' +
+    String(date.getMonth() + 1).padStart(2, '0') + '-' +
+    String(date.getDate()).padStart(2, '0') + ' ' +
+    String(date.getHours()).padStart(2, '0') + ':' +
+    String(date.getMinutes()).padStart(2, '0') + ':' +
+    String(date.getSeconds()).padStart(2, '0');
+}
+
+const getPrivateChannelVisibilityValue = (row: PrivateChannel) => {
+  return row.username ? 'public' : 'private'
+}
+
+const privateChannelTypeOptions = computed(() => {
+  const types = [...new Set(privateChannels.value.map(row => row.type).filter(type => type))]
+    .sort()
+  return [
+    {label: '全部类型', value: 'all'},
+    ...types.map(type => ({label: type, value: type})),
+  ]
+})
+
+const filteredPrivateChannels = computed(() => {
+  const keyword = privateChannelKeyword.value.trim().toLowerCase()
+  return privateChannels.value.filter(row => {
+    if (keyword) {
+      const text = [row.title, row.username]
+        .map(value => `${value || ''}`.toLowerCase())
+        .join(' ')
+      if (!text.includes(keyword)) {
+        return false
+      }
+    }
+    if (privateChannelVisibility.value !== 'all' && getPrivateChannelVisibilityValue(row) !== privateChannelVisibility.value) {
+      return false
+    }
+    if (privateChannelType.value !== 'all' && row.type !== privateChannelType.value) {
+      return false
+    }
+    return true
+  })
+})
 
 const normalizeDriverOrder = (value: string) => {
   const ids = value.split(',').map(e => e.trim()).filter(e => e)
@@ -458,10 +514,12 @@ const syncPrivateChannels = () => {
 }
 
 const syncPrivateChannel = (row: PrivateChannel) => {
-  axios.post('/api/telegram/private/channels/sync', {channel_ids: [row.id]}).then(({data}) => {
-    const queued = data?.queued || 0
-    const skipped = data?.skipped || 0
-    ElMessage.success(`已同步 ${queued} 个频道，跳过 ${skipped} 个`)
+  axios.post(`/api/telegram/private/channels/${row.id}/sync`).then(({data}) => {
+    if (data?.status) {
+      ElMessage.success(`已提交频道同步任务：${data.status}`)
+      return
+    }
+    ElMessage.success(`已同步 ${data?.messages || 0} 条消息，发现 ${data?.links || 0} 个链接`)
   })
 }
 
@@ -735,14 +793,28 @@ onUnmounted(() => {
       </el-table>
     </el-tab-pane>
     <el-tab-pane label="我的频道" name="private-channels">
-      <el-row justify="end">
+      <el-row class="private-channel-toolbar" justify="end">
+        <el-input class="private-channel-filter-keyword" v-model="privateChannelKeyword" clearable
+                  placeholder="搜索频道"/>
+        <el-select class="private-channel-filter-select" v-model="privateChannelVisibility" placeholder="公开状态">
+          <el-option v-for="item in privateChannelVisibilityOptions"
+                     :key="item.value"
+                     :label="item.label"
+                     :value="item.value"/>
+        </el-select>
+        <el-select class="private-channel-filter-select" v-model="privateChannelType" placeholder="类型">
+          <el-option v-for="item in privateChannelTypeOptions"
+                     :key="item.value"
+                     :label="item.label"
+                     :value="item.value"/>
+        </el-select>
         <el-button @click="syncPrivateChannelList" :loading="privateChannelsLoading">同步频道列表</el-button>
         <el-button @click="loadPrivateChannels">刷新</el-button>
         <el-button @click="syncPrivateChannels" :disabled="!privateChannelIds().length">同步选中频道</el-button>
         <el-button type="primary" :disabled="!privateChannelsChanged" @click="savePrivateChannels">保存</el-button>
       </el-row>
       <div class="space"></div>
-      <el-table :data="privateChannels"
+      <el-table :data="filteredPrivateChannels"
                 v-loading="privateChannelsLoading"
                 :row-class-name="tableRowClassName"
                 row-key="id"
@@ -764,7 +836,11 @@ onUnmounted(() => {
         </el-table-column>
         <el-table-column prop="type" label="类型" width="120" sortable/>
         <el-table-column prop="last_message_id" label="最新消息" width="120" sortable/>
-        <el-table-column prop="last_sync_time" label="同步时间" width="210" sortable/>
+        <el-table-column prop="last_sync_time" label="同步时间" width="210" sortable>
+          <template #default="scope">
+            {{ formatTime(scope.row.last_sync_time) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="enabled" label="参与搜索" width="120" sortable>
           <template #default="scope">
             <el-switch v-model="scope.row.enabled" @change="markPrivateChannelChanged(scope.row)"/>
@@ -811,12 +887,12 @@ onUnmounted(() => {
       <el-form-item label="用户名" required>
         <el-input style="width: 200px" v-model="form.username" autocomplete="off"/>
       </el-form-item>
-<!--      <el-form-item label="ID">-->
-<!--        <el-input v-model="form.id" autocomplete="off"/>-->
-<!--      </el-form-item>-->
-<!--      <el-form-item label="Access Hash">-->
-<!--        <el-input v-model="form.accessHash" autocomplete="off"/>-->
-<!--      </el-form-item>-->
+      <!--      <el-form-item label="ID">-->
+      <!--        <el-input v-model="form.id" autocomplete="off"/>-->
+      <!--      </el-form-item>-->
+      <!--      <el-form-item label="Access Hash">-->
+      <!--        <el-input v-model="form.accessHash" autocomplete="off"/>-->
+      <!--      </el-form-item>-->
       <el-form-item label="开启搜索？">
         <el-switch v-model="form.enabled"/>
       </el-form-item>
@@ -870,5 +946,32 @@ onUnmounted(() => {
 
 .order-text {
   cursor: default;
+}
+
+.private-channel-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.private-channel-filter-keyword {
+  width: 260px;
+  max-width: 100%;
+}
+
+.private-channel-filter-select {
+  width: 140px;
+}
+
+.private-channel-toolbar .el-button + .el-button {
+  margin-left: 0;
+}
+
+@media (max-width: 640px) {
+  .private-channel-filter-keyword,
+  .private-channel-filter-select {
+    width: 100%;
+  }
 }
 </style>

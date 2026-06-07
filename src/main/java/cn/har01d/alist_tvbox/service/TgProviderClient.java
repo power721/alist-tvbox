@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLink;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchItem;
@@ -108,6 +109,10 @@ public class TgProviderClient {
             return TgProviderSyncResponse.empty();
         }
         return post("/api/channels/sync", Map.of("channel_ids", channelIds), TgProviderSyncResponse.class);
+    }
+
+    public TgProviderChannelSyncResponse syncChannel(long channelId) {
+        return post("/api/channels/" + channelId + "/sync", Map.of(), TgProviderChannelSyncResponse.class);
     }
 
     public TgProviderAccountChannelSyncResponse syncAccountChannels(long accountId) {

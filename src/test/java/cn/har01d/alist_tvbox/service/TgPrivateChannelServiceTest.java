@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannelSelectionRequest;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderChannelSyncResponse;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -97,6 +98,17 @@ class TgPrivateChannelServiceTest {
 
         assertThat(responses).containsExactly(response);
         verify(tgProviderClient).syncAccountChannels(1);
+    }
+
+    @Test
+    void shouldSyncSingleChannelById() {
+        TgProviderChannelSyncResponse response = new TgProviderChannelSyncResponse(null, null, 3, 2);
+        when(tgProviderClient.syncChannel(7L)).thenReturn(response);
+
+        TgProviderChannelSyncResponse result = service.syncChannel(7L);
+
+        assertThat(result).isEqualTo(response);
+        verify(tgProviderClient).syncChannel(7L);
     }
 
     private TgProviderChannel channel(long id, String title) {

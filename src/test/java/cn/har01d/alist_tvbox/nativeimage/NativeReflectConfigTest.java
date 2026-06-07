@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannelSelectionRequest;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLink;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchItem;
@@ -38,6 +39,7 @@ class NativeReflectConfigTest {
             TgPrivateChannel.class.getName(),
             TgPrivateChannelSelectionRequest.class.getName(),
             TgProviderAccountChannelSyncResponse.class.getName(),
+            TgProviderChannelSyncResponse.class.getName(),
             TgProviderSyncResponse.class.getName(),
             TgProviderSyncResult.class.getName(),
             TelegramLoginRequest.class.getName());

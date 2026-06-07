@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannelSelectionRequest;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
@@ -167,6 +168,16 @@ class TelegramControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].job_id").value("3"))
                 .andExpect(jsonPath("$[0].status").value("queued"));
+    }
+
+    @Test
+    void shouldSyncSinglePrivateChannel() throws Exception {
+        when(tgPrivateChannelService.syncChannel(7L)).thenReturn(new TgProviderChannelSyncResponse(null, null, 3, 2));
+
+        mockMvc.perform(post("/api/telegram/private/channels/7/sync"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages").value(3))
+                .andExpect(jsonPath("$.links").value(2));
     }
 
     @Test

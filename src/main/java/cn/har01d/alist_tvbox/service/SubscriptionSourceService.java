@@ -275,6 +275,7 @@ public class SubscriptionSourceService {
         if (appProperties.isTgLogin() || StringUtils.isNotBlank(appProperties.getTgSearch())) {
             definitions.add(new BuiltinDefinition("csp_TgSearch", "电报搜索", order++));
         }
+        definitions.add(new BuiltinDefinition("csp_TgChannel", "电报频道", order++)); // TODO: check login
         definitions.add(new BuiltinDefinition("csp_TgWeb", "电报网页", order++));
         if (StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
             definitions.add(new BuiltinDefinition("csp_FishPanSou", "鱼佬盘搜", order));

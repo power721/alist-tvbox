@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -221,6 +222,21 @@ class TgProviderClientTest {
 
         assertThat(response.queued()).isEqualTo(2);
         assertThat(response.results().get(7L).links()).isEqualTo(2);
+        server.verify();
+    }
+
+    @Test
+    void shouldSyncSingleChannelWithProviderPath() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/channels/7/sync"))
+                .andExpect(method(POST))
+                .andRespond(withSuccess("""
+                        {"messages":3,"links":2}
+                        """, MediaType.APPLICATION_JSON));
+
+        TgProviderChannelSyncResponse response = client.syncChannel(7L);
+
+        assertThat(response.messages()).isEqualTo(3);
+        assertThat(response.links()).isEqualTo(2);
         server.verify();
     }
 }
