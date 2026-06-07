@@ -887,8 +887,34 @@ public class ShareService {
         return url;
     }
 
+    private static final Pattern URL_PWD = Pattern.compile("[?&]pwd=([a-zA-Z0-9]{4})(?:[^a-zA-Z0-9]|$)");
+    private static final Pattern URL_PASSWORD = Pattern.compile("[?&]password=([a-zA-Z0-9]{4})(?:[^a-zA-Z0-9]|$)");
+    private static final Pattern TIANYI_ACCESS_CODE = Pattern.compile("(?:（访问码：|%EF%BC%88%E8%AE%BF%E9%97%AE%E7%A0%81%EF%BC%9A)([a-zA-Z0-9]+)(?:）|%EF%BC%89)");
+    private static final Pattern PAN123_EXTRACT_CODE = Pattern.compile("(?:提取码|%E6%8F%90%E5%8F%96%E7%A0%81)[:：]([a-zA-Z0-9]+)");
+
     private String parsePassword(String url) {
-        var m = PASSWORD.matcher(url);
+        // 天翼云盘 URL 编码的访问码
+        var m = TIANYI_ACCESS_CODE.matcher(url);
+        if (m.find()) {
+            return m.group(1);
+        }
+        // URL 中的 pwd 参数
+        m = URL_PWD.matcher(url);
+        if (m.find()) {
+            return m.group(1);
+        }
+        // 115网盘 URL 中的 password 参数
+        m = URL_PASSWORD.matcher(url);
+        if (m.find()) {
+            return m.group(1);
+        }
+        // 123网盘 URL 编码的提取码
+        m = PAN123_EXTRACT_CODE.matcher(url);
+        if (m.find()) {
+            return m.group(1);
+        }
+        // 通用密码提取
+        m = PASSWORD.matcher(url);
         if (m.find()) {
             return m.group(1);
         }

@@ -160,11 +160,46 @@ public class Message {
         return links;
     }
 
+    private static final String TRAILING_GARBAGE = "，。；：；,.;:?！？、）》」』】)]}·…—–_​‌‍﻿";
+
     private static String fixLink(String link) {
         if (link.endsWith("**")) {
             return link.substring(0, link.length() - 2);
         }
+        // Strip trailing punctuation, emoji and other garbage characters
+        int end = link.length();
+        while (end > 0) {
+            char ch = link.charAt(end - 1);
+            if (isTrailingGarbage(ch)) {
+                end--;
+            } else {
+                break;
+            }
+        }
+        if (end < link.length()) {
+            return link.substring(0, end);
+        }
         return link;
+    }
+
+    private static boolean isTrailingGarbage(char ch) {
+        // Common punctuation and invisible characters
+        if (TRAILING_GARBAGE.indexOf(ch) >= 0) {
+            return true;
+        }
+        // CJK punctuation range
+        if (ch >= '　' && ch <= '〿') {
+            return true;
+        }
+        // Emoji ranges
+        if (ch >= 0x1F300 && ch <= 0x1FAFF) {
+            return true;
+        }
+        // Emoji modifier and variation selector
+        if (ch == 0xFE0F || ch == 0xFE0E || ch >= 0x1F3FB && ch <= 0x1F3FF) {
+            return true;
+        }
+        return false;
     }
 
     private static String parseType(String link) {
