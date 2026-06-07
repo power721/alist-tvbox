@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.config;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
+import cn.har01d.alist_tvbox.service.TgProviderClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
@@ -46,6 +47,14 @@ public class RestErrorHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<Object> handleNotFoundException(Exception ex, WebRequest request) {
         HttpHeaders headers = new HttpHeaders();
         HttpStatusCode status = HttpStatusCode.valueOf(404);
+        ProblemDetail body = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
+        return handleExceptionInternal(ex, body, headers, status, request);
+    }
+
+    @ExceptionHandler({TgProviderClient.TgProviderException.class})
+    public ResponseEntity<Object> handleTgProviderException(TgProviderClient.TgProviderException ex, WebRequest request) {
+        HttpHeaders headers = new HttpHeaders();
+        HttpStatusCode status = ex.getStatusCode() == null ? HttpStatusCode.valueOf(502) : ex.getStatusCode();
         ProblemDetail body = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
         return handleExceptionInternal(ex, body, headers, status, request);
     }

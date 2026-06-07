@@ -9,6 +9,8 @@ import cn.har01d.alist_tvbox.dto.tg.TgProviderChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderWebAccessCheckItem;
+import cn.har01d.alist_tvbox.dto.tg.TgWatchRule;
+import cn.har01d.alist_tvbox.dto.tg.TgWatchRuleRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,10 +25,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.HttpMethod.DELETE;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
+import static org.springframework.http.HttpMethod.PUT;
+import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class TgProviderClientTest {
@@ -320,5 +325,102 @@ class TgProviderClientTest {
         assertThat(items.getFirst().webAccess()).isTrue();
         regularServer.verify();
         webAccessServer.verify();
+    }
+
+    @Test
+    void shouldListWatchRulesFromProviderEnvelope() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/watch-rules"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("""
+                        {"items":[{"id":1,"channel_id":7,"enabled":true,"includes":["庆余年"],"excludes":["预告"],"created_at":"2026-06-07T12:00:00Z","updated_at":"2026-06-07T12:00:00Z"}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        List<TgWatchRule> rules = client.watchRules();
+
+        assertThat(rules).hasSize(1);
+        assertThat(rules.getFirst().id()).isEqualTo(1);
+        assertThat(rules.getFirst().channelId()).isEqualTo(7);
+        assertThat(rules.getFirst().includes()).containsExactly("庆余年");
+        assertThat(rules.getFirst().excludes()).containsExactly("预告");
+        server.verify();
+    }
+
+    @Test
+    void shouldLoadSingleWatchRuleById() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/watch-rules/1"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("""
+                        {"id":1,"channel_id":7,"enabled":true,"includes":["庆余年"],"excludes":["预告"],"created_at":"2026-06-07T12:00:00Z","updated_at":"2026-06-07T12:00:00Z"}
+                        """, MediaType.APPLICATION_JSON));
+
+        TgWatchRule rule = client.watchRule(1L);
+
+        assertThat(rule.id()).isEqualTo(1);
+        assertThat(rule.channelId()).isEqualTo(7);
+        server.verify();
+    }
+
+    @Test
+    void shouldCreateWatchRuleWithProviderRequestBody() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/watch-rules"))
+                .andExpect(method(POST))
+                .andExpect(content().json("""
+                        {"channel_id":7,"enabled":true,"includes":["庆余年"],"excludes":["预告"]}
+                        """))
+                .andRespond(withSuccess("""
+                        {"id":1,"channel_id":7,"enabled":true,"includes":["庆余年"],"excludes":["预告"],"created_at":"2026-06-07T12:00:00Z","updated_at":"2026-06-07T12:00:00Z"}
+                        """, MediaType.APPLICATION_JSON));
+
+        TgWatchRule rule = client.createWatchRule(new TgWatchRuleRequest(7L, true, List.of("庆余年"), List.of("预告")));
+
+        assertThat(rule.id()).isEqualTo(1);
+        assertThat(rule.channelId()).isEqualTo(7);
+        assertThat(rule.enabled()).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void shouldUpdateWatchRuleWithProviderRequestBody() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/watch-rules/1"))
+                .andExpect(method(PUT))
+                .andExpect(content().json("""
+                        {"channel_id":7,"enabled":false,"includes":["庆余年"],"excludes":[]}
+                        """))
+                .andRespond(withSuccess("""
+                        {"id":1,"channel_id":7,"enabled":false,"includes":["庆余年"],"excludes":[],"created_at":"2026-06-07T12:00:00Z","updated_at":"2026-06-07T13:00:00Z"}
+                        """, MediaType.APPLICATION_JSON));
+
+        TgWatchRule rule = client.updateWatchRule(1L, new TgWatchRuleRequest(7L, false, List.of("庆余年"), List.of()));
+
+        assertThat(rule.id()).isEqualTo(1);
+        assertThat(rule.enabled()).isFalse();
+        assertThat(rule.updatedAt()).isEqualTo("2026-06-07T13:00:00Z");
+        server.verify();
+    }
+
+    @Test
+    void shouldDeleteWatchRuleById() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/watch-rules/1"))
+                .andExpect(method(DELETE))
+                .andRespond(withSuccess());
+
+        client.deleteWatchRule(1L);
+
+        server.verify();
+    }
+
+    @Test
+    void shouldPreserveProviderHttpStatusOnWatchRuleConflict() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/watch-rules"))
+                .andExpect(method(POST))
+                .andRespond(withStatus(CONFLICT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"detail\":\"watch rule already exists\"}"));
+
+        assertThatThrownBy(() -> client.createWatchRule(new TgWatchRuleRequest(7L, true, List.of(), List.of())))
+                .isInstanceOf(TgProviderClient.TgProviderException.class)
+                .extracting("statusCode")
+                .isEqualTo(CONFLICT);
+        server.verify();
     }
 }

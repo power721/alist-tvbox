@@ -15,6 +15,9 @@ import cn.har01d.alist_tvbox.dto.tg.TgProviderStatus;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResult;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderWebAccessCheckItem;
+import cn.har01d.alist_tvbox.dto.tg.TgWatchRule;
+import cn.har01d.alist_tvbox.dto.tg.TgWatchRuleRequest;
+import cn.har01d.alist_tvbox.dto.tg.TgWatchRulesResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -44,6 +47,9 @@ class NativeReflectConfigTest {
             TgProviderSyncResponse.class.getName(),
             TgProviderSyncResult.class.getName(),
             TgProviderWebAccessCheckItem.class.getName(),
+            TgWatchRule.class.getName(),
+            TgWatchRuleRequest.class.getName(),
+            TgWatchRulesResponse.class.getName(),
             TelegramLoginRequest.class.getName());
 
     private final ObjectMapper objectMapper = new ObjectMapper();

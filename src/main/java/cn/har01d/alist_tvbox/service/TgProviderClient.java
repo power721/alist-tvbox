@@ -13,6 +13,8 @@ import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderStatus;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderWebAccessCheckItem;
+import cn.har01d.alist_tvbox.dto.tg.TgWatchRule;
+import cn.har01d.alist_tvbox.dto.tg.TgWatchRuleRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,7 +26,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -120,6 +124,32 @@ public class TgProviderClient {
         return get("/api/channels/" + id, TgProviderChannel.class);
     }
 
+    public List<TgWatchRule> watchRules() {
+        JsonNode response = get("/api/watch-rules", JsonNode.class);
+        return parseItems(response, new TypeReference<>() {
+        }, "watch rules");
+    }
+
+    public TgWatchRule watchRule(long id) {
+        return get("/api/watch-rules/" + id, TgWatchRule.class);
+    }
+
+    public TgWatchRule createWatchRule(TgWatchRuleRequest request) {
+        return post("/api/watch-rules", request, TgWatchRule.class);
+    }
+
+    public TgWatchRule updateWatchRule(long id, TgWatchRuleRequest request) {
+        return post(HttpMethod.PUT, "/api/watch-rules/" + id, request, TgWatchRule.class);
+    }
+
+    public void deleteWatchRule(long id) {
+        try {
+            restTemplate.exchange(baseUrl + "/api/watch-rules/{id}", HttpMethod.DELETE, HttpEntity.EMPTY, Void.class, id);
+        } catch (RestClientException e) {
+            throw providerException("/api/watch-rules/" + id, e);
+        }
+    }
+
     public List<TgProviderWebAccessCheckItem> checkChannelWebAccess(Collection<Long> channelIds) {
         if (channelIds == null || channelIds.isEmpty()) {
             return List.of();
@@ -133,7 +163,7 @@ public class TgProviderClient {
         try {
             restTemplate.exchange(baseUrl + "/api/accounts/{id}", HttpMethod.DELETE, HttpEntity.EMPTY, Void.class, id);
         } catch (RestClientException e) {
-            throw new TgProviderException("tg-provider request failed: /api/accounts/" + id, e);
+            throw providerException("/api/accounts/" + id, e);
         }
     }
 
@@ -223,7 +253,7 @@ public class TgProviderClient {
         try {
             return restTemplate.getForObject(url, TgProviderSearchResponse.class);
         } catch (RestClientException e) {
-            throw new TgProviderException("tg-provider request failed: /api/search", e);
+            throw providerException("/api/search", e);
         }
     }
 
@@ -237,7 +267,7 @@ public class TgProviderClient {
         try {
             return restTemplate.getForObject(url, TgProviderSearchResponse.class);
         } catch (RestClientException e) {
-            throw new TgProviderException("tg-provider request failed: /api/messages/latest", e);
+            throw providerException("/api/messages/latest", e);
         }
     }
 
@@ -245,7 +275,7 @@ public class TgProviderClient {
         try {
             return restTemplate.getForObject(baseUrl + path, type);
         } catch (RestClientException e) {
-            throw new TgProviderException("tg-provider request failed: " + path, e);
+            throw providerException(path, e);
         }
     }
 
@@ -253,7 +283,7 @@ public class TgProviderClient {
         try {
             return restTemplate.getForObject(uri, type);
         } catch (RestClientException e) {
-            throw new TgProviderException("tg-provider request failed: " + path, e);
+            throw providerException(path, e);
         }
     }
 
@@ -261,11 +291,19 @@ public class TgProviderClient {
         return post(restTemplate, path, body, type);
     }
 
+    private <T> T post(HttpMethod method, String path, Object body, Class<T> type) {
+        try {
+            return restTemplate.exchange(baseUrl + path, method, new HttpEntity<>(body), type).getBody();
+        } catch (RestClientException e) {
+            throw providerException(path, e);
+        }
+    }
+
     private <T> T post(RestTemplate client, String path, Object body, Class<T> type) {
         try {
             return client.postForObject(baseUrl + path, body, type);
         } catch (RestClientException e) {
-            throw new TgProviderException("tg-provider request failed: " + path, e);
+            throw providerException(path, e);
         }
     }
 
@@ -304,13 +342,35 @@ public class TgProviderClient {
         }
     }
 
+    private TgProviderException providerException(String path, RestClientException e) {
+        if (e instanceof RestClientResponseException responseException) {
+            return new TgProviderException("tg-provider request failed: " + path, responseException.getStatusCode(), e);
+        }
+        return new TgProviderException("tg-provider request failed: " + path, e);
+    }
+
     public static class TgProviderException extends RuntimeException {
+        private final HttpStatusCode statusCode;
+
         public TgProviderException(String message) {
-            super(message);
+            this(message, null, null);
+        }
+
+        public TgProviderException(String message, HttpStatusCode statusCode) {
+            this(message, statusCode, null);
+        }
+
+        public TgProviderException(String message, HttpStatusCode statusCode, Throwable cause) {
+            super(message, cause);
+            this.statusCode = statusCode;
         }
 
         public TgProviderException(String message, Throwable cause) {
-            super(message, cause);
+            this(message, null, cause);
+        }
+
+        public HttpStatusCode getStatusCode() {
+            return statusCode;
         }
     }
 }
