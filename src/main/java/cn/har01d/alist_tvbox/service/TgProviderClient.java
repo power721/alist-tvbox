@@ -3,11 +3,13 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLink;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchItem;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderStatus;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,6 +28,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -61,7 +64,22 @@ public class TgProviderClient {
 
     public List<TgProviderAccount> accounts() {
         JsonNode response = get("/api/accounts", JsonNode.class);
-        return parseAccounts(response);
+        return parseItems(response, new TypeReference<>() {
+        }, "accounts");
+    }
+
+    public List<TgProviderChannel> channels() {
+        return channels(null);
+    }
+
+    public List<TgProviderChannel> channels(Long accountId) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl + "/api/channels");
+        if (accountId != null && accountId > 0) {
+            builder.queryParam("account_id", accountId);
+        }
+        JsonNode response = get(builder.build().encode().toUri(), JsonNode.class, "/api/channels");
+        return parseItems(response, new TypeReference<>() {
+        }, "channels");
     }
 
     public void deleteAccount(long id) {
@@ -84,8 +102,28 @@ public class TgProviderClient {
         return post("/api/login/password", Map.of("phone", phone, "password", password), TgProviderAccount.class);
     }
 
+    public TgProviderSyncResponse syncChannels(Collection<Long> channelIds) {
+        if (channelIds == null || channelIds.isEmpty()) {
+            return TgProviderSyncResponse.empty();
+        }
+        return post("/api/channels/sync", Map.of("channel_ids", channelIds), TgProviderSyncResponse.class);
+    }
+
     public List<Message> searchMessages(String keyword, int limit) {
-        TgProviderSearchResponse response = search(keyword, limit);
+        return searchMessages(keyword, limit, null);
+    }
+
+    public List<Message> searchMessages(String keyword, int limit, Long channelId) {
+        TgProviderSearchResponse response = search(keyword, limit, channelId);
+        return toMessages(response);
+    }
+
+    public List<Message> latestMessages(int limit, Long channelId) {
+        TgProviderSearchResponse response = latest(limit, channelId);
+        return toMessages(response);
+    }
+
+    private List<Message> toMessages(TgProviderSearchResponse response) {
         if (response == null || response.items() == null) {
             return List.of();
         }
@@ -116,12 +154,17 @@ public class TgProviderClient {
     }
 
     public TgProviderSearchResponse search(String keyword, int limit) {
-        URI url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/api/search")
+        return search(keyword, limit, null);
+    }
+
+    public TgProviderSearchResponse search(String keyword, int limit, Long channelId) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl + "/api/search")
                 .queryParam("q", keyword)
-                .queryParam("limit", limit)
-                .build()
-                .encode()
-                .toUri();
+                .queryParam("limit", limit);
+        if (channelId != null && channelId > 0) {
+            builder.queryParam("channel_id", channelId);
+        }
+        URI url = builder.build().encode().toUri();
         try {
             return restTemplate.getForObject(url, TgProviderSearchResponse.class);
         } catch (RestClientException e) {
@@ -129,9 +172,31 @@ public class TgProviderClient {
         }
     }
 
+    public TgProviderSearchResponse latest(int limit, Long channelId) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl + "/api/messages/latest")
+                .queryParam("limit", limit);
+        if (channelId != null && channelId > 0) {
+            builder.queryParam("channel_id", channelId);
+        }
+        URI url = builder.build().encode().toUri();
+        try {
+            return restTemplate.getForObject(url, TgProviderSearchResponse.class);
+        } catch (RestClientException e) {
+            throw new TgProviderException("tg-provider request failed: /api/messages/latest", e);
+        }
+    }
+
     private <T> T get(String path, Class<T> type) {
         try {
             return restTemplate.getForObject(baseUrl + path, type);
+        } catch (RestClientException e) {
+            throw new TgProviderException("tg-provider request failed: " + path, e);
+        }
+    }
+
+    private <T> T get(URI uri, Class<T> type, String path) {
+        try {
+            return restTemplate.getForObject(uri, type);
         } catch (RestClientException e) {
             throw new TgProviderException("tg-provider request failed: " + path, e);
         }
@@ -153,21 +218,20 @@ public class TgProviderClient {
         }
     }
 
-    private List<TgProviderAccount> parseAccounts(JsonNode response) {
+    private <T> List<T> parseItems(JsonNode response, TypeReference<List<T>> typeReference, String name) {
         if (response == null || response.isNull()) {
             return List.of();
         }
 
-        JsonNode accounts = response.isArray() ? response : response.get("items");
-        if (accounts == null || !accounts.isArray()) {
-            throw new TgProviderException("tg-provider accounts response format invalid");
+        JsonNode items = response.isArray() ? response : response.get("items");
+        if (items == null || !items.isArray()) {
+            throw new TgProviderException("tg-provider " + name + " response format invalid");
         }
 
         try {
-            return objectMapper.convertValue(accounts, new TypeReference<>() {
-            });
+            return objectMapper.convertValue(items, typeReference);
         } catch (IllegalArgumentException e) {
-            throw new TgProviderException("parse tg-provider accounts response failed", e);
+            throw new TgProviderException("parse tg-provider " + name + " response failed", e);
         }
     }
 
