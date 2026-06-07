@@ -160,7 +160,7 @@ public class Message {
         return links;
     }
 
-    private static final String TRAILING_GARBAGE = "，。；：；,.;:?！？、）》」』】)]}·…—–_​‌‍﻿";
+    private static final String TRAILING_GARBAGE = "，。；：；,.;:?！？、）》」』】)]}·…—–​‌‍﻿";
 
     private static String fixLink(String link) {
         if (link.endsWith("**")) {

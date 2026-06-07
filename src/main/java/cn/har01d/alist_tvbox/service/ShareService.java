@@ -890,7 +890,7 @@ public class ShareService {
     private static final Pattern URL_PWD = Pattern.compile("[?&]pwd=([a-zA-Z0-9]{4})(?:[^a-zA-Z0-9]|$)");
     private static final Pattern URL_PASSWORD = Pattern.compile("[?&]password=([a-zA-Z0-9]{4})(?:[^a-zA-Z0-9]|$)");
     private static final Pattern TIANYI_ACCESS_CODE = Pattern.compile("(?:（访问码：|%EF%BC%88%E8%AE%BF%E9%97%AE%E7%A0%81%EF%BC%9A)([a-zA-Z0-9]+)(?:）|%EF%BC%89)");
-    private static final Pattern PAN123_EXTRACT_CODE = Pattern.compile("(?:提取码|%E6%8F%90%E5%8F%96%E7%A0%81)[:：]([a-zA-Z0-9]+)");
+    private static final Pattern PAN123_EXTRACT_CODE = Pattern.compile("(?:提取码|%E6%8F%90%E5%8F%96%E7%A0%81)(?:[:：]|%EF%BC%9A|%3A)([a-zA-Z0-9]+)");
 
     private String parsePassword(String url) {
         // 天翼云盘 URL 编码的访问码
