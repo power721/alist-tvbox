@@ -21,6 +21,26 @@ interface Channel {
   type: number
 }
 
+interface PrivateChannel {
+  id: number
+  account_id: number
+  telegram_channel_id: number
+  title: string
+  username: string
+  type: string
+  last_message_id: number
+  last_sync_time: string
+  enabled: boolean
+}
+
+interface TelegramUser {
+  id: number
+  username: string
+  first_name: string
+  last_name: string
+  phone: string
+}
+
 const cover = ref('')
 const tgChannels = ref('')
 const tgWebChannels = ref('')
@@ -41,7 +61,15 @@ const plugins = ref([])
 const tgSortField = ref('time')
 const tgTimeout = ref(3000)
 const channels = ref<Channel[]>([])
+const privateChannels = ref<PrivateChannel[]>([])
+const privateChannelsChanged = ref(false)
+const privateChannelsLoading = ref(false)
 const activeRows = ref<Channel[]>([])
+const tgPhase = ref(1)
+const tgPhone = ref('')
+const tgCode = ref('')
+const tgPassword = ref('')
+const tgUser = ref<TelegramUser>({id: 0, username: '', first_name: '', last_name: '', phone: ''})
 const defaultDriverOrder = '9,10,5,7,8,3,2,0,6,1,12,magnet,ed2k'.split(',')
 const tgDrivers = ref([...defaultDriverOrder])
 const tgDriverOrder = ref([...defaultDriverOrder])
@@ -378,10 +406,99 @@ const loadChannels = () => {
   })
 }
 
+const loadPrivateChannels = () => {
+  privateChannelsLoading.value = true
+  return axios.get('/api/telegram/private/channels').then(({data}) => {
+    privateChannels.value = data || []
+    privateChannelsChanged.value = false
+  }).finally(() => {
+    privateChannelsLoading.value = false
+  })
+}
+
+const privateChannelIds = () => {
+  return privateChannels.value.filter(e => e.enabled).map(e => e.id)
+}
+
+const savePrivateChannels = () => {
+  axios.put('/api/telegram/private/channels', {channel_ids: privateChannelIds()}).then(({data}) => {
+    privateChannels.value = data || []
+    privateChannelsChanged.value = false
+    ElMessage.success('保存成功')
+  })
+}
+
+const syncPrivateChannels = () => {
+  axios.post('/api/telegram/private/channels/sync', {channel_ids: privateChannelIds()}).then(({data}) => {
+    const queued = data?.queued || 0
+    const skipped = data?.skipped || 0
+    ElMessage.success(`已同步 ${queued} 个频道，跳过 ${skipped} 个`)
+  })
+}
+
+const emptyTelegramUser = (): TelegramUser => ({id: 0, username: '', first_name: '', last_name: '', phone: ''})
+
+const loadTelegramUser = () => {
+  return axios.get('/api/telegram/user').then(({data}) => {
+    tgUser.value = data || emptyTelegramUser()
+    tgPhase.value = tgUser.value.id ? 0 : 1
+  })
+}
+
+const logoutTelegram = () => {
+  axios.post('/api/telegram/logout').then(() => {
+    ElMessage.success('退出登录成功')
+    tgUser.value = emptyTelegramUser()
+    tgPhase.value = 1
+  })
+}
+
+const sendTgPhone = () => {
+  if (!tgPhone.value) {
+    return
+  }
+  axios.post('/api/telegram/login/send-code', {phone: tgPhone.value}).then(() => {
+    tgPhase.value = 3
+    ElMessage.success('验证码已发送')
+  }, () => {
+    ElMessage.error('发送验证码失败')
+  })
+}
+
+const sendTgCode = () => {
+  if (!tgCode.value) {
+    return
+  }
+  axios.post('/api/telegram/login/sign-in', {phone: tgPhone.value, code: tgCode.value}).then(({data}) => {
+    if (data && data.password_required) {
+      tgPhase.value = 5
+      return
+    }
+    loadTelegramUser()
+    loadPrivateChannels()
+  }, () => {
+    ElMessage.error('登录失败')
+  })
+}
+
+const sendTgPassword = () => {
+  if (!tgPassword.value) {
+    return
+  }
+  axios.post('/api/telegram/login/password', {phone: tgPhone.value, password: tgPassword.value}).then(() => {
+    loadTelegramUser()
+    loadPrivateChannels()
+  }, () => {
+    ElMessage.error('密码验证失败')
+  })
+}
+
 onMounted(() => {
   loadChannels().then(() => {
     rowDrop()
   })
+  loadPrivateChannels()
+  loadTelegramUser()
   axios.get('/api/settings').then(({data}) => {
     tgChannels.value = data.tg_channels
     tgWebChannels.value = data.tg_web_channels
@@ -512,7 +629,7 @@ onUnmounted(() => {
         </el-form-item>
       </el-form>
     </el-tab-pane>
-    <el-tab-pane label="频道管理" name="second">
+    <el-tab-pane label="公开频道" name="public-channels">
       <el-row justify="end">
         <span style="margin-right: 16px" v-if="channelDragEnabled">可以拖动行排序</span>
         <el-button @click="loadChannels">刷新</el-button>
@@ -587,6 +704,61 @@ onUnmounted(() => {
           </template>
         </el-table-column>
       </el-table>
+    </el-tab-pane>
+    <el-tab-pane label="我的频道" name="private-channels">
+      <el-row justify="end">
+        <el-button @click="loadPrivateChannels">刷新</el-button>
+        <el-button @click="syncPrivateChannels" :disabled="!privateChannelIds().length">同步</el-button>
+        <el-button type="primary" :disabled="!privateChannelsChanged" @click="savePrivateChannels">保存</el-button>
+      </el-row>
+      <div class="space"></div>
+      <el-table :data="privateChannels" v-loading="privateChannelsLoading" row-key="id" style="width: 100%">
+        <el-table-column prop="id" label="ID" width="90"/>
+        <el-table-column prop="account_id" label="账号" width="90"/>
+        <el-table-column prop="title" label="标题"/>
+        <el-table-column prop="username" label="用户名" width="180">
+          <template #default="scope">
+            <a :href="'https://t.me/'+scope.row.username" target="_blank" v-if="scope.row.username">
+              {{ scope.row.username }}
+            </a>
+          </template>
+        </el-table-column>
+        <el-table-column prop="type" label="类型" width="120"/>
+        <el-table-column prop="last_message_id" label="最新消息" width="120"/>
+        <el-table-column prop="last_sync_time" label="同步时间" width="210"/>
+        <el-table-column prop="enabled" label="参与搜索" width="120">
+          <template #default="scope">
+            <el-switch v-model="scope.row.enabled" @change="privateChannelsChanged=true"/>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-tab-pane>
+    <el-tab-pane label="电报管理" name="telegram">
+      <el-form label-width="120">
+        <template v-if="tgUser.id">
+          <el-form-item label="用户ID">{{ tgUser.id }}</el-form-item>
+          <el-form-item label="用户名">{{ tgUser.username }}</el-form-item>
+          <el-form-item label="姓名">{{ tgUser.first_name }} {{ tgUser.last_name }}</el-form-item>
+          <el-form-item label="电话">{{ tgUser.phone }}</el-form-item>
+          <el-form-item>
+            <el-button type="danger" @click="logoutTelegram">退出登录</el-button>
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="电话号码" required v-if="tgPhase === 1">
+            <el-input style="width: 260px" v-model="tgPhone" autocomplete="off" placeholder="+8612345678901"/>
+            <el-button @click="sendTgPhone">发送验证码</el-button>
+          </el-form-item>
+          <el-form-item label="验证码" required v-if="tgPhase === 3">
+            <el-input style="width: 160px" v-model="tgCode" autocomplete="off"/>
+            <el-button @click="sendTgCode">登录</el-button>
+          </el-form-item>
+          <el-form-item label="密码" required v-if="tgPhase === 5">
+            <el-input style="width: 260px" v-model="tgPassword" type="password" show-password autocomplete="off"/>
+            <el-button @click="sendTgPassword">确认</el-button>
+          </el-form-item>
+        </template>
+      </el-form>
     </el-tab-pane>
   </el-tabs>
 

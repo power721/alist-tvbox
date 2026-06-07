@@ -53,3 +53,19 @@ test('play config exposes backend PanSou link check settings', () => {
   assert.equal(componentSource.includes(`label="链接检测"`), true)
   assert.equal(componentSource.includes(`自动检查盘搜搜索结果的有效性`), true)
 })
+
+test('play config separates public private and telegram management tabs', () => {
+  assert.equal(componentSource.includes(`label="公开频道"`), true)
+  assert.equal(componentSource.includes(`label="我的频道"`), true)
+  assert.equal(componentSource.includes(`label="电报管理"`), true)
+  assert.equal(componentSource.includes(`'/api/telegram/private/channels'`), true)
+  assert.equal(componentSource.includes(`'/api/telegram/private/channels/sync'`), true)
+})
+
+test('play config owns telegram login workflow', () => {
+  assert.equal(componentSource.includes(`'/api/telegram/user'`), true)
+  assert.equal(componentSource.includes(`'/api/telegram/login/send-code'`), true)
+  assert.equal(componentSource.includes(`'/api/telegram/login/sign-in'`), true)
+  assert.equal(componentSource.includes(`'/api/telegram/login/password'`), true)
+  assert.equal(componentSource.includes(`'/api/telegram/logout'`), true)
+})
