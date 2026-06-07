@@ -31,6 +31,7 @@ interface PrivateChannel {
   last_message_id: number
   last_sync_time: string
   enabled: boolean
+  changed: boolean
 }
 
 interface TelegramUser {
@@ -143,6 +144,10 @@ const activeName = ref('basic')
 
 const getTypeName = (id: number) => {
   return options2.find(e => e.value === id)?.label
+}
+
+const getPrivateChannelVisibilityName = (row: PrivateChannel) => {
+  return row.username ? '公开' : '私密'
 }
 
 const normalizeDriverOrder = (value: string) => {
@@ -267,13 +272,18 @@ const channelDragEnabled = isPluginDragEnabledForUserAgent(window.navigator.user
 let channelSortable: Sortable | null = null
 
 const tableRowClassName = ({row}: {
-  row: Channel
+  row: Channel | PrivateChannel
   rowIndex: number
 }) => {
   if (row.changed) {
     return 'warning-row'
   }
   return ''
+}
+
+const markPrivateChannelChanged = (row: PrivateChannel) => {
+  row.changed = true
+  privateChannelsChanged.value = true
 }
 
 const treeToTile = (treeData: Channel[]) => {
@@ -441,6 +451,14 @@ const syncPrivateChannelList = () => {
 
 const syncPrivateChannels = () => {
   axios.post('/api/telegram/private/channels/sync', {channel_ids: privateChannelIds()}).then(({data}) => {
+    const queued = data?.queued || 0
+    const skipped = data?.skipped || 0
+    ElMessage.success(`已同步 ${queued} 个频道，跳过 ${skipped} 个`)
+  })
+}
+
+const syncPrivateChannel = (row: PrivateChannel) => {
+  axios.post('/api/telegram/private/channels/sync', {channel_ids: [row.id]}).then(({data}) => {
     const queued = data?.queued || 0
     const skipped = data?.skipped || 0
     ElMessage.success(`已同步 ${queued} 个频道，跳过 ${skipped} 个`)
@@ -724,23 +742,37 @@ onUnmounted(() => {
         <el-button type="primary" :disabled="!privateChannelsChanged" @click="savePrivateChannels">保存</el-button>
       </el-row>
       <div class="space"></div>
-      <el-table :data="privateChannels" v-loading="privateChannelsLoading" row-key="id" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="90"/>
-        <el-table-column prop="account_id" label="账号" width="90"/>
-        <el-table-column prop="title" label="标题"/>
-        <el-table-column prop="username" label="用户名" width="180">
+      <el-table :data="privateChannels"
+                v-loading="privateChannelsLoading"
+                :row-class-name="tableRowClassName"
+                row-key="id"
+                style="width: 100%">
+        <el-table-column prop="id" label="ID" width="90" sortable/>
+        <el-table-column prop="account_id" label="账号" width="90" sortable/>
+        <el-table-column prop="title" label="标题" sortable/>
+        <el-table-column prop="username" label="用户名" width="180" sortable>
           <template #default="scope">
             <a :href="'https://t.me/'+scope.row.username" target="_blank" v-if="scope.row.username">
               {{ scope.row.username }}
             </a>
           </template>
         </el-table-column>
-        <el-table-column prop="type" label="类型" width="120"/>
-        <el-table-column prop="last_message_id" label="最新消息" width="120"/>
-        <el-table-column prop="last_sync_time" label="同步时间" width="210"/>
-        <el-table-column prop="enabled" label="参与搜索" width="120">
+        <el-table-column label="公开状态" width="100" sortable>
           <template #default="scope">
-            <el-switch v-model="scope.row.enabled" @change="privateChannelsChanged=true"/>
+            {{ getPrivateChannelVisibilityName(scope.row) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="type" label="类型" width="120" sortable/>
+        <el-table-column prop="last_message_id" label="最新消息" width="120" sortable/>
+        <el-table-column prop="last_sync_time" label="同步时间" width="210" sortable/>
+        <el-table-column prop="enabled" label="参与搜索" width="120" sortable>
+          <template #default="scope">
+            <el-switch v-model="scope.row.enabled" @change="markPrivateChannelChanged(scope.row)"/>
+          </template>
+        </el-table-column>
+        <el-table-column fixed="right" label="操作" width="90">
+          <template #default="scope">
+            <el-button link type="primary" @click="syncPrivateChannel(scope.row)">同步</el-button>
           </template>
         </el-table-column>
       </el-table>

@@ -64,6 +64,28 @@ test('play config separates public private and telegram management tabs', () => 
   assert.equal(componentSource.includes(`'/api/telegram/private/channels/sync'`), true)
 })
 
+test('play config highlights changed private channel rows like public channels', () => {
+  const rowClassBindings = componentSource.match(/:row-class-name="tableRowClassName"/g) || []
+
+  assert.equal(rowClassBindings.length, 2)
+  assert.equal(componentSource.includes(`const markPrivateChannelChanged = (row: PrivateChannel) => {`), true)
+  assert.equal(componentSource.includes(`row.changed = true`), true)
+  assert.equal(componentSource.includes(`privateChannelsChanged.value = true`), true)
+  assert.equal(componentSource.includes(`@change="markPrivateChannelChanged(scope.row)"`), true)
+})
+
+test('play config shows private channel visibility and row sync action', () => {
+  assert.equal(componentSource.includes(`const getPrivateChannelVisibilityName = (row: PrivateChannel) => {`), true)
+  assert.equal(componentSource.includes(`return row.username ? '公开' : '私密'`), true)
+  assert.equal(componentSource.includes(`label="公开状态"`), true)
+  assert.equal(componentSource.includes(`{{ getPrivateChannelVisibilityName(scope.row) }}`), true)
+  assert.equal(componentSource.includes(`label="类型"`), true)
+  assert.equal(componentSource.includes(`const syncPrivateChannel = (row: PrivateChannel) => {`), true)
+  assert.equal(componentSource.includes(`axios.post('/api/telegram/private/channels/sync', {channel_ids: [row.id]})`), true)
+  assert.equal(componentSource.includes(`label="操作"`), true)
+  assert.equal(componentSource.includes(`@click="syncPrivateChannel(scope.row)"`), true)
+})
+
 test('play config owns telegram login workflow', () => {
   assert.equal(componentSource.includes(`'/api/telegram/user'`), true)
   assert.equal(componentSource.includes(`'/api/telegram/login/send-code'`), true)
