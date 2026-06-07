@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannelSelectionRequest;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -64,6 +65,12 @@ public class TgPrivateChannelService {
             return TgProviderSyncResponse.empty();
         }
         return tgProviderClient.syncChannels(ids);
+    }
+
+    public List<TgProviderAccountChannelSyncResponse> syncAccountChannels() {
+        return tgProviderClient.accounts().stream()
+                .map(account -> tgProviderClient.syncAccountChannels(account.id()))
+                .toList();
     }
 
     public List<Message> search(String keyword, int limit) {

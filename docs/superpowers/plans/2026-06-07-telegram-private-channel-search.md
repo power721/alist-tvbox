@@ -1240,6 +1240,8 @@ test('play config separates public private and telegram management tabs', () => 
   assert.equal(componentSource.includes(`label="我的频道"`), true)
   assert.equal(componentSource.includes(`label="电报管理"`), true)
   assert.equal(componentSource.includes(`'/api/telegram/private/channels'`), true)
+  assert.equal(componentSource.includes(`'/api/telegram/private/channels/sync-list'`), true)
+  assert.equal(componentSource.includes(`同步频道列表`), true)
   assert.equal(componentSource.includes(`'/api/telegram/private/channels/sync'`), true)
 })
 
@@ -1321,6 +1323,17 @@ const savePrivateChannels = () => {
     privateChannels.value = data || []
     privateChannelsChanged.value = false
     ElMessage.success('保存成功')
+  })
+}
+
+const syncPrivateChannelList = () => {
+  privateChannelsLoading.value = true
+  axios.post('/api/telegram/private/channels/sync-list').then(({data}) => {
+    const queued = (data || []).filter((e: any) => e.status === 'queued').length
+    ElMessage.success(queued ? `已提交 ${queued} 个账号的频道列表同步` : '频道列表同步完成')
+    return loadPrivateChannels()
+  }).finally(() => {
+    privateChannelsLoading.value = false
   })
 }
 
@@ -1434,8 +1447,9 @@ Add after the public channel table tab:
 ```vue
 <el-tab-pane label="我的频道" name="private-channels">
   <el-row justify="end">
+    <el-button @click="syncPrivateChannelList" :loading="privateChannelsLoading">同步频道列表</el-button>
     <el-button @click="loadPrivateChannels">刷新</el-button>
-    <el-button @click="syncPrivateChannels" :disabled="!privateChannelIds().length">同步</el-button>
+    <el-button @click="syncPrivateChannels" :disabled="!privateChannelIds().length">同步选中频道</el-button>
     <el-button type="primary" :disabled="!privateChannelsChanged" @click="savePrivateChannels">保存</el-button>
   </el-row>
   <div class="space"></div>

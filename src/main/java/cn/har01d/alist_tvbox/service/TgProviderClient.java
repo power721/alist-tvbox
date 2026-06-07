@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLink;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
@@ -107,6 +108,10 @@ public class TgProviderClient {
             return TgProviderSyncResponse.empty();
         }
         return post("/api/channels/sync", Map.of("channel_ids", channelIds), TgProviderSyncResponse.class);
+    }
+
+    public TgProviderAccountChannelSyncResponse syncAccountChannels(long accountId) {
+        return post("/api/accounts/" + accountId + "/channels/sync", Map.of(), TgProviderAccountChannelSyncResponse.class);
     }
 
     public List<Message> searchMessages(String keyword, int limit) {
@@ -223,7 +228,17 @@ public class TgProviderClient {
             return List.of();
         }
 
+        JsonNode error = response.get("error");
+        if (error != null && !error.isNull()) {
+            String code = error.path("code").asText("unknown");
+            String message = error.path("message").asText("unknown error");
+            throw new TgProviderException("tg-provider " + name + " error: " + code + " - " + message);
+        }
+
         JsonNode items = response.isArray() ? response : response.get("items");
+        if (items != null && items.isNull()) {
+            return List.of();
+        }
         if (items == null || !items.isArray()) {
             throw new TgProviderException("tg-provider " + name + " response format invalid");
         }

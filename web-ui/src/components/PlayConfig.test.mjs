@@ -59,6 +59,8 @@ test('play config separates public private and telegram management tabs', () => 
   assert.equal(componentSource.includes(`label="我的频道"`), true)
   assert.equal(componentSource.includes(`label="电报管理"`), true)
   assert.equal(componentSource.includes(`'/api/telegram/private/channels'`), true)
+  assert.equal(componentSource.includes(`'/api/telegram/private/channels/sync-list'`), true)
+  assert.equal(componentSource.includes(`同步频道列表`), true)
   assert.equal(componentSource.includes(`'/api/telegram/private/channels/sync'`), true)
 })
 

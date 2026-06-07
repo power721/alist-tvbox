@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.dto.tg.TelegramLoginRequest;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannelSelectionRequest;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderStatus;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
@@ -76,6 +77,11 @@ public class TelegramController {
     @PostMapping("/api/telegram/private/channels/sync")
     public TgProviderSyncResponse syncPrivateChannels(@RequestBody(required = false) TgPrivateChannelSelectionRequest request) {
         return tgPrivateChannelService.syncChannels(request);
+    }
+
+    @PostMapping("/api/telegram/private/channels/sync-list")
+    public List<TgProviderAccountChannelSyncResponse> syncPrivateChannelList() {
+        return tgPrivateChannelService.syncAccountChannels();
     }
 
     @GetMapping("/api/telegram/private/search")

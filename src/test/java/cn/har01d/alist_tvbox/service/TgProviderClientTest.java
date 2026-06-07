@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
@@ -15,6 +16,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.HttpMethod.DELETE;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
@@ -127,6 +129,51 @@ class TgProviderClientTest {
         assertThat(channels.getFirst().accountId()).isEqualTo(1);
         assertThat(channels.getFirst().title()).isEqualTo("VIP");
         assertThat(channels.getFirst().username()).isEqualTo("vip_share");
+        server.verify();
+    }
+
+    @Test
+    void shouldTreatNullItemsEnvelopeAsEmptyList() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/channels"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("""
+                        {"items":null}
+                        """, MediaType.APPLICATION_JSON));
+
+        List<TgProviderChannel> channels = client.channels();
+
+        assertThat(channels).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    void shouldSurfaceProviderErrorEnvelopeWhenChannelsFail() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/channels"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("""
+                        {"error":{"code":"internal_error","message":"database is locked"}}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.channels())
+                .isInstanceOf(TgProviderClient.TgProviderException.class)
+                .hasMessageContaining("channels")
+                .hasMessageContaining("internal_error")
+                .hasMessageContaining("database is locked");
+        server.verify();
+    }
+
+    @Test
+    void shouldSyncAccountChannelsWithProvider() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/accounts/1/channels/sync"))
+                .andExpect(method(POST))
+                .andRespond(withSuccess("""
+                        {"job_id":"3","status":"queued"}
+                        """, MediaType.APPLICATION_JSON));
+
+        TgProviderAccountChannelSyncResponse response = client.syncAccountChannels(1);
+
+        assertThat(response.jobId()).isEqualTo("3");
+        assertThat(response.status()).isEqualTo("queued");
         server.verify();
     }
 

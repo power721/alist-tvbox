@@ -4,6 +4,7 @@ import cn.har01d.alist_tvbox.config.RestErrorHandler;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannelSelectionRequest;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
@@ -155,6 +156,17 @@ class TelegramControllerTest {
         mockMvc.perform(get("/api/telegram/private/search").param("wd", "短剧"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].link").value("https://pan.quark.cn/s/private"));
+    }
+
+    @Test
+    void shouldSyncPrivateChannelListFromProviderAccounts() throws Exception {
+        when(tgPrivateChannelService.syncAccountChannels()).thenReturn(List.of(
+                new TgProviderAccountChannelSyncResponse("3", "queued", List.of())));
+
+        mockMvc.perform(post("/api/telegram/private/channels/sync-list"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].job_id").value("3"))
+                .andExpect(jsonPath("$[0].status").value("queued"));
     }
 
     @Test

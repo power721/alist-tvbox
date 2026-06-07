@@ -68,7 +68,8 @@ own the private channel search tab.
 - `基本配置`: existing playback and PanSou settings.
 - `公开频道`: current channel management UI, renamed from `频道管理`.
 - `我的频道`: loads private provider channels, shows account/channel metadata, lets the
-  user enable channels for private search, and can trigger sync for enabled channels.
+  user enable channels for private search, can trigger account channel-list sync, and
+  can trigger content sync for enabled channels.
 - `电报管理`: Telegram login, password step, current account display, and logout. This UI
   is moved out of `SubscriptionsView.vue`.
 

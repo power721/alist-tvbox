@@ -4,6 +4,8 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannel;
 import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannelSelectionRequest;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderChannel;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -82,6 +84,19 @@ class TgPrivateChannelServiceTest {
         List<Message> messages = service.search("短剧", 20);
 
         assertThat(messages).extracting(Message::getName).containsExactly("B", "A");
+    }
+
+    @Test
+    void shouldSyncAccountChannelsForEveryProviderAccount() {
+        TgProviderAccount account = new TgProviderAccount(1, "tester", "Test", "User", "+86138");
+        TgProviderAccountChannelSyncResponse response = new TgProviderAccountChannelSyncResponse("3", "queued", List.of());
+        when(tgProviderClient.accounts()).thenReturn(List.of(account));
+        when(tgProviderClient.syncAccountChannels(1)).thenReturn(response);
+
+        List<TgProviderAccountChannelSyncResponse> responses = service.syncAccountChannels();
+
+        assertThat(responses).containsExactly(response);
+        verify(tgProviderClient).syncAccountChannels(1);
     }
 
     private TgProviderChannel channel(long id, String title) {
