@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccountChannelSyncResponse;
@@ -35,7 +36,7 @@ class TgProviderClientTest {
     void setUp() {
         RestTemplate restTemplate = new RestTemplate();
         server = MockRestServiceServer.createServer(restTemplate);
-        client = new TgProviderClient(restTemplate, new ObjectMapper(), "http://127.0.0.1:6000");
+        client = new TgProviderClient(restTemplate, new AppProperties(), new ObjectMapper(), "http://127.0.0.1:6000");
     }
 
     @Test

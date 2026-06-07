@@ -12,10 +12,11 @@ import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchItem;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderStatus;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,11 +41,13 @@ public class TgProviderClient {
     private static final String DEFAULT_BASE_URL = "http://127.0.0.1:6000";
 
     private final RestTemplate restTemplate;
+    private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
     private final String baseUrl;
 
     @Autowired
     public TgProviderClient(RestTemplateBuilder builder, AppProperties appProperties, ObjectMapper objectMapper) {
+        this.appProperties = appProperties;
         Duration timeout = Duration.ofMillis(appProperties.getTgTimeout());
         this.restTemplate = builder
                 .connectTimeout(timeout)
@@ -54,10 +57,23 @@ public class TgProviderClient {
         this.baseUrl = DEFAULT_BASE_URL;
     }
 
-    TgProviderClient(RestTemplate restTemplate, ObjectMapper objectMapper, String baseUrl) {
+    TgProviderClient(RestTemplate restTemplate, AppProperties appProperties, ObjectMapper objectMapper, String baseUrl) {
         this.restTemplate = restTemplate;
+        this.appProperties = appProperties;
         this.objectMapper = objectMapper;
         this.baseUrl = baseUrl;
+    }
+
+    @PostConstruct
+    public void init() {
+        try {
+            TgProviderStatus status = status();
+            if (status != null && status.accounts() > 0) {
+                appProperties.setTgLogin(true);
+            }
+        } catch (Exception e) {
+            log.warn("check status failed", e);
+        }
     }
 
     public TgProviderStatus status() {

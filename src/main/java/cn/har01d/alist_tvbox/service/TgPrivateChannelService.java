@@ -121,13 +121,6 @@ public class TgPrivateChannelService {
     public CategoryList category() {
         CategoryList result = new CategoryList();
         List<Category> categories = new ArrayList<>();
-        for (String type : appProperties.getTgDrivers()) {
-            Category category = new Category();
-            category.setType_id("type:" + type);
-            category.setType_name(getTypeName(type));
-            category.setType_flag(0);
-            categories.add(category);
-        }
         for (TgPrivateChannel channel : channels()) {
             if (!channel.enabled()) {
                 continue;
@@ -135,6 +128,13 @@ public class TgPrivateChannelService {
             Category category = new Category();
             category.setType_id(String.valueOf(channel.id()));
             category.setType_name(StringUtils.defaultIfBlank(channel.title(), channel.username()));
+            category.setType_flag(0);
+            categories.add(category);
+        }
+        for (String type : appProperties.getTgDrivers()) {
+            Category category = new Category();
+            category.setType_id("type:" + type);
+            category.setType_name(getTypeName(type));
             category.setType_flag(0);
             categories.add(category);
         }
