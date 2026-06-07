@@ -37,6 +37,24 @@ interface PrivateChannel {
   changed: boolean
 }
 
+interface TgWatchRule {
+  id: number
+  channel_id: number
+  enabled: boolean
+  includes: string[]
+  excludes: string[]
+  created_at: string
+  updated_at: string
+}
+
+interface TgWatchRuleForm {
+  id: number
+  channel_id: number
+  enabled: boolean
+  includes: string[]
+  excludes: string[]
+}
+
 interface TelegramUser {
   id: number
   username: string
@@ -66,12 +84,22 @@ const tgSortField = ref('time')
 const tgTimeout = ref(3000)
 const channels = ref<Channel[]>([])
 const privateChannels = ref<PrivateChannel[]>([])
+const watchRules = ref<TgWatchRule[]>([])
 const privateChannelKeyword = ref('')
 const privateChannelVisibility = ref('all')
 const privateChannelType = ref('all')
 const privateChannelWebAccess = ref('all')
 const privateChannelsChanged = ref(false)
 const privateChannelsLoading = ref(false)
+const watchRuleVisible = ref(false)
+const watchRuleChannel = ref<PrivateChannel | null>(null)
+const watchRuleForm = ref<TgWatchRuleForm>({
+  id: 0,
+  channel_id: 0,
+  enabled: true,
+  includes: [],
+  excludes: [],
+})
 const activeRows = ref<Channel[]>([])
 const activePrivateRows = ref<PrivateChannel[]>([])
 const tgPhase = ref(1)
@@ -222,6 +250,52 @@ const filteredPrivateChannels = computed(() => {
     return true
   })
 })
+
+const watchRuleMap = computed(() => {
+  const map = new Map<number, TgWatchRule>()
+  watchRules.value.forEach(rule => {
+    map.set(rule.channel_id, rule)
+  })
+  return map
+})
+
+const getWatchRule = (row: PrivateChannel) => {
+  return watchRuleMap.value.get(row.id)
+}
+
+const getWatchRuleStatusName = (row: PrivateChannel) => {
+  const rule = getWatchRule(row)
+  if (!rule) {
+    return row.enabled ? '保存后启用' : '未配置'
+  }
+  return rule.enabled ? '已启用' : '已停用'
+}
+
+const getWatchRuleStatusType = (row: PrivateChannel) => {
+  const rule = getWatchRule(row)
+  if (rule?.enabled) {
+    return 'success'
+  }
+  if (rule) {
+    return 'info'
+  }
+  return row.enabled ? 'warning' : 'info'
+}
+
+const normalizeWatchRuleKeywords = (values: string[]) => {
+  const keywords: string[] = []
+  values.forEach(item => {
+    const keyword = `${item || ''}`.trim()
+    if (keyword && !keywords.includes(keyword)) {
+      keywords.push(keyword)
+    }
+  })
+  return keywords
+}
+
+const cloneWatchRuleKeywords = (values: string[] | undefined) => {
+  return normalizeWatchRuleKeywords(values || [])
+}
 
 const normalizeDriverOrder = (value: string) => {
   const ids = value.split(',').map(e => e.trim()).filter(e => e)
@@ -540,12 +614,20 @@ const loadChannels = () => {
   })
 }
 
+const loadWatchRules = () => {
+  return axios.get('/api/watch-rules').then(({data}) => {
+    watchRules.value = data?.items || []
+    return watchRules.value
+  })
+}
+
 const loadPrivateChannels = () => {
   privateChannelsLoading.value = true
   return axios.get('/api/telegram/private/channels').then(({data}) => {
     privateChannels.value = data || []
     privateChannelsChanged.value = false
     setTimeout(() => privateRowDrop(), 500)
+    return loadWatchRules()
   }).finally(() => {
     privateChannelsLoading.value = false
   })
@@ -563,9 +645,35 @@ const privateChannelAliases = () => {
   return aliases
 }
 
+const ensureSearchWatchRules = (rows: PrivateChannel[]) => {
+  const missingRows = rows.filter(row => row.enabled && !getWatchRule(row))
+  if (!missingRows.length) {
+    return Promise.resolve()
+  }
+  return Promise.all(missingRows.map(row => {
+    return axios.post('/api/watch-rules', {
+      channel_id: row.id,
+      enabled: true,
+      includes: [],
+      excludes: [],
+    }).then(({data}) => {
+      if (data) {
+        updateWatchRule(data)
+      }
+    }, error => {
+      if (error?.response?.status === 409) {
+        return loadWatchRules()
+      }
+      return Promise.reject(error)
+    })
+  }))
+}
+
 const savePrivateChannels = () => {
   axios.put('/api/telegram/private/channels', {channel_ids: privateChannelIds(), aliases: privateChannelAliases()}).then(({data}) => {
     privateChannels.value = data || []
+    return ensureSearchWatchRules(privateChannels.value)
+  }).then(() => {
     privateChannelsChanged.value = false
     setTimeout(() => privateRowDrop(), 500)
     ElMessage.success('保存成功')
@@ -620,6 +728,60 @@ const checkPrivateChannelsWebAccess = () => {
     ElMessage.success('检测完成')
   }).finally(() => {
     privateChannelsLoading.value = false
+  })
+}
+
+const openWatchRule = (row: PrivateChannel) => {
+  const rule = getWatchRule(row)
+  watchRuleChannel.value = row
+  watchRuleForm.value = {
+    id: rule?.id || 0,
+    channel_id: row.id,
+    enabled: rule?.enabled ?? true,
+    includes: cloneWatchRuleKeywords(rule?.includes),
+    excludes: cloneWatchRuleKeywords(rule?.excludes),
+  }
+  watchRuleVisible.value = true
+}
+
+const watchRulePayload = () => {
+  return {
+    channel_id: watchRuleForm.value.channel_id,
+    enabled: watchRuleForm.value.enabled,
+    includes: normalizeWatchRuleKeywords(watchRuleForm.value.includes),
+    excludes: normalizeWatchRuleKeywords(watchRuleForm.value.excludes),
+  }
+}
+
+const updateWatchRule = (rule: TgWatchRule) => {
+  watchRules.value = [
+    ...watchRules.value.filter(item => item.id !== rule.id && item.channel_id !== rule.channel_id),
+    rule,
+  ]
+}
+
+const saveWatchRule = () => {
+  const request = watchRuleForm.value.id
+    ? axios.put(`/api/watch-rules/${watchRuleForm.value.id}`, watchRulePayload())
+    : axios.post('/api/watch-rules', watchRulePayload())
+  request.then(({data}) => {
+    if (data) {
+      updateWatchRule(data)
+    }
+    watchRuleVisible.value = false
+    ElMessage.success('保存成功')
+  })
+}
+
+const deleteWatchRule = () => {
+  if (!watchRuleForm.value.id) {
+    watchRuleVisible.value = false
+    return
+  }
+  axios.delete(`/api/watch-rules/${watchRuleForm.value.id}`).then(() => {
+    watchRules.value = watchRules.value.filter(rule => rule.id !== watchRuleForm.value.id)
+    watchRuleVisible.value = false
+    ElMessage.success('删除成功')
   })
 }
 
@@ -978,10 +1140,18 @@ onUnmounted(() => {
             <el-switch v-model="scope.row.enabled" @change="markPrivateChannelChanged(scope.row)"/>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="140">
+        <el-table-column label="监听规则" width="110">
+          <template #default="scope">
+            <el-tag :type="getWatchRuleStatusType(scope.row)">
+              {{ getWatchRuleStatusName(scope.row) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column fixed="right" label="操作" width="180">
           <template #default="scope">
             <el-button link type="primary" @click="syncPrivateChannel(scope.row)">同步</el-button>
             <el-button link type="primary" :disabled="!scope.row.username" @click="checkPrivateChannelWebAccess(scope.row)">检测</el-button>
+            <el-button link type="primary" @click="openWatchRule(scope.row)">规则</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -1014,6 +1184,52 @@ onUnmounted(() => {
       </el-form>
     </el-tab-pane>
   </el-tabs>
+
+  <el-dialog v-model="watchRuleVisible" title="监听规则" width="560px">
+    <el-form label-width="120" :model="watchRuleForm">
+      <el-form-item label="频道">
+        <span>{{ watchRuleChannel?.title || watchRuleForm.channel_id }}</span>
+      </el-form-item>
+      <el-form-item label="实时监听">
+        <el-switch v-model="watchRuleForm.enabled"/>
+      </el-form-item>
+      <el-form-item label="包含关键词">
+        <el-select class="watch-rule-keywords"
+                   v-model="watchRuleForm.includes"
+                   multiple
+                   filterable
+                   allow-create
+                   default-first-option
+                   clearable
+                   placeholder="包含关键词">
+          <el-option v-for="item in watchRuleForm.includes" :key="item" :label="item" :value="item"/>
+        </el-select>
+      </el-form-item>
+      <el-form-item label="排除关键词">
+        <el-select class="watch-rule-keywords"
+                   v-model="watchRuleForm.excludes"
+                   multiple
+                   filterable
+                   allow-create
+                   default-first-option
+                   clearable
+                   placeholder="排除关键词">
+          <el-option v-for="item in watchRuleForm.excludes" :key="item" :label="item" :value="item"/>
+        </el-select>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <span class="dialog-footer">
+        <el-popconfirm v-if="watchRuleForm.id" @confirm="deleteWatchRule" title="是否删除监听规则？">
+          <template #reference>
+            <el-button type="danger">删除</el-button>
+          </template>
+        </el-popconfirm>
+        <el-button @click="watchRuleVisible=false">取消</el-button>
+        <el-button type="primary" @click="saveWatchRule">保存</el-button>
+      </span>
+    </template>
+  </el-dialog>
 
   <el-dialog v-model="formVisible" :title="dialogTitle">
     <el-form label-width="140" :model="form">
@@ -1095,6 +1311,10 @@ onUnmounted(() => {
 
 .private-channel-filter-select {
   width: 140px;
+}
+
+.watch-rule-keywords {
+  width: 100%;
 }
 
 .private-channel-toolbar .el-button + .el-button {

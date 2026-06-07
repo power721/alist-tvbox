@@ -139,6 +139,41 @@ test('play config lets users edit and save private channel aliases', () => {
   assert.equal(componentSource.includes(`@input="markPrivateChannelChanged(scope.row)"`), true)
 })
 
+test('play config manages telegram watch rules from private channel rows', () => {
+  assert.equal(componentSource.includes(`interface TgWatchRule {`), true)
+  assert.equal(componentSource.includes(`const watchRules = ref<TgWatchRule[]>([])`), true)
+  assert.equal(componentSource.includes(`const loadWatchRules = () => {`), true)
+  assert.equal(componentSource.includes(`axios.get('/api/watch-rules')`), true)
+  assert.equal(componentSource.includes(`axios.post('/api/watch-rules', watchRulePayload())`), true)
+  assert.equal(
+    componentSource.includes("axios.put(`/api/watch-rules/${watchRuleForm.value.id}`, watchRulePayload())"),
+    true
+  )
+  assert.equal(componentSource.includes("axios.delete(`/api/watch-rules/${watchRuleForm.value.id}`)"), true)
+  assert.equal(componentSource.includes(`const openWatchRule = (row: PrivateChannel) => {`), true)
+  assert.equal(componentSource.includes(`@click="openWatchRule(scope.row)"`), true)
+  assert.equal(componentSource.includes(`label="监听规则"`), true)
+  assert.equal(componentSource.includes(`v-model="watchRuleVisible"`), true)
+  assert.equal(componentSource.includes(`v-model="watchRuleForm.enabled"`), true)
+  assert.equal(componentSource.includes(`v-model="watchRuleForm.includes"`), true)
+  assert.equal(componentSource.includes(`v-model="watchRuleForm.excludes"`), true)
+  assert.equal(componentSource.includes(`label="实时监听"`), true)
+  assert.equal(componentSource.includes(`label="包含关键词"`), true)
+  assert.equal(componentSource.includes(`label="排除关键词"`), true)
+})
+
+test('play config enables realtime watching by default for new searchable private channels', () => {
+  assert.equal(componentSource.includes(`const ensureSearchWatchRules = (rows: PrivateChannel[]) => {`), true)
+  assert.equal(componentSource.includes(`row.enabled && !getWatchRule(row)`), true)
+  assert.equal(componentSource.includes(`axios.post('/api/watch-rules', {`), true)
+  assert.equal(componentSource.includes(`channel_id: row.id,`), true)
+  assert.equal(componentSource.includes(`enabled: true,`), true)
+  assert.equal(componentSource.includes(`includes: [],`), true)
+  assert.equal(componentSource.includes(`excludes: [],`), true)
+  assert.equal(componentSource.includes(`return ensureSearchWatchRules(privateChannels.value)`), true)
+  assert.equal(componentSource.includes(`return row.enabled ? '保存后启用' : '未配置'`), true)
+})
+
 test('play config filters private channels by keyword visibility and type', () => {
   assert.equal(componentSource.includes(`import {computed, onMounted, onUnmounted, ref, watch} from "vue";`), true)
   assert.equal(componentSource.includes(`const privateChannelKeyword = ref('')`), true)
