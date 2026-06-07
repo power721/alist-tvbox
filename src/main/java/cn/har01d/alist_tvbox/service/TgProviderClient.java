@@ -79,13 +79,17 @@ public class TgProviderClient {
     @PostConstruct
     public void init() {
         try {
-            TgProviderStatus status = status();
-            if (status != null && status.accounts() > 0) {
-                appProperties.setTgLogin(true);
-            }
+            refreshLoginState();
         } catch (Exception e) {
             log.warn("check status failed", e);
         }
+    }
+
+    public boolean refreshLoginState() {
+        TgProviderStatus status = status();
+        boolean login = status != null && status.accounts() > 0;
+        appProperties.setTgLogin(login);
+        return login;
     }
 
     public TgProviderStatus status() {

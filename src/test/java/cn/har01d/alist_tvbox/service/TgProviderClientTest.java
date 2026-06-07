@@ -30,12 +30,13 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class TgProviderClientTest {
+    private RestTemplate restTemplate;
     private MockRestServiceServer server;
     private TgProviderClient client;
 
     @BeforeEach
     void setUp() {
-        RestTemplate restTemplate = new RestTemplate();
+        restTemplate = new RestTemplate();
         server = MockRestServiceServer.createServer(restTemplate);
         client = new TgProviderClient(restTemplate, new AppProperties(), new ObjectMapper(), "http://127.0.0.1:6000");
     }
@@ -85,6 +86,23 @@ class TgProviderClientTest {
         assertThat(accounts.getFirst().username()).isEqualTo("power721");
         assertThat(accounts.getFirst().firstName()).isEqualTo("Harold");
         assertThat(accounts.getFirst().phone()).isEqualTo("+8619113152564");
+        server.verify();
+    }
+
+    @Test
+    void shouldRefreshLoginStateFromProviderStatus() {
+        AppProperties appProperties = new AppProperties();
+        TgProviderClient providerClient = new TgProviderClient(restTemplate, appProperties, new ObjectMapper(), "http://127.0.0.1:6000");
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/status"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("""
+                        {"service":"tg-provider","accounts":1,"channels":3,"messages":5,"links":8}
+                        """, MediaType.APPLICATION_JSON));
+
+        boolean login = providerClient.refreshLoginState();
+
+        assertThat(login).isTrue();
+        assertThat(appProperties.isTgLogin()).isTrue();
         server.verify();
     }
 

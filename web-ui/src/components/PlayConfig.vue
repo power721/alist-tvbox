@@ -68,6 +68,7 @@ const privateChannels = ref<PrivateChannel[]>([])
 const privateChannelKeyword = ref('')
 const privateChannelVisibility = ref('all')
 const privateChannelType = ref('all')
+const privateChannelWebAccess = ref('all')
 const privateChannelsChanged = ref(false)
 const privateChannelsLoading = ref(false)
 const activeRows = ref<Channel[]>([])
@@ -152,6 +153,12 @@ const privateChannelVisibilityOptions = [
   {label: '私密', value: 'private'},
 ]
 
+const privateChannelWebAccessOptions = [
+  {label: '全部网页', value: 'all'},
+  {label: '可访问', value: 'accessible'},
+  {label: '不可访问', value: 'inaccessible'},
+]
+
 const activeName = ref('basic')
 
 const getTypeName = (id: number) => {
@@ -203,6 +210,12 @@ const filteredPrivateChannels = computed(() => {
       return false
     }
     if (privateChannelType.value !== 'all' && row.type !== privateChannelType.value) {
+      return false
+    }
+    if (privateChannelWebAccess.value === 'accessible' && !row.web_access) {
+      return false
+    }
+    if (privateChannelWebAccess.value === 'inaccessible' && row.web_access) {
       return false
     }
     return true
@@ -336,6 +349,7 @@ const privateChannelDragEnabled = computed(() => {
   return channelDragEnabled && !privateChannelKeyword.value.trim()
     && privateChannelVisibility.value === 'all'
     && privateChannelType.value === 'all'
+    && privateChannelWebAccess.value === 'all'
 })
 
 const tableRowClassName = ({row}: {
@@ -657,7 +671,7 @@ const sendTgPassword = () => {
   })
 }
 
-watch([privateChannelKeyword, privateChannelVisibility, privateChannelType], () => {
+watch([privateChannelKeyword, privateChannelVisibility, privateChannelType, privateChannelWebAccess], () => {
   setTimeout(() => privateRowDrop(), 0)
 })
 
@@ -881,6 +895,12 @@ onUnmounted(() => {
                   placeholder="搜索频道"/>
         <el-select class="private-channel-filter-select" v-model="privateChannelVisibility" placeholder="公开状态">
           <el-option v-for="item in privateChannelVisibilityOptions"
+                     :key="item.value"
+                     :label="item.label"
+                     :value="item.value"/>
+        </el-select>
+        <el-select class="private-channel-filter-select" v-model="privateChannelWebAccess" placeholder="网页访问">
+          <el-option v-for="item in privateChannelWebAccessOptions"
                      :key="item.value"
                      :label="item.label"
                      :value="item.value"/>
