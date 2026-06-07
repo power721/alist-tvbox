@@ -15,7 +15,11 @@
         </el-breadcrumb>
       </el-col>
 
-      <el-col :span="2">
+      <el-col :span="4">
+        <el-tabs v-model="searchMode" class="search-mode-tabs">
+          <el-tab-pane label="盘搜" name="public"/>
+          <el-tab-pane label="电报频道" name="private"/>
+        </el-tabs>
         <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源">
           <template #append>
             <el-button :icon="Search" :disabled="searching" @click="search"/>
@@ -721,6 +725,7 @@ const scrollbarRef = ref<ScrollbarInstance>()
 const episodeScrollbarRef = ref<ScrollbarInstance>()
 const filePath = ref('/')
 const keyword = ref('')
+const searchMode = ref('public')
 const order = ref('index')
 const shareType = ref('ALL')
 const name = ref('')
@@ -967,7 +972,8 @@ const handleAdd = () => {
 
 const search = () => {
   searching.value = true
-  return axios.get('/api/telegram/search?wd=' + keyword.value).then(({data}) => {
+  const endpoint = searchMode.value === 'private' ? '/api/telegram/private/search' : '/api/telegram/search'
+  return axios.get(endpoint + '?wd=' + encodeURIComponent(keyword.value)).then(({data}) => {
     searching.value = false
     results.value = data.map(e => {
       return {
@@ -2201,6 +2207,18 @@ video {
 
 .divider {
   margin: 15px 0;
+}
+
+.search-mode-tabs {
+  margin-bottom: 4px;
+}
+
+::v-deep .search-mode-tabs .el-tabs__header {
+  margin: 0 0 4px;
+}
+
+::v-deep .search-mode-tabs .el-tabs__nav-wrap::after {
+  height: 1px;
 }
 
 .results {
