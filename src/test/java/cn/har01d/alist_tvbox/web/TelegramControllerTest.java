@@ -2,12 +2,17 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.config.RestErrorHandler;
 import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannel;
+import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannelSelectionRequest;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TelegramService;
+import cn.har01d.alist_tvbox.service.TgPrivateChannelService;
 import cn.har01d.alist_tvbox.service.TgProviderClient;
+import cn.har01d.alist_tvbox.tvbox.CategoryList;
+import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,11 +26,11 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -39,6 +44,8 @@ class TelegramControllerTest {
     private SubscriptionService subscriptionService;
     @Mock
     private TgProviderClient tgProviderClient;
+    @Mock
+    private TgPrivateChannelService tgPrivateChannelService;
 
     private MockMvc mockMvc;
 
@@ -49,7 +56,8 @@ class TelegramControllerTest {
                 telegramService,
                 subscriptionService,
                 new ObjectMapper(),
-                tgProviderClient);
+                tgProviderClient,
+                tgPrivateChannelService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new RestErrorHandler())
                 .build();
@@ -110,21 +118,8 @@ class TelegramControllerTest {
     }
 
     @Test
-    void shouldUseProviderSearchBeforeLegacySearch() throws Exception {
-        Message providerMessage = Message.fromProvider(1, "channel", "名称：短剧", "https://pan.quark.cn/s/abc", "2026-06-07T12:00:00Z");
-        when(tgProviderClient.searchMessages("短剧", 100)).thenReturn(List.of(providerMessage));
-
-        mockMvc.perform(get("/api/telegram/search").param("wd", "短剧"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].link").value("https://pan.quark.cn/s/abc"));
-
-        verifyNoInteractions(telegramService);
-    }
-
-    @Test
-    void shouldFallbackToLegacySearchWhenProviderReturnsEmpty() throws Exception {
-        Message legacyMessage = Message.fromProvider(2, "legacy", "名称：旧搜索", "https://pan.baidu.com/s/1abc", "2026-06-07T12:00:00Z");
-        when(tgProviderClient.searchMessages("短剧", 100)).thenReturn(List.of());
+    void shouldUsePublicTelegramSearchForBrowserSearchEndpoint() throws Exception {
+        Message legacyMessage = Message.fromProvider(2, "legacy", "名称：公开搜索", "https://pan.baidu.com/s/1abc", "2026-06-07T12:00:00Z");
         when(telegramService.search("短剧", 100, false, false)).thenReturn(List.of(legacyMessage));
 
         mockMvc.perform(get("/api/telegram/search").param("wd", "短剧"))
@@ -132,5 +127,57 @@ class TelegramControllerTest {
                 .andExpect(jsonPath("$[0].channel").value("legacy"));
 
         verify(telegramService).search(eq("短剧"), eq(100), eq(false), eq(false));
+    }
+
+    @Test
+    void shouldExposePrivateChannelsAndSaveSelection() throws Exception {
+        TgPrivateChannel channel = new TgPrivateChannel(7, 1, 1001, "VIP", "vip_share", "channel", 88, "2026-06-07T12:00:00Z", true);
+        when(tgPrivateChannelService.channels()).thenReturn(List.of(channel));
+        when(tgPrivateChannelService.saveChannels(new TgPrivateChannelSelectionRequest(List.of(7L)))).thenReturn(List.of(channel));
+
+        mockMvc.perform(get("/api/telegram/private/channels"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(7))
+                .andExpect(jsonPath("$[0].enabled").value(true));
+
+        mockMvc.perform(put("/api/telegram/private/channels")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"channel_ids\":[7]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].username").value("vip_share"));
+    }
+
+    @Test
+    void shouldSearchPrivateChannelsFromSeparateBrowserEndpoint() throws Exception {
+        Message providerMessage = Message.fromProvider(1, "vip_share", "名称：私密短剧", "https://pan.quark.cn/s/private", "2026-06-07T12:00:00Z");
+        when(tgPrivateChannelService.search("短剧", 100)).thenReturn(List.of(providerMessage));
+
+        mockMvc.perform(get("/api/telegram/private/search").param("wd", "短剧"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].link").value("https://pan.quark.cn/s/private"));
+    }
+
+    @Test
+    void shouldRouteTgscLikeTgSearch() throws Exception {
+        when(tgPrivateChannelService.searchMovies("短剧", 20)).thenReturn(new MovieList());
+        when(tgPrivateChannelService.list("7", 2)).thenReturn(new MovieList());
+        when(tgPrivateChannelService.category()).thenReturn(new CategoryList());
+
+        mockMvc.perform(get("/tgsc").param("wd", "短剧"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/tgsc").param("t", "7").param("pg", "2"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/tgsc"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldCheckTokenForTgscTokenEndpoint() throws Exception {
+        when(tgPrivateChannelService.searchMovies("短剧", 20)).thenReturn(new MovieList());
+
+        mockMvc.perform(get("/tgsc/token123").param("wd", "短剧"))
+                .andExpect(status().isOk());
+
+        verify(subscriptionService).checkToken("token123");
     }
 }

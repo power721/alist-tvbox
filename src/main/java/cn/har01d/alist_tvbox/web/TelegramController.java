@@ -3,13 +3,17 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.dto.tg.SearchRequest;
 import cn.har01d.alist_tvbox.dto.tg.TelegramLoginRequest;
+import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannel;
+import cn.har01d.alist_tvbox.dto.tg.TgPrivateChannelSelectionRequest;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderAccount;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderStatus;
+import cn.har01d.alist_tvbox.dto.tg.TgProviderSyncResponse;
 import cn.har01d.alist_tvbox.entity.TelegramChannel;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TelegramService;
+import cn.har01d.alist_tvbox.service.TgPrivateChannelService;
 import cn.har01d.alist_tvbox.service.TgProviderClient;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,30 +42,45 @@ public class TelegramController {
     private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
     private final TgProviderClient tgProviderClient;
+    private final TgPrivateChannelService tgPrivateChannelService;
 
     public TelegramController(TelegramChannelRepository telegramChannelRepository,
                               TelegramService telegramService,
                               SubscriptionService subscriptionService,
                               ObjectMapper objectMapper,
-                              TgProviderClient tgProviderClient) {
+                              TgProviderClient tgProviderClient,
+                              TgPrivateChannelService tgPrivateChannelService) {
         this.telegramChannelRepository = telegramChannelRepository;
         this.telegramService = telegramService;
         this.subscriptionService = subscriptionService;
         this.objectMapper = objectMapper;
         this.tgProviderClient = tgProviderClient;
+        this.tgPrivateChannelService = tgPrivateChannelService;
     }
 
     @GetMapping("/api/telegram/search")
     public List<Message> searchByKeyword(String wd) {
-        try {
-            List<Message> messages = tgProviderClient.searchMessages(wd, 100);
-            if (!messages.isEmpty()) {
-                return messages;
-            }
-        } catch (RuntimeException e) {
-            log.warn("tg-provider search failed, fallback to legacy telegram search", e);
-        }
         return telegramService.search(wd, 100, false, false);
+    }
+
+    @GetMapping("/api/telegram/private/channels")
+    public List<TgPrivateChannel> privateChannels() {
+        return tgPrivateChannelService.channels();
+    }
+
+    @PutMapping("/api/telegram/private/channels")
+    public List<TgPrivateChannel> savePrivateChannels(@RequestBody TgPrivateChannelSelectionRequest request) {
+        return tgPrivateChannelService.saveChannels(request);
+    }
+
+    @PostMapping("/api/telegram/private/channels/sync")
+    public TgProviderSyncResponse syncPrivateChannels(@RequestBody(required = false) TgPrivateChannelSelectionRequest request) {
+        return tgPrivateChannelService.syncChannels(request);
+    }
+
+    @GetMapping("/api/telegram/private/search")
+    public List<Message> searchPrivateChannels(String wd) {
+        return tgPrivateChannelService.search(wd, 100);
     }
 
     @GetMapping("/api/telegram/provider/status")
@@ -140,6 +159,24 @@ public class TelegramController {
             return telegramService.searchMovies(wd, web, 20);
         }
         return telegramService.category(web);
+    }
+
+    @GetMapping("/tgsc")
+    public Object browsePrivate(String id, String t, String ac, String wd, String title, boolean web, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+        return browsePrivate("", id, t, ac, wd, title, web, pg);
+    }
+
+    @GetMapping("/tgsc/{token}")
+    public Object browsePrivate(@PathVariable String token, String id, String t, String ac, String wd, String title, boolean web, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
+        subscriptionService.checkToken(token);
+        if (StringUtils.isNotBlank(id)) {
+            return telegramService.detail(id, ac, title);
+        } else if (StringUtils.isNotBlank(t)) {
+            return tgPrivateChannelService.list(t, pg);
+        } else if (StringUtils.isNotBlank(wd)) {
+            return tgPrivateChannelService.searchMovies(wd, 20);
+        }
+        return tgPrivateChannelService.category();
     }
 
     @GetMapping("/tg-db")
