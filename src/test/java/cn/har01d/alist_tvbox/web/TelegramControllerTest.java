@@ -1,0 +1,134 @@
+package cn.har01d.alist_tvbox.web;
+
+import cn.har01d.alist_tvbox.config.RestErrorHandler;
+import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
+import cn.har01d.alist_tvbox.service.SubscriptionService;
+import cn.har01d.alist_tvbox.service.TelegramService;
+import cn.har01d.alist_tvbox.service.TgProviderClient;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@ExtendWith(MockitoExtension.class)
+class TelegramControllerTest {
+    @Mock
+    private TelegramChannelRepository telegramChannelRepository;
+    @Mock
+    private TelegramService telegramService;
+    @Mock
+    private SubscriptionService subscriptionService;
+    @Mock
+    private TgProviderClient tgProviderClient;
+
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        TelegramController controller = new TelegramController(
+                telegramChannelRepository,
+                telegramService,
+                subscriptionService,
+                new ObjectMapper(),
+                tgProviderClient);
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new RestErrorHandler())
+                .build();
+    }
+
+    @Test
+    void shouldReturnEmptyTelegramUserWhenProviderHasNoAccounts() throws Exception {
+        when(tgProviderClient.accounts()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/telegram/user"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(0))
+                .andExpect(jsonPath("$.username").value(""))
+                .andExpect(jsonPath("$.phone").value(""));
+    }
+
+    @Test
+    void shouldReturnFirstProviderAccountAsTelegramUser() throws Exception {
+        when(tgProviderClient.accounts()).thenReturn(List.of(
+                new TgProviderClient.Account(9, "tester", "Test", "User", "+86138")));
+
+        mockMvc.perform(get("/api/telegram/user"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(9))
+                .andExpect(jsonPath("$.username").value("tester"))
+                .andExpect(jsonPath("$.first_name").value("Test"))
+                .andExpect(jsonPath("$.last_name").value("User"))
+                .andExpect(jsonPath("$.phone").value("+86138"));
+    }
+
+    @Test
+    void shouldProxyLoginRequestsToProvider() throws Exception {
+        when(tgProviderClient.sendCode("+86138")).thenReturn(new TgProviderClient.LoginResponse("LOGIN_REQUIRED", false));
+        when(tgProviderClient.signIn("+86138", "1234")).thenReturn(new TgProviderClient.LoginResponse("LOGIN_REQUIRED", true));
+
+        mockMvc.perform(post("/api/telegram/login/send-code")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"phone\":\"+86138\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LOGIN_REQUIRED"));
+
+        mockMvc.perform(post("/api/telegram/login/sign-in")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"phone\":\"+86138\",\"code\":\"1234\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.password_required").value(true));
+    }
+
+    @Test
+    void shouldDeleteFirstAccountOnLogout() throws Exception {
+        when(tgProviderClient.accounts()).thenReturn(List.of(
+                new TgProviderClient.Account(9, "tester", "Test", "User", "+86138")));
+
+        mockMvc.perform(post("/api/telegram/logout"))
+                .andExpect(status().isOk());
+
+        verify(tgProviderClient).deleteAccount(9);
+    }
+
+    @Test
+    void shouldUseProviderSearchBeforeLegacySearch() throws Exception {
+        Message providerMessage = Message.fromProvider(1, "channel", "名称：短剧", "https://pan.quark.cn/s/abc", "2026-06-07T12:00:00Z");
+        when(tgProviderClient.searchMessages("短剧", 100)).thenReturn(List.of(providerMessage));
+
+        mockMvc.perform(get("/api/telegram/search").param("wd", "短剧"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].link").value("https://pan.quark.cn/s/abc"));
+
+        verifyNoInteractions(telegramService);
+    }
+
+    @Test
+    void shouldFallbackToLegacySearchWhenProviderReturnsEmpty() throws Exception {
+        Message legacyMessage = Message.fromProvider(2, "legacy", "名称：旧搜索", "https://pan.baidu.com/s/1abc", "2026-06-07T12:00:00Z");
+        when(tgProviderClient.searchMessages("短剧", 100)).thenReturn(List.of());
+        when(telegramService.search("短剧", 100, false, false)).thenReturn(List.of(legacyMessage));
+
+        mockMvc.perform(get("/api/telegram/search").param("wd", "短剧"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].channel").value("legacy"));
+
+        verify(telegramService).search(eq("短剧"), eq(100), eq(false), eq(false));
+    }
+}

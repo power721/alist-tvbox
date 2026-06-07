@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.entity.TelegramChannel;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TelegramService;
+import cn.har01d.alist_tvbox.service.TgProviderClient;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,20 +33,91 @@ public class TelegramController {
     private final TelegramService telegramService;
     private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
+    private final TgProviderClient tgProviderClient;
 
     public TelegramController(TelegramChannelRepository telegramChannelRepository,
                               TelegramService telegramService,
                               SubscriptionService subscriptionService,
-                              ObjectMapper objectMapper) {
+                              ObjectMapper objectMapper,
+                              TgProviderClient tgProviderClient) {
         this.telegramChannelRepository = telegramChannelRepository;
         this.telegramService = telegramService;
         this.subscriptionService = subscriptionService;
         this.objectMapper = objectMapper;
+        this.tgProviderClient = tgProviderClient;
     }
 
     @GetMapping("/api/telegram/search")
     public List<Message> searchByKeyword(String wd) {
+        try {
+            List<Message> messages = tgProviderClient.searchMessages(wd, 100);
+            if (!messages.isEmpty()) {
+                return messages;
+            }
+        } catch (RuntimeException e) {
+            log.warn("tg-provider search failed, fallback to legacy telegram search", e);
+        }
         return telegramService.search(wd, 100, false, false);
+    }
+
+    @GetMapping("/api/telegram/provider/status")
+    public TgProviderClient.Status providerStatus() {
+        return tgProviderClient.status();
+    }
+
+    @GetMapping("/api/telegram/user")
+    public Map<String, Object> user() {
+        try {
+            return tgProviderClient.accounts().stream()
+                    .findFirst()
+                    .<Map<String, Object>>map(this::toTelegramUser)
+                    .orElseGet(this::emptyTelegramUser);
+        } catch (RuntimeException e) {
+            log.warn("get tg-provider account failed", e);
+            return emptyTelegramUser();
+        }
+    }
+
+    @PostMapping("/api/telegram/login/send-code")
+    public TgProviderClient.LoginResponse sendCode(@RequestBody TelegramLoginRequest request) {
+        return tgProviderClient.sendCode(request.phone());
+    }
+
+    @PostMapping("/api/telegram/login/sign-in")
+    public TgProviderClient.LoginResponse signIn(@RequestBody TelegramLoginRequest request) {
+        return tgProviderClient.signIn(request.phone(), request.code());
+    }
+
+    @PostMapping("/api/telegram/login/password")
+    public TgProviderClient.Account password(@RequestBody TelegramLoginRequest request) {
+        return tgProviderClient.password(request.phone(), request.password());
+    }
+
+    @PostMapping("/api/telegram/logout")
+    public void logout() {
+        try {
+            tgProviderClient.accounts().stream()
+                    .findFirst()
+                    .ifPresent(account -> tgProviderClient.deleteAccount(account.id()));
+        } catch (RuntimeException e) {
+            log.warn("tg-provider logout failed", e);
+        }
+    }
+
+    private Map<String, Object> toTelegramUser(TgProviderClient.Account account) {
+        return Map.of(
+                "id", account.id(),
+                "username", StringUtils.defaultString(account.username()),
+                "first_name", StringUtils.defaultString(account.firstName()),
+                "last_name", StringUtils.defaultString(account.lastName()),
+                "phone", StringUtils.defaultString(account.phone()));
+    }
+
+    private Map<String, Object> emptyTelegramUser() {
+        return Map.of("id", 0, "username", "", "first_name", "", "last_name", "", "phone", "");
+    }
+
+    public record TelegramLoginRequest(String phone, String code, String password) {
     }
 
     @GetMapping("/tg-search")
