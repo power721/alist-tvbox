@@ -8,7 +8,9 @@ import cn.har01d.alist_tvbox.dto.tg.TgProviderLoginResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchItem;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderSearchResponse;
 import cn.har01d.alist_tvbox.dto.tg.TgProviderStatus;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -58,8 +60,8 @@ public class TgProviderClient {
     }
 
     public List<TgProviderAccount> accounts() {
-        TgProviderAccount[] accounts = get("/api/accounts", TgProviderAccount[].class);
-        return accounts == null ? List.of() : List.of(accounts);
+        JsonNode response = get("/api/accounts", JsonNode.class);
+        return parseAccounts(response);
     }
 
     public void deleteAccount(long id) {
@@ -151,7 +153,29 @@ public class TgProviderClient {
         }
     }
 
+    private List<TgProviderAccount> parseAccounts(JsonNode response) {
+        if (response == null || response.isNull()) {
+            return List.of();
+        }
+
+        JsonNode accounts = response.isArray() ? response : response.get("items");
+        if (accounts == null || !accounts.isArray()) {
+            throw new TgProviderException("tg-provider accounts response format invalid");
+        }
+
+        try {
+            return objectMapper.convertValue(accounts, new TypeReference<>() {
+            });
+        } catch (IllegalArgumentException e) {
+            throw new TgProviderException("parse tg-provider accounts response failed", e);
+        }
+    }
+
     public static class TgProviderException extends RuntimeException {
+        public TgProviderException(String message) {
+            super(message);
+        }
+
         public TgProviderException(String message, Throwable cause) {
             super(message, cause);
         }

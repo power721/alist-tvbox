@@ -64,6 +64,24 @@ class TgProviderClientTest {
     }
 
     @Test
+    void shouldParseAccountsFromItemsEnvelope() {
+        server.expect(once(), requestTo("http://127.0.0.1:6000/api/accounts"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("""
+                        {"items":[{"id":1,"phone":"+8619113152564","telegram_user_id":1734222246,"first_name":"Harold","last_name":"Finch","username":"power721","status":"ONLINE","created_at":"2026-06-07T06:10:11.41198197Z","updated_at":"2026-06-07T06:17:24.592484439Z"}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        List<TgProviderAccount> accounts = client.accounts();
+
+        assertThat(accounts).hasSize(1);
+        assertThat(accounts.getFirst().id()).isEqualTo(1);
+        assertThat(accounts.getFirst().username()).isEqualTo("power721");
+        assertThat(accounts.getFirst().firstName()).isEqualTo("Harold");
+        assertThat(accounts.getFirst().phone()).isEqualTo("+8619113152564");
+        server.verify();
+    }
+
+    @Test
     void shouldDeleteAccountById() {
         server.expect(once(), requestTo("http://127.0.0.1:6000/api/accounts/3"))
                 .andExpect(method(DELETE))
