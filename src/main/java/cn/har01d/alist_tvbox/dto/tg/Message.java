@@ -183,13 +183,13 @@ public class Message {
         if (link.contains("xunlei.com")) {
             return "2";
         }
-        if (link.contains("123pan.com") || link.contains("123pan.cn") || link.contains("123684.com") || link.contains("123865.com") || link.contains("123912.com") || link.contains("123592.com")) {
+        if (link.contains("123pan.com") || link.contains("123pan.cn") || link.contains("123684.com") || link.contains("123685.com") || link.contains("123865.com") || link.contains("123912.com") || link.contains("123592.com")) {
             return "3";
         }
         if (link.contains("quark.cn")) {
             return "5";
         }
-        if (link.contains("139.com")) {
+        if (link.contains("139.com") || link.contains("caiyun.feixin.10086.cn")) {
             return "6";
         }
         if (link.contains("uc.cn")) {
@@ -200,6 +200,9 @@ public class Message {
         }
         if (link.contains("189.cn")) {
             return "9";
+        }
+        if (link.contains("guangyapan.com")) {
+            return "12";
         }
         if (link.contains("baidu.com")) {
             return "10";

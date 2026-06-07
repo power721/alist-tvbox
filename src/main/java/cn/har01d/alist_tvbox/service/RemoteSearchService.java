@@ -527,6 +527,7 @@ public class RemoteSearchService {
             case "8" -> "115";
             case "9" -> "tianyi";
             case "10" -> "baidu";
+            case "12" -> "guangya";
             case "magnet" -> "magnet";
             case "ed2k" -> "ed2k";
             default -> null;
@@ -571,6 +572,7 @@ public class RemoteSearchService {
             case "115" -> "8";
             case "tianyi" -> "9";
             case "baidu" -> "10";
+            case "guangya" -> "12";
             case "magnet" -> "magnet";
             case "ed2k" -> "ed2k";
             default -> null;
@@ -629,6 +631,7 @@ public class RemoteSearchService {
             case "8" -> "115";
             case "9" -> "天翼";
             case "10" -> "百度";
+            case "12" -> "光鸭";
             case "aliyun" -> "阿里";
             case "pikpak" -> "PikPak";
             case "xunlei" -> "迅雷";
@@ -639,6 +642,7 @@ public class RemoteSearchService {
             case "115" -> "115";
             case "tianyi" -> "天翼";
             case "baidu" -> "百度";
+            case "guangya" -> "光鸭";
             case "magnet" -> "磁力";
             case "ed2k" -> "ED2K";
             default -> null;
@@ -660,6 +664,7 @@ public class RemoteSearchService {
             case "9" -> getUrl("/189.png");
             case "6" -> getUrl("/139.jpg");
             case "10" -> getUrl("/baidu.jpg");
+            case "12" -> getUrl("/guangya.webp");
             case "magnet" -> getUrl("/magnet.png");
             case "ed2k" -> getUrl("/ed2k.jpg");
             default -> null;

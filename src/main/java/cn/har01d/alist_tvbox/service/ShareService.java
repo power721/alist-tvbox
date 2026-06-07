@@ -852,12 +852,13 @@ public class ShareService {
     private static final Pattern SHARE_139_LINK1 = Pattern.compile("https://caiyun.139.com/m/i\\?([\\w-]+)");
     private static final Pattern SHARE_139_LINK2 = Pattern.compile("https://yun.139.com/shareweb/#/w/i/([\\w-]+)");
     private static final Pattern SHARE_139_LINK3 = Pattern.compile("https://caiyun.139.com/w/i/([\\w-]+)");
+    private static final Pattern SHARE_139_LINK4 = Pattern.compile("https://caiyun.feixin.10086.cn/([\\w-]+)");
     private static final Pattern SHARE_QUARK_LINK = Pattern.compile("https://pan.quark.cn/s/([\\w-]+)");
     private static final Pattern SHARE_UC_LINK = Pattern.compile("https://(?:drive|fast).uc.cn/s/([\\w-]+)(?:\\?password=(\\w+))?");
     private static final Pattern SHARE_ALI_LINK1 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([\\w-]+)/folder/([\\w-]+)(?:\\?password=(\\w+))?");
     private static final Pattern SHARE_ALI_LINK2 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([\\w-]+)(?:\\?password=(\\w+))?");
-    private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)提取码[:：](\\w+)");
-    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://(?:www\\.)?123...\\.com/s/([\\w-]+)(?:\\.html)?(?:\\??提取码[:：](\\w+))?");
+    private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://(?:www\\.)?123(?:684|685|865|912|pan|592)\\.(?:com|cn)/s/([\\w-]+)提取码[:：](\\w+)");
+    private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://(?:www\\.)?123(?:684|685|865|912|pan|592)\\.(?:com|cn)/s/([\\w-]+)(?:\\.html)?(?:\\??提取码[:：](\\w+))?");
     private static final Pattern SHARE_GUANGYA_LINK = Pattern.compile("https://(?:www\\.)?guangyapan\\.com/s/([A-Za-z0-9_-]+)");
     public static final Pattern PASSWORD = Pattern.compile("(?:密码|提取码|验证码|访问码|分享密码|密钥|pwd|password|code|share_pwd|pass_code|#)[=:：\\s]*([a-zA-Z0-9]{1,4})");
 
@@ -980,6 +981,14 @@ public class ShareService {
         }
 
         m = SHARE_139_LINK3.matcher(url);
+        if (m.find()) {
+            share.setType(6);
+            share.setShareId(m.group(1));
+            share.setPassword(parsePassword(url));
+            return true;
+        }
+
+        m = SHARE_139_LINK4.matcher(url);
         if (m.find()) {
             share.setType(6);
             share.setShareId(m.group(1));
