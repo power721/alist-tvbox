@@ -26,6 +26,7 @@ interface PrivateChannel {
   account_id: number
   telegram_channel_id: number
   title: string
+  alias: string
   username: string
   type: string
   last_message_id: number
@@ -199,7 +200,7 @@ const filteredPrivateChannels = computed(() => {
   const keyword = privateChannelKeyword.value.trim().toLowerCase()
   return privateChannels.value.filter(row => {
     if (keyword) {
-      const text = [row.title, row.username]
+      const text = [row.title, row.username, row.alias]
         .map(value => `${value || ''}`.toLowerCase())
         .join(' ')
       if (!text.includes(keyword)) {
@@ -554,8 +555,16 @@ const privateChannelIds = () => {
   return privateChannels.value.filter(e => e.enabled).map(e => e.id)
 }
 
+const privateChannelAliases = () => {
+  const aliases: Record<number, string> = {}
+  privateChannels.value.forEach(row => {
+    aliases[row.id] = row.alias || ''
+  })
+  return aliases
+}
+
 const savePrivateChannels = () => {
-  axios.put('/api/telegram/private/channels', {channel_ids: privateChannelIds()}).then(({data}) => {
+  axios.put('/api/telegram/private/channels', {channel_ids: privateChannelIds(), aliases: privateChannelAliases()}).then(({data}) => {
     privateChannels.value = data || []
     privateChannelsChanged.value = false
     setTimeout(() => privateRowDrop(), 500)
@@ -932,6 +941,11 @@ onUnmounted(() => {
         <el-table-column prop="id" label="ID" width="90" sortable/>
         <el-table-column prop="account_id" label="账号" width="90" sortable/>
         <el-table-column prop="title" label="标题" sortable/>
+        <el-table-column prop="alias" label="别名" width="180">
+          <template #default="scope">
+            <el-input v-model="scope.row.alias" clearable @input="markPrivateChannelChanged(scope.row)"/>
+          </template>
+        </el-table-column>
         <el-table-column prop="username" label="用户名" width="180" sortable>
           <template #default="scope">
             <a :href="'https://t.me/'+scope.row.username" target="_blank" v-if="scope.row.username">

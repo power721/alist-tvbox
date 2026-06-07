@@ -128,6 +128,17 @@ test('play config shows private channel visibility and row sync action', () => {
   )
 })
 
+test('play config lets users edit and save private channel aliases', () => {
+  assert.equal(componentSource.includes(`alias: string`), true)
+  assert.equal(componentSource.includes(`const privateChannelAliases = () => {`), true)
+  assert.equal(componentSource.includes(`aliases[row.id] = row.alias || ''`), true)
+  assert.equal(componentSource.includes(`{channel_ids: privateChannelIds(), aliases: privateChannelAliases()}`), true)
+  assert.equal(componentSource.includes(`[row.title, row.username, row.alias]`), true)
+  assert.equal(componentSource.includes(`prop="alias" label="别名"`), true)
+  assert.equal(componentSource.includes(`v-model="scope.row.alias"`), true)
+  assert.equal(componentSource.includes(`@input="markPrivateChannelChanged(scope.row)"`), true)
+})
+
 test('play config filters private channels by keyword visibility and type', () => {
   assert.equal(componentSource.includes(`import {computed, onMounted, onUnmounted, ref, watch} from "vue";`), true)
   assert.equal(componentSource.includes(`const privateChannelKeyword = ref('')`), true)

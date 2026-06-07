@@ -19,12 +19,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -70,6 +72,32 @@ class TgPrivateChannelServiceTest {
         verify(settingRepository).save(captor.capture());
         assertThat(captor.getValue().getName()).isEqualTo("tg_private_channel_ids");
         assertThat(captor.getValue().getValue()).isEqualTo("9,7");
+    }
+
+    @Test
+    void shouldSavePrivateChannelAliasesAndUseThemAsCategoryNames() {
+        when(tgProviderClient.channels()).thenReturn(List.of(
+                channel(7, "VIP 1"),
+                channel(9, "VIP 3")));
+        when(settingRepository.findById("tg_private_channel_ids"))
+                .thenReturn(Optional.of(new Setting("tg_private_channel_ids", "9,7")));
+        when(settingRepository.findById("tg_private_channel_aliases"))
+                .thenReturn(Optional.of(new Setting("tg_private_channel_aliases", "9=短剧频道\n7=电影频道")));
+
+        service.saveChannels(new TgPrivateChannelSelectionRequest(List.of(9L, 7L), Map.of(
+                9L, "短剧频道",
+                7L, "电影频道")));
+
+        ArgumentCaptor<Setting> captor = ArgumentCaptor.forClass(Setting.class);
+        verify(settingRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(Setting::getName)
+                .containsExactly("tg_private_channel_ids", "tg_private_channel_aliases");
+        assertThat(captor.getAllValues().get(1).getValue()).isEqualTo("9=短剧频道\n7=电影频道");
+
+        var categories = service.category().getCategories();
+
+        assertThat(categories).extracting("type_name").containsExactly("短剧频道", "电影频道", "夸克", "百度");
     }
 
     @Test

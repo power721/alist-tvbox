@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -135,7 +136,7 @@ class TelegramControllerTest {
     void shouldExposePrivateChannelsAndSaveSelection() throws Exception {
         TgPrivateChannel channel = new TgPrivateChannel(7, 1, 1001, "VIP", "vip_share", "channel", 88, "2026-06-07T12:00:00Z", true, "2026-06-07T12:05:00Z", true);
         when(tgPrivateChannelService.channels()).thenReturn(List.of(channel));
-        when(tgPrivateChannelService.saveChannels(new TgPrivateChannelSelectionRequest(List.of(7L)))).thenReturn(List.of(channel));
+        when(tgPrivateChannelService.saveChannels(new TgPrivateChannelSelectionRequest(List.of(7L), Map.of(7L, "短剧频道")))).thenReturn(List.of(channel));
 
         mockMvc.perform(get("/api/telegram/private/channels"))
                 .andExpect(status().isOk())
@@ -146,7 +147,7 @@ class TelegramControllerTest {
 
         mockMvc.perform(put("/api/telegram/private/channels")
                         .contentType(APPLICATION_JSON)
-                        .content("{\"channel_ids\":[7]}"))
+                        .content("{\"channel_ids\":[7],\"aliases\":{\"7\":\"短剧频道\"}}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].username").value("vip_share"));
     }

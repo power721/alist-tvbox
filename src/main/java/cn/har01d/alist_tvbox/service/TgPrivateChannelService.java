@@ -28,6 +28,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -36,6 +37,7 @@ import java.util.stream.Stream;
 @Service
 public class TgPrivateChannelService {
     public static final String CHANNEL_IDS_KEY = "tg_private_channel_ids";
+    public static final String CHANNEL_ALIASES_KEY = "tg_private_channel_aliases";
 
     private final TgProviderClient tgProviderClient;
     private final SettingRepository settingRepository;
@@ -51,14 +53,18 @@ public class TgPrivateChannelService {
 
     public List<TgPrivateChannel> channels() {
         Set<Long> enabled = enabledChannelIds();
+        Map<Long, String> aliases = channelAliases();
         List<TgPrivateChannel> channels = tgProviderClient.channels().stream()
-                .map(channel -> TgPrivateChannel.from(channel, enabled.contains(channel.id())))
+                .map(channel -> TgPrivateChannel.from(channel, enabled.contains(channel.id()), alias(channel, aliases)))
                 .toList();
         return orderChannels(channels, enabled);
     }
 
     public List<TgPrivateChannel> saveChannels(TgPrivateChannelSelectionRequest request) {
         settingRepository.save(new Setting(CHANNEL_IDS_KEY, joinIds(normalize(request == null ? null : request.channelIds()))));
+        if (request != null && request.aliases() != null) {
+            settingRepository.save(new Setting(CHANNEL_ALIASES_KEY, joinAliases(request)));
+        }
         return channels();
     }
 
@@ -78,11 +84,13 @@ public class TgPrivateChannelService {
 
     public TgPrivateChannel checkWebAccess(long channelId) {
         tgProviderClient.checkChannelWebAccess(List.of(channelId));
-        return TgPrivateChannel.from(tgProviderClient.channel(channelId), enabledChannelIds().contains(channelId));
+        TgProviderChannel channel = tgProviderClient.channel(channelId);
+        return TgPrivateChannel.from(channel, enabledChannelIds().contains(channelId), alias(channel, channelAliases()));
     }
 
     public List<TgPrivateChannel> checkWebAccess() {
         Set<Long> enabled = enabledChannelIds();
+        Map<Long, String> aliases = channelAliases();
         List<TgProviderChannel> channels = tgProviderClient.channels();
         List<Long> publicChannelIds = channels.stream()
                 .filter(channel -> StringUtils.isNotBlank(channel.username()))
@@ -93,7 +101,7 @@ public class TgPrivateChannelService {
             channels = tgProviderClient.channels();
         }
         List<TgPrivateChannel> privateChannels = channels.stream()
-                .map(channel -> TgPrivateChannel.from(channel, enabled.contains(channel.id())))
+                .map(channel -> TgPrivateChannel.from(channel, enabled.contains(channel.id()), alias(channel, aliases)))
                 .toList();
         return orderChannels(privateChannels, enabled);
     }
@@ -156,7 +164,7 @@ public class TgPrivateChannelService {
             }
             Category category = new Category();
             category.setType_id(String.valueOf(channel.id()));
-            category.setType_name(StringUtils.defaultIfBlank(channel.title(), channel.username()));
+            category.setType_name(StringUtils.defaultIfBlank(channel.alias(), StringUtils.defaultIfBlank(channel.title(), channel.username())));
             category.setType_flag(0);
             categories.add(category);
         }
@@ -229,7 +237,7 @@ public class TgPrivateChannelService {
     }
 
     private Set<Long> enabledChannelIds() {
-        return new LinkedHashSet<>(normalize(settingRepository.findById(CHANNEL_IDS_KEY)
+        return new LinkedHashSet<>(normalize(setting(CHANNEL_IDS_KEY)
                 .map(Setting::getValue)
                 .map(value -> List.of(value.split(",")))
                 .orElse(List.of())
@@ -250,6 +258,56 @@ public class TgPrivateChannelService {
 
     private String joinIds(Collection<Long> ids) {
         return ids.stream().map(String::valueOf).collect(Collectors.joining(","));
+    }
+
+    private String joinAliases(TgPrivateChannelSelectionRequest request) {
+        Map<Long, String> aliases = request.aliases();
+        if (aliases == null || aliases.isEmpty()) {
+            return "";
+        }
+        List<Long> orderedIds = new ArrayList<>(normalize(request.channelIds()));
+        aliases.keySet().stream()
+                .filter(id -> id != null && id > 0 && !orderedIds.contains(id))
+                .sorted()
+                .forEach(orderedIds::add);
+        return orderedIds.stream()
+                .filter(id -> StringUtils.isNotBlank(aliases.get(id)))
+                .map(id -> id + "=" + StringUtils.trim(aliases.get(id)))
+                .collect(Collectors.joining("\n"));
+    }
+
+    private Map<Long, String> channelAliases() {
+        return setting(CHANNEL_ALIASES_KEY)
+                .map(Setting::getValue)
+                .stream()
+                .flatMap(value -> List.of(value.split("\n")).stream())
+                .map(this::parseAlias)
+                .filter(entry -> entry != null && StringUtils.isNotBlank(entry.getValue()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (first, ignored) -> first));
+    }
+
+    private Map.Entry<Long, String> parseAlias(String line) {
+        if (StringUtils.isBlank(line)) {
+            return null;
+        }
+        int index = line.indexOf('=');
+        if (index <= 0) {
+            return null;
+        }
+        Long id = parseId(line.substring(0, index));
+        if (id == null) {
+            return null;
+        }
+        return Map.entry(id, line.substring(index + 1));
+    }
+
+    private String alias(TgProviderChannel channel, Map<Long, String> aliases) {
+        return StringUtils.defaultIfBlank(aliases.get(channel.id()), channel.alias());
+    }
+
+    private Optional<Setting> setting(String name) {
+        Optional<Setting> setting = settingRepository.findById(name);
+        return setting == null ? Optional.empty() : setting;
     }
 
     private Long parseId(String value) {
