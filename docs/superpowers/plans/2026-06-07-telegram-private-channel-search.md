@@ -22,10 +22,11 @@
 - Modify `src/main/java/cn/har01d/alist_tvbox/web/TelegramController.java`: split public/private search endpoints and add `/tgsc`.
 - Modify `src/main/resources/META-INF/native-image/reflect-config.json`: add new top-level DTOs.
 - Modify backend tests under `src/test/java/cn/har01d/alist_tvbox/service`, `src/test/java/cn/har01d/alist_tvbox/web`, and `src/test/java/cn/har01d/alist_tvbox/nativeimage`.
-- Modify `web-ui/src/views/VodView.vue`: add search source tabs and private search endpoint.
+- Modify `web-ui/src/views/SearchView.vue`: add search source tabs and private `/tgsc` search endpoint.
+- Modify `web-ui/src/views/VodView.vue`: keep playback-page public Telegram search only.
 - Modify `web-ui/src/components/PlayConfig.vue`: rename public channel tab, add private channels tab, add Telegram management tab.
 - Modify `web-ui/src/views/SubscriptionsView.vue`: remove Telegram login UI and state.
-- Modify frontend source tests `web-ui/src/views/VodView.test.mjs`, `web-ui/src/components/PlayConfig.test.mjs`, and `web-ui/src/views/SubscriptionsView.test.mjs`.
+- Modify frontend source tests `web-ui/src/views/SearchView.test.mjs`, `web-ui/src/views/VodView.test.mjs`, `web-ui/src/components/PlayConfig.test.mjs`, and `web-ui/src/views/SubscriptionsView.test.mjs`.
 
 ---
 
@@ -1109,85 +1110,81 @@ git commit -m "build: register telegram private dtos for native"
 
 ---
 
-### Task 5: Add Search Source Tabs To `VodView`
+### Task 5: Add Search Source Tabs To `SearchView`
 
 **Files:**
+- Modify: `web-ui/src/views/SearchView.test.mjs`
+- Modify: `web-ui/src/views/SearchView.vue`
 - Modify: `web-ui/src/views/VodView.test.mjs`
 - Modify: `web-ui/src/views/VodView.vue`
 
-- [ ] **Step 1: Add failing frontend source test**
+- [ ] **Step 1: Add failing frontend source tests**
 
-Append to `VodView.test.mjs`:
+Append to `SearchView.test.mjs`:
 
 ```js
-test('vod search separates public and private telegram search endpoints', () => {
-  assert.equal(viewSource.includes(`const searchMode = ref('public')`), true)
-  assert.equal(viewSource.includes(`label="盘搜"`), true)
-  assert.equal(viewSource.includes(`label="电报频道"`), true)
-  assert.equal(viewSource.includes(`searchMode.value === 'private' ? '/api/telegram/private/search' : '/api/telegram/search'`), true)
-  assert.equal(viewSource.includes(`encodeURIComponent(keyword.value)`), true)
+test('search page exposes telegram channel search tab', () => {
+  assert.equal(componentSource.includes(`const searchMode = ref(localStorage.getItem("search_mode") || 'pansou')`), true)
+  assert.equal(componentSource.includes(`label="盘搜"`), true)
+  assert.equal(componentSource.includes(`label="电报频道"`), true)
+  assert.equal(componentSource.includes(`searchMode.value === 'telegram' ? '/tgsc' : getPath(type.value)`), true)
 })
 ```
 
-- [ ] **Step 2: Run source test and confirm it fails**
+Replace the private-search expectation in `VodView.test.mjs` with a guard:
+
+```js
+test('vod page keeps telegram search tab out of player page', () => {
+  assert.equal(viewSource.includes(`const searchMode = ref('public')`), false)
+  assert.equal(viewSource.includes(`label="电报频道"`), false)
+  assert.equal(viewSource.includes(`searchMode.value === 'private' ? '/api/telegram/private/search' : '/api/telegram/search'`), false)
+  assert.equal(viewSource.includes(`axios.get('/api/telegram/search?wd=' + encodeURIComponent(keyword.value))`), true)
+})
+```
+
+- [ ] **Step 2: Run source tests and confirm they fail**
 
 Run:
 
 ```bash
-node --test web-ui/src/views/VodView.test.mjs
+node --test web-ui/src/views/SearchView.test.mjs web-ui/src/views/VodView.test.mjs
 ```
 
-Expected: FAIL because the new source selector and endpoint switch do not exist.
+Expected: FAIL because the new search-page source selector does not exist and the
+playback page still owns it.
 
-- [ ] **Step 3: Implement search mode state**
+- [ ] **Step 3: Implement search mode state in `SearchView.vue`**
 
-In `VodView.vue`, near the existing `keyword` state, add:
+Near the existing `keyword` state, add:
 
 ```ts
-const searchMode = ref('public')
+const searchMode = ref(localStorage.getItem("search_mode") || 'pansou')
 ```
 
-Update `search()`:
+Add:
 
 ```ts
-const search = () => {
-  searching.value = true
-  const endpoint = searchMode.value === 'private' ? '/api/telegram/private/search' : '/api/telegram/search'
-  return axios.get(endpoint + '?wd=' + encodeURIComponent(keyword.value)).then(({data}) => {
-    searching.value = false
-    results.value = data.map(e => {
-      return {
-        vod_id: e.id + '',
-        vod_name: e.name,
-        vod_tag: 'folder',
-        vod_time: formatDate(e.time),
-        type_name: e.type,
-        vod_play_from: e.channel,
-        vod_play_url: e.link,
-      }
-    })
-    if (results.value.length == 0) {
-      ElMessage.info('无搜索结果')
-    }
-    filterSearchResults()
-  }, () => {
-    searching.value = false
-  })
-}
+const getSearchPath = () => searchMode.value === 'telegram' ? '/tgsc' : getPath(type.value)
 ```
 
-- [ ] **Step 4: Add the search tabs in the header**
+In `search()`, persist `search_mode`, then choose the endpoint with the same expression
+and call `endpoint + '/' + store.token + '?ac=web&wd=' + encodeURIComponent(...)`.
 
-In the search column before the existing `<el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源">`, add:
+- [ ] **Step 4: Add the search tabs and telegram result table**
+
+At the top of `SearchView.vue`, add:
 
 ```vue
-<el-tabs v-model="searchMode" class="search-mode-tabs">
-  <el-tab-pane label="盘搜" name="public"/>
-  <el-tab-pane label="电报频道" name="private"/>
+<el-tabs v-model="searchMode" class="search-mode-tabs" @tab-change="handleSearchModeChange">
+  <el-tab-pane label="盘搜" name="pansou"/>
+  <el-tab-pane label="电报频道" name="telegram"/>
 </el-tabs>
 ```
 
-Keep the existing search input directly below the tabs.
+Use `getSearchPath()` in the displayed API address. Show the existing type selector and
+PanSou actions only when `searchMode === 'pansou'`. Add a telegram result table for
+`searchMode === 'telegram' && config?.list?.length` that opens rows with
+`/#/vod?link=` plus `vod_id`.
 
 - [ ] **Step 5: Add compact tab CSS**
 
@@ -1212,15 +1209,16 @@ In the scoped style block, add:
 Run:
 
 ```bash
-node --test web-ui/src/views/VodView.test.mjs
+node --test web-ui/src/views/SearchView.test.mjs web-ui/src/views/VodView.test.mjs
 ```
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit `VodView` changes**
+- [ ] **Step 7: Commit search-page changes**
 
 ```bash
-git add web-ui/src/views/VodView.vue web-ui/src/views/VodView.test.mjs
+git add web-ui/src/views/SearchView.vue web-ui/src/views/SearchView.test.mjs \
+        web-ui/src/views/VodView.vue web-ui/src/views/VodView.test.mjs
 git commit -m "feat: add telegram channel search tab"
 ```
 
@@ -1705,7 +1703,7 @@ Expected: PASS.
 Run:
 
 ```bash
-node --test web-ui/src/views/VodView.test.mjs web-ui/src/components/PlayConfig.test.mjs web-ui/src/views/SubscriptionsView.test.mjs
+node --test web-ui/src/views/SearchView.test.mjs web-ui/src/views/VodView.test.mjs web-ui/src/components/PlayConfig.test.mjs web-ui/src/views/SubscriptionsView.test.mjs
 ```
 
 Expected: PASS.

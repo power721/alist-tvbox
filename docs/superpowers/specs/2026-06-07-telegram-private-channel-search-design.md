@@ -55,13 +55,13 @@ must include these DTOs.
 
 ## Frontend Design
 
-`VodView.vue` adds a search source tab beside the existing search input:
+`SearchView.vue` adds a search source tab on the standalone search page:
 
 - `盘搜`: calls public search.
-- `电报频道`: calls private Telegram search.
+- `电报频道`: calls the private TvBox-compatible `/tgsc` search endpoint.
 
-The result table and filters stay shared because both endpoints return the existing
-message/result shape.
+`VodView.vue` keeps its existing playback-page public Telegram search box and does not
+own the private channel search tab.
 
 `PlayConfig.vue` changes its tabs to:
 
@@ -110,6 +110,7 @@ Backend tests:
 
 Frontend source tests:
 
-- `VodView.test.mjs` verifies the new `电报频道` tab and private search endpoint.
+- `SearchView.test.mjs` verifies the new `电报频道` tab and `/tgsc` endpoint.
+- `VodView.test.mjs` verifies the playback page does not own the private search tab.
 - `PlayConfig.test.mjs` verifies `公开频道`/`我的频道`/`电报管理` tabs and Telegram login APIs.
 - `SubscriptionsView.test.mjs` verifies Telegram login UI and API calls were removed.

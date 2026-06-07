@@ -17,7 +17,7 @@ test('search page persists search keyword in localStorage', () => {
 })
 
 test('PanSou search result table supports local header sorting', () => {
-  assert.equal(componentSource.includes(`<el-table v-if="(type=='6')&&config" :data="filteredPanSouResults" border style="width: 100%" v-loading="searching">`), true)
+  assert.equal(componentSource.includes(`<el-table v-if="searchMode === 'pansou'&&(type=='6')&&config" :data="filteredPanSouResults" border style="width: 100%" v-loading="searching">`), true)
   assert.equal(componentSource.includes(`<el-table-column prop="vod_name" label="名称" sortable>`), true)
   assert.equal(componentSource.includes(`<el-table-column prop="vod_id" label="链接" width="350" sortable>`), true)
   assert.equal(componentSource.includes(`<el-table-column prop="vod_remarks" label="类型" width="100" sortable/>`), true)
@@ -67,4 +67,11 @@ test('PanSou search result table hides magnet dn parameter only for display', ()
   assert.equal(componentSource.includes(`const formatDisplayLink = (vodId: string) => {`), true)
   assert.equal(componentSource.includes(`url.searchParams.delete('dn')`), true)
   assert.equal(componentSource.includes(`return decodeURIComponent(vodId)`), true)
+})
+
+test('search page exposes telegram channel search tab', () => {
+  assert.equal(componentSource.includes(`const searchMode = ref(localStorage.getItem("search_mode") || 'pansou')`), true)
+  assert.equal(componentSource.includes(`label="盘搜"`), true)
+  assert.equal(componentSource.includes(`label="电报频道"`), true)
+  assert.equal(componentSource.includes(`searchMode.value === 'telegram' ? '/tgsc' : getPath(type.value)`), true)
 })

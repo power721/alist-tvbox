@@ -1,9 +1,14 @@
 <template>
   <div class="search">
+    <el-tabs v-model="searchMode" class="search-mode-tabs" @tab-change="handleSearchModeChange">
+      <el-tab-pane label="盘搜" name="pansou"/>
+      <el-tab-pane label="电报频道" name="telegram"/>
+    </el-tabs>
+
     <h2>API地址</h2>
     <div class="description">
-      <a :href="currentUrl+getPath(type)+'/'+store.token+'?wd=' + keyword"
-         target="_blank">{{ currentUrl }}{{ getPath(type) }}/{{ store.token }}?wd={{ keyword }}</a>
+      <a :href="currentUrl+getSearchPath()+'/'+store.token+'?wd=' + keyword"
+         target="_blank">{{ currentUrl }}{{ getSearchPath() }}/{{ store.token }}?wd={{ keyword }}</a>
     </div>
 
     <div>
@@ -12,7 +17,7 @@
       <el-button type="primary" @click="showDialog" v-if="store.admin">设置</el-button>
     </div>
 
-    <el-form-item label="类型" label-width="140">
+    <el-form-item label="类型" label-width="140" v-if="searchMode === 'pansou'">
       <el-radio-group v-model="type" @change="search" class="ml-4">
         <el-radio label="1" size="large">点播模式</el-radio>
         <el-radio label="" size="large">网盘模式</el-radio>
@@ -28,7 +33,7 @@
     <span class="divider" v-if="store.admin"></span>
     <a href="/#/tmdb" v-if="store.admin">TMDB电影数据列表</a>
 
-    <div class="actions" v-if="type=='6'&&config?.list?.length">
+    <div class="actions" v-if="searchMode === 'pansou'&&type=='6'&&config?.list?.length">
       <span>{{ filteredPanSouResults.length }}/{{ config.list.length }}条搜索结果</span>
       <el-select style="width: 100px;margin: 0 12px;" v-model="panSouType">
         <el-option
@@ -46,7 +51,7 @@
       </el-button>
     </div>
 
-    <el-table v-if="(type==''||type=='1')&&config" :data="config.list" border style="width: 100%">
+    <el-table v-if="searchMode === 'pansou'&&(type==''||type=='1')&&config" :data="config.list" border style="width: 100%">
       <el-table-column prop="vod_name" label="名称" width="300">
         <template #default="scope">
           <a :href="'/#/vod'+scope.row.vod_content" target="_blank">
@@ -65,7 +70,7 @@
       <el-table-column prop="vod_remarks" label="评分" width="100"/>
     </el-table>
 
-    <el-table v-if="(type=='6')&&config" :data="filteredPanSouResults" border style="width: 100%" v-loading="searching">
+    <el-table v-if="searchMode === 'pansou'&&(type=='6')&&config" :data="filteredPanSouResults" border style="width: 100%" v-loading="searching">
       <el-table-column prop="vod_name" label="名称" sortable>
         <template #default="scope">
           <a :href="'/#/vod?link='+scope.row.vod_id" target="_blank">
@@ -99,8 +104,20 @@
       </el-table-column>
     </el-table>
 
-    <h2 v-if="type!='6'">API返回数据</h2>
-    <div class="data" v-if="type!='6'">
+    <el-table v-if="searchMode === 'telegram'&&config?.list?.length" :data="config.list" border style="width: 100%" v-loading="searching">
+      <el-table-column prop="vod_name" label="名称" sortable>
+        <template #default="scope">
+          <a :href="'/#/vod?link='+scope.row.vod_id" target="_blank">
+            {{ scope.row.vod_name }}
+          </a>
+        </template>
+      </el-table-column>
+      <el-table-column prop="vod_remarks" label="类型" width="100" sortable/>
+      <el-table-column prop="vod_time" label="时间" width="180" sortable/>
+    </el-table>
+
+    <h2 v-if="searchMode === 'pansou'&&type!='6'">API返回数据</h2>
+    <div class="data" v-if="searchMode === 'pansou'&&type!='6'">
       <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=3>
       </json-viewer>
     </div>
@@ -137,6 +154,7 @@ import {store} from "@/services/store";
 
 const type = ref(localStorage.getItem("search_type") || '1');
 const keyword = ref(localStorage.getItem("search_keyword") || '')
+const searchMode = ref(localStorage.getItem("search_mode") || 'pansou')
 const panSouType = ref('ALL')
 const config = ref<any>('')
 const searching = ref(false)
@@ -168,6 +186,8 @@ const getPath = (type: string) => {
     return '/vod'
   }
 }
+
+const getSearchPath = () => searchMode.value === 'telegram' ? '/tgsc' : getPath(type.value)
 
 const diskTypeMap: Record<string, string> = {
   '百度': 'baidu',
@@ -235,6 +255,7 @@ const search = function () {
   if (searching.value) {
     return
   }
+  localStorage.setItem('search_mode', searchMode.value)
   localStorage.setItem('search_type', type.value)
   localStorage.setItem('search_keyword', keyword.value.trim())
   if (!keyword.value) {
@@ -242,14 +263,23 @@ const search = function () {
   }
   searching.value = true
   config.value = ''
-  axios.get(getPath(type.value) + '/' + store.token + '?ac=web&wd=' + keyword.value.trim()).then(({data}) => {
+  const endpoint = searchMode.value === 'telegram' ? '/tgsc' : getPath(type.value)
+  axios.get(endpoint + '/' + store.token + '?ac=web&wd=' + encodeURIComponent(keyword.value.trim())).then(({data}) => {
     config.value = data
-    if (type.value == '6' && panSouType.value != 'ALL' && !panSouItems.value.some((e: any) => e.vod_remarks == panSouType.value)) {
+    if (searchMode.value === 'pansou' && type.value == '6' && panSouType.value != 'ALL' && !panSouItems.value.some((e: any) => e.vod_remarks == panSouType.value)) {
       panSouType.value = 'ALL'
     }
   }).finally(() => {
     searching.value = false
   })
+}
+
+const handleSearchModeChange = () => {
+  localStorage.setItem('search_mode', searchMode.value)
+  config.value = ''
+  if (keyword.value) {
+    search()
+  }
 }
 
 const checkLinks = () => {
@@ -379,6 +409,19 @@ const update = () => {
 <style scoped>
 .description {
   margin-bottom: 12px;
+}
+
+.search-mode-tabs {
+  max-width: 320px;
+  margin-bottom: 8px;
+}
+
+::v-deep .search-mode-tabs .el-tabs__header {
+  margin: 0 0 8px;
+}
+
+::v-deep .search-mode-tabs .el-tabs__nav-wrap::after {
+  height: 1px;
 }
 
 .actions {
