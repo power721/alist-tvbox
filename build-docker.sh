@@ -1,4 +1,9 @@
+#!/usr/bin/env bash
 set -e
+
+SCRIPT_PATH="${BASH_SOURCE:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+. "$SCRIPT_DIR/scripts/tg-provider-build-cache.sh"
 
 BASE_DIR=/opt/alist
 PORT1=4567
@@ -59,6 +64,7 @@ cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 
 export TZ=Asia/Shanghai
 echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
+prepare_tg_provider
 echo "build haroldli/alist-tvbox:latest"
 docker build -f docker/Dockerfile --tag=haroldli/alist-tvbox:latest .
 

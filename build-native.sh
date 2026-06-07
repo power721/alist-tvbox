@@ -1,4 +1,9 @@
+#!/usr/bin/env bash
 set -e
+
+SCRIPT_PATH="${BASH_SOURCE:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+. "$SCRIPT_DIR/scripts/tg-provider-build-cache.sh"
 
 MOUNT=/etc/xiaoya
 PORT1=4567
@@ -65,6 +70,7 @@ docker pull xiaoyaliu/alist:latest
 
 docker image prune -f
 echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
+prepare_tg_provider
 docker build -f docker/Dockerfile-native --tag=haroldli/xiaoya-tvbox:native . || exit 1
 docker rm -f xiaoya-tvbox alist-tvbox 2>/dev/null
 docker run -d -p $PORT1:4567 -p $PORT2:80 -e ALIST_PORT=$PORT2 -e INSTALL=native -v "$MOUNT":/data --name=xiaoya-tvbox haroldli/xiaoya-tvbox:native
