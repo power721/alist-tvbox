@@ -961,8 +961,10 @@ public class SubscriptionService {
                         if (StringUtils.isNotBlank(spider) && url != null) {
                             spider = resolveUrl(url, spider);
                         }
+                    } else if ("headers".equals(key)) {
+                        keyName = "host";
                     }
-                    log.debug("overrideConfig: {} {}", key, value);
+                    log.debug("overrideConfig: {} {} {}", key, keyName, value);
                     overrideList(config, override, prefix, spider, key, keyName);
                 } else {
                     config.put(key, value);
