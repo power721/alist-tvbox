@@ -629,6 +629,7 @@ import {ElMessage} from "element-plus";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
 import PluginFilterConfigFieldEditor from "@/components/PluginFilterConfigFieldEditor.vue";
+import {isPluginDragEnabledForUserAgent} from "@/utils/pluginDragSupport.mjs";
 
 interface Sub {
   sid: '',
@@ -855,6 +856,7 @@ const pluginFilterConfigJson = ref('{}')
 const pluginFilterConfigObject = ref<Record<string, any>>({})
 const pluginFilterConfigExtras = ref<PluginFilterExtraEntry[]>([])
 const pluginFilterConfigError = ref('')
+const pluginDragEnabled = ref(isPluginDragEnabledForUserAgent(window.navigator.userAgent))
 let timer = 0
 let pluginSortable: Sortable | null = null
 let pluginFilterSortable: Sortable | null = null
@@ -1348,6 +1350,11 @@ const formatPluginCheckedAt = (value: string) => {
 }
 
 const enablePluginRowDrop = () => {
+  if (!pluginDragEnabled.value) {
+    pluginSortable?.destroy()
+    pluginSortable = null
+    return
+  }
   const tbody = document.querySelector('#plugins-table .el-table__body-wrapper tbody') as HTMLElement
   if (!tbody) {
     return
@@ -1374,6 +1381,11 @@ const enablePluginRowDrop = () => {
 }
 
 const enablePluginFilterRowDrop = () => {
+  if (!pluginDragEnabled.value) {
+    pluginFilterSortable?.destroy()
+    pluginFilterSortable = null
+    return
+  }
   const tbody = document.querySelector('#plugin-filters-table .el-table__body-wrapper tbody') as HTMLElement
   if (!tbody) {
     return

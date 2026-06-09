@@ -17,6 +17,13 @@ test('reorders unified subscription sources instead of plugin-only list', () => 
   assert.equal(viewSource.includes("/api/subscription-sources/reorder"), true)
 })
 
+test('disables source and filter drag sorting on mobile browsers', () => {
+  assert.equal(viewSource.includes('isPluginDragEnabledForUserAgent'), true)
+  assert.equal(viewSource.includes('const pluginDragEnabled = ref(isPluginDragEnabledForUserAgent(window.navigator.userAgent))'), true)
+  assert.equal((viewSource.match(/if \(!pluginDragEnabled\.value\)/g) || []).length, 2)
+  assert.equal((viewSource.match(/pluginSortable = null|pluginFilterSortable = null/g) || []).length, 2)
+})
+
 test('exposes plugin run mode settings in subscription source manager', () => {
   assert.equal(viewSource.includes('plugin_run_mode'), true)
   assert.equal(viewSource.includes('原生Python'), true)
