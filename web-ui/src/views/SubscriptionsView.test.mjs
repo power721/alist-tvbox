@@ -22,3 +22,14 @@ test('exposes plugin run mode settings in subscription source manager', () => {
   assert.equal(viewSource.includes('原生Python'), true)
   assert.equal(viewSource.includes('Java代理'), true)
 })
+
+test('does not show telegram login button in subscription toolbar', () => {
+  assert.equal(viewSource.includes('<el-button @click="handleLogin">登录 Telegram</el-button>'), false)
+})
+
+test('does not own telegram sms login workflow', () => {
+  assert.equal(viewSource.includes('/api/telegram/login/send-code'), false)
+  assert.equal(viewSource.includes('/api/telegram/login/sign-in'), false)
+  assert.equal(viewSource.includes('/api/telegram/login/password'), false)
+  assert.equal(viewSource.includes('/api/telegram/logout'), false)
+})

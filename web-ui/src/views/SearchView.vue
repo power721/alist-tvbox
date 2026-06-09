@@ -21,6 +21,7 @@
         <el-radio label="5" size="large">Jellyfin</el-radio>
         <el-radio label="7" size="large">飞牛影视</el-radio>
         <el-radio label="6" size="large">鱼佬盘搜</el-radio>
+        <el-radio label="8" size="large">电报频道</el-radio>
       </el-radio-group>
     </el-form-item>
 
@@ -99,8 +100,20 @@
       </el-table-column>
     </el-table>
 
-    <h2 v-if="type!='6'">API返回数据</h2>
-    <div class="data" v-if="type!='6'">
+    <el-table v-if="(type=='8')&&config?.list?.length" :data="config.list" border style="width: 100%" v-loading="searching">
+      <el-table-column prop="vod_name" label="名称" sortable>
+        <template #default="scope">
+          <a :href="'/#/vod?link='+scope.row.vod_id" target="_blank">
+            {{ scope.row.vod_name }}
+          </a>
+        </template>
+      </el-table-column>
+      <el-table-column prop="vod_remarks" label="类型" width="100" sortable/>
+      <el-table-column prop="vod_time" label="时间" width="180" sortable/>
+    </el-table>
+
+    <h2 v-if="type!='6'&&type!='8'">API返回数据</h2>
+    <div class="data" v-if="type!='6'&&type!='8'">
       <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=3>
       </json-viewer>
     </div>
@@ -164,6 +177,8 @@ const getPath = (type: string) => {
     return '/feiniu'
   } else if (type == '6') {
     return '/pansou'
+  } else if (type == '8') {
+    return '/tgsc'
   } else {
     return '/vod'
   }
@@ -242,7 +257,7 @@ const search = function () {
   }
   searching.value = true
   config.value = ''
-  axios.get(getPath(type.value) + '/' + store.token + '?ac=web&wd=' + keyword.value.trim()).then(({data}) => {
+  axios.get(getPath(type.value) + '/' + store.token + '?ac=web&wd=' + encodeURIComponent(keyword.value.trim())).then(({data}) => {
     config.value = data
     if (type.value == '6' && panSouType.value != 'ALL' && !panSouItems.value.some((e: any) => e.vod_remarks == panSouType.value)) {
       panSouType.value = 'ALL'

@@ -1,0 +1,37 @@
+package cn.har01d.alist_tvbox.dto.tg;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record TgProviderChannel(long id,
+                                @JsonProperty("account_id") long accountId,
+                                @JsonProperty("telegram_channel_id") long telegramChannelId,
+                                @JsonProperty("access_hash") long accessHash,
+                                String title,
+                                String alias,
+                                String username,
+                                String type,
+                                @JsonProperty("last_message_id") long lastMessageId,
+                                @JsonProperty("last_sync_time") String lastSyncTime,
+                                @JsonProperty("web_access") boolean webAccess,
+                                @JsonProperty("web_access_checked_at") String webAccessCheckedAt,
+                                @JsonProperty("created_at") String createdAt,
+                                @JsonProperty("updated_at") String updatedAt) {
+    public TgProviderChannel(long id,
+                             long accountId,
+                             long telegramChannelId,
+                             long accessHash,
+                             String title,
+                             String username,
+                             String type,
+                             long lastMessageId,
+                             String lastSyncTime,
+                             boolean webAccess,
+                             String webAccessCheckedAt,
+                             String createdAt,
+                             String updatedAt) {
+        this(id, accountId, telegramChannelId, accessHash, title, null, username, type, lastMessageId, lastSyncTime,
+                webAccess, webAccessCheckedAt, createdAt, updatedAt);
+    }
+}

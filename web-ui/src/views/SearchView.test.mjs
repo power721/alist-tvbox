@@ -68,3 +68,12 @@ test('PanSou search result table hides magnet dn parameter only for display', ()
   assert.equal(componentSource.includes(`url.searchParams.delete('dn')`), true)
   assert.equal(componentSource.includes(`return decodeURIComponent(vodId)`), true)
 })
+
+test('search page exposes telegram channel as the eighth search type', () => {
+  assert.equal(componentSource.includes(`const searchMode = ref(`), false)
+  assert.equal(componentSource.includes(`<el-tabs v-model="searchMode"`), false)
+  assert.equal(componentSource.includes(`<el-radio label="8" size="large">电报频道</el-radio>`), true)
+  assert.equal(componentSource.includes(`} else if (type == '8') {`), true)
+  assert.equal(componentSource.includes(`return '/tgsc'`), true)
+  assert.equal(componentSource.includes(`<el-table v-if="(type=='8')&&config?.list?.length"`), true)
+})

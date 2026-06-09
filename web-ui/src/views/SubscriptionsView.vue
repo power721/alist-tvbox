@@ -159,50 +159,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="tgVisible" title="登陆Telegram" width="60%" @close="cancelLogin">
-      <el-form>
-        <el-form-item label="登陆方式" label-width="140">
-          <el-radio-group v-model="tgAuthType" class="ml-4" @change="setAuthType">
-            <el-radio label="qr" size="large">二维码</el-radio>
-            <el-radio label="code" size="large">验证码</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <div v-if="tgAuthType=='qr'&&tgPhase==1&&base64QrCode!=''">
-          <img alt="qr" :src="'data:image/png;base64,'+ base64QrCode" style="width: 500px;">
-          <p>二维码30秒内有效。</p>
-          <el-form-item>
-            <el-button type="primary" @click="setScanned">我已经扫码</el-button>
-          </el-form-item>
-        </div>
-        <el-form-item label="电话号码" label-width="140" required v-if="tgAuthType=='code'&&tgPhase==1">
-          <el-input v-model="tgPhone" autocomplete="off" placeholder="+8612345678901"/>
-          <el-button @click="sendTgPhone">输入</el-button>
-        </el-form-item>
-        <el-form-item label="验证码" label-width="140" required v-if="tgAuthType=='code'&&tgPhase==3">
-          <el-input v-model="tgCode" autocomplete="off"/>
-          <el-button @click="sendTgCode">输入</el-button>
-        </el-form-item>
-        <el-form-item label="密码" label-width="140" required v-if="tgPhase==5">
-          <el-input v-model="tgPassword" autocomplete="off"/>
-          <el-button @click="sendTgPassword">输入</el-button>
-        </el-form-item>
-        <div v-if="user.id">
-          <div>登陆成功</div>
-          <div>用户ID： {{ user.id }}</div>
-          <div>用户名： {{ user.username }}</div>
-          <div>姓名： {{ user.first_name }} {{ user.last_name }}</div>
-        </div>
-      </el-form>
-      <template #footer>
-      <span class="dialog-footer">
-        <el-button type="primary" @click="login">登陆</el-button>
-        <el-button type="danger" @click="logout">退出登陆</el-button>
-        <!--        <el-button @click="reset">重置</el-button>-->
-        <el-button @click="cancelLogin">取消</el-button>
-      </span>
-      </template>
-    </el-dialog>
-
     <el-dialog v-model="scanVisible" title="影视设备">
       <el-row>
         <el-col span="8">
@@ -731,11 +687,6 @@ const pluginRunModeOptions = [
   {label: 'Java代理', value: 'java'},
   {label: '原生Python', value: 'python'},
 ]
-const tgPhase = ref(0)
-const tgPhone = ref('')
-const tgCode = ref('')
-const tgPassword = ref('')
-const tgAuthType = ref('qr')
 const base64QrCode = ref('')
 const token = ref('')
 const pgLocal = ref('')
@@ -760,7 +711,6 @@ const pluginFilterVisible = ref(false)
 const pluginFilterConfigVisible = ref(false)
 const sourceExtendVisible = ref(false)
 const importingPlugins = ref(false)
-const tgVisible = ref(false)
 const scanVisible = ref(false)
 const confirm = ref(false)
 const push = ref(false)
@@ -788,13 +738,6 @@ const form = ref({
   url: '',
   sort: '',
   override: ''
-})
-const user = ref({
-  id: 0,
-  username: '',
-  first_name: '',
-  last_name: '',
-  phone: ''
 })
 const plugins = ref<Plugin[]>([])
 const managedSources = ref<ManagedSource[]>([])
@@ -855,71 +798,8 @@ const pluginFilterConfigJson = ref('{}')
 const pluginFilterConfigObject = ref<Record<string, any>>({})
 const pluginFilterConfigExtras = ref<PluginFilterExtraEntry[]>([])
 const pluginFilterConfigError = ref('')
-let timer = 0
 let pluginSortable: Sortable | null = null
 let pluginFilterSortable: Sortable | null = null
-
-const handleLogin = () => {
-  axios.get('/api/telegram/user').then(({data}) => {
-    user.value = data
-  })
-  axios.get('/api/settings/tg_auth_type').then(({data}) => {
-    tgAuthType.value = data.value || 'qr'
-  })
-  tgVisible.value = true
-}
-
-const login = () => {
-  axios.post('/api/telegram/login')
-  timer = setInterval(() => {
-    axios.get('/api/settings/tg_phase').then(({data}) => {
-      tgPhase.value = +data.value
-      if (tgPhase.value > 8) {
-        clearInterval(timer)
-        axios.get('/api/telegram/user').then(({data}) => {
-          user.value = data
-        })
-      } else if (tgAuthType.value == 'qr' && tgPhase.value == 1 && !base64QrCode.value) {
-        loadQrCode()
-      }
-    })
-  }, 1000)
-  setTimeout(() => {
-    clearInterval(timer)
-  }, 120_000)
-}
-
-const loadQrCode = () => {
-  axios.get('/api/settings/tg_qr_img').then(({data}) => {
-    base64QrCode.value = data.value
-  })
-}
-
-const cancelLogin = () => {
-  clearInterval(timer)
-  tgVisible.value = false
-}
-
-const reset = () => {
-  axios.post('/api/telegram/reset').then(() => {
-    ElMessage.success('重置成功')
-    clearInterval(timer)
-  })
-}
-
-const logout = () => {
-  axios.post('/api/telegram/logout').then(() => {
-    ElMessage.success('退出登陆成功')
-    clearInterval(timer)
-    user.value = {
-      id: 0,
-      username: '',
-      first_name: '',
-      last_name: '',
-      phone: ''
-    }
-  })
-}
 
 const handleAdd = () => {
   dialogTitle.value = '添加订阅'
@@ -1718,29 +1598,6 @@ const deleteDevice = () => {
   })
 }
 
-const setAuthType = () => {
-  base64QrCode.value = ''
-  axios.post('/api/settings', {name: 'tg_auth_type', value: tgAuthType.value})
-}
-
-const setScanned = () => {
-  axios.post('/api/settings', {name: 'tg_scanned', value: 'true'}).then(() => {
-    base64QrCode.value = ''
-  })
-}
-
-const sendTgPhone = () => {
-  axios.post('/api/settings', {name: 'tg_phone', value: tgPhone.value})
-}
-
-const sendTgCode = () => {
-  axios.post('/api/settings', {name: 'tg_code', value: tgCode.value})
-}
-
-const sendTgPassword = () => {
-  axios.post('/api/settings', {name: 'tg_password', value: tgPassword.value})
-}
-
 const handleConfirm = () => {
   axios.post('/api/subscriptions', form.value).then(() => {
     formVisible.value = false
@@ -1788,15 +1645,11 @@ onMounted(() => {
     token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
     load()
     loadVersion()
-    axios.get('/api/settings/tg_phase').then(({data}) => {
-      tgPhase.value = data.value
-    })
   })
   loadDevices()
 })
 
 onUnmounted(() => {
-  clearInterval(timer)
   pluginSortable?.destroy()
   pluginFilterSortable?.destroy()
 })

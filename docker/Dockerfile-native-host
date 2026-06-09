@@ -2,6 +2,8 @@ FROM haroldli/alist-base:hostmode
 
 LABEL MAINTAINER="Har01d"
 
+ARG TARGETARCH
+
 ENV INSTALL=native-host NATIVE=true
 
 WORKDIR /opt/atv/
@@ -12,6 +14,8 @@ COPY scripts/index.sh /
 
 COPY entrypoint-native.sh /entrypoint.sh
 COPY init.sh /
+COPY scripts/tg-provider-runtime.sh /tg-provider-runtime.sh
+RUN chmod +x /tg-provider-runtime.sh
 
 COPY data/update.sql /
 COPY data/tvbox.zip /
@@ -22,6 +26,8 @@ COPY data/zx.zip /
 COPY data/data.zip /
 COPY data/base_version /
 
+COPY build/tg-provider/linux-${TARGETARCH}/tg-provider /usr/local/bin/tg-provider
+RUN chmod +x /usr/local/bin/tg-provider
 COPY target/atv ./
 
 COPY data/version /app_version

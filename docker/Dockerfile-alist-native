@@ -2,6 +2,8 @@ FROM haroldli/alist-base:latest
 
 LABEL MAINTAINER="Har01d"
 
+ARG TARGETARCH
+
 ENV ALIST_PORT=5344 INSTALL=native NATIVE=true
 
 WORKDIR /opt/atv/
@@ -11,6 +13,8 @@ COPY config/alist.json /
 COPY scripts/entrypoint-native.sh /entrypoint.sh
 COPY scripts/index.sh /
 COPY scripts/init.sh /
+COPY scripts/tg-provider-runtime.sh /tg-provider-runtime.sh
+RUN chmod +x /tg-provider-runtime.sh
 
 COPY data/tvbox.zip /
 COPY data/cat.zip /
@@ -18,6 +22,8 @@ COPY data/pg.zip /
 COPY data/zx.zip /
 COPY data/base_version /
 
+COPY build/tg-provider/linux-${TARGETARCH}/tg-provider /usr/local/bin/tg-provider
+RUN chmod +x /usr/local/bin/tg-provider
 COPY target/atv ./
 
 COPY data/version /app_version

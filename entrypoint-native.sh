@@ -26,4 +26,6 @@ ln -sf /data/log /opt/atv/log
 /usr/sbin/nginx
 shift
 
-./atv "$@"
+. /tg-provider-runtime.sh
+tg_provider_start || exit 1
+tg_provider_run_app ./atv "$@"

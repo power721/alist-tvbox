@@ -1,5 +1,11 @@
+#!/usr/bin/env bash
 set -e
 
+SCRIPT_PATH="${BASH_SOURCE:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+. "$SCRIPT_DIR/scripts/tg-provider-build-cache.sh"
+
+main() {
 BASE_DIR=/etc/xiaoya
 PORT1=4567
 PORT2=5344
@@ -83,6 +89,7 @@ echo -e "\e[36m端口映射：\e[0m $PORT1:4567  $PORT2:5244"
 
 docker image prune -f
 echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
+prepare_tg_provider
 echo "=== build haroldli/xiaoya-tvbox ==="
 docker build -f docker/Dockerfile-xiaoya --tag=haroldli/xiaoya-tvbox:latest .
 echo "=== restart xiaoya-tvbox ==="
@@ -111,3 +118,8 @@ fi
 echo ""
 
 docker logs -f xiaoya-tvbox
+}
+
+if [ "${BUILD_XIAOYA_SOURCE_ONLY:-0}" != "1" ]; then
+  main "$@"
+fi

@@ -15,6 +15,7 @@ import cn.har01d.alist_tvbox.model.BuiltinSubscriptionSourceState;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class SubscriptionSourceService {
     private static final String BUILTIN_SETTINGS_KEY = "builtin_subscription_sources";
     private static final String SORT_ORDER_MIGRATED_KEY = "subscription_source_sort_order_migrated";
@@ -37,6 +39,7 @@ public class SubscriptionSourceService {
     private final FeiniuRepository feiniuRepository;
     private final JellyfinRepository jellyfinRepository;
     private final ObjectMapper objectMapper;
+    private final TgProviderClient tgProviderClient;
 
     public SubscriptionSourceService(AppProperties appProperties,
                                      PluginRepository pluginRepository,
@@ -45,7 +48,8 @@ public class SubscriptionSourceService {
                                      EmbyRepository embyRepository,
                                      FeiniuRepository feiniuRepository,
                                      JellyfinRepository jellyfinRepository,
-                                     ObjectMapper objectMapper) {
+                                     ObjectMapper objectMapper,
+                                     TgProviderClient tgProviderClient) {
         this.appProperties = appProperties;
         this.pluginRepository = pluginRepository;
         this.settingRepository = settingRepository;
@@ -54,6 +58,7 @@ public class SubscriptionSourceService {
         this.feiniuRepository = feiniuRepository;
         this.jellyfinRepository = jellyfinRepository;
         this.objectMapper = objectMapper;
+        this.tgProviderClient = tgProviderClient;
     }
 
     public record ManagedSource(
@@ -253,6 +258,7 @@ public class SubscriptionSourceService {
     }
 
     private List<BuiltinDefinition> builtinDefinitions() {
+        refreshTgProviderLoginState();
         List<BuiltinDefinition> definitions = new ArrayList<>();
         int order = 1;
         Site xiaoya = siteRepository.findById(1).orElse(null);
@@ -275,12 +281,23 @@ public class SubscriptionSourceService {
         if (appProperties.isTgLogin() || StringUtils.isNotBlank(appProperties.getTgSearch())) {
             definitions.add(new BuiltinDefinition("csp_TgSearch", "电报搜索", order++));
         }
+        if (appProperties.isTgLogin()) {
+            definitions.add(new BuiltinDefinition("csp_TgChannel", "电报频道", order++));
+        }
         definitions.add(new BuiltinDefinition("csp_TgWeb", "电报网页", order++));
         if (StringUtils.isNotBlank(appProperties.getPanSouUrl())) {
             definitions.add(new BuiltinDefinition("csp_FishPanSou", "鱼佬盘搜", order));
         }
         definitions.add(new BuiltinDefinition("csp_Push", "推送", order++));
         return definitions;
+    }
+
+    private void refreshTgProviderLoginState() {
+        try {
+            appProperties.setTgLogin(tgProviderClient.refreshLoginState());
+        } catch (RuntimeException e) {
+            log.warn("refresh tg-provider login state failed", e);
+        }
     }
 
     private Integer parsePluginId(String id) {

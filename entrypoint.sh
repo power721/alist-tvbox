@@ -26,4 +26,6 @@ ln -sf /data/log /opt/atv/log
 /usr/sbin/nginx
 shift
 
-/jre/bin/java "$MEM_OPT" -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication "$@"
+. /tg-provider-runtime.sh
+tg_provider_start || exit 1
+tg_provider_run_app /jre/bin/java "$MEM_OPT" -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication "$@"

@@ -90,6 +90,29 @@ jobs:
           echo "${{ github.event.head_commit.message }}" >> data/version
           cp data/version data/app_version
           cat data/version
+      - name: Download tg-provider latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf build/tg-provider
+          mkdir -p build/tg-provider/download build/tg-provider/linux-amd64 build/tg-provider/linux-arm64
+          tag="$(gh release view --repo power721/telegram-search --json tagName --jq .tagName)"
+          echo "${tag}" > build/tg-provider/version
+          gh release download "${tag}" \
+            --repo power721/telegram-search \
+            --dir build/tg-provider/download \
+            --pattern tg-provider-linux-amd64 \
+            --pattern tg-provider-linux-arm64 \
+            --pattern checksums.txt \
+            --clobber
+          cd build/tg-provider/download
+          sha256sum -c checksums.txt
+          cd ../../..
+          install -m 0755 build/tg-provider/download/tg-provider-linux-amd64 build/tg-provider/linux-amd64/tg-provider
+          install -m 0755 build/tg-provider/download/tg-provider-linux-arm64 build/tg-provider/linux-arm64/tg-provider
+          echo "tg-provider release: $(cat build/tg-provider/version)"
+          ls -l build/tg-provider/linux-amd64/tg-provider build/tg-provider/linux-arm64/tg-provider
       - name: Build xiaoya docker and push
         uses: docker/build-push-action@v6
         with:

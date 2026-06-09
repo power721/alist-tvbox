@@ -967,7 +967,7 @@ const handleAdd = () => {
 
 const search = () => {
   searching.value = true
-  return axios.get('/api/telegram/search?wd=' + keyword.value).then(({data}) => {
+  return axios.get('/api/telegram/search?wd=' + encodeURIComponent(keyword.value)).then(({data}) => {
     searching.value = false
     results.value = data.map(e => {
       return {

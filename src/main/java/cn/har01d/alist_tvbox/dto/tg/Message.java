@@ -88,6 +88,38 @@ public class Message {
         this.channel = link.getSource();
     }
 
+    public static Message fromProvider(int providerId,
+                                       String channel,
+                                       String content,
+                                       String link,
+                                       String time) {
+        return fromProvider(providerId, null, channel, content, link, time);
+    }
+
+    public static Message fromProvider(int providerId,
+                                       Long telegramMessageId,
+                                       String channel,
+                                       String content,
+                                       String link,
+                                       String time) {
+        Message message = new Message();
+        message.id = resolveProviderMessageId(providerId, telegramMessageId);
+        message.parseTime(time);
+        message.content = content == null ? "" : content;
+        message.link = link == null ? null : fixLink(link);
+        message.type = message.link == null ? null : parseType(message.link);
+        message.name = message.parseName();
+        message.channel = channel;
+        return message;
+    }
+
+    private static int resolveProviderMessageId(int providerId, Long telegramMessageId) {
+        if (telegramMessageId == null || telegramMessageId > Integer.MAX_VALUE || telegramMessageId < Integer.MIN_VALUE) {
+            return providerId;
+        }
+        return telegramMessageId.intValue();
+    }
+
     public String toPgString() {
         return time.atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) + "\t" + channel + "\t" + content.replace('\n', ' ') + "\t" + (mid == null ? id : mid);
     }
