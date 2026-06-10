@@ -16,6 +16,7 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -97,6 +98,7 @@ public class TelegramService {
     private final LoadingCache<String, List<Message>> searchCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(15)).build(this::getFromChannel);
     private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private final Cache<String, String> lastId = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
+    private final Cache<String, MovieDetail> movies = Caffeine.newBuilder().maximumSize(200).expireAfterWrite(Duration.ofHours(2)).build();
     private final List<String> fields = new ArrayList<>(List.of("id", "name", "genre", "description", "language", "country", "directors", "editors", "actors", "cover", "dbScore", "year"));
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -356,6 +358,17 @@ public class TelegramService {
         MovieList result = tvBoxService.getDetail(ac, "1$" + path + "/~playlist");
         if (StringUtils.isNotBlank(title)) {
             result.getList().get(0).setVod_name(title);
+        } else {
+            MovieDetail movie = movies.getIfPresent(tid);
+            if (movie != null) {
+                MovieDetail movieDetail = result.getList().get(0);
+                movieDetail.setVod_name(movie.getVod_name());
+                movieDetail.setVod_year(movie.getVod_year());
+                movieDetail.setVod_remarks(movie.getVod_remarks());
+                if (StringUtils.isNotBlank(movie.getVod_content())) {
+                    movieDetail.setVod_content(movieDetail.getVod_content() + "\n" + movie.getVod_content());
+                }
+            }
         }
         return result;
     }
@@ -1029,7 +1042,7 @@ public class TelegramService {
         }
         Object title = media.get("title");
         if (title != null && StringUtils.isNotBlank(String.valueOf(title))) {
-            movieDetail.setVod_name(String.valueOf(title));
+            movieDetail.setVod_name(TextUtils.fixName(String.valueOf(title)));
         }
         Object year = media.get("year");
         if (year != null && StringUtils.isNotBlank(String.valueOf(year))) {
@@ -1049,7 +1062,9 @@ public class TelegramService {
         if (!content.isEmpty()) {
             movieDetail.setVod_content(String.join("\n", content));
         }
-        movieDetail.setExt(media);
+//        movieDetail.setExt(media);
+        log.debug("cache put: {} {}", message.getLink(), media);
+        movies.put(message.getLink(), movieDetail);
     }
 
     private String resolveTgSearchMediaUrl(String url) {
