@@ -224,7 +224,7 @@ public class RemoteSearchService {
         }
     }
 
-    private List<Message> filterInvalidPanSouLinks(List<Message> messages) {
+    public List<Message> filterInvalidPanSouLinks(List<Message> messages) {
         if (!appProperties.isPanSouLinkCheckEnabled() || messages.isEmpty()) {
             return messages;
         }

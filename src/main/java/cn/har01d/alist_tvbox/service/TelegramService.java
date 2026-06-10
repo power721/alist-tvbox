@@ -518,7 +518,7 @@ public class TelegramService {
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
         List<String> tgDrivers = appProperties.getTgDrivers();
-        for (Message message : searchResult.messages()) {
+        for (Message message : remoteSearchService.filterInvalidPanSouLinks(searchResult.messages())) {
             if (tgDrivers.isEmpty() || tgDrivers.contains(message.getType())) {
                 list.add(toMovieDetail(message));
             }

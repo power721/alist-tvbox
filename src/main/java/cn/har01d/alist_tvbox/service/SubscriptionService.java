@@ -1169,6 +1169,7 @@ public class SubscriptionService {
         map.put("jellyfin", jellyfinRepository.count() > 0);
         map.put("feiniu", feiniuRepository.count() > 0);
         map.put("pansou", StringUtils.isNotBlank(appProperties.getPanSouUrl()));
+        map.put("telegram_channel", StringUtils.isNotBlank(appProperties.getTgSearch()));
         map.put("bilibili", StringUtils.isNotBlank(settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse("")));
         Site site = siteRepository.findById(1).orElse(null);
         map.put("xiaoya", site != null);
