@@ -453,15 +453,15 @@ onUnmounted(() => {
         <el-form-item>
           <el-button type="primary" @click="updateTgTimeout">更新</el-button>
         </el-form-item>
-        <el-form-item label="tg-search地址">
+        <el-form-item label="TG-Search地址">
           <el-input v-model="tgSearch" placeholder="http://IP:9900"/>
         </el-form-item>
-        <el-form-item label="tg-search API Key">
+        <el-form-item label="TG-Search API Key">
           <el-input v-model="tgSearchApiKey" type="password" show-password/>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgSearch">更新并校验</el-button>
-          <a class="hint" target="_blank" title="部署tg-search" href="https://github.com/power721/tg-search">部署</a>
+          <a class="hint" target="_blank" title="部署TG-Search" href="https://github.com/power721/tg-search">部署</a>
           <span class="hint" v-if="tgSearchVersion">版本：{{ tgSearchVersion }}</span>
           <span class="hint error" v-if="tgSearchHealthError">{{ tgSearchHealthError }}</span>
         </el-form-item>

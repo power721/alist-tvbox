@@ -1078,6 +1078,7 @@ public class TelegramService {
                 .encode()
                 .toUriString();
         try {
+            log.debug("search TG-Search url: {}", url);
             HttpEntity<Void> entity = new HttpEntity<>(null, buildTgSearchHeaders());
             var response = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
             return parseTgSearchResponse(response);
