@@ -47,10 +47,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -1148,29 +1148,46 @@ public class TelegramService {
             return new TgSearchResult(List.of(), 0);
         }
         int offset = (safePage - 1) * safeSize;
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(normalizeTgSearchUrl("/api/search"))
-                .queryParam("kw", keyword)
-                .queryParam("res", "merge")
-                .queryParam("include_image", true)
-                .queryParam("include_media_metadata", true)
-                .queryParam("limit", safeSize)
-                .queryParam("offset", offset);
-        if (StringUtils.isNotBlank(cloudType)) {
-            builder.queryParam("cloud_types", cloudType);
+        ObjectNode body = objectMapper.createObjectNode()
+                .put("kw", StringUtils.defaultString(keyword))
+                .put("res", "merge")
+                .put("include_image", true)
+                .put("include_media_metadata", true)
+                .put("limit", safeSize)
+                .put("offset", offset);
+        List<String> cloudTypes = getTgSearchCloudTypes(cloudType);
+        if (!cloudTypes.isEmpty()) {
+            ArrayNode cloudTypesNode = objectMapper.createArrayNode();
+            cloudTypes.forEach(cloudTypesNode::add);
+            body.set("cloud_types", cloudTypesNode);
         }
-        String url = builder
-                .build()
-                .encode()
-                .toUriString();
+        String url = normalizeTgSearchUrl("/api/search");
         try {
             log.debug("search TG-Search url: {}", url);
-            HttpEntity<Void> entity = new HttpEntity<>(null, buildTgSearchHeaders());
-            var response = restTemplate.exchange(url, HttpMethod.GET, entity, ObjectNode.class).getBody();
+            HttpHeaders headers = buildTgSearchHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<ObjectNode> entity = new HttpEntity<>(body, headers);
+            var response = restTemplate.exchange(url, HttpMethod.POST, entity, ObjectNode.class).getBody();
             return parseTgSearchResponse(response);
         } catch (Exception e) {
             log.warn("", e);
         }
         return new TgSearchResult(List.of(), 0);
+    }
+
+    private List<String> getTgSearchCloudTypes(String cloudType) {
+        if (StringUtils.isNotBlank(cloudType)) {
+            return List.of(cloudType);
+        }
+        List<String> tgDrivers = appProperties.getTgDrivers();
+        if (tgDrivers == null || tgDrivers.isEmpty()) {
+            return List.of();
+        }
+        return tgDrivers.stream()
+                .map(this::getCloudType)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .toList();
     }
 
     private HttpHeaders buildTgSearchHeaders() {
@@ -1207,7 +1224,7 @@ public class TelegramService {
                 continue;
             }
             for (JsonNode link : entry.getValue()) {
-                String url = link.path("url").asText("");
+                String url = appendTgSearchPassword(link.path("url").asText(""), link.path("password").asText(""));
                 if (StringUtils.isBlank(url)) {
                     continue;
                 }
@@ -1230,6 +1247,18 @@ public class TelegramService {
             }
         }
         return new TgSearchResult(messages, total);
+    }
+
+    private String appendTgSearchPassword(String url, String password) {
+        if (StringUtils.isBlank(url) || StringUtils.isBlank(password) || ShareService.PASSWORD.matcher(url).find()) {
+            return url;
+        }
+        String encodedPassword = URLEncoder.encode(password.trim(), StandardCharsets.UTF_8);
+        int fragmentIndex = url.indexOf('#');
+        String base = fragmentIndex >= 0 ? url.substring(0, fragmentIndex) : url;
+        String fragment = fragmentIndex >= 0 ? url.substring(fragmentIndex) : "";
+        String separator = base.contains("?") ? "&" : "?";
+        return base + separator + "password=" + encodedPassword + fragment;
     }
 
     private Instant parseInstant(String value) {
