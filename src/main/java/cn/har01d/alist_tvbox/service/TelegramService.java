@@ -484,32 +484,37 @@ public class TelegramService {
         return result;
     }
 
-    public MovieList listTgSearch(String type, int size) {
+    public MovieList listTgSearch(String type, int page, int size) {
         String keyword = "";
         String filterType = StringUtils.isNotBlank(type) && type.startsWith("type:") ? type.substring(5) : type;
-        List<Message> messages = searchTgSearchApi(keyword, size);
+        TgSearchResult searchResult = searchTgSearchApi(keyword, getCloudType(filterType), page, size);
+        List<Message> messages = searchResult.messages();
         if (StringUtils.isNotBlank(filterType)) {
             messages = messages.stream().filter(message -> filterType.equals(message.getType())).toList();
         }
-        return toMovieList(messages);
+        return toMovieList(new TgSearchResult(messages, searchResult.total()), page, size);
     }
 
-    public MovieList searchTgSearchMovies(String keyword, int size) {
-        return toMovieList(searchTgSearchApi(keyword, size));
+    public MovieList searchTgSearchMovies(String keyword, int page, int size) {
+        return toMovieList(searchTgSearchApi(keyword, null, page, size), page, size);
     }
 
-    private MovieList toMovieList(List<Message> messages) {
+    private MovieList toMovieList(TgSearchResult searchResult, int page, int size) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, size);
         MovieList result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
         List<String> tgDrivers = appProperties.getTgDrivers();
-        for (Message message : messages) {
+        for (Message message : searchResult.messages()) {
             if (tgDrivers.isEmpty() || tgDrivers.contains(message.getType())) {
                 list.add(toMovieDetail(message));
             }
         }
         result.setList(list);
-        result.setTotal(list.size());
-        result.setLimit(list.size());
+        result.setPage(safePage);
+        result.setTotal(searchResult.total());
+        result.setLimit(safeSize);
+        result.setPagecount(Math.max(1, (searchResult.total() + safeSize - 1) / safeSize));
         return result;
     }
 
@@ -1130,13 +1135,21 @@ public class TelegramService {
         return List.of();
     }
 
-    private List<Message> searchTgSearchApi(String keyword, int size) {
-        String url = UriComponentsBuilder.fromHttpUrl(normalizeTgSearchUrl("/api/search"))
+    private TgSearchResult searchTgSearchApi(String keyword, String cloudType, int page, int size) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, size);
+        int offset = (safePage - 1) * safeSize;
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(normalizeTgSearchUrl("/api/search"))
                 .queryParam("kw", keyword)
                 .queryParam("res", "merge")
                 .queryParam("include_image", true)
                 .queryParam("include_media_metadata", true)
-                .queryParam("limit", size)
+                .queryParam("limit", safeSize)
+                .queryParam("offset", offset);
+        if (StringUtils.isNotBlank(cloudType)) {
+            builder.queryParam("cloud_types", cloudType);
+        }
+        String url = builder
                 .build()
                 .encode()
                 .toUriString();
@@ -1148,7 +1161,7 @@ public class TelegramService {
         } catch (Exception e) {
             log.warn("", e);
         }
-        return List.of();
+        return new TgSearchResult(List.of(), 0);
     }
 
     private HttpHeaders buildTgSearchHeaders() {
@@ -1167,13 +1180,14 @@ public class TelegramService {
         return api + path;
     }
 
-    private List<Message> parseTgSearchResponse(ObjectNode response) {
+    private TgSearchResult parseTgSearchResponse(ObjectNode response) {
         if (response == null) {
-            return List.of();
+            return new TgSearchResult(List.of(), 0);
         }
+        int total = response.path("data").path("total").asInt(0);
         JsonNode mergedByType = response.path("data").path("merged_by_type");
         if (!mergedByType.isObject()) {
-            return List.of();
+            return new TgSearchResult(List.of(), total);
         }
         List<Message> messages = new ArrayList<>();
         Iterator<Map.Entry<String, JsonNode>> fields = mergedByType.fields();
@@ -1206,7 +1220,7 @@ public class TelegramService {
                 ));
             }
         }
-        return messages;
+        return new TgSearchResult(messages, total);
     }
 
     private Instant parseInstant(String value) {
@@ -1240,6 +1254,31 @@ public class TelegramService {
             case "ed2k" -> "ed2k";
             default -> null;
         };
+    }
+
+    private String getCloudType(String type) {
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case "0" -> "aliyun";
+            case "1" -> "pikpak";
+            case "2" -> "xunlei";
+            case "3" -> "123";
+            case "5" -> "quark";
+            case "6" -> "mobile";
+            case "7" -> "uc";
+            case "8" -> "115";
+            case "9" -> "tianyi";
+            case "10" -> "baidu";
+            case "12" -> "guangya";
+            case "magnet" -> "magnet";
+            case "ed2k" -> "ed2k";
+            default -> null;
+        };
+    }
+
+    private record TgSearchResult(List<Message> messages, int total) {
     }
 
     private List<Message> getResult(List<Future<List<Message>>> futures) {

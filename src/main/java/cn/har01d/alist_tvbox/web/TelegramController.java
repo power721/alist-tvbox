@@ -76,22 +76,22 @@ public class TelegramController {
     }
 
     @GetMapping("/tgsc")
-    public Object browseTgSearch(String id, String t, String ac, String wd, String title) {
-        return browseTgSearch("", id, t, ac, wd, title);
+    public Object browseTgSearch(String id, String t, String ac, String wd, String title, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) {
+        return browseTgSearch("", id, t, ac, wd, title, pg, size);
     }
 
     @GetMapping("/tgsc/{token}")
-    public Object browseTgSearch(@PathVariable String token, String id, String t, String ac, String wd, String title) {
+    public Object browseTgSearch(@PathVariable String token, String id, String t, String ac, String wd, String title, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) {
         subscriptionService.checkToken(token);
         if (StringUtils.isNotBlank(id)) {
             return telegramService.detail(id, ac, title);
         } else if (StringUtils.isNotBlank(t)) {
             if (t.equals("0")) {
-                return telegramService.searchTgSearchMovies("", 5);
+                return telegramService.searchTgSearchMovies("", pg, size);
             }
-            return telegramService.listTgSearch(t, 100);
+            return telegramService.listTgSearch(t, pg, size);
         } else if (StringUtils.isNotBlank(wd)) {
-            return telegramService.searchTgSearchMovies(wd, 20);
+            return telegramService.searchTgSearchMovies(wd, pg, size);
         }
         return telegramService.categoryTgSearch();
     }
