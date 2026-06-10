@@ -355,22 +355,16 @@ public class TelegramService {
         share.setLink(tid);
         String path = shareService.add(share);
 
-        MovieList result = tvBoxService.getDetail(ac, "1$" + path + "/~playlist");
-        if (StringUtils.isNotBlank(title)) {
-            result.getList().get(0).setVod_name(title);
-        } else {
+        if (StringUtils.isBlank(title)) {
             MovieDetail movie = movies.getIfPresent(tid);
             if (movie != null) {
-                MovieDetail movieDetail = result.getList().get(0);
-                movieDetail.setVod_name(movie.getVod_name());
-                movieDetail.setVod_year(movie.getVod_year());
-                movieDetail.setVod_remarks(movie.getVod_remarks());
-                if (StringUtils.isNotBlank(movie.getVod_content())) {
-                    movieDetail.setVod_content(movieDetail.getVod_content() + "\n" + movie.getVod_content());
-                }
+                title = movie.getVod_name();
             }
         }
-        return result;
+
+        MovieList movieList = tvBoxService.getDetail(ac, "1$" + path + "/~playlist", title);
+        log.debug("{}", movieList);
+        return movieList;
     }
 
     private String encodeUrl(String url) {

@@ -456,6 +456,7 @@ public class TextUtils {
                 .replace("夸克网盘", " ")
                 .replace("UC网盘", " ")
                 .replace("迅雷网盘", " ")
+                .replace("原盘", " ")
                 .replace("·ali", " ")
                 .replace("公众号：锦技社", " ")
                 .replace("推荐!", " ")
@@ -509,6 +510,7 @@ public class TextUtils {
                 .replaceAll(".([季部])全", " ")
                 .replaceAll("[0-9.]+GB", " ")
                 .replaceAll("豆瓣评分：?[0-9.]+", " ")
+                .replaceAll("豆瓣\\d\\.\\d", " ")
                 .replaceAll("NO \\d+\\｜", " ")
                 .replaceAll("\\(\\d{4}\\)", " ")
         ;
