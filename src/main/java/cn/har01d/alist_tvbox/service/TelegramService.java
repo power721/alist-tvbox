@@ -16,11 +16,13 @@ import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
+import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -46,6 +48,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -95,6 +98,7 @@ public class TelegramService {
     private final LoadingCache<String, List<Message>> searchCache = Caffeine.newBuilder().expireAfterWrite(Duration.ofMinutes(15)).build(this::getFromChannel);
     private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private final Cache<String, String> lastId = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
+    private final Cache<String, MovieDetail> movies = Caffeine.newBuilder().maximumSize(200).expireAfterWrite(Duration.ofHours(2)).build();
     private final List<String> fields = new ArrayList<>(List.of("id", "name", "genre", "description", "language", "country", "directors", "editors", "actors", "cover", "dbScore", "year"));
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -222,7 +226,7 @@ public class TelegramService {
         var channels = list();
         if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
             try {
-                remoteValidate(channels);
+                getTgSearchHealth();
             } catch (Exception e) {
                 log.warn("validate channels error", e);
             }
@@ -234,19 +238,6 @@ public class TelegramService {
         telegramChannelRepository.saveAll(channels);
         log.info("validate channels success");
         return channels;
-    }
-
-    private void remoteValidate(List<TelegramChannel> channels) throws IOException {
-        String api = appProperties.getTgSearch() + "/validate";
-        api = api.replaceAll("//", "/");
-        String url = api + "?channels=" + channels.stream().map(TelegramChannel::getUsername).collect(Collectors.joining(","));
-        String json = getHtml(url);
-        if (StringUtils.isNotBlank(json)) {
-            Map<String, Boolean> results = objectMapper.readValue(json, Map.class);
-            for (var channel : channels) {
-                channel.setValid(results.get(channel.getUsername()));
-            }
-        }
     }
 
     private void validateWebAccess(TelegramChannel channel) {
@@ -275,6 +266,18 @@ public class TelegramService {
 
     public List<TelegramChannel> list() {
         return telegramChannelRepository.findAll(Sort.by("order"));
+    }
+
+    public ObjectNode getTgSearchHealth() {
+        if (StringUtils.isBlank(appProperties.getTgSearch())) {
+            ObjectNode result = objectMapper.createObjectNode();
+            result.put("service", "unconfigured");
+            result.put("message", "tg-search api url is blank");
+            return result;
+        }
+        String api = normalizeTgSearchUrl("/api/health");
+        HttpEntity<Void> entity = new HttpEntity<>(null, buildTgSearchHeaders());
+        return restTemplate.exchange(api, HttpMethod.GET, entity, ObjectNode.class).getBody();
     }
 
     public Map<String, Object> searchZx(String keyword, String username) {
@@ -352,11 +355,16 @@ public class TelegramService {
         share.setLink(tid);
         String path = shareService.add(share);
 
-        MovieList result = tvBoxService.getDetail(ac, "1$" + path + "/~playlist");
-        if (StringUtils.isNotBlank(title)) {
-            result.getList().get(0).setVod_name(title);
+        if (StringUtils.isBlank(title)) {
+            MovieDetail movie = movies.getIfPresent(tid);
+            if (movie != null) {
+                title = movie.getVod_name();
+            }
         }
-        return result;
+
+        MovieList movieList = tvBoxService.getDetail(ac, "1$" + path + "/~playlist", title);
+        log.debug("{}", movieList);
+        return movieList;
     }
 
     private String encodeUrl(String url) {
@@ -420,16 +428,7 @@ public class TelegramService {
 
         for (Message message : messages) {
             if (appProperties.getTgDrivers().isEmpty() || appProperties.getTgDrivers().contains(message.getType())) {
-                MovieDetail movieDetail = new MovieDetail();
-                movieDetail.setVod_id(encodeUrl(message.getLink()));
-                movieDetail.setVod_name(message.getName());
-                if (StringUtils.isBlank(message.getCover())) {
-                    movieDetail.setVod_pic(getPic(message.getType()));
-                } else {
-                    movieDetail.setVod_pic(message.getCover());
-                }
-                movieDetail.setVod_remarks(getTypeName(message.getType()));
-                list.add(movieDetail);
+                list.add(toMovieDetail(message));
             }
         }
 
@@ -453,16 +452,7 @@ public class TelegramService {
         List<Message> messages = search("", 100, web, true);
         for (Message message : messages) {
             if (type.equals(message.getType())) {
-                MovieDetail movieDetail = new MovieDetail();
-                movieDetail.setVod_id(encodeUrl(message.getLink()));
-                movieDetail.setVod_name(message.getName());
-                if (StringUtils.isBlank(message.getCover())) {
-                    movieDetail.setVod_pic(getPic(message.getType()));
-                } else {
-                    movieDetail.setVod_pic(message.getCover());
-                }
-                movieDetail.setVod_remarks(getTypeName(message.getType()));
-                list.add(movieDetail);
+                list.add(toMovieDetail(message));
             }
         }
 
@@ -479,22 +469,65 @@ public class TelegramService {
 
         List<Message> messages = search(keyword, size, web, false);
         for (Message message : messages) {
-            MovieDetail movieDetail = new MovieDetail();
-            movieDetail.setVod_id(encodeUrl(message.getLink()));
-            movieDetail.setVod_name(message.getName());
-            if (StringUtils.isBlank(message.getCover())) {
-                movieDetail.setVod_pic(getPic(message.getType()));
-            } else {
-                movieDetail.setVod_pic(message.getCover());
-            }
-            movieDetail.setVod_remarks(getTypeName(message.getType()));
-            list.add(movieDetail);
+            list.add(toMovieDetail(message));
         }
 
         result.setList(list);
         result.setTotal(list.size());
         result.setLimit(list.size());
 
+        return result;
+    }
+
+    public CategoryList categoryTgSearch() {
+        CategoryList result = new CategoryList();
+        List<Category> list = new ArrayList<>();
+
+        for (String type : appProperties.getTgDrivers()) {
+            var category = new Category();
+            category.setType_id("type:" + type);
+            category.setType_name(getTypeName(type));
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        result.setCategories(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
+        return result;
+    }
+
+    public MovieList listTgSearch(String type, int page, int size) {
+        String keyword = "";
+        String filterType = StringUtils.isNotBlank(type) && type.startsWith("type:") ? type.substring(5) : type;
+        TgSearchResult searchResult = searchTgSearchApi(keyword, getCloudType(filterType), page, size);
+        List<Message> messages = searchResult.messages();
+        if (StringUtils.isNotBlank(filterType)) {
+            messages = messages.stream().filter(message -> filterType.equals(message.getType())).toList();
+        }
+        return toMovieList(new TgSearchResult(messages, searchResult.total()), page, size);
+    }
+
+    public MovieList searchTgSearchMovies(String keyword, int page, int size) {
+        return toMovieList(searchTgSearchApi(keyword, null, page, size), page, size);
+    }
+
+    private MovieList toMovieList(TgSearchResult searchResult, int page, int size) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, size);
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+        List<String> tgDrivers = appProperties.getTgDrivers();
+        for (Message message : searchResult.messages()) {
+            if (tgDrivers.isEmpty() || tgDrivers.contains(message.getType())) {
+                list.add(toMovieDetail(message));
+            }
+        }
+        result.setList(list);
+        result.setPage(safePage);
+        result.setTotal(searchResult.total());
+        result.setLimit(safeSize);
+        result.setPagecount(Math.max(1, (searchResult.total() + safeSize - 1) / safeSize));
         return result;
     }
 
@@ -941,6 +974,8 @@ public class TelegramService {
             case "9" -> "天翼";
             case "10" -> "百度";
             case "12" -> "光鸭";
+            case "magnet" -> "磁力";
+            case "ed2k" -> "ED2K";
             default -> null;
         };
     }
@@ -961,6 +996,8 @@ public class TelegramService {
             case "6" -> getUrl("/139.jpg");
             case "10" -> getUrl("/baidu.jpg");
             case "12" -> getUrl("/guangya.webp");
+            case "magnet" -> getUrl("/magnet.png");
+            case "ed2k" -> getUrl("/ed2k.jpg");
             default -> null;
         };
     }
@@ -972,6 +1009,66 @@ public class TelegramService {
                 .replaceQuery(null)
                 .build()
                 .toUriString();
+    }
+
+    private MovieDetail toMovieDetail(Message message) {
+        MovieDetail movieDetail = new MovieDetail();
+        movieDetail.setVod_id(encodeUrl(message.getLink()));
+        movieDetail.setVod_name(StringUtils.defaultIfBlank(message.getName(), message.getContent()));
+        if (StringUtils.isBlank(message.getCover())) {
+            movieDetail.setVod_pic(getPic(message.getType()));
+        } else {
+            movieDetail.setVod_pic(resolveTgSearchMediaUrl(message.getCover()));
+        }
+        movieDetail.setVod_remarks(getTypeName(message.getType()));
+        movieDetail.setVod_play_from(message.getChannel());
+        if (message.getTime() != null) {
+            movieDetail.setVod_time(message.getTime().toString());
+        }
+        applyMedia(message, movieDetail);
+        return movieDetail;
+    }
+
+    private void applyMedia(Message message, MovieDetail movieDetail) {
+        Map<String, Object> media = message.getMedia();
+        if (media == null || media.isEmpty()) {
+            return;
+        }
+        Object title = media.get("title");
+        if (title != null && StringUtils.isNotBlank(String.valueOf(title))) {
+            movieDetail.setVod_name(TextUtils.fixName(String.valueOf(title)));
+        }
+        Object year = media.get("year");
+        if (year != null && StringUtils.isNotBlank(String.valueOf(year))) {
+            movieDetail.setVod_year(String.valueOf(year));
+        }
+        List<String> remarks = Stream.of(media.get("episode"), media.get("quality"), media.get("size"))
+                .filter(e -> e != null && StringUtils.isNotBlank(String.valueOf(e)))
+                .map(String::valueOf)
+                .toList();
+        if (!remarks.isEmpty()) {
+            movieDetail.setVod_remarks(String.join(" ", remarks));
+        }
+        List<String> content = Stream.of(message.getContent(), media.get("tags"))
+                .filter(e -> e != null && StringUtils.isNotBlank(String.valueOf(e)))
+                .map(String::valueOf)
+                .toList();
+        if (!content.isEmpty()) {
+            movieDetail.setVod_content(String.join("\n", content));
+        }
+//        movieDetail.setExt(media);
+        log.debug("cache put: {} {}", message.getLink(), media);
+        movies.put(message.getLink(), movieDetail);
+    }
+
+    private String resolveTgSearchMediaUrl(String url) {
+        if (StringUtils.isBlank(url) || url.startsWith("http://") || url.startsWith("https://")) {
+            return url;
+        }
+        if (url.startsWith("/") && StringUtils.isNotBlank(appProperties.getTgSearch())) {
+            return appProperties.getTgSearch() + url;
+        }
+        return url;
     }
 
     public List<Message> search(String keyword, int size, boolean web, boolean cached) {
@@ -1051,6 +1148,184 @@ public class TelegramService {
             log.warn("", e);
         }
         return List.of();
+    }
+
+    private TgSearchResult searchTgSearchApi(String keyword, String cloudType, int page, int size) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, size);
+        if (StringUtils.isBlank(appProperties.getTgSearch())) {
+            return new TgSearchResult(List.of(), 0);
+        }
+        int offset = (safePage - 1) * safeSize;
+        ObjectNode body = objectMapper.createObjectNode()
+                .put("kw", StringUtils.defaultString(keyword))
+                .put("res", "merge")
+                .put("include_image", true)
+                .put("include_media_metadata", true)
+                .put("limit", safeSize)
+                .put("offset", offset);
+        List<String> cloudTypes = getTgSearchCloudTypes(cloudType);
+        if (!cloudTypes.isEmpty()) {
+            ArrayNode cloudTypesNode = objectMapper.createArrayNode();
+            cloudTypes.forEach(cloudTypesNode::add);
+            body.set("cloud_types", cloudTypesNode);
+        }
+        String url = normalizeTgSearchUrl("/api/search");
+        try {
+            log.debug("search TG-Search url: {}", url);
+            HttpHeaders headers = buildTgSearchHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<ObjectNode> entity = new HttpEntity<>(body, headers);
+            var response = restTemplate.exchange(url, HttpMethod.POST, entity, ObjectNode.class).getBody();
+            return parseTgSearchResponse(response);
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return new TgSearchResult(List.of(), 0);
+    }
+
+    private List<String> getTgSearchCloudTypes(String cloudType) {
+        if (StringUtils.isNotBlank(cloudType)) {
+            return List.of(cloudType);
+        }
+        List<String> tgDrivers = appProperties.getTgDrivers();
+        if (tgDrivers == null || tgDrivers.isEmpty()) {
+            return List.of();
+        }
+        return tgDrivers.stream()
+                .map(this::getCloudType)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .toList();
+    }
+
+    private HttpHeaders buildTgSearchHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        if (StringUtils.isNotBlank(appProperties.getTgSearchApiKey())) {
+            headers.set(HttpHeaders.AUTHORIZATION, appProperties.getTgSearchApiKey());
+        }
+        return headers;
+    }
+
+    private String normalizeTgSearchUrl(String path) {
+        String api = StringUtils.defaultString(appProperties.getTgSearch());
+        while (api.endsWith("/")) {
+            api = api.substring(0, api.length() - 1);
+        }
+        return api + path;
+    }
+
+    private TgSearchResult parseTgSearchResponse(ObjectNode response) {
+        if (response == null) {
+            return new TgSearchResult(List.of(), 0);
+        }
+        int total = response.path("data").path("total").asInt(0);
+        JsonNode mergedByType = response.path("data").path("merged_by_type");
+        if (!mergedByType.isObject()) {
+            return new TgSearchResult(List.of(), total);
+        }
+        List<Message> messages = new ArrayList<>();
+        Iterator<Map.Entry<String, JsonNode>> fields = mergedByType.fields();
+        while (fields.hasNext()) {
+            Map.Entry<String, JsonNode> entry = fields.next();
+            String type = getMessageType(entry.getKey());
+            if (type == null || !entry.getValue().isArray()) {
+                continue;
+            }
+            for (JsonNode link : entry.getValue()) {
+                String url = appendTgSearchPassword(link.path("url").asText(""), link.path("password").asText(""));
+                if (StringUtils.isBlank(url)) {
+                    continue;
+                }
+                List<String> images = new ArrayList<>();
+                link.path("images").forEach(image -> {
+                    if (image.isTextual()) {
+                        images.add(image.asText());
+                    }
+                });
+                Map<String, Object> media = objectMapper.convertValue(link.path("media"), new TypeReference<>() {
+                });
+                messages.add(new Message(
+                        type,
+                        url,
+                        link.path("note").asText(""),
+                        parseInstant(link.path("datetime").asText(null)),
+                        images,
+                        media
+                ));
+            }
+        }
+        return new TgSearchResult(messages, total);
+    }
+
+    private String appendTgSearchPassword(String url, String password) {
+        if (StringUtils.isBlank(url) || StringUtils.isBlank(password) || ShareService.PASSWORD.matcher(url).find()) {
+            return url;
+        }
+        String encodedPassword = URLEncoder.encode(password.trim(), StandardCharsets.UTF_8);
+        int fragmentIndex = url.indexOf('#');
+        String base = fragmentIndex >= 0 ? url.substring(0, fragmentIndex) : url;
+        String fragment = fragmentIndex >= 0 ? url.substring(fragmentIndex) : "";
+        String separator = base.contains("?") ? "&" : "?";
+        return base + separator + "password=" + encodedPassword + fragment;
+    }
+
+    private Instant parseInstant(String value) {
+        if (StringUtils.isBlank(value)) {
+            return Instant.now();
+        }
+        try {
+            return Instant.parse(value);
+        } catch (Exception e) {
+            return Instant.now();
+        }
+    }
+
+    private String getMessageType(String type) {
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case "aliyun", "ali" -> "0";
+            case "pikpak" -> "1";
+            case "xunlei" -> "2";
+            case "123" -> "3";
+            case "quark" -> "5";
+            case "mobile" -> "6";
+            case "uc" -> "7";
+            case "115" -> "8";
+            case "tianyi" -> "9";
+            case "baidu" -> "10";
+            case "guangya" -> "12";
+            case "magnet" -> "magnet";
+            case "ed2k" -> "ed2k";
+            default -> null;
+        };
+    }
+
+    private String getCloudType(String type) {
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case "0" -> "aliyun";
+            case "1" -> "pikpak";
+            case "2" -> "xunlei";
+            case "3" -> "123";
+            case "5" -> "quark";
+            case "6" -> "mobile";
+            case "7" -> "uc";
+            case "8" -> "115";
+            case "9" -> "tianyi";
+            case "10" -> "baidu";
+            case "12" -> "guangya";
+            case "magnet" -> "magnet";
+            case "ed2k" -> "ed2k";
+            default -> null;
+        };
+    }
+
+    private record TgSearchResult(List<Message> messages, int total) {
     }
 
     private List<Message> getResult(List<Future<List<Message>>> futures) {

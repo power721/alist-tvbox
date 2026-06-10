@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 @Slf4j
 @RestController
@@ -48,6 +49,11 @@ public class TelegramController {
         return telegramService.search(wd, 100, false, false);
     }
 
+    @GetMapping("/api/telegram/tg-search/health")
+    public ObjectNode tgSearchHealth() {
+        return telegramService.getTgSearchHealth();
+    }
+
     @GetMapping("/tg-search")
     public Object browse(String id, String t, String ac, String wd, String title, boolean web, @RequestParam(required = false, defaultValue = "1") int pg) throws IOException {
         return browse("", id, t, ac, wd, title, web, pg);
@@ -67,6 +73,27 @@ public class TelegramController {
             return telegramService.searchMovies(wd, web, 20);
         }
         return telegramService.category(web);
+    }
+
+    @GetMapping("/tgsc")
+    public Object browseTgSearch(String id, String t, String ac, String wd, String title, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) {
+        return browseTgSearch("", id, t, ac, wd, title, pg, size);
+    }
+
+    @GetMapping("/tgsc/{token}")
+    public Object browseTgSearch(@PathVariable String token, String id, String t, String ac, String wd, String title, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) {
+        subscriptionService.checkToken(token);
+        if (StringUtils.isNotBlank(id)) {
+            return telegramService.detail(id, ac, title);
+        } else if (StringUtils.isNotBlank(t)) {
+            if (t.equals("0")) {
+                return telegramService.searchTgSearchMovies("", pg, size);
+            }
+            return telegramService.listTgSearch(t, pg, size);
+        } else if (StringUtils.isNotBlank(wd)) {
+            return telegramService.searchTgSearchMovies(wd, pg, size);
+        }
+        return telegramService.categoryTgSearch();
     }
 
     @GetMapping("/tg-db")

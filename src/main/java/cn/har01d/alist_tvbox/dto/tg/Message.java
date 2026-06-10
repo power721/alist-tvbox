@@ -12,6 +12,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,6 +31,8 @@ public class Message {
     private String type;
     private String link;
     private String cover;
+    private List<String> images = List.of();
+    private Map<String, Object> media;
     private String validityState;
     private String validitySummary;
 
@@ -86,6 +89,19 @@ public class Message {
         this.type = type;
         this.name = link.getNote();
         this.channel = link.getSource();
+    }
+
+    public Message(String type, String url, String note, Instant datetime, List<String> images, Map<String, Object> media) {
+        this.time = datetime == null ? Instant.now() : datetime;
+        this.content = note == null ? "" : note;
+        this.link = url;
+        this.type = type;
+        this.images = images == null ? List.of() : images;
+        this.media = media;
+        this.cover = this.images.isEmpty() ? null : this.images.getFirst();
+        Object title = media == null ? null : media.get("title");
+        this.name = title == null || String.valueOf(title).isBlank() ? this.content : String.valueOf(title);
+        this.channel = "tg-search";
     }
 
     public String toPgString() {

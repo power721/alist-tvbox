@@ -1699,11 +1699,19 @@ public class TvBoxService {
         return result;
     }
 
+    public MovieList getDetail(String ac, String tid, String name) {
+        return getDetail(ac, tid, name, 0);
+    }
+
     public MovieList getDetail(String ac, String tid) {
         return getDetail(ac, tid, 0);
     }
 
     public MovieList getDetail(String ac, String tid, Integer depth) {
+        return getDetail(ac, tid, null, depth);
+    }
+
+    public MovieList getDetail(String ac, String tid, String title, Integer depth) {
         if (tid.contains("%24")) {
             tid = URLDecoder.decode(tid, StandardCharsets.UTF_8);
         }
@@ -1723,7 +1731,7 @@ public class TvBoxService {
         }
         updateShareTime(path);
         if (path.contains(PLAYLIST)) {
-            return getPlaylist(ac, site, path, depth);
+            return getPlaylist(ac, site, path, title, depth);
         }
 
         MovieList result = new MovieList();
@@ -1894,6 +1902,10 @@ public class TvBoxService {
     }
 
     public MovieList getPlaylist(String ac, Site site, String path, Integer depth) {
+        return getPlaylist(ac, site, path, null, depth);
+    }
+
+    public MovieList getPlaylist(String ac, Site site, String path, String title, Integer depth) {
         log.info("load playlist {}:{} {}", site.getId(), site.getName(), path);
         String newPath = getParent(path);
         if (!tenantService.valid(newPath)) {
@@ -1942,7 +1954,10 @@ public class TvBoxService {
         movieDetail.setVod_tag(FILE);
         movieDetail.setVod_pic(getListPic());
 
-        setMovieInfo(site, movieDetail, fsDetail.getName(), newPath, true);
+        if (!setMovieInfo(site, movieDetail, fsDetail.getName(), newPath, true) && StringUtils.isNotBlank(title)) {
+            movieDetail.setVod_name(title);
+            setMovieInfo(site, movieDetail, "", newPath, true);
+        }
 
         FilesList filesList = dfs(site, newPath, ac, "", depth);
         List<String> sources = filesList.getFolders();

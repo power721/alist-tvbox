@@ -25,6 +25,9 @@ const cover = ref('')
 const tgChannels = ref('')
 const tgWebChannels = ref('')
 const tgSearch = ref('')
+const tgSearchApiKey = ref('')
+const tgSearchVersion = ref('')
+const tgSearchHealthError = ref('')
 const panSouUrl = ref('')
 const panSouSource = ref('all')
 const panSouChannels = ref('custom')
@@ -164,7 +167,31 @@ const updateTgTimeout = () => {
 const updateTgSearch = () => {
   axios.post('/api/settings', {name: 'tg_search', value: tgSearch.value}).then(({data}) => {
     tgSearch.value = data.value
-    ElMessage.success('更新成功')
+    axios.post('/api/settings', {name: 'tg_search_api_key', value: tgSearchApiKey.value}).then(() => {
+      checkTgSearchHealth(true)
+    })
+  })
+}
+
+const checkTgSearchHealth = (showMessage = false) => {
+  tgSearchVersion.value = ''
+  tgSearchHealthError.value = ''
+  if (!tgSearch.value) {
+    if (showMessage) {
+      ElMessage.success('更新成功')
+    }
+    return
+  }
+  axios.get('/api/telegram/tg-search/health').then(({data}) => {
+    tgSearchVersion.value = data.version || ''
+    if (showMessage) {
+      ElMessage.success(tgSearchVersion.value ? '校验成功' : '更新成功')
+    }
+  }).catch(() => {
+    tgSearchHealthError.value = '地址或API Key无效'
+    if (showMessage) {
+      ElMessage.error(tgSearchHealthError.value)
+    }
   })
 }
 
@@ -386,6 +413,8 @@ onMounted(() => {
     tgChannels.value = data.tg_channels
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
+    tgSearchApiKey.value = data.tg_search_api_key
+    checkTgSearchHealth()
     panSouUrl.value = data.pan_sou_url
     if (panSouUrl.value) {
       loadPanSouInfo()
@@ -423,6 +452,18 @@ onUnmounted(() => {
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="updateTgTimeout">更新</el-button>
+        </el-form-item>
+        <el-form-item label="TG-Search地址">
+          <el-input v-model="tgSearch" placeholder="http://IP:9900"/>
+        </el-form-item>
+        <el-form-item label="TG-Search API Key">
+          <el-input v-model="tgSearchApiKey" type="password" show-password/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updateTgSearch">更新并校验</el-button>
+          <a class="hint" target="_blank" title="部署TG-Search" href="https://github.com/power721/tg-search">部署</a>
+          <span class="hint" v-if="tgSearchVersion">版本：{{ tgSearchVersion }}</span>
+          <span class="hint error" v-if="tgSearchHealthError">{{ tgSearchHealthError }}</span>
         </el-form-item>
         <el-form-item label="PanSou地址">
           <el-input v-model="panSouUrl" placeholder="http://IP:8888"/>
