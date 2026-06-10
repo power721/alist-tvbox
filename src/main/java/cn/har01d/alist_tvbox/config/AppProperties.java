@@ -33,6 +33,7 @@ public class AppProperties {
     private List<String> tgDriverOrder = Arrays.asList(Constants.TG_DRIVERS.split(","));
     private String userAgent = Constants.USER_AGENT;
     private String tgSearch;
+    private String tgSearchApiKey;
     private String tgSortField = "time";
     private boolean tgLogin;
     private String panSouUrl;

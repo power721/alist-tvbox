@@ -53,3 +53,16 @@ test('play config exposes backend PanSou link check settings', () => {
   assert.equal(componentSource.includes(`label="链接检测"`), true)
   assert.equal(componentSource.includes(`自动检查盘搜搜索结果的有效性`), true)
 })
+
+test('play config exposes tg-search api key and health version check', () => {
+  assert.equal(componentSource.includes(`const tgSearchApiKey = ref('')`), true)
+  assert.equal(componentSource.includes(`const tgSearchVersion = ref('')`), true)
+  assert.equal(componentSource.includes(`name: 'tg_search_api_key'`), true)
+  assert.equal(componentSource.includes(`axios.get('/api/telegram/tg-search/health')`), true)
+  assert.equal(componentSource.includes(`data.version`), true)
+})
+
+test('play config links to power721 tg-search deployment guide', () => {
+  assert.equal(componentSource.includes(`https://github.com/power721/tg-search`), true)
+  assert.equal(componentSource.includes(`tg-search API Key`), true)
+})

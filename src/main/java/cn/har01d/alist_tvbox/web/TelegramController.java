@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 @Slf4j
 @RestController
@@ -46,6 +47,11 @@ public class TelegramController {
     @GetMapping("/api/telegram/search")
     public List<Message> searchByKeyword(String wd) {
         return telegramService.search(wd, 100, false, false);
+    }
+
+    @GetMapping("/api/telegram/tg-search/health")
+    public ObjectNode tgSearchHealth() {
+        return telegramService.getTgSearchHealth();
     }
 
     @GetMapping("/tg-search")

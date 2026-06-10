@@ -89,6 +89,7 @@ public class SettingService {
         appProperties.setMix(!settingRepository.findById("mix_site_source").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
+        appProperties.setTgSearchApiKey(settingRepository.findById("tg_search_api_key").map(Setting::getValue).orElse(""));
         appProperties.setPanSouUrl(settingRepository.findById("pan_sou_url").map(Setting::getValue).orElse(""));
         appProperties.setPanSouSource(settingRepository.findById("pan_sou_source").map(Setting::getValue).orElse("all"));
         appProperties.setPanSouChannels(settingRepository.findById("pan_sou_channels").map(Setting::getValue).map(this::normalizePanSouChannels).orElse("custom"));
@@ -280,7 +281,16 @@ public class SettingService {
             if (setting.getValue().endsWith("/")) {
                 setting.setValue(setting.getValue().substring(0, setting.getValue().length() - 1));
             }
+            if (setting.getValue().endsWith("/api/search")) {
+                setting.setValue(setting.getValue().substring(0, setting.getValue().length() - 11));
+            }
+            if (setting.getValue().endsWith("/api/health")) {
+                setting.setValue(setting.getValue().substring(0, setting.getValue().length() - 11));
+            }
             appProperties.setTgSearch(setting.getValue());
+        }
+        if ("tg_search_api_key".equals(setting.getName())) {
+            appProperties.setTgSearchApiKey(setting.getValue());
         }
         if ("pan_sou_url".equals(setting.getName())) {
             if (setting.getValue().endsWith("/")) {
