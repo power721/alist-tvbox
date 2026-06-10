@@ -64,5 +64,5 @@ test('play config exposes tg-search api key and health version check', () => {
 
 test('play config links to power721 tg-search deployment guide', () => {
   assert.equal(componentSource.includes(`https://github.com/power721/tg-search`), true)
-  assert.equal(componentSource.includes(`tg-search API Key`), true)
+  assert.equal(componentSource.includes(`TG-Search API Key`), true)
 })

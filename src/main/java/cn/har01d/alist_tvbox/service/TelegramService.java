@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.dto.tg.Message;
+import cn.har01d.alist_tvbox.dto.tg.SearchResponse;
 import cn.har01d.alist_tvbox.dto.tg.SearchResult;
 import cn.har01d.alist_tvbox.entity.Movie;
 import cn.har01d.alist_tvbox.entity.MovieRepository;
@@ -462,6 +463,53 @@ public class TelegramService {
         result.setTotal(list.size());
         result.setLimit(list.size());
 
+        return result;
+    }
+
+    public CategoryList categoryTgSearch() {
+        CategoryList result = new CategoryList();
+        List<Category> list = new ArrayList<>();
+
+        for (String type : appProperties.getTgDrivers()) {
+            var category = new Category();
+            category.setType_id("type:" + type);
+            category.setType_name(getTypeName(type));
+            category.setType_flag(0);
+            list.add(category);
+        }
+
+        result.setCategories(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
+        return result;
+    }
+
+    public MovieList listTgSearch(String type, int size) {
+        String keyword = "";
+        String filterType = StringUtils.isNotBlank(type) && type.startsWith("type:") ? type.substring(5) : type;
+        List<Message> messages = searchTgSearchApi(keyword, size);
+        if (StringUtils.isNotBlank(filterType)) {
+            messages = messages.stream().filter(message -> filterType.equals(message.getType())).toList();
+        }
+        return toMovieList(messages);
+    }
+
+    public MovieList searchTgSearchMovies(String keyword, int size) {
+        return toMovieList(searchTgSearchApi(keyword, size));
+    }
+
+    private MovieList toMovieList(List<Message> messages) {
+        MovieList result = new MovieList();
+        List<MovieDetail> list = new ArrayList<>();
+        List<String> tgDrivers = appProperties.getTgDrivers();
+        for (Message message : messages) {
+            if (tgDrivers.isEmpty() || tgDrivers.contains(message.getType())) {
+                list.add(toMovieDetail(message));
+            }
+        }
+        result.setList(list);
+        result.setTotal(list.size());
+        result.setLimit(list.size());
         return result;
     }
 
@@ -1068,6 +1116,21 @@ public class TelegramService {
     }
 
     private List<Message> searchRemote(String channels, String keyword, int size) {
+        String api = appProperties.getTgSearch();
+        if (!api.endsWith("/search")) {
+            api = api + "/search";
+        }
+        String url = api + "?channels=" + channels + "&query=" + keyword + "&size=" + size + "&timeout=" + appProperties.getTgTimeout();
+        try {
+            var response = restTemplate.getForObject(url, SearchResponse.class);
+            return response.getMessages().stream().flatMap(this::parseMessage).toList();
+        } catch (Exception e) {
+            log.warn("", e);
+        }
+        return List.of();
+    }
+
+    private List<Message> searchTgSearchApi(String keyword, int size) {
         String url = UriComponentsBuilder.fromHttpUrl(normalizeTgSearchUrl("/api/search"))
                 .queryParam("kw", keyword)
                 .queryParam("res", "merge")

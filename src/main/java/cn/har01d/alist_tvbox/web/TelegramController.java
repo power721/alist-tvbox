@@ -75,6 +75,27 @@ public class TelegramController {
         return telegramService.category(web);
     }
 
+    @GetMapping("/tgsc")
+    public Object browseTgSearch(String id, String t, String ac, String wd, String title) {
+        return browseTgSearch("", id, t, ac, wd, title);
+    }
+
+    @GetMapping("/tgsc/{token}")
+    public Object browseTgSearch(@PathVariable String token, String id, String t, String ac, String wd, String title) {
+        subscriptionService.checkToken(token);
+        if (StringUtils.isNotBlank(id)) {
+            return telegramService.detail(id, ac, title);
+        } else if (StringUtils.isNotBlank(t)) {
+            if (t.equals("0")) {
+                return telegramService.searchTgSearchMovies("", 5);
+            }
+            return telegramService.listTgSearch(t, 100);
+        } else if (StringUtils.isNotBlank(wd)) {
+            return telegramService.searchTgSearchMovies(wd, 20);
+        }
+        return telegramService.categoryTgSearch();
+    }
+
     @GetMapping("/tg-db")
     public Object db(String id, String t, String ac, String wd, String sort, Integer year, String genre, String region, @RequestParam(required = false, defaultValue = "1") int pg, @RequestParam(required = false, defaultValue = "30") int size) throws IOException {
         return db("", id, t, ac, wd, sort, year, genre, region, pg, size);
