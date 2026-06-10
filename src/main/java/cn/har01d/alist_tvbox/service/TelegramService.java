@@ -267,6 +267,12 @@ public class TelegramService {
     }
 
     public ObjectNode getTgSearchHealth() {
+        if (StringUtils.isBlank(appProperties.getTgSearch())) {
+            ObjectNode result = objectMapper.createObjectNode();
+            result.put("service", "unconfigured");
+            result.put("message", "tg-search api url is blank");
+            return result;
+        }
         String api = normalizeTgSearchUrl("/api/health");
         HttpEntity<Void> entity = new HttpEntity<>(null, buildTgSearchHeaders());
         return restTemplate.exchange(api, HttpMethod.GET, entity, ObjectNode.class).getBody();
@@ -1138,6 +1144,9 @@ public class TelegramService {
     private TgSearchResult searchTgSearchApi(String keyword, String cloudType, int page, int size) {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, size);
+        if (StringUtils.isBlank(appProperties.getTgSearch())) {
+            return new TgSearchResult(List.of(), 0);
+        }
         int offset = (safePage - 1) * safeSize;
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(normalizeTgSearchUrl("/api/search"))
                 .queryParam("kw", keyword)
