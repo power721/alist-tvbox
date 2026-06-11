@@ -622,11 +622,16 @@
     </el-dialog>
 
     <el-dialog v-model="editorVisible" :title="editorTargetIsGlobal ? '全局订阅配置' : '订阅定制'" width="900px" destroy-on-close>
-      <div v-if="editorTargetIsGlobal" style="margin-bottom: 8px">
-        参考订阅：
-        <el-select v-model="globalReferenceSid" style="width: 220px">
-          <el-option v-for="item in subscriptions" :key="item.sid" :label="item.name" :value="item.sid" />
-        </el-select>
+      <div style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between">
+        <span v-if="editorTargetIsGlobal">参考订阅：
+          <el-select v-model="globalReferenceSid" style="width: 220px">
+            <el-option v-for="item in subscriptions" :key="item.sid" :label="item.name" :value="item.sid" />
+          </el-select>
+        </span>
+        <span v-else />
+        <el-link type="info" href="https://github.com/FongMi/TV/blob/release/docs/CONFIG.md" target="_blank" :underline="false">
+          配置文档 <el-icon><Link /></el-icon>
+        </el-link>
       </div>
       <SubscriptionConfigEditor
         ref="editorRef"
@@ -650,6 +655,7 @@
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
+import {Link} from "@element-plus/icons-vue";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
 import PluginFilterConfigFieldEditor from "@/components/PluginFilterConfigFieldEditor.vue";

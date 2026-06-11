@@ -1,10 +1,5 @@
 <template>
   <div class="sub-config-editor">
-    <div style="margin-bottom: 8px; text-align: right">
-      <el-link type="info" href="https://github.com/FongMi/TV/blob/release/docs/CONFIG.md" target="_blank" :underline="false">
-        配置文档 <el-icon><LinkIcon /></el-icon>
-      </el-link>
-    </div>
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- 站点 -->
       <el-tab-pane label="站点" name="sites">
@@ -508,7 +503,6 @@
 import { ref, reactive, computed, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { Link as LinkIcon } from '@element-plus/icons-vue'
 import {
   parseOverride,
   detectFilterMode,
