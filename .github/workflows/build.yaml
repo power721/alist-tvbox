@@ -15,7 +15,7 @@ on:
       - 'config/**'
       - 'doc/**'
       - 'docs/**'
-      - 'README.md'
+      - '*.md'
       - 'pom.xml'
       - 'pom-standalone.xml'
       - 'docker/Dockerfile-v7'

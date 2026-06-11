@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --noEmit",
-    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
+    "test": "node --test src/utils/subscriptionConfig.test.mjs src/views/SubscriptionsView.test.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

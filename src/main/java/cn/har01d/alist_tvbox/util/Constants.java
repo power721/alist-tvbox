@@ -61,4 +61,5 @@ public final class Constants {
     public static final String ALI_SECRET = "ali_secret";
     public static final String TACIT_0924_ID = "tacit0924_id";
     public static final String TACIT_FOLDER_ID = "tacit0924_folder_id";
+    public static final String GLOBAL_SUBSCRIPTION_OVERRIDE = "global_subscription_override";
 }

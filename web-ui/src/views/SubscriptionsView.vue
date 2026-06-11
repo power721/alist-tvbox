@@ -3,6 +3,7 @@
     <h1>订阅列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
+      <el-button @click="showGlobalConfig">全局配置</el-button>
       <el-button @click="showPlugins">订阅源管理</el-button>
       <el-button @click="showPluginFilters">过滤器管理</el-button>
       <el-button @click="showScan">同步影视</el-button>
@@ -111,8 +112,8 @@
           <el-input v-model="form.sort" autocomplete="off" placeholder="留空保持默认排序"/>
         </el-form-item>
         <el-form-item label="定制" label-width="140">
-          <el-input v-model="form.override" type="textarea" rows="15"/>
-          <a href="https://www.json.cn/" target="_blank">JSON验证</a>
+          <el-button @click="openEditor(false)">🎨 可视化编辑</el-button>
+          <span class="hint">{{ form.override ? '已配置' : '未配置' }}</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -619,6 +620,28 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="editorVisible" :title="editorTargetIsGlobal ? '全局订阅配置' : '订阅定制'" width="900px" destroy-on-close>
+      <div v-if="editorTargetIsGlobal" style="margin-bottom: 8px">
+        参考订阅：
+        <el-select v-model="globalReferenceSid" style="width: 220px">
+          <el-option v-for="item in subscriptions" :key="item.sid" :label="item.name" :value="item.sid" />
+        </el-select>
+      </div>
+      <SubscriptionConfigEditor
+        ref="editorRef"
+        :model-value="editorTargetIsGlobal ? globalConfigJson : form.override"
+        :mode="editorTargetIsGlobal ? 'global' : 'subscription'"
+        :reference-sid="editorTargetIsGlobal ? globalReferenceSid : form.sid"
+        :token="token"
+      />
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="editorVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveEditor">{{ editorTargetIsGlobal ? '保存全局' : '应用到定制' }}</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -629,6 +652,7 @@ import {ElMessage} from "element-plus";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
 import PluginFilterConfigFieldEditor from "@/components/PluginFilterConfigFieldEditor.vue";
+import SubscriptionConfigEditor from "@/components/SubscriptionConfigEditor.vue";
 import {isPluginDragEnabledForUserAgent} from "@/utils/pluginDragSupport.mjs";
 
 interface Sub {
@@ -797,6 +821,11 @@ const user = ref({
   last_name: '',
   phone: ''
 })
+const globalConfigJson = ref('')
+const editorVisible = ref(false)
+const editorRef = ref<any>(null)
+const editorTargetIsGlobal = ref(false)
+const globalReferenceSid = ref('')
 const plugins = ref<Plugin[]>([])
 const managedSources = ref<ManagedSource[]>([])
 const pluginFilters = ref<PluginFilter[]>([])
@@ -1440,6 +1469,44 @@ const loadPluginSettings = () => {
   })
 }
 
+const showGlobalConfig = () => {
+  openEditor(true)
+}
+
+const loadGlobalConfig = () => {
+  axios.get('/api/subscriptions/global-config').then(response => {
+    globalConfigJson.value = JSON.stringify(response.data || {})
+  })
+}
+
+const openEditor = (isGlobal: boolean) => {
+  editorTargetIsGlobal.value = isGlobal
+  if (isGlobal) {
+    globalReferenceSid.value = subscriptions.value.length ? (subscriptions.value[0] as any).sid : ''
+    loadGlobalConfig()
+  }
+  editorVisible.value = true
+}
+
+const saveEditor = () => {
+  const value = editorRef.value?.getValue()
+  if (value === null || value === undefined) {
+    ElMessage.error('JSON 格式错误,请修正后再保存')
+    return
+  }
+  if (editorTargetIsGlobal.value) {
+    let config: any = {}
+    try { config = value ? JSON.parse(value) : {} } catch { ElMessage.error('JSON格式错误'); return }
+    axios.put('/api/subscriptions/global-config', config).then(() => {
+      ElMessage.success('全局配置保存成功')
+      editorVisible.value = false
+    })
+  } else {
+    form.value.override = value
+    editorVisible.value = false
+  }
+}
+
 const showPlugins = () => {
   pluginVisible.value = true
   resetPluginForm()
@@ -1633,6 +1700,7 @@ const handleEdit = (data: any) => {
     sort: data.sort,
     override: data.override
   }
+
   formVisible.value = true
 }
 
