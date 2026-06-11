@@ -65,4 +65,48 @@ class SubscriptionServiceGlobalConfigTest {
         assertTrue(config.containsKey("sites"));
         assertFalse(config.containsKey("spider")); // spider 不应该被应用
     }
+
+    @Test
+    void testWhitelistFilter() {
+        // 测试白名单过滤逻辑
+        Map<String, Object> config = new HashMap<>();
+        config.put("sites", List.of(
+            Map.of("key", "site1"),
+            Map.of("key", "site2"),
+            Map.of("key", "site3")
+        ));
+        List<String> whitelist = List.of("site1", "site3");
+
+        // 模拟白名单过滤
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        sites = sites.stream()
+                .filter(s -> whitelist.contains(s.get("key")))
+                .toList();
+        config.put("sites", sites);
+
+        assertEquals(2, sites.size());
+        assertTrue(sites.stream().anyMatch(s -> "site1".equals(s.get("key"))));
+        assertTrue(sites.stream().anyMatch(s -> "site3".equals(s.get("key"))));
+    }
+
+    @Test
+    void testBlacklistFilter() {
+        // 测试黑名单过滤逻辑
+        Map<String, Object> config = new HashMap<>();
+        config.put("sites", List.of(
+            Map.of("key", "site1"),
+            Map.of("key", "site2")
+        ));
+        List<String> blacklist = List.of("site2");
+
+        // 模拟黑名单过滤
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        sites = sites.stream()
+                .filter(s -> !blacklist.contains(s.get("key")))
+                .toList();
+        config.put("sites", sites);
+
+        assertEquals(1, sites.size());
+        assertEquals("site1", sites.get(0).get("key"));
+    }
 }

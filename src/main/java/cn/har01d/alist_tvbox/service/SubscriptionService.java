@@ -1640,4 +1640,43 @@ public class SubscriptionService {
             }
         }
     }
+
+    private void applySitesFilter(Map<String, Object> config) {
+        Object whitelistObj = config.get("sites-whitelist");
+        Object blacklistObj = config.get("sites-blacklist");
+
+        if (whitelistObj instanceof List) {
+            handleWhitelistFilter(config, (List<String>) whitelistObj);
+            config.remove("sites-whitelist");
+        } else if (blacklistObj instanceof List) {
+            handleBlacklistFilter(config, (List<String>) blacklistObj);
+            config.remove("sites-blacklist");
+        }
+    }
+
+    private void handleWhitelistFilter(Map<String, Object> config, List<String> whitelist) {
+        Object obj = config.get("sites");
+        if (obj instanceof List) {
+            List<Map<String, Object>> sites = (List<Map<String, Object>>) obj;
+            Set<String> whiteSet = new HashSet<>(whitelist);
+            sites = sites.stream()
+                    .filter(s -> whiteSet.contains(s.get("key")))
+                    .collect(Collectors.toList());
+            config.put("sites", sites);
+            log.info("whitelist mode: include sites {}", whitelist);
+        }
+    }
+
+    private void handleBlacklistFilter(Map<String, Object> config, List<String> blacklist) {
+        Object obj = config.get("sites");
+        if (obj instanceof List) {
+            List<Map<String, Object>> sites = (List<Map<String, Object>>) obj;
+            Set<String> blackSet = new HashSet<>(blacklist);
+            sites = sites.stream()
+                    .filter(s -> !blackSet.contains(s.get("key")))
+                    .collect(Collectors.toList());
+            config.put("sites", sites);
+            log.info("blacklist mode: exclude sites {}", blacklist);
+        }
+    }
 }
