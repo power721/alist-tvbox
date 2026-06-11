@@ -85,17 +85,50 @@ export function buildHeaderRows(config) {
     .filter((h) => h && typeof h === 'object')
     .map((h) => ({
       host: h.host || '',
-      header: h.header && typeof h.header === 'object' ? { ...h.header } : {},
-      headerText: h.header && typeof h.header === 'object' ? JSON.stringify(h.header, null, 2) : '{}',
+      pairs: h.header && typeof h.header === 'object'
+        ? Object.entries(h.header).map(([name, value]) => ({ name, value: String(value) }))
+        : [],
     }))
 }
 
 function buildHeaderItem(row) {
-  if (!row.host && (!row.header || !Object.keys(row.header).length)) return null
+  const header = {}
+  for (const p of row.pairs || []) {
+    if (p.name) header[p.name] = p.value || ''
+  }
+  if (!row.host && !Object.keys(header).length) return null
   const item = {}
   if (row.host) item.host = row.host
-  if (row.header && Object.keys(row.header).length) item.header = row.header
+  if (Object.keys(header).length) item.header = header
   return item
+}
+
+export function buildLiveRows(config) {
+  if (!Array.isArray(config.lives)) return []
+  return config.lives
+    .filter((l) => l && typeof l === 'object')
+    .map((l) => ({
+      name: l.name || '',
+      type: l.type ?? 0,
+      url: l.url || '',
+      playerType: l.playerType ?? 0,
+      ua: l.ua || '',
+      epg: l.epg || '',
+      logo: l.logo || '',
+    }))
+}
+
+const LIVE_KEYS = ['name', 'type', 'url', 'playerType', 'ua', 'epg', 'logo']
+
+function buildLiveItem(row) {
+  if (!row.name && !row.url) return null
+  const item = {}
+  for (const k of LIVE_KEYS) {
+    const v = row[k]
+    if (v === undefined || v === null || v === '') continue
+    item[k] = v
+  }
+  return Object.keys(item).length ? item : null
 }
 
 function buildCustomParse(row) {
@@ -177,6 +210,10 @@ export function serialize(baseConfig, state) {
   // headers
   const headers = state.headers.map(buildHeaderItem).filter(Boolean)
   setArrOrDelete(config, 'headers', headers)
+
+  // lives
+  const lives = state.lives.map(buildLiveItem).filter(Boolean)
+  setArrOrDelete(config, 'lives', lives)
 
   return config
 }

@@ -32,7 +32,7 @@
         <el-row justify="space-between" align="middle">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item @click="navigateTo('')">
-              <el-link type="primary">根目录</el-link>
+              <el-link type="primary">/根目录</el-link>
             </el-breadcrumb-item>
             <el-breadcrumb-item v-for="(seg, idx) in pathSegments" :key="idx"
                                 @click="navigateTo(pathSegments.slice(0, idx + 1).join('/'))">
@@ -63,7 +63,7 @@
               <span>将壁纸图片上传到 <strong>wallpapers</strong> 文件夹，可通过 API 随机获取壁纸：</span><br>
               <a :href="currentUrl+'/wallpaper'+token" target="_blank">{{ currentUrl }}/wallpaper{{ token }}</a><br>
               订阅定制，壁纸地址填写：
-              <code>ATV_ADDRESS/wallpaper/TOKEN</code><br>
+              <code>WALLPAPER</code><br>
             </p>
           </template>
         </el-alert>

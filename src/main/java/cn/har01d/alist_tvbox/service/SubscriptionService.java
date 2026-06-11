@@ -1000,6 +1000,7 @@ public class SubscriptionService {
             json = json.replace("ATV_ADDRESS", address);
             json = json.replace("BILI_COOKIE", settingRepository.findById(BILIBILI_COOKIE).map(Setting::getValue).orElse(""));
             json = json.replace("TOKEN", getCurrentOrFirstToken());
+            json = json.replace("WALLPAPER", address + "/wallpaper/" + getCurrentOrFirstToken());
             Map<String, Object> override = objectMapper.readValue(json, Map.class);
             overrideConfig(config, null, "", override);
             return replaceString(config, override);

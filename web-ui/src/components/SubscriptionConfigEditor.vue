@@ -108,25 +108,64 @@
 
       <!-- Headers -->
       <el-tab-pane label="Headers" name="headers">
-        <el-table v-if="state.headers.length" :data="state.headers" border style="width: 100%">
-          <el-table-column label="Host" width="220">
-            <template #default="scope">
-              <el-input v-model="scope.row.host" placeholder="example.com" />
-            </template>
-          </el-table-column>
-          <el-table-column label="Header (JSON)">
-            <template #default="scope">
-              <el-input v-model="scope.row.headerText" type="textarea" :rows="2" placeholder='{"Referer": "...", "Cookie": "..."}' @blur="parseHeaderText(scope.row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="70">
-            <template #default="scope">
-              <el-button link type="danger" @click="removeHeader(scope.$index)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div v-if="state.headers.length">
+          <div v-for="(h, hi) in state.headers" :key="hi" style="margin-bottom: 12px; border: 1px solid var(--el-border-color-lighter); border-radius: 4px; padding: 8px">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
+              <span style="white-space: nowrap; font-weight: 500">Host</span>
+              <el-input v-model="h.host" placeholder="example.com" style="flex: 1" />
+              <el-button link type="danger" @click="removeHeader(hi)">删除组</el-button>
+            </div>
+            <el-table :data="h.pairs" border size="small">
+              <el-table-column label="Name" width="200">
+                <template #default="scope">
+                  <el-input v-model="scope.row.name" placeholder="Referer" />
+                </template>
+              </el-table-column>
+              <el-table-column label="Value">
+                <template #default="scope">
+                  <el-input v-model="scope.row.value" placeholder="https://example.com/" />
+                </template>
+              </el-table-column>
+              <el-table-column label="" width="50">
+                <template #default="scope">
+                  <el-button link type="danger" @click="h.pairs.splice(scope.$index, 1)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-button type="primary" link @click="h.pairs.push({ name: '', value: '' })" style="margin-top: 4px">+ 添加</el-button>
+          </div>
+        </div>
         <el-empty v-else description="无 Headers 配置" />
-        <el-button type="primary" plain @click="addHeader" style="margin-top: 8px">+ 添加 Header</el-button>
+        <el-button type="primary" plain @click="addHeader" style="margin-top: 8px">+ 添加 Header 组</el-button>
+      </el-tab-pane>
+
+      <!-- 直播 -->
+      <el-tab-pane label="直播" name="lives">
+        <div v-if="state.lives.length">
+          <div v-for="(l, li) in state.lives" :key="li" style="margin-bottom: 12px; border: 1px solid var(--el-border-color-lighter); border-radius: 4px; padding: 12px">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
+              <el-input v-model="l.name" placeholder="名称" style="width: 160px" />
+              <el-select v-model="l.type" style="width: 100px">
+                <el-option :value="0" label="接口 0" />
+                <el-option :value="1" label="标准 1" />
+              </el-select>
+              <el-select v-model="l.playerType" style="width: 120px">
+                <el-option :value="0" label="系统 0" />
+                <el-option :value="1" label="IJK 1" />
+                <el-option :value="2" label="Exo 2" />
+              </el-select>
+              <el-button link type="danger" @click="state.lives.splice(li, 1)">删除</el-button>
+            </div>
+            <el-form label-width="80" size="small">
+              <el-form-item label="URL"><el-input v-model="l.url" placeholder="直播源地址" /></el-form-item>
+              <el-form-item label="UA"><el-input v-model="l.ua" placeholder="okhttp/3.15" /></el-form-item>
+              <el-form-item label="EPG"><el-input v-model="l.epg" placeholder="http://epg.example.com/?ch={name}&date={date}" /></el-form-item>
+              <el-form-item label="Logo"><el-input v-model="l.logo" placeholder="http://logo.example.com/{name}.png" /></el-form-item>
+            </el-form>
+          </div>
+        </div>
+        <el-empty v-else description="无直播配置" />
+        <el-button type="primary" plain @click="addLive" style="margin-top: 8px">+ 添加直播源</el-button>
       </el-tab-pane>
 
       <!-- 原始 JSON -->
@@ -215,6 +254,7 @@ import {
   serialize,
   stringify,
   buildHeaderRows,
+  buildLiveRows,
 } from '@/utils/subscriptionConfig.mjs'
 
 const props = withDefaults(
@@ -258,6 +298,7 @@ const state = reactive<any>({
   flags: [],
   ads: [],
   headers: [],
+  lives: [],
 })
 // 未建模键的保留载体
 let baseConfig: Record<string, any> = {}
@@ -311,6 +352,7 @@ const load = async () => {
   state.flags = Array.isArray(config.flags) ? [...config.flags] : []
   state.ads = Array.isArray(config.ads) ? [...config.ads] : []
   state.headers = buildHeaderRows(config)
+  state.lives = buildLiveRows(config)
 
   // catalog
   let catalog: any = { sites: [], parses: [] }
@@ -448,20 +490,14 @@ function removeCustomParse(row: any) {
 }
 
 function addHeader() {
-  state.headers.push({ host: '', header: {}, headerText: '{}' })
+  state.headers.push({ host: '', pairs: [{ name: '', value: '' }] })
 }
 function removeHeader(index: number) {
   state.headers.splice(index, 1)
 }
-function parseHeaderText(row: any) {
-  try {
-    const obj = JSON.parse(row.headerText)
-    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-      row.header = obj
-    }
-  } catch {
-    // keep original text, don't lose user input
-  }
+
+function addLive() {
+  state.lives.push({ name: '', type: 0, url: '', playerType: 0, ua: '', epg: '', logo: '' })
 }
 
 function onTabChange(name: string) {
@@ -487,6 +523,7 @@ function applyJson() {
   state.flags = Array.isArray(parsed.flags) ? [...parsed.flags] : []
   state.ads = Array.isArray(parsed.ads) ? [...parsed.ads] : []
   state.headers = buildHeaderRows(parsed)
+  state.lives = buildLiveRows(parsed)
   state.filterMode = detectFilterMode(parsed)
   buildRows(parsed, catalog)
   ElMessage.success('已应用到表单')

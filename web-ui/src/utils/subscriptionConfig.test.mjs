@@ -10,6 +10,7 @@ import {
   serialize,
   stringify,
   buildHeaderRows,
+  buildLiveRows,
 } from './subscriptionConfig.mjs'
 
 test('parseOverride: empty -> {}', () => {
@@ -55,6 +56,7 @@ test('serialize: blacklist mode writes blacklist.sites, migrates legacy, drops s
     ],
     parses: [{ name: '虾米', enabled: false, isCustom: false }],
     headers: [],
+    lives: [],
     wallpaper: '',
     logo: '',
     flags: [],
@@ -77,6 +79,7 @@ test('serialize: whitelist mode writes sites-whitelist of enabled keys', () => {
     ],
     parses: [],
     headers: [],
+    lives: [],
     wallpaper: '',
     logo: '',
     flags: [],
@@ -96,6 +99,7 @@ test('serialize: upstream rename + order emit sites partial; custom site full', 
     ],
     parses: [],
     headers: [],
+    lives: [],
     wallpaper: 'http://w',
     logo: '',
     flags: ['x'],
@@ -115,7 +119,7 @@ test('stringify: empty object -> empty string', () => {
   assert.equal(stringify({ wallpaper: 'x' }), '{"wallpaper":"x"}')
 })
 
-test('buildHeaderRows: parses config.headers into editor rows', () => {
+test('buildHeaderRows: parses config.headers into editor rows with pairs', () => {
   const rows = buildHeaderRows({
     headers: [
       { host: 'www.javbus.com', header: { Referer: 'https://www.javbus.com/', Cookie: 'a=1' } },
@@ -123,8 +127,9 @@ test('buildHeaderRows: parses config.headers into editor rows', () => {
   })
   assert.equal(rows.length, 1)
   assert.equal(rows[0].host, 'www.javbus.com')
-  assert.deepEqual(rows[0].header, { Referer: 'https://www.javbus.com/', Cookie: 'a=1' })
-  assert.ok(typeof rows[0].headerText === 'string')
+  assert.equal(rows[0].pairs.length, 2)
+  assert.deepEqual(rows[0].pairs[0], { name: 'Referer', value: 'https://www.javbus.com/' })
+  assert.deepEqual(rows[0].pairs[1], { name: 'Cookie', value: 'a=1' })
 })
 
 test('buildHeaderRows: empty/missing -> []', () => {
@@ -133,14 +138,18 @@ test('buildHeaderRows: empty/missing -> []', () => {
   assert.deepEqual(buildHeaderRows({ headers: [null, 5] }), [])
 })
 
-test('serialize: headers array is written to config', () => {
+test('serialize: headers pairs are written to config as header object', () => {
   const state = {
     filterMode: 'none',
     sites: [],
     parses: [],
     headers: [
-      { host: 'www.javbus.com', header: { Referer: 'https://www.javbus.com/', Cookie: 'a=1' }, headerText: '{}' },
+      { host: 'www.javbus.com', pairs: [
+        { name: 'Referer', value: 'https://www.javbus.com/' },
+        { name: 'Cookie', value: 'a=1' },
+      ] },
     ],
+    lives: [],
     wallpaper: '',
     logo: '',
     flags: [],
@@ -158,9 +167,10 @@ test('serialize: empty headers rows are filtered out', () => {
     sites: [],
     parses: [],
     headers: [
-      { host: '', header: {}, headerText: '{}' },
-      { host: 'a.com', header: {}, headerText: '{}' },
+      { host: '', pairs: [{ name: '', value: '' }] },
+      { host: 'a.com', pairs: [{ name: '', value: '' }] },
     ],
+    lives: [],
     wallpaper: '',
     logo: '',
     flags: [],
@@ -169,4 +179,65 @@ test('serialize: empty headers rows are filtered out', () => {
   const out = serialize({}, state)
   assert.equal(out.headers.length, 1)
   assert.equal(out.headers[0].host, 'a.com')
+})
+
+test('buildLiveRows: parses config.lives into editor rows', () => {
+  const rows = buildLiveRows({
+    lives: [
+      { name: '范明明', type: 0, url: 'https://example.com/live.m3u', playerType: 1, ua: 'okhttp/3.15', epg: 'http://epg.example.com', logo: 'http://logo.example.com/{name}.png' },
+    ],
+  })
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].name, '范明明')
+  assert.equal(rows[0].type, 0)
+  assert.equal(rows[0].url, 'https://example.com/live.m3u')
+  assert.equal(rows[0].playerType, 1)
+  assert.equal(rows[0].ua, 'okhttp/3.15')
+})
+
+test('buildLiveRows: empty/missing -> []', () => {
+  assert.deepEqual(buildLiveRows({}), [])
+  assert.deepEqual(buildLiveRows({ lives: [] }), [])
+  assert.deepEqual(buildLiveRows({ lives: [null, 5] }), [])
+})
+
+test('serialize: lives are written to config', () => {
+  const state = {
+    filterMode: 'none',
+    sites: [],
+    parses: [],
+    headers: [],
+    lives: [
+      { name: '范明明', type: 0, url: 'https://example.com/live.m3u', playerType: 1, ua: '', epg: '', logo: '' },
+    ],
+    wallpaper: '',
+    logo: '',
+    flags: [],
+    ads: [],
+  }
+  const out = serialize({}, state)
+  assert.equal(out.lives.length, 1)
+  assert.equal(out.lives[0].name, '范明明')
+  assert.equal(out.lives[0].type, 0)
+  assert.equal(out.lives[0].url, 'https://example.com/live.m3u')
+  assert.equal(out.lives[0].playerType, 1)
+  assert.equal(out.lives[0].ua, undefined) // empty string filtered out
+})
+
+test('serialize: empty lives rows are filtered out', () => {
+  const state = {
+    filterMode: 'none',
+    sites: [],
+    parses: [],
+    headers: [],
+    lives: [
+      { name: '', type: 0, url: '', playerType: 0, ua: '', epg: '', logo: '' },
+    ],
+    wallpaper: '',
+    logo: '',
+    flags: [],
+    ads: [],
+  }
+  const out = serialize({}, state)
+  assert.equal(out.lives, undefined)
 })
