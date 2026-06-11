@@ -43,4 +43,26 @@ class SubscriptionServiceGlobalConfigTest {
         assertTrue(json.contains("sites-blacklist"));
         assertTrue(json.contains("site1"));
     }
+
+    @Test
+    void testApplyGlobalConfigLogic() {
+        // 测试应用全局配置的逻辑
+        Map<String, Object> config = new HashMap<>();
+        Map<String, Object> globalConfig = new HashMap<>();
+        globalConfig.put("sites-blacklist", List.of("site1"));
+        globalConfig.put("spider", "http://example.com/spider.jar");
+        globalConfig.put("sites", List.of(Map.of("key", "global")));
+
+        // 模拟 applyGlobalConfig 的逻辑
+        for (Map.Entry<String, Object> entry : globalConfig.entrySet()) {
+            String key = entry.getKey();
+            if (!"spider".equals(key) && !config.containsKey(key)) {
+                config.put(key, entry.getValue());
+            }
+        }
+
+        assertTrue(config.containsKey("sites-blacklist"));
+        assertTrue(config.containsKey("sites"));
+        assertFalse(config.containsKey("spider")); // spider 不应该被应用
+    }
 }

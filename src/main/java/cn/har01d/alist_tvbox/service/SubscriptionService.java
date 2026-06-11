@@ -1625,4 +1625,19 @@ public class SubscriptionService {
             throw new BadRequestException("Invalid config format");
         }
     }
+
+    private void applyGlobalConfig(Map<String, Object> config) {
+        Map<String, Object> globalConfig = getGlobalConfig();
+        if (globalConfig.isEmpty()) {
+            return;
+        }
+
+        // 不包含 spider 的全局配置应用
+        for (Map.Entry<String, Object> entry : globalConfig.entrySet()) {
+            String key = entry.getKey();
+            if (!"spider".equals(key) && !config.containsKey(key)) {
+                config.put(key, entry.getValue());
+            }
+        }
+    }
 }
