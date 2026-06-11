@@ -91,11 +91,11 @@
       <!-- 基础 -->
       <el-tab-pane label="基础" name="basic">
         <el-form label-width="120">
-          <el-form-item label="壁纸 wall">
-            <el-input v-model="state.wall" placeholder="壁纸图片/接口 URL" />
+          <el-form-item label="壁纸 wallpaper">
+            <el-input v-model="state.wallpaper" placeholder="壁纸图片/接口 URL" />
           </el-form-item>
-          <el-form-item label="Spider">
-            <el-input v-model="state.spider" :disabled="mode === 'global'" :placeholder="mode === 'global' ? '全局配置不支持 spider' : 'jar 地址'" />
+          <el-form-item label="Logo">
+            <el-input v-model="state.logo" placeholder="Logo 地址" />
           </el-form-item>
           <el-form-item label="播放标识 flags">
             <el-select v-model="state.flags" multiple filterable allow-create default-first-option placeholder="追加到上游" style="width: 100%" />
@@ -229,8 +229,8 @@ const state = reactive<any>({
   filterMode: 'none',
   sites: [],
   parses: [],
-  wall: '',
-  spider: '',
+  wallpaper: '',
+  logo: '',
   flags: [],
   ads: [],
 })
@@ -281,8 +281,8 @@ const load = async () => {
   const config = parsed === null ? {} : parsed
 
   state.filterMode = detectFilterMode(config)
-  state.wall = config.wall || ''
-  state.spider = config.spider || ''
+  state.wallpaper = config.wallpaper || ''
+  state.logo = config.logo || ''
   state.flags = Array.isArray(config.flags) ? [...config.flags] : []
   state.ads = Array.isArray(config.ads) ? [...config.ads] : []
 
@@ -439,8 +439,8 @@ function applyJson() {
     sites: siteRows.value.filter((r) => !r.isCustom).map((r) => ({ key: r.key, name: r.originalName, origin: r.origin })),
     parses: parseRows.value.filter((p) => !p.isCustom).map((p) => ({ name: p.name })),
   }
-  state.wall = parsed.wall || ''
-  state.spider = parsed.spider || ''
+  state.wallpaper = parsed.wallpaper || ''
+  state.logo = parsed.logo || ''
   state.flags = Array.isArray(parsed.flags) ? [...parsed.flags] : []
   state.ads = Array.isArray(parsed.ads) ? [...parsed.ads] : []
   state.filterMode = detectFilterMode(parsed)

@@ -60,7 +60,7 @@
         <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px">
           <template #title>
             <span>将壁纸图片上传到 <strong>wallpapers</strong> 文件夹，可通过 API 随机获取壁纸：</span>
-            <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px">{{ currentUrl }}/wallpaper/{token}</code>
+            <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px">ATV_ADDRESS/wallpaper/TOKEN</code>
           </template>
         </el-alert>
 
