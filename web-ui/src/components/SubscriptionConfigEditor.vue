@@ -1,8 +1,19 @@
 <template>
   <div class="sub-config-editor">
+    <div style="margin-bottom: 8px; text-align: right">
+      <el-link type="info" href="https://github.com/FongMi/TV/blob/release/docs/CONFIG.md" target="_blank" :underline="false">
+        配置文档 <el-icon><LinkIcon /></el-icon>
+      </el-link>
+    </div>
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- 站点 -->
       <el-tab-pane label="站点" name="sites">
+        <el-alert type="info" :closable="false" style="margin-bottom: 8px">
+          <template #title>
+            <p>可修改上游站点名称和排序,也可添加自定义站点。</p>
+            <p>白名单模式下勾选要保留的站点,黑名单模式下勾选要保留的站点、未勾选的加入黑名单。</p>
+          </template>
+        </el-alert>
         <el-form-item label="过滤模式" v-if="mode === 'subscription'">
           <el-radio-group v-model="state.filterMode">
             <el-radio label="none">继承全局</el-radio>
@@ -62,25 +73,31 @@
       <el-tab-pane label="基础" name="basic">
         <el-form label-width="120">
           <el-form-item label="壁纸 wallpaper">
-            <el-input v-model="state.wallpaper" placeholder="壁纸图片/接口 URL" />
+            <el-input v-model="state.wallpaper" placeholder="图片或视频 URL, 如 https://example.com/bg.jpg" />
           </el-form-item>
           <el-form-item label="Logo">
-            <el-input v-model="state.logo" placeholder="Logo图片地址" />
+            <el-input v-model="state.logo" placeholder="Logo 图片 URL" />
           </el-form-item>
-          <el-form-item label="notice">
-            <el-input v-model="state.notice" placeholder="启动时的公告" />
+          <el-form-item label="公告 notice">
+            <el-input v-model="state.notice" placeholder="应用启动时显示的公告文字" />
           </el-form-item>
-          <el-form-item label="播放标识 flags">
-            <el-select v-model="state.flags" multiple filterable allow-create default-first-option placeholder="追加到上游" style="width: 100%" />
+          <el-form-item label="平台标识 flags">
+            <el-select v-model="state.flags" multiple filterable allow-create default-first-option placeholder="平台标识, 如 qq、youku、iqiyi (追加到上游)" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="广告 ads">
-            <el-select v-model="state.ads" multiple filterable allow-create default-first-option placeholder="广告域名(追加)" style="width: 100%" />
+          <el-form-item label="广告过滤 ads">
+            <el-select v-model="state.ads" multiple filterable allow-create default-first-option placeholder="广告域名, 匹配的请求将被拦截 (追加)" style="width: 100%" />
           </el-form-item>
         </el-form>
       </el-tab-pane>
 
       <!-- 解析 -->
       <el-tab-pane label="解析" name="parses">
+        <el-alert type="info" :closable="false" style="margin-bottom: 8px">
+          <template #title>
+            <p>管理影片解析规则。取消勾选可禁用上游解析器,也可添加自定义解析。</p>
+            <p>解析类型: 0=嗅探, 1=Json, 2=Json扩展, 3=聚合, 4=超级解析。</p>
+          </template>
+        </el-alert>
         <el-table v-if="parseRows.length" :data="parseRows" border style="width: 100%">
           <el-table-column label="启用" width="60">
             <template #default="scope">
@@ -112,20 +129,23 @@
 
       <!-- Headers -->
       <el-tab-pane label="Headers" name="headers">
+        <el-alert type="info" :closable="false" style="margin-bottom: 8px">
+          <template #title>针对特定域名注入 HTTP 响应头, 常用于解除 CORS 限制或设置 User-Agent。</template>
+        </el-alert>
         <div v-if="state.headers.length">
           <div v-for="(h, hi) in state.headers" :key="hi" style="margin-bottom: 12px; border: 1px solid var(--el-border-color-lighter); border-radius: 4px; padding: 8px">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
-              <span style="white-space: nowrap; font-weight: 500">Host</span>
-              <el-input v-model="h.host" placeholder="example.com" style="flex: 1" />
+              <span style="white-space: nowrap; font-weight: 500">域名</span>
+              <el-input v-model="h.host" placeholder="example.com (不含协议)" style="flex: 1" />
               <el-button link type="danger" @click="removeHeader(hi)">删除组</el-button>
             </div>
             <el-table :data="h.pairs" border size="small">
-              <el-table-column label="Name" width="200">
+              <el-table-column label="名称" width="200">
                 <template #default="scope">
                   <el-input v-model="scope.row.name" placeholder="Referer" />
                 </template>
               </el-table-column>
-              <el-table-column label="Value">
+              <el-table-column label="值">
                 <template #default="scope">
                   <el-input v-model="scope.row.value" placeholder="https://example.com/" />
                 </template>
@@ -145,10 +165,13 @@
 
       <!-- 直播 -->
       <el-tab-pane label="直播" name="lives">
+        <el-alert type="info" :closable="false" style="margin-bottom: 8px">
+          <template #title>配置直播源。可内嵌频道组,也可指向外部直播列表(M3U/TXT/JSON)。EPG 支持 {name}、{id} 变量。</template>
+        </el-alert>
         <div v-if="state.lives.length">
           <div v-for="(l, li) in state.lives" :key="li" style="margin-bottom: 12px; border: 1px solid var(--el-border-color-lighter); border-radius: 4px; padding: 12px">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
-              <el-input v-model="l.name" placeholder="名称" style="width: 160px" />
+              <el-input v-model="l.name" placeholder="直播源名称 (唯一)" style="width: 160px" />
               <el-select v-model="l.type" style="width: 100px">
                 <el-option :value="0" label="接口 0" />
                 <el-option :value="1" label="标准 1" />
@@ -161,36 +184,36 @@
               <el-button link type="danger" @click="state.lives.splice(li, 1)">删除</el-button>
             </div>
             <el-form label-width="80" size="small">
-              <el-form-item label="URL"><el-input v-model="l.url" placeholder="直播源地址" /></el-form-item>
-              <el-form-item label="UA"><el-input v-model="l.ua" placeholder="okhttp/3.15" /></el-form-item>
-              <el-form-item label="EPG"><el-input v-model="l.epg" placeholder="http://epg.example.com/?ch={name}&date={date}" /></el-form-item>
-              <el-form-item label="Logo"><el-input v-model="l.logo" placeholder="http://logo.example.com/{name}.png" /></el-form-item>
+              <el-form-item label="地址 url"><el-input v-model="l.url" placeholder="直播源地址 (M3U/TXT/JSON)" /></el-form-item>
+              <el-form-item label="UA"><el-input v-model="l.ua" placeholder="User-Agent, 如 okhttp/3.15" /></el-form-item>
+              <el-form-item label="节目表 epg"><el-input v-model="l.epg" placeholder="EPG 地址, 支持 {name} {id} 变量, 多个逗号分隔" /></el-form-item>
+              <el-form-item label="图标 logo"><el-input v-model="l.logo" placeholder="频道默认 Logo, 支持 {name} {id} {logo} 变量" /></el-form-item>
             </el-form>
             <!-- 高级设置 -->
             <el-collapse>
               <el-collapse-item title="高级设置" :name="'live-adv-' + li">
-                <el-form label-width="80" size="small">
-                  <el-form-item label="api"><el-input v-model="l.api" placeholder="API 地址或爬虫类名" /></el-form-item>
-                  <el-form-item label="ext"><el-input v-model="l.ext" placeholder="扩展参数" /></el-form-item>
-                  <el-form-item label="jar"><el-input v-model="l.jar" placeholder="JAR URL" /></el-form-item>
-                  <el-form-item label="click"><el-input v-model="l.click" placeholder="点击拦截" /></el-form-item>
-                  <el-form-item label="origin"><el-input v-model="l.origin" placeholder="Origin" /></el-form-item>
-                  <el-form-item label="referer"><el-input v-model="l.referer" placeholder="Referer" /></el-form-item>
-                  <el-form-item label="timeZone"><el-input v-model="l.timeZone" placeholder="时区 (如 Asia/Taipei)" /></el-form-item>
-                  <el-form-item label="timeout">
+                <el-form label-width="100" size="small">
+                  <el-form-item label="api"><el-input v-model="l.api" placeholder="直播 API 端点或爬虫类名 (如 csp_Live)" /></el-form-item>
+                  <el-form-item label="ext"><el-input v-model="l.ext" placeholder="传给直播爬虫的扩展参数" /></el-form-item>
+                  <el-form-item label="jar"><el-input v-model="l.jar" placeholder="Spider JAR 路径或 URL" /></el-form-item>
+                  <el-form-item label="点击拦截 click"><el-input v-model="l.click" placeholder="点击拦截处理 URL 或规则" /></el-form-item>
+                  <el-form-item label="来源 origin"><el-input v-model="l.origin" placeholder="请求 Origin 标头值" /></el-form-item>
+                  <el-form-item label="引用 referer"><el-input v-model="l.referer" placeholder="请求 Referer 标头值" /></el-form-item>
+                  <el-form-item label="时区 timeZone"><el-input v-model="l.timeZone" placeholder="如 Asia/Taipei, Asia/Shanghai" /></el-form-item>
+                  <el-form-item label="超时 timeout">
                     <el-input-number v-model="l.timeout" :min="0" controls-position="right" placeholder="秒" />
                   </el-form-item>
-                  <el-form-item label="boot"><el-switch v-model="l.boot" :active-value="1" :inactive-value="0" /></el-form-item>
-                  <el-form-item label="pass"><el-switch v-model="l.pass" :active-value="1" :inactive-value="0" /></el-form-item>
+                  <el-form-item label="启动选中 boot"><el-switch v-model="l.boot" :active-value="1" :inactive-value="0" /><span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">应用启动时自动选中此直播源</span></el-form-item>
+                  <el-form-item label="跳过密码 pass"><el-switch v-model="l.pass" :active-value="1" :inactive-value="0" /><span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">跳过密码保护, 显示含密码的隐藏分组</span></el-form-item>
                 </el-form>
                 <!-- header -->
-                <el-form-item label="header" label-width="80">
+                <el-form-item label="请求头 header" label-width="100">
                   <div style="width: 100%">
                     <el-table :data="liveHeaderPairs(l)" border size="small">
-                      <el-table-column label="Name" width="200">
+                      <el-table-column label="名称" width="200">
                         <template #default="scope"><el-input v-model="scope.row.name" placeholder="User-Agent" /></template>
                       </el-table-column>
-                      <el-table-column label="Value">
+                      <el-table-column label="值">
                         <template #default="scope"><el-input v-model="scope.row.value" /></template>
                       </el-table-column>
                       <el-table-column label="" width="50">
@@ -203,24 +226,28 @@
                   </div>
                 </el-form-item>
                 <!-- catchup -->
-                <el-form-item label="catchup" label-width="80">
+                <el-form-item label="回看 catchup" label-width="100">
                   <div style="width: 100%">
-                    <el-form label-width="60" size="small" :inline="true">
-                      <el-form-item label="type">
-                        <el-select v-model="liveCatchup(l).type" style="width: 120px" @change="onCatchupChange(l)">
+                    <el-form label-width="80" size="small" :inline="true">
+                      <el-form-item label="类型 type">
+                        <el-select v-model="liveCatchup(l).type" style="width: 140px" @change="onCatchupChange(l)">
                           <el-option value="" label="无" />
-                          <el-option value="append" label="append" />
-                          <el-option value="default" label="default" />
+                          <el-option value="append" label="append (追加)" />
+                          <el-option value="default" label="default (替换)" />
                         </el-select>
                       </el-form-item>
-                      <el-form-item label="regex">
-                        <el-input v-model="liveCatchup(l).regex" placeholder="URL匹配条件" style="width: 200px" @input="onCatchupChange(l)" />
+                      <el-form-item label="匹配 regex">
+                        <el-input v-model="liveCatchup(l).regex" placeholder="URL 匹配条件 (子串或正则)" style="width: 200px" @input="onCatchupChange(l)" />
                       </el-form-item>
-                      <el-form-item label="source">
-                        <el-input v-model="liveCatchup(l).source" placeholder="时移URL模板" style="width: 260px" @input="onCatchupChange(l)" />
+                    </el-form>
+                    <el-form label-width="80" size="small" :inline="true" style="margin-top: 4px">
+                      <el-form-item label="模板 source">
+                        <el-input v-model="liveCatchup(l).source" placeholder="时移 URL 模板, 如 ?playseek=${(b)yyyyMMddHHmmss}" style="width: 360px" @input="onCatchupChange(l)" />
                       </el-form-item>
-                      <el-form-item label="replace">
-                        <el-input v-model="liveCatchup(l).replace" placeholder="原串,新串" style="width: 200px" @input="onCatchupChange(l)" />
+                    </el-form>
+                    <el-form label-width="80" size="small" :inline="true" style="margin-top: 4px">
+                      <el-form-item label="替换 replace">
+                        <el-input v-model="liveCatchup(l).replace" placeholder="原串,新串 (逗号分隔)" style="width: 360px" @input="onCatchupChange(l)" />
                       </el-form-item>
                     </el-form>
                   </div>
@@ -230,21 +257,24 @@
             <!-- 频道组 -->
             <el-collapse>
               <el-collapse-item :title="'频道组 (' + (l.groups ? l.groups.length : 0) + ')'" :name="'live-groups-' + li">
+                <el-alert type="info" :closable="false" style="margin-bottom: 8px">
+                  <template #title>内嵌频道组数据。url 和 groups 二选一, 如已有外部直播列表则无需配置频道组。</template>
+                </el-alert>
                 <div v-for="(g, gi) in l.groups" :key="gi" style="margin-bottom: 8px; border: 1px dashed var(--el-border-color); border-radius: 4px; padding: 8px">
                   <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px">
-                    <el-input v-model="g.name" placeholder="组名称" style="width: 200px" />
-                    <span style="white-space: nowrap; font-size: 12px">pass</span>
+                    <el-input v-model="g.name" placeholder="分组名称 (如 新闻台)" style="width: 200px" />
+                    <span style="white-space: nowrap; font-size: 12px">密码保护</span>
                     <el-switch v-model="g.pass" :active-value="1" :inactive-value="0" />
                     <el-button link type="danger" @click="l.groups.splice(gi, 1)">删除组</el-button>
                   </div>
                   <el-table :data="g.channels" border size="small">
-                    <el-table-column label="名称" width="140">
+                    <el-table-column label="频道名" width="140">
                       <template #default="scope"><el-input v-model="scope.row.name" placeholder="频道名" /></template>
                     </el-table-column>
-                    <el-table-column label="urls">
+                    <el-table-column label="流地址 urls">
                       <template #default="scope">
                         <el-select v-model="scope.row.urls" multiple filterable allow-create default-first-option
-                          placeholder="流地址" style="width: 100%" />
+                          placeholder="流地址 (可加 $线路名 后缀)" style="width: 100%" />
                       </template>
                     </el-table-column>
                     <el-table-column label="操作" width="120">
@@ -267,62 +297,66 @@
 
       <!-- 网络 -->
       <el-tab-pane label="网络" name="network">
+        <el-alert type="info" :closable="false" style="margin-bottom: 8px">
+          <template #title>配置 DNS 加密查询、网络代理、请求拦截规则和 DNS 覆盖。不熟悉的选项可留空。</template>
+        </el-alert>
+
         <!-- DoH -->
-        <el-divider content-position="left">DNS over HTTPS (doh)</el-divider>
+        <el-divider content-position="left">DNS 加密查询 (doh)</el-divider>
         <div v-for="(d, di) in state.doh" :key="'doh-' + di" style="margin-bottom: 8px; border: 1px solid var(--el-border-color-lighter); border-radius: 4px; padding: 8px">
           <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px">
-            <el-input v-model="d.name" placeholder="名称" style="width: 160px" />
-            <el-input v-model="d.url" placeholder="DoH URL" style="flex: 1" />
+            <el-input v-model="d.name" placeholder="名称 (如 Google DoH)" style="width: 160px" />
+            <el-input v-model="d.url" placeholder="DoH 查询端点, 如 https://dns.google/dns-query" style="flex: 1" />
             <el-button link type="danger" @click="state.doh.splice(di, 1)">删除</el-button>
           </div>
-          <el-form-item label="ips" label-width="40" style="margin-bottom: 0">
-            <el-select v-model="d.ips" multiple filterable allow-create default-first-option placeholder="IP 地址" style="width: 100%" />
+          <el-form-item label="IP 地址" label-width="60" style="margin-bottom: 0">
+            <el-select v-model="d.ips" multiple filterable allow-create default-first-option placeholder="服务器 IP, 用于引导解析, 如 8.8.8.8" style="width: 100%" />
           </el-form-item>
         </div>
         <el-button type="primary" plain @click="state.doh.push({ name: '', url: '', ips: [] })" style="margin-bottom: 12px">+ 添加 DoH</el-button>
 
         <!-- Proxy -->
-        <el-divider content-position="left">代理 (proxy)</el-divider>
+        <el-divider content-position="left">网络代理 (proxy)</el-divider>
         <div v-for="(p, pi) in state.proxy" :key="'proxy-' + pi" style="margin-bottom: 8px; border: 1px solid var(--el-border-color-lighter); border-radius: 4px; padding: 8px">
           <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px">
-            <el-input v-model="p.name" placeholder="名称" style="width: 160px" />
+            <el-input v-model="p.name" placeholder="名称 (如 全局代理)" style="width: 160px" />
             <el-button link type="danger" @click="state.proxy.splice(pi, 1)">删除</el-button>
           </div>
-          <el-form-item label="hosts" label-width="60" style="margin-bottom: 0">
-            <el-select v-model="p.hosts" multiple filterable allow-create default-first-option placeholder="域名列表 (支持正则)" style="width: 100%" />
+          <el-form-item label="适用域名" label-width="80" style="margin-bottom: 0">
+            <el-select v-model="p.hosts" multiple filterable allow-create default-first-option placeholder="匹配的域名列表, 支持正则, 如 googlevideo.com 或 .* " style="width: 100%" />
           </el-form-item>
-          <el-form-item label="urls" label-width="60" style="margin-bottom: 0">
-            <el-select v-model="p.urls" multiple filterable allow-create default-first-option placeholder="代理 URL 列表" style="width: 100%" />
+          <el-form-item label="代理地址" label-width="80" style="margin-bottom: 0">
+            <el-select v-model="p.urls" multiple filterable allow-create default-first-option placeholder="代理 URL, 如 http://127.0.0.1:7890 或 socks5://user:pass@host:port" style="width: 100%" />
           </el-form-item>
         </div>
         <el-button type="primary" plain @click="state.proxy.push({ name: '', hosts: [], urls: [] })" style="margin-bottom: 12px">+ 添加代理</el-button>
 
         <!-- Rules -->
-        <el-divider content-position="left">网络规则 (rules)</el-divider>
+        <el-divider content-position="left">网络拦截规则 (rules)</el-divider>
         <div v-for="(r, ri) in state.rules" :key="'rules-' + ri" style="margin-bottom: 8px; border: 1px solid var(--el-border-color-lighter); border-radius: 4px; padding: 8px">
           <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px">
-            <el-input v-model="r.name" placeholder="名称" style="width: 160px" />
+            <el-input v-model="r.name" placeholder="名称 (如 视频嗅探)" style="width: 160px" />
             <el-button link type="danger" @click="state.rules.splice(ri, 1)">删除</el-button>
           </div>
-          <el-form-item label="hosts" label-width="60" style="margin-bottom: 0">
-            <el-select v-model="r.hosts" multiple filterable allow-create default-first-option placeholder="域名列表" style="width: 100%" />
+          <el-form-item label="匹配域名" label-width="80" style="margin-bottom: 0">
+            <el-select v-model="r.hosts" multiple filterable allow-create default-first-option placeholder="触发的域名列表" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="regex" label-width="60" style="margin-bottom: 0">
-            <el-select v-model="r.regex" multiple filterable allow-create default-first-option placeholder="正则表达式" style="width: 100%" />
+          <el-form-item label="提取正则" label-width="80" style="margin-bottom: 0">
+            <el-select v-model="r.regex" multiple filterable allow-create default-first-option placeholder="用于提取播放 URL 的正则, 如 m3u8?token=" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="script" label-width="60" style="margin-bottom: 0">
-            <el-select v-model="r.script" multiple filterable allow-create default-first-option placeholder="脚本列表" style="width: 100%" />
+          <el-form-item label="执行脚本" label-width="80" style="margin-bottom: 0">
+            <el-select v-model="r.script" multiple filterable allow-create default-first-option placeholder="WebView 中执行的 JS 脚本" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="exclude" label-width="60" style="margin-bottom: 0">
-            <el-select v-model="r.exclude" multiple filterable allow-create default-first-option placeholder="排除列表" style="width: 100%" />
+          <el-form-item label="排除规则" label-width="80" style="margin-bottom: 0">
+            <el-select v-model="r.exclude" multiple filterable allow-create default-first-option placeholder="排除的 URL 模式, 匹配则不触发正则" style="width: 100%" />
           </el-form-item>
         </div>
         <el-button type="primary" plain @click="state.rules.push({ name: '', hosts: [], regex: [], script: [], exclude: [] })" style="margin-bottom: 12px">+ 添加规则</el-button>
 
         <!-- Hosts -->
-        <el-divider content-position="left">DNS 覆盖 (hosts)</el-divider>
+        <el-divider content-position="left">DNS 解析覆盖 (hosts)</el-divider>
         <el-select v-model="state.hostsList" multiple filterable allow-create default-first-option
-          placeholder="格式: original=target (如 example.com=1.2.3.4)" style="width: 100%" />
+          placeholder="格式: 原始域名=目标域名或IP, 如 example.com=1.2.3.4 (支持 * 通配)" style="width: 100%" />
       </el-tab-pane>
 
       <!-- 原始 JSON -->
@@ -338,56 +372,57 @@
     <!-- 自定义站点表单 -->
     <el-dialog v-model="siteFormVisible" title="自定义站点" width="640px" append-to-body destroy-on-close>
       <el-form :model="siteForm" label-width="120" style="max-height: 60vh; overflow-y: auto">
-        <el-form-item label="key" required><el-input v-model="siteForm.key" /></el-form-item>
-        <el-form-item label="名称"><el-input v-model="siteForm.name" /></el-form-item>
-        <el-form-item label="类型">
+        <el-form-item label="标识 key" required><el-input v-model="siteForm.key" placeholder="唯一标识, 不可重复" /></el-form-item>
+        <el-form-item label="名称"><el-input v-model="siteForm.name" placeholder="显示名称" /></el-form-item>
+        <el-form-item label="类型 type">
           <el-select v-model="siteForm.type">
             <el-option v-for="o in siteTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="api"><el-input v-model="siteForm.api" /></el-form-item>
-        <el-form-item label="ext"><el-input v-model="siteForm.ext" type="textarea" :rows="3" placeholder="字符串或 JSON 对象" /></el-form-item>
-        <el-form-item label="jar"><el-input v-model="siteForm.jar" /></el-form-item>
-        <el-form-item label="searchable">
+        <el-form-item label="接口 api"><el-input v-model="siteForm.api" placeholder="API 端点 URL 或爬虫类名 (如 csp_MySource)" /></el-form-item>
+        <el-form-item label="扩展 ext"><el-input v-model="siteForm.ext" type="textarea" :rows="3" placeholder="传给爬虫的扩展数据, 可为字符串或 JSON" /></el-form-item>
+        <el-form-item label="Spider jar"><el-input v-model="siteForm.jar" placeholder="Spider JAR 路径或 URL, 覆盖全局 spider" /></el-form-item>
+        <el-form-item label="搜索 searchable">
           <el-select v-model="siteForm.searchable">
             <el-option :value="0" label="不可搜索(0)" />
             <el-option :value="1" label="可搜索(1)" />
-            <el-option :value="2" label="聚合(2)" />
+            <el-option :value="2" label="聚合搜索(2)" />
           </el-select>
         </el-form-item>
-        <el-form-item label="quickSearch"><el-switch v-model="siteForm.quickSearch" :active-value="1" :inactive-value="0" /></el-form-item>
-        <el-form-item label="filterable"><el-switch v-model="siteForm.filterable" :active-value="1" :inactive-value="0" /></el-form-item>
-        <el-form-item label="changeable"><el-switch v-model="siteForm.changeable" :active-value="1" :inactive-value="0" /></el-form-item>
-        <el-form-item label="风格 style">
+        <el-form-item label="快速搜索"><el-switch v-model="siteForm.quickSearch" :active-value="1" :inactive-value="0" /></el-form-item>
+        <el-form-item label="筛选 filterable"><el-switch v-model="siteForm.filterable" :active-value="1" :inactive-value="0" /></el-form-item>
+        <el-form-item label="线路切换"><el-switch v-model="siteForm.changeable" :active-value="1" :inactive-value="0" /></el-form-item>
+        <el-form-item label="卡片风格 style">
           <el-select v-model="siteForm.styleType" style="width: 140px">
             <el-option value="" label="默认" />
-            <el-option value="rect" label="rect" />
-            <el-option value="oval" label="oval" />
-            <el-option value="list" label="list" />
+            <el-option value="rect" label="rect 矩形" />
+            <el-option value="oval" label="oval 圆形" />
+            <el-option value="list" label="list 列表" />
           </el-select>
-          <el-input v-model="siteForm.styleRatio" placeholder="ratio" style="width: 120px; margin-left: 8px" />
+          <el-input v-model="siteForm.styleRatio" placeholder="宽高比, 如 1.33" style="width: 120px; margin-left: 8px" />
         </el-form-item>
-        <el-form-item label="排序 order"><el-input v-model="siteForm.order" /></el-form-item>
+        <el-form-item label="排序 order"><el-input v-model="siteForm.order" placeholder="数字, 越小越靠前" /></el-form-item>
         <el-divider content-position="left">高级设置</el-divider>
-        <el-form-item label="timeout">
-          <el-input-number v-model="siteForm.timeout" :min="0" controls-position="right" placeholder="秒" />
+        <el-form-item label="超时 timeout">
+          <el-input-number v-model="siteForm.timeout" :min="0" controls-position="right" placeholder="请求超时秒数" />
         </el-form-item>
-        <el-form-item label="indexs">
+        <el-form-item label="索引模式 indexs">
           <el-switch v-model="siteForm.indexs" :active-value="1" :inactive-value="0" />
+          <span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">作为索引来源使用</span>
         </el-form-item>
-        <el-form-item label="playUrl"><el-input v-model="siteForm.playUrl" placeholder="播放地址前缀" /></el-form-item>
-        <el-form-item label="click"><el-input v-model="siteForm.click" placeholder="点击拦截" /></el-form-item>
-        <el-form-item label="categories">
+        <el-form-item label="播放前缀 playUrl"><el-input v-model="siteForm.playUrl" placeholder="播放 URL 前缀或转换规则" /></el-form-item>
+        <el-form-item label="点击拦截 click"><el-input v-model="siteForm.click" placeholder="点击拦截处理 URL 或规则" /></el-form-item>
+        <el-form-item label="分类白名单">
           <el-select v-model="siteForm.categories" multiple filterable allow-create default-first-option
-            placeholder="分类白名单" style="width: 100%" />
+            placeholder="仅显示这些分类, 留空显示全部" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="header">
+        <el-form-item label="请求头 header">
           <div style="width: 100%">
             <el-table :data="siteForm.headerPairs" border size="small">
-              <el-table-column label="Name" width="200">
+              <el-table-column label="名称" width="200">
                 <template #default="scope"><el-input v-model="scope.row.name" placeholder="User-Agent" /></template>
               </el-table-column>
-              <el-table-column label="Value">
+              <el-table-column label="值">
                 <template #default="scope"><el-input v-model="scope.row.value" /></template>
               </el-table-column>
               <el-table-column label="" width="50">
@@ -415,18 +450,18 @@
             <el-option v-for="o in parseTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="url"><el-input v-model="parseForm.url" /></el-form-item>
-        <el-form-item label="flag">
-          <el-select v-model="parseForm.flag" multiple filterable allow-create default-first-option style="width: 100%" />
+        <el-form-item label="地址 url"><el-input v-model="parseForm.url" placeholder="解析 API 端点, 待解析 URL 作为后缀参数" /></el-form-item>
+        <el-form-item label="适用平台 flag">
+          <el-select v-model="parseForm.flag" multiple filterable allow-create default-first-option placeholder="适用的平台标识, 如 qq、youku" style="width: 100%" />
         </el-form-item>
         <el-divider content-position="left">高级设置</el-divider>
-        <el-form-item label="ext.header">
+        <el-form-item label="请求头 ext.header">
           <div style="width: 100%">
             <el-table :data="parseForm.headerPairs" border size="small">
-              <el-table-column label="Name" width="200">
+              <el-table-column label="名称" width="200">
                 <template #default="scope"><el-input v-model="scope.row.name" placeholder="Referer" /></template>
               </el-table-column>
-              <el-table-column label="Value">
+              <el-table-column label="值">
                 <template #default="scope"><el-input v-model="scope.row.value" /></template>
               </el-table-column>
               <el-table-column label="" width="50">
@@ -447,19 +482,19 @@
 
     <!-- 频道详情 -->
     <el-dialog v-model="channelFormVisible" title="频道详情" width="560px" append-to-body destroy-on-close>
-      <el-form :model="channelForm" label-width="80" style="max-height: 60vh; overflow-y: auto">
-        <el-form-item label="名称"><el-input v-model="channelForm.name" /></el-form-item>
-        <el-form-item label="number"><el-input v-model="channelForm.number" placeholder="频道号" /></el-form-item>
-        <el-form-item label="logo"><el-input v-model="channelForm.logo" placeholder="Logo URL" /></el-form-item>
-        <el-form-item label="epg"><el-input v-model="channelForm.epg" placeholder="EPG URL" /></el-form-item>
-        <el-form-item label="ua"><el-input v-model="channelForm.ua" placeholder="User-Agent" /></el-form-item>
-        <el-form-item label="format"><el-input v-model="channelForm.format" placeholder="MIME type" /></el-form-item>
-        <el-form-item label="origin"><el-input v-model="channelForm.origin" /></el-form-item>
-        <el-form-item label="referer"><el-input v-model="channelForm.referer" /></el-form-item>
-        <el-form-item label="tvgId"><el-input v-model="channelForm.tvgId" /></el-form-item>
-        <el-form-item label="tvgName"><el-input v-model="channelForm.tvgName" /></el-form-item>
-        <el-form-item label="parse"><el-switch v-model="channelForm.parse" :active-value="1" :inactive-value="0" /></el-form-item>
-        <el-form-item label="click"><el-input v-model="channelForm.click" /></el-form-item>
+      <el-form :model="channelForm" label-width="100" style="max-height: 60vh; overflow-y: auto">
+        <el-form-item label="频道名"><el-input v-model="channelForm.name" /></el-form-item>
+        <el-form-item label="频道号 number"><el-input v-model="channelForm.number" placeholder="显示用频道号" /></el-form-item>
+        <el-form-item label="图标 logo"><el-input v-model="channelForm.logo" placeholder="频道 Logo URL" /></el-form-item>
+        <el-form-item label="节目表 epg"><el-input v-model="channelForm.epg" placeholder="此频道专属 EPG URL" /></el-form-item>
+        <el-form-item label="UA"><el-input v-model="channelForm.ua" placeholder="User-Agent" /></el-form-item>
+        <el-form-item label="格式 format"><el-input v-model="channelForm.format" placeholder="MIME type, 如 application/x-mpegURL" /></el-form-item>
+        <el-form-item label="来源 origin"><el-input v-model="channelForm.origin" placeholder="请求 Origin 标头" /></el-form-item>
+        <el-form-item label="引用 referer"><el-input v-model="channelForm.referer" placeholder="请求 Referer 标头" /></el-form-item>
+        <el-form-item label="EPG ID tvgId"><el-input v-model="channelForm.tvgId" placeholder="XMLTV 格式频道 ID" /></el-form-item>
+        <el-form-item label="EPG 名称 tvgName"><el-input v-model="channelForm.tvgName" placeholder="XMLTV 格式频道名称" /></el-form-item>
+        <el-form-item label="解析 parse"><el-switch v-model="channelForm.parse" :active-value="1" :inactive-value="0" /><span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">是否需要解析此频道 URL</span></el-form-item>
+        <el-form-item label="点击拦截 click"><el-input v-model="channelForm.click" placeholder="点击拦截处理" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="channelFormVisible = false">取消</el-button>
@@ -473,6 +508,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { Link as LinkIcon } from '@element-plus/icons-vue'
 import {
   parseOverride,
   detectFilterMode,
@@ -507,11 +543,11 @@ const siteTypeOptions = [
   { value: 4, label: '外部 4' },
 ]
 const parseTypeOptions = [
-  { value: 0, label: '嗅探 0' },
-  { value: 1, label: 'Json 1' },
+  { value: 0, label: '嗅探 0 (WebView)' },
+  { value: 1, label: 'Json 1 (GET 取 url)' },
   { value: 2, label: 'Json扩展 2' },
   { value: 3, label: '聚合 3' },
-  { value: 4, label: '超级解析 4' },
+  { value: 4, label: '超级解析 4 (并行)' },
 ]
 
 const activeTab = ref('sites')
