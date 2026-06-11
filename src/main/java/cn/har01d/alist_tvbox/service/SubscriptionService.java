@@ -1698,19 +1698,15 @@ public class SubscriptionService {
         Subscription sub = subscriptionRepository.findBySid(sid).orElseThrow(NotFoundException::new);
         String apiUrl = sub.getUrl() == null ? "" : sub.getUrl();
         Map<String, Object> config = new HashMap<>();
-        config.put("sites", new ArrayList<>());
+        // 与 subscription() 保持一致:apiUrl 为空时也要处理空串(加载默认 my.json 的上游站点)
         for (String url : apiUrl.split(",")) {
-            if (StringUtils.isBlank(url)) {
-                continue;
-            }
-            String u = url.trim();
+            String[] parts = url.split("@", 2);
             String prefix = "";
-            String[] parts = u.split("@", 2);
             if (parts.length == 2) {
                 prefix = parts[0].trim() + "@";
-                u = parts[1].trim();
+                url = parts[1].trim();
             }
-            overrideConfig(config, fixUrl(u), prefix, getConfigData(u));
+            overrideConfig(config, fixUrl(url.trim()), prefix, getConfigData(url.trim()));
         }
         return buildCatalog(config, subscriptionSourceService.findEnabledSources());
     }
