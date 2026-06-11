@@ -1615,4 +1615,14 @@ public class SubscriptionService {
                 })
                 .orElse(new HashMap<>());
     }
+
+    public void updateGlobalConfig(Map<String, Object> config) {
+        try {
+            String json = objectMapper.writeValueAsString(config);
+            settingRepository.save(new Setting(Constants.GLOBAL_SUBSCRIPTION_OVERRIDE, json));
+        } catch (Exception e) {
+            log.warn("Failed to save global config", e);
+            throw new BadRequestException("Invalid config format");
+        }
+    }
 }

@@ -32,4 +32,15 @@ class SubscriptionServiceGlobalConfigTest {
         Map<String, Object> config = new HashMap<>();
         assertTrue(config.isEmpty());
     }
+
+    @Test
+    void testUpdateGlobalConfigJsonSerialization() throws Exception {
+        // 测试配置序列化
+        Map<String, Object> config = Map.of("sites-blacklist", List.of("site1"));
+        String json = objectMapper.writeValueAsString(config);
+
+        assertNotNull(json);
+        assertTrue(json.contains("sites-blacklist"));
+        assertTrue(json.contains("site1"));
+    }
 }
