@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 @Slf4j
@@ -87,7 +89,8 @@ public class StaticFileController {
     }
 
     @PostMapping("/upload")
-    public void upload(@RequestParam String dir, @RequestParam("file") MultipartFile file) throws IOException {
+    public void upload(@RequestParam String dir, @RequestParam("file") MultipartFile file,
+                       @RequestParam(defaultValue = "false") boolean extract) throws IOException {
         Path basePath = Utils.getWebPath("static");
         Path targetDir = basePath.resolve(dir).normalize();
         if (!targetDir.startsWith(basePath)) {
@@ -99,14 +102,36 @@ public class StaticFileController {
             throw new BadRequestException("文件名不能为空");
         }
 
-        Path filePath = targetDir.resolve(filename).normalize();
-        if (!filePath.startsWith(basePath)) {
-            throw new BadRequestException("非法文件名");
-        }
-
         Files.createDirectories(targetDir);
-        file.transferTo(filePath.toFile());
-        log.info("uploaded file: {}", filePath);
+
+        if (extract && filename.toLowerCase().endsWith(".zip")) {
+            try (ZipInputStream zis = new ZipInputStream(file.getInputStream())) {
+                ZipEntry entry;
+                while ((entry = zis.getNextEntry()) != null) {
+                    if (entry.isDirectory()) {
+                        Path dirPath = targetDir.resolve(entry.getName()).normalize();
+                        if (dirPath.startsWith(targetDir)) {
+                            Files.createDirectories(dirPath);
+                        }
+                    } else {
+                        Path filePath = targetDir.resolve(entry.getName()).normalize();
+                        if (filePath.startsWith(targetDir) && !Files.exists(filePath)) {
+                            Files.createDirectories(filePath.getParent());
+                            Files.copy(zis, filePath, StandardCopyOption.REPLACE_EXISTING);
+                        }
+                    }
+                    zis.closeEntry();
+                }
+            }
+            log.info("extracted zip to: {}", targetDir);
+        } else {
+            Path filePath = targetDir.resolve(filename).normalize();
+            if (!filePath.startsWith(basePath)) {
+                throw new BadRequestException("非法文件名");
+            }
+            file.transferTo(filePath.toFile());
+            log.info("uploaded file: {}", filePath);
+        }
     }
 
     @DeleteMapping
@@ -348,6 +373,51 @@ public class StaticFileController {
             Files.copy(targetPath, response.getOutputStream());
             log.info("downloaded file: {}", targetPath);
         }
+    }
+
+    @PostMapping("/batch-download")
+    public void batchDownload(@RequestBody Map<String, List<String>> body, HttpServletResponse response) throws IOException {
+        List<String> paths = body.get("paths");
+        if (paths == null || paths.isEmpty()) {
+            throw new BadRequestException("路径列表不能为空");
+        }
+        Path basePath = Utils.getWebPath("static");
+
+        response.setContentType("application/zip");
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"download.zip\"");
+        try (ZipOutputStream zos = new ZipOutputStream(response.getOutputStream())) {
+            for (String p : paths) {
+                Path targetPath = basePath.resolve(p).normalize();
+                if (!targetPath.startsWith(basePath) || targetPath.equals(basePath) || !Files.exists(targetPath)) {
+                    continue;
+                }
+                String entryPrefix = targetPath.getFileName().toString();
+                if (Files.isDirectory(targetPath)) {
+                    try (Stream<Path> stream = Files.walk(targetPath)) {
+                        stream.forEach(file -> {
+                            try {
+                                String relative = targetPath.getParent().relativize(file).toString();
+                                if (Files.isDirectory(file)) {
+                                    zos.putNextEntry(new ZipEntry(relative + "/"));
+                                    zos.closeEntry();
+                                } else {
+                                    zos.putNextEntry(new ZipEntry(relative));
+                                    Files.copy(file, zos);
+                                    zos.closeEntry();
+                                }
+                            } catch (IOException e) {
+                                log.warn("failed to add to zip: {}", file, e);
+                            }
+                        });
+                    }
+                } else {
+                    zos.putNextEntry(new ZipEntry(entryPrefix));
+                    Files.copy(targetPath, zos);
+                    zos.closeEntry();
+                }
+            }
+        }
+        log.info("batch downloaded {} items", paths.size());
     }
 
     private StaticFileInfo buildFileInfo(Path basePath, Path path) {

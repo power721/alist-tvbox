@@ -41,6 +41,9 @@
           </el-breadcrumb>
           <div>
             <template v-if="selectedPaths.length > 0">
+              <el-button type="success" @click="batchDownloadSelected">
+                下载 ({{ selectedPaths.length }})
+              </el-button>
               <el-button type="danger" @click="batchDeleteSelected">
                 删除 ({{ selectedPaths.length }})
               </el-button>
@@ -175,15 +178,19 @@
         ref="uploadRef"
         :action="uploadUrl"
         :headers="uploadHeaders"
-        :data="{ dir: currentStaticDir }"
+        :data="uploadData"
         :on-success="handleUploadSuccess"
         :on-error="handleUploadError"
+        :before-upload="beforeUpload"
         multiple
         drag
       >
         <el-icon style="font-size: 40px; color: #909399"><Upload/></el-icon>
         <div>拖拽文件到此处或 <em>点击上传</em></div>
       </el-upload>
+      <div style="margin-top: 10px">
+        <el-checkbox v-model="autoExtract" label="自动解压 ZIP 文件"/>
+      </div>
       <template #footer>
         <el-button @click="uploadDialogVisible = false">关闭</el-button>
       </template>
@@ -360,10 +367,22 @@ const pathSegments = computed(() => {
 
 const uploadUrl = '/api/static-files/upload'
 
+const autoExtract = ref(false)
+
+const uploadData = computed(() => ({
+  dir: currentStaticDir.value,
+  extract: autoExtract.value
+}))
+
 const uploadHeaders = computed(() => {
   const token = localStorage.getItem('token')
   return token ? {'Authorization': token} : {}
 })
+
+const beforeUpload = () => {
+  // Refresh data params before each upload
+  return true
+}
 
 const navigateTo = (dir: string) => {
   currentStaticDir.value = dir
@@ -483,6 +502,22 @@ const confirmDelete = () => {
 
 const downloadFile = (row: any) => {
   window.open('/api/static-files/download?path=' + encodeURIComponent(row.path), '_blank')
+}
+
+const batchDownloadSelected = () => {
+  axios.post('/api/static-files/batch-download', {paths: selectedPaths.value}, {responseType: 'blob'}).then(({data}) => {
+    const url = window.URL.createObjectURL(new Blob([data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', 'download.zip')
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('下载完成')
+  }).catch(() => {
+    ElMessage.error('批量下载失败')
+  })
 }
 
 const showMoveDialog = () => {
