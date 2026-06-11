@@ -497,7 +497,7 @@ function removeHeader(index: number) {
 }
 
 function addLive() {
-  state.lives.push({ name: '', type: 0, url: '', playerType: 0, ua: '', epg: '', logo: '' })
+  state.lives.push({ name: '', type: 0, url: '', playerType: 2, ua: '', epg: '', logo: '' })
 }
 
 function onTabChange(name: string) {
