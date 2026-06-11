@@ -29,3 +29,8 @@ test('exposes plugin run mode settings in subscription source manager', () => {
   assert.equal(viewSource.includes('原生Python'), true)
   assert.equal(viewSource.includes('Java代理'), true)
 })
+
+test('uses visual editor for subscription override instead of raw textarea', () => {
+  assert.equal(viewSource.includes('SubscriptionConfigEditor'), true)
+  assert.equal(viewSource.includes("openEditor(false)"), true)
+})

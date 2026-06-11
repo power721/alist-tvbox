@@ -111,22 +111,9 @@
         <el-form-item label="排序字段" label-width="140">
           <el-input v-model="form.sort" autocomplete="off" placeholder="留空保持默认排序"/>
         </el-form-item>
-        <el-form-item label="站点过滤模式" label-width="140">
-          <el-radio-group v-model="sitesFilterMode">
-            <el-radio label="none">继承全局</el-radio>
-            <el-radio label="whitelist">白名单</el-radio>
-            <el-radio label="blacklist">黑名单</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="白名单站点" label-width="140" v-if="sitesFilterMode==='whitelist'">
-          <el-input v-model="sitesWhitelist" autocomplete="off" placeholder="逗号分隔，如: site1,site2"/>
-        </el-form-item>
-        <el-form-item label="黑名单站点" label-width="140" v-if="sitesFilterMode==='blacklist'">
-          <el-input v-model="sitesBlacklist" autocomplete="off" placeholder="逗号分隔，如: site1,site2"/>
-        </el-form-item>
         <el-form-item label="定制" label-width="140">
-          <el-input v-model="form.override" type="textarea" rows="15"/>
-          <a href="https://www.json.cn/" target="_blank">JSON验证</a>
+          <el-button @click="openEditor(false)">🎨 可视化编辑</el-button>
+          <span class="hint">{{ form.override ? '已配置' : '未配置' }}</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -633,28 +620,24 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="globalConfigVisible" title="全局订阅配置" width="60%">
-      <el-form>
-        <el-form-item label="站点过滤模式" label-width="140">
-          <el-radio-group v-model="globalFilterMode">
-            <el-radio label="whitelist">白名单</el-radio>
-            <el-radio label="blacklist">黑名单</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="白名单站点" label-width="140" v-if="globalFilterMode==='whitelist'">
-          <el-input v-model="globalWhitelist" autocomplete="off" placeholder="逗号分隔，如: site1,site2"/>
-        </el-form-item>
-        <el-form-item label="黑名单站点" label-width="140" v-if="globalFilterMode==='blacklist'">
-          <el-input v-model="globalBlacklist" autocomplete="off" placeholder="逗号分隔，如: site1,site2"/>
-        </el-form-item>
-        <el-form-item label="原始JSON" label-width="140">
-          <el-input v-model="globalConfigJson" type="textarea" rows="10"/>
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="editorVisible" :title="editorTargetIsGlobal ? '全局订阅配置' : '订阅定制'" width="900px" destroy-on-close>
+      <div v-if="editorTargetIsGlobal" style="margin-bottom: 8px">
+        参考订阅：
+        <el-select v-model="globalReferenceSid" style="width: 220px">
+          <el-option v-for="item in subscriptions" :key="item.sid" :label="item.name" :value="item.sid" />
+        </el-select>
+      </div>
+      <SubscriptionConfigEditor
+        ref="editorRef"
+        :model-value="editorTargetIsGlobal ? globalConfigJson : form.override"
+        :mode="editorTargetIsGlobal ? 'global' : 'subscription'"
+        :reference-sid="editorTargetIsGlobal ? globalReferenceSid : form.sid"
+        :token="token"
+      />
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="globalConfigVisible = false">取消</el-button>
-          <el-button type="primary" @click="saveGlobalConfig">保存</el-button>
+          <el-button @click="editorVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveEditor">{{ editorTargetIsGlobal ? '保存全局' : '应用到定制' }}</el-button>
         </span>
       </template>
     </el-dialog>
@@ -669,6 +652,7 @@ import {ElMessage} from "element-plus";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
 import PluginFilterConfigFieldEditor from "@/components/PluginFilterConfigFieldEditor.vue";
+import SubscriptionConfigEditor from "@/components/SubscriptionConfigEditor.vue";
 import {isPluginDragEnabledForUserAgent} from "@/utils/pluginDragSupport.mjs";
 
 interface Sub {
@@ -837,14 +821,11 @@ const user = ref({
   last_name: '',
   phone: ''
 })
-const globalConfigVisible = ref(false)
 const globalConfigJson = ref('')
-const globalFilterMode = ref('blacklist')
-const globalWhitelist = ref('')
-const globalBlacklist = ref('')
-const sitesFilterMode = ref('none')
-const sitesWhitelist = ref('')
-const sitesBlacklist = ref('')
+const editorVisible = ref(false)
+const editorRef = ref<any>(null)
+const editorTargetIsGlobal = ref(false)
+const globalReferenceSid = ref('')
 const plugins = ref<Plugin[]>([])
 const managedSources = ref<ManagedSource[]>([])
 const pluginFilters = ref<PluginFilter[]>([])
@@ -982,9 +963,6 @@ const handleAdd = () => {
     sort: '',
     override: ''
   }
-  sitesFilterMode.value = 'none'
-  sitesWhitelist.value = ''
-  sitesBlacklist.value = ''
   formVisible.value = true
 }
 
@@ -1492,44 +1470,36 @@ const loadPluginSettings = () => {
 }
 
 const showGlobalConfig = () => {
-  globalConfigVisible.value = true
-  loadGlobalConfig()
+  openEditor(true)
 }
 
 const loadGlobalConfig = () => {
   axios.get('/api/subscriptions/global-config').then(response => {
-    const config = response.data
-    globalConfigJson.value = JSON.stringify(config, null, 2)
-
-    if (config['sites-whitelist']) {
-      globalFilterMode.value = 'whitelist'
-      globalWhitelist.value = config['sites-whitelist'].join(',')
-    } else if (config['sites-blacklist']) {
-      globalFilterMode.value = 'blacklist'
-      globalBlacklist.value = config['sites-blacklist'].join(',')
-    }
+    globalConfigJson.value = JSON.stringify(response.data || {})
   })
 }
 
-const saveGlobalConfig = () => {
-  try {
-    const config = JSON.parse(globalConfigJson.value || '{}')
+const openEditor = (isGlobal: boolean) => {
+  editorTargetIsGlobal.value = isGlobal
+  if (isGlobal) {
+    globalReferenceSid.value = subscriptions.value.length ? (subscriptions.value[0] as any).sid : ''
+    loadGlobalConfig()
+  }
+  editorVisible.value = true
+}
 
-    // 根据界面模式更新配置
-    if (globalFilterMode.value === 'whitelist' && globalWhitelist.value) {
-      config['sites-whitelist'] = globalWhitelist.value.split(',').map(s => s.trim()).filter(s => s)
-      delete config['sites-blacklist']
-    } else if (globalFilterMode.value === 'blacklist' && globalBlacklist.value) {
-      config['sites-blacklist'] = globalBlacklist.value.split(',').map(s => s.trim()).filter(s => s)
-      delete config['sites-whitelist']
-    }
-
+const saveEditor = () => {
+  const value = editorRef.value?.getValue() ?? ''
+  if (editorTargetIsGlobal.value) {
+    let config: any = {}
+    try { config = value ? JSON.parse(value) : {} } catch { ElMessage.error('JSON格式错误'); return }
     axios.put('/api/subscriptions/global-config', config).then(() => {
       ElMessage.success('全局配置保存成功')
-      globalConfigVisible.value = false
+      editorVisible.value = false
     })
-  } catch (e) {
-    ElMessage.error('JSON格式错误')
+  } else {
+    form.value.override = value
+    editorVisible.value = false
   }
 }
 
@@ -1727,25 +1697,6 @@ const handleEdit = (data: any) => {
     override: data.override
   }
 
-  // 解析 override 中的白名单/黑名单
-  sitesFilterMode.value = 'none'
-  sitesWhitelist.value = ''
-  sitesBlacklist.value = ''
-  if (data.override) {
-    try {
-      const override: any = JSON.parse(data.override)
-      if (override['sites-whitelist']) {
-        sitesFilterMode.value = 'whitelist'
-        sitesWhitelist.value = override['sites-whitelist'].join(',')
-      } else if (override['sites-blacklist']) {
-        sitesFilterMode.value = 'blacklist'
-        sitesBlacklist.value = override['sites-blacklist'].join(',')
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-
   formVisible.value = true
 }
 
@@ -1867,30 +1818,6 @@ const sendTgPassword = () => {
 }
 
 const handleConfirm = () => {
-  // 合并白名单/黑名单到 override
-  let override: any = {}
-  if (form.value.override) {
-    try {
-      override = JSON.parse(form.value.override)
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  // 根据过滤模式更新 override
-  if (sitesFilterMode.value === 'whitelist' && sitesWhitelist.value) {
-    override['sites-whitelist'] = sitesWhitelist.value.split(',').map(s => s.trim()).filter(s => s)
-    delete override['sites-blacklist']
-  } else if (sitesFilterMode.value === 'blacklist' && sitesBlacklist.value) {
-    override['sites-blacklist'] = sitesBlacklist.value.split(',').map(s => s.trim()).filter(s => s)
-    delete override['sites-whitelist']
-  } else if (sitesFilterMode.value === 'none') {
-    delete override['sites-whitelist']
-    delete override['sites-blacklist']
-  }
-
-  form.value.override = Object.keys(override).length > 0 ? JSON.stringify(override) : ''
-
   axios.post('/api/subscriptions', form.value).then(() => {
     formVisible.value = false
     load()
