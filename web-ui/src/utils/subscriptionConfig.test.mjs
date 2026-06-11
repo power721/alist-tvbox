@@ -9,6 +9,7 @@ import {
   siteOverrideMap,
   serialize,
   stringify,
+  buildHeaderRows,
 } from './subscriptionConfig.mjs'
 
 test('parseOverride: empty -> {}', () => {
@@ -53,6 +54,7 @@ test('serialize: blacklist mode writes blacklist.sites, migrates legacy, drops s
       { key: 'b', origin: 'builtin', enabled: false, name: 'B', originalName: 'B', order: '', isCustom: false },
     ],
     parses: [{ name: '虾米', enabled: false, isCustom: false }],
+    headers: [],
     wallpaper: '',
     logo: '',
     flags: [],
@@ -74,6 +76,7 @@ test('serialize: whitelist mode writes sites-whitelist of enabled keys', () => {
       { key: 'b', origin: 'plugin', enabled: false, name: 'B', originalName: 'B', order: '', isCustom: false },
     ],
     parses: [],
+    headers: [],
     wallpaper: '',
     logo: '',
     flags: [],
@@ -92,6 +95,7 @@ test('serialize: upstream rename + order emit sites partial; custom site full', 
       { key: 'mine', origin: 'custom', enabled: true, isCustom: true, name: '自定义', type: 3, api: 'csp_X', searchable: 1, quickSearch: 1, filterable: 1 },
     ],
     parses: [],
+    headers: [],
     wallpaper: 'http://w',
     logo: '',
     flags: ['x'],
@@ -109,4 +113,60 @@ test('serialize: upstream rename + order emit sites partial; custom site full', 
 test('stringify: empty object -> empty string', () => {
   assert.equal(stringify({}), '')
   assert.equal(stringify({ wallpaper: 'x' }), '{"wallpaper":"x"}')
+})
+
+test('buildHeaderRows: parses config.headers into editor rows', () => {
+  const rows = buildHeaderRows({
+    headers: [
+      { host: 'www.javbus.com', header: { Referer: 'https://www.javbus.com/', Cookie: 'a=1' } },
+    ],
+  })
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].host, 'www.javbus.com')
+  assert.deepEqual(rows[0].header, { Referer: 'https://www.javbus.com/', Cookie: 'a=1' })
+  assert.ok(typeof rows[0].headerText === 'string')
+})
+
+test('buildHeaderRows: empty/missing -> []', () => {
+  assert.deepEqual(buildHeaderRows({}), [])
+  assert.deepEqual(buildHeaderRows({ headers: [] }), [])
+  assert.deepEqual(buildHeaderRows({ headers: [null, 5] }), [])
+})
+
+test('serialize: headers array is written to config', () => {
+  const state = {
+    filterMode: 'none',
+    sites: [],
+    parses: [],
+    headers: [
+      { host: 'www.javbus.com', header: { Referer: 'https://www.javbus.com/', Cookie: 'a=1' }, headerText: '{}' },
+    ],
+    wallpaper: '',
+    logo: '',
+    flags: [],
+    ads: [],
+  }
+  const out = serialize({}, state)
+  assert.equal(out.headers.length, 1)
+  assert.equal(out.headers[0].host, 'www.javbus.com')
+  assert.deepEqual(out.headers[0].header, { Referer: 'https://www.javbus.com/', Cookie: 'a=1' })
+})
+
+test('serialize: empty headers rows are filtered out', () => {
+  const state = {
+    filterMode: 'none',
+    sites: [],
+    parses: [],
+    headers: [
+      { host: '', header: {}, headerText: '{}' },
+      { host: 'a.com', header: {}, headerText: '{}' },
+    ],
+    wallpaper: '',
+    logo: '',
+    flags: [],
+    ads: [],
+  }
+  const out = serialize({}, state)
+  assert.equal(out.headers.length, 1)
+  assert.equal(out.headers[0].host, 'a.com')
 })

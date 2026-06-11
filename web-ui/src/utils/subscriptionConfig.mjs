@@ -79,6 +79,25 @@ function buildCustomSite(row) {
   return s
 }
 
+export function buildHeaderRows(config) {
+  if (!Array.isArray(config.headers)) return []
+  return config.headers
+    .filter((h) => h && typeof h === 'object')
+    .map((h) => ({
+      host: h.host || '',
+      header: h.header && typeof h.header === 'object' ? { ...h.header } : {},
+      headerText: h.header && typeof h.header === 'object' ? JSON.stringify(h.header, null, 2) : '{}',
+    }))
+}
+
+function buildHeaderItem(row) {
+  if (!row.host && (!row.header || !Object.keys(row.header).length)) return null
+  const item = {}
+  if (row.host) item.host = row.host
+  if (row.header && Object.keys(row.header).length) item.header = row.header
+  return item
+}
+
 function buildCustomParse(row) {
   const p = { name: row.name }
   if (row.type != null && row.type !== '') p.type = Number(row.type)
@@ -154,6 +173,10 @@ export function serialize(baseConfig, state) {
   setOrDelete(config, 'logo', state.logo)
   setArrOrDelete(config, 'flags', state.flags)
   setArrOrDelete(config, 'ads', state.ads)
+
+  // headers
+  const headers = state.headers.map(buildHeaderItem).filter(Boolean)
+  setArrOrDelete(config, 'headers', headers)
 
   return config
 }

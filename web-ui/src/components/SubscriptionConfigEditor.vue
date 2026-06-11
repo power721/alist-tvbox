@@ -106,6 +106,29 @@
         </el-form>
       </el-tab-pane>
 
+      <!-- Headers -->
+      <el-tab-pane label="Headers" name="headers">
+        <el-table v-if="state.headers.length" :data="state.headers" border style="width: 100%">
+          <el-table-column label="Host" width="220">
+            <template #default="scope">
+              <el-input v-model="scope.row.host" placeholder="example.com" />
+            </template>
+          </el-table-column>
+          <el-table-column label="Header (JSON)">
+            <template #default="scope">
+              <el-input v-model="scope.row.headerText" type="textarea" :rows="2" placeholder='{"Referer": "...", "Cookie": "..."}' @blur="parseHeaderText(scope.row)" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="70">
+            <template #default="scope">
+              <el-button link type="danger" @click="removeHeader(scope.$index)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-else description="无 Headers 配置" />
+        <el-button type="primary" plain @click="addHeader" style="margin-top: 8px">+ 添加 Header</el-button>
+      </el-tab-pane>
+
       <!-- 原始 JSON -->
       <el-tab-pane label="原始JSON" name="json">
         <el-input v-model="jsonText" type="textarea" :rows="18" />
@@ -191,6 +214,7 @@ import {
   siteOverrideMap,
   serialize,
   stringify,
+  buildHeaderRows,
 } from '@/utils/subscriptionConfig.mjs'
 
 const props = withDefaults(
@@ -233,6 +257,7 @@ const state = reactive<any>({
   logo: '',
   flags: [],
   ads: [],
+  headers: [],
 })
 // 未建模键的保留载体
 let baseConfig: Record<string, any> = {}
@@ -285,6 +310,7 @@ const load = async () => {
   state.logo = config.logo || ''
   state.flags = Array.isArray(config.flags) ? [...config.flags] : []
   state.ads = Array.isArray(config.ads) ? [...config.ads] : []
+  state.headers = buildHeaderRows(config)
 
   // catalog
   let catalog: any = { sites: [], parses: [] }
@@ -421,6 +447,23 @@ function removeCustomParse(row: any) {
   state.parses = parseRows.value
 }
 
+function addHeader() {
+  state.headers.push({ host: '', header: {}, headerText: '{}' })
+}
+function removeHeader(index: number) {
+  state.headers.splice(index, 1)
+}
+function parseHeaderText(row: any) {
+  try {
+    const obj = JSON.parse(row.headerText)
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      row.header = obj
+    }
+  } catch {
+    // keep original text, don't lose user input
+  }
+}
+
 function onTabChange(name: string) {
   if (name === 'json') {
     jsonText.value = JSON.stringify(serialize(baseConfig, state), null, 2)
@@ -443,6 +486,7 @@ function applyJson() {
   state.logo = parsed.logo || ''
   state.flags = Array.isArray(parsed.flags) ? [...parsed.flags] : []
   state.ads = Array.isArray(parsed.ads) ? [...parsed.ads] : []
+  state.headers = buildHeaderRows(parsed)
   state.filterMode = detectFilterMode(parsed)
   buildRows(parsed, catalog)
   ElMessage.success('已应用到表单')
