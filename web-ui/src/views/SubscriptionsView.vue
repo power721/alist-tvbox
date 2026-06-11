@@ -800,6 +800,7 @@ const pushForm = ref({
   id: 0,
   sid: '',
   token: '',
+  name: '',
   url: '',
 })
 const sub = ref({
@@ -1738,6 +1739,7 @@ const loadDevices = () => {
 const showPush = () => {
   pushForm.value.id = devices.value[0].id
   pushForm.value.sid = subscriptions.value[0].sid
+  pushForm.value.name = subscriptions.value[0].name
   pushForm.value.token = tokens.value[0]
   pushForm.value.url = currentUrl + '/sub/' + pushForm.value.token + '/' + pushForm.value.sid
   push.value = true
@@ -1748,7 +1750,7 @@ const onTokenChange = () => {
 }
 
 const pushConfig = () => {
-  axios.post(`/api/devices/${pushForm.value.id}/push?type=setting&url=${pushForm.value.url}`).then(() => {
+  axios.post(`/api/devices/${pushForm.value.id}/push?type=setting&name=${pushForm.value.name}&url=${pushForm.value.url}`).then(() => {
     ElMessage.success('推送成功')
   })
 }
