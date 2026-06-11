@@ -112,7 +112,7 @@
 
     <!-- 自定义站点表单 -->
     <el-dialog v-model="siteFormVisible" title="自定义站点" width="640px" append-to-body destroy-on-close>
-      <el-form :model="siteForm" label-width="120">
+      <el-form :model="siteForm" label-width="120" style="max-height: 60vh; overflow-y: auto">
         <el-form-item label="key" required><el-input v-model="siteForm.key" /></el-form-item>
         <el-form-item label="名称"><el-input v-model="siteForm.name" /></el-form-item>
         <el-form-item label="类型">
@@ -443,6 +443,13 @@ watch(
 
 <style scoped>
 .sub-config-editor {
-  min-height: 420px;
+  min-height: 360px;
+}
+
+/* 限制标签内容高度,内容超出时滚动,标签头保持可见 */
+.sub-config-editor :deep(.el-tabs__content) {
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 </style>
