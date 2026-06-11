@@ -10,6 +10,7 @@ services:
       MEM_OPT: -Xmx512M
     volumes:
       - /etc/xiaoya:/data
+      - tvbox-www-static:/www/static
     ports:
       - "4567:4567"
       - "5344:80"
