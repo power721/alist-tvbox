@@ -108,12 +108,13 @@
         <el-form-item label="配置URL" label-width="140">
           <el-input v-model="form.url" autocomplete="off" placeholder="支持多个，逗号分割。留空使用默认配置。"/>
         </el-form-item>
-        <el-form-item label="排序字段" label-width="140">
-          <el-input v-model="form.sort" autocomplete="off" placeholder="留空保持默认排序"/>
-        </el-form-item>
+<!--        <el-form-item label="排序字段" label-width="140">-->
+<!--          <el-input v-model="form.sort" autocomplete="off" placeholder="留空保持默认排序"/>-->
+<!--        </el-form-item>-->
         <el-form-item label="定制" label-width="140">
           <el-button @click="openEditor(false)">🎨 可视化编辑</el-button>
           <span class="hint">{{ form.override ? '已配置' : '未配置' }}</span>
+          <el-tag v-if="overrideModified" type="warning" size="small" style="margin-left: 8px">已修改，请点击「更新」保存</el-tag>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -827,6 +828,8 @@ const editorVisible = ref(false)
 const editorRef = ref<any>(null)
 const editorTargetIsGlobal = ref(false)
 const globalReferenceSid = ref('')
+const overrideModified = ref(false)
+const overrideBeforeEdit = ref('')
 const plugins = ref<Plugin[]>([])
 const managedSources = ref<ManagedSource[]>([])
 const pluginFilters = ref<PluginFilter[]>([])
@@ -1485,6 +1488,8 @@ const openEditor = (isGlobal: boolean) => {
   if (isGlobal) {
     globalReferenceSid.value = subscriptions.value.length ? (subscriptions.value[0] as any).sid : ''
     loadGlobalConfig()
+  } else {
+    overrideBeforeEdit.value = form.value.override || ''
   }
   editorVisible.value = true
 }
@@ -1505,6 +1510,7 @@ const saveEditor = () => {
   } else {
     form.value.override = value
     editorVisible.value = false
+    overrideModified.value = value !== overrideBeforeEdit.value
   }
 }
 
@@ -1693,6 +1699,7 @@ const deletePluginFilter = (id: number) => {
 const handleEdit = (data: any) => {
   dialogTitle.value = '更新订阅 - ' + data.name
   updateAction.value = true
+  overrideModified.value = false
   form.value = {
     id: data.id,
     sid: data.sid,
@@ -1728,6 +1735,7 @@ const deleteSub = () => {
 
 const handleCancel = () => {
   formVisible.value = false
+  overrideModified.value = false
 }
 
 const loadDevices = () => {
@@ -1826,6 +1834,7 @@ const sendTgPassword = () => {
 const handleConfirm = () => {
   axios.post('/api/subscriptions', form.value).then(() => {
     formVisible.value = false
+    overrideModified.value = false
     load()
   })
 }

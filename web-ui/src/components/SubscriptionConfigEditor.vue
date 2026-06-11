@@ -44,8 +44,9 @@
                   <el-input v-model="scope.row.order" :disabled="!isOwnRow(scope.row)" placeholder="默认" />
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="80">
+              <el-table-column label="操作" width="120">
                 <template #default="scope">
+                  <el-button v-if="isOwnRow(scope.row) && !scope.row.isCustom" link type="warning" @click="resetSiteToDefault(scope.row)">恢复默认</el-button>
                   <el-button v-if="scope.row.isCustom" link type="danger" @click="removeCustomSite(scope.row)">删除</el-button>
                 </template>
               </el-table-column>
@@ -55,6 +56,24 @@
         <el-empty v-else description="无站点目录,可手动添加自定义站点" />
 
         <el-button type="primary" plain @click="openSiteForm" style="margin-top: 8px">+ 添加自定义站点</el-button>
+      </el-tab-pane>
+
+      <!-- 基础 -->
+      <el-tab-pane label="基础" name="basic">
+        <el-form label-width="120">
+          <el-form-item label="壁纸 wallpaper">
+            <el-input v-model="state.wallpaper" placeholder="壁纸图片/接口 URL" />
+          </el-form-item>
+          <el-form-item label="Logo">
+            <el-input v-model="state.logo" placeholder="Logo 地址" />
+          </el-form-item>
+          <el-form-item label="播放标识 flags">
+            <el-select v-model="state.flags" multiple filterable allow-create default-first-option placeholder="追加到上游" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="广告 ads">
+            <el-select v-model="state.ads" multiple filterable allow-create default-first-option placeholder="广告域名(追加)" style="width: 100%" />
+          </el-form-item>
+        </el-form>
       </el-tab-pane>
 
       <!-- 解析 -->
@@ -86,24 +105,6 @@
         </el-table>
         <el-empty v-else description="无解析目录" />
         <el-button type="primary" plain @click="openParseForm" style="margin-top: 8px">+ 添加自定义解析</el-button>
-      </el-tab-pane>
-
-      <!-- 基础 -->
-      <el-tab-pane label="基础" name="basic">
-        <el-form label-width="120">
-          <el-form-item label="壁纸 wallpaper">
-            <el-input v-model="state.wallpaper" placeholder="壁纸图片/接口 URL" />
-          </el-form-item>
-          <el-form-item label="Logo">
-            <el-input v-model="state.logo" placeholder="Logo 地址" />
-          </el-form-item>
-          <el-form-item label="播放标识 flags">
-            <el-select v-model="state.flags" multiple filterable allow-create default-first-option placeholder="追加到上游" style="width: 100%" />
-          </el-form-item>
-          <el-form-item label="广告 ads">
-            <el-select v-model="state.ads" multiple filterable allow-create default-first-option placeholder="广告域名(追加)" style="width: 100%" />
-          </el-form-item>
-        </el-form>
       </el-tab-pane>
 
       <!-- Headers -->
@@ -466,6 +467,12 @@ function confirmSiteForm() {
 function removeCustomSite(row: any) {
   siteRows.value = siteRows.value.filter((r) => r !== row)
   state.sites = siteRows.value
+}
+function resetSiteToDefault(row: any) {
+  row.name = row.originalName
+  row.hadNameOverride = false
+  row.order = ''
+
 }
 
 function openParseForm() {
