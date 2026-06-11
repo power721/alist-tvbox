@@ -103,6 +103,37 @@ function buildHeaderItem(row) {
   return item
 }
 
+// --- Live helpers ---
+
+function normalizeGroup(g) {
+  return {
+    name: g.name || '',
+    pass: g.pass ?? 0,
+    channels: Array.isArray(g.channel) ? g.channel.map(normalizeChannel) : [],
+  }
+}
+
+function normalizeChannel(c) {
+  return {
+    name: c.name || '',
+    urls: Array.isArray(c.urls) ? [...c.urls] : [],
+    number: c.number ?? '',
+    logo: c.logo || '',
+    epg: c.epg || '',
+    ua: c.ua || '',
+    format: c.format || '',
+    origin: c.origin || '',
+    referer: c.referer || '',
+    tvgId: c.tvgId || '',
+    tvgName: c.tvgName || '',
+    parse: c.parse ?? 0,
+    click: c.click || '',
+    header: c.header && typeof c.header === 'object' ? { ...c.header } : {},
+    catchup: c.catchup || null,
+    drm: c.drm || null,
+  }
+}
+
 export function buildLiveRows(config) {
   if (!Array.isArray(config.lives)) return []
   return config.lives
@@ -115,21 +146,97 @@ export function buildLiveRows(config) {
       ua: l.ua || '',
       epg: l.epg || '',
       logo: l.logo || '',
+      api: l.api || '',
+      ext: l.ext || '',
+      jar: l.jar || '',
+      click: l.click || '',
+      origin: l.origin || '',
+      referer: l.referer || '',
+      timeZone: l.timeZone || '',
+      timeout: l.timeout ?? '',
+      header: l.header && typeof l.header === 'object' ? { ...l.header } : {},
+      catchup: l.catchup || null,
+      boot: l.boot ?? 0,
+      pass: l.pass ?? 0,
+      groups: Array.isArray(l.groups) ? l.groups.map(normalizeGroup) : [],
     }))
 }
 
-const LIVE_KEYS = ['name', 'type', 'url', 'playerType', 'ua', 'epg', 'logo']
+const LIVE_KEYS = [
+  'name', 'type', 'url', 'playerType', 'ua', 'epg', 'logo',
+  'api', 'ext', 'jar', 'click', 'origin', 'referer', 'timeZone',
+  'timeout', 'header', 'catchup', 'boot', 'pass', 'groups',
+]
+
+const CHANNEL_KEYS = [
+  'name', 'urls', 'number', 'logo', 'epg', 'ua', 'format',
+  'origin', 'referer', 'tvgId', 'tvgName', 'parse', 'click', 'header', 'catchup', 'drm',
+]
+
+function buildChannelItem(c) {
+  const item = {}
+  for (const k of CHANNEL_KEYS) {
+    if (k === 'header') {
+      if (c.header && typeof c.header === 'object' && Object.keys(c.header).length) item.header = { ...c.header }
+      continue
+    }
+    if (k === 'catchup' || k === 'drm') {
+      if (c[k] && typeof c[k] === 'object' && Object.keys(c[k]).length) item[k] = { ...c[k] }
+      continue
+    }
+    const v = c[k]
+    if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue
+    item[k] = v
+  }
+  return Object.keys(item).length ? item : null
+}
+
+function buildGroupsArray(groups) {
+  if (!Array.isArray(groups)) return []
+  return groups.map((g) => {
+    const item = {}
+    if (g.name) item.name = g.name
+    if (g.pass) item.pass = g.pass
+    const channels = buildChannelsArray(g.channels)
+    if (channels.length) item.channel = channels
+    return Object.keys(item).length ? item : null
+  }).filter(Boolean)
+}
+
+function buildChannelsArray(channels) {
+  if (!Array.isArray(channels)) return []
+  return channels.map(buildChannelItem).filter(Boolean)
+}
 
 function buildLiveItem(row) {
-  if (!row.name && !row.url) return null
+  if (!row.name && !row.url && !row.api) return null
   const item = {}
   for (const k of LIVE_KEYS) {
+    if (k === 'groups') {
+      const groups = buildGroupsArray(row.groups)
+      if (groups.length) item.groups = groups
+      continue
+    }
+    if (k === 'header') {
+      if (row.header && typeof row.header === 'object' && Object.keys(row.header).length) {
+        item.header = { ...row.header }
+      }
+      continue
+    }
+    if (k === 'catchup') {
+      if (row.catchup && typeof row.catchup === 'object' && Object.keys(row.catchup).length) {
+        item.catchup = { ...row.catchup }
+      }
+      continue
+    }
     const v = row[k]
     if (v === undefined || v === null || v === '') continue
     item[k] = v
   }
   return Object.keys(item).length ? item : null
 }
+
+// --- Parse helpers ---
 
 function buildCustomParse(row) {
   const p = { name: row.name }
@@ -141,6 +248,45 @@ function buildCustomParse(row) {
   if (Object.keys(ext).length) p.ext = ext
   return p
 }
+
+// --- Network builders ---
+
+export function buildDohRows(config) {
+  if (!Array.isArray(config.doh)) return []
+  return config.doh
+    .filter((d) => d && typeof d === 'object')
+    .map((d) => ({
+      name: d.name || '',
+      url: d.url || '',
+      ips: Array.isArray(d.ips) ? [...d.ips] : [],
+    }))
+}
+
+export function buildProxyRows(config) {
+  if (!Array.isArray(config.proxy)) return []
+  return config.proxy
+    .filter((p) => p && typeof p === 'object')
+    .map((p) => ({
+      name: p.name || '',
+      hosts: Array.isArray(p.hosts) ? [...p.hosts] : [],
+      urls: Array.isArray(p.urls) ? [...p.urls] : [],
+    }))
+}
+
+export function buildRulesRows(config) {
+  if (!Array.isArray(config.rules)) return []
+  return config.rules
+    .filter((r) => r && typeof r === 'object')
+    .map((r) => ({
+      name: r.name || '',
+      hosts: Array.isArray(r.hosts) ? [...r.hosts] : [],
+      regex: Array.isArray(r.regex) ? [...r.regex] : [],
+      script: Array.isArray(r.script) ? [...r.script] : [],
+      exclude: Array.isArray(r.exclude) ? [...r.exclude] : [],
+    }))
+}
+
+// --- Config helpers ---
 
 function setOrDelete(config, key, value) {
   if (value === undefined || value === null || value === '') delete config[key]
@@ -204,6 +350,7 @@ export function serialize(baseConfig, state) {
   // 基础
   setOrDelete(config, 'wallpaper', state.wallpaper)
   setOrDelete(config, 'logo', state.logo)
+  setOrDelete(config, 'notice', state.notice)
   setArrOrDelete(config, 'flags', state.flags)
   setArrOrDelete(config, 'ads', state.ads)
 
@@ -214,6 +361,41 @@ export function serialize(baseConfig, state) {
   // lives
   const lives = state.lives.map(buildLiveItem).filter(Boolean)
   setArrOrDelete(config, 'lives', lives)
+
+  // doh
+  const doh = state.doh.filter((d) => d.name || d.url).map((d) => {
+    const item = {}
+    if (d.name) item.name = d.name
+    if (d.url) item.url = d.url
+    if (Array.isArray(d.ips) && d.ips.length) item.ips = [...d.ips]
+    return item
+  })
+  setArrOrDelete(config, 'doh', doh)
+
+  // proxy
+  const proxyItems = state.proxy.filter((p) => p.name || p.hosts.length || p.urls.length).map((p) => {
+    const item = {}
+    if (p.name) item.name = p.name
+    if (p.hosts.length) item.hosts = [...p.hosts]
+    if (p.urls.length) item.urls = [...p.urls]
+    return item
+  })
+  setArrOrDelete(config, 'proxy', proxyItems)
+
+  // rules
+  const rules = state.rules.filter((r) => r.name || r.hosts.length || r.regex.length).map((r) => {
+    const item = {}
+    if (r.name) item.name = r.name
+    if (r.hosts.length) item.hosts = [...r.hosts]
+    if (r.regex.length) item.regex = [...r.regex]
+    if (r.script.length) item.script = [...r.script]
+    if (r.exclude.length) item.exclude = [...r.exclude]
+    return item
+  })
+  setArrOrDelete(config, 'rules', rules)
+
+  // hosts (string array)
+  setArrOrDelete(config, 'hosts', state.hostsList)
 
   return config
 }
