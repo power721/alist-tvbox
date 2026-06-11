@@ -391,6 +391,7 @@ start_container() {
     -e ALIST_PORT="${CONFIG[PORT2]}" \
     -e MEM_OPT="-Xmx512M" \
     -v "${CONFIG[BASE_DIR]}":/data \
+    -v tvbox-www-static:/www/static \
     --restart="${CONFIG[RESTART]}" \
     "${network_args[@]}" \
     "$image"
