@@ -151,7 +151,7 @@ export function serialize(baseConfig, state) {
 
   // 基础
   setOrDelete(config, 'wall', state.wall)
-  setOrDelete(config, 'spider', state.spider)
+  setOrDelete(config, 'logo', state.logo)
   setArrOrDelete(config, 'flags', state.flags)
   setArrOrDelete(config, 'ads', state.ads)
 

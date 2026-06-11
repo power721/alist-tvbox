@@ -54,7 +54,7 @@ test('serialize: blacklist mode writes blacklist.sites, migrates legacy, drops s
     ],
     parses: [{ name: '虾米', enabled: false, isCustom: false }],
     wall: '',
-    spider: '',
+    logo: '',
     flags: [],
     ads: [],
   }
@@ -75,7 +75,7 @@ test('serialize: whitelist mode writes sites-whitelist of enabled keys', () => {
     ],
     parses: [],
     wall: '',
-    spider: '',
+    logo: '',
     flags: [],
     ads: [],
   }
@@ -93,7 +93,7 @@ test('serialize: upstream rename + order emit sites partial; custom site full', 
     ],
     parses: [],
     wall: 'http://w',
-    spider: '',
+    logo: '',
     flags: ['x'],
     ads: [],
   }

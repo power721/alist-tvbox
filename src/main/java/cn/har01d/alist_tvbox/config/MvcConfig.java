@@ -15,6 +15,7 @@ public class MvcConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/files/**").addResourceLocations("file:" + Utils.getWebPath("files") + "/");
         registry.addResourceHandler("/pg/**").addResourceLocations("file:" + Utils.getWebPath("pg") + "/");
         registry.addResourceHandler("/zx/**").addResourceLocations("file:" + Utils.getWebPath("zx") + "/");
+        registry.addResourceHandler("/static/**").addResourceLocations("file:" + Utils.getWebPath("static") + "/");
     }
 
     @Override

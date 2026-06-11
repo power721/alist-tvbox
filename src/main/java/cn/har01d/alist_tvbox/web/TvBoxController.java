@@ -191,10 +191,6 @@ public class TvBoxController {
 
     @GetMapping("/sub/{token}/{id}")
     public Map<String, Object> subscription(@PathVariable String token, @PathVariable String id, HttpServletRequest request) {
-        for (var it = request.getHeaderNames().asIterator();it.hasNext();) {
-            var header = it.next();
-            log.debug("header: {} {}", header, request.getHeader(header));
-        }
         subscriptionService.checkToken(token);
 
         return subscriptionService.subscription(token, id);
