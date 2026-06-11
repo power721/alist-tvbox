@@ -1601,4 +1601,18 @@ public class SubscriptionService {
         Map<String, Object> map = Map.of("urls", urls);
         return objectMapper.writeValueAsString(map);
     }
+
+    public Map<String, Object> getGlobalConfig() {
+        return settingRepository.findById(Constants.GLOBAL_SUBSCRIPTION_OVERRIDE)
+                .map(Setting::getValue)
+                .map(json -> {
+                    try {
+                        return objectMapper.readValue(json, Map.class);
+                    } catch (Exception e) {
+                        log.warn("Failed to parse global config", e);
+                        return new HashMap<String, Object>();
+                    }
+                })
+                .orElse(new HashMap<>());
+    }
 }
