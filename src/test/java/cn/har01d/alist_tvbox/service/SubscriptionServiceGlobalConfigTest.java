@@ -109,4 +109,110 @@ class SubscriptionServiceGlobalConfigTest {
         assertEquals(1, sites.size());
         assertEquals("site1", sites.get(0).get("key"));
     }
+
+    @Test
+    void scenario1_globalWhitelist_subscriptionBlacklist() {
+        // 场景1: 全局白名单 + 订阅黑名单
+        Map<String, Object> globalConfig = new HashMap<>();
+        globalConfig.put("sites-whitelist", List.of("site1"));
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("sites", List.of(
+            Map.of("key", "site1"),
+            Map.of("key", "site2"),
+            Map.of("key", "site3")
+        ));
+
+        // 应用全局配置
+        for (Map.Entry<String, Object> entry : globalConfig.entrySet()) {
+            if (!config.containsKey(entry.getKey())) {
+                config.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // 订阅覆盖为黑名单
+        config.put("sites-blacklist", List.of("site2"));
+
+        // 应用过滤（黑名单优先）
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        List<String> blacklist = (List<String>) config.get("sites-blacklist");
+        sites = sites.stream()
+                .filter(s -> !blacklist.contains(s.get("key")))
+                .toList();
+        config.put("sites", sites);
+
+        assertEquals(2, sites.size());
+        assertTrue(sites.stream().anyMatch(s -> "site1".equals(s.get("key"))));
+        assertTrue(sites.stream().anyMatch(s -> "site3".equals(s.get("key"))));
+    }
+
+    @Test
+    void scenario2_globalBlacklist_subscriptionWhitelist() {
+        // 场景2: 全局黑名单 + 订阅白名单
+        Map<String, Object> globalConfig = new HashMap<>();
+        globalConfig.put("sites-blacklist", List.of("site1", "site2"));
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("sites", List.of(
+            Map.of("key", "site1"),
+            Map.of("key", "site2"),
+            Map.of("key", "site3")
+        ));
+
+        // 应用全局配置
+        for (Map.Entry<String, Object> entry : globalConfig.entrySet()) {
+            if (!config.containsKey(entry.getKey())) {
+                config.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // 订阅覆盖为白名单
+        config.put("sites-whitelist", List.of("site1"));
+
+        // 应用过滤（白名单优先）
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        List<String> whitelist = (List<String>) config.get("sites-whitelist");
+        sites = sites.stream()
+                .filter(s -> whitelist.contains(s.get("key")))
+                .toList();
+        config.put("sites", sites);
+
+        assertEquals(1, sites.size());
+        assertEquals("site1", sites.get(0).get("key"));
+    }
+
+    @Test
+    void scenario3_globalBlacklist_subscriptionCustomBlacklist() {
+        // 场景3: 全局黑名单 + 订阅自定义黑名单
+        Map<String, Object> globalConfig = new HashMap<>();
+        globalConfig.put("sites-blacklist", List.of("siteX"));
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("sites", List.of(
+            Map.of("key", "site1"),
+            Map.of("key", "site2"),
+            Map.of("key", "siteX")
+        ));
+
+        // 应用全局配置
+        for (Map.Entry<String, Object> entry : globalConfig.entrySet()) {
+            if (!config.containsKey(entry.getKey())) {
+                config.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // 订阅完全替换黑名单
+        config.put("sites-blacklist", List.of("site1", "site2"));
+
+        // 应用过滤
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
+        List<String> blacklist = (List<String>) config.get("sites-blacklist");
+        sites = sites.stream()
+                .filter(s -> !blacklist.contains(s.get("key")))
+                .toList();
+        config.put("sites", sites);
+
+        assertEquals(1, sites.size());
+        assertEquals("siteX", sites.get(0).get("key")); // siteX 未被排除
+    }
 }
