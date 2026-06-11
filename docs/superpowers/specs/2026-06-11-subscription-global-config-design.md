@@ -11,17 +11,23 @@
 
 ## 设计方案
 
-### 方案选择：黑名单合并策略
+### 方案选择：简化的覆盖策略
 
-**黑名单合并公式：**
+**黑名单处理规则：**
 ```
-最终黑名单 = (全局黑名单 - 订阅白名单) ∪ 订阅额外黑名单
+IF 订阅有 sites-blacklist:
+    使用订阅的 sites-blacklist（完全覆盖，忽略全局）
+ELSE IF 订阅有 sites-whitelist:
+    最终黑名单 = 全局黑名单 - 订阅白名单
+ELSE:
+    使用全局黑名单
 ```
 
 **优势：**
-- 逻辑清晰，精确解决黑名单场景
-- 订阅白名单可以"救回"全局黑名单中的站点
-- 支持订阅级别的额外排除
+- 逻辑更简单，只需两个字段：sites-blacklist（覆盖）和 sites-whitelist（救回）
+- 场景1（订阅1排除 site1+site2）：直接用 sites-blacklist: ["site1", "site2"]
+- 场景2（订阅3只救回 site1）：用 sites-whitelist: ["site1"]
+- 完全兼容现有逻辑
 
 ## 数据模型
 
@@ -47,14 +53,16 @@
 **现有字段保持不变：**
 - `override` (TEXT)：订阅级别定制配置
 
-**订阅 override 新增支持字段：**
+**订阅 override 字段语义：**
 ```json
 {
-  "sites-whitelist": ["site1"],           // 从全局黑名单中救回
-  "sites-blacklist-extra": ["site2"],     // 额外排除
+  "sites-blacklist": ["siteX", "siteY"],  // 完全覆盖全局黑名单（与全局互斥）
+  "sites-whitelist": ["site1"],           // 从全局黑名单中救回（与全局配合）
   ...其他现有字段
 }
 ```
+
+**注意：** `sites-blacklist` 和 `sites-whitelist` 互斥，不能同时使用
 
 ## 配置应用逻辑
 
@@ -72,21 +80,26 @@
 5. 白名单过滤
 ```
 
-### 黑名单合并算法
+### 黑名单处理算法
 
 **输入：**
 - `globalBlacklist`：全局黑名单
-- `subscriptionWhitelist`：订阅白名单
-- `subscriptionBlacklistExtra`：订阅额外黑名单
+- `subscriptionBlacklist`：订阅黑名单（可选）
+- `subscriptionWhitelist`：订阅白名单（可选）
 
 **输出：**
 ```
-finalBlacklist = (globalBlacklist - subscriptionWhitelist) + subscriptionBlacklistExtra
+IF subscriptionBlacklist 存在:
+    finalBlacklist = subscriptionBlacklist  // 完全覆盖
+ELSE IF subscriptionWhitelist 存在:
+    finalBlacklist = globalBlacklist - subscriptionWhitelist  // 救回
+ELSE:
+    finalBlacklist = globalBlacklist  // 继承
 ```
 
 **实现位置：**
 - 修改 `SubscriptionService.subscription()` 方法
-- 修改 `removeBlacklist()` 方法处理新的黑名单合并逻辑
+- 修改 `removeBlacklist()` 方法处理新的黑名单逻辑
 
 ### 代码层面的关键点
 
@@ -108,9 +121,9 @@ if (StringUtils.isNotBlank(override)) {
     config = overrideConfig(config, override);
 }
 
-// 5. 处理黑名单合并（修改现有逻辑）
+// 5. 处理黑名单逻辑（修改现有逻辑）
 handleWhitelist(config);
-removeBlacklist(config);  // 修改此方法实现合并逻辑
+removeBlacklist(config);  // 修改此方法实现新的覆盖/救回逻辑
 ```
 
 ## API 设计
@@ -153,9 +166,10 @@ Content-Type: application/json
 - 打开配置编辑对话框（JSON 编辑器或表单）
 
 **订阅编辑页面：**
-- 显示提示："该订阅继承全局配置，可通过白名单/额外黑名单定制"
+- 显示提示："该订阅继承全局配置"
+- 提供选项："使用白名单（从全局黑名单救回站点）" 或 "使用自定义黑名单（完全覆盖全局）"
 - `sites-whitelist` 输入框：选择要从全局黑名单救回的站点
-- `sites-blacklist-extra` 输入框：选择要额外排除的站点
+- `sites-blacklist` 输入框：自定义黑名单（与白名单互斥）
 
 ## 实现步骤
 
@@ -163,7 +177,7 @@ Content-Type: application/json
    - 新增 `getGlobalConfig()` 方法
    - 新增 `updateGlobalConfig()` 方法
    - 新增 `applyGlobalConfig()` 方法
-   - 修改 `removeBlacklist()` 方法实现黑名单合并逻辑
+   - 修改 `removeBlacklist()` 方法实现新的覆盖/救回逻辑
 
 2. **后端 - Controller 层**
    - 新增 `GET /api/subscription/global-config` 接口
@@ -172,10 +186,10 @@ Content-Type: application/json
 3. **前端 - 管理界面**
    - 订阅管理页面增加"全局配置"入口
    - 实现全局配置编辑对话框
-   - 订阅编辑页面增加白名单/额外黑名单字段
+   - 订阅编辑页面增加白名单/黑名单字段（互斥选择）
 
 4. **测试**
-   - 单元测试：黑名单合并逻辑
+   - 单元测试：黑名单覆盖/救回逻辑
    - 集成测试：全局配置 + 订阅配置组合场景
 
 ## 测试场景
@@ -186,32 +200,31 @@ Content-Type: application/json
 - 订阅3最终黑名单：`["site2"]`
 - 其他订阅最终黑名单：`["site1", "site2"]`
 
-### 场景2：订阅1额外排除 site3
-- 全局：`{"sites-blacklist": ["site1"]}`
-- 订阅1：`{"sites-blacklist-extra": ["site3"]}`
-- 订阅1最终黑名单：`["site1", "site3"]`
+### 场景2：订阅1完全覆盖（排除 site1 + site2）
+- 全局：`{"sites-blacklist": ["siteX"]}`
+- 订阅1：`{"sites-blacklist": ["site1", "site2"]}`
+- 订阅1最终黑名单：`["site1", "site2"]`（忽略全局）
 
-### 场景3：订阅2同时救回和额外排除
+### 场景3：订阅2同时救回 site1
 - 全局：`{"sites-blacklist": ["site1", "site2"]}`
-- 订阅2：`{"sites-whitelist": ["site1"], "sites-blacklist-extra": ["site3"]}`
-- 订阅2最终黑名单：`["site2", "site3"]`
-
-### 场景4：订阅完全自定义（不继承全局）
-- 全局：`{"sites-blacklist": ["site1"]}`
-- 订阅4：`{"sites-blacklist": ["siteX"]}`（使用传统 sites-blacklist）
-- 订阅4最终黑名单：`["siteX"]`（忽略全局）
+- 订阅2：`{"sites-whitelist": ["site1"]}`
+- 订阅2最终黑名单：`["site2"]`
 
 ## 兼容性考虑
 
 **向后兼容：**
 - 不配置全局配置时，行为与现有逻辑完全一致
 - 订阅的 `override` 字段继续支持现有所有字段
-- 新增的 `sites-whitelist` 和 `sites-blacklist-extra` 为可选字段
+- 新增的 `sites-whitelist` 为可选字段
 
 **优先级规则：**
-1. 订阅 `sites-blacklist`（传统字段）：完全覆盖，不继承全局
-2. 订阅 `sites-whitelist` + `sites-blacklist-extra`：合并逻辑
+1. 订阅 `sites-blacklist`：完全覆盖，忽略全局
+2. 订阅 `sites-whitelist`：从全局黑名单中救回站点
 3. 全局 `sites-blacklist`：作为默认值
+
+**互斥约束：**
+- 订阅的 `sites-blacklist` 和 `sites-whitelist` 不能同时使用
+- 如果同时存在，`sites-blacklist` 优先（完全覆盖模式）
 
 ## 未来扩展
 
