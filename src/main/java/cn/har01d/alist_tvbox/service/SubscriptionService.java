@@ -732,7 +732,7 @@ public class SubscriptionService {
             for (Map<String, Object> site : list) {
                 Object ext = site.get("ext");
                 if (ext instanceof String json) {
-                     log.debug(json);
+                    log.debug(json);
                 } else if (ext instanceof Map map) {
                     map.put("cookie", cookie);
                 }
@@ -1804,17 +1804,11 @@ public class SubscriptionService {
     }
 
     private void applyGlobalConfig(Map<String, Object> config) {
-        Map<String, Object> globalConfig = getGlobalConfig();
-        if (globalConfig.isEmpty()) {
-            return;
-        }
-
-        // 不包含 spider 的全局配置应用
-        for (Map.Entry<String, Object> entry : globalConfig.entrySet()) {
-            String key = entry.getKey();
-            if (!"spider".equals(key) && !config.containsKey(key)) {
-                config.put(key, entry.getValue());
-            }
+        String json = settingRepository.findById(Constants.GLOBAL_SUBSCRIPTION_OVERRIDE)
+                .map(Setting::getValue)
+                .orElse("");
+        if (StringUtils.isNotBlank(json)) {
+            overrideConfig(config, json);
         }
     }
 }
