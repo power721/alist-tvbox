@@ -59,8 +59,11 @@
 
         <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px">
           <template #title>
-            <span>将壁纸图片上传到 <strong>wallpapers</strong> 文件夹，可通过 API 随机获取壁纸：</span>
-            <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px">ATV_ADDRESS/wallpaper/TOKEN</code>
+            <p>
+              <span>将壁纸图片上传到 <strong>wallpapers</strong> 文件夹，可通过 API 随机获取壁纸：</span><br>
+              <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px">ATV_ADDRESS/wallpaper/TOKEN</code>
+              <a :href="currentUrl+/wallpaper/+token" target="_blank">{{ currentUrl }}/wallpaper/{{ token }}</a><br>
+            </p>
           </template>
         </el-alert>
 
@@ -347,6 +350,7 @@ const selectedPaths = ref<string[]>([])
 const selectedRows = ref<any[]>([])
 const uploadRef = ref<UploadInstance>()
 const staticTableRef = ref()
+const token = ref('-')
 
 const pathSegments = computed(() => {
   if (!currentStaticDir.value) return []
@@ -525,6 +529,9 @@ const formatDate = (timestamp: number) => {
 }
 
 onMounted(() => {
+  axios.get('/api/token').then(({data}) => {
+    token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
+  })
   loadConfig()
   loadStatic()
 })

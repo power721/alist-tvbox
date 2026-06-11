@@ -53,7 +53,7 @@ test('serialize: blacklist mode writes blacklist.sites, migrates legacy, drops s
       { key: 'b', origin: 'builtin', enabled: false, name: 'B', originalName: 'B', order: '', isCustom: false },
     ],
     parses: [{ name: '虾米', enabled: false, isCustom: false }],
-    wall: '',
+    wallpaper: '',
     logo: '',
     flags: [],
     ads: [],
@@ -74,7 +74,7 @@ test('serialize: whitelist mode writes sites-whitelist of enabled keys', () => {
       { key: 'b', origin: 'plugin', enabled: false, name: 'B', originalName: 'B', order: '', isCustom: false },
     ],
     parses: [],
-    wall: '',
+    wallpaper: '',
     logo: '',
     flags: [],
     ads: [],
@@ -92,7 +92,7 @@ test('serialize: upstream rename + order emit sites partial; custom site full', 
       { key: 'mine', origin: 'custom', enabled: true, isCustom: true, name: '自定义', type: 3, api: 'csp_X', searchable: 1, quickSearch: 1, filterable: 1 },
     ],
     parses: [],
-    wall: 'http://w',
+    wallpaper: 'http://w',
     logo: '',
     flags: ['x'],
     ads: [],
@@ -102,11 +102,11 @@ test('serialize: upstream rename + order emit sites partial; custom site full', 
   const custom = out.sites.find((s) => s.key === 'mine')
   assert.equal(custom.type, 3)
   assert.equal(custom.api, 'csp_X')
-  assert.equal(out.wall, 'http://w')
+  assert.equal(out.wallpaper, 'http://w')
   assert.deepEqual(out.flags, ['x'])
 })
 
 test('stringify: empty object -> empty string', () => {
   assert.equal(stringify({}), '')
-  assert.equal(stringify({ wall: 'x' }), '{"wall":"x"}')
+  assert.equal(stringify({ wallpaper: 'x' }), '{"wallpaper":"x"}')
 })

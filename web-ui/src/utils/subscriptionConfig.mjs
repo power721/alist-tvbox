@@ -150,7 +150,7 @@ export function serialize(baseConfig, state) {
   setArrOrDelete(config, 'parses', customParses)
 
   // 基础
-  setOrDelete(config, 'wall', state.wall)
+  setOrDelete(config, 'wallpaper', state.wallpaper)
   setOrDelete(config, 'logo', state.logo)
   setArrOrDelete(config, 'flags', state.flags)
   setArrOrDelete(config, 'ads', state.ads)
