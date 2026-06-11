@@ -3,6 +3,7 @@
     <h1>订阅列表</h1>
     <el-row justify="end">
       <el-button @click="load">刷新</el-button>
+      <el-button @click="showGlobalConfig">全局配置</el-button>
       <el-button @click="showPlugins">订阅源管理</el-button>
       <el-button @click="showPluginFilters">过滤器管理</el-button>
       <el-button @click="showScan">同步影视</el-button>
@@ -109,6 +110,19 @@
         </el-form-item>
         <el-form-item label="排序字段" label-width="140">
           <el-input v-model="form.sort" autocomplete="off" placeholder="留空保持默认排序"/>
+        </el-form-item>
+        <el-form-item label="站点过滤模式" label-width="140">
+          <el-radio-group v-model="sitesFilterMode">
+            <el-radio label="none">继承全局</el-radio>
+            <el-radio label="whitelist">白名单</el-radio>
+            <el-radio label="blacklist">黑名单</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="白名单站点" label-width="140" v-if="sitesFilterMode==='whitelist'">
+          <el-input v-model="sitesWhitelist" autocomplete="off" placeholder="逗号分隔，如: site1,site2"/>
+        </el-form-item>
+        <el-form-item label="黑名单站点" label-width="140" v-if="sitesFilterMode==='blacklist'">
+          <el-input v-model="sitesBlacklist" autocomplete="off" placeholder="逗号分隔，如: site1,site2"/>
         </el-form-item>
         <el-form-item label="定制" label-width="140">
           <el-input v-model="form.override" type="textarea" rows="15"/>
@@ -619,6 +633,32 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="globalConfigVisible" title="全局订阅配置" width="60%">
+      <el-form>
+        <el-form-item label="站点过滤模式" label-width="140">
+          <el-radio-group v-model="globalFilterMode">
+            <el-radio label="whitelist">白名单</el-radio>
+            <el-radio label="blacklist">黑名单</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="白名单站点" label-width="140" v-if="globalFilterMode==='whitelist'">
+          <el-input v-model="globalWhitelist" autocomplete="off" placeholder="逗号分隔，如: site1,site2"/>
+        </el-form-item>
+        <el-form-item label="黑名单站点" label-width="140" v-if="globalFilterMode==='blacklist'">
+          <el-input v-model="globalBlacklist" autocomplete="off" placeholder="逗号分隔，如: site1,site2"/>
+        </el-form-item>
+        <el-form-item label="原始JSON" label-width="140">
+          <el-input v-model="globalConfigJson" type="textarea" rows="10"/>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="globalConfigVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveGlobalConfig">保存</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -797,6 +837,14 @@ const user = ref({
   last_name: '',
   phone: ''
 })
+const globalConfigVisible = ref(false)
+const globalConfigJson = ref('')
+const globalFilterMode = ref('blacklist')
+const globalWhitelist = ref('')
+const globalBlacklist = ref('')
+const sitesFilterMode = ref('none')
+const sitesWhitelist = ref('')
+const sitesBlacklist = ref('')
 const plugins = ref<Plugin[]>([])
 const managedSources = ref<ManagedSource[]>([])
 const pluginFilters = ref<PluginFilter[]>([])
@@ -934,6 +982,9 @@ const handleAdd = () => {
     sort: '',
     override: ''
   }
+  sitesFilterMode.value = 'none'
+  sitesWhitelist.value = ''
+  sitesBlacklist.value = ''
   formVisible.value = true
 }
 
@@ -1440,6 +1491,48 @@ const loadPluginSettings = () => {
   })
 }
 
+const showGlobalConfig = () => {
+  globalConfigVisible.value = true
+  loadGlobalConfig()
+}
+
+const loadGlobalConfig = () => {
+  axios.get('/api/subscriptions/global-config').then(response => {
+    const config = response.data
+    globalConfigJson.value = JSON.stringify(config, null, 2)
+
+    if (config['sites-whitelist']) {
+      globalFilterMode.value = 'whitelist'
+      globalWhitelist.value = config['sites-whitelist'].join(',')
+    } else if (config['sites-blacklist']) {
+      globalFilterMode.value = 'blacklist'
+      globalBlacklist.value = config['sites-blacklist'].join(',')
+    }
+  })
+}
+
+const saveGlobalConfig = () => {
+  try {
+    const config = JSON.parse(globalConfigJson.value || '{}')
+
+    // 根据界面模式更新配置
+    if (globalFilterMode.value === 'whitelist' && globalWhitelist.value) {
+      config['sites-whitelist'] = globalWhitelist.value.split(',').map(s => s.trim()).filter(s => s)
+      delete config['sites-blacklist']
+    } else if (globalFilterMode.value === 'blacklist' && globalBlacklist.value) {
+      config['sites-blacklist'] = globalBlacklist.value.split(',').map(s => s.trim()).filter(s => s)
+      delete config['sites-whitelist']
+    }
+
+    axios.put('/api/subscriptions/global-config', config).then(() => {
+      ElMessage.success('全局配置保存成功')
+      globalConfigVisible.value = false
+    })
+  } catch (e) {
+    ElMessage.error('JSON格式错误')
+  }
+}
+
 const showPlugins = () => {
   pluginVisible.value = true
   resetPluginForm()
@@ -1633,6 +1726,26 @@ const handleEdit = (data: any) => {
     sort: data.sort,
     override: data.override
   }
+
+  // 解析 override 中的白名单/黑名单
+  sitesFilterMode.value = 'none'
+  sitesWhitelist.value = ''
+  sitesBlacklist.value = ''
+  if (data.override) {
+    try {
+      const override: any = JSON.parse(data.override)
+      if (override['sites-whitelist']) {
+        sitesFilterMode.value = 'whitelist'
+        sitesWhitelist.value = override['sites-whitelist'].join(',')
+      } else if (override['sites-blacklist']) {
+        sitesFilterMode.value = 'blacklist'
+        sitesBlacklist.value = override['sites-blacklist'].join(',')
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
   formVisible.value = true
 }
 
@@ -1754,6 +1867,30 @@ const sendTgPassword = () => {
 }
 
 const handleConfirm = () => {
+  // 合并白名单/黑名单到 override
+  let override: any = {}
+  if (form.value.override) {
+    try {
+      override = JSON.parse(form.value.override)
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // 根据过滤模式更新 override
+  if (sitesFilterMode.value === 'whitelist' && sitesWhitelist.value) {
+    override['sites-whitelist'] = sitesWhitelist.value.split(',').map(s => s.trim()).filter(s => s)
+    delete override['sites-blacklist']
+  } else if (sitesFilterMode.value === 'blacklist' && sitesBlacklist.value) {
+    override['sites-blacklist'] = sitesBlacklist.value.split(',').map(s => s.trim()).filter(s => s)
+    delete override['sites-whitelist']
+  } else if (sitesFilterMode.value === 'none') {
+    delete override['sites-whitelist']
+    delete override['sites-blacklist']
+  }
+
+  form.value.override = Object.keys(override).length > 0 ? JSON.stringify(override) : ''
+
   axios.post('/api/subscriptions', form.value).then(() => {
     formVisible.value = false
     load()
