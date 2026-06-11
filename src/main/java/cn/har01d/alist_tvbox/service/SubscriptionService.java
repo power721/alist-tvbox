@@ -601,6 +601,9 @@ public class SubscriptionService {
 
         sortSites(config, sort);
 
+        // 应用全局配置
+        applyGlobalConfig(config);
+
         if (StringUtils.isNotBlank(override)) {
             config = overrideConfig(config, override);
         }
@@ -612,8 +615,7 @@ public class SubscriptionService {
         }
 
         // should after overrideConfig
-        handleWhitelist(config);
-        removeBlacklist(config);
+        applySitesFilter(config);
 
         if (StringUtils.isBlank(sort)) {
             sortSitesByOrder(config);
