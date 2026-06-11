@@ -18,34 +18,40 @@
           </el-radio-group>
         </el-form-item>
 
+        <div style="margin-bottom: 8px">
+          <el-button type="primary" plain @click="openSiteForm">+ 添加自定义站点</el-button>
+        </div>
+
         <el-alert v-if="catalogError" type="warning" :closable="false" :title="catalogError" style="margin-bottom: 8px" />
 
-        <el-table v-if="siteRows.length" :data="siteRows" id="sub-sites-table" border style="width: 100%">
-          <el-table-column :label="filterCheckboxLabel" width="60" v-if="state.filterMode !== 'none'">
-            <template #default="scope">
-              <el-checkbox v-model="scope.row.enabled" />
-            </template>
-          </el-table-column>
-          <el-table-column label="来源" width="80">
-            <template #default="scope">{{ originLabel(scope.row.origin) }}</template>
-          </el-table-column>
-          <el-table-column prop="key" label="key" width="170" />
-          <el-table-column label="名称">
-            <template #default="scope">
-              <el-input v-model="scope.row.name" :disabled="scope.row.origin !== 'upstream'" />
-            </template>
-          </el-table-column>
-          <el-table-column label="排序" width="120">
-            <template #default="scope">
-              <el-input v-model="scope.row.order" :disabled="scope.row.origin !== 'upstream'" placeholder="默认" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="80">
-            <template #default="scope">
-              <el-button v-if="scope.row.isCustom" link type="danger" @click="removeCustomSite(scope.row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <el-collapse v-if="siteGroups.length" v-model="expandedGroups">
+          <el-collapse-item v-for="group in siteGroups" :key="group.key" :name="group.key">
+            <template #title>{{ group.label }}（{{ group.rows.length }}）</template>
+            <el-table :data="group.rows" border style="width: 100%">
+              <el-table-column :label="filterCheckboxLabel" width="60" v-if="state.filterMode !== 'none'">
+                <template #default="scope">
+                  <el-checkbox v-model="scope.row.enabled" />
+                </template>
+              </el-table-column>
+              <el-table-column prop="key" label="key" width="180" />
+              <el-table-column label="名称">
+                <template #default="scope">
+                  <el-input v-model="scope.row.name" :disabled="!isOwnRow(scope.row)" />
+                </template>
+              </el-table-column>
+              <el-table-column label="排序" width="120">
+                <template #default="scope">
+                  <el-input v-model="scope.row.order" :disabled="!isOwnRow(scope.row)" placeholder="默认" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="80">
+                <template #default="scope">
+                  <el-button v-if="scope.row.isCustom" link type="danger" @click="removeCustomSite(scope.row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-collapse-item>
+        </el-collapse>
         <el-empty v-else description="无站点目录,可手动添加自定义站点" />
 
         <el-button type="primary" plain @click="openSiteForm" style="margin-top: 8px">+ 添加自定义站点</el-button>
@@ -173,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import {
@@ -232,9 +238,23 @@ const state = reactive<any>({
 let baseConfig: Record<string, any> = {}
 
 const filterCheckboxLabel = '保留'
-const originLabel = (o: string) => (o === 'builtin' ? '内置' : o === 'plugin' ? '插件' : '上游')
 const siteRows = ref<any[]>([])
 const parseRows = ref<any[]>([])
+const expandedGroups = ref<string[]>(['upstream', 'custom'])
+const GROUP_ORDER = [
+  { key: 'upstream', label: '上游源' },
+  { key: 'custom', label: '自定义站点' },
+  { key: 'builtin', label: '内置源' },
+  { key: 'plugin', label: '插件源' },
+]
+const groupKeyOf = (row: any) =>
+  row.isCustom ? 'custom' : row.origin === 'builtin' ? 'builtin' : row.origin === 'plugin' ? 'plugin' : 'upstream'
+const isOwnRow = (row: any) => row.origin === 'upstream' || row.isCustom
+const siteGroups = computed(() =>
+  GROUP_ORDER.map((g) => ({ ...g, rows: siteRows.value.filter((r) => groupKeyOf(r) === g.key) })).filter(
+    (g) => g.rows.length
+  )
+)
 
 const siteForm = reactive<any>({})
 const parseForm = reactive<any>({})
@@ -428,8 +448,18 @@ function applyJson() {
   ElMessage.success('已应用到表单')
 }
 
-// 对外:保存时取序列化结果
-function getValue(): string {
+// 对外:保存时取序列化结果。停留在「原始JSON」标签时直接用该 JSON
+// (支持清空/直接编辑后保存,无需先点"从 JSON 应用到表单");非法 JSON 返回 null 以阻止保存
+function getValue(): string | null {
+  if (activeTab.value === 'json') {
+    const parsed = parseOverride(jsonText.value)
+    if (parsed === null) {
+      jsonError.value = 'JSON 格式错误,请修正后再保存'
+      return null
+    }
+    jsonError.value = ''
+    return stringify(parsed)
+  }
   return stringify(serialize(baseConfig, state))
 }
 defineExpose({ getValue, reload: load })

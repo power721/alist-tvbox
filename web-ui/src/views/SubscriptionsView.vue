@@ -1489,7 +1489,11 @@ const openEditor = (isGlobal: boolean) => {
 }
 
 const saveEditor = () => {
-  const value = editorRef.value?.getValue() ?? ''
+  const value = editorRef.value?.getValue()
+  if (value === null || value === undefined) {
+    ElMessage.error('JSON 格式错误,请修正后再保存')
+    return
+  }
   if (editorTargetIsGlobal.value) {
     let config: any = {}
     try { config = value ? JSON.parse(value) : {} } catch { ElMessage.error('JSON格式错误'); return }
