@@ -88,5 +88,10 @@ public class SubscriptionController {
         subscriptionService.updateGlobalConfig(config);
     }
 
+    @GetMapping("/{sid}/catalog")
+    public Map<String, Object> getCatalog(@PathVariable String sid) {
+        return subscriptionService.getCatalog(sid);
+    }
+
 }
 

@@ -1694,6 +1694,94 @@ public class SubscriptionService {
         return objectMapper.writeValueAsString(map);
     }
 
+    public Map<String, Object> getCatalog(String sid) {
+        Subscription sub = subscriptionRepository.findBySid(sid).orElseThrow(NotFoundException::new);
+        String apiUrl = sub.getUrl() == null ? "" : sub.getUrl();
+        Map<String, Object> config = new HashMap<>();
+        config.put("sites", new ArrayList<>());
+        for (String url : apiUrl.split(",")) {
+            if (StringUtils.isBlank(url)) {
+                continue;
+            }
+            String u = url.trim();
+            String prefix = "";
+            String[] parts = u.split("@", 2);
+            if (parts.length == 2) {
+                prefix = parts[0].trim() + "@";
+                u = parts[1].trim();
+            }
+            overrideConfig(config, fixUrl(u), prefix, getConfigData(u));
+        }
+        return buildCatalog(config, subscriptionSourceService.findEnabledSources());
+    }
+
+    static Map<String, Object> buildCatalog(Map<String, Object> config, List<SubscriptionSourceService.SubscriptionSourceRef> sources) {
+        Set<String> builtinPluginKeys = new HashSet<>();
+        List<Map<String, Object>> sourceSites = new ArrayList<>();
+        for (SubscriptionSourceService.SubscriptionSourceRef source : sources) {
+            String key;
+            String origin;
+            if (source.builtin()) {
+                key = "csp_Push".equals(source.siteKey()) ? "push_agent" : source.siteKey();
+                origin = "builtin";
+            } else if (source.plugin() != null) {
+                key = source.plugin().getName();
+                origin = "plugin";
+            } else {
+                continue;
+            }
+            if (key == null) {
+                continue;
+            }
+            builtinPluginKeys.add(key);
+            Map<String, Object> item = new HashMap<>();
+            item.put("key", key);
+            item.put("name", source.name() == null ? key : source.name());
+            item.put("origin", origin);
+            sourceSites.add(item);
+        }
+
+        List<Map<String, Object>> upstream = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        Object sitesObj = config.get("sites");
+        if (sitesObj instanceof List<?> list) {
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> s) || s.get("key") == null) {
+                    continue;
+                }
+                String key = String.valueOf(s.get("key"));
+                if (builtinPluginKeys.contains(key) || !seen.add(key)) {
+                    continue;
+                }
+                Map<String, Object> item = new HashMap<>();
+                item.put("key", key);
+                item.put("name", s.get("name") == null ? key : s.get("name"));
+                item.put("origin", "upstream");
+                upstream.add(item);
+            }
+        }
+
+        List<Map<String, Object>> parses = new ArrayList<>();
+        Object parsesObj = config.get("parses");
+        if (parsesObj instanceof List<?> list) {
+            for (Object o : list) {
+                if (o instanceof Map<?, ?> p && p.get("name") != null) {
+                    Map<String, Object> item = new HashMap<>();
+                    item.put("name", String.valueOf(p.get("name")));
+                    parses.add(item);
+                }
+            }
+        }
+
+        List<Map<String, Object>> allSites = new ArrayList<>();
+        allSites.addAll(sourceSites);
+        allSites.addAll(upstream);
+        Map<String, Object> result = new HashMap<>();
+        result.put("sites", allSites);
+        result.put("parses", parses);
+        return result;
+    }
+
     public Map<String, Object> getGlobalConfig() {
         return settingRepository.findById(Constants.GLOBAL_SUBSCRIPTION_OVERRIDE)
                 .map(Setting::getValue)

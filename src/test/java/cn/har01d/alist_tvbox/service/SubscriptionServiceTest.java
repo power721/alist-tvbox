@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.entity.Plugin;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -135,5 +136,33 @@ class SubscriptionServiceTest {
         SubscriptionService.resolveAndApplyFilters(c, new HashMap<>(), override);
         assertThat(siteKeys(c)).containsExactly("A");
         assertThat(parseNames(c)).containsExactly("虾米"); // parse NOT removed in whitelist mode
+    }
+
+    @Test
+    void buildCatalogTagsUpstreamBuiltinPluginAndMapsPushKey() {
+        Map<String, Object> c = config("csp_Bili"); // upstream
+        c.put("parses", new ArrayList<>(List.of(parse("虾米"))));
+
+        Plugin plugin = new Plugin();
+        plugin.setName("我的插件");
+
+        List<SubscriptionSourceService.SubscriptionSourceRef> sources = List.of(
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_AList", true, "csp_AList", "🟢 AList", null),
+                new SubscriptionSourceService.SubscriptionSourceRef("builtin-csp_Push", true, "csp_Push", "推送", null),
+                new SubscriptionSourceService.SubscriptionSourceRef("plugin-1", false, "我的插件", "我的插件", plugin)
+        );
+
+        Map<String, Object> catalog = SubscriptionService.buildCatalog(c, sources);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> sites = (List<Map<String, Object>>) catalog.get("sites");
+        assertThat(sites).anySatisfy(s -> assertThat(s).containsEntry("key", "csp_Bili").containsEntry("origin", "upstream"));
+        assertThat(sites).anySatisfy(s -> assertThat(s).containsEntry("key", "csp_AList").containsEntry("origin", "builtin"));
+        assertThat(sites).anySatisfy(s -> assertThat(s).containsEntry("key", "push_agent").containsEntry("origin", "builtin"));
+        assertThat(sites).anySatisfy(s -> assertThat(s).containsEntry("key", "我的插件").containsEntry("origin", "plugin"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> parses = (List<Map<String, Object>>) catalog.get("parses");
+        assertThat(parses).extracting(p -> p.get("name")).containsExactly("虾米");
     }
 }
