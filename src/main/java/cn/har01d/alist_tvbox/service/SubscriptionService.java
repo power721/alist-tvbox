@@ -615,7 +615,7 @@ public class SubscriptionService {
         }
 
         // should after overrideConfig
-        applySitesFilter(config);
+        resolveAndApplyFilters(config, getGlobalConfig(), parseOverride(override));
 
         if (StringUtils.isBlank(sort)) {
             sortSitesByOrder(config);
@@ -826,7 +826,97 @@ public class SubscriptionService {
         return config;
     }
 
-    private void handleWhitelist(Map<String, Object> config) {
+    static List<String> normalizeWhitelist(Map<String, Object> source) {
+        if (source == null) {
+            return null;
+        }
+        Object obj = source.get("sites-whitelist");
+        if (obj instanceof List<?> list && !list.isEmpty()) {
+            List<String> result = new ArrayList<>();
+            for (Object o : list) {
+                result.add(String.valueOf(o));
+            }
+            return result;
+        }
+        return null;
+    }
+
+    static Map<String, Object> normalizeBlacklist(Map<String, Object> source) {
+        if (source == null) {
+            return null;
+        }
+        Map<String, Object> result = new HashMap<>();
+        Object blacklist = source.get("blacklist");
+        if (blacklist instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                if (e.getValue() instanceof List<?> list && !list.isEmpty()) {
+                    result.put(String.valueOf(e.getKey()), new ArrayList<>(list));
+                }
+            }
+        }
+        Object sitesBlacklist = source.get("sites-blacklist");
+        if (sitesBlacklist instanceof List<?> list && !list.isEmpty()) {
+            List<Object> sites = (List<Object>) result.computeIfAbsent("sites", k -> new ArrayList<>());
+            for (Object o : list) {
+                if (!sites.contains(o)) {
+                    sites.add(o);
+                }
+            }
+        }
+        return result.isEmpty() ? null : result;
+    }
+
+    static void resolveAndApplyFilters(Map<String, Object> config, Map<String, Object> globalConfig, Map<String, Object> override) {
+        List<String> globalWhitelist = normalizeWhitelist(globalConfig);
+        Map<String, Object> globalBlacklist = normalizeBlacklist(globalConfig);
+        List<String> subWhitelist = normalizeWhitelist(override);
+        Map<String, Object> subBlacklist = normalizeBlacklist(override);
+
+        // 清除合并残留,避免外泄/重复应用
+        config.remove("sites-whitelist");
+        config.remove("sites-blacklist");
+        config.remove("blacklist");
+
+        List<String> finalWhitelist;
+        Map<String, Object> finalBlacklist;
+        if (subWhitelist != null) {
+            finalWhitelist = subWhitelist;
+            finalBlacklist = null;
+        } else if (subBlacklist != null) {
+            finalWhitelist = null;
+            finalBlacklist = subBlacklist;
+        } else if (globalWhitelist != null) {
+            finalWhitelist = globalWhitelist;
+            finalBlacklist = null;
+        } else {
+            finalWhitelist = null;
+            finalBlacklist = globalBlacklist;
+        }
+
+        if (finalWhitelist != null) {
+            config.put("sites-whitelist", finalWhitelist);
+            handleWhitelist(config); // 白名单模式忽略黑名单
+        } else {
+            if (finalBlacklist != null) {
+                config.put("blacklist", finalBlacklist);
+            }
+            removeBlacklist(config); // 应用黑名单对象 + 始终移除 Alist1
+        }
+    }
+
+    private Map<String, Object> parseOverride(String override) {
+        if (StringUtils.isBlank(override)) {
+            return new HashMap<>();
+        }
+        try {
+            return objectMapper.readValue(override, Map.class);
+        } catch (Exception e) {
+            log.warn("parse override for filters failed", e);
+            return new HashMap<>();
+        }
+    }
+
+    private static void handleWhitelist(Map<String, Object> config) {
         try {
             Object obj1 = config.get("sites-whitelist");
             Object obj2 = config.get("sites");
@@ -842,7 +932,7 @@ public class SubscriptionService {
         }
     }
 
-    private void removeBlacklist(Map<String, Object> config) {
+    private static void removeBlacklist(Map<String, Object> config) {
         try {
             Object obj1 = config.get("sites-blacklist");
             if (obj1 == null) {
@@ -877,7 +967,7 @@ public class SubscriptionService {
         }
     }
 
-    private void removeBlacklist(Map<String, Object> config, Map<String, Object> blacklist, String type) {
+    private static void removeBlacklist(Map<String, Object> config, Map<String, Object> blacklist, String type) {
         Object obj1 = blacklist.get(type);
         if (obj1 == null) {
             obj1 = new ArrayList<String>(); // to remove Alist1 site
@@ -1640,45 +1730,6 @@ public class SubscriptionService {
             if (!"spider".equals(key) && !config.containsKey(key)) {
                 config.put(key, entry.getValue());
             }
-        }
-    }
-
-    private void applySitesFilter(Map<String, Object> config) {
-        Object whitelistObj = config.get("sites-whitelist");
-        Object blacklistObj = config.get("sites-blacklist");
-
-        if (whitelistObj instanceof List) {
-            handleWhitelistFilter(config, (List<String>) whitelistObj);
-            config.remove("sites-whitelist");
-        } else if (blacklistObj instanceof List) {
-            handleBlacklistFilter(config, (List<String>) blacklistObj);
-            config.remove("sites-blacklist");
-        }
-    }
-
-    private void handleWhitelistFilter(Map<String, Object> config, List<String> whitelist) {
-        Object obj = config.get("sites");
-        if (obj instanceof List) {
-            List<Map<String, Object>> sites = (List<Map<String, Object>>) obj;
-            Set<String> whiteSet = new HashSet<>(whitelist);
-            sites = sites.stream()
-                    .filter(s -> whiteSet.contains(s.get("key")))
-                    .collect(Collectors.toList());
-            config.put("sites", sites);
-            log.info("whitelist mode: include sites {}", whitelist);
-        }
-    }
-
-    private void handleBlacklistFilter(Map<String, Object> config, List<String> blacklist) {
-        Object obj = config.get("sites");
-        if (obj instanceof List) {
-            List<Map<String, Object>> sites = (List<Map<String, Object>>) obj;
-            Set<String> blackSet = new HashSet<>(blacklist);
-            sites = sites.stream()
-                    .filter(s -> !blackSet.contains(s.get("key")))
-                    .collect(Collectors.toList());
-            config.put("sites", sites);
-            log.info("blacklist mode: exclude sites {}", blacklist);
         }
     }
 }
