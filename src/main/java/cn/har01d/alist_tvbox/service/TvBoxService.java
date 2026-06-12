@@ -1723,7 +1723,9 @@ public class TvBoxService {
         String[] parts = tid.split("\\$");
         String path = parts[1];
         try {
-            path = proxyService.getPath(Integer.parseInt(path));
+            if (!path.contains(PLAYLIST)) {
+                path = proxyService.getPath(Integer.parseInt(path));
+            }
         } catch (NumberFormatException e) {
             log.debug("", e);
         } catch (Exception e) {

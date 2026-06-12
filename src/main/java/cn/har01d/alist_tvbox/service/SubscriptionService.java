@@ -761,11 +761,18 @@ public class SubscriptionService {
     private void sortSitesByOrder(Map<String, Object> config) {
         List<Map<String, Object>> sites = (List<Map<String, Object>>) config.get("sites");
         sites.sort(Comparator.comparing(a -> {
-            Integer order = (Integer) a.get("order");
+            Object order = a.get("order");
             if (order == null) {
-                order = 9000;
+                return 9000;
+            } else if (order instanceof Integer) {
+                return (Integer) order;
+            } else {
+                try {
+                    return Integer.parseInt(order.toString());
+                } catch (NumberFormatException e) {
+                    return 9000;
+                }
             }
-            return order;
         }));
     }
 
@@ -1269,6 +1276,7 @@ public class SubscriptionService {
     /**
      * Find a partial site entry in config.sites (added by overrideConfig for builtin/plugin keys)
      * and merge its override fields into the fully-built site, then remove the partial entry.
+     *
      * @return true if an override was found and applied
      */
     private boolean applySiteOverride(String key, Map<String, Object> site, List<Map<String, Object>> sites) {

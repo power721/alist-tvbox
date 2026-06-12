@@ -120,6 +120,17 @@ test('serialize: upstream rename + order emit sites partial; custom site full', 
   assert.deepEqual(out.flags, ['x'])
 })
 
+test('serialize: custom site order is written as number', () => {
+  const state = {
+    ...defaultState(),
+    sites: [
+      { key: 'mine', origin: 'custom', enabled: true, isCustom: true, name: '自定义', type: 3, api: 'csp_X', order: '12' },
+    ],
+  }
+  const out = serialize({}, state)
+  assert.equal(out.sites[0].order, 12)
+})
+
 test('stringify: empty object -> empty string', () => {
   assert.equal(stringify({}), '')
   assert.equal(stringify({ wallpaper: 'x' }), '{"wallpaper":"x"}')

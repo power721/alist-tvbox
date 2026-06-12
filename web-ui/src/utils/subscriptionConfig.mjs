@@ -46,7 +46,8 @@ export function siteOverrideMap(config) {
   if (Array.isArray(config.sites)) {
     for (const s of config.sites) {
       if (s && s.key != null) {
-        map[String(s.key)] = { ...s }
+        const { key, ...override } = s
+        map[String(key)] = override
       }
     }
   }
@@ -71,6 +72,11 @@ function buildCustomSite(row) {
   for (const k of CUSTOM_SITE_KEYS) {
     const v = row[k]
     if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) continue
+    if (k === 'order') {
+      const n = Number(v)
+      if (Number.isFinite(n)) s[k] = n
+      continue
+    }
     s[k] = v
   }
   return s
