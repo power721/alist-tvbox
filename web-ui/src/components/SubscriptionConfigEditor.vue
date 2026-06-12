@@ -199,8 +199,8 @@
                   <el-form-item label="超时 timeout">
                     <el-input-number v-model="l.timeout" :min="0" controls-position="right" placeholder="秒" />
                   </el-form-item>
-                  <el-form-item label="启动选中 boot"><el-switch v-model="l.boot" :active-value="1" :inactive-value="0" /><span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">应用启动时自动选中此直播源</span></el-form-item>
-                  <el-form-item label="跳过密码 pass"><el-switch v-model="l.pass" :active-value="1" :inactive-value="0" /><span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">跳过密码保护, 显示含密码的隐藏分组</span></el-form-item>
+                  <el-form-item label="启动选中 boot"><el-switch v-model="l.boot" /><span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">应用启动时自动选中此直播源</span></el-form-item>
+                  <el-form-item label="跳过密码 pass"><el-switch v-model="l.pass" /><span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">跳过密码保护, 显示含密码的隐藏分组</span></el-form-item>
                 </el-form>
                 <!-- header -->
                 <el-form-item label="请求头 header" label-width="100">
@@ -259,8 +259,7 @@
                 <div v-for="(g, gi) in l.groups" :key="gi" style="margin-bottom: 8px; border: 1px dashed var(--el-border-color); border-radius: 4px; padding: 8px">
                   <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px">
                     <el-input v-model="g.name" placeholder="分组名称 (如 新闻台)" style="width: 200px" />
-                    <span style="white-space: nowrap; font-size: 12px">密码保护</span>
-                    <el-switch v-model="g.pass" :active-value="1" :inactive-value="0" />
+                    <el-input v-model="g.pass" placeholder="密码" style="width: 200px" />
                     <el-button link type="danger" @click="l.groups.splice(gi, 1)">删除组</el-button>
                   </div>
                   <el-table :data="g.channels" border size="small">
@@ -953,7 +952,7 @@ function addLive() {
   state.lives.push({
     name: '', type: 0, url: '', playerType: 2, ua: '', epg: '', logo: '',
     api: '', ext: '', jar: '', click: '', origin: '', referer: '',
-    timeZone: '', timeout: '', header: {}, catchup: null, boot: 0, pass: 0,
+    timeZone: '', timeout: '', header: {}, catchup: null, boot: false, pass: false,
     groups: [],
   })
 }
@@ -992,7 +991,7 @@ function onCatchupChange(live: any) {
 
 function addGroup(live: any) {
   if (!Array.isArray(live.groups)) live.groups = []
-  live.groups.push({ name: '', pass: 0, channels: [] })
+  live.groups.push({ name: '', pass: '', channels: [] })
 }
 
 function addChannel(group: any) {
