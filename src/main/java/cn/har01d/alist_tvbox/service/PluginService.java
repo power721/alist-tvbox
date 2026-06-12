@@ -31,6 +31,7 @@ public class PluginService {
     private static final String PLUGIN_INDEX_FILE = "spiders_v2.json";
     private static final Pattern PLUGIN_ID = Pattern.compile("(?m)^\\s*//@id:([^\\s]+)\\s*$");
     private static final Pattern PLUGIN_VERSION = Pattern.compile("(?m)^\\s*//@version:(\\d+)\\s*$");
+    private static final Pattern PLUGIN_NAME = Pattern.compile("(?m)^\\s*//@name:(.+)\\s*$");
     private static final String GITHUB_PROXY = "github_proxy";
 
     private final PluginRepository pluginRepository;
@@ -375,7 +376,11 @@ public class PluginService {
 
     private DownloadedPlugin downloadPluginData(String url) {
         String body = downloadPlugin(url);
-        return new DownloadedPlugin(body, deriveSourceName(url), extractPluginId(body), extractPluginVersion(body));
+        String name = extractPluginName(body);
+        if (StringUtils.isBlank(name)) {
+            name = deriveSourceName(url);
+        }
+        return new DownloadedPlugin(body, name, extractPluginId(body), extractPluginVersion(body));
     }
 
     private String downloadText(String url, String message) {
@@ -463,6 +468,17 @@ public class PluginService {
             return null;
         }
         Matcher matcher = PLUGIN_ID.matcher(body);
+        if (!matcher.find()) {
+            return null;
+        }
+        return StringUtils.trimToNull(matcher.group(1));
+    }
+
+    private String extractPluginName(String body) {
+        if (StringUtils.isBlank(body)) {
+            return null;
+        }
+        Matcher matcher = PLUGIN_NAME.matcher(body);
         if (!matcher.find()) {
             return null;
         }

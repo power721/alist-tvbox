@@ -53,7 +53,7 @@
               <el-table-column label="操作" width="180">
                 <template #default="scope">
                   <el-button link type="primary" @click="openSiteAdvanced(scope.row)">更多设置</el-button>
-                  <el-button v-if="isOwnRow(scope.row) && !scope.row.isCustom" link type="warning" @click="resetSiteToDefault(scope.row)">恢复默认</el-button>
+                  <el-button v-if="!scope.row.isCustom" link type="warning" @click="resetSiteToDefault(scope.row)">恢复默认</el-button>
                   <el-button v-if="scope.row.isCustom" link type="danger" @click="removeCustomSite(scope.row)">删除</el-button>
                 </template>
               </el-table-column>
@@ -645,8 +645,8 @@ const siteRows = ref<any[]>([])
 const parseRows = ref<any[]>([])
 const expandedGroups = ref<string[]>(['upstream', 'custom'])
 const GROUP_ORDER = [
-  { key: 'upstream', label: '上游源' },
   { key: 'custom', label: '自定义站点' },
+  { key: 'upstream', label: '上游源' },
   { key: 'builtin', label: '内置源' },
   { key: 'plugin', label: '插件源' },
 ]
@@ -849,6 +849,20 @@ function resetSiteToDefault(row: any) {
   row.name = row.originalName
   row.hadNameOverride = false
   row.order = ''
+  // clear advanced override fields
+  row.ext = undefined
+  row.searchable = undefined
+  row.quickSearch = undefined
+  row.filterable = undefined
+  row.changeable = undefined
+  row.style = undefined
+  row.timeout = undefined
+  row.indexs = undefined
+  row.playUrl = undefined
+  row.click = undefined
+  row.categories = undefined
+  row.header = undefined
+  row.hasAdvancedOverride = false
 }
 
 function openSiteAdvanced(row: any) {

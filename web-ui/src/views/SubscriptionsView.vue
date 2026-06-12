@@ -114,7 +114,6 @@
         <el-form-item label="定制" label-width="140">
           <el-button @click="openEditor(false)">🎨 可视化编辑</el-button>
           <span class="hint">{{ form.override ? '已配置' : '未配置' }}</span>
-          <el-tag v-if="overrideModified" type="warning" size="small" style="margin-left: 8px">已修改，请点击「更新」保存</el-tag>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -658,6 +657,18 @@
       </template>
     </el-dialog>
 
+    <!-- JSON 预览确认 -->
+    <el-dialog v-model="jsonPreviewVisible" title="确认保存" width="700px" append-to-body>
+      <el-alert type="info" :closable="false" style="margin-bottom: 8px">
+        <template #title>请确认以下配置内容无误后点击「确认保存」</template>
+      </el-alert>
+      <el-input v-model="jsonPreviewText" type="textarea" :rows="16" readonly style="font-family: monospace" />
+      <template #footer>
+        <el-button @click="jsonPreviewVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmSaveEditor">确认保存</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -805,6 +816,8 @@ const importingPlugins = ref(false)
 const tgVisible = ref(false)
 const scanVisible = ref(false)
 const confirm = ref(false)
+const jsonPreviewVisible = ref(false)
+const jsonPreviewText = ref('')
 const push = ref(false)
 const device = ref<Device>({
   name: "",
@@ -844,8 +857,6 @@ const editorVisible = ref(false)
 const editorRef = ref<any>(null)
 const editorTargetIsGlobal = ref(false)
 const globalReferenceSid = ref('')
-const overrideModified = ref(false)
-const overrideBeforeEdit = ref('')
 const plugins = ref<Plugin[]>([])
 const managedSources = ref<ManagedSource[]>([])
 const sourceFilter = ref('')
@@ -1532,8 +1543,6 @@ const openEditor = (isGlobal: boolean) => {
   if (isGlobal) {
     globalReferenceSid.value = subscriptions.value.length ? (subscriptions.value[0] as any).sid : ''
     loadGlobalConfig()
-  } else {
-    overrideBeforeEdit.value = form.value.override || ''
   }
   editorVisible.value = true
 }
@@ -1544,6 +1553,14 @@ const saveEditor = () => {
     ElMessage.error('JSON 格式错误,请修正后再保存')
     return
   }
+  jsonPreviewText.value = value ? JSON.stringify(JSON.parse(value), null, 2) : '(空)'
+  jsonPreviewVisible.value = true
+}
+
+const confirmSaveEditor = () => {
+  const value = editorRef.value?.getValue()
+  if (value === null || value === undefined) return
+  jsonPreviewVisible.value = false
   if (editorTargetIsGlobal.value) {
     let config: any = {}
     try { config = value ? JSON.parse(value) : {} } catch { ElMessage.error('JSON格式错误'); return }
@@ -1553,8 +1570,11 @@ const saveEditor = () => {
     })
   } else {
     form.value.override = value
-    editorVisible.value = false
-    overrideModified.value = value !== overrideBeforeEdit.value
+    axios.post('/api/subscriptions', form.value).then(() => {
+      editorVisible.value = false
+      ElMessage.success('订阅配置保存成功')
+      load()
+    })
   }
 }
 
@@ -1743,7 +1763,6 @@ const deletePluginFilter = (id: number) => {
 const handleEdit = (data: any) => {
   dialogTitle.value = '更新订阅 - ' + data.name
   updateAction.value = true
-  overrideModified.value = false
   form.value = {
     id: data.id,
     sid: data.sid,
@@ -1779,7 +1798,6 @@ const deleteSub = () => {
 
 const handleCancel = () => {
   formVisible.value = false
-  overrideModified.value = false
 }
 
 const loadDevices = () => {
@@ -1878,7 +1896,6 @@ const sendTgPassword = () => {
 const handleConfirm = () => {
   axios.post('/api/subscriptions', form.value).then(() => {
     formVisible.value = false
-    overrideModified.value = false
     load()
   })
 }
