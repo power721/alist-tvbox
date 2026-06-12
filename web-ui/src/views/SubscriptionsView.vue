@@ -357,11 +357,21 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="managedSources" row-key="id" id="plugins-table" border style="width: 100%" @selection-change="onPluginSelectionChange">
+      <el-input v-model="sourceFilter" placeholder="搜索插件名称或地址" clearable style="width: 280px; margin-bottom: 10px"/>
+
+      <el-table :data="filteredManagedSources" row-key="id" id="plugins-table" border style="width: 100%" @selection-change="onPluginSelectionChange">
         <el-table-column type="selection" width="55" :selectable="isSourceDeletable"/>
-        <el-table-column label="顺序" width="80">
+        <el-table-column label="顺序" width="100">
           <template #default="scope">
-            <span class="pointer">{{ scope.row.sortOrder }}</span>
+            <el-input-number
+              v-model="scope.row.sortOrder"
+              :min="1"
+              :max="managedSources.length"
+              :controls="false"
+              size="small"
+              style="width: 60px"
+              @change="(val: number) => reorderManagedSource(scope.row.id, val)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="类型" width="90">
@@ -838,6 +848,15 @@ const overrideModified = ref(false)
 const overrideBeforeEdit = ref('')
 const plugins = ref<Plugin[]>([])
 const managedSources = ref<ManagedSource[]>([])
+const sourceFilter = ref('')
+const filteredManagedSources = computed(() => {
+  const keyword = sourceFilter.value.trim().toLowerCase()
+  if (!keyword) return managedSources.value
+  return managedSources.value.filter(item =>
+    (item.name && item.name.toLowerCase().includes(keyword)) ||
+    (item.url && item.url.toLowerCase().includes(keyword))
+  )
+})
 const pluginFilters = ref<PluginFilter[]>([])
 const pluginForm = ref<Plugin>({
   id: 0,
@@ -1453,6 +1472,25 @@ const enablePluginFilterRowDrop = () => {
 const loadPlugins = () => {
   axios.get('/api/plugins').then(({data}) => {
     plugins.value = data
+  })
+}
+
+const reorderManagedSource = (sourceId: string, newSortOrder: number) => {
+  const list = managedSources.value
+  const oldIndex = list.findIndex(item => item.id === sourceId)
+  if (oldIndex < 0) return
+  const clamped = Math.max(1, Math.min(newSortOrder, list.length))
+  const newIndex = clamped - 1
+  if (newIndex === oldIndex) {
+    return
+  }
+  const row = list.splice(oldIndex, 1)[0]
+  list.splice(newIndex, 0, row)
+  list.forEach((item, index) => {
+    item.sortOrder = index + 1
+  })
+  axios.post('/api/subscription-sources/reorder', list.map(item => item.id)).then(() => {
+    ElMessage.success('排序已更新')
   })
 }
 
