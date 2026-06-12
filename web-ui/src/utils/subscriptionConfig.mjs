@@ -40,16 +40,13 @@ export function disabledParseNames(config) {
   return config.blacklist && Array.isArray(config.blacklist.parses) ? [...config.blacklist.parses] : []
 }
 
-// 返回 { key: {name?, order?} } —— config.sites 里的局部 override
+// 返回 { key: {...all fields} } —— config.sites 里的完整 override
 export function siteOverrideMap(config) {
   const map = {}
   if (Array.isArray(config.sites)) {
     for (const s of config.sites) {
       if (s && s.key != null) {
-        const o = {}
-        if (s.name != null) o.name = s.name
-        if (s.order != null) o.order = s.order
-        map[String(s.key)] = o
+        map[String(s.key)] = { ...s }
       }
     }
   }
@@ -299,19 +296,35 @@ function setArrOrDelete(config, key, value) {
 }
 
 // 把编辑器状态写回 config(保留未建模键)
+const ADVANCED_OVERRIDE_KEYS = [
+  'ext', 'searchable', 'quickSearch', 'filterable', 'changeable',
+  'style', 'timeout', 'indexs', 'playUrl', 'click', 'categories', 'header',
+]
+
+function buildAdvancedOverride(row) {
+  const o = {}
+  for (const k of ADVANCED_OVERRIDE_KEYS) {
+    const v = row[k]
+    if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) continue
+    o[k] = v
+  }
+  return o
+}
+
 export function serialize(baseConfig, state) {
   const config = JSON.parse(JSON.stringify(baseConfig || {}))
 
-  // sites: 上游局部 override + 自定义站点
+  // sites: 上游/内置/插件局部 override + 自定义站点
   const sites = []
   for (const row of state.sites) {
     if (row.isCustom) {
       sites.push(buildCustomSite(row))
-    } else if (row.origin === 'upstream') {
+    } else {
       const o = {}
       if (row.name && row.name !== row.originalName) o.name = row.name
       else if (row.hadNameOverride && row.name) o.name = row.name
       if (row.order !== '' && row.order !== null && row.order !== undefined) o.order = Number(row.order)
+      if (row.hasAdvancedOverride) Object.assign(o, buildAdvancedOverride(row))
       if (Object.keys(o).length) {
         o.key = row.key
         sites.push(o)

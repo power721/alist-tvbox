@@ -50,8 +50,9 @@
                   <el-input v-model="scope.row.order" :disabled="!isOwnRow(scope.row)" placeholder="默认" />
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="120">
+              <el-table-column label="操作" width="180">
                 <template #default="scope">
+                  <el-button link type="primary" @click="openSiteAdvanced(scope.row)">更多设置</el-button>
                   <el-button v-if="isOwnRow(scope.row) && !scope.row.isCustom" link type="warning" @click="resetSiteToDefault(scope.row)">恢复默认</el-button>
                   <el-button v-if="scope.row.isCustom" link type="danger" @click="removeCustomSite(scope.row)">删除</el-button>
                 </template>
@@ -436,6 +437,73 @@
       </template>
     </el-dialog>
 
+    <!-- 站点高级设置 -->
+    <el-dialog v-model="siteAdvancedVisible" title="站点设置" width="640px" append-to-body destroy-on-close>
+      <template #header>
+        <span>站点设置</span>
+        <span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">{{ siteAdvancedRow?.key }}</span>
+      </template>
+      <el-form :model="siteAdvancedForm" label-width="120" style="max-height: 60vh; overflow-y: auto">
+        <el-form-item label="扩展 ext"><el-input v-model="siteAdvancedForm.ext" type="textarea" :rows="3" placeholder="传给爬虫的扩展数据, 可为字符串或 JSON" /></el-form-item>
+        <el-form-item label="搜索 searchable">
+          <el-select v-model="siteAdvancedForm.searchable">
+            <el-option :value="0" label="不可搜索(0)" />
+            <el-option :value="1" label="可搜索(1)" />
+            <el-option :value="2" label="聚合搜索(2)" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="快速搜索"><el-switch v-model="siteAdvancedForm.quickSearch" :active-value="1" :inactive-value="0" /></el-form-item>
+        <el-form-item label="筛选 filterable"><el-switch v-model="siteAdvancedForm.filterable" :active-value="1" :inactive-value="0" /></el-form-item>
+        <el-form-item label="线路切换"><el-switch v-model="siteAdvancedForm.changeable" :active-value="1" :inactive-value="0" /></el-form-item>
+        <el-form-item label="卡片风格 style">
+          <el-select v-model="siteAdvancedForm.styleType" style="width: 140px">
+            <el-option value="" label="默认" />
+            <el-option value="rect" label="rect 矩形" />
+            <el-option value="oval" label="oval 圆形" />
+            <el-option value="list" label="list 列表" />
+          </el-select>
+          <el-input v-model="siteAdvancedForm.styleRatio" placeholder="宽高比, 如 1.33" style="width: 120px; margin-left: 8px" />
+        </el-form-item>
+        <el-form-item label="排序 order"><el-input v-model="siteAdvancedForm.order" placeholder="数字, 越小越靠前" /></el-form-item>
+        <el-divider content-position="left">高级设置</el-divider>
+        <el-form-item label="超时 timeout">
+          <el-input-number v-model="siteAdvancedForm.timeout" :min="0" controls-position="right" placeholder="请求超时秒数" />
+        </el-form-item>
+        <el-form-item label="索引模式 indexs">
+          <el-switch v-model="siteAdvancedForm.indexs" :active-value="1" :inactive-value="0" />
+          <span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">作为索引来源使用</span>
+        </el-form-item>
+        <el-form-item label="播放前缀 playUrl"><el-input v-model="siteAdvancedForm.playUrl" placeholder="播放 URL 前缀或转换规则" /></el-form-item>
+        <el-form-item label="点击拦截 click"><el-input v-model="siteAdvancedForm.click" placeholder="点击拦截处理 URL 或规则" /></el-form-item>
+        <el-form-item label="分类白名单">
+          <el-select v-model="siteAdvancedForm.categories" multiple filterable allow-create default-first-option
+            placeholder="仅显示这些分类, 留空显示全部" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="请求头 header">
+          <div style="width: 100%">
+            <el-table :data="siteAdvancedForm.headerPairs" border size="small">
+              <el-table-column label="名称" width="200">
+                <template #default="scope"><el-input v-model="scope.row.name" placeholder="User-Agent" /></template>
+              </el-table-column>
+              <el-table-column label="值">
+                <template #default="scope"><el-input v-model="scope.row.value" /></template>
+              </el-table-column>
+              <el-table-column label="" width="50">
+                <template #default="scope">
+                  <el-button link type="danger" @click="siteAdvancedForm.headerPairs.splice(scope.$index, 1)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-button type="primary" link @click="siteAdvancedForm.headerPairs.push({ name: '', value: '' })">+ 添加</el-button>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="siteAdvancedVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmSiteAdvanced">确定</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 自定义解析表单 -->
     <el-dialog v-model="parseFormVisible" title="自定义解析" width="560px" append-to-body destroy-on-close>
       <el-form :model="parseForm" label-width="100">
@@ -549,6 +617,7 @@ const catalogError = ref('')
 const jsonText = ref('')
 const jsonError = ref('')
 const siteFormVisible = ref(false)
+const siteAdvancedVisible = ref(false)
 const parseFormVisible = ref(false)
 const channelFormVisible = ref(false)
 
@@ -591,6 +660,8 @@ const siteGroups = computed(() =>
 )
 
 const siteForm = reactive<any>({})
+const siteAdvancedForm = reactive<any>({})
+const siteAdvancedRow = ref<any>(null)
 const parseForm = reactive<any>({})
 const channelForm = reactive<any>({})
 let _channelGroup: any = null
@@ -652,11 +723,26 @@ function buildRows(config: Record<string, any>, catalog: any) {
   const overrides = siteOverrideMap(config)
   const catalogKeys = new Set<string>((catalog.sites || []).map((s: any) => String(s.key)))
 
+  const ADVANCED_KEYS = [
+    'ext', 'searchable', 'quickSearch', 'filterable', 'changeable',
+    'style', 'timeout', 'indexs', 'playUrl', 'click', 'categories', 'header',
+  ]
+  function applyAdvancedOverride(row: any, ov: any) {
+    let hasAdvanced = false
+    for (const k of ADVANCED_KEYS) {
+      if (ov[k] !== undefined && ov[k] !== null && ov[k] !== '') {
+        row[k] = ov[k]
+        hasAdvanced = true
+      }
+    }
+    if (hasAdvanced) row.hasAdvancedOverride = true
+  }
+
   const rows: any[] = []
   for (const c of catalog.sites || []) {
     const key = String(c.key)
     const ov = overrides[key] || {}
-    rows.push({
+    const row: any = {
       key,
       origin: c.origin,
       isCustom: false,
@@ -665,19 +751,23 @@ function buildRows(config: Record<string, any>, catalog: any) {
       originalName: c.name,
       hadNameOverride: ov.name != null,
       order: ov.order != null ? ov.order : '',
-    })
+    }
+    applyAdvancedOverride(row, ov)
+    rows.push(row)
   }
   // catalog 缺失但被禁用/白名单引用的 key -> 合成行
   const known = new Set(rows.map((r) => r.key))
   ;[...disabled, ...white].forEach((key) => {
     if (!known.has(key)) {
       const ov = overrides[key] || {}
-      rows.push({
+      const row: any = {
         key, origin: 'upstream', isCustom: false,
         enabled: state.filterMode === 'whitelist' ? white.has(key) : !disabled.has(key),
         name: ov.name != null ? ov.name : key, originalName: key, hadNameOverride: ov.name != null,
         order: ov.order != null ? ov.order : '',
-      })
+      }
+      applyAdvancedOverride(row, ov)
+      rows.push(row)
       known.add(key)
     }
   })
@@ -759,7 +849,58 @@ function resetSiteToDefault(row: any) {
   row.name = row.originalName
   row.hadNameOverride = false
   row.order = ''
+}
 
+function openSiteAdvanced(row: any) {
+  siteAdvancedRow.value = row
+  const headerPairs = row.header && typeof row.header === 'object'
+    ? Object.entries(row.header).map(([name, value]) => ({ name, value: String(value) }))
+    : []
+  Object.assign(siteAdvancedForm, {
+    ext: row.ext ?? '',
+    searchable: row.searchable ?? 1,
+    quickSearch: row.quickSearch ?? 1,
+    filterable: row.filterable ?? 1,
+    changeable: row.changeable ?? 0,
+    styleType: row.style?.type || '',
+    styleRatio: row.style?.ratio ?? '',
+    order: row.order ?? '',
+    timeout: row.timeout ?? '',
+    indexs: row.indexs ?? 0,
+    playUrl: row.playUrl ?? '',
+    click: row.click ?? '',
+    categories: Array.isArray(row.categories) ? [...row.categories] : [],
+    headerPairs,
+  })
+  siteAdvancedVisible.value = true
+}
+
+function confirmSiteAdvanced() {
+  const row = siteAdvancedRow.value
+  if (!row) return
+  const headerObj: any = {}
+  for (const p of siteAdvancedForm.headerPairs || []) {
+    if (p.name) headerObj[p.name] = p.value || ''
+  }
+  row.ext = siteAdvancedForm.ext || undefined
+  row.searchable = siteAdvancedForm.searchable
+  row.quickSearch = siteAdvancedForm.quickSearch
+  row.filterable = siteAdvancedForm.filterable
+  row.changeable = siteAdvancedForm.changeable
+  if (siteAdvancedForm.styleType) {
+    row.style = { type: siteAdvancedForm.styleType, ratio: Number(siteAdvancedForm.styleRatio) || undefined }
+  } else {
+    row.style = undefined
+  }
+  row.order = siteAdvancedForm.order ?? ''
+  row.timeout = siteAdvancedForm.timeout || undefined
+  row.indexs = siteAdvancedForm.indexs || undefined
+  row.playUrl = siteAdvancedForm.playUrl || undefined
+  row.click = siteAdvancedForm.click || undefined
+  row.categories = siteAdvancedForm.categories.length ? [...siteAdvancedForm.categories] : undefined
+  row.header = Object.keys(headerObj).length ? headerObj : undefined
+  row.hasAdvancedOverride = true
+  siteAdvancedVisible.value = false
 }
 
 function openParseForm() {

@@ -64,6 +64,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1230,15 +1231,22 @@ public class SubscriptionService {
                 if (source.builtin()) {
                     Map<String, Object> site = buildSite(token, secret, uid, source.siteKey(), source.name());
                     site.put("order", order);
+                    // key transformation for csp_Push (needed before override lookup)
+                    if ("csp_Push".equals(source.siteKey())) {
+                        site.put("key", "push_agent");
+                    }
+                    // apply user override from config.sites (partial entry added by overrideConfig)
+                    String overrideKey = (String) site.get("key");
+                    boolean overridden = applySiteOverride(overrideKey, site, sites);
+                    // special defaults when no user override
+                    if (("csp_TgDouBan".equals(source.siteKey()) || "csp_Push".equals(source.siteKey())) && !overridden) {
+                        site.put("searchable", 0);
+                        site.put("quickSearch", 0);
+                    }
+                    // remove upstream duplicates (after override consumed)
                     if ("csp_AList".equals(source.siteKey())) {
                         sites.removeIf(item -> "Alist".equals(item.get("key")));
-                    } else if ("csp_TgDouBan".equals(source.siteKey())) {
-                        site.put("searchable", 0);
-                        site.put("quickSearch", 0);
                     } else if ("csp_Push".equals(source.siteKey())) {
-                        site.put("key", "push_agent");
-                        site.put("searchable", 0);
-                        site.put("quickSearch", 0);
                         sites.removeIf(item -> "push_agent".equals(item.get("key")));
                     }
                     sites.add(id++, site);
@@ -1246,6 +1254,8 @@ public class SubscriptionService {
                 } else if (source.plugin() != null) {
                     Map<String, Object> site = buildPluginSite(source.plugin(), token, secret);
                     site.put("order", order);
+                    String overrideKey = (String) site.get("key");
+                    applySiteOverride(overrideKey, site, sites);
                     sites.add(id++, site);
                 }
                 order += 10;
@@ -1254,6 +1264,32 @@ public class SubscriptionService {
             }
         }
         return order;
+    }
+
+    /**
+     * Find a partial site entry in config.sites (added by overrideConfig for builtin/plugin keys)
+     * and merge its override fields into the fully-built site, then remove the partial entry.
+     * @return true if an override was found and applied
+     */
+    private boolean applySiteOverride(String key, Map<String, Object> site, List<Map<String, Object>> sites) {
+        Iterator<Map<String, Object>> it = sites.iterator();
+        while (it.hasNext()) {
+            Map<String, Object> existing = it.next();
+            if (key.equals(existing.get("key"))) {
+                // merge ext maps if both are maps
+                Object ext1 = site.get("ext");
+                Object ext2 = existing.get("ext");
+                if (ext1 instanceof Map extMap1 && ext2 instanceof Map extMap2) {
+                    extMap1.putAll(extMap2);
+                    existing.put("ext", extMap1);
+                }
+                site.putAll(existing);
+                it.remove();
+                log.debug("apply site override for builtin/plugin: {}", key);
+                return true;
+            }
+        }
+        return false;
     }
 
     public Map<String, Boolean> getCapabilities() {
