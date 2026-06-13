@@ -375,3 +375,23 @@ test('pickExtra: returns unmodeled keys only', () => {
   assert.deepEqual(pickExtra(null, ['a']), {})
   assert.deepEqual(pickExtra([1, 2], ['a']), {})
 })
+
+test('serialize: custom site preserves unknown fields + homePage, no internal leak', () => {
+  const state = {
+    ...defaultState(),
+    sites: [{
+      key: 'mine', origin: 'custom', enabled: true, isCustom: true,
+      name: '自定义', type: 3, api: 'csp_X',
+      homePage: 'http://h/6v.html', hide: 1, extensions: { a: 1 },
+      originalName: '自定义', styleType: '', styleRatio: '',
+    }],
+  }
+  const out = serialize({}, state)
+  const s = out.sites.find((x) => x.key === 'mine')
+  assert.equal(s.homePage, 'http://h/6v.html')
+  assert.equal(s.hide, 1)
+  assert.deepEqual(s.extensions, { a: 1 })
+  assert.equal(s.styleType, undefined)
+  assert.equal(s.isCustom, undefined)
+  assert.equal(s.enabled, undefined)
+})

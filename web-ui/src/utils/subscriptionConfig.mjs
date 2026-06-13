@@ -72,15 +72,16 @@ export function customSites(config, catalogKeys) {
   return config.sites.filter((s) => s && s.key != null && !set.has(String(s.key)))
 }
 
-const CUSTOM_SITE_KEYS = [
-  'key', 'name', 'type', 'api', 'ext', 'jar', 'searchable', 'quickSearch',
-  'filterable', 'changeable', 'indexs', 'timeout', 'order', 'style',
-  'categories', 'header', 'playUrl', 'click',
-]
+const SITE_INTERNAL_KEYS = new Set([
+  'isCustom', 'origin', 'enabled', 'originalName', 'hadNameOverride',
+  'hasAdvancedOverride', 'styleType', 'styleRatio', '_extra',
+])
 
+// 自定义站点:发射除内部 UI 键外的所有非空键 (保留 homePage/hide/extensions 等全部业务字段)
 function buildCustomSite(row) {
   const s = {}
-  for (const k of CUSTOM_SITE_KEYS) {
+  for (const k of Object.keys(row)) {
+    if (SITE_INTERNAL_KEYS.has(k)) continue
     const v = row[k]
     if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) continue
     if (k === 'order') {
