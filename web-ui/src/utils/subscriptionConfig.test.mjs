@@ -9,6 +9,7 @@ import {
   siteOverrideMap,
   serialize,
   stringify,
+  pickExtra,
   buildHeaderRows,
   buildLiveRows,
   buildDohRows,
@@ -366,4 +367,11 @@ test('serialize: empty doh/proxy/rules/hosts are deleted', () => {
   assert.equal(out.proxy, undefined)
   assert.equal(out.rules, undefined)
   assert.equal(out.hosts, undefined)
+})
+
+test('pickExtra: returns unmodeled keys only', () => {
+  assert.deepEqual(pickExtra({ a: 1, b: 2, c: 3 }, ['a', 'c']), { b: 2 })
+  assert.deepEqual(pickExtra({}, ['a']), {})
+  assert.deepEqual(pickExtra(null, ['a']), {})
+  assert.deepEqual(pickExtra([1, 2], ['a']), {})
 })

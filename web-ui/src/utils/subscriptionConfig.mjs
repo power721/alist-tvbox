@@ -16,6 +16,17 @@ export function stringify(config) {
   return JSON.stringify(config)
 }
 
+// 返回 obj 中不在 modeledKeys 内的所有键 (raw 透传袋)
+export function pickExtra(obj, modeledKeys) {
+  const extra = {}
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return extra
+  const set = new Set(modeledKeys)
+  for (const k of Object.keys(obj)) {
+    if (!set.has(k)) extra[k] = obj[k]
+  }
+  return extra
+}
+
 export function detectFilterMode(config) {
   const wl = config['sites-whitelist']
   if (Array.isArray(wl) && wl.length) return 'whitelist'

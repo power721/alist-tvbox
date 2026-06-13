@@ -1,6 +1,7 @@
 declare module '@/utils/subscriptionConfig.mjs' {
   export function parseOverride(text: string): Record<string, any> | null
   export function stringify(config: Record<string, any>): string
+  export function pickExtra(obj: Record<string, any>, modeledKeys: string[]): Record<string, any>
   export function detectFilterMode(config: Record<string, any>): string
   export function disabledSiteKeys(config: Record<string, any>): string[]
   export function whitelistKeys(config: Record<string, any>): string[]
