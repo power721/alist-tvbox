@@ -395,3 +395,32 @@ test('serialize: custom site preserves unknown fields + homePage, no internal le
   assert.equal(s.isCustom, undefined)
   assert.equal(s.enabled, undefined)
 })
+
+test('serialize: non-custom site preserves _extra and emits homePage', () => {
+  const state = {
+    ...defaultState(),
+    sites: [{
+      key: 'a', origin: 'upstream', enabled: true, isCustom: false,
+      name: 'A', originalName: 'A', order: '',
+      _extra: { hide: 1, extensions: { x: 1 } },
+      hasAdvancedOverride: true, homePage: 'http://h/6v.html', searchable: 1,
+    }],
+  }
+  const out = serialize({}, state)
+  const s = out.sites.find((x) => x.key === 'a')
+  assert.equal(s.homePage, 'http://h/6v.html')
+  assert.equal(s.hide, 1)
+  assert.deepEqual(s.extensions, { x: 1 })
+})
+
+test('serialize: non-custom site with only _extra is still emitted', () => {
+  const state = {
+    ...defaultState(),
+    sites: [{
+      key: 'b', origin: 'builtin', enabled: true, isCustom: false,
+      name: 'B', originalName: 'B', order: '', _extra: { hide: 1 },
+    }],
+  }
+  const out = serialize({}, state)
+  assert.equal(out.sites.find((x) => x.key === 'b').hide, 1)
+})

@@ -316,7 +316,7 @@ function setArrOrDelete(config, key, value) {
 // 把编辑器状态写回 config(保留未建模键)
 const ADVANCED_OVERRIDE_KEYS = [
   'ext', 'searchable', 'quickSearch', 'filterable', 'changeable',
-  'style', 'timeout', 'indexs', 'playUrl', 'click', 'categories', 'header',
+  'style', 'timeout', 'indexs', 'playUrl', 'click', 'categories', 'header', 'homePage',
 ]
 
 function buildAdvancedOverride(row) {
@@ -338,7 +338,7 @@ export function serialize(baseConfig, state) {
     if (row.isCustom) {
       sites.push(buildCustomSite(row))
     } else {
-      const o = {}
+      const o = { ...(row._extra || {}) }
       if (row.name && row.name !== row.originalName) o.name = row.name
       else if (row.hadNameOverride && row.name) o.name = row.name
       if (row.order !== '' && row.order !== null && row.order !== undefined) o.order = Number(row.order)

@@ -579,6 +579,7 @@ import {
   siteOverrideMap,
   serialize,
   stringify,
+  pickExtra,
   buildHeaderRows,
   buildLiveRows,
   buildDohRows,
@@ -724,7 +725,7 @@ function buildRows(config: Record<string, any>, catalog: any) {
 
   const ADVANCED_KEYS = [
     'ext', 'searchable', 'quickSearch', 'filterable', 'changeable',
-    'style', 'timeout', 'indexs', 'playUrl', 'click', 'categories', 'header',
+    'style', 'timeout', 'indexs', 'playUrl', 'click', 'categories', 'header', 'homePage',
   ]
   function applyAdvancedOverride(row: any, ov: any) {
     let hasAdvanced = false
@@ -752,6 +753,7 @@ function buildRows(config: Record<string, any>, catalog: any) {
       order: ov.order != null ? ov.order : '',
     }
     applyAdvancedOverride(row, ov)
+    row._extra = pickExtra(ov, [...ADVANCED_KEYS, 'name', 'order'])
     rows.push(row)
   }
   // catalog 缺失但被禁用/白名单引用的 key -> 合成行
@@ -766,6 +768,7 @@ function buildRows(config: Record<string, any>, catalog: any) {
         order: ov.order != null ? ov.order : '',
       }
       applyAdvancedOverride(row, ov)
+      row._extra = pickExtra(ov, [...ADVANCED_KEYS, 'name', 'order'])
       rows.push(row)
       known.add(key)
     }
