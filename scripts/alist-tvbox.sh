@@ -227,6 +227,26 @@ get_container_config() {
     echo -e "${CYAN}已从现有容器加载配置${NC}"
 }
 
+# 从现存容器同步运行时配置（镜像/网络/端口/重启策略）到内存 CONFIG，
+# 用于显示真实状态——即使用户绕过脚本手动改动了容器（如切换版本、host<->bridge）。
+# 故意不覆盖 BASE_DIR（以免影响 install/update 的迁移逻辑），也不写回 app.conf。
+sync_runtime_config() {
+  local name="" n
+  for n in "$(get_container_name)" "$(get_opposite_container_name)"; do
+    [[ -n "$n" ]] || continue
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${n}\$"; then
+      name="$n"
+      break
+    fi
+  done
+  [[ -n "$name" ]] || return 1
+
+  local saved_base="${CONFIG[BASE_DIR]:-}"
+  get_container_config "$name" >/dev/null
+  [[ -n "$saved_base" ]] && CONFIG["BASE_DIR"]="$saved_base"
+  return 0
+}
+
 get_image_id_from_name() {
   local image="$1"
   local key candidate
@@ -435,6 +455,7 @@ start_container() {
 
 # 显示访问信息
 show_access_info() {
+  sync_runtime_config || true
   local container_name=$(get_container_name)
   local ip=$(get_host_ip)
 
@@ -460,6 +481,7 @@ show_access_info() {
 # 显示交互式菜单
 show_menu() {
   clear
+  sync_runtime_config || true
   local status=$(check_container_status)
   local container_name=$(get_container_name)
   local sys=$(uname -mor)
@@ -1004,6 +1026,7 @@ check_alist_status() {
 }
 
 check_status() {
+  sync_runtime_config || true
   local status=$(check_container_status)
   if [[ "$status" != "running" ]]; then
     echo -e "${YELLOW}容器不存在${NC}"
@@ -1334,6 +1357,7 @@ check_url() {
 }
 
 health_check() {
+  sync_runtime_config || true
   local ip
   ip="$(get_host_ip)"
   ip="${ip:-localhost}"
