@@ -26,7 +26,33 @@ declare -A VERSIONS=(
 # 默认配置
 CONFIG_FILE="$HOME/.config/alist-tvbox/app.conf"
 
-# 初始化基础目录
+detect_best_base_dir() {
+  local best_path="/opt/alist-tvbox"
+  local best_size=0
+
+  local candidates=(
+    "/volume1/docker/alist-tvbox"
+    "/volume2/docker/alist-tvbox"
+    "/volume3/docker/alist-tvbox"
+    "/share/CACHEDEV1_DATA/docker/alist-tvbox"
+    "/share/CACHEDEV2_DATA/docker/alist-tvbox"
+  )
+
+  for p in "${candidates[@]}"; do
+    local base
+    base="$(dirname "$p")"
+    if [[ -d "$base" ]]; then
+      local avail
+      avail="$(df -P "$base" 2>/dev/null | awk 'NR==2 {print $4}')"
+      if [[ -n "$avail" && "$avail" =~ ^[0-9]+$ && "$avail" -gt "$best_size" ]]; then
+        best_size="$avail"
+        best_path="$p"
+      fi
+    fi
+  done
+
+  echo "$best_path"
+}
 detect_base_dir() {
     if [[ -f "/proc/sys/kernel/syno_hw_version" ]]; then
         echo "/volume1/docker/alist-tvbox"
@@ -34,6 +60,9 @@ detect_base_dir() {
         echo "/opt/alist-tvbox"
     fi
 }
+
+# 初始化基础目录
+
 
 DEFAULT_BASE_DIR=$(detect_base_dir)
 
@@ -350,7 +379,11 @@ start_container() {
   # 确保数据目录存在
   mkdir -p "${CONFIG[BASE_DIR]}"
 
-  [ "${CONFIG[GITHUB_PROXY]}" = "" ] || echo "${CONFIG[GITHUB_PROXY]}" > "${CONFIG[BASE_DIR]}/github_proxy.txt"
+  if [[ -n "${CONFIG[GITHUB_PROXY]}" ]]; then
+    echo "${CONFIG[GITHUB_PROXY]}" > "${CONFIG[BASE_DIR]}/github_proxy.txt"
+  else
+    rm -f "${CONFIG[BASE_DIR]}/github_proxy.txt"
+  fi
 
   # 统一构造 docker run 参数：用条件追加而非展开可能为空的数组，
   # 避免在 set -u 下（NAS 常见的 bash 4.3 及更早版本）报 "unbound variable"
@@ -519,9 +552,10 @@ migrate_legacy_data() {
   if [[ -d "$legacy_dir" && -z "$(ls -A "$new_dir" 2>/dev/null)" ]]; then
     echo -e "${YELLOW}检测到旧目录，正在迁移: $legacy_dir -> $new_dir${NC}"
     cp -a "$legacy_dir/." "$new_dir/" 2>/dev/null || true
+    touch "$new_dir/.v3"
+  elif [[ -d "$legacy_dir" ]]; then
+    touch "$new_dir/.v3"
   fi
-
-  touch "$new_dir/.v3"
 
   if [[ "${CONFIG[BASE_DIR]}" == "$legacy_dir" ]]; then
     CONFIG["BASE_DIR"]="$new_dir"
@@ -583,11 +617,18 @@ check_update() {
   fi
 
   local image="${CONFIG[IMAGE_NAME]}"
+  local platform=""
+
+  if [[ $(uname -m) == "aarch64" || $(uname -m) == "arm64" ]]; then
+    platform="--platform=linux/arm64"
+    echo -e "${CYAN}检测到 ARM64 平台，强制使用 arm64 镜像${NC}"
+  fi
+
   echo -e "${CYAN}正在检查镜像更新...${NC}"
 
   local current_id=$(docker images --quiet "$image")
   echo -e "${CYAN}正在拉取镜像: ${CONFIG[IMAGE_NAME]}${NC}"
-  if ! docker pull "${CONFIG[IMAGE_NAME]}" >/dev/null; then
+  if ! docker pull $platform "${CONFIG[IMAGE_NAME]}" >/dev/null; then
     echo -e "${RED}镜像拉取失败!${NC}"
     return 1
   fi
@@ -915,28 +956,24 @@ get_host_ip() {
 
 # 检查 AList 运行状态
 check_alist_status() {
-  local ip=$(get_host_ip)
+  local ip
+  ip="$(get_host_ip)"
   local port="${CONFIG[PORT1]}"
-  local api_url="http://$ip:$port/api/alist/status"
+  local api_url="http://${ip:-localhost}:$port/api/alist/status"
 
   echo -e "${CYAN}正在检查 AList 状态...${NC}"
 
-  # 使用 curl 调用 API
-  local status_code
-  if status_code=$(curl -s --connect-timeout 3 "$api_url"); then
+  local response
+  if response="$(curl -fsS --connect-timeout 3 "$api_url" 2>/dev/null)"; then
+    local status_code
+    status_code="$(printf '%s' "$response" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*\([0-9]\+\).*/\1/p')"
+    [[ -z "$status_code" ]] && status_code="$(printf '%s' "$response" | tr -d '\n' | sed -n 's/^\([0-9]\+\)$/\1/p')"
+
     case "$status_code" in
-      0)
-        echo -e "AList 状态: ${RED}未启动${NC}"
-        ;;
-      1)
-        echo -e "AList 状态: ${YELLOW}启动中...${NC}"
-        ;;
-      2)
-        echo -e "AList 状态: ${GREEN}已启动${NC}"
-        ;;
-      *)
-        echo -e "AList 状态: ${RED}未知状态码: $status_code${NC}"
-        ;;
+      0) echo -e "AList 状态: ${RED}未启动${NC}" ;;
+      1) echo -e "AList 状态: ${YELLOW}启动中...${NC}" ;;
+      2) echo -e "AList 状态: ${GREEN}已启动${NC}" ;;
+      *) echo -e "AList 状态: ${RED}未知状态: ${response}${NC}" ;;
     esac
   else
     echo -e "AList 状态: ${RED}无法连接到管理应用${NC}"
@@ -1215,37 +1252,11 @@ show_config_menu() {
 # ENVIRONMENT INIT / HEALTH
 # =========================
 
-detect_best_base_dir() {
-  local best_path="/opt/alist-tvbox"
-  local best_size=0
 
-  local candidates=(
-    "/volume1/docker/alist-tvbox"
-    "/volume2/docker/alist-tvbox"
-    "/volume3/docker/alist-tvbox"
-    "/share/CACHEDEV1_DATA/docker/alist-tvbox"
-    "/share/CACHEDEV2_DATA/docker/alist-tvbox"
-  )
-
-  for p in "${candidates[@]}"; do
-    local base
-    base="$(dirname "$p")"
-    if [[ -d "$base" ]]; then
-      local avail
-      avail="$(df -P "$base" 2>/dev/null | awk 'NR==2 {print $4}')"
-      if [[ -n "$avail" && "$avail" =~ ^[0-9]+$ && "$avail" -gt "$best_size" ]]; then
-        best_size="$avail"
-        best_path="$p"
-      fi
-    fi
-  done
-
-  echo "$best_path"
-}
 
 is_default_or_legacy_base_dir() {
   local dir="${1:-}"
-  [[ -z "$dir" || "$dir" == "/etc/xiaoya" || "$dir" == "/opt/alist-tvbox" || "$dir" == "/opt/alist-tvbox" ]]
+  [[ -z "$dir" || "$dir" == "/etc/xiaoya" || "$dir" == "/opt/xiaoya" ]]
 }
 
 check_port_conflict() {
@@ -1268,9 +1279,15 @@ check_port_conflict() {
 }
 
 init_environment() {
-  # 如果是旧路径或默认路径，按当前环境重新选择最合适的数据目录：
-  # NAS/QNAP/Synology 优先 /volume*/docker 或 /share/CACHEDEV*_DATA/docker；
-  # 普通 Linux 使用 /opt/alist-tvbox。
+  local allow_mutation="${1:-false}"
+
+  if [[ "$allow_mutation" != "true" ]]; then
+    check_port_conflict
+    return 0
+  fi
+
+  # 只在 install/update/menu 等写操作路径中修正旧路径；
+  # status/logs/health 等只读命令不应改写 app.conf。
   if is_default_or_legacy_base_dir "${CONFIG[BASE_DIR]:-}"; then
     CONFIG["BASE_DIR"]="$(detect_best_base_dir)"
     save_config
@@ -1320,7 +1337,9 @@ auto_repair() {
     running="$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null || echo false)"
     if [[ "$running" != "true" ]]; then
       echo -e "${YELLOW}容器未运行，正在启动...${NC}"
-      docker start "$container_name" >/dev/null
+      if ! docker start "$container_name" >/dev/null; then
+        echo -e "${RED}容器启动失败，请查看日志：docker logs -f $container_name${NC}"
+      fi
     else
       echo -e "${GREEN}容器正在运行${NC}"
     fi
@@ -1334,7 +1353,7 @@ auto_repair() {
 interactive_mode() {
   check_environment
   load_config
-  init_environment
+  init_environment true
 
   while true; do
     show_menu
@@ -1430,15 +1449,40 @@ interactive_mode() {
   done
 }
 
+
+is_safe_data_dir() {
+  local dir="${1:-}"
+
+  [[ -n "$dir" ]] || return 1
+  [[ "$dir" != "/" ]] || return 1
+  [[ "$dir" != "/home" && "$dir" != "/etc" && "$dir" != "/opt" && "$dir" != "/usr" && "$dir" != "/var" ]] || return 1
+  [[ "$dir" != "$HOME" ]] || return 1
+
+  case "$dir" in
+    /opt/alist-tvbox|/opt/alist-tvbox/*) return 0 ;;
+    /volume*/docker/alist-tvbox|/volume*/docker/alist-tvbox/*) return 0 ;;
+    /share/CACHEDEV*_DATA/docker/alist-tvbox|/share/CACHEDEV*_DATA/docker/alist-tvbox/*) return 0 ;;
+    "$PWD"/alist-tvbox|"$PWD"/alist-tvbox/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+confirm_delete_data_dir() {
+  local dir="$1"
+  echo -e "${RED}危险操作：将删除数据目录：$dir${NC}"
+  read -p "请输入 DELETE 确认删除: " confirm
+  [[ "$confirm" == "DELETE" ]]
+}
+
 # 命令行模式处理
 cli_mode() {
   check_environment
   load_config
-  init_environment
   local container_name=$(get_container_name)
 
   case "$1" in
     install)
+      init_environment true
       install_container
       ;;
     start)
@@ -1463,7 +1507,6 @@ cli_mode() {
       }
       ;;
     status)
-      local status=$(check_container_status)
       check_status
       ;;
     logs)
@@ -1481,11 +1524,16 @@ cli_mode() {
         echo -e "${RED}容器不存在${NC}"
       }
       if [[ "$#" -ge 2 && "$2" == "-f" ]]; then
-       echo -e "${RED}删除安装目录：${CONFIG[BASE_DIR]}${NC}"
-       rm -rf "${CONFIG[BASE_DIR]}"
+       if is_safe_data_dir "${CONFIG[BASE_DIR]}" && confirm_delete_data_dir "${CONFIG[BASE_DIR]}"; then
+         echo -e "${RED}删除安装目录：${CONFIG[BASE_DIR]}${NC}"
+         rm -rf -- "${CONFIG[BASE_DIR]}"
+       else
+         echo -e "${YELLOW}已取消删除数据目录，或目录不在安全白名单内：${CONFIG[BASE_DIR]}${NC}"
+       fi
       fi
       ;;
     update)
+      init_environment true
       if [[ "$#" -ge 2 && "$2" == "-y" ]]; then
         check_update "-y"
       else
