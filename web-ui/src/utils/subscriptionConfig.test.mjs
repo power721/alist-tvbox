@@ -459,3 +459,17 @@ test('rules round-trip unknown fields', () => {
   const out = serialize({}, { ...defaultState(), rules: rows })
   assert.equal(out.rules[0].enabled, true)
 })
+
+test('lives preserve unknown live/group/channel fields', () => {
+  const rows = buildLiveRows({ lives: [{
+    name: 'L', url: './live.json', customField: 'lf',
+    groups: [{ name: 'G', gExtra: 1, channel: [{ name: 'C', urls: ['u'], cExtra: 2 }] }],
+  }] })
+  assert.equal(rows[0]._extra.customField, 'lf')
+  assert.equal(rows[0].groups[0]._extra.gExtra, 1)
+  assert.equal(rows[0].groups[0].channels[0]._extra.cExtra, 2)
+  const out = serialize({}, { ...defaultState(), lives: rows })
+  assert.equal(out.lives[0].customField, 'lf')
+  assert.equal(out.lives[0].groups[0].gExtra, 1)
+  assert.equal(out.lives[0].groups[0].channel[0].cExtra, 2)
+})

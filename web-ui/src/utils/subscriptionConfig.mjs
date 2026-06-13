@@ -125,6 +125,7 @@ function normalizeGroup(g) {
     name: g.name || '',
     pass: g.pass ?? 0,
     channels: Array.isArray(g.channel) ? g.channel.map(normalizeChannel) : [],
+    _extra: pickExtra(g, ['name', 'pass', 'channel']),
   }
 }
 
@@ -146,6 +147,7 @@ function normalizeChannel(c) {
     header: c.header && typeof c.header === 'object' ? { ...c.header } : {},
     catchup: c.catchup || null,
     drm: c.drm || null,
+    _extra: pickExtra(c, CHANNEL_KEYS),
   }
 }
 
@@ -174,6 +176,7 @@ export function buildLiveRows(config) {
       boot: l.boot ?? 0,
       pass: l.pass ?? 0,
       groups: Array.isArray(l.groups) ? l.groups.map(normalizeGroup) : [],
+      _extra: pickExtra(l, LIVE_KEYS),
     }))
 }
 
@@ -189,7 +192,7 @@ const CHANNEL_KEYS = [
 ]
 
 function buildChannelItem(c) {
-  const item = {}
+  const item = { ...(c._extra || {}) }
   for (const k of CHANNEL_KEYS) {
     if (k === 'header') {
       if (c.header && typeof c.header === 'object' && Object.keys(c.header).length) item.header = { ...c.header }
@@ -209,7 +212,7 @@ function buildChannelItem(c) {
 function buildGroupsArray(groups) {
   if (!Array.isArray(groups)) return []
   return groups.map((g) => {
-    const item = {}
+    const item = { ...(g._extra || {}) }
     if (g.name) item.name = g.name
     if (g.pass) item.pass = g.pass
     const channels = buildChannelsArray(g.channels)
@@ -225,7 +228,7 @@ function buildChannelsArray(channels) {
 
 function buildLiveItem(row) {
   if (!row.name && !row.url && !row.api) return null
-  const item = {}
+  const item = { ...(row._extra || {}) }
   for (const k of LIVE_KEYS) {
     if (k === 'groups') {
       const groups = buildGroupsArray(row.groups)
