@@ -549,20 +549,43 @@ migrate_legacy_data() {
     return 0
   fi
 
-  if [[ -d "$legacy_dir" && -z "$(ls -A "$new_dir" 2>/dev/null)" ]]; then
-    echo -e "${YELLOW}检测到旧目录，正在迁移: $legacy_dir -> $new_dir${NC}"
-    cp -a "$legacy_dir/." "$new_dir/" 2>/dev/null || true
+  # 目标目录已有数据则不覆盖，直接标记完成
+  if [[ -n "$(ls -A "$new_dir" 2>/dev/null)" ]]; then
     touch "$new_dir/.v3"
-  elif [[ -d "$legacy_dir" ]]; then
-    touch "$new_dir/.v3"
+    echo -e "${GREEN}目标目录已有数据，跳过迁移${NC}"
+    return 0
   fi
 
-  if [[ "${CONFIG[BASE_DIR]}" == "$legacy_dir" ]]; then
-    CONFIG["BASE_DIR"]="$new_dir"
-    save_config
-  fi
+  # 从现存容器的 /data 挂载反推用户实际使用的数据目录。
+  # 只有当现存容器确实把 /data 绑定到 /etc/xiaoya 时才迁移，
+  # 不假设用户数据一定在 /etc/xiaoya。
+  local bound_source=""
+  local name
+  for name in "$(get_container_name)" "$(get_opposite_container_name)"; do
+    [[ -n "$name" ]] || continue
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${name}\$"; then
+      bound_source="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' "$name" 2>/dev/null)"
+      [[ -n "$bound_source" ]] && break
+    fi
+  done
 
-  echo -e "${GREEN}迁移完成${NC}"
+  if [[ "$bound_source" == "$legacy_dir" && -d "$legacy_dir" && "$new_dir" != "$legacy_dir" ]]; then
+    echo -e "${YELLOW}检测到容器数据目录为旧路径，正在迁移: $legacy_dir -> $new_dir${NC}"
+    if cp -a "$legacy_dir/." "$new_dir/"; then
+      touch "$new_dir/.v3"
+      echo -e "${GREEN}迁移完成${NC}"
+    else
+      # 清理半成品，避免下次因目标非空被跳过而残留不完整数据
+      if [[ -n "$new_dir" && "$new_dir" != "/" ]]; then
+        find "$new_dir" -mindepth 1 -delete 2>/dev/null || true
+      fi
+      echo -e "${RED}迁移失败：已清理目标目录，请检查权限（可能需要 root）后重试，或手动复制 $legacy_dir -> $new_dir${NC}"
+      return 1
+    fi
+  else
+    touch "$new_dir/.v3"
+    echo -e "${GREEN}未检测到绑定 /etc/xiaoya 的容器，无需迁移${NC}"
+  fi
 }
 
 
@@ -1256,7 +1279,9 @@ show_config_menu() {
 
 is_default_or_legacy_base_dir() {
   local dir="${1:-}"
-  [[ -z "$dir" || "$dir" == "/etc/xiaoya" || "$dir" == "/opt/xiaoya" ]]
+  # 仅把 /etc/xiaoya（旧版默认路径）和空值视为“未选定”，允许重新探测；
+  # 其它路径一律视为用户已选定，避免把用户数据目录改写后孤立其数据。
+  [[ -z "$dir" || "$dir" == "/etc/xiaoya" ]]
 }
 
 check_port_conflict() {

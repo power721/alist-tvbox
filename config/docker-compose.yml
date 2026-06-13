@@ -9,8 +9,8 @@ services:
       ALIST_PORT: 5344
       MEM_OPT: -Xmx512M
     volumes:
-      - /etc/xiaoya:/data
-      - tvbox-www-static:/www/static
+      - /opt/alist-tvbox/data:/data
+      - /opt/alist-tvbox/www-static:/www/static
     ports:
       - "4567:4567"
       - "5344:80"
