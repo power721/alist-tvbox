@@ -895,7 +895,7 @@ function openSiteAdvanced(row: any) {
     type: row.type ?? 3,
     api: row.api ?? '',
     jar: row.jar ?? '',
-    ext: row.ext ?? '',
+    ext: typeof row.ext === 'object' && row.ext !== null ? JSON.stringify(row.ext, null, 2) : (row.ext ?? ''),
     searchable: row.searchable ?? 1,
     quickSearch: row.quickSearch ?? 1,
     filterable: row.filterable ?? 1,
@@ -932,7 +932,11 @@ function confirmSiteAdvanced() {
   for (const p of siteAdvancedForm.headerPairs || []) {
     if (p.name) headerObj[p.name] = p.value || ''
   }
-  row.ext = siteAdvancedForm.ext || undefined
+  let ext = siteAdvancedForm.ext || undefined
+  if (typeof ext === 'string' && ext.trim().startsWith('{')) {
+    try { ext = JSON.parse(ext) } catch { /* keep string */ }
+  }
+  row.ext = ext
   row.searchable = siteAdvancedForm.searchable
   row.quickSearch = siteAdvancedForm.quickSearch
   row.filterable = siteAdvancedForm.filterable
