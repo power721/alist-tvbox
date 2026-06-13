@@ -401,6 +401,44 @@ check_image_update() {
   fi
 }
 
+# 把旧的命名卷 tvbox-www-static 中的静态文件一次性迁移到绑定目录
+# ${CONFIG[BASE_DIR]}/www-static。仅在命名卷存在、目标为空时复制，幂等。
+migrate_www_static() {
+  local volume="tvbox-www-static"
+  local target="${CONFIG[BASE_DIR]}/www-static"
+  local marker="${CONFIG[BASE_DIR]}/.www-static-migrated"
+
+  mkdir -p "$target"
+
+  # 已迁移过则跳过
+  [[ -f "$marker" ]] && return 0
+
+  # 旧命名卷不存在，无需迁移
+  if ! docker volume inspect "$volume" >/dev/null 2>&1; then
+    touch "$marker"
+    return 0
+  fi
+
+  # 目标已有数据则不覆盖，仅标记完成
+  if [[ -n "$(ls -A "$target" 2>/dev/null)" ]]; then
+    touch "$marker"
+    return 0
+  fi
+
+  echo -e "${YELLOW}正在迁移静态文件: 命名卷 $volume -> $target${NC}"
+  if docker run --rm \
+      -v "${volume}:/from:ro" \
+      -v "${target}:/to" \
+      --entrypoint sh \
+      "${CONFIG[IMAGE_NAME]}" -c "cp -a /from/. /to/" 2>/dev/null; then
+    touch "$marker"
+    echo -e "${GREEN}静态文件迁移完成${NC}"
+  else
+    echo -e "${RED}静态文件迁移失败：请手动从卷 $volume 复制到 $target${NC}"
+    return 1
+  fi
+}
+
 # 启动容器
 start_container() {
   local image="${CONFIG[IMAGE_NAME]}"
@@ -409,6 +447,7 @@ start_container() {
 
   # 确保数据目录存在
   mkdir -p "${CONFIG[BASE_DIR]}"
+  migrate_www_static || true
 
   if [[ -n "${CONFIG[GITHUB_PROXY]}" ]]; then
     echo "${CONFIG[GITHUB_PROXY]}" > "${CONFIG[BASE_DIR]}/github_proxy.txt"
@@ -424,7 +463,7 @@ start_container() {
     -e ALIST_PORT="${CONFIG[PORT2]}"
     -e MEM_OPT="-Xmx512M"
     -v "${CONFIG[BASE_DIR]}":/data
-    -v tvbox-www-static:/www/static
+    -v "${CONFIG[BASE_DIR]}/www-static":/www/static
     --restart="${CONFIG[RESTART]}"
   )
 

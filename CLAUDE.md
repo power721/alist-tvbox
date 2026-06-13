@@ -32,7 +32,7 @@ mvn test -Dtest=TvBoxServiceTest#testMethodName
 
 # Docker build + run
 ./build-docker.sh
-docker run -d -p 4567:4567 -p 5344:80 -e ALIST_PORT=5344 -v /etc/xiaoya:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+docker run -d -p 4567:4567 -p 5344:80 -e ALIST_PORT=5344 -v /opt/alist-tvbox:/data --restart=always --name=xiaoya-tvbox haroldli/xiaoya-tvbox:latest
 ```
 
 Other build scripts: `build-java.sh`, `build-xiaoya.sh`, `build-hostmode.sh`, `build-app.sh`, `build-musl.sh`, `build-service.sh`.
