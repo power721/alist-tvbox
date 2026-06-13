@@ -366,7 +366,9 @@
 
     <!-- 自定义站点表单 -->
     <el-dialog v-model="siteFormVisible" title="自定义站点" width="640px" append-to-body destroy-on-close>
-      <el-form :model="siteForm" label-width="120" style="max-height: 60vh; overflow-y: auto">
+      <el-tabs v-model="siteFormActiveTab">
+        <el-tab-pane label="表单输入" name="form">
+          <el-form :model="siteForm" label-width="120" style="max-height: 60vh; overflow-y: auto">
         <el-form-item label="标识 key" required><el-input v-model="siteForm.key" placeholder="唯一标识, 不可重复" /></el-form-item>
         <el-form-item label="名称"><el-input v-model="siteForm.name" placeholder="显示名称" /></el-form-item>
         <el-form-item label="类型 type">
@@ -431,6 +433,23 @@
           </div>
         </el-form-item>
       </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="JSON输入" name="json">
+          <el-input
+            v-model="siteFormJson"
+            type="textarea"
+            :rows="20"
+            placeholder='输入 JSON 格式的站点配置，例如:
+{
+  "key": "Nostr",
+  "name": "Nostr推荐",
+  "type": 3,
+  "api": "csp_Nostr",
+  "homePage": "https://example.com/"
+}'
+          />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="siteFormVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmSiteForm">确定</el-button>
@@ -630,6 +649,8 @@ const catalogError = ref('')
 const jsonText = ref('')
 const jsonError = ref('')
 const siteFormVisible = ref(false)
+const siteFormActiveTab = ref('form')
+const siteFormJson = ref('')
 const siteAdvancedVisible = ref(false)
 const parseFormVisible = ref(false)
 const channelFormVisible = ref(false)
@@ -826,9 +847,42 @@ function buildRows(config: Record<string, any>, catalog: any) {
 
 function openSiteForm() {
   resetSiteForm()
+  siteFormActiveTab.value = 'form'
+  siteFormJson.value = ''
   siteFormVisible.value = true
 }
 function confirmSiteForm() {
+  // JSON 模式
+  if (siteFormActiveTab.value === 'json') {
+    const text = siteFormJson.value.trim()
+    if (!text) {
+      ElMessage.warning('请输入 JSON')
+      return
+    }
+    let parsed: any
+    try {
+      parsed = JSON.parse(text)
+    } catch (e) {
+      ElMessage.error('JSON 格式错误: ' + (e as Error).message)
+      return
+    }
+    if (!parsed.key) {
+      ElMessage.warning('JSON 中必须包含 key 字段')
+      return
+    }
+    const row: any = {
+      ...parsed,
+      origin: 'custom',
+      isCustom: true,
+      enabled: true,
+    }
+    siteRows.value.push(row)
+    state.sites = siteRows.value
+    siteFormVisible.value = false
+    return
+  }
+
+  // 表单模式
   if (!siteForm.key) {
     ElMessage.warning('请输入 key')
     return
