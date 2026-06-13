@@ -27,12 +27,15 @@ declare -A VERSIONS=(
 CONFIG_FILE="$HOME/.config/alist-tvbox/app.conf"
 
 # 初始化基础目录
-INITIAL_BASE_DIR="/etc/xiaoya"
-if [[ -d "$INITIAL_BASE_DIR" ]]; then
-    DEFAULT_BASE_DIR="$INITIAL_BASE_DIR"
-else
-    DEFAULT_BASE_DIR="$PWD/alist-tvbox"
-fi
+detect_base_dir() {
+    if [[ -f "/proc/sys/kernel/syno_hw_version" ]]; then
+        echo "/volume1/docker/alist-tvbox"
+    else
+        echo "/opt/alist-tvbox"
+    fi
+}
+
+DEFAULT_BASE_DIR=$(detect_base_dir)
 
 declare -A DEFAULT_CONFIG=(
   ["MODE"]="docker"
@@ -406,8 +409,9 @@ show_access_info() {
   echo -e "容器名称: ${GREEN}${container_name}${NC}"
   if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
     echo -e "管理界面: ${GREEN}http://${ip:-localhost}:4567/${NC}"
-    echo -e "AList界面: ${GREEN}http://${ip:-localhost}:5234/${NC}"
     echo -e "Nginx界面: ${GREEN}http://${ip:-localhost}:5678/${NC}"
+    echo -e "httpd服务: ${GREEN}http://${ip:-localhost}:5233/${NC}"
+    echo -e "AList界面: ${GREEN}http://${ip:-localhost}:5234/${NC}"
   else
     echo -e "管理界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT1]}/${NC}"
     echo -e "AList界面: ${GREEN}http://${ip:-localhost}:${CONFIG[PORT2]}/${NC}"
@@ -464,9 +468,11 @@ show_menu() {
   echo -e "${GREEN} 7. 选择版本${NC}"
   echo -e "${GREEN} 8. 配置管理${NC}"
   echo -e "${GREEN} 9. 检查更新${NC}"
+  echo -e "${GREEN} h. 健康检查${NC}"
+  echo -e "${GREEN} r. 自动修复${NC}"
   echo -e "${GREEN} 0. 退出${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请输入选项 [0-9]: " choice
+  read -p "请输入选项 [0-9/h/r]: " choice
 }
 
 # 检查系统架构支持
@@ -495,7 +501,39 @@ check_architecture_support() {
 }
 
 # 安装/更新容器
+
+# -------------------------
+# LEGACY MIGRATION (v3)
+# -------------------------
+migrate_legacy_data() {
+  local legacy_dir="/etc/xiaoya"
+  local new_dir="${CONFIG[BASE_DIR]:-/opt/alist-tvbox}"
+
+  mkdir -p "$new_dir"
+
+  if [[ -f "$new_dir/.v3" ]]; then
+    echo -e "${GREEN}数据已迁移，跳过${NC}"
+    return 0
+  fi
+
+  if [[ -d "$legacy_dir" && -z "$(ls -A "$new_dir" 2>/dev/null)" ]]; then
+    echo -e "${YELLOW}检测到旧目录，正在迁移: $legacy_dir -> $new_dir${NC}"
+    cp -a "$legacy_dir/." "$new_dir/" 2>/dev/null || true
+  fi
+
+  touch "$new_dir/.v3"
+
+  if [[ "${CONFIG[BASE_DIR]}" == "$legacy_dir" ]]; then
+    CONFIG["BASE_DIR"]="$new_dir"
+    save_config
+  fi
+
+  echo -e "${GREEN}迁移完成${NC}"
+}
+
+
 install_container() {
+  migrate_legacy_data
   # 先检查架构支持
   if ! check_architecture_support; then
     return 1
@@ -923,8 +961,9 @@ check_status() {
   if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
     echo -e "${YELLOW}host模式使用主机网络，无独立端口映射${NC}"
     echo -e "管理端口: ${GREEN}4567${NC}"
-    echo -e "AList端口: ${GREEN}5234${NC}"
     echo -e "Nginx端口: ${GREEN}5678${NC}"
+    echo -e "httpd端口: ${GREEN}5233${NC}"
+    echo -e "AList端口: ${GREEN}5234${NC}"
   else
     docker inspect --format \
       '{{range $p, $conf := .NetworkSettings.Ports}}{{$p}} -> {{(index $conf 0).HostPort}}{{"\n"}}{{end}}' \
@@ -1169,9 +1208,133 @@ show_config_menu() {
 }
 
 # 主循环
+
+
+
+# =========================
+# ENVIRONMENT INIT / HEALTH
+# =========================
+
+detect_best_base_dir() {
+  local best_path="/opt/alist-tvbox"
+  local best_size=0
+
+  local candidates=(
+    "/volume1/docker/alist-tvbox"
+    "/volume2/docker/alist-tvbox"
+    "/volume3/docker/alist-tvbox"
+    "/share/CACHEDEV1_DATA/docker/alist-tvbox"
+    "/share/CACHEDEV2_DATA/docker/alist-tvbox"
+  )
+
+  for p in "${candidates[@]}"; do
+    local base
+    base="$(dirname "$p")"
+    if [[ -d "$base" ]]; then
+      local avail
+      avail="$(df -P "$base" 2>/dev/null | awk 'NR==2 {print $4}')"
+      if [[ -n "$avail" && "$avail" =~ ^[0-9]+$ && "$avail" -gt "$best_size" ]]; then
+        best_size="$avail"
+        best_path="$p"
+      fi
+    fi
+  done
+
+  echo "$best_path"
+}
+
+is_default_or_legacy_base_dir() {
+  local dir="${1:-}"
+  [[ -z "$dir" || "$dir" == "/etc/xiaoya" || "$dir" == "/opt/alist-tvbox" || "$dir" == "/opt/alist-tvbox" ]]
+}
+
+check_port_conflict() {
+  local ports=()
+
+  if [[ "${CONFIG[NETWORK]:-bridge}" == "host" ]]; then
+    ports=(4567 5678 5233 5234)
+  else
+    ports=("${CONFIG[PORT1]:-4567}" "${CONFIG[PORT2]:-5344}")
+  fi
+
+  local p
+  for p in "${ports[@]}"; do
+    if command -v ss >/dev/null 2>&1 && ss -lnt 2>/dev/null | awk '{print $4}' | grep -Eq "(:|\.)${p}$"; then
+      echo -e "${YELLOW}警告：端口 $p 已被占用，容器启动可能失败${NC}"
+    elif command -v netstat >/dev/null 2>&1 && netstat -lnt 2>/dev/null | awk '{print $4}' | grep -Eq "(:|\.)${p}$"; then
+      echo -e "${YELLOW}警告：端口 $p 已被占用，容器启动可能失败${NC}"
+    fi
+  done
+}
+
+init_environment() {
+  # 如果是旧路径或默认路径，按当前环境重新选择最合适的数据目录：
+  # NAS/QNAP/Synology 优先 /volume*/docker 或 /share/CACHEDEV*_DATA/docker；
+  # 普通 Linux 使用 /opt/alist-tvbox。
+  if is_default_or_legacy_base_dir "${CONFIG[BASE_DIR]:-}"; then
+    CONFIG["BASE_DIR"]="$(detect_best_base_dir)"
+    save_config
+  fi
+
+  check_port_conflict
+}
+
+
+check_url() {
+  local name="$1"
+  local url="$2"
+
+  if curl -fsS --connect-timeout 3 "$url" >/dev/null 2>&1; then
+    echo -e "${name}: ${GREEN}OK${NC} ${url}"
+  else
+    echo -e "${name}: ${RED}FAIL${NC} ${url}"
+  fi
+}
+
+health_check() {
+  local ip
+  ip="$(get_host_ip)"
+  ip="${ip:-localhost}"
+
+  echo -e "${CYAN}============== 健康检查 ==============${NC}"
+
+  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
+    check_url "管理应用" "http://${ip}:4567/"
+    check_url "Nginx" "http://${ip}:5678/"
+    check_url "httpd" "http://${ip}:5233/"
+    check_url "AList" "http://${ip}:5234/"
+  else
+    check_url "管理应用" "http://${ip}:${CONFIG[PORT1]}/"
+    check_url "入口服务" "http://${ip}:${CONFIG[PORT2]}/"
+  fi
+}
+
+auto_repair() {
+  local container_name
+  container_name="$(get_container_name)"
+
+  echo -e "${CYAN}正在执行自动修复...${NC}"
+
+  if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    local running
+    running="$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null || echo false)"
+    if [[ "$running" != "true" ]]; then
+      echo -e "${YELLOW}容器未运行，正在启动...${NC}"
+      docker start "$container_name" >/dev/null
+    else
+      echo -e "${GREEN}容器正在运行${NC}"
+    fi
+  else
+    echo -e "${YELLOW}容器不存在，请先安装${NC}"
+  fi
+
+  health_check
+}
+
 interactive_mode() {
   check_environment
   load_config
+  init_environment
 
   while true; do
     show_menu
@@ -1247,6 +1410,14 @@ interactive_mode() {
           sleep 3
         fi
         ;;
+      h|H)
+        health_check
+        read -n 1 -s -r -p "按任意键继续..."
+        ;;
+      r|R)
+        auto_repair
+        read -n 1 -s -r -p "按任意键继续..."
+        ;;
       0)
         echo -e "${GREEN}再见!${NC}"
         exit 0
@@ -1263,6 +1434,7 @@ interactive_mode() {
 cli_mode() {
   check_environment
   load_config
+  init_environment
   local container_name=$(get_container_name)
 
   case "$1" in
@@ -1320,12 +1492,18 @@ cli_mode() {
         check_update
       fi
       ;;
+    health)
+      health_check
+      ;;
+    repair)
+      auto_repair
+      ;;
     menu)
       interactive_mode
       ;;
     *)
       echo -e "${RED}未知命令: $1${NC}"
-      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, menu"
+      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, health, repair, menu"
       exit 1
       ;;
   esac
