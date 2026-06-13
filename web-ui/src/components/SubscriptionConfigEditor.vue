@@ -444,7 +444,18 @@
         <span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px">{{ siteAdvancedRow?.key }}</span>
       </template>
       <el-form :model="siteAdvancedForm" label-width="120" style="max-height: 60vh; overflow-y: auto">
+        <template v-if="siteAdvancedRow?.isCustom">
+          <el-form-item label="标识 key" required><el-input v-model="siteAdvancedForm.key" placeholder="唯一标识, 不可重复" /></el-form-item>
+          <el-form-item label="名称"><el-input v-model="siteAdvancedForm.name" placeholder="显示名称" /></el-form-item>
+          <el-form-item label="类型 type">
+            <el-select v-model="siteAdvancedForm.type">
+              <el-option v-for="o in siteTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="接口 api"><el-input v-model="siteAdvancedForm.api" placeholder="API 端点 URL 或爬虫类名 (如 csp_MySource)" /></el-form-item>
+        </template>
         <el-form-item label="扩展 ext"><el-input v-model="siteAdvancedForm.ext" type="textarea" :rows="3" placeholder="传给爬虫的扩展数据, 可为字符串或 JSON" /></el-form-item>
+        <el-form-item v-if="siteAdvancedRow?.isCustom" label="Spider jar"><el-input v-model="siteAdvancedForm.jar" placeholder="Spider JAR 路径或 URL, 覆盖全局 spider" /></el-form-item>
         <el-form-item label="搜索 searchable">
           <el-select v-model="siteAdvancedForm.searchable">
             <el-option :value="0" label="不可搜索(0)" />
@@ -879,6 +890,11 @@ function openSiteAdvanced(row: any) {
     ? Object.entries(row.header).map(([name, value]) => ({ name, value: String(value) }))
     : []
   Object.assign(siteAdvancedForm, {
+    key: row.key ?? '',
+    name: row.name ?? '',
+    type: row.type ?? 3,
+    api: row.api ?? '',
+    jar: row.jar ?? '',
     ext: row.ext ?? '',
     searchable: row.searchable ?? 1,
     quickSearch: row.quickSearch ?? 1,
@@ -901,6 +917,17 @@ function openSiteAdvanced(row: any) {
 function confirmSiteAdvanced() {
   const row = siteAdvancedRow.value
   if (!row) return
+  if (row.isCustom) {
+    if (!siteAdvancedForm.key) {
+      ElMessage.warning('请输入 key')
+      return
+    }
+    row.key = siteAdvancedForm.key
+    row.name = siteAdvancedForm.name
+    row.type = siteAdvancedForm.type
+    row.api = siteAdvancedForm.api
+    row.jar = siteAdvancedForm.jar || undefined
+  }
   const headerObj: any = {}
   for (const p of siteAdvancedForm.headerPairs || []) {
     if (p.name) headerObj[p.name] = p.value || ''
