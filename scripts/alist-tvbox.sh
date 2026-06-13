@@ -197,6 +197,15 @@ check_existing_container() {
     fi
 }
 
+# 规整端口：去除空白/换行，仅保留纯数字；非法则回退默认值。
+# 防止从容器反推出的 HostPort 带异常字符（如换行）导致 docker run -p 解析失败。
+sanitize_port() {
+  local v="${1//[[:space:]]/}"
+  local default="$2"
+  [[ "$v" =~ ^[0-9]+$ ]] || v="$default"
+  printf '%s' "$v"
+}
+
 get_container_config() {
     local container_name="${1:-$(get_container_name)}"
 
@@ -211,10 +220,12 @@ get_container_config() {
 
     # 获取端口映射（非 host 网络时）
     if [[ "${CONFIG[NETWORK]}" != "host" ]]; then
-        CONFIG["PORT1"]=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "4567/tcp") 0).HostPort}}' "$container_name" 2>/dev/null || echo "4567")
-        local alist_port_key
+        local p1 p2 alist_port_key
+        p1="$(docker inspect --format '{{(index (index .NetworkSettings.Ports "4567/tcp") 0).HostPort}}' "$container_name" 2>/dev/null || true)"
         alist_port_key="$(get_alist_container_port "${CONFIG[IMAGE_NAME]}")"
-        CONFIG["PORT2"]=$(docker inspect --format "{{(index (index .NetworkSettings.Ports \"$alist_port_key\") 0).HostPort}}" "$container_name" 2>/dev/null || echo "5344")
+        p2="$(docker inspect --format "{{(index (index .NetworkSettings.Ports \"$alist_port_key\") 0).HostPort}}" "$container_name" 2>/dev/null || true)"
+        CONFIG["PORT1"]="$(sanitize_port "$p1" 4567)"
+        CONFIG["PORT2"]="$(sanitize_port "$p2" 5344)"
     fi
 
     # 获取重启策略
