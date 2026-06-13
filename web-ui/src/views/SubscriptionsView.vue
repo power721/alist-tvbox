@@ -113,6 +113,7 @@
 <!--        </el-form-item>-->
         <el-form-item label="定制" label-width="140">
           <el-button @click="openEditor(false)">🎨 可视化编辑</el-button>
+          <el-button @click="openRawJsonEditor">JSON编辑</el-button>
           <span class="hint">{{ form.override ? '已配置' : '未配置' }}</span>
         </el-form-item>
       </el-form>
@@ -669,6 +670,19 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="rawJsonEditorVisible" title="JSON 编辑" width="700px">
+      <el-input
+        v-model="rawJsonEditorText"
+        type="textarea"
+        :rows="20"
+        placeholder="输入 JSON 格式的订阅定制配置"
+      />
+      <template #footer>
+        <el-button @click="rawJsonEditorVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveRawJson">保存</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -857,6 +871,8 @@ const editorVisible = ref(false)
 const editorRef = ref<any>(null)
 const editorTargetIsGlobal = ref(false)
 const globalReferenceSid = ref('')
+const rawJsonEditorVisible = ref(false)
+const rawJsonEditorText = ref('')
 const plugins = ref<Plugin[]>([])
 const managedSources = ref<ManagedSource[]>([])
 const sourceFilter = ref('')
@@ -1545,6 +1561,29 @@ const openEditor = (isGlobal: boolean) => {
     loadGlobalConfig()
   }
   editorVisible.value = true
+}
+
+const openRawJsonEditor = () => {
+  rawJsonEditorText.value = form.value.override || ''
+  rawJsonEditorVisible.value = true
+}
+
+const saveRawJson = () => {
+  const text = rawJsonEditorText.value.trim()
+  if (!text) {
+    form.value.override = ''
+    rawJsonEditorVisible.value = false
+    ElMessage.success('已清空定制配置')
+    return
+  }
+  try {
+    JSON.parse(text)
+    form.value.override = text
+    rawJsonEditorVisible.value = false
+    ElMessage.success('保存成功')
+  } catch (e) {
+    ElMessage.error('JSON 格式错误: ' + (e as Error).message)
+  }
 }
 
 const saveEditor = () => {
