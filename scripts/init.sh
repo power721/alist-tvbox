@@ -38,7 +38,7 @@ init() {
 
   gh_proxy=$(head -n 1 "/data/github_proxy.txt" 2>/dev/null || echo "")
   wget -T 30 -t 2 ${gh_proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
-  wget -t 3 http://har01d.org/tvbox.zip -O tvbox.zip || \
+  wget -t 3 https://d.har01d.cn/tvbox.zip -O tvbox.zip || \
   cp /tvbox.zip ./
 
   unzip -q -o tvbox.zip
