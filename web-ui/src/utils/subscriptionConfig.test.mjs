@@ -424,3 +424,38 @@ test('serialize: non-custom site with only _extra is still emitted', () => {
   const out = serialize({}, state)
   assert.equal(out.sites.find((x) => x.key === 'b').hide, 1)
 })
+
+test('serialize: custom parse preserves _extra', () => {
+  const out = serialize({}, { ...defaultState(), parses: [
+    { name: 'p', isCustom: true, enabled: true, type: 0, url: 'http://u', flag: [], header: {}, _extra: { ext2: 'x' } },
+  ] })
+  assert.equal(out.parses[0].ext2, 'x')
+  assert.equal(out.parses[0].name, 'p')
+})
+
+test('headers round-trip unknown fields', () => {
+  const rows = buildHeaderRows({ headers: [{ host: 'a.com', header: { X: '1' }, timeout: 5 }] })
+  assert.equal(rows[0]._extra.timeout, 5)
+  const out = serialize({}, { ...defaultState(), headers: rows })
+  assert.equal(out.headers[0].timeout, 5)
+  assert.equal(out.headers[0].host, 'a.com')
+})
+
+test('doh round-trip unknown fields', () => {
+  const rows = buildDohRows({ doh: [{ name: 'G', url: 'u', ips: [], remark: 'r' }] })
+  assert.equal(rows[0]._extra.remark, 'r')
+  const out = serialize({}, { ...defaultState(), doh: rows })
+  assert.equal(out.doh[0].remark, 'r')
+})
+
+test('proxy round-trip unknown fields', () => {
+  const rows = buildProxyRows({ proxy: [{ name: 'P', hosts: ['x.com'], urls: [], remark: 'r' }] })
+  const out = serialize({}, { ...defaultState(), proxy: rows })
+  assert.equal(out.proxy[0].remark, 'r')
+})
+
+test('rules round-trip unknown fields', () => {
+  const rows = buildRulesRows({ rules: [{ name: 'R', hosts: [], regex: [], script: [], exclude: [], enabled: true }] })
+  const out = serialize({}, { ...defaultState(), rules: rows })
+  assert.equal(out.rules[0].enabled, true)
+})

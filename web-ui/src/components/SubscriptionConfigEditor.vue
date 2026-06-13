@@ -802,6 +802,7 @@ function buildRows(config: Record<string, any>, catalog: any) {
         prows.push({
           name: p.name, isCustom: true, enabled: true, type: p.type ?? 0,
           url: p.url || '', flag: p.ext?.flag || [], header: p.ext?.header || {},
+          _extra: pickExtra(p, ['name', 'type', 'url', 'ext']),
         })
       }
     }

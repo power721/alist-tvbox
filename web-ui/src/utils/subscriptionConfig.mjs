@@ -103,6 +103,7 @@ export function buildHeaderRows(config) {
       pairs: h.header && typeof h.header === 'object'
         ? Object.entries(h.header).map(([name, value]) => ({ name, value: String(value) }))
         : [],
+      _extra: pickExtra(h, ['host', 'header']),
     }))
 }
 
@@ -111,11 +112,10 @@ function buildHeaderItem(row) {
   for (const p of row.pairs || []) {
     if (p.name) header[p.name] = p.value || ''
   }
-  if (!row.host && !Object.keys(header).length) return null
-  const item = {}
+  const item = { ...(row._extra || {}) }
   if (row.host) item.host = row.host
   if (Object.keys(header).length) item.header = header
-  return item
+  return Object.keys(item).length ? item : null
 }
 
 // --- Live helpers ---
@@ -254,7 +254,7 @@ function buildLiveItem(row) {
 // --- Parse helpers ---
 
 function buildCustomParse(row) {
-  const p = { name: row.name }
+  const p = { ...(row._extra || {}), name: row.name }
   if (row.type != null && row.type !== '') p.type = Number(row.type)
   if (row.url) p.url = row.url
   const ext = {}
@@ -274,6 +274,7 @@ export function buildDohRows(config) {
       name: d.name || '',
       url: d.url || '',
       ips: Array.isArray(d.ips) ? [...d.ips] : [],
+      _extra: pickExtra(d, ['name', 'url', 'ips']),
     }))
 }
 
@@ -285,6 +286,7 @@ export function buildProxyRows(config) {
       name: p.name || '',
       hosts: Array.isArray(p.hosts) ? [...p.hosts] : [],
       urls: Array.isArray(p.urls) ? [...p.urls] : [],
+      _extra: pickExtra(p, ['name', 'hosts', 'urls']),
     }))
 }
 
@@ -298,6 +300,7 @@ export function buildRulesRows(config) {
       regex: Array.isArray(r.regex) ? [...r.regex] : [],
       script: Array.isArray(r.script) ? [...r.script] : [],
       exclude: Array.isArray(r.exclude) ? [...r.exclude] : [],
+      _extra: pickExtra(r, ['name', 'hosts', 'regex', 'script', 'exclude']),
     }))
 }
 
@@ -395,7 +398,7 @@ export function serialize(baseConfig, state) {
 
   // doh
   const doh = state.doh.filter((d) => d.name || d.url).map((d) => {
-    const item = {}
+    const item = { ...(d._extra || {}) }
     if (d.name) item.name = d.name
     if (d.url) item.url = d.url
     if (Array.isArray(d.ips) && d.ips.length) item.ips = [...d.ips]
@@ -405,7 +408,7 @@ export function serialize(baseConfig, state) {
 
   // proxy
   const proxyItems = state.proxy.filter((p) => p.name || p.hosts.length || p.urls.length).map((p) => {
-    const item = {}
+    const item = { ...(p._extra || {}) }
     if (p.name) item.name = p.name
     if (p.hosts.length) item.hosts = [...p.hosts]
     if (p.urls.length) item.urls = [...p.urls]
@@ -415,7 +418,7 @@ export function serialize(baseConfig, state) {
 
   // rules
   const rules = state.rules.filter((r) => r.name || r.hosts.length || r.regex.length).map((r) => {
-    const item = {}
+    const item = { ...(r._extra || {}) }
     if (r.name) item.name = r.name
     if (r.hosts.length) item.hosts = [...r.hosts]
     if (r.regex.length) item.regex = [...r.regex]
