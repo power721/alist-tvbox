@@ -377,6 +377,7 @@
         <el-form-item label="接口 api"><el-input v-model="siteForm.api" placeholder="API 端点 URL 或爬虫类名 (如 csp_MySource)" /></el-form-item>
         <el-form-item label="扩展 ext"><el-input v-model="siteForm.ext" type="textarea" :rows="3" placeholder="传给爬虫的扩展数据, 可为字符串或 JSON" /></el-form-item>
         <el-form-item label="Spider jar"><el-input v-model="siteForm.jar" placeholder="Spider JAR 路径或 URL, 覆盖全局 spider" /></el-form-item>
+        <el-form-item label="首页 homePage"><el-input v-model="siteForm.homePage" placeholder="站点首页 / 推荐页 URL" /></el-form-item>
         <el-form-item label="搜索 searchable">
           <el-select v-model="siteForm.searchable">
             <el-option :value="0" label="不可搜索(0)" />
@@ -474,6 +475,7 @@
         </el-form-item>
         <el-form-item label="播放前缀 playUrl"><el-input v-model="siteAdvancedForm.playUrl" placeholder="播放 URL 前缀或转换规则" /></el-form-item>
         <el-form-item label="点击拦截 click"><el-input v-model="siteAdvancedForm.click" placeholder="点击拦截处理 URL 或规则" /></el-form-item>
+        <el-form-item label="首页 homePage"><el-input v-model="siteAdvancedForm.homePage" placeholder="站点首页 / 推荐页 URL" /></el-form-item>
         <el-form-item label="分类白名单">
           <el-select v-model="siteAdvancedForm.categories" multiple filterable allow-create default-first-option
             placeholder="仅显示这些分类, 留空显示全部" style="width: 100%" />
@@ -672,7 +674,7 @@ function resetSiteForm() {
     key: '', name: '', type: 3, api: '', ext: '', jar: '',
     searchable: 1, quickSearch: 1, filterable: 1, changeable: 0,
     styleType: '', styleRatio: '', order: '',
-    timeout: '', indexs: 0, playUrl: '', click: '',
+    timeout: '', indexs: 0, playUrl: '', click: '', homePage: '',
     categories: [], headerPairs: [],
   })
 }
@@ -833,6 +835,7 @@ function confirmSiteForm() {
     indexs: siteForm.indexs || undefined,
     playUrl: siteForm.playUrl || undefined,
     click: siteForm.click || undefined,
+    homePage: siteForm.homePage || undefined,
     categories: siteForm.categories.length ? [...siteForm.categories] : undefined,
     header: Object.keys(headerObj).length ? headerObj : undefined,
   }
@@ -863,8 +866,10 @@ function resetSiteToDefault(row: any) {
   row.indexs = undefined
   row.playUrl = undefined
   row.click = undefined
+  row.homePage = undefined
   row.categories = undefined
   row.header = undefined
+  row._extra = undefined
   row.hasAdvancedOverride = false
 }
 
@@ -886,6 +891,7 @@ function openSiteAdvanced(row: any) {
     indexs: row.indexs ?? 0,
     playUrl: row.playUrl ?? '',
     click: row.click ?? '',
+    homePage: row.homePage ?? '',
     categories: Array.isArray(row.categories) ? [...row.categories] : [],
     headerPairs,
   })
@@ -914,6 +920,7 @@ function confirmSiteAdvanced() {
   row.indexs = siteAdvancedForm.indexs || undefined
   row.playUrl = siteAdvancedForm.playUrl || undefined
   row.click = siteAdvancedForm.click || undefined
+  row.homePage = siteAdvancedForm.homePage || undefined
   row.categories = siteAdvancedForm.categories.length ? [...siteAdvancedForm.categories] : undefined
   row.header = Object.keys(headerObj).length ? headerObj : undefined
   row.hasAdvancedOverride = true
