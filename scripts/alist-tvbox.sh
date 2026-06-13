@@ -342,9 +342,6 @@ check_image_update() {
 start_container() {
   local image="${CONFIG[IMAGE_NAME]}"
   local container_name=$(get_container_name)
-  local -a network_args=()
-  local -a port_args=()
-  local -a volume_args=()
   local aList_port=80
 
   # 确保数据目录存在
@@ -352,15 +349,27 @@ start_container() {
 
   [ "${CONFIG[GITHUB_PROXY]}" = "" ] || echo "${CONFIG[GITHUB_PROXY]}" > "${CONFIG[BASE_DIR]}/github_proxy.txt"
 
+  # 统一构造 docker run 参数：用条件追加而非展开可能为空的数组，
+  # 避免在 set -u 下（NAS 常见的 bash 4.3 及更早版本）报 "unbound variable"
+  local -a run_args=(
+    -d
+    --name "$container_name"
+    -e ALIST_PORT="${CONFIG[PORT2]}"
+    -e MEM_OPT="-Xmx512M"
+    -v "${CONFIG[BASE_DIR]}":/data
+    -v tvbox-www-static:/www/static
+    --restart="${CONFIG[RESTART]}"
+  )
+
   if [[ "${CONFIG[IMAGE_NAME]}" == *"alist-tvbox"* ]]; then
     aList_port=5244
-    volume_args+=("-v" "${CONFIG[BASE_DIR]}/alist:/opt/alist/data")
+    run_args+=("-v" "${CONFIG[BASE_DIR]}/alist:/opt/alist/data")
   fi
 
   # 添加/www挂载选项
   if [[ "${CONFIG[MOUNT_WWW]}" == "true" ]]; then
-    volume_args+=("-v" "${CONFIG[BASE_DIR]}/www:/www")
     mkdir -p "${CONFIG[BASE_DIR]}/www"
+    run_args+=("-v" "${CONFIG[BASE_DIR]}/www:/www")
   fi
 
   # 添加自定义挂载
@@ -373,28 +382,19 @@ start_container() {
         mkdir -p "$host_dir"
         echo -e "${YELLOW}已创建主机目录: $host_dir${NC}"
       fi
-      volume_args+=("-v" "$line")
+      run_args+=("-v" "$line")
     done < "${CONFIG[BASE_DIR]}/mounts.conf"
   fi
 
+  # host 模式直接使用主机网络不映射端口；否则按端口映射
   if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
-    network_args=("--network" "host")
+    run_args+=("--network" "host")
     echo -e "${YELLOW}使用host网络模式${NC}"
   else
-    port_args=("-p" "${CONFIG[PORT1]}:4567" "-p" "${CONFIG[PORT2]}:${aList_port}")
+    run_args+=("-p" "${CONFIG[PORT1]}:4567" "-p" "${CONFIG[PORT2]}:${aList_port}")
   fi
 
-  docker run -d \
-    --name "$container_name" \
-    "${port_args[@]}" \
-    "${volume_args[@]}" \
-    -e ALIST_PORT="${CONFIG[PORT2]}" \
-    -e MEM_OPT="-Xmx512M" \
-    -v "${CONFIG[BASE_DIR]}":/data \
-    -v tvbox-www-static:/www/static \
-    --restart="${CONFIG[RESTART]}" \
-    "${network_args[@]}" \
-    "$image"
+  docker run "${run_args[@]}" "$image"
 }
 
 # 显示访问信息
