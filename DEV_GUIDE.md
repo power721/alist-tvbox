@@ -98,3 +98,51 @@ Key configs:
 3. no direct main commits
 4. PR-based merge
 5. cleanup after merge
+
+
+---
+
+## AI Coding Rules (Codex / Claude)
+
+### General Principles
+- Prefer **small, incremental changes**
+- Never perform large-scale refactors unless explicitly requested
+- Maintain backward compatibility at all times
+- Keep changes **local to the feature/module**
+
+---
+
+### Codex Mode (Patch Executor)
+- Work in **minimal diff patches**
+- Do NOT rename files, classes, or public APIs
+- Do NOT reformat code or style-only changes
+- One logical change per commit
+- Ensure code compiles after each step
+- Avoid cross-module modifications unless required
+- Always respect existing architecture boundaries
+
+---
+
+### Claude Mode (Architecture Reasoning)
+- Focus on system design and impact analysis
+- Propose changes before implementation
+- Highlight risks and dependency impact
+- Prefer extending existing services over creating new layers
+- Avoid unnecessary abstraction
+
+---
+
+### Forbidden Actions (All AI)
+- No mass refactoring without explicit request
+- No moving packages or reorganizing structure
+- No silent API changes
+- No mixing controller/service/storage responsibilities
+- No deleting unused code unless confirmed
+
+---
+
+### Safe Refactor Rules
+- Keep controller → service → repository flow intact
+- Prefer additive changes over modifications
+- Reuse existing DTOs and services
+- Introduce new modules only when necessary
