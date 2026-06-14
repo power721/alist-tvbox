@@ -263,6 +263,36 @@
   .page-title {
     font-size: 20px;
   }
+
+  /* Table responsive behavior */
+  .el-table {
+    min-width: 800px;
+  }
+
+  /* Sticky first column for context while scrolling */
+  .el-table th:first-child,
+  .el-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--bg-card);
+    z-index: 2;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+  }
+
+  /* Sticky action column */
+  .el-table .el-table__fixed-right {
+    position: sticky;
+    right: 0;
+    background: var(--bg-card);
+    z-index: 2;
+  }
+
+  /* Touch-friendly table action buttons */
+  .el-table .el-button--small {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+  }
 }
 
 /* ============================================
