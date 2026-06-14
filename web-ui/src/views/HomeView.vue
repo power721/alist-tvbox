@@ -4,13 +4,11 @@ import axios from "axios";
 import {store} from "@/services/store";
 
 const url = ref(window.location.protocol + '//' + window.location.hostname + ':' + (store.hostmode ? 5678 : 5344))
-const height = ref(window.innerHeight - 175)
-const width = ref(window.innerWidth - 40)
+const height = ref(window.innerHeight - 220) // 调整高度以适应新的页面结构
 const installMode = ref('')
 
 window.onresize = () => {
-  height.value = window.innerHeight - 175
-  width.value = window.innerWidth - 40
+  height.value = window.innerHeight - 220
 }
 
 const loadBaseUrl = () => {
@@ -73,7 +71,7 @@ onMounted(() => {
         <a :href="url" class="hint" target="_blank">{{ url }}</a>
       </div>
 
-      <iframe v-if="store.aListStatus" :src="url" :width="width" :height="height">
+      <iframe v-if="store.aListStatus" :src="url" :height="height" style="width: 100%; border: none; border-radius: 4px;">
       </iframe>
     </div>
   </div>
