@@ -70,7 +70,7 @@
           <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%; min-width: 800px"
                   class="clickable-table" @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
-          <el-table-column prop="vod_name" label="名称" sortable>
+          <el-table-column prop="vod_name" label="名称" sortable min-width="200">
             <template #default="scope">
               <el-popover :width="300" placement="left-start" v-if="scope.row.vod_pic">
                 <template #reference>
@@ -146,7 +146,7 @@
         <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%; min-width: 800px"
                 class="clickable-table" @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
-          <el-table-column prop="vod_name" label="名称" sortable>
+          <el-table-column prop="vod_name" label="名称" sortable min-width="200">
             <template #default="scope">
               <el-popover :width="300" placement="left-start" v-if="scope.row.vod_pic">
                 <template #reference>
