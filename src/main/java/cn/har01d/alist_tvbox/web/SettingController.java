@@ -78,11 +78,31 @@ public class SettingController {
     }
 
     /**
-     * 并发测速多个 GitHub 代理节点（5线程）
+     * 并发测速多个 GitHub 代理节点（5线程）- 同步版本
      */
     @PostMapping("/github-proxy/benchmark")
     public List<GitHubProxyNode> benchmarkGitHubProxyNodes(@RequestBody GitHubProxyBenchmarkRequest request) {
         return gitHubProxyService.benchmarkNodes(request.getUrls());
+    }
+
+    /**
+     * 启动异步测速任务（实时更新）
+     */
+    @PostMapping("/github-proxy/benchmark/start")
+    public Map<String, Object> startBenchmark(@RequestBody GitHubProxyBenchmarkRequest request) {
+        gitHubProxyService.benchmarkNodesAsync(request.getUrls());
+        return Map.of("success", true, "message", "测速任务已启动");
+    }
+
+    /**
+     * 获取测速结果（实时更新）
+     */
+    @GetMapping("/github-proxy/benchmark/results")
+    public Map<String, Object> getBenchmarkResults() {
+        return Map.of(
+            "results", gitHubProxyService.getBenchmarkResults(),
+            "isRunning", gitHubProxyService.isBenchmarking()
+        );
     }
 
     /**

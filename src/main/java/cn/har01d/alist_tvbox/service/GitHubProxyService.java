@@ -22,11 +22,13 @@ public class GitHubProxyService {
     private static final String GITHUB_PROXY_FILE = "/data/github_proxy.txt";
     private static final String TEST_URL = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
     private static final int BENCHMARK_THREADS = 5;
-    private static final int CONNECT_TIMEOUT_SECONDS = 8;
-    private static final int READ_TIMEOUT_SECONDS = 30;
+    private static final int CONNECT_TIMEOUT_SECONDS = 3;
+    private static final int READ_TIMEOUT_SECONDS = 3;
     private static final int MAX_PROXY_COUNT = 5; // 最多配置 5 个代理
 
     private final OkHttpClient httpClient;
+    private final Map<String, GitHubProxyNode> benchmarkCache = new ConcurrentHashMap<>();
+    private volatile boolean isBenchmarking = false;
 
     public GitHubProxyService() {
         this.httpClient = new OkHttpClient.Builder()
@@ -86,7 +88,79 @@ public class GitHubProxyService {
     }
 
     /**
-     * 并发测速多个代理节点（5线程）
+     * 异步并发测速多个代理节点，结果实时更新到缓存
+     */
+    public void benchmarkNodesAsync(List<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return;
+        }
+
+        if (isBenchmarking) {
+            log.warn("测速任务已在进行中，忽略新请求");
+            return;
+        }
+
+        isBenchmarking = true;
+        benchmarkCache.clear();
+
+        // 初始化缓存（标记为进行中）
+        for (String url : urls) {
+            GitHubProxyNode node = new GitHubProxyNode();
+            node.setUrl(url);
+            node.setLabel("测速中...");
+            node.setSuccess(null);
+            benchmarkCache.put(url, node);
+        }
+
+        ExecutorService executor = Executors.newFixedThreadPool(BENCHMARK_THREADS);
+
+        for (String url : urls) {
+            executor.submit(() -> {
+                try {
+                    GitHubProxyNode result = benchmarkSingleNode(url);
+                    benchmarkCache.put(url, result);
+                    log.info("测速完成并更新缓存: {}", url);
+                } catch (Exception e) {
+                    log.error("测速异常: {}", url, e);
+                    GitHubProxyNode errorNode = new GitHubProxyNode();
+                    errorNode.setUrl(url);
+                    errorNode.setSuccess(false);
+                    errorNode.setError("异常: " + e.getMessage());
+                    benchmarkCache.put(url, errorNode);
+                }
+            });
+        }
+
+        // 异步等待所有任务完成
+        executor.shutdown();
+        CompletableFuture.runAsync(() -> {
+            try {
+                executor.awaitTermination(30, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                log.error("等待测速任务超时", e);
+            } finally {
+                isBenchmarking = false;
+                log.info("所有测速任务完成");
+            }
+        });
+    }
+
+    /**
+     * 获取测速结果缓存
+     */
+    public Map<String, GitHubProxyNode> getBenchmarkResults() {
+        return new HashMap<>(benchmarkCache);
+    }
+
+    /**
+     * 检查是否正在测速
+     */
+    public boolean isBenchmarking() {
+        return isBenchmarking;
+    }
+
+    /**
+     * 并发测速多个代理节点（5线程）- 同步版本
      */
     public List<GitHubProxyNode> benchmarkNodes(List<String> urls) {
         if (urls == null || urls.isEmpty()) {

@@ -1693,19 +1693,45 @@ const benchmarkAllProxies = () => {
   benchmarking.value = true
   benchmarkResults.value.clear()
 
-  axios.post('/api/settings/github-proxy/benchmark', { urls: githubProxyList.value })
-    .then(({data}) => {
-      data.forEach((result: any) => {
-        benchmarkResults.value.set(result.url, result)
-      })
-      ElMessage.success('测速完成')
+  // 启动异步测速任务
+  axios.post('/api/settings/github-proxy/benchmark/start', { urls: githubProxyList.value })
+    .then(() => {
+      // 开始轮询获取结果
+      pollBenchmarkResults()
     })
     .catch(() => {
-      ElMessage.error('测速失败')
-    })
-    .finally(() => {
+      ElMessage.error('启动测速失败')
       benchmarking.value = false
     })
+}
+
+const pollBenchmarkResults = () => {
+  const poll = () => {
+    axios.get('/api/settings/github-proxy/benchmark/results')
+      .then(({data}) => {
+        // 更新结果
+        const results = data.results || {}
+        Object.keys(results).forEach((url: string) => {
+          benchmarkResults.value.set(url, results[url])
+        })
+
+        // 检查是否还在运行
+        if (data.isRunning) {
+          // 继续轮询（500ms 间隔）
+          setTimeout(poll, 500)
+        } else {
+          // 测速完成
+          benchmarking.value = false
+          ElMessage.success('测速完成')
+        }
+      })
+      .catch(() => {
+        benchmarking.value = false
+        ElMessage.error('获取测速结果失败')
+      })
+  }
+
+  poll()
 }
 
 const saveGitHubProxyList = () => {
