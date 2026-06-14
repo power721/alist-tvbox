@@ -374,6 +374,7 @@
         <el-form-item>
           <el-button @click="resetAListToken">重置AList认证Token</el-button>
           <el-button @click="exportDatabase">导出数据库</el-button>
+          <el-button @click="openRemoteSync">远程同步</el-button>
         </el-form-item>
       </el-form>
       <template #footer>
