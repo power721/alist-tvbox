@@ -15,7 +15,8 @@
     </div>
 
     <div class="page-card">
-    <el-table :data="accounts" border style="width: 100%">
+    <div class="table-scroll-wrapper">
+    <el-table :data="accounts" border style="width: 100%; min-width: 1200px">
       <el-table-column prop="id" label="ID" sortable width="70">
         <template #default="scope">
           {{ scope.row.id + 4000 }}
@@ -83,6 +84,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
     </div>
   </div>
 
