@@ -9,7 +9,7 @@ import okhttp3.*;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -43,9 +43,11 @@ public class RemoteClient {
 
         log.info("尝试登录远端获取临时 token: {}", loginUrl);
 
-        // 构建登录请求体
-        String loginJson = String.format("{\"username\":\"%s\",\"password\":\"%s\"}",
-            escapeJson(username), escapeJson(password));
+        // 使用 ObjectMapper 构建登录请求体
+        Map<String, String> loginRequest = new HashMap<>();
+        loginRequest.put("username", username);
+        loginRequest.put("password", password);
+        String loginJson = objectMapper.writeValueAsString(loginRequest);
         RequestBody body = RequestBody.create(loginJson, MediaType.get("application/json"));
 
         Request request = new Request.Builder()
@@ -93,18 +95,6 @@ public class RemoteClient {
             log.error("登录远端失败: {} - {}", normalizedUrl, e.getClass().getName() + ": " + e.getMessage(), e);
             throw new IOException("连接失败：" + e.getClass().getSimpleName() + " - " + e.getMessage());
         }
-    }
-
-    /**
-     * 转义 JSON 字符串中的特殊字符
-     */
-    private String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 
     public SyncData fetchRemoteData(String remoteUrl, String token, List<String> modules) throws IOException {
