@@ -106,23 +106,27 @@
     <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" :page-size="size"
       :total="total" @current-change="loadShares" @size-change="handleSizeChange" />
   </div>
+    </div>
 
-  <div class="space"></div>
-  <h2>失败资源</h2>
-  <el-row justify="end">
-    <el-popconfirm @confirm="cleanStorages" title="是否删除全部失效资源？">
-      <template #reference>
-        <el-button type="danger">清理</el-button>
-      </template>
-    </el-popconfirm>
-    <el-popconfirm @confirm="validateStorages" title="是否校验全部资源？">
-      <template #reference>
-        <el-button>校验</el-button>
-      </template>
-    </el-popconfirm>
-    <el-button @click="refreshStorages">刷新</el-button>
-    <el-button type="danger" @click="dialogVisible1 = true" v-if="selectedStorages.length">删除</el-button>
-  </el-row>
+    <div class="page-header" style="margin-top: 24px;">
+      <h1 class="page-title">失败资源</h1>
+      <div class="page-actions">
+        <el-popconfirm @confirm="cleanStorages" title="是否删除全部失效资源？">
+          <template #reference>
+            <el-button type="danger">清理</el-button>
+          </template>
+        </el-popconfirm>
+        <el-popconfirm @confirm="validateStorages" title="是否校验全部资源？">
+          <template #reference>
+            <el-button>校验</el-button>
+          </template>
+        </el-popconfirm>
+        <el-button @click="refreshStorages">刷新</el-button>
+        <el-button type="danger" @click="dialogVisible1 = true" v-if="selectedStorages.length">删除</el-button>
+      </div>
+    </div>
+
+    <div class="page-card">
   <el-table :data="storages" border @selection-change="handleSelectionStorages" style="width: 100%">
     <el-table-column type="selection" width="55" />
     <el-table-column prop="id" label="ID" width="70" />
