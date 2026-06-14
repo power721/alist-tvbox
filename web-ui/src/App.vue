@@ -7,6 +7,7 @@ import axios from "axios";
 import { store } from "@/services/store";
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import { useDark } from '@vueuse/core'
+import { Menu } from '@element-plus/icons-vue'
 
 useDark()
 
@@ -17,6 +18,7 @@ const show = ref(true)
 const full = ref(localStorage.getItem('full_view') == 'true')
 const mounted = ref(false)
 const showNotification = ref(true)
+const mobileMenuOpen = ref(false)
 
 const logout = () => {
   accountService.logout()
@@ -25,6 +27,11 @@ const logout = () => {
 
 const close = () => {
   localStorage.setItem('notification2', 'true')
+}
+
+const navigate = (path: string) => {
+  router.push(path)
+  mobileMenuOpen.value = false
 }
 
 const onModeChange = (value: boolean) => {
