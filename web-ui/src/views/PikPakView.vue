@@ -7,7 +7,8 @@
     </el-row>
     <div class="space"></div>
 
-    <el-table :data="accounts" border style="width: 100%">
+    <div class="table-scroll-wrapper">
+      <el-table :data="accounts" border style="width: 100%; min-width: 700px">
 <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="nickname" label="昵称" sortable width="180"/>
       <el-table-column prop="username" label="用户名"/>
@@ -28,6 +29,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle" width="60%">
       <el-form :model="form">

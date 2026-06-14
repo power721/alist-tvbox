@@ -23,11 +23,12 @@
     </el-row>
     <div class="space"></div>
 
-    <el-table :data="list"
-              :row-class-name="tableRowClassName"
-              row-key="id"
-              :key="tableKey"
-              style="width: 100%">
+    <div class="table-scroll-wrapper">
+      <el-table :data="list"
+                :row-class-name="tableRowClassName"
+                row-key="id"
+                :key="tableKey"
+                style="width: 100%; min-width: 1200px">
       <el-table-column prop="order" label="顺序" sortable width="100">
         <template #default="scope">
           <span :class="channelDragEnabled ? 'pointer' : 'order-text'">{{ scope.row.order }}</span>
@@ -70,6 +71,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form label-width="140" :model="form">

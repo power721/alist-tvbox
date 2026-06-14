@@ -24,7 +24,8 @@
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
   </el-row>
 
-  <el-table :data="shares" border @selection-change="handleSelection" @sort-change="handleSort" style="width: 100%">
+  <div class="table-scroll-wrapper">
+    <el-table :data="shares" border @selection-change="handleSelection" @sort-change="handleSort" style="width: 100%; min-width: 1200px">
     <el-table-column type="selection" width="55" />
     <el-table-column prop="id" label="ID" width="70" sortable="custom" />
     <el-table-column prop="path" label="路径" sortable="custom">
@@ -101,6 +102,7 @@
       </template>
     </el-table-column>
   </el-table>
+  </div>
   <div>
     <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" :page-size="size"
       :total="total" @current-change="loadShares" @size-change="handleSizeChange" />

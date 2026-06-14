@@ -21,7 +21,8 @@
     </el-row>
     <div class="space"></div>
 
-    <el-table :data="files" border @selection-change="handleSelectionChange" style="width: 100%">
+    <div class="table-scroll-wrapper">
+      <el-table :data="files" border @selection-change="handleSelectionChange" style="width: 100%; min-width: 1100px">
       <el-table-column type="selection" width="55"/>
       <el-table-column prop="id" label="ID" width="75"/>
       <el-table-column prop="name" label="名称" width="250"/>
@@ -55,6 +56,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
     <div>
       <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" @current-change="load"
                      :page-size="size" :page-sizes="sizes" :total="total" @size-change="handleSizeChange"/>

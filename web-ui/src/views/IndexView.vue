@@ -56,7 +56,8 @@
       <el-button @click="loadTasks">刷新</el-button>
       <el-button @click="cleanVisible=true">清理</el-button>
     </el-row>
-    <el-table :data="tasks.content" border style="width: 100%">
+    <div class="table-scroll-wrapper">
+      <el-table :data="tasks.content" border style="width: 100%; min-width: 1100px">
       <el-table-column prop="id" label="ID" sortable width="70"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
       <el-table-column prop="status" label="状态" sortable width="120">
@@ -88,6 +89,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
     <el-pagination layout="total, prev, pager, next" v-model:current-page="currentPage"
                    @current-change="handleCurrentChange" :total="total"/>
 
@@ -165,7 +167,8 @@
     </el-dialog>
 
     <el-dialog v-model="templatesVisible" title="索引模板" width="80%">
-      <el-table :data="templates" border style="width: 100%">
+      <div class="table-scroll-wrapper">
+        <el-table :data="templates" border style="width: 100%; min-width: 900px">
         <el-table-column prop="id" label="ID" sortable width="70"/>
         <el-table-column prop="name" label="名称" sortable width="120"/>
         <el-table-column prop="siteId" label="站点" sortable width="80"/>
@@ -188,6 +191,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
       <template #footer>
       <span class="dialog-footer">
         <el-button @click="templatesVisible = false">关闭</el-button>
