@@ -117,7 +117,7 @@
           </el-table-column>
           <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
           <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
-          <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="165" sortable/>
+          <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
           <el-table-column width="90" v-if="isHistory">
             <template #default="scope">
               <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>

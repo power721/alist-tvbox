@@ -90,12 +90,12 @@
         <span v-else>阿里分享</span>
       </template>
     </el-table-column>
-    <el-table-column prop="time" label="创建时间" width="175" sortable="custom">
+    <el-table-column prop="time" label="创建时间" width="180" sortable="custom">
       <template #default="scope">
         {{ new Date(scope.row.time).toLocaleString() }}
       </template>
     </el-table-column>
-    <el-table-column fixed="right" label="操作" width="120">
+    <el-table-column fixed="right" label="操作" width="135">
       <template #default="scope">
         <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
         <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
@@ -154,7 +154,7 @@
         <span v-else>{{ scope.row.driver }}</span>
       </template>
     </el-table-column>
-    <el-table-column fixed="right" label="操作" width="130">
+    <el-table-column fixed="right" label="操作" width="155">
       <template #default="scope">
         <el-button link type="primary" size="small" @click="reloadStorage(scope.row.id)">重新加载</el-button>
         <el-button link type="danger" size="small" @click="handleDeleteStorage(scope.row)">删除</el-button>

@@ -212,15 +212,9 @@
     </el-dialog>
   </div>
 
-  <div class="divider"></div>
-
   <EmbyView></EmbyView>
 
-  <div class="divider"></div>
-
   <JellyfinView></JellyfinView>
-
-  <div class="divider"></div>
 
   <FeiniuView></FeiniuView>
 
