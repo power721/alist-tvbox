@@ -222,9 +222,9 @@
 .el-menu-item.is-active::after {
   content: '';
   position: absolute;
-  bottom: 0;
-  left: 10%;
-  right: 10%;
+  bottom: -1px;
+  left: 20%;
+  right: 20%;
   height: 3px;
   background: var(--primary-gradient);
   border-radius: 3px 3px 0 0;
