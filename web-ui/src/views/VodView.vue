@@ -33,7 +33,7 @@
         </el-input>
         <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
         <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
-        <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
+        <el-button :icon="Refresh" :disabled="loading" @click="refresh">刷新</el-button>
       </div>
     </div>
 
@@ -700,6 +700,7 @@ import {
   Menu,
   Plus,
   QuestionFilled,
+  Refresh,
   Search,
   Setting,
   Upload,
