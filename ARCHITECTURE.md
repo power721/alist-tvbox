@@ -30,50 +30,20 @@ Two data sources:
 - Strategy pattern
 - AList-compatible config generator
 
-Examples: Aliyun, Baidu, Quark, 115, PikPak
-
----
-
 ### Live Streaming (live/)
-Platforms:
-- Huya
-- Douyu
-- Bilibili
-- CC
-- Kuaishou
-- Douyin
-
-All implement LivePlatform
-
----
+Multiple platform aggregators implementing LivePlatform
 
 ### Telegram Search
-- TelegramService
-- TelegramController
-- Jsoup scraping + caching
-
-APIs:
-- /tg-search
-- /tgsc
-- /tgs
-
----
+Jsoup scraping + caching + media extraction
 
 ### Plugin System
-Spider plugins (.txt) + Filter plugins (.py)
-
----
+Spider (.txt) + Filter (.py)
 
 ### Offline Download
-- 115 Pan
-- GuangyaPan
-- Thunder
-
----
+Strategy-based provider handlers
 
 ### Embedded AList
-- subprocess runtime
-- WebDAV proxy (/dav/)
+Subprocess + WebDAV proxy
 
 ---
 
@@ -88,16 +58,34 @@ Roles: ADMIN / USER / CLIENT
 ---
 
 ## Scheduling
-
-- Index build
-- Douban scrape
-- Share validation
-- Proxy cleanup
-- Daily cleanup
+Multiple cron jobs for indexing, cleanup, sync tasks
 
 ---
 
-## Core Design Principles
+## AI CODING RULES (IMPORTANT)
+
+### Codex Mode (Execution)
+- Only small, local changes
+- No refactor without request
+- Must not change public APIs
+- Must preserve compilation
+- Prefer patch-level edits
+
+### Claude Mode (Architecture)
+- Analyze before modifying
+- Prefer reuse over new abstraction
+- Avoid unnecessary layering
+- Do not over-engineer
+
+### Shared Rules
+- Never modify controller/service boundaries incorrectly
+- Never break external API contracts
+- Never introduce cross-layer logic
+- Keep changes minimal and reversible
+
+---
+
+## Design Principles
 
 - Service-oriented architecture
 - Adapter-based storage layer

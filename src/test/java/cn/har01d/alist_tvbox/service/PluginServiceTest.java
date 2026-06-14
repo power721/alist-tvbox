@@ -47,6 +47,8 @@ class PluginServiceTest {
     private PlatformTransactionManager transactionManager;
     @Mock
     private SubscriptionSourceService subscriptionSourceService;
+    @Mock
+    private GitHubProxyService gitHubProxyService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -57,7 +59,8 @@ class PluginServiceTest {
         when(builder.build()).thenReturn(restTemplate);
         lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(new SimpleTransactionStatus());
         lenient().when(subscriptionSourceService.nextSortOrder()).thenReturn(1);
-        pluginService = new PluginService(pluginRepository, settingRepository, builder, objectMapper, new TransactionTemplate(transactionManager), subscriptionSourceService);
+        lenient().when(gitHubProxyService.readProxyListFromFile()).thenReturn(List.of());
+        pluginService = new PluginService(pluginRepository, settingRepository, builder, objectMapper, new TransactionTemplate(transactionManager), subscriptionSourceService, gitHubProxyService);
     }
 
     @Test
