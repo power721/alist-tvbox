@@ -123,4 +123,176 @@ public class SyncService {
     public RemoteClient getRemoteClient() {
         return remoteClient;
     }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, SyncResult> importData(SyncData data, MergeStrategy strategy, boolean force) {
+        // 版本校验
+        String localVersion = settingRepository.findById("app_version")
+                .map(Setting::getValue)
+                .orElse("unknown");
+        if (!localVersion.equals(data.getAppVersion()) && !force) {
+            throw new VersionMismatchException(localVersion, data.getAppVersion());
+        }
+
+        Map<String, SyncResult> results = new HashMap<>();
+
+        // 按顺序导入各模块（独立事务）
+        if (data.getModules().containsKey("settings")) {
+            results.put("settings", importSettings(
+                (Map<String, String>) data.getModules().get("settings"), strategy));
+        }
+        if (data.getModules().containsKey("sites")) {
+            results.put("sites", importSites(
+                (List<Site>) data.getModules().get("sites"), strategy));
+        }
+        if (data.getModules().containsKey("accounts")) {
+            results.put("accounts", importAccounts(
+                (List<Account>) data.getModules().get("accounts"), strategy));
+        }
+        if (data.getModules().containsKey("driverAccounts")) {
+            results.put("driverAccounts", importDriverAccounts(
+                (List<DriverAccount>) data.getModules().get("driverAccounts"), strategy));
+        }
+        if (data.getModules().containsKey("pikpakAccounts")) {
+            results.put("pikpakAccounts", importPikPakAccounts(
+                (List<PikPakAccount>) data.getModules().get("pikpakAccounts"), strategy));
+        }
+        if (data.getModules().containsKey("shares")) {
+            results.put("shares", importShares(
+                (List<Share>) data.getModules().get("shares"), strategy));
+        }
+        if (data.getModules().containsKey("plugins")) {
+            results.put("plugins", importPlugins(
+                (List<Plugin>) data.getModules().get("plugins"), strategy));
+        }
+        if (data.getModules().containsKey("pluginFilters")) {
+            results.put("pluginFilters", importPluginFilters(
+                (List<PluginFilter>) data.getModules().get("pluginFilters"), strategy));
+        }
+        if (data.getModules().containsKey("subscriptions")) {
+            results.put("subscriptions", importSubscriptions(
+                (List<Subscription>) data.getModules().get("subscriptions"), strategy));
+        }
+
+        return results;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importSettings(Map<String, String> settings, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                // 覆盖模式：删除白名单内的 Setting
+                for (String key : SETTING_WHITELIST) {
+                    settingRepository.deleteById(key);
+                }
+            }
+
+            // 插入或更新
+            for (Map.Entry<String, String> entry : settings.entrySet()) {
+                if (!SETTING_WHITELIST.contains(entry.getKey())) {
+                    continue;  // 跳过不在白名单的
+                }
+
+                Optional<Setting> existing = settingRepository.findById(entry.getKey());
+                if (existing.isPresent()) {
+                    existing.get().setValue(entry.getValue());
+                    settingRepository.save(existing.get());
+                    result.setUpdated(result.getUpdated() + 1);
+                } else {
+                    settingRepository.save(new Setting(entry.getKey(), entry.getValue()));
+                    result.setImported(result.getImported() + 1);
+                }
+            }
+
+            log.info("导入 Settings 完成: 新增 {}, 更新 {}", result.getImported(), result.getUpdated());
+        } catch (Exception e) {
+            log.error("导入 Settings 失败", e);
+            result.setFailed(1);
+            result.getErrors().add("导入失败: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importSites(List<Site> sites, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                siteRepository.deleteAll();
+            }
+
+            for (Site remote : sites) {
+                try {
+                    Optional<Site> existing = siteRepository.findByUrl(remote.getUrl());
+                    if (existing.isPresent()) {
+                        // 更新：保留本地 ID
+                        Site local = existing.get();
+                        local.setName(remote.getName());
+                        local.setPassword(remote.getPassword());
+                        local.setToken(remote.getToken());
+                        local.setIndexFile(remote.getIndexFile());
+                        local.setFolder(remote.getFolder());
+                        local.setSearchable(remote.isSearchable());
+                        local.setDisabled(remote.isDisabled());
+                        local.setXiaoya(remote.isXiaoya());
+                        local.setOrder(remote.getOrder());
+                        local.setVersion(remote.getVersion());
+                        siteRepository.save(local);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        // 插入：ID 自动生成
+                        remote.setId(null);
+                        siteRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 Site 失败: {}", remote.getUrl(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add("Site " + remote.getUrl() + " 导入失败: " + e.getMessage());
+                }
+            }
+
+            log.info("导入 Sites 完成: 新增 {}, 更新 {}, 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 Sites 失败", e);
+            result.setFailed(sites.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    // 占位方法，将在后续任务实现
+    private SyncResult importAccounts(List<Account> accounts, MergeStrategy strategy) {
+        return new SyncResult();
+    }
+
+    private SyncResult importDriverAccounts(List<DriverAccount> accounts, MergeStrategy strategy) {
+        return new SyncResult();
+    }
+
+    private SyncResult importPikPakAccounts(List<PikPakAccount> accounts, MergeStrategy strategy) {
+        return new SyncResult();
+    }
+
+    private SyncResult importShares(List<Share> shares, MergeStrategy strategy) {
+        return new SyncResult();
+    }
+
+    private SyncResult importPlugins(List<Plugin> plugins, MergeStrategy strategy) {
+        return new SyncResult();
+    }
+
+    private SyncResult importPluginFilters(List<PluginFilter> filters, MergeStrategy strategy) {
+        return new SyncResult();
+    }
+
+    private SyncResult importSubscriptions(List<Subscription> subscriptions, MergeStrategy strategy) {
+        return new SyncResult();
+    }
 }
