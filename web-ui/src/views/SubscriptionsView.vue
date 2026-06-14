@@ -842,29 +842,33 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="addProxyDialogVisible" title="添加 GitHub 代理" width="600px">
+    <el-dialog v-model="addProxyDialogVisible" title="添加自定义 GitHub 代理" width="700px">
       <el-form label-width="120px">
-        <el-form-item label="选择或输入">
-          <el-select
-            v-model="newProxyUrl"
-            filterable
-            allow-create
-            default-first-option
-            placeholder="选择预设节点或输入自定义代理"
+        <el-form-item label="代理地址">
+          <el-input
+            v-model="customProxyUrls"
+            type="textarea"
+            :rows="8"
+            placeholder="每行一个代理地址，例如：&#10;https://gh.llkk.cc/&#10;https://github.starrlzy.cn/&#10;gh.tryxd.cn&#10;&#10;支持自动补全协议和斜杠"
             style="width: 100%"
-          >
-            <el-option
-              v-for="node in githubProxyNodes"
-              :key="node.url"
-              :label="formatNodeLabel(node)"
-              :value="node.url"
-            />
-          </el-select>
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-alert type="info" :closable="false">
+            <template #title>
+              <span style="font-size: 13px;">
+                • 每行一个代理地址<br/>
+                • 自动添加 https:// 协议（如果缺少）<br/>
+                • 自动添加末尾斜杠（如果缺少）<br/>
+                • 空行和重复地址会自动过滤
+              </span>
+            </template>
+          </el-alert>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="addProxyDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="addProxyToList">添加</el-button>
+        <el-button type="primary" @click="addCustomProxiesToList">添加并测速</el-button>
       </template>
     </el-dialog>
 
@@ -1139,6 +1143,7 @@ const proxyTableRef = ref()
 const benchmarkResults = ref<Map<string, any>>(new Map())
 const addProxyDialogVisible = ref(false)
 const newProxyUrl = ref('')
+const customProxyUrls = ref('')
 const selectedPluginIds = ref<number[]>([])
 const sourceExtendTarget = ref<ManagedSource | null>(null)
 const sourceExtendText = ref('')
@@ -1791,12 +1796,146 @@ const loadGitHubProxyList = () => {
 }
 
 const showAddProxyDialog = () => {
-  if (githubProxyList.value.length >= 5) {
-    ElMessage.warning('最多只能配置 5 个代理节点')
+  customProxyUrls.value = ''
+  addProxyDialogVisible.value = true
+}
+
+// 规范化 URL
+const normalizeProxyUrl = (url: string): string => {
+  let normalized = url.trim()
+  if (!normalized) return ''
+
+  // 添加协议
+  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    normalized = 'https://' + normalized
+  }
+
+  // 添加末尾斜杠
+  if (!normalized.endsWith('/')) {
+    normalized += '/'
+  }
+
+  return normalized
+}
+
+// 添加自定义代理到测速列表
+const addCustomProxiesToList = () => {
+  const lines = customProxyUrls.value.split('\n')
+  const newUrls: string[] = []
+  const existingUrls = new Set(githubProxyNodes.value.map(node => node.url))
+
+  for (const line of lines) {
+    const normalized = normalizeProxyUrl(line)
+    if (!normalized) continue
+
+    // 检查是否已存在
+    if (existingUrls.has(normalized)) {
+      continue
+    }
+
+    // 检查是否重复
+    if (newUrls.includes(normalized)) {
+      continue
+    }
+
+    newUrls.push(normalized)
+    existingUrls.add(normalized)
+  }
+
+  if (newUrls.length === 0) {
+    ElMessage.warning('没有有效的代理地址或所有地址已存在')
     return
   }
-  newProxyUrl.value = ''
-  addProxyDialogVisible.value = true
+
+  // 添加到 githubProxyNodes
+  newUrls.forEach(url => {
+    try {
+      const urlObj = new URL(url)
+      githubProxyNodes.value.push({
+        label: '自定义节点',
+        url: url,
+        host: urlObj.host
+      })
+    } catch (e) {
+      console.error('Invalid URL:', url, e)
+    }
+  })
+
+  addProxyDialogVisible.value = false
+  ElMessage.success(`已添加 ${newUrls.length} 个自定义节点到测速列表`)
+
+  // 自动开始测速
+  benchmarkCustomProxies(newUrls)
+}
+
+// 测速自定义代理
+const benchmarkCustomProxies = (urls: string[]) => {
+  if (benchmarking.value) {
+    ElMessage.warning('正在测速中，请稍候')
+    return
+  }
+
+  benchmarking.value = true
+
+  // 为新添加的节点设置"测速中"状态
+  urls.forEach(url => {
+    benchmarkResults.value.set(url, { pending: true })
+  })
+
+  ElMessage.info(`开始测速 ${urls.length} 个自定义节点...`)
+
+  // 启动异步测速
+  axios.post('/api/settings/github-proxy/benchmark/start', { urls })
+    .then(() => {
+      // 轮询获取结果
+      pollCustomProxiesResults(urls)
+    })
+    .catch(() => {
+      ElMessage.error('启动测速失败')
+      benchmarking.value = false
+      urls.forEach(url => {
+        benchmarkResults.value.delete(url)
+      })
+    })
+}
+
+// 轮询自定义节点测速结果
+const pollCustomProxiesResults = (urls: string[]) => {
+  const poll = () => {
+    axios.get('/api/settings/github-proxy/benchmark/results')
+      .then(({data}) => {
+        // 更新结果
+        const results = data.results || {}
+        Object.keys(results).forEach((url: string) => {
+          benchmarkResults.value.set(url, results[url])
+        })
+
+        // 检查是否还在运行
+        if (data.isRunning) {
+          setTimeout(poll, 500)
+        } else {
+          benchmarking.value = false
+
+          // 统计成功的节点
+          const successCount = urls.filter(url => {
+            const result = benchmarkResults.value.get(url)
+            return result && result.success
+          }).length
+
+          if (successCount > 0) {
+            ElMessage.success(`测速完成！${successCount}/${urls.length} 个节点可用`)
+          } else {
+            ElMessage.warning('测速完成，但没有可用节点')
+          }
+        }
+      })
+      .catch(() => {
+        benchmarking.value = false
+        ElMessage.error('获取测速结果失败')
+      })
+  }
+
+  poll()
 }
 
 const addProxyToList = () => {

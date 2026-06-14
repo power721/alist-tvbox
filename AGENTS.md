@@ -1,90 +1,144 @@
 # AGENTS.md
 
-This file defines how AI agents should work in this repository.
-
-## Project Type
-
-AList-TvBox is a Spring Boot 3 (Java 21) backend + Vue 3 admin UI system that:
-- Aggregates cloud storage (AList ecosystem)
-- Provides TVBox VOD APIs
-- Supports Telegram media search
-- Handles live streaming aggregation
-- Provides plugin + filter system
-- Runs embedded AList process
-
-Base package: `cn.har01d.alist_tvbox`
+This is the single source of truth for AI agents (Codex / Claude Code).
 
 ---
 
-## Critical Rules
+# 1. Project Overview
 
-### 1. Code Safety
-- Never commit secrets (cookies, tokens, DB files, credentials)
-- Never modify `main` directly
-- Always use feature branches or git worktrees
+AList-TvBox is a Spring Boot 3 (Java 21) + Vue 3 system:
 
-### 2. Architecture Discipline
-- Controller = thin layer only
-- Business logic MUST go into Service layer
-- Storage providers MUST follow Strategy pattern (`storage/`)
-- DTOs MUST be top-level classes in `dto/`
+- TVBox VOD API backend
+- Cloud storage aggregation (AList)
+- Telegram media search engine
+- Live streaming aggregator
+- Plugin + filter system
+- Embedded AList runtime
 
-### 3. Frontend Rules
-- Vue 3 + TypeScript only
-- SFC components required
-- Models in `web-ui/src/model/`
-- PascalCase filenames
+Base package: cn.har01d.alist_tvbox
 
 ---
 
-## Build Rules
+# 2. Architecture Overview
 
-- Backend: `mvn clean package`
-- Test: `mvn test`
-- Run: `mvn spring-boot:run`
-- Frontend dev: `cd web-ui && npm run dev`
-- Frontend build: `npm run build`
+Controller → Service → Repository → Database
 
 ---
 
-## Git Workflow (MANDATORY)
+## Core Modules
 
-1. Create worktree per task
-2. Create feature branch inside worktree
-3. Never touch main branch directly
-4. Merge via PR
-5. After merge:
-   - delete worktree
-   - delete branch
-   - verify `git worktree list`
+### Storage (storage/)
+- 30+ cloud drive adapters
+- Strategy pattern
+- AList-compatible config generator
+
+### Live (live/)
+Multi-platform streaming:
+Huya / Douyu / Bilibili / CC / Kuaishou / Douyin
+
+### Telegram Search
+- Jsoup scraping
+- Caffeine cache
+- Media extraction
+
+APIs:
+- /tg-search
+- /tgsc
+- /tgs
+
+### Plugin System
+- Spider plugins (.txt)
+- Filter plugins (.py)
+
+### Offline Download
+- 115 / Guangya / Thunder handlers
+
+### Embedded AList
+- subprocess runtime
+- WebDAV proxy (/dav/)
 
 ---
 
-## Code Conventions
+# 3. Security Model
 
-### Java
-- 4-space indentation
-- Lombok preferred (`@Data`, `@Slf4j`)
-- camelCase methods, PascalCase classes
+- X-API-KEY → CLIENT
+- Basic Auth → legacy APIs
+- Authorization → session tokens
 
-### Modules
-- `web/` → controllers
-- `service/` → business logic
-- `storage/` → adapters
-- `live/` → streaming
-- `auth/` → security
+Roles:
+- ADMIN
+- USER
+- CLIENT
 
 ---
 
-## System Boundaries
+# 4. Scheduling Jobs
 
-DO NOT:
-- put business logic in controllers
-- bypass service layer
-- mix storage implementations
-- hardcode runtime configuration
+- Index build (22:00 + hourly)
+- Douban sync (20:00 / 22:00)
+- Share validation (:00 / :30)
+- Proxy cleanup (:45)
+- Daily cleanup (06:00)
 
-DO:
-- follow existing patterns
-- reuse services
-- keep API stable
+---
+
+# 5. Development Guide
+
+Backend:
+mvn clean package
+mvn spring-boot:run
+mvn test
+
+Frontend:
+cd web-ui
+npm install
+npm run dev
+npm run build
+npm run lint
+
+---
+
+# 6. Code Rules
+
+## Java
+- 4-space indent
+- Lombok required
+- Service-first design
+
+## DTO Rules
+- Must be top-level class
+- Must be in dto/
+
+## Frontend
+- Vue 3 + TypeScript
+- PascalCase components
+
+---
+
+# 7. Git Workflow
+
+1. worktree per task
+2. feature branch
+3. no direct main commits
+4. PR-based merge
+5. cleanup after merge
+
+---
+
+# 8. AI CODING RULES
+
+## Codex Mode
+- Minimal patch only
+- No refactor unless requested
+- Must compile
+- No API breaking changes
+
+## Claude Mode
+- Analyze before changes
+- Prefer simple solutions
+- Avoid over-engineering
+
+## Shared Rules
+- No cross-layer logic
+- No API break
+- Keep diffs small
