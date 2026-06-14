@@ -631,4 +631,67 @@ public class SyncService {
 
         return result;
     }
+
+    public SyncResponse push(String remoteUrl, String username, String password, List<String> modules) {
+        SyncResponse response = new SyncResponse();
+
+        try {
+            // 登录远端
+            String token = remoteClient.login(remoteUrl, username, password);
+
+            // 导出本地数据
+            SyncData data = exportData(modules);
+
+            // 推送到远端（远端使用覆盖模式）
+            Map<String, SyncResult> results = remoteClient.pushToRemote(
+                remoteUrl, token, data, "OVERWRITE", false);
+
+            response.setSuccess(true);
+            response.setResults(results);
+
+            log.info("推送到远端成功: ", remoteUrl);
+        } catch (Exception e) {
+            log.error("推送到远端失败: {}", remoteUrl, e);
+            response.setSuccess(false);
+            SyncResult errorResult = new SyncResult();
+            errorResult.setFailed(1);
+            errorResult.getErrors().add(e.getMessage());
+            response.addResult("error", errorResult);
+        }
+
+        return response;
+    }
+
+    public SyncResponse pull(String remoteUrl, String username, String password,
+                            List<String> modules, MergeStrategy strategy, boolean force) {
+        SyncResponse response = new SyncResponse();
+
+        try {
+            // 登录远端
+            String token = remoteClient.login(remoteUrl, username, password);
+
+            // 从远端获取数据
+            SyncData data = remoteClient.fetchRemoteData(remoteUrl, token, modules);
+
+            // 导入到本地
+            Map<String, SyncResult> results = importData(data, strategy, force);
+
+            response.setSuccess(true);
+            response.setResults(results);
+
+            log.info("从远端拉取成功: {}", remoteUrl);
+        } catch (VersionMismatchException e) {
+            log.warn("版本不匹配: {} vs {}", e.getLocalVersion(), e.getRemoteVersion());
+            throw e;  // 重新抛出让 Controller 处理
+        } catch (Exception e) {
+            log.error("从远端拉取失败: {}", remoteUrl, e);
+            response.setSuccess(false);
+            SyncResult errorResult = new SyncResult();
+            errorResult.setFailed(1);
+            errorResult.getErrors().add(e.getMessage());
+            response.addResult("error", errorResult);
+        }
+
+        return response;
+    }
 }
