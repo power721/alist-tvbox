@@ -1,11 +1,6 @@
 package cn.har01d.alist_tvbox.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.TableGenerator;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -20,6 +15,9 @@ import java.util.Objects;
 @RequiredArgsConstructor
 @Entity
 @TableGenerator(name = "tableGenerator", table = "id_generator", pkColumnName = "entity_name", valueColumnName = "next_id", allocationSize = 1)
+@Table(indexes = {
+    @Index(name = "idx_site_url", columnList = "url")
+})
 public class Site {
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
