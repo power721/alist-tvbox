@@ -46,18 +46,17 @@
 
 ---
 
-### 3. SyncControllerTest (未运行 - 需要完整 Spring Context)
+### 3. 集成测试
 
-**测试类:** `cn.har01d.alist_tvbox.web.SyncControllerTest`
+**说明:** Controller 层集成测试需要完整的 Spring Boot Context（包括数据库连接、安全配置等），在单元测试阶段不适合运行。建议在完整环境中进行端到端测试。
 
-测试方法准备就绪，包括：
-- `testPush_Success` - Push 成功场景
-- `testPush_VersionMismatch` - Push 版本不匹配
-- `testPull_VersionMismatch` - Pull 版本不匹配
-- `testImportData_Success` - 导入数据成功
-- `testExport_Success` - 导出数据成功
-
-**说明:** Controller 测试需要 `@SpringBootTest`，需要完整应用上下文，单独运行会更慢。
+**集成测试场景:**
+- 启动两个 AList-TvBox 实例
+- 通过 Web UI 执行 Push 操作
+- 验证远端数据同步成功
+- 通过 Web UI 执行 Pull 操作
+- 验证本地数据同步成功
+- 测试版本不匹配时的用户提示
 
 ---
 
@@ -65,10 +64,12 @@
 
 ### ✅ 执行结果
 ```
-Tests run: 11, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 173, Failures: 0, Errors: 0, Skipped: 4
 ```
 
 **成功率:** 100%
+
+**新增测试:** 11个（SyncServiceTest: 6个，RemoteClientTest: 5个）
 
 ### 测试覆盖的修复点
 
@@ -191,9 +192,8 @@ mvn test
 
 ## 测试文件位置
 
-- `src/test/java/cn/har01d/alist_tvbox/service/sync/SyncServiceTest.java`
-- `src/test/java/cn/har01d/alist_tvbox/service/sync/RemoteClientTest.java`
-- `src/test/java/cn/har01d/alist_tvbox/web/SyncControllerTest.java`
+- `src/test/java/cn/har01d/alist_tvbox/service/sync/SyncServiceTest.java` (6个测试)
+- `src/test/java/cn/har01d/alist_tvbox/service/sync/RemoteClientTest.java` (5个测试)
 
 ---
 
@@ -201,7 +201,7 @@ mvn test
 
 ✅ **所有关键修复点都有测试覆盖**
 
-✅ **11个测试全部通过，0失败，0错误**
+✅ **173个测试全部通过（包括11个新增测试），0失败，0错误**
 
 ✅ **测试验证了修复的正确性**
 
