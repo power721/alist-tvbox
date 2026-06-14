@@ -51,7 +51,8 @@
           </el-select>
           <el-button :icon="Delete" @click="clearSearch">清除</el-button>
         </div>
-        <el-table :data="filteredResults" v-loading="searching" @row-click="loadResult" border max-height="1080">
+        <div class="table-scroll-wrapper">
+          <el-table :data="filteredResults" v-loading="searching" @row-click="loadResult" border max-height="1080" style="min-width: 400px">
             <el-table-column prop="vod_name" label="内容">
               <template #default="scope">
                 <el-tooltip :content="scope.row.vod_play_url">
@@ -61,10 +62,12 @@
               </template>
             </el-table-column>
           </el-table>
+        </div>
       </div>
 
       <div style="flex: 1;">
-        <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%"
+        <div class="table-scroll-wrapper">
+          <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%; min-width: 800px"
                   class="clickable-table" @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
           <el-table-column prop="vod_name" label="名称" sortable>
@@ -129,6 +132,7 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
 
     <el-pagination layout="total, prev, pager, next, jumper, sizes"
                    :current-page="page" :page-size="size" :total="total"
@@ -137,7 +141,8 @@
     </div>
 
     <div v-else>
-      <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%"
+      <div class="table-scroll-wrapper">
+        <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%; min-width: 800px"
                 class="clickable-table" @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
           <el-table-column prop="vod_name" label="名称" sortable>
@@ -202,6 +207,7 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
 
     <el-pagination layout="total, prev, pager, next, jumper, sizes"
                    :current-page="page" :page-size="size" :total="total"
