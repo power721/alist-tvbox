@@ -75,6 +75,9 @@
             </el-table-column>
             <el-table-column label="大小" width="120" />
             <el-table-column label="修改时间" width="180" />
+            <el-table-column label="豆瓣ID" width="120" />
+            <el-table-column label="评分" width="90" />
+            <el-table-column width="120" />
           </el-table>
         </div>
         <div v-else class="table-scroll-wrapper">
