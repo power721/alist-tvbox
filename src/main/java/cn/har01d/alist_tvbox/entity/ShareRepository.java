@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ShareRepository extends JpaRepository<Share, Integer> {
     boolean existsByPath(String path);
@@ -22,4 +23,6 @@ public interface ShareRepository extends JpaRepository<Share, Integer> {
     Page<Share> findByTypeAndPathContains(int type, String keyword, Pageable pageable);
 
     List<Share> findByTempTrue();
+
+    Optional<Share> findByTypeAndShareId(Integer type, String shareId);
 }

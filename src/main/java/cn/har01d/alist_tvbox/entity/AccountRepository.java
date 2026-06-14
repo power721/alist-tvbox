@@ -10,4 +10,6 @@ public interface AccountRepository extends JpaRepository<Account, Integer> {
     Account findByRefreshToken(String token);
 
     Optional<Account> getFirstByMasterTrue();
+
+    Optional<Account> findByNickname(String nickname);
 }
