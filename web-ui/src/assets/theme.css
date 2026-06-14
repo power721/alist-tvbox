@@ -87,3 +87,10 @@
   --transition-slow: 300ms;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* ============================================
+   触摸目标尺寸
+   ============================================ */
+:root {
+  --tap-target-min: 44px; /* iOS Human Interface Guidelines minimum tap target */
+}
