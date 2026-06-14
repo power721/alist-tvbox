@@ -9,7 +9,8 @@
     </div>
 
     <div class="page-card">
-      <el-table :data="sites" border style="width: 100%">
+    <div class="table-scroll-wrapper">
+      <el-table :data="sites" border style="width: 100%; min-width: 900px">
 <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="name" label="名称" sortable width="180"/>
       <el-table-column prop="order" label="顺序" sortable width="90"/>
@@ -26,6 +27,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
     </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle">

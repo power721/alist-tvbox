@@ -9,7 +9,8 @@
     </div>
 
     <div class="page-card">
-    <el-table :data="users" border style="width: 100%">
+    <div class="table-scroll-wrapper">
+    <el-table :data="users" border style="width: 100%; min-width: 600px">
       <el-table-column prop="id" label="ID"/>
       <el-table-column prop="username" label="用户名"/>
       <el-table-column fixed="right" label="操作" width="200">
@@ -19,6 +20,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
     </div>
   </div>
 

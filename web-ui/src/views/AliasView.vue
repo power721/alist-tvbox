@@ -9,7 +9,8 @@
     </div>
 
     <div class="page-card">
-    <el-table :data="files" border style="width: 100%">
+    <div class="table-scroll-wrapper">
+    <el-table :data="files" border style="width: 100%; min-width: 600px">
       <el-table-column prop="id" label="ID" width="70"/>
       <el-table-column prop="path" label="挂载路径"/>
       <el-table-column fixed="right" label="操作" width="200">
@@ -19,6 +20,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
     </div>
   </div>
 
