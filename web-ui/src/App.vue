@@ -74,7 +74,15 @@ onMounted(() => {
   <div class="common-layout">
     <el-container>
       <el-header>
-        <el-menu mode="horizontal" :ellipsis="false" :router="true">
+        <!-- Mobile navigation trigger -->
+        <div class="mobile-nav-header">
+          <h2 class="app-title">AList-TvBox</h2>
+          <el-button class="mobile-menu-trigger" @click="mobileMenuOpen = true" text>
+            <el-icon :size="24"><Menu /></el-icon>
+          </el-button>
+        </div>
+
+        <el-menu mode="horizontal" :ellipsis="false" :router="true" class="desktop-nav">
           <el-menu-item index="/" v-if="store.admin">首页</el-menu-item>
           <el-menu-item index="/sites" v-if="account.authenticated && store.admin">站点</el-menu-item>
           <el-menu-item index="/accounts" v-if="account.authenticated && show && store.admin">账号</el-menu-item>
