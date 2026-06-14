@@ -222,16 +222,7 @@
   position: relative;
 }
 
-.el-menu-item.is-active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 20%;
-  right: 20%;
-  height: 3px;
-  background: var(--primary-gradient);
-  border-radius: 3px 3px 0 0;
-}
+/* 移除导航栏高亮下划线 */
 
 /* ============================================
    响应式设计
