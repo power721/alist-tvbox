@@ -1,13 +1,18 @@
 <template>
-  <div class="search">
-    <h2>API地址</h2>
-    <div class="description">
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">搜索</h1>
+    </div>
+
+    <div class="page-card">
+    <h3>API地址</h3>
+    <div style="margin-bottom: 16px;">
       <a :href="currentUrl+getPath(type)+'/'+store.token+'?wd=' + keyword"
          target="_blank">{{ currentUrl }}{{ getPath(type) }}/{{ store.token }}?wd={{ keyword }}</a>
     </div>
 
-    <div>
-      <el-input v-model="keyword" @change="search"/>
+    <div style="margin-bottom: 16px;">
+      <el-input v-model="keyword" @change="search" style="width: 300px; margin-right: 12px;"/>
       <el-button type="primary" @click="search" :disabled="!keyword || searching">搜索</el-button>
       <el-button type="primary" @click="showDialog" v-if="store.admin">设置</el-button>
     </div>
@@ -126,6 +131,7 @@
       </template>
     </el-dialog>
 
+    </div>
   </div>
 </template>
 

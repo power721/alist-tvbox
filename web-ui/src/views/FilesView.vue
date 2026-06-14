@@ -1,6 +1,10 @@
 <template>
-  <div class="files">
-    <h1>文件管理</h1>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">文件管理</h1>
+    </div>
+
+    <div class="page-card">
     <el-tabs v-model="activeTab">
       <el-tab-pane label="配置文件" name="config">
         <el-row justify="end">
@@ -256,6 +260,7 @@
         <el-button type="primary" @click="confirmMove" :disabled="moveTargetDir === null">确定移动</el-button>
       </template>
     </el-dialog>
+    </div>
   </div>
 </template>
 
