@@ -33,24 +33,36 @@ public class RemoteClient {
         String credentials = username + ":" + password;
         String basicAuth = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
 
+        // 使用 /api/settings 端点测试认证
         Request request = new Request.Builder()
-                .url(remoteUrl + "/api/settings")  // 测试端点
+                .url(remoteUrl + "/api/settings")
                 .header("Authorization", basicAuth)
                 .get()
                 .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                if (response.code() == 401) {
+                if (response.code() == 401 || response.code() == 403) {
                     throw new IOException("认证失败：用户名或密码错误");
                 }
-                throw new IOException("连接失败：HTTP " + response.code());
+                throw new IOException("连接失败：HTTP " + response.code() + " - " + response.message());
             }
             // Basic Auth 成功，返回 credentials 作为 token
+            log.info("成功连接到远端: {}", remoteUrl);
             return basicAuth;
+        } catch (java.net.ConnectException | java.net.UnknownHostException e) {
+            log.error("无法连接到远端: {}", remoteUrl, e);
+            throw new IOException("无法连接到远端服务器：" + e.getMessage() + "，请检查地址和网络");
+        } catch (java.net.SocketTimeoutException e) {
+            log.error("连接超时: {}", remoteUrl, e);
+            throw new IOException("连接超时，请检查网络或远端服务器是否正常运行");
         } catch (IOException e) {
+            // 如果已经是我们抛出的友好错误，直接重新抛出
+            if (e.getMessage().startsWith("认证失败") || e.getMessage().startsWith("连接失败")) {
+                throw e;
+            }
             log.error("登录远端失败: {}", remoteUrl, e);
-            throw new IOException("无法连接到远端服务器，请检查地址和网络");
+            throw new IOException("连接失败：" + e.getMessage());
         }
     }
 
