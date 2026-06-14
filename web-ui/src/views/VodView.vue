@@ -3,11 +3,11 @@
     <div class="page-header">
       <h1 class="page-title">文件浏览</h1>
       <div class="page-actions">
-        <el-button :icon="HomeFilled" @click="goBack" v-if="isHistory">返回</el-button>
-        <el-button :icon="Film" @click="goHistory" v-else>播放历史</el-button>
-        <el-button :icon="Setting" @click="settingVisible=true" v-if="store.admin">设置</el-button>
-        <el-button :icon="Plus" @click="handleAdd">添加</el-button>
-        <el-button type="warning" @click="openDoubanMode">豆瓣</el-button>
+        <el-button :icon="HomeFilled" @click="goBack" v-if="isHistory">返回浏览</el-button>
+        <el-button :icon="Film" @click="goHistory" v-else>播放记录</el-button>
+        <el-button :icon="Setting" @click="settingVisible=true" v-if="store.admin">播放配置</el-button>
+        <el-button :icon="Plus" @click="handleAdd">添加分享</el-button>
+        <el-button type="warning" @click="openDoubanMode">豆瓣电影</el-button>
       </div>
     </div>
 
