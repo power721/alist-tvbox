@@ -1,0 +1,89 @@
+/* web-ui/src/assets/theme.css */
+
+/* ============================================
+   主题色（渐变）
+   ============================================ */
+:root {
+  /* 主渐变色 - 用于按钮、强调元素 */
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+  /* 单色版本 - 用于非渐变场景 */
+  --primary-color: #667eea;
+  --primary-hover: #5568d3;
+  --primary-active: #4557c2;
+  --accent-color: #764ba2;
+}
+
+/* ============================================
+   深色主题（默认）
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 背景层级 */
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #242424;
+    --bg-card: #2a2a2a;
+
+    /* 边框和分隔 */
+    --border-color: rgba(255, 255, 255, 0.1);
+    --divider-color: rgba(255, 255, 255, 0.06);
+
+    /* 文字 */
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --text-disabled: #666666;
+
+    /* 阴影 */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+}
+
+/* ============================================
+   浅色主题
+   ============================================ */
+@media (prefers-color-scheme: light) {
+  :root {
+    /* 背景层级 */
+    --bg-primary: #f5f5f7;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+
+    /* 边框和分隔 */
+    --border-color: rgba(0, 0, 0, 0.08);
+    --divider-color: rgba(0, 0, 0, 0.04);
+
+    /* 文字 */
+    --text-primary: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-disabled: #c7c7cc;
+
+    /* 阴影 */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+}
+
+/* ============================================
+   间距系统
+   ============================================ */
+:root {
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+}
+
+/* ============================================
+   过渡时间
+   ============================================ */
+:root {
+  --transition-fast: 150ms;
+  --transition-base: 250ms;
+  --transition-slow: 300ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
