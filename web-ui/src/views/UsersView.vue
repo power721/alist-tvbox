@@ -1,12 +1,14 @@
 <template>
-  <div class="files">
-    <h1>用户列表</h1>
-    <el-row justify="end">
-      <el-button @click="load">刷新</el-button>
-      <el-button type="primary" @click="handleAdd">添加</el-button>
-    </el-row>
-    <div class="space"></div>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">用户列表</h1>
+      <div class="page-actions">
+        <el-button @click="load">刷新</el-button>
+        <el-button type="primary" @click="handleAdd">添加</el-button>
+      </div>
+    </div>
 
+    <div class="page-card">
     <el-table :data="users" border style="width: 100%">
       <el-table-column prop="id" label="ID"/>
       <el-table-column prop="username" label="用户名"/>
@@ -17,6 +19,8 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
+  </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form" label-width="120">

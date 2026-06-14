@@ -1,5 +1,10 @@
 <template>
-  <div>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">索引管理</h1>
+    </div>
+
+    <div class="page-card">
     <el-form :model="form" :label-width="labelWidth">
       <el-form-item label="站点">
         <el-select v-model="form.siteId">
@@ -194,6 +199,7 @@
       </span>
       </template>
     </el-dialog>
+    </div>
   </div>
 </template>
 
