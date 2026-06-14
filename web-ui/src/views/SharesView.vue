@@ -1,30 +1,31 @@
 <template>
-  <h2>资源列表</h2>
-  <el-row justify="end">
-    <el-input style="width: 200px;" v-model="keyword" @keyup="search">
-      <template #append>
-        <el-button :icon="Search" @click="search" />
-      </template>
-    </el-input>
-    <div class="hint"></div>
-    <el-select style="width: 90px" v-model="type" @change="filter">
-      <el-option v-for="item in options" :key="item.value" :label="item.label" :value="item.value" />
-    </el-select>
-    <div class="hint"></div>
-    <el-button type="success" @click="showUpload">导入</el-button>
-    <el-button type="success" @click="exportVisible = true">导出</el-button>
-    <!--    <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>-->
-    <el-popconfirm @confirm="deleteShares" title="是否清空全部资源？">
-      <template #reference>
-        <el-button type="danger">清空</el-button>
-      </template>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">资源列表</h1>
+      <div class="page-actions">
+        <el-input style="width: 200px;" v-model="keyword" @keyup="search">
+          <template #append>
+            <el-button :icon="Search" @click="search" />
+          </template>
+        </el-input>
+        <el-select style="width: 90px" v-model="type" @change="filter">
+          <el-option v-for="item in options" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-button type="success" @click="showUpload">导入</el-button>
+        <el-button type="success" @click="exportVisible = true">导出</el-button>
+        <el-popconfirm @confirm="deleteShares" title="是否清空全部资源？">
+          <template #reference>
+            <el-button type="danger">清空</el-button>
+          </template>
     </el-popconfirm>
     <el-button @click="refreshShares">刷新</el-button>
     <el-button type="primary" @click="handleAdd">添加</el-button>
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
-  </el-row>
+      </div>
+    </div>
 
-  <el-table :data="shares" border @selection-change="handleSelection" @sort-change="handleSort" style="width: 100%">
+    <div class="page-card">
+  <el-table :data="shares" v-loading="loading" border @selection-change="handleSelection" @sort-change="handleSort" style="width: 100%">
     <el-table-column type="selection" width="55" />
     <el-table-column prop="id" label="ID" width="70" sortable="custom" />
     <el-table-column prop="path" label="路径" sortable="custom">
@@ -89,12 +90,12 @@
         <span v-else>阿里分享</span>
       </template>
     </el-table-column>
-    <el-table-column prop="time" label="创建时间" width="175" sortable="custom">
+    <el-table-column prop="time" label="创建时间" width="180" sortable="custom">
       <template #default="scope">
         {{ new Date(scope.row.time).toLocaleString() }}
       </template>
     </el-table-column>
-    <el-table-column fixed="right" label="操作" width="120">
+    <el-table-column fixed="right" label="操作" width="135">
       <template #default="scope">
         <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
         <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
@@ -105,24 +106,28 @@
     <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" :page-size="size"
       :total="total" @current-change="loadShares" @size-change="handleSizeChange" />
   </div>
+    </div>
 
-  <div class="space"></div>
-  <h2>失败资源</h2>
-  <el-row justify="end">
-    <el-popconfirm @confirm="cleanStorages" title="是否删除全部失效资源？">
-      <template #reference>
-        <el-button type="danger">清理</el-button>
-      </template>
-    </el-popconfirm>
-    <el-popconfirm @confirm="validateStorages" title="是否校验全部资源？">
-      <template #reference>
-        <el-button>校验</el-button>
-      </template>
-    </el-popconfirm>
-    <el-button @click="refreshStorages">刷新</el-button>
-    <el-button type="danger" @click="dialogVisible1 = true" v-if="selectedStorages.length">删除</el-button>
-  </el-row>
-  <el-table :data="storages" border @selection-change="handleSelectionStorages" style="width: 100%">
+    <div class="page-header" style="margin-top: 24px;">
+      <h1 class="page-title">失败资源</h1>
+      <div class="page-actions">
+        <el-popconfirm @confirm="cleanStorages" title="是否删除全部失效资源？">
+          <template #reference>
+            <el-button type="danger">清理</el-button>
+          </template>
+        </el-popconfirm>
+        <el-popconfirm @confirm="validateStorages" title="是否校验全部资源？">
+          <template #reference>
+            <el-button>校验</el-button>
+          </template>
+        </el-popconfirm>
+        <el-button @click="refreshStorages">刷新</el-button>
+        <el-button type="danger" @click="dialogVisible1 = true" v-if="selectedStorages.length">删除</el-button>
+      </div>
+    </div>
+
+    <div class="page-card">
+  <el-table :data="storages" v-loading="loadingStorages" border @selection-change="handleSelectionStorages" style="width: 100%">
     <el-table-column type="selection" width="55" />
     <el-table-column prop="id" label="ID" width="70" />
     <el-table-column prop="mount_path" label="路径" />
@@ -149,7 +154,7 @@
         <span v-else>{{ scope.row.driver }}</span>
       </template>
     </el-table-column>
-    <el-table-column fixed="right" label="操作" width="130">
+    <el-table-column fixed="right" label="操作" width="155">
       <template #default="scope">
         <el-button link type="primary" size="small" @click="reloadStorage(scope.row.id)">重新加载</el-button>
         <el-button link type="danger" size="small" @click="handleDeleteStorage(scope.row)">删除</el-button>
@@ -160,8 +165,10 @@
     <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page1" :total="total1"
       :page-size="size1" @current-change="loadStorages" @size-change="handleSize1Change" />
   </div>
+    </div>
+  </div>
 
-  <el-dialog v-model="formVisible" width="60%" :title="dialogTitle">
+  <el-dialog v-model="formVisible" width="65%" :title="dialogTitle">
     <el-form :model="form">
       <el-form-item label="挂载路径" label-width="140" required>
         <el-input v-model="form.path" autocomplete="off" />
@@ -460,6 +467,7 @@ const options = [
 
 const multipleSelection = ref<ShareInfo[]>([])
 const storages = ref<Storage[]>([])
+const loadingStorages = ref(false)
 const selectedStorages = ref<Storage[]>([])
 const storage = ref<Storage>({
   id: 0,
@@ -477,6 +485,7 @@ const size1 = ref(20)
 const total = ref(0)
 const total1 = ref(0)
 const shares = ref([])
+const loading = ref(false)
 const keyword = ref('')
 const dialogTitle = ref('')
 const formVisible = ref(false)
@@ -728,17 +737,23 @@ const search = () => {
 
 const loadShares = (value: number) => {
   page.value = value
+  loading.value = true
   axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value + '&sort=' + sort.value + '&type=' + type.value + '&keyword=' + keyword.value).then(({ data }) => {
     shares.value = data.content
     total.value = data.totalElements
+  }).finally(() => {
+    loading.value = false
   })
 }
 
 const loadStorages = (value: number) => {
   page1.value = value
+  loadingStorages.value = true
   axios.get('/api/storages?page=' + page1.value + '&size=' + size1.value).then(({ data }) => {
     storages.value = data.data.content
     total1.value = data.data.total
+  }).finally(() => {
+    loadingStorages.value = false
   })
 }
 

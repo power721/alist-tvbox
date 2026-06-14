@@ -1,27 +1,27 @@
 <template>
-  <div class="sites">
-    <div class="flex">
-      <div v-if="userInfo">
-        <span v-if="userInfo.uname">用户名：{{ userInfo.uname }}</span>
-        <span class="hint">登录状态：{{ userInfo.isLogin ? '已登录' : '未登录' }}</span>
-        <span v-if="userInfo.uname" class="hint">会员状态：{{
-            userInfo.vipType ? userInfo.vip_label.text : '无会员'
-          }}</span>
-      </div>
-      <div class="">
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">BiliBili管理</h1>
+      <div class="page-actions">
+        <div v-if="userInfo">
+          <span v-if="userInfo.uname">用户名：{{ userInfo.uname }}</span>
+          <span style="margin-left: 12px">登录状态：{{ userInfo.isLogin ? '已登录' : '未登录' }}</span>
+          <span v-if="userInfo.uname" style="margin-left: 12px">会员状态：{{
+              userInfo.vipType ? userInfo.vip_label.text : '无会员'
+            }}</span>
+        </div>
         <el-button type="primary" @click="scanLogin">登录</el-button>
         <el-button type="primary" @click="settingVisible=true">配置</el-button>
       </div>
     </div>
 
-    <h1>分类列表</h1>
-    <el-row justify="end">
-      <span style="margin-right: 16px" v-if="channelDragEnabled">可以拖动行排序</span>
+    <div class="page-card">
+    <div style="margin-bottom: 12px; display: flex; justify-content: flex-end; gap: 12px;">
+      <span v-if="channelDragEnabled">可以拖动行排序</span>
       <el-button @click="load">刷新</el-button>
       <el-button type="primary" :disabled="!changed" @click="handleSave">保存</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
-    </el-row>
-    <div class="space"></div>
+    </div>
 
     <el-table :data="list"
               :row-class-name="tableRowClassName"
@@ -70,6 +70,8 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
+  </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form label-width="140" :model="form">
@@ -208,8 +210,6 @@
       </span>
       </template>
     </el-dialog>
-
-  </div>
 </template>
 
 <script setup lang="ts">

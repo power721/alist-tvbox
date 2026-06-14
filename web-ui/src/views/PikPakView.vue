@@ -1,12 +1,18 @@
 <template>
-  <div class="list">
-    <h1>PikPak账号列表</h1>
-    <el-row justify="end">
+  <div :class="embedded ? '' : 'page-container'">
+    <div class="page-header" v-if="!embedded">
+      <h1 class="page-title">PikPak账号列表</h1>
+      <div class="page-actions">
+        <el-button @click="load">刷新</el-button>
+        <el-button type="primary" @click="handleAdd">添加</el-button>
+      </div>
+    </div>
+    <div v-else class="page-actions" style="margin-bottom: 16px; display: flex; justify-content: flex-end; gap: 12px;">
       <el-button @click="load">刷新</el-button>
       <el-button type="primary" @click="handleAdd">添加</el-button>
-    </el-row>
-    <div class="space"></div>
+    </div>
 
+    <div class="page-card">
     <el-table :data="accounts" border style="width: 100%">
 <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="nickname" label="昵称" sortable width="180"/>
@@ -28,6 +34,8 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
+  </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle" width="60%">
       <el-form :model="form">
@@ -88,8 +96,6 @@
       </span>
       </template>
     </el-dialog>
-
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -99,6 +105,10 @@ import axios from "axios"
 import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 import router from "@/router";
+
+const props = defineProps<{
+  embedded?: boolean
+}>()
 
 interface Item {
   path: string

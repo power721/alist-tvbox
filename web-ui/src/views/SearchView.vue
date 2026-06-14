@@ -1,13 +1,18 @@
 <template>
-  <div class="search">
-    <h2>API地址</h2>
-    <div class="description">
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">搜索</h1>
+    </div>
+
+    <div class="page-card">
+    <h3>API地址</h3>
+    <div style="margin-bottom: 16px;">
       <a :href="currentUrl+getPath(type)+'/'+store.token+'?wd=' + keyword"
          target="_blank">{{ currentUrl }}{{ getPath(type) }}/{{ store.token }}?wd={{ keyword }}</a>
     </div>
 
-    <div>
-      <el-input v-model="keyword" @change="search"/>
+    <div style="margin-bottom: 16px;">
+      <el-input v-model="keyword" @change="search" style="width: 300px; margin-right: 12px;"/>
       <el-button type="primary" @click="search" :disabled="!keyword || searching">搜索</el-button>
       <el-button type="primary" @click="showDialog" v-if="store.admin">设置</el-button>
     </div>
@@ -46,7 +51,8 @@
       </el-button>
     </div>
 
-    <el-table v-if="(type==''||type=='1')&&config" :data="config.list" border style="width: 100%">
+    <div class="table-scroll-wrapper">
+      <el-table v-if="(type==''||type=='1')&&config" :data="config.list" border style="width: 100%; min-width: 800px">
       <el-table-column prop="vod_name" label="名称" width="300">
         <template #default="scope">
           <a :href="'/#/vod'+scope.row.vod_content" target="_blank">
@@ -64,8 +70,10 @@
       <el-table-column prop="vod_year" label="年份" width="90"/>
       <el-table-column prop="vod_remarks" label="评分" width="100"/>
     </el-table>
+    </div>
 
-    <el-table v-if="(type=='6')&&config" :data="filteredPanSouResults" border style="width: 100%" v-loading="searching">
+    <div class="table-scroll-wrapper">
+      <el-table v-if="(type=='6')&&config" :data="filteredPanSouResults" border style="width: 100%; min-width: 800px" v-loading="searching">
       <el-table-column prop="vod_name" label="名称" sortable>
         <template #default="scope">
           <a :href="'/#/vod?link='+scope.row.vod_id" target="_blank">
@@ -98,6 +106,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <h2 v-if="type!='6'">API返回数据</h2>
     <div class="data" v-if="type!='6'">
@@ -126,6 +135,7 @@
       </template>
     </el-dialog>
 
+    </div>
   </div>
 </template>
 

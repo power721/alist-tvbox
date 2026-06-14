@@ -1,5 +1,10 @@
 <template>
-  <div>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">索引管理</h1>
+    </div>
+
+    <div class="page-card">
     <el-form :model="form" :label-width="labelWidth">
       <el-form-item label="站点">
         <el-select v-model="form.siteId">
@@ -49,13 +54,17 @@
         <el-button type="info" @click="validateVisible=true">校验内置索引</el-button>
       </el-form-item>
     </el-form>
-    <div class="space"></div>
+    </div>
 
-    <h2>任务列表</h2>
-    <el-row justify="end">
-      <el-button @click="loadTasks">刷新</el-button>
-      <el-button @click="cleanVisible=true">清理</el-button>
-    </el-row>
+    <div class="page-header" style="margin-top: 24px;">
+      <h1 class="page-title">任务列表</h1>
+      <div class="page-actions">
+        <el-button @click="loadTasks">刷新</el-button>
+        <el-button @click="cleanVisible=true">清理</el-button>
+      </div>
+    </div>
+
+    <div class="page-card">
     <el-table :data="tasks.content" border style="width: 100%">
       <el-table-column prop="id" label="ID" sortable width="70"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
@@ -71,14 +80,14 @@
       </el-table-column>
       <el-table-column prop="summary" label="概要"/>
       <el-table-column prop="error" label="错误"/>
-      <el-table-column prop="startTime" label="开始时间" :formatter="datetime" sortable width="155"/>
-      <el-table-column prop="endTime" label="结束时间" :formatter="datetime" sortable width="155"/>
-      <el-table-column label="耗时" width="80">
+      <el-table-column prop="startTime" label="开始时间" :formatter="datetime" sortable width="175"/>
+      <el-table-column prop="endTime" label="结束时间" :formatter="datetime" sortable width="175"/>
+      <el-table-column label="耗时" width="90">
         <template #default="scope">
           <div>{{ formatDuration(scope.row.startTime, scope.row.endTime) }}</div>
         </template>
       </el-table-column>
-      <el-table-column fixed="right" label="操作" width="140">
+      <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">数据</el-button>
           <el-button link type="danger" size="small" @click="handleCancel(scope.row)"
@@ -90,6 +99,7 @@
     </el-table>
     <el-pagination layout="total, prev, pager, next" v-model:current-page="currentPage"
                    @current-change="handleCurrentChange" :total="total"/>
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="task.name" width="60%">
       <pre>{{ task.data }}</pre>

@@ -1,4 +1,4 @@
-BASE_DIR=/etc/xiaoya
+BASE_DIR=/opt/alist-tvbox
 PORT1=4567
 PORT2=5344
 PORT3=5345
@@ -10,7 +10,7 @@ MOUNT=""
 
 usage(){
   echo "Usage: $0 [ -d BASE_DIR ] [ -p PORT1 ] [ -P PORT2 ] [ -t TAG ] [ -v MOUNT ] [ -u ] [ -l ]"
-  echo "-d BASE_DIR    数据目录，默认：/etc/xiaoya"
+  echo "-d BASE_DIR    数据目录，默认：/opt/alist-tvbox"
   echo "-p PORT1       管理界面端口，默认：4567"
   echo "-P PORT2       小雅AList端口，默认：5344"
   echo "-t TAG         Docker镜像标签，默认：latest"

@@ -1,5 +1,9 @@
 <template>
-  <div id="config">
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">系统配置</h1>
+    </div>
+
     <el-row>
       <el-col :xs="23" :sm="23" :md="23" :lg="11" :xl="11">
         <el-card class="box-card">

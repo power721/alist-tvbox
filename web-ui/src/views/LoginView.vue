@@ -3,7 +3,7 @@
     <el-alert title="关于密码加强" type="warning" description="本次升级会强制更改帐号为随机密码。" show-icon @close="closeAlert"/>
     <div class="alert">
       <p>请从Docker日志搜索“密码”或者安装目录的initial_admin_credentials.txt文件查看密码：</p>
-      <p><code>cat /etc/xiaoya/initial_admin_credentials.txt</code></p>
+      <p><code>cat /opt/alist-tvbox/initial_admin_credentials.txt</code></p>
       <p>或者查看容器内文件：</p>
       <p><code>docker exec -it alist-tvbox cat /data/initial_admin_credentials.txt</code></p>
       <p><code>docker exec -it xiaoya-tvbox cat /data/initial_admin_credentials.txt</code></p>

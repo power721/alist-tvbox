@@ -365,7 +365,7 @@
     </el-tabs>
 
     <!-- 自定义站点表单 -->
-    <el-dialog v-model="siteFormVisible" title="自定义站点" width="640px" append-to-body destroy-on-close>
+    <el-dialog v-model="siteFormVisible" title="自定义站点" append-to-body destroy-on-close>
       <el-tabs v-model="siteFormActiveTab">
         <el-tab-pane label="表单输入" name="form">
           <el-form :model="siteForm" label-width="120" style="max-height: 60vh; overflow-y: auto">
@@ -536,7 +536,7 @@
     </el-dialog>
 
     <!-- 自定义解析表单 -->
-    <el-dialog v-model="parseFormVisible" title="自定义解析" width="560px" append-to-body destroy-on-close>
+    <el-dialog v-model="parseFormVisible" title="自定义解析" append-to-body destroy-on-close>
       <el-form :model="parseForm" label-width="100">
         <el-form-item label="名称" required><el-input v-model="parseForm.name" /></el-form-item>
         <el-form-item label="类型">

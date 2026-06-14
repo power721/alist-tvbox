@@ -1,4 +1,4 @@
-BASE_DIR=/etc/xiaoya
+BASE_DIR=/opt/alist-tvbox
 TAG="native-host"
 UPDATE=false
 MOUNT=""

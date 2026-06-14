@@ -1,6 +1,10 @@
 <template>
-  <div class="files">
-    <h1>文件管理</h1>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">文件管理</h1>
+    </div>
+
+    <div class="page-card">
     <el-tabs v-model="activeTab">
       <el-tab-pane label="配置文件" name="config">
         <el-row justify="end">
@@ -21,8 +25,8 @@
           </el-table-column>
           <el-table-column fixed="right" label="操作" width="200">
             <template #default="scope">
-              <el-button type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
-              <el-button type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
+              <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
+              <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -103,9 +107,9 @@
           </el-table-column>
           <el-table-column fixed="right" label="操作" width="230">
             <template #default="scope">
-              <el-button type="primary" size="small" @click="showRenameDialog(scope.row)">重命名</el-button>
-              <el-button type="success" size="small" @click="downloadFile(scope.row)">下载</el-button>
-              <el-button type="danger" size="small" @click="handleStaticDelete(scope.row)">删除</el-button>
+              <el-button link type="primary" size="small" @click="showRenameDialog(scope.row)">重命名</el-button>
+              <el-button link type="success" size="small" @click="downloadFile(scope.row)">下载</el-button>
+              <el-button link type="danger" size="small" @click="handleStaticDelete(scope.row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -256,6 +260,7 @@
         <el-button type="primary" @click="confirmMove" :disabled="moveTargetDir === null">确定移动</el-button>
       </template>
     </el-dialog>
+    </div>
   </div>
 </template>
 

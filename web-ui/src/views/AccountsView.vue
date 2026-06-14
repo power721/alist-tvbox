@@ -1,13 +1,16 @@
 <template>
-  <div class="list">
-    <h1>阿里账号列表</h1>
-    <el-row justify="end">
-      <el-button @click="load">刷新</el-button>
-      <el-button type="primary" @click="handleAdd">添加</el-button>
-    </el-row>
-    <div class="space"></div>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">阿里账号列表</h1>
+      <div class="page-actions">
+        <el-button @click="load">刷新</el-button>
+        <el-button type="primary" @click="handleAdd">添加</el-button>
+      </div>
+    </div>
 
-    <el-table :data="accounts" border style="width: 100%">
+    <div class="page-card">
+    <div class="table-scroll-wrapper">
+      <el-table :data="accounts" border style="width: 100%; min-width: 900px">
 <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="nickname" label="昵称" sortable width="180"/>
       <el-table-column prop="autoCheckin" label="自动签到" width="90">
@@ -72,6 +75,8 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
+    </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle" width="60%">
       <el-form :model="form" label-width="auto">
@@ -279,13 +284,16 @@
       </template>
     </el-dialog>
 
-    <div class="divider"></div>
+    <div class="page-header" style="margin-top: 24px;">
+      <h1 class="page-title">网盘账号列表</h1>
+    </div>
+    <driver-account-view embedded></driver-account-view>
 
-    <PikPakView></PikPakView>
+    <div class="page-header" style="margin-top: 24px;">
+      <h1 class="page-title">PikPak账号列表</h1>
+    </div>
+    <PikPakView embedded></PikPakView>
 
-    <div class="divider"></div>
-
-    <driver-account-view></driver-account-view>
   </div>
 </template>
 

@@ -1,0 +1,417 @@
+/* web-ui/src/assets/modern.css */
+
+/* ============================================
+   页面容器
+   ============================================ */
+.modern-main {
+  background: var(--bg-primary);
+  min-height: calc(100vh - 60px);
+}
+
+.page-container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: var(--spacing-xl);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.page-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+/* ============================================
+   卡片组件
+   ============================================ */
+.page-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: var(--spacing-xl);
+  margin-bottom: var(--spacing-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  transition: all var(--transition-base) var(--ease);
+  animation: fadeInUp var(--transition-slow) var(--ease);
+}
+
+.page-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--divider-color);
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================
+   按钮样式
+   ============================================ */
+.el-button {
+  transition: all var(--transition-base) var(--ease);
+}
+
+.el-button--primary {
+  background: var(--primary-gradient) !important;
+  border: none !important;
+  border-radius: 8px;
+  font-weight: 500;
+  color: white !important;
+}
+
+.el-button--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.el-button--primary:active {
+  transform: translateY(0);
+}
+
+.el-button--default {
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+}
+
+.el-button--default:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+/* 移除了.el-button--text的通用样式，以免影响表格内的link按钮 */
+
+
+/* ============================================
+   表格样式
+   ============================================ */
+.el-table {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  width: 100%;
+}
+
+.el-table__header th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border-color);
+  height: 56px;
+}
+
+.el-table__row {
+  height: 52px;
+  transition: all var(--transition-fast) var(--ease);
+}
+
+.el-table__row:hover {
+  background: var(--bg-secondary);
+  transform: scale(1.002);
+}
+
+.el-table .action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* 表格内的link按钮保持正常大小 */
+.el-table .el-button--small {
+  padding: 5px 11px;
+  font-size: 12px;
+  min-height: 24px;
+}
+
+.el-table .el-button {
+  border-radius: 4px;
+}
+
+/* ============================================
+   表单样式
+   ============================================ */
+.el-input__wrapper {
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  transition: all var(--transition-base) var(--ease);
+}
+
+.el-input__wrapper:hover {
+  border-color: var(--primary-color);
+}
+
+.el-input__wrapper.is-focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.el-select__wrapper {
+  border-radius: 8px;
+}
+
+.el-switch {
+  --el-switch-on-color: var(--primary-color);
+}
+
+.el-form-item {
+  margin-bottom: var(--spacing-md);
+}
+
+
+/* ============================================
+   导航栏样式
+   ============================================ */
+.el-header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.el-menu {
+  background: transparent;
+  border: none;
+}
+
+.el-menu-item {
+  border-radius: 8px;
+  margin: 0 4px;
+  transition: all var(--transition-base) var(--ease);
+}
+
+.el-menu-item:hover {
+  background: var(--bg-secondary);
+}
+
+.el-menu-item.is-active {
+  color: var(--primary-color);
+  background: var(--bg-secondary);
+  position: relative;
+}
+
+/* 移除导航栏高亮下划线 */
+
+/* ============================================
+   响应式设计
+   ============================================ */
+@media (max-width: 1199px) {
+  .page-container {
+    max-width: 100%;
+    padding: 20px;
+  }
+
+  .page-card {
+    padding: 20px;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 767px) {
+  .page-container {
+    padding: 16px;
+  }
+
+  .page-card {
+    padding: 16px;
+    border-radius: 8px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  /* Table responsive behavior */
+  .el-table {
+    min-width: 800px;
+  }
+
+  /* Sticky first column for context while scrolling */
+  .el-table th:first-child,
+  .el-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--bg-card);
+    z-index: 2;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+  }
+
+  /* Sticky action column */
+  .el-table .el-table__fixed-right {
+    position: sticky;
+    right: 0;
+    background: var(--bg-card);
+    z-index: 2;
+  }
+
+  /* Touch-friendly table action buttons */
+  .el-table .el-button--small {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+  }
+
+  /* Full-width dialogs on mobile */
+  .el-dialog {
+    width: 95vw !important;
+    margin: 5px auto !important;
+  }
+
+  /* Stack form labels and inputs vertically */
+  .el-form-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .el-form-item__label {
+    width: 100% !important;
+    text-align: left;
+    margin-bottom: 8px;
+  }
+
+  .el-form-item__content {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  /* Full-width form controls */
+  .el-input,
+  .el-select,
+  .el-textarea {
+    width: 100%;
+  }
+
+  /* Touch-friendly form controls */
+  .el-button {
+    min-height: var(--tap-target-min);
+    padding: 12px 16px;
+  }
+
+  .el-switch {
+    min-height: var(--tap-target-min);
+  }
+
+  .el-checkbox,
+  .el-radio {
+    min-height: var(--tap-target-min);
+    line-height: var(--tap-target-min);
+  }
+
+  /* Mobile navigation */
+  .desktop-nav {
+    display: none;
+  }
+
+  .mobile-nav-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 0 16px;
+  }
+
+  .app-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .mobile-menu-trigger {
+    min-width: var(--tap-target-min);
+    min-height: var(--tap-target-min);
+  }
+
+  /* Wrap action buttons to multiple rows */
+  .page-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* ============================================
+   Mobile Utilities
+   ============================================ */
+.table-scroll-wrapper {
+  width: 100%;
+}
+
+.mobile-only {
+  display: none;
+}
+
+.desktop-only {
+  display: block;
+}
+
+@media (max-width: 767px) {
+  .mobile-only {
+    display: block;
+  }
+
+  .desktop-only {
+    display: none;
+  }
+
+  .table-scroll-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+}
+
+/* Desktop navigation - hide mobile elements */
+@media (min-width: 768px) {
+  .mobile-nav-header,
+  .mobile-menu-trigger {
+    display: none;
+  }
+
+  .desktop-nav {
+    display: flex;
+  }
+}

@@ -1,25 +1,25 @@
 <template>
-  <div class="files">
-    <h1>豆瓣电影数据列表</h1>
-    <a href="/#/tmdb">TMDB电影数据列表</a>
-    <el-row justify="end">
-      <el-input v-model="keyword" @change="search" class="search" autocomplete="off"/>
-      <el-button type="primary" @click="search" :disabled="!keyword">
-        搜索
-      </el-button>
-      <el-button @click="scrapeVisible=true" v-if="showScrape">刮削</el-button>
-      <el-button @click="fixMeta">去重</el-button>
-      <el-button @click="refresh">刷新</el-button>
-      <el-button type="primary" @click="addMeta" v-if="showScrape">添加</el-button>
-      <el-popconfirm @confirm="clear" title="是否清空全部数据？">
-        <template #reference>
-          <el-button type="danger">清空</el-button>
-        </template>
-      </el-popconfirm>
-      <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
-    </el-row>
-    <div class="space"></div>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">豆瓣电影数据列表</h1>
+      <div class="page-actions">
+        <a href="/#/tmdb">TMDB电影数据列表</a>
+        <el-input v-model="keyword" @change="search" style="width: 200px" autocomplete="off"/>
+        <el-button type="primary" @click="search" :disabled="!keyword">搜索</el-button>
+        <el-button @click="scrapeVisible=true" v-if="showScrape">刮削</el-button>
+        <el-button @click="fixMeta">去重</el-button>
+        <el-button @click="refresh">刷新</el-button>
+        <el-button type="primary" @click="addMeta" v-if="showScrape">添加</el-button>
+        <el-popconfirm @confirm="clear" title="是否清空全部数据？">
+          <template #reference>
+            <el-button type="danger">清空</el-button>
+          </template>
+        </el-popconfirm>
+        <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
+      </div>
+    </div>
 
+    <div class="page-card">
     <el-table :data="files" border @selection-change="handleSelectionChange" style="width: 100%">
       <el-table-column type="selection" width="55"/>
       <el-table-column prop="id" label="ID" width="75"/>
@@ -60,6 +60,8 @@
       <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page" @current-change="load"
                      :page-size="size" :page-sizes="sizes" :total="total" @size-change="handleSizeChange"/>
     </div>
+    </div>
+  </div>
 
     <el-dialog v-model="formVisible" :title="'编辑 '+form.id" width="60%">
       <el-form label-width="140px">
@@ -147,7 +149,6 @@
       </template>
     </el-dialog>
 
-  </div>
 </template>
 
 <script setup lang="ts">

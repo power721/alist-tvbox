@@ -1,18 +1,21 @@
 <template>
-  <div class="subscriptions">
-    <h1>订阅列表</h1>
-    <el-row justify="end">
-      <el-button @click="load">刷新</el-button>
-      <el-button @click="showGlobalConfig">全局配置</el-button>
-      <el-button @click="showPlugins">订阅源管理</el-button>
-      <el-button @click="showPluginFilters">过滤器管理</el-button>
-      <el-button @click="showScan">同步影视</el-button>
-      <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
-      <el-button type="primary" @click="handleAdd">添加</el-button>
-    </el-row>
-    <div class="space"></div>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">订阅管理</h1>
+      <div class="page-actions">
+        <el-button @click="load">刷新</el-button>
+        <el-button @click="showGlobalConfig">全局配置</el-button>
+        <el-button @click="showPlugins">订阅源管理</el-button>
+        <el-button @click="showPluginFilters">过滤器管理</el-button>
+        <el-button @click="showScan">同步影视</el-button>
+        <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
+        <el-button type="primary" @click="handleAdd">添加</el-button>
+      </div>
+    </div>
 
-    <el-table :data="subscriptions" border style="width: 100%">
+    <div class="page-card">
+    <div class="table-scroll-wrapper">
+      <el-table :data="subscriptions" v-loading="loading" border style="width: 100%; min-width: 800px">
       <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="sid" label="订阅ID" sortable width="180"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
@@ -49,6 +52,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-row>
       猫影视配置接口：
@@ -96,6 +100,7 @@
     <el-row>
       <el-button @click="syncCat">同步文件</el-button>
     </el-row>
+    </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form">
@@ -221,7 +226,8 @@
         </el-col>
       </el-row>
 
-      <el-table :data="devices" border style="width: 100%">
+      <div class="table-scroll-wrapper">
+        <el-table :data="devices" v-loading="loadingDevices" border style="width: 100%; min-width: 800px">
         <el-table-column prop="name" label="名称" sortable width="180"/>
         <el-table-column prop="uuid" label="ID" sortable width="180"/>
         <el-table-column prop="ip" label="URL地址" sortable>
@@ -229,13 +235,14 @@
             <a :href="scope.row.ip" target="_blank">{{ scope.row.ip }}</a>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="100">
+        <el-table-column fixed="right" label="操作" width="140">
           <template #default="scope">
             <el-button link type="primary" size="small" @click="syncHistory(scope.row.id)">同步</el-button>
             <el-button link type="danger" size="small" @click="showDelete(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </el-dialog>
 
     <el-dialog v-model="confirm" title="删除影视设备" width="30%">
@@ -359,7 +366,8 @@
 
       <el-input v-model="sourceFilter" placeholder="搜索插件名称或地址" clearable style="width: 280px; margin-bottom: 10px"/>
 
-      <el-table :data="filteredManagedSources" row-key="id" id="plugins-table" border style="width: 100%" @selection-change="onPluginSelectionChange">
+      <div class="table-scroll-wrapper">
+        <el-table :data="filteredManagedSources" row-key="id" id="plugins-table" border style="width: 100%; min-width: 1200px" @selection-change="onPluginSelectionChange">
         <el-table-column type="selection" width="55" :selectable="isSourceDeletable"/>
         <el-table-column label="顺序" width="100">
           <template #default="scope">
@@ -415,6 +423,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </el-dialog>
 
     <el-dialog v-model="sourceExtendVisible" title="扩展配置" width="720px">
@@ -476,13 +485,14 @@
         </el-form-item>
       </el-form>
 
-      <el-table
-        :data="pluginFilters"
-        row-key="id"
-        id="plugin-filters-table"
-        border
-        style="width: 100%"
-        @selection-change="onPluginFilterSelectionChange"
+      <div class="table-scroll-wrapper">
+        <el-table
+          :data="pluginFilters"
+          row-key="id"
+          id="plugin-filters-table"
+          border
+          style="width: 100%; min-width: 1400px"
+          @selection-change="onPluginFilterSelectionChange"
       >
         <el-table-column type="selection" width="55"/>
         <el-table-column label="顺序" width="80">
@@ -561,6 +571,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </el-dialog>
 
     <el-dialog v-model="pluginFilterConfigVisible" title="过滤器配置" width="860px" destroy-on-close>
@@ -815,8 +826,10 @@ const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
 const subscriptions = ref<Sub[]>([])
+const loading = ref(false)
 const tokens = ref([])
 const devices = ref<Device[]>([])
+const loadingDevices = ref(false)
 const detailVisible = ref(false)
 const detailTab = ref('json')
 const rawJsonData = computed(() => JSON.stringify(jsonData.value, null, 2))
@@ -1840,8 +1853,11 @@ const handleCancel = () => {
 }
 
 const loadDevices = () => {
+  loadingDevices.value = true
   axios.get('/api/devices').then(({data}) => {
     devices.value = data
+  }).finally(() => {
+    loadingDevices.value = false
   })
 }
 
@@ -1951,8 +1967,11 @@ const syncCat = () => {
 }
 
 const load = () => {
+  loading.value = true
   axios.get('/api/subscriptions').then(({data}) => {
     subscriptions.value = data
+  }).finally(() => {
+    loading.value = false
   })
 }
 
