@@ -1784,8 +1784,32 @@ const loadPluginSettings = () => {
 }
 
 const loadGitHubProxyNodes = () => {
+  // 加载预设节点
   axios.get('/api/settings/github-proxy/nodes').then(({data}) => {
-    githubProxyNodes.value = data || []
+    const defaultNodes = data || []
+
+    // 加载自定义节点
+    axios.get('/api/settings/github-proxy/custom-nodes').then(({data: customUrls}) => {
+      const customNodes = (customUrls || []).map((url: string) => {
+        try {
+          const urlObj = new URL(url)
+          return {
+            label: '自定义节点',
+            url: url,
+            host: urlObj.host
+          }
+        } catch (e) {
+          console.error('Invalid custom URL:', url, e)
+          return null
+        }
+      }).filter((node: any) => node !== null)
+
+      // 合并节点列表：预设节点 + 自定义节点
+      githubProxyNodes.value = [...defaultNodes, ...customNodes]
+    }).catch(() => {
+      // 如果加载自定义节点失败，只使用预设节点
+      githubProxyNodes.value = defaultNodes
+    })
   })
 }
 
@@ -1847,25 +1871,38 @@ const addCustomProxiesToList = () => {
     return
   }
 
-  // 添加到 githubProxyNodes
-  newUrls.forEach(url => {
-    try {
-      const urlObj = new URL(url)
-      githubProxyNodes.value.push({
-        label: '自定义节点',
-        url: url,
-        host: urlObj.host
+  // 获取现有的自定义节点URL列表
+  axios.get('/api/settings/github-proxy/custom-nodes').then(({data}) => {
+    const existingCustomUrls = data || []
+    const allCustomUrls = [...existingCustomUrls, ...newUrls]
+
+    // 保存到 settings
+    axios.post('/api/settings/github-proxy/custom-nodes', allCustomUrls)
+      .then(() => {
+        // 添加到 githubProxyNodes
+        newUrls.forEach(url => {
+          try {
+            const urlObj = new URL(url)
+            githubProxyNodes.value.push({
+              label: '自定义节点',
+              url: url,
+              host: urlObj.host
+            })
+          } catch (e) {
+            console.error('Invalid URL:', url, e)
+          }
+        })
+
+        addProxyDialogVisible.value = false
+        ElMessage.success(`已添加 ${newUrls.length} 个自定义节点并保存`)
+
+        // 自动开始测速
+        benchmarkCustomProxies(newUrls)
       })
-    } catch (e) {
-      console.error('Invalid URL:', url, e)
-    }
+      .catch(() => {
+        ElMessage.error('保存自定义节点失败')
+      })
   })
-
-  addProxyDialogVisible.value = false
-  ElMessage.success(`已添加 ${newUrls.length} 个自定义节点到测速列表`)
-
-  // 自动开始测速
-  benchmarkCustomProxies(newUrls)
 }
 
 // 测速自定义代理

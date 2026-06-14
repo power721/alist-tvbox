@@ -122,4 +122,32 @@ public class SettingController {
         return Map.of("success", true, "count", Math.min(proxyList.size(), 5));
     }
 
+    /**
+     * 获取用户自定义的 GitHub 代理节点列表
+     */
+    @GetMapping("/github-proxy/custom-nodes")
+    public List<String> getCustomNodes() {
+        Setting setting = service.get("github_custom_nodes");
+        if (setting == null || setting.getValue() == null || setting.getValue().isEmpty()) {
+            return List.of();
+        }
+        return List.of(setting.getValue().split("\n"));
+    }
+
+    /**
+     * 保存用户自定义的 GitHub 代理节点列表
+     */
+    @PostMapping("/github-proxy/custom-nodes")
+    public Map<String, Object> saveCustomNodes(@RequestBody List<String> nodes) {
+        String value = String.join("\n", nodes);
+        Setting setting = service.get("github_custom_nodes");
+        if (setting == null) {
+            setting = new Setting();
+            setting.setName("github_custom_nodes");
+        }
+        setting.setValue(value);
+        service.update(setting);
+        return Map.of("success", true, "count", nodes.size());
+    }
+
 }
