@@ -156,15 +156,33 @@ const remoteInfo = reactive({
 // 同步结果
 const syncResults = ref<Record<string, SyncResult>>({})
 
+// 规范化 URL：只保留协议、主机和端口
+const normalizeUrl = (url: string): string => {
+  try {
+    const urlObj = new URL(url)
+    return `${urlObj.protocol}//${urlObj.host}`
+  } catch (e) {
+    // 如果 URL 解析失败，返回原值
+    return url
+  }
+}
+
 const handleConnect = async () => {
   if (!connectionForm.url || !connectionForm.username || !connectionForm.password) {
     ElMessage.warning('请填写完整的连接信息')
     return
   }
 
+  // 规范化 URL
+  const normalizedUrl = normalizeUrl(connectionForm.url.trim())
+
   connecting.value = true
   try {
-    const response = await axios.post('/api/sync/connect', connectionForm)
+    const response = await axios.post('/api/sync/connect', {
+      url: normalizedUrl,
+      username: connectionForm.username,
+      password: connectionForm.password
+    })
 
     if (response.data.success) {
       remoteInfo.appVersion = response.data.appVersion
@@ -187,11 +205,13 @@ const handleSync = async () => {
     return
   }
 
+  const normalizedUrl = normalizeUrl(connectionForm.url.trim())
+
   syncing.value = true
   try {
     const endpoint = syncConfig.direction === 'push' ? '/api/sync/push' : '/api/sync/pull'
     const payload = {
-      remoteUrl: connectionForm.url,
+      remoteUrl: normalizedUrl,
       username: connectionForm.username,
       password: connectionForm.password,
       modules: syncConfig.modules,
@@ -230,11 +250,13 @@ const handleVersionMismatch = async () => {
   ).catch(() => false)
 
   if (confirmed) {
+    const normalizedUrl = normalizeUrl(connectionForm.url.trim())
+
     syncing.value = true
     try {
       const endpoint = syncConfig.direction === 'push' ? '/api/sync/push' : '/api/sync/pull'
       const payload = {
-        remoteUrl: connectionForm.url,
+        remoteUrl: normalizedUrl,
         username: connectionForm.username,
         password: connectionForm.password,
         modules: syncConfig.modules,
