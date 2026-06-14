@@ -1,44 +1,40 @@
 <template>
   <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">文件浏览</h1>
+      <div class="page-actions">
+        <el-button :icon="HomeFilled" @click="goBack" v-if="isHistory">返回</el-button>
+        <el-button :icon="Film" @click="goHistory" v-else>播放历史</el-button>
+        <el-button :icon="Setting" @click="settingVisible=true" v-if="store.admin">设置</el-button>
+        <el-button :icon="Plus" @click="handleAdd">添加</el-button>
+        <el-button type="warning" @click="openDoubanMode">豆瓣</el-button>
+      </div>
+    </div>
 
     <div class="page-card">
-    <el-row justify="space-between">
-      <el-col :span="18">
-        <el-breadcrumb separator="/">
-          <el-breadcrumb-item v-for="(item,index) in paths">
-            <a id="copy" @click="copy(item.path)" v-if="index==paths.length-1">
-              {{ item.text }}
-            </a>
-            <a @click="loadFolder(item.path)" v-else>
-              {{ item.text }}
-            </a>
-          </el-breadcrumb-item>
-        </el-breadcrumb>
-      </el-col>
+    <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+      <el-breadcrumb separator="/">
+        <el-breadcrumb-item v-for="(item,index) in paths">
+          <a id="copy" @click="copy(item.path)" v-if="index==paths.length-1">
+            {{ item.text }}
+          </a>
+          <a @click="loadFolder(item.path)" v-else>
+            {{ item.text }}
+          </a>
+        </el-breadcrumb-item>
+      </el-breadcrumb>
 
-      <el-col :span="2">
-        <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源">
-          <template #append>
-            <el-button :icon="Search" :disabled="searching" @click="search"/>
-          </template>
-        </el-input>
-      </el-col>
+      <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源" style="width: 300px;">
+        <template #append>
+          <el-button :icon="Search" :disabled="searching" @click="search"/>
+        </template>
+      </el-input>
+    </div>
 
-      <el-col :span="2">
-        <el-button :icon="HomeFilled" circle @click="goBack" v-if="isHistory"/>
-        <el-button :icon="Film" circle @click="goHistory" v-else/>
-        <el-button :icon="Setting" circle @click="settingVisible=true" v-if="store.admin"/>
-        <el-button :icon="Plus" circle @click="handleAdd"/>
-        <el-button type="warning" @click="openDoubanMode">豆瓣</el-button>
-      </el-col>
-    </el-row>
-
-    <div class="divider"></div>
-
-    <el-row justify="center">
-      <el-col :xs="3" :sm="3" :md="5" :span="9" v-if="results.length">
-        {{ filteredResults.length }}/{{ results.length }}条搜索结果&nbsp;&nbsp;
-        <el-select style="width: 90px" v-model="shareType" @change="filterSearchResults">
+    <div v-if="results.length" style="margin-bottom: 16px;">
+      <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+        <span>{{ filteredResults.length }}/{{ results.length }}条搜索结果</span>
+        <el-select style="width: 120px" v-model="shareType" @change="filterSearchResults">
           <el-option
             v-for="item in options"
             :key="item.value"
@@ -46,8 +42,9 @@
             :value="item.value"
           />
         </el-select>
-        <el-button :icon="Delete" circle @click="clearSearch"></el-button>
-        <el-table :data="filteredResults" v-loading="searching" class="results" @row-click="loadResult">
+        <el-button :icon="Delete" @click="clearSearch">清除</el-button>
+      </div>
+      <el-table :data="filteredResults" v-loading="searching" @row-click="loadResult" border>
           <el-table-column prop="vod_name" label="内容">
             <template #default="scope">
               <el-tooltip :content="scope.row.vod_play_url">
@@ -57,17 +54,17 @@
             </template>
           </el-table-column>
         </el-table>
-      </el-col>
+    </div>
 
-      <el-col :xs="22" :sm="20" :md="18" :span="14">
-        <el-row justify="end">
-          <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
-          <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
-          <el-button @click="showScan" v-if="store.admin">同步影视</el-button>
-          <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
-        </el-row>
-        <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" style="width: 100%"
-                  @row-click="load">
+    <div style="margin-bottom: 12px; display: flex; justify-content: flex-end; gap: 12px;">
+      <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
+      <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
+      <el-button @click="showScan" v-if="store.admin">同步影视</el-button>
+      <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
+    </div>
+
+    <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%"
+              @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
           <el-table-column prop="vod_name" label="名称" sortable>
             <template #default="scope">
@@ -131,11 +128,11 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-pagination layout="total, prev, pager, next, jumper, sizes"
-                       :current-page="page" :page-size="size" :total="total"
-                       @current-change="handlePageChange" @size-change="handleSizeChange"/>
-      </el-col>
-    </el-row>
+
+    <el-pagination layout="total, prev, pager, next, jumper, sizes"
+                   :current-page="page" :page-size="size" :total="total"
+                   @current-change="handlePageChange" @size-change="handleSizeChange"/>
+    </div>
 
     <el-dialog v-model="imageVisible" :title="playItem.title" :fullscreen="true">
       <el-row>
@@ -680,7 +677,6 @@
       </el-container>
     </el-dialog>
 
-    </div>
   </div>
 </template>
 
