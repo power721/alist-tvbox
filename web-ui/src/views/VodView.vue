@@ -65,22 +65,7 @@
         </div>
       </div>
 
-      <div style="min-width: 0;">
-        <div v-if="!files.length && !loading" class="table-scroll-wrapper">
-          <el-table :data="[{placeholder: true}]" border style="width: 100%;" :show-header="true">
-            <el-table-column label="名称" min-width="300">
-              <template #default>
-                <span style="color: #999; font-style: italic;">暂无数据</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="大小" width="120" />
-            <el-table-column label="修改时间" width="180" />
-            <el-table-column label="豆瓣ID" width="120" />
-            <el-table-column label="评分" width="90" />
-            <el-table-column width="120" />
-          </el-table>
-        </div>
-        <div v-else class="table-scroll-wrapper">
+        <div style="min-width: 0;">
           <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border
                     style="width: 100%;"
                     class="clickable-table" @row-click="load">
@@ -153,7 +138,6 @@
     <el-pagination layout="total, prev, pager, next, jumper, sizes"
                    :current-page="page" :page-size="size" :total="total"
                    @current-change="handlePageChange" @size-change="handleSizeChange"/>
-      </div>
     </div>
 
     <div v-else>
@@ -229,7 +213,7 @@
     <el-pagination layout="total, prev, pager, next, jumper, sizes"
                    :current-page="page" :page-size="size" :total="total"
                    @current-change="handlePageChange" @size-change="handleSizeChange"/>
-    </div>
+      </div>
     </div>
 
     <el-dialog v-model="imageVisible" :title="playItem.title" :fullscreen="true">
