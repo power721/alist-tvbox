@@ -339,6 +339,37 @@
     min-height: var(--tap-target-min);
     line-height: var(--tap-target-min);
   }
+
+  /* Mobile navigation */
+  .desktop-nav {
+    display: none;
+  }
+
+  .mobile-nav-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 0 16px;
+  }
+
+  .app-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .mobile-menu-trigger {
+    min-width: var(--tap-target-min);
+    min-height: var(--tap-target-min);
+  }
+
+  /* Wrap action buttons to multiple rows */
+  .page-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }
 
 /* ============================================
@@ -370,5 +401,17 @@
     -webkit-overflow-scrolling: touch;
     margin: 0 -16px;
     padding: 0 16px;
+  }
+}
+
+/* Desktop navigation - hide mobile elements */
+@media (min-width: 768px) {
+  .mobile-nav-header,
+  .mobile-menu-trigger {
+    display: none;
+  }
+
+  .desktop-nav {
+    display: flex;
   }
 }
