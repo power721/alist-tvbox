@@ -348,11 +348,31 @@
           </el-select>
         </el-form-item>
         <el-form-item label="GitHub代理">
-          <el-input
+          <el-select
             v-model="pluginSettingsForm.githubProxy"
+            filterable
+            allow-create
+            default-first-option
+            placeholder="选择或输入自定义代理"
             style="width: 460px"
-            placeholder="https://gh.llkk.cc/"
-          />
+          >
+            <el-option
+              v-for="node in githubProxyNodes"
+              :key="node.url"
+              :label="formatNodeLabel(node)"
+              :value="node.url"
+            >
+              <span style="float: left">{{ node.label }}</span>
+              <span v-if="benchmarkResults.get(node.url)" style="float: right; color: #8492a6; font-size: 13px">
+                {{ formatBenchmarkResult(benchmarkResults.get(node.url)) }}
+              </span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button @click="benchmarkGitHubProxy" :loading="benchmarking">
+            {{ benchmarking ? '测速中...' : '测速' }}
+          </el-button>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="savePluginSettings">保存设置</el-button>
@@ -917,6 +937,9 @@ const pluginSettingsForm = ref({
   githubProxy: '',
   pluginRunMode: 'java'
 })
+const githubProxyNodes = ref<any[]>([])
+const benchmarking = ref(false)
+const benchmarkResults = ref<Map<string, any>>(new Map())
 const selectedPluginIds = ref<number[]>([])
 const sourceExtendTarget = ref<ManagedSource | null>(null)
 const sourceExtendText = ref('')
@@ -1555,6 +1578,51 @@ const loadPluginSettings = () => {
   axios.get('/api/settings/plugin_run_mode').then(({data}) => {
     pluginSettingsForm.value.pluginRunMode = data?.value || 'java'
   })
+  loadGitHubProxyNodes()
+}
+
+const loadGitHubProxyNodes = () => {
+  axios.get('/api/settings/github-proxy/nodes').then(({data}) => {
+    githubProxyNodes.value = data || []
+  })
+}
+
+const benchmarkGitHubProxy = () => {
+  if (benchmarking.value) return
+
+  benchmarking.value = true
+  benchmarkResults.value.clear()
+
+  const urls = githubProxyNodes.value.map(node => node.url)
+
+  axios.post('/api/settings/github-proxy/benchmark', { urls })
+    .then(({data}) => {
+      data.forEach((result: any) => {
+        benchmarkResults.value.set(result.url, result)
+      })
+      ElMessage.success('测速完成')
+    })
+    .catch(() => {
+      ElMessage.error('测速失败')
+    })
+    .finally(() => {
+      benchmarking.value = false
+    })
+}
+
+const formatNodeLabel = (node: any) => {
+  if (!node.url) {
+    return '无代理（直连）'
+  }
+  return `${node.label} (${node.host || node.url})`
+}
+
+const formatBenchmarkResult = (result: any) => {
+  if (!result) return ''
+  if (!result.success) {
+    return '失败'
+  }
+  return `${result.latency}ms`
 }
 
 const showGlobalConfig = () => {

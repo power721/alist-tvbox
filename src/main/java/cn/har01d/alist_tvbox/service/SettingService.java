@@ -55,6 +55,7 @@ public class SettingService {
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final ObjectMapper objectMapper;
+    private final GitHubProxyService gitHubProxyService;
 
     public SettingService(JdbcTemplate jdbcTemplate,
                           Environment environment,
@@ -64,7 +65,8 @@ public class SettingService {
                           TokenFilter tokenFilter,
                           SettingRepository settingRepository,
                           DriverAccountRepository driverAccountRepository,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          GitHubProxyService gitHubProxyService) {
         this.jdbcTemplate = jdbcTemplate;
         this.environment = environment;
         this.appProperties = appProperties;
@@ -74,6 +76,7 @@ public class SettingService {
         this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.objectMapper = objectMapper;
+        this.gitHubProxyService = gitHubProxyService;
     }
 
     @PostConstruct
@@ -355,6 +358,13 @@ public class SettingService {
         }
         if ("ali_to_115".equals(setting.getName())) {
             aListLocalService.updateSetting("ali_to_115", setting.getValue(), "bool");
+        }
+        if ("github_proxy".equals(setting.getName())) {
+            try {
+                gitHubProxyService.saveToFile(setting.getValue());
+            } catch (IOException e) {
+                log.error("保存 GitHub 代理到文件失败", e);
+            }
         }
         return settingRepository.save(setting);
     }
