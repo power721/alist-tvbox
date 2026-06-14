@@ -14,7 +14,8 @@
     </div>
 
     <div class="page-card">
-    <el-table :data="subscriptions" v-loading="loading" border style="width: 100%">
+    <div class="table-scroll-wrapper">
+      <el-table :data="subscriptions" v-loading="loading" border style="width: 100%; min-width: 800px">
       <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="sid" label="订阅ID" sortable width="180"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
@@ -51,6 +52,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-row>
       猫影视配置接口：
@@ -224,7 +226,8 @@
         </el-col>
       </el-row>
 
-      <el-table :data="devices" v-loading="loadingDevices" border style="width: 100%">
+      <div class="table-scroll-wrapper">
+        <el-table :data="devices" v-loading="loadingDevices" border style="width: 100%; min-width: 800px">
         <el-table-column prop="name" label="名称" sortable width="180"/>
         <el-table-column prop="uuid" label="ID" sortable width="180"/>
         <el-table-column prop="ip" label="URL地址" sortable>
@@ -239,6 +242,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </el-dialog>
 
     <el-dialog v-model="confirm" title="删除影视设备" width="30%">
@@ -362,7 +366,8 @@
 
       <el-input v-model="sourceFilter" placeholder="搜索插件名称或地址" clearable style="width: 280px; margin-bottom: 10px"/>
 
-      <el-table :data="filteredManagedSources" row-key="id" id="plugins-table" border style="width: 100%" @selection-change="onPluginSelectionChange">
+      <div class="table-scroll-wrapper">
+        <el-table :data="filteredManagedSources" row-key="id" id="plugins-table" border style="width: 100%; min-width: 1200px" @selection-change="onPluginSelectionChange">
         <el-table-column type="selection" width="55" :selectable="isSourceDeletable"/>
         <el-table-column label="顺序" width="100">
           <template #default="scope">
@@ -418,6 +423,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </el-dialog>
 
     <el-dialog v-model="sourceExtendVisible" title="扩展配置" width="720px">
@@ -479,13 +485,14 @@
         </el-form-item>
       </el-form>
 
-      <el-table
-        :data="pluginFilters"
-        row-key="id"
-        id="plugin-filters-table"
-        border
-        style="width: 100%"
-        @selection-change="onPluginFilterSelectionChange"
+      <div class="table-scroll-wrapper">
+        <el-table
+          :data="pluginFilters"
+          row-key="id"
+          id="plugin-filters-table"
+          border
+          style="width: 100%; min-width: 1400px"
+          @selection-change="onPluginFilterSelectionChange"
       >
         <el-table-column type="selection" width="55"/>
         <el-table-column label="顺序" width="80">
@@ -564,6 +571,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </el-dialog>
 
     <el-dialog v-model="pluginFilterConfigVisible" title="过滤器配置" width="860px" destroy-on-close>
