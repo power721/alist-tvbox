@@ -283,14 +283,15 @@
     </el-dialog>
 
     <div class="page-header" style="margin-top: 24px;">
+      <h1 class="page-title">网盘账号列表</h1>
+    </div>
+    <driver-account-view embedded></driver-account-view>
+
+    <div class="page-header" style="margin-top: 24px;">
       <h1 class="page-title">PikPak账号列表</h1>
     </div>
     <PikPakView embedded></PikPakView>
 
-    <div class="page-header" style="margin-top: 24px;">
-      <h1 class="page-title">网盘账号列表</h1>
-    </div>
-    <driver-account-view embedded></driver-account-view>
   </div>
 </template>
 

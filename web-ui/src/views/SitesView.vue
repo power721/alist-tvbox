@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title">站点管理</h1>
+      <h1 class="page-title">AList站点列表</h1>
       <div class="page-actions">
         <el-button @click="load">刷新</el-button>
         <el-button type="primary" @click="handleAdd">添加</el-button>
