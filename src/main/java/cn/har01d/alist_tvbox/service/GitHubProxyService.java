@@ -236,7 +236,7 @@ public class GitHubProxyService {
                     node.setSuccess(true);
                     node.setLatency(latency);
                     node.setSpeed(0.0);
-                    log.info("测速成功: {} - ms (版本: {})", node.getHost(), latency, content);
+                    log.info("测速成功: {} - {}ms (版本: {})", node.getHost(), latency, content);
                 } else {
                     node.setSuccess(false);
                     node.setError("内容验证失败（非版本号）: " + content.substring(0, Math.min(20, content.length())));
