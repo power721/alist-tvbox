@@ -2,22 +2,28 @@
 
 # 通用下载函数，支持多代理 fallback
 download_with_proxy() {
-  local url=$1
-  local output=$2
+  url=$1
+  output=$2
 
   # 读取多代理列表，逐个尝试（最多 5 个）
   if [ -f "/data/github_proxy.txt" ]; then
-    proxies=($(head -n 5 "/data/github_proxy.txt" 2>/dev/null | grep -v '^$'))
+    proxies=$(head -n 5 "/data/github_proxy.txt" 2>/dev/null | grep -v '^$')
   else
-    proxies=()
+    proxies=""
   fi
 
   # 尝试使用代理下载
-  for proxy in "${proxies[@]}"; do
-    if wget -T 30 -t 1 "${proxy}${url}" -O "${output}" 2>/dev/null; then
-      return 0
-    fi
-  done
+  if [ -n "$proxies" ]; then
+    echo "$proxies" | while IFS= read -r proxy; do
+      if [ -n "$proxy" ]; then
+        if wget -T 30 -t 1 "${proxy}${url}" -O "${output}" 2>/dev/null; then
+          exit 0
+        fi
+      fi
+    done
+    # 检查是否下载成功
+    [ -f "$output" ] && [ -s "$output" ] && return 0
+  fi
 
   # 所有代理失败，尝试直连
   wget -T 30 -t 2 "${url}" -O "${output}"

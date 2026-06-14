@@ -37,22 +37,23 @@ init() {
   cd /www/
 
   # 读取多代理列表，逐个尝试（最多 5 个）
-  if [ -f "/data/github_proxy.txt" ]; then
-    proxies=($(head -n 5 "/data/github_proxy.txt" 2>/dev/null | grep -v '^$'))
-  else
-    proxies=()
-  fi
-
-  # 下载 tvbox.zip，支持多代理 fallback
   downloaded=false
-  for proxy in "${proxies[@]}"; do
-    echo "尝试使用代理: $proxy"
-    if wget -T 30 -t 1 "${proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip" -O tvbox.zip 2>/dev/null; then
-      downloaded=true
-      echo "下载成功（代理: $proxy）"
-      break
+  if [ -f "/data/github_proxy.txt" ]; then
+    proxies=$(head -n 5 "/data/github_proxy.txt" 2>/dev/null | grep -v '^$')
+    if [ -n "$proxies" ]; then
+      echo "$proxies" | while IFS= read -r proxy; do
+        if [ -n "$proxy" ]; then
+          echo "尝试使用代理: $proxy"
+          if wget -T 30 -t 1 "${proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip" -O tvbox.zip 2>/dev/null; then
+            echo "下载成功（代理: $proxy）"
+            exit 0
+          fi
+        fi
+      done
+      # 检查是否下载成功
+      [ -f tvbox.zip ] && [ -s tvbox.zip ] && downloaded=true
     fi
-  done
+  fi
 
   # 所有代理失败，尝试直连
   if [ "$downloaded" = false ]; then
