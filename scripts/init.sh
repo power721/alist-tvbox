@@ -36,10 +36,31 @@ init() {
   /opt/alist/alist admin
   cd /www/
 
-  gh_proxy=$(head -n 1 "/data/github_proxy.txt" 2>/dev/null || echo "")
-  wget -T 30 -t 2 ${gh_proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
-  wget -t 3 https://d.har01d.cn/tvbox.zip -O tvbox.zip || \
-  cp /tvbox.zip ./
+  # 读取多代理列表，逐个尝试（最多 5 个）
+  if [ -f "/data/github_proxy.txt" ]; then
+    proxies=($(head -n 5 "/data/github_proxy.txt" 2>/dev/null | grep -v '^$'))
+  else
+    proxies=()
+  fi
+
+  # 下载 tvbox.zip，支持多代理 fallback
+  downloaded=false
+  for proxy in "${proxies[@]}"; do
+    echo "尝试使用代理: $proxy"
+    if wget -T 30 -t 1 "${proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip" -O tvbox.zip 2>/dev/null; then
+      downloaded=true
+      echo "下载成功（代理: $proxy）"
+      break
+    fi
+  done
+
+  # 所有代理失败，尝试直连
+  if [ "$downloaded" = false ]; then
+    echo "所有代理失败，尝试直连"
+    wget -T 30 -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
+    wget -t 3 https://d.har01d.cn/tvbox.zip -O tvbox.zip || \
+    cp /tvbox.zip ./
+  fi
 
   unzip -q -o tvbox.zip
 

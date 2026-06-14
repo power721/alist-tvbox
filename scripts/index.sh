@@ -1,8 +1,28 @@
 if [ $# -gt 0 ]; then
   remote=$1
-  gh_proxy=$(head -n 1 "/data/github_proxy.txt" 2>/dev/null || echo "")
-  wget -t 2 ${gh_proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip || \
-  wget -t 2 https://d.har01d.cn/index.zip -O index.zip
+
+  # 读取多代理列表，逐个尝试（最多 5 个）
+  if [ -f "/data/github_proxy.txt" ]; then
+    proxies=($(head -n 5 "/data/github_proxy.txt" 2>/dev/null | grep -v '^$'))
+  else
+    proxies=()
+  fi
+
+  # 下载 index.zip，支持多代理 fallback
+  downloaded=false
+  for proxy in "${proxies[@]}"; do
+    if wget -t 1 "${proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip" -O index.zip 2>/dev/null; then
+      downloaded=true
+      break
+    fi
+  done
+
+  # 所有代理失败，尝试直连和备用地址
+  if [ "$downloaded" = false ]; then
+    wget -t 2 https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip -O index.zip || \
+    wget -t 2 https://d.har01d.cn/index.zip -O index.zip
+  fi
+
   if [ ! -f index.zip ]; then
     echo "Failed to download index compressed file, the index file upgrade process has aborted"
     exit 1
