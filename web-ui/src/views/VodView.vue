@@ -65,7 +65,7 @@
         </div>
       </div>
 
-      <div>
+      <div style="min-width: 0;">
         <div v-if="!files.length && !loading" class="table-scroll-wrapper">
           <el-table :data="[{placeholder: true}]" border style="width: 100%;" :show-header="true">
             <el-table-column label="名称" min-width="300">
