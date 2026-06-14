@@ -3,7 +3,6 @@
     <div class="page-header">
       <h1 class="page-title">系统配置</h1>
     </div>
-
     <el-row>
       <el-col :xs="23" :sm="23" :md="23" :lg="11" :xl="11">
         <el-card class="box-card">
@@ -362,6 +361,7 @@
         <el-form-item>
           <el-button @click="resetAListToken">重置AList认证Token</el-button>
           <el-button @click="exportDatabase">导出数据库</el-button>
+          <el-button @click="openRemoteSync">远程同步配置</el-button>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -370,6 +370,8 @@
       </span>
       </template>
     </el-dialog>
+
+    <RemoteSyncDialog ref="remoteSyncDialogRef" />
 
   </div>
 </template>
@@ -380,6 +382,13 @@ import {ElMessage} from "element-plus";
 import axios from "axios";
 import {onUnmounted} from "@vue/runtime-core";
 import {store} from "@/services/store";
+import RemoteSyncDialog from './RemoteSyncDialog.vue'
+
+const remoteSyncDialogRef = ref()
+
+const openRemoteSync = () => {
+  remoteSyncDialogRef.value.open()
+}
 
 let intervalId = 0
 const currentUrl = window.location.origin

@@ -1,11 +1,7 @@
 package cn.har01d.alist_tvbox.entity;
 
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -18,6 +14,9 @@ import java.time.Instant;
 @ToString
 @RequiredArgsConstructor
 @Entity
+@Table(indexes = {
+    @Index(name = "idx_account_nickname", columnList = "nickname")
+})
 public class Account {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

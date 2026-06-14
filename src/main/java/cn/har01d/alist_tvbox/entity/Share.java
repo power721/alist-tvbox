@@ -1,8 +1,6 @@
 package cn.har01d.alist_tvbox.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -17,6 +15,9 @@ import java.util.Objects;
 @ToString
 @RequiredArgsConstructor
 @Entity
+@Table(indexes = {
+    @Index(name = "idx_share_type_shareid", columnList = "type, share_id")
+})
 public class Share {
     @Id
     private Integer id;

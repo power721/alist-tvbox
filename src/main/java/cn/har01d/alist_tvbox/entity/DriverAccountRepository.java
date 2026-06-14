@@ -13,4 +13,8 @@ public interface DriverAccountRepository extends JpaRepository<DriverAccount, In
     long countByType(DriverType type);
 
     Optional<DriverAccount> findByTypeAndMasterTrue(DriverType type);
+
+    Optional<DriverAccount> findByTypeAndUsername(DriverType type, String username);
+
+    Optional<DriverAccount> findByTypeAndName(DriverType type, String name);
 }

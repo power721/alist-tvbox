@@ -36,7 +36,8 @@ public class WebSecurityConfiguration {
                                 "/api/local/admin/password",
                                 "/api/alist/status",
                                 "/api/profiles",
-                                "/api/accounts/login"
+                                "/api/accounts/login",
+                                "/api/sync/validate"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers(
