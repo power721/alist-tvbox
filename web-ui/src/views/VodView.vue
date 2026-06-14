@@ -13,206 +13,213 @@
     </div>
 
     <div class="page-card">
-    <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-      <el-breadcrumb separator="/">
-        <el-breadcrumb-item v-for="(item,index) in paths">
-          <a id="copy" @click="copy(item.path)" v-if="index==paths.length-1">
-            {{ item.text }}
-          </a>
-          <a @click="loadFolder(item.path)" v-else>
-            {{ item.text }}
-          </a>
-        </el-breadcrumb-item>
-      </el-breadcrumb>
+      <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+        <el-breadcrumb separator="/">
+          <el-breadcrumb-item v-for="(item,index) in paths">
+            <a id="copy" @click="copy(item.path)" v-if="index==paths.length-1">
+              {{ item.text }}
+            </a>
+            <a @click="loadFolder(item.path)" v-else>
+              {{ item.text }}
+            </a>
+          </el-breadcrumb-item>
+        </el-breadcrumb>
 
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源" style="width: 300px;">
-          <template #append>
-            <el-button :icon="Search" :disabled="searching" @click="search"/>
-          </template>
-        </el-input>
-        <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
-        <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
-        <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
-      </div>
-    </div>
-
-    <div v-if="results.length" style="display: grid; grid-template-columns: 400px 1fr; gap: 16px;">
-      <div>
-        <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
-          <span>{{ filteredResults.length }}/{{ results.length }}条搜索结果</span>
-          <el-select style="width: 120px" v-model="shareType" @change="filterSearchResults">
-            <el-option
-              v-for="item in options"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
-          <el-button :icon="Delete" @click="clearSearch">清除</el-button>
-        </div>
-        <div class="table-scroll-wrapper">
-          <el-table :data="filteredResults" v-loading="searching" @row-click="loadResult" border max-height="1080" style="min-width: 400px" class="clickable-table">
-            <el-table-column prop="vod_name" label="内容">
-              <template #default="scope">
-                <el-tooltip :content="scope.row.vod_play_url">
-                  {{ getShareType(scope.row.type_name) }}
-                  {{ scope.row.vod_name }}
-                </el-tooltip>
-              </template>
-            </el-table-column>
-          </el-table>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源"
+                    style="width: 300px;">
+            <template #append>
+              <el-button :icon="Search" :disabled="searching" @click="search"/>
+            </template>
+          </el-input>
+          <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
+          <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
+          <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
         </div>
       </div>
+
+      <div v-if="results.length" style="display: grid; grid-template-columns: 400px 1fr; gap: 16px;">
+        <div>
+          <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+            <span>{{ filteredResults.length }}/{{ results.length }}条搜索结果</span>
+            <el-select style="width: 120px" v-model="shareType" @change="filterSearchResults">
+              <el-option
+                v-for="item in options"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+            <el-button :icon="Delete" @click="clearSearch">清除</el-button>
+          </div>
+          <div class="table-scroll-wrapper">
+            <el-table :data="filteredResults" v-loading="searching" @row-click="loadResult" border max-height="1080"
+                      style="min-width: 400px" class="clickable-table">
+              <el-table-column prop="vod_name" label="内容">
+                <template #default="scope">
+                  <el-tooltip :content="scope.row.vod_play_url">
+                    {{ getShareType(scope.row.type_name) }}
+                    {{ scope.row.vod_name }}
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
 
         <div style="min-width: 0;">
           <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border
                     style="width: 100%;"
                     class="clickable-table" @row-click="load">
-          <el-table-column type="selection" width="55" v-if="isHistory"/>
-          <el-table-column prop="vod_name" label="名称" sortable min-width="200">
-            <template #default="scope">
-              <el-popover :width="300" placement="left-start" v-if="scope.row.vod_pic">
-                <template #reference>
-                  📺
-                </template>
-                <template #default>
-                  <el-image :src="imageUrl(scope.row.vod_pic)" loading="lazy" show-progress fit="cover"/>
-                </template>
-              </el-popover>
-              <span v-else-if="scope.row.type==1">📂</span>
-              <span v-else-if="scope.row.type==2">🎬</span>
-              <span v-else-if="scope.row.type==3">🎧</span>
-              <span v-else-if="scope.row.type==4">🖹</span>
-              <span v-else-if="scope.row.type==5">📷</span>
-              <span v-else-if="scope.row.type==9">▶️</span>
-              <span v-if="scope.row.vod_name && scope.row.vod_name.trim()">{{ scope.row.vod_name }}</span>
-              <span v-else style="color: #999;">(无名称)</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="vod_remarks" label="大小" width="120"
-                           sortable :sort-method="sortFileSizes" v-if="!isHistory">
-            <template #default="scope">
-              {{ scope.row.vod_tag === 'file' ? scope.row.vod_remarks : '-' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="dbid" label="豆瓣ID" width="120" v-if="!isHistory">
-            <template #default="scope">
-              <a @click.stop :href="'https://movie.douban.com/subject/'+scope.row.dbid" target="_blank"
-                 v-if="scope.row.dbid">
-                {{ scope.row.dbid }}
-              </a>
-            </template>
-          </el-table-column>
-          <el-table-column prop="vod_remarks" label="评分" width="90" sortable v-if="!isHistory">
-            <template #default="scope">
-              {{ scope.row.vod_tag === 'folder' ? scope.row.vod_remarks : '' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="index" label="集数" width="90" v-if="isHistory">
-            <template #default="scope">
-              {{ scope.row.index > 0 ? scope.row.index : '' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
-          <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
-          <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
-          <el-table-column width="90" v-if="isHistory">
-            <template #default="scope">
-              <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
-            </template>
-          </el-table-column>
-          <el-table-column width="120" v-else>
-            <template #default="scope">
-              <el-button link type="primary" @click.stop="showRenameFile(scope.row)" v-if="store.admin&&scope.row.type!=9">
-                重命名
-              </el-button>
-              <el-button link type="danger" @click.stop="showRemoveFile(scope.row)" v-if="store.admin&&scope.row.type!=9">
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+            <el-table-column type="selection" width="55" v-if="isHistory"/>
+            <el-table-column prop="vod_name" label="名称" sortable min-width="200">
+              <template #default="scope">
+                <el-popover :width="300" placement="left-start" v-if="scope.row.vod_pic">
+                  <template #reference>
+                    📺
+                  </template>
+                  <template #default>
+                    <el-image :src="imageUrl(scope.row.vod_pic)" loading="lazy" show-progress fit="cover"/>
+                  </template>
+                </el-popover>
+                <span v-else-if="scope.row.type==1">📂</span>
+                <span v-else-if="scope.row.type==2">🎬</span>
+                <span v-else-if="scope.row.type==3">🎧</span>
+                <span v-else-if="scope.row.type==4">🖹</span>
+                <span v-else-if="scope.row.type==5">📷</span>
+                <span v-else-if="scope.row.type==9">▶️</span>
+                <span v-if="scope.row.vod_name && scope.row.vod_name.trim()">{{ scope.row.vod_name }}</span>
+                <span v-else style="color: #999;">(无名称)</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="vod_remarks" label="大小" width="120"
+                             sortable :sort-method="sortFileSizes" v-if="!isHistory">
+              <template #default="scope">
+                {{ scope.row.vod_tag === 'file' ? scope.row.vod_remarks : '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="dbid" label="豆瓣ID" width="120" v-if="!isHistory">
+              <template #default="scope">
+                <a @click.stop :href="'https://movie.douban.com/subject/'+scope.row.dbid" target="_blank"
+                   v-if="scope.row.dbid">
+                  {{ scope.row.dbid }}
+                </a>
+              </template>
+            </el-table-column>
+            <el-table-column prop="vod_remarks" label="评分" width="90" sortable v-if="!isHistory">
+              <template #default="scope">
+                {{ scope.row.vod_tag === 'folder' ? scope.row.vod_remarks : '' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="index" label="集数" width="90" v-if="isHistory">
+              <template #default="scope">
+                {{ scope.row.index > 0 ? scope.row.index : '' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
+            <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
+            <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
+            <el-table-column width="90" v-if="isHistory">
+              <template #default="scope">
+                <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
+              </template>
+            </el-table-column>
+            <el-table-column width="120" v-else>
+              <template #default="scope">
+                <el-button link type="primary" @click.stop="showRenameFile(scope.row)"
+                           v-if="store.admin&&scope.row.type!=9">
+                  重命名
+                </el-button>
+                <el-button link type="danger" @click.stop="showRemoveFile(scope.row)"
+                           v-if="store.admin&&scope.row.type!=9">
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
 
-    <el-pagination layout="total, prev, pager, next, jumper, sizes"
-                   :current-page="page" :page-size="size" :total="total"
-                   @current-change="handlePageChange" @size-change="handleSizeChange"/>
-    </div>
+        <el-pagination layout="total, prev, pager, next, jumper, sizes"
+                       :current-page="page" :page-size="size" :total="total"
+                       @current-change="handlePageChange" @size-change="handleSizeChange"/>
+      </div>
 
-    <div v-else>
-      <div class="table-scroll-wrapper">
-        <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%"
-                class="clickable-table" @row-click="load">
-          <el-table-column type="selection" width="55" v-if="isHistory"/>
-          <el-table-column prop="vod_name" label="名称" sortable min-width="200">
-            <template #default="scope">
-              <el-popover :width="300" placement="left-start" v-if="scope.row.vod_pic">
-                <template #reference>
-                  📺
-                </template>
-                <template #default>
-                  <el-image :src="imageUrl(scope.row.vod_pic)" loading="lazy" show-progress fit="cover"/>
-                </template>
-              </el-popover>
-              <span v-else-if="scope.row.type==1">📂</span>
-              <span v-else-if="scope.row.type==2">🎬</span>
-              <span v-else-if="scope.row.type==3">🎧</span>
-              <span v-else-if="scope.row.type==4">🖹</span>
-              <span v-else-if="scope.row.type==5">📷</span>
-              <span v-else-if="scope.row.type==9">▶️</span>
-              <span v-if="scope.row.vod_name && scope.row.vod_name.trim()">{{ scope.row.vod_name }}</span>
-              <span v-else style="color: #999;">(无名称)</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="vod_remarks" label="大小" width="120"
-                           sortable :sort-method="sortFileSizes" v-if="!isHistory">
-            <template #default="scope">
-              {{ scope.row.vod_tag === 'file' ? scope.row.vod_remarks : '-' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="dbid" label="豆瓣ID" width="120" v-if="!isHistory">
-            <template #default="scope">
-              <a @click.stop :href="'https://movie.douban.com/subject/'+scope.row.dbid" target="_blank"
-                 v-if="scope.row.dbid">
-                {{ scope.row.dbid }}
-              </a>
-            </template>
-          </el-table-column>
-          <el-table-column prop="vod_remarks" label="评分" width="90" sortable v-if="!isHistory">
-            <template #default="scope">
-              {{ scope.row.vod_tag === 'folder' ? scope.row.vod_remarks : '' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="index" label="集数" width="90" v-if="isHistory">
-            <template #default="scope">
-              {{ scope.row.index > 0 ? scope.row.index : '' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
-          <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
-          <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
-          <el-table-column width="90" v-if="isHistory">
-            <template #default="scope">
-              <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
-            </template>
-          </el-table-column>
-          <el-table-column width="120" v-else>
-            <template #default="scope">
-              <el-button link type="primary" @click.stop="showRenameFile(scope.row)" v-if="store.admin&&scope.row.type!=9">
-                重命名
-              </el-button>
-              <el-button link type="danger" @click.stop="showRemoveFile(scope.row)" v-if="store.admin&&scope.row.type!=9">
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+      <div v-else>
+        <div class="table-scroll-wrapper">
+          <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border
+                    style="width: 100%"
+                    class="clickable-table" @row-click="load">
+            <el-table-column type="selection" width="55" v-if="isHistory"/>
+            <el-table-column prop="vod_name" label="名称" sortable min-width="200">
+              <template #default="scope">
+                <el-popover :width="300" placement="left-start" v-if="scope.row.vod_pic">
+                  <template #reference>
+                    📺
+                  </template>
+                  <template #default>
+                    <el-image :src="imageUrl(scope.row.vod_pic)" loading="lazy" show-progress fit="cover"/>
+                  </template>
+                </el-popover>
+                <span v-else-if="scope.row.type==1">📂</span>
+                <span v-else-if="scope.row.type==2">🎬</span>
+                <span v-else-if="scope.row.type==3">🎧</span>
+                <span v-else-if="scope.row.type==4">🖹</span>
+                <span v-else-if="scope.row.type==5">📷</span>
+                <span v-else-if="scope.row.type==9">▶️</span>
+                <span v-if="scope.row.vod_name && scope.row.vod_name.trim()">{{ scope.row.vod_name }}</span>
+                <span v-else style="color: #999;">(无名称)</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="vod_remarks" label="大小" width="120"
+                             sortable :sort-method="sortFileSizes" v-if="!isHistory">
+              <template #default="scope">
+                {{ scope.row.vod_tag === 'file' ? scope.row.vod_remarks : '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="dbid" label="豆瓣ID" width="120" v-if="!isHistory">
+              <template #default="scope">
+                <a @click.stop :href="'https://movie.douban.com/subject/'+scope.row.dbid" target="_blank"
+                   v-if="scope.row.dbid">
+                  {{ scope.row.dbid }}
+                </a>
+              </template>
+            </el-table-column>
+            <el-table-column prop="vod_remarks" label="评分" width="90" sortable v-if="!isHistory">
+              <template #default="scope">
+                {{ scope.row.vod_tag === 'folder' ? scope.row.vod_remarks : '' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="index" label="集数" width="90" v-if="isHistory">
+              <template #default="scope">
+                {{ scope.row.index > 0 ? scope.row.index : '' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="vod_remarks" label="当前播放" width="250" v-if="isHistory"/>
+            <el-table-column prop="progress" label="进度" width="120" v-if="isHistory"/>
+            <el-table-column prop="vod_time" :label="isHistory?'播放时间':'修改时间'" width="180" sortable/>
+            <el-table-column width="90" v-if="isHistory">
+              <template #default="scope">
+                <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
+              </template>
+            </el-table-column>
+            <el-table-column width="120" v-else>
+              <template #default="scope">
+                <el-button link type="primary" @click.stop="showRenameFile(scope.row)"
+                           v-if="store.admin&&scope.row.type!=9">
+                  重命名
+                </el-button>
+                <el-button link type="danger" @click.stop="showRemoveFile(scope.row)"
+                           v-if="store.admin&&scope.row.type!=9">
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
 
-    <el-pagination layout="total, prev, pager, next, jumper, sizes"
-                   :current-page="page" :page-size="size" :total="total"
-                   @current-change="handlePageChange" @size-change="handleSizeChange"/>
+        <el-pagination layout="total, prev, pager, next, jumper, sizes"
+                       :current-page="page" :page-size="size" :total="total"
+                       @current-change="handlePageChange" @size-change="handleSizeChange"/>
       </div>
     </div>
 
@@ -348,7 +355,10 @@
                 <el-button @click="playNextVideo" v-if="playlist.length>1">下集</el-button>
                 <el-popover placement="top" :width="400" trigger="click" v-if="playlist.length>1">
                   <template #reference>
-                    <el-button @click="scrollEpisodeList">选集 {{ currentVideoIndex + 1 }}/{{ playlist.length }}</el-button>
+                    <el-button @click="scrollEpisodeList">选集 {{ currentVideoIndex + 1 }}/{{
+                        playlist.length
+                      }}
+                    </el-button>
                   </template>
                   <template #default>
                     <div>
@@ -733,8 +743,9 @@
         <el-main v-loading="loadingPosters">
           <el-row :gutter="30">
             <el-col :span="3" v-for="item in doubanItems" :key="item.vod_id" style="margin-bottom: 20px;">
-              <el-card :body-style="{ padding: '0px', cursor: 'pointer' }" shadow="hover" @click="searchDoubanItem(item)">
-                <el-image :src="item.vod_pic" fit="cover" style="width: 100%; height: 400px;" />
+              <el-card :body-style="{ padding: '0px', cursor: 'pointer' }" shadow="hover"
+                       @click="searchDoubanItem(item)">
+                <el-image :src="item.vod_pic" fit="cover" style="width: 100%; height: 400px;"/>
                 <div style="padding: 10px;">
                   <div style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     {{ item.vod_name }}
@@ -2155,10 +2166,12 @@ const formatTime = (seconds: number): string => {
 
 const replay = () => {
   playItem.value.url = ''
-  setTimeout(() => {{
-    getPlayUrl()
-    startPlay()
-  }}, 500)
+  setTimeout(() => {
+    {
+      getPlayUrl()
+      startPlay()
+    }
+  }, 500)
 }
 
 const playNextVideo = () => {
