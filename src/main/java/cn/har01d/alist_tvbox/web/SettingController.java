@@ -85,4 +85,21 @@ public class SettingController {
         return gitHubProxyService.benchmarkNodes(request.getUrls());
     }
 
+    /**
+     * 获取已配置的 GitHub 代理列表
+     */
+    @GetMapping("/github-proxy/list")
+    public List<String> getGitHubProxyList() {
+        return gitHubProxyService.readProxyListFromFile();
+    }
+
+    /**
+     * 保存 GitHub 代理列表（最多 5 个）
+     */
+    @PostMapping("/github-proxy/list")
+    public Map<String, Object> saveGitHubProxyList(@RequestBody List<String> proxyList) throws IOException {
+        gitHubProxyService.saveProxyListToFile(proxyList);
+        return Map.of("success", true, "count", Math.min(proxyList.size(), 5));
+    }
+
 }

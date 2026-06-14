@@ -366,6 +366,16 @@ public class SettingService {
                 log.error("保存 GitHub 代理到文件失败", e);
             }
         }
+        if ("github_proxy_list".equals(setting.getName())) {
+            try {
+                // 解析 JSON 数组
+                List<String> proxyList = objectMapper.readValue(setting.getValue(),
+                    new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+                gitHubProxyService.saveProxyListToFile(proxyList);
+            } catch (IOException e) {
+                log.error("保存 GitHub 代理列表到文件失败", e);
+            }
+        }
         return settingRepository.save(setting);
     }
 

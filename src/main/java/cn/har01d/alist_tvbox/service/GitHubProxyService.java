@@ -24,6 +24,7 @@ public class GitHubProxyService {
     private static final int BENCHMARK_THREADS = 5;
     private static final int CONNECT_TIMEOUT_SECONDS = 8;
     private static final int READ_TIMEOUT_SECONDS = 30;
+    private static final int MAX_PROXY_COUNT = 5; // 最多配置 5 个代理
 
     private final OkHttpClient httpClient;
 
@@ -205,39 +206,127 @@ public class GitHubProxyService {
     }
 
     /**
-     * 保存 GitHub 代理到文件 /data/github_proxy.txt
-     * 确保以 / 结尾
+     * 保存 GitHub 代理列表到文件 /data/github_proxy.txt（多行格式）
+     * 每个代理一行，确保以 / 结尾，最多保存 5 个
      */
-    public void saveToFile(String proxyUrl) throws IOException {
+    public void saveProxyListToFile(List<String> proxyUrls) throws IOException {
         Path filePath = Paths.get(GITHUB_PROXY_FILE);
 
-        // 确保以 / 结尾（空字符串除外）
-        String normalizedUrl = "";
-        if (proxyUrl != null && !proxyUrl.trim().isEmpty()) {
-            normalizedUrl = proxyUrl.trim().endsWith("/") ? proxyUrl.trim() : proxyUrl.trim() + "/";
-        }
+        // 限制最多 5 个代理
+        List<String> limitedProxies = proxyUrls.stream()
+                .limit(MAX_PROXY_COUNT)
+                .map(this::normalizeProxyUrl)
+                .collect(Collectors.toList());
 
-        // 写入文件
+        // 写入文件（多行）
         Files.createDirectories(filePath.getParent());
-        Files.writeString(filePath, normalizedUrl, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        Files.write(filePath, limitedProxies, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 
-        log.info("已保存 GitHub 代理到文件: {} -> {}", GITHUB_PROXY_FILE, normalizedUrl);
+        log.info("已保存 {} 个 GitHub 代理到文件: {}", limitedProxies.size(), GITHUB_PROXY_FILE);
     }
 
     /**
-     * 从文件读取 GitHub 代理
+     * 从文件读取 GitHub 代理列表（多行格式）
      */
-    public String readFromFile() {
+    public List<String> readProxyListFromFile() {
         Path filePath = Paths.get(GITHUB_PROXY_FILE);
         if (!Files.exists(filePath)) {
-            return "";
+            return Collections.emptyList();
         }
 
         try {
-            return Files.readString(filePath).trim();
+            return Files.readAllLines(filePath).stream()
+                    .map(String::trim)
+                    .filter(line -> !line.isEmpty())
+                    .limit(MAX_PROXY_COUNT)
+                    .collect(Collectors.toList());
         } catch (IOException e) {
             log.error("读取 GitHub 代理文件失败: {}", GITHUB_PROXY_FILE, e);
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 规范化代理 URL：确保以 / 结尾（空字符串除外）
+     */
+    private String normalizeProxyUrl(String proxyUrl) {
+        if (proxyUrl == null || proxyUrl.trim().isEmpty()) {
             return "";
         }
+        String trimmed = proxyUrl.trim();
+        return trimmed.endsWith("/") ? trimmed : trimmed + "/";
+    }
+
+    /**
+     * 使用代理列表下载文件，支持自动 fallback
+     * 按顺序尝试每个代理，最多尝试 5 个，失败则尝试下一个
+     */
+    public Response downloadWithFallback(String githubUrl, List<String> proxyList) throws IOException {
+        if (proxyList == null || proxyList.isEmpty()) {
+            // 没有配置代理，直接下载
+            return downloadDirect(githubUrl);
+        }
+
+        // 限制最多尝试 5 个代理
+        List<String> limitedProxies = proxyList.stream()
+                .limit(MAX_PROXY_COUNT)
+                .collect(Collectors.toList());
+
+        IOException lastException = null;
+
+        for (int i = 0; i < limitedProxies.size(); i++) {
+            String proxy = limitedProxies.get(i);
+            try {
+                if (proxy == null || proxy.trim().isEmpty()) {
+                    // 空字符串表示直连
+                    log.info("尝试直连下载 (代理 {}/{}): {}", i + 1, limitedProxies.size(), githubUrl);
+                    return downloadDirect(githubUrl);
+                } else {
+                    // 使用代理下载
+                    String proxyUrl = normalizeProxyUrl(proxy) + githubUrl;
+                    log.info("尝试使用代理 {}/{} 下载: {} -> {}", i + 1, limitedProxies.size(), proxy, githubUrl);
+                    return downloadDirect(proxyUrl);
+                }
+            } catch (IOException e) {
+                lastException = e;
+                log.warn("代理 {}/{} ({}) 下载失败: {}", i + 1, limitedProxies.size(), proxy, e.getMessage());
+                // 继续尝试下一个代理
+            }
+        }
+
+        // 所有代理都失败
+        throw new IOException("所有 GitHub 代理均失败 (" + limitedProxies.size() + " 个已尝试)", lastException);
+    }
+
+    /**
+     * 直接下载（不使用代理或使用完整 URL）
+     */
+    private Response downloadDirect(String url) throws IOException {
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .build();
+
+        Response response = httpClient.newCall(request).execute();
+        if (!response.isSuccessful()) {
+            response.close();
+            throw new IOException("下载失败: HTTP " + response.code());
+        }
+        return response;
+    }
+
+    /**
+     * 兼容旧版：保存单个代理到文件（现在保存为单行列表）
+     */
+    public void saveToFile(String proxyUrl) throws IOException {
+        saveProxyListToFile(Collections.singletonList(proxyUrl));
+    }
+
+    /**
+     * 兼容旧版：从文件读取单个代理（现在读取第一行）
+     */
+    public String readFromFile() {
+        List<String> proxies = readProxyListFromFile();
+        return proxies.isEmpty() ? "" : proxies.get(0);
     }
 }
