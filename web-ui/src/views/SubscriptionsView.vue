@@ -364,6 +364,9 @@
         <el-button @click="benchmarkAllProxies" :loading="benchmarking">
           {{ benchmarking ? '测速中...' : '批量测速' }}
         </el-button>
+        <el-button type="success" @click="autoSelectFastest" :loading="benchmarking">
+          智能选择（测速并自动选择最快5个）
+        </el-button>
         <el-button type="primary" @click="saveGitHubProxyList">保存代理列表</el-button>
       </div>
 
@@ -1742,6 +1745,76 @@ const saveGitHubProxyList = () => {
     .catch(() => {
       ElMessage.error('保存失败')
     })
+}
+
+const autoSelectFastest = () => {
+  if (benchmarking.value) return
+
+  benchmarking.value = true
+  benchmarkResults.value.clear()
+
+  // 获取所有预设节点
+  const allUrls = githubProxyNodes.value.map(node => node.url)
+
+  ElMessage.info('开始测速所有预设节点...')
+
+  // 启动异步测速
+  axios.post('/api/settings/github-proxy/benchmark/start', { urls: allUrls })
+    .then(() => {
+      // 轮询获取结果并自动选择最快的 5 个
+      pollAndSelectFastest()
+    })
+    .catch(() => {
+      ElMessage.error('启动测速失败')
+      benchmarking.value = false
+    })
+}
+
+const pollAndSelectFastest = () => {
+  const poll = () => {
+    axios.get('/api/settings/github-proxy/benchmark/results')
+      .then(({data}) => {
+        // 更新结果
+        const results = data.results || {}
+        Object.keys(results).forEach((url: string) => {
+          benchmarkResults.value.set(url, results[url])
+        })
+
+        // 检查是否还在运行
+        if (data.isRunning) {
+          // 继续轮询
+          setTimeout(poll, 500)
+        } else {
+          // 测速完成，选择最快的 5 个
+          benchmarking.value = false
+          selectFastestNodes()
+        }
+      })
+      .catch(() => {
+        benchmarking.value = false
+        ElMessage.error('获取测速结果失败')
+      })
+  }
+
+  poll()
+}
+
+const selectFastestNodes = () => {
+  // 过滤成功的节点并按延迟排序
+  const successNodes = Array.from(benchmarkResults.value.entries())
+    .filter(([url, result]) => result.success && result.latency != null)
+    .sort((a, b) => a[1].latency - b[1].latency)
+    .slice(0, 5)
+    .map(([url]) => url)
+
+  if (successNodes.length === 0) {
+    ElMessage.warning('没有测速成功的节点')
+    return
+  }
+
+  // 更新代理列表
+  githubProxyList.value = successNodes
+  ElMessage.success(`已自动选择最快的 ${successNodes.length} 个节点，请点击"保存代理列表"生效`)
 }
 
 const benchmarkGitHubProxy = () => {
