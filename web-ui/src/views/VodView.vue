@@ -37,8 +37,8 @@
       </div>
     </div>
 
-    <div style="display: flex; gap: 16px;" v-if="results.length">
-      <div style="flex: 0 0 400px;">
+    <div v-if="results.length" style="display: grid; grid-template-columns: 400px 1fr; gap: 16px;">
+      <div>
         <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
           <span>{{ filteredResults.length }}/{{ results.length }}条搜索结果</span>
           <el-select style="width: 120px" v-model="shareType" @change="filterSearchResults">
@@ -65,7 +65,7 @@
         </div>
       </div>
 
-      <div style="flex: 1;">
+      <div>
         <div v-if="!files.length && !loading" class="table-scroll-wrapper">
           <el-table :data="[{placeholder: true}]" border style="width: 100%;" :show-header="true">
             <el-table-column label="名称" min-width="300">
