@@ -143,3 +143,15 @@ JUnit 5 + Spring Boot Test + Mockito. Tests mirror source package structure unde
 - TVBox API models in `tvbox/`
 - Domain enums in `domain/` (`DriverType`, `Role`, `TaskType`, `TaskStatus`)
 - Custom exceptions in `exception/` (`BadRequestException`, `NotFoundException`, `UserUnauthorizedException`)
+
+## Git Worktree Policy
+1. Create a new Git worktree for every task.
+2. Create and use a dedicated feature branch inside that worktree.
+3. Do not make changes directly on the `main` branch.
+4. Commit all changes to the task branch.
+5. Merge the task branch into `main` through the normal review process.
+6. After the merge is complete:
+    * Remove the worktree (`git worktree remove <path>`).
+    * Delete the merged branch (`git branch -d <branch>`).
+    * Verify that no unused worktrees remain (`git worktree list`).
+7. Keep only active worktrees in the repository.
