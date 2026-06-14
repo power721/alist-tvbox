@@ -7,7 +7,7 @@
         <el-button :icon="Film" @click="goHistory" v-else>播放记录</el-button>
         <el-button :icon="Setting" @click="settingVisible=true" v-if="store.admin">播放配置</el-button>
         <el-button :icon="Plus" @click="handleAdd">添加分享</el-button>
-        <el-button @click="showScan" v-if="store.admin">同步影视</el-button>
+        <el-button :icon="Refresh" @click="showScan" v-if="store.admin">同步影视</el-button>
         <el-button type="warning" @click="openDoubanMode">豆瓣电影</el-button>
       </div>
     </div>
