@@ -1,11 +1,15 @@
 <template>
-  <div class="page-container">
-    <div class="page-header">
+  <div :class="embedded ? '' : 'page-container'">
+    <div class="page-header" v-if="!embedded">
       <h1 class="page-title">PikPak账号列表</h1>
       <div class="page-actions">
         <el-button @click="load">刷新</el-button>
         <el-button type="primary" @click="handleAdd">添加</el-button>
       </div>
+    </div>
+    <div v-else class="page-actions" style="margin-bottom: 16px; display: flex; justify-content: flex-end; gap: 12px;">
+      <el-button @click="load">刷新</el-button>
+      <el-button type="primary" @click="handleAdd">添加</el-button>
     </div>
 
     <div class="page-card">
@@ -92,8 +96,6 @@
       </span>
       </template>
     </el-dialog>
-
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -103,6 +105,10 @@ import axios from "axios"
 import {ElMessage} from "element-plus";
 import {store} from "@/services/store";
 import router from "@/router";
+
+const props = defineProps<{
+  embedded?: boolean
+}>()
 
 interface Item {
   path: string

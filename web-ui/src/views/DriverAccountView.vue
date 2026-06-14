@@ -1,12 +1,17 @@
 <template>
-  <div class="page-container">
-    <div class="page-header">
+  <div :class="embedded ? '' : 'page-container'">
+    <div class="page-header" v-if="!embedded">
       <h1 class="page-title">网盘账号列表</h1>
       <div class="page-actions">
         <el-button @click="load">刷新</el-button>
         <el-button @click="openConfig">配置</el-button>
         <el-button type="primary" @click="handleAdd">添加</el-button>
       </div>
+    </div>
+    <div v-else class="page-actions" style="margin-bottom: 16px; display: flex; justify-content: flex-end; gap: 12px;">
+      <el-button @click="load">刷新</el-button>
+      <el-button @click="openConfig">配置</el-button>
+      <el-button type="primary" @click="handleAdd">添加</el-button>
     </div>
 
     <div class="page-card">
@@ -391,8 +396,6 @@
       </span>
       </template>
     </el-dialog>
-
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -403,6 +406,10 @@ import {ElMessage} from "element-plus";
 import clipBorad from "vue-clipboard3";
 
 let {toClipboard} = clipBorad();
+
+const props = defineProps<{
+  embedded?: boolean
+}>()
 
 type CloudDriveType = 'ALI' | 'QUARK' | 'UC' | 'PAN115' | 'PAN123' | 'PAN139' | 'BAIDU' | 'GUANGYA'
 
