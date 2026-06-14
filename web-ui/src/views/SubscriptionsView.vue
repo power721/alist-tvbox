@@ -13,6 +13,7 @@
       </div>
     </div>
 
+    <div class="page-card">
     <el-table :data="subscriptions" border style="width: 100%">
       <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="sid" label="订阅ID" sortable width="180"/>
@@ -97,6 +98,7 @@
     <el-row>
       <el-button @click="syncCat">同步文件</el-button>
     </el-row>
+    </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form :model="form">

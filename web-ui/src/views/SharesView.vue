@@ -1,29 +1,30 @@
 <template>
-  <h2>资源列表</h2>
-  <el-row justify="end">
-    <el-input style="width: 200px;" v-model="keyword" @keyup="search">
-      <template #append>
-        <el-button :icon="Search" @click="search" />
-      </template>
-    </el-input>
-    <div class="hint"></div>
-    <el-select style="width: 90px" v-model="type" @change="filter">
-      <el-option v-for="item in options" :key="item.value" :label="item.label" :value="item.value" />
-    </el-select>
-    <div class="hint"></div>
-    <el-button type="success" @click="showUpload">导入</el-button>
-    <el-button type="success" @click="exportVisible = true">导出</el-button>
-    <!--    <el-button type="success" @click="reload" title="点击获取最新地址">Tacit0924</el-button>-->
-    <el-popconfirm @confirm="deleteShares" title="是否清空全部资源？">
-      <template #reference>
-        <el-button type="danger">清空</el-button>
-      </template>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">资源列表</h1>
+      <div class="page-actions">
+        <el-input style="width: 200px;" v-model="keyword" @keyup="search">
+          <template #append>
+            <el-button :icon="Search" @click="search" />
+          </template>
+        </el-input>
+        <el-select style="width: 90px" v-model="type" @change="filter">
+          <el-option v-for="item in options" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-button type="success" @click="showUpload">导入</el-button>
+        <el-button type="success" @click="exportVisible = true">导出</el-button>
+        <el-popconfirm @confirm="deleteShares" title="是否清空全部资源？">
+          <template #reference>
+            <el-button type="danger">清空</el-button>
+          </template>
     </el-popconfirm>
     <el-button @click="refreshShares">刷新</el-button>
     <el-button type="primary" @click="handleAdd">添加</el-button>
     <el-button type="danger" @click="handleDeleteBatch" v-if="multipleSelection.length">删除</el-button>
-  </el-row>
+      </div>
+    </div>
 
+    <div class="page-card">
   <el-table :data="shares" border @selection-change="handleSelection" @sort-change="handleSort" style="width: 100%">
     <el-table-column type="selection" width="55" />
     <el-table-column prop="id" label="ID" width="70" sortable="custom" />
@@ -159,6 +160,8 @@
   <div>
     <el-pagination layout="total, prev, pager, next, jumper, sizes" :current-page="page1" :total="total1"
       :page-size="size1" @current-change="loadStorages" @size-change="handleSize1Change" />
+  </div>
+    </div>
   </div>
 
   <el-dialog v-model="formVisible" width="60%" :title="dialogTitle">
