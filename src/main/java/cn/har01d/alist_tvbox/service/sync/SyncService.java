@@ -268,19 +268,171 @@ public class SyncService {
     }
 
     // 占位方法，将在后续任务实现
-    private SyncResult importAccounts(List<Account> accounts, MergeStrategy strategy) {
-        return new SyncResult();
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importShares(List<Share> shares, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                shareRepository.deleteAll();
+            }
+
+            for (Share remote : shares) {
+                try {
+                    Optional<Share> existing = shareRepository.findByTypeAndShareId(
+                        remote.getType(), remote.getShareId());
+
+                    if (existing.isPresent()) {
+                        Share local = existing.get();
+                        local.setPath(remote.getPath());
+                        local.setFolderId(remote.getFolderId());
+                        local.setPassword(remote.getPassword());
+                        local.setCookie(remote.getCookie());
+                        local.setTemp(remote.isTemp());
+                        shareRepository.save(local);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        remote.setId(null);
+                        shareRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 Share 失败: {}:{}", remote.getType(), remote.getShareId(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add(remote.getType() + ":" + remote.getShareId() + " 导入失败");
+                }
+            }
+
+            log.info("导入 Shares 完成: 新增 {}, 更新 {}, 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 Shares 失败", e);
+            result.setFailed(shares.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
     }
 
-    private SyncResult importDriverAccounts(List<DriverAccount> accounts, MergeStrategy strategy) {
-        return new SyncResult();
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importAccounts(List<Account> accounts, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                accountRepository.deleteAll();
+            }
+
+            for (Account remote : accounts) {
+                try {
+                    Optional<Account> existing = accountRepository.findByNickname(remote.getNickname());
+
+                    if (existing.isPresent()) {
+                        Account local = existing.get();
+                        local.setRefreshToken(remote.getRefreshToken());
+                        local.setRefreshTokenTime(remote.getRefreshTokenTime());
+                        local.setAccessToken(remote.getAccessToken());
+                        local.setAccessTokenTime(remote.getAccessTokenTime());
+                        local.setOpenToken(remote.getOpenToken());
+                        local.setOpenTokenTime(remote.getOpenTokenTime());
+                        local.setOpenAccessToken(remote.getOpenAccessToken());
+                        local.setOpenAccessTokenTime(remote.getOpenAccessTokenTime());
+                        local.setAutoCheckin(remote.isAutoCheckin());
+                        local.setShowMyAli(remote.isShowMyAli());
+                        local.setMaster(remote.isMaster());
+                        local.setClean(remote.isClean());
+                        local.setUseProxy(remote.isUseProxy());
+                        local.setConcurrency(remote.getConcurrency());
+                        local.setChunkSize(remote.getChunkSize());
+                        accountRepository.save(local);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        remote.setId(null);
+                        accountRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 Account 失败: {}", remote.getNickname(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add("Account " + remote.getNickname() + " 导入失败");
+                }
+            }
+
+            log.info("导入 Accounts 完成: 新增 {}, 更新 {}, 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 Accounts 失败", e);
+            result.setFailed(accounts.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importDriverAccounts(List<DriverAccount> accounts, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                driverAccountRepository.deleteAll();
+            }
+
+            for (DriverAccount remote : accounts) {
+                try {
+                    DriverAccount existing = null;
+
+                    // 优先用 username 查找
+                    if (StringUtils.isNotBlank(remote.getUsername())) {
+                        existing = driverAccountRepository.findByTypeAndUsername(
+                            remote.getType(), remote.getUsername()).orElse(null);
+                    }
+
+                    // 回退到 name
+                    if (existing == null && StringUtils.isNotBlank(remote.getName())) {
+                        existing = driverAccountRepository.findByTypeAndName(
+                            remote.getType(), remote.getName()).orElse(null);
+                    }
+
+                    if (existing != null) {
+                        existing.setName(remote.getName());
+                        existing.setCookie(remote.getCookie());
+                        existing.setToken(remote.getToken());
+                        existing.setAddition(remote.getAddition());
+                        existing.setUsername(remote.getUsername());
+                        existing.setPassword(remote.getPassword());
+                        existing.setSafePassword(remote.getSafePassword());
+                        existing.setFolder(remote.getFolder());
+                        existing.setConcurrency(remote.getConcurrency());
+                        existing.setDisabled(remote.isDisabled());
+                        existing.setUseProxy(remote.isUseProxy());
+                        existing.setMaster(remote.isMaster());
+                        driverAccountRepository.save(existing);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        remote.setId(null);
+                        driverAccountRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 DriverAccount 失败: {} {}", remote.getType(), remote.getName(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add("DriverAccount " + remote.getType() + " " + remote.getName() + " 导入失败");
+                }
+            }
+
+            log.info("导入 DriverAccounts 完成: 新增 {}, 更新 {}, 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 DriverAccounts 失败", e);
+            result.setFailed(accounts.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
     }
 
     private SyncResult importPikPakAccounts(List<PikPakAccount> accounts, MergeStrategy strategy) {
-        return new SyncResult();
-    }
-
-    private SyncResult importShares(List<Share> shares, MergeStrategy strategy) {
         return new SyncResult();
     }
 
