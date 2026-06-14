@@ -24,11 +24,17 @@
         </el-breadcrumb-item>
       </el-breadcrumb>
 
-      <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源" style="width: 300px;">
-        <template #append>
-          <el-button :icon="Search" :disabled="searching" @click="search"/>
-        </template>
-      </el-input>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <el-input v-model="keyword" @keyup.enter="search" :disabled="searching" clearable placeholder="搜索电报资源" style="width: 300px;">
+          <template #append>
+            <el-button :icon="Search" :disabled="searching" @click="search"/>
+          </template>
+        </el-input>
+        <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
+        <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
+        <el-button @click="showScan" v-if="store.admin">同步影视</el-button>
+        <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
+      </div>
     </div>
 
     <div v-if="results.length" style="margin-bottom: 16px;">
@@ -54,13 +60,6 @@
             </template>
           </el-table-column>
         </el-table>
-    </div>
-
-    <div style="margin-bottom: 12px; display: flex; justify-content: flex-end; gap: 12px;">
-      <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
-      <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
-      <el-button @click="showScan" v-if="store.admin">同步影视</el-button>
-      <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
     </div>
 
     <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%"
