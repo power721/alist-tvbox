@@ -60,3 +60,6 @@ musl-toolchain/
 /uninstall-service..sh
 /install-docker.sh
 /alist-tvbox.yaml
+/config/data/
+/.claude/worktrees/mobile-tier2/
+/scripts/gh_proxy_bench_result.json
