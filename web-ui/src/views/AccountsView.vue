@@ -75,7 +75,6 @@
       </el-table-column>
     </el-table>
     </div>
-  </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle" width="60%">
       <el-form :model="form" label-width="auto">
