@@ -1213,10 +1213,28 @@ check_status() {
 # 显示网络模式菜单
 show_network_menu() {
   clear
+
+  # 从配置文件重新加载，避免被 sync_runtime_config 覆盖的内存值
+  local saved_network=""
+  if [[ -f "$CONFIG_FILE" ]]; then
+    saved_network=$(grep "^NETWORK=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+  fi
+  [[ -n "$saved_network" ]] && CONFIG["NETWORK"]="$saved_network"
+
   echo -e "${CYAN}=============================================${NC}"
   echo -e "${GREEN}          网络模式设置          ${NC}"
   echo -e "${CYAN}=============================================${NC}"
-  echo -e " 当前网络模式: ${GREEN}${CONFIG[NETWORK]}${NC}"
+  echo -e " 当前配置: ${GREEN}${CONFIG[NETWORK]}${NC}"
+
+  # 显示容器实际使用的网络模式（如果存在）
+  local container_name=$(get_container_name)
+  if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${container_name}\$"; then
+    local actual_network=$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container_name" 2>/dev/null)
+    if [[ -n "$actual_network" && "$actual_network" != "${CONFIG[NETWORK]}" ]]; then
+      echo -e " 容器实际: ${YELLOW}${actual_network}${NC} (需要重建容器使配置生效)"
+    fi
+  fi
+
   echo -e " 1. bridge模式 (默认)"
   echo -e " 2. host模式"
   echo -e " 0. 返回"
@@ -1244,9 +1262,8 @@ show_network_menu() {
 
   # 如果变更了网络模式且容器存在，提示需要重建
   if [[ "$choice" =~ ^[12]$ ]]; then
-    local container_name=$(get_container_name)
     if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-      echo -e "${YELLOW}注意: 网络模式变更将在下次启动容器时生效${NC}"
+      echo -e "${YELLOW}注意: 网络模式变更需要重建容器才能生效${NC}"
       read -p "是否立即重建容器？[Y/n] " yn
       case "$yn" in
         [Nn]*) ;;
@@ -1297,6 +1314,16 @@ show_restart_menu() {
 show_config_menu() {
   while true; do
     clear
+
+    # 从配置文件重新加载关键配置，避免被 sync_runtime_config 覆盖
+    if [[ -f "$CONFIG_FILE" ]]; then
+      while IFS='=' read -r key value; do
+        if [[ -n "$key" && "$key" =~ ^(NETWORK|BASE_DIR|PORT1|PORT2|RESTART|MOUNT_WWW|GITHUB_PROXY)$ ]]; then
+          CONFIG["$key"]="$value"
+        fi
+      done < "$CONFIG_FILE"
+    fi
+
     echo -e "${CYAN}=============================================${NC}"
     echo -e "${GREEN}          当前配置管理          ${NC}"
     echo -e "${CYAN}=============================================${NC}"
@@ -1372,7 +1399,7 @@ show_config_menu() {
         ;;
       6)
         show_network_menu
-        need_recreate=true
+        # show_network_menu 内部已处理重建逻辑
         continue
         ;;
       7)
