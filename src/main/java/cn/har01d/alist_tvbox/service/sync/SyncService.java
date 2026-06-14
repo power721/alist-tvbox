@@ -158,7 +158,6 @@ public class SyncService {
                 .orElse("unknown");
     }
 
-    @SuppressWarnings("unchecked")
     public Map<String, SyncResult> importData(SyncData data, MergeStrategy strategy, boolean force) {
         // 版本校验
         String localVersion = settingRepository.findById("app_version")
@@ -170,42 +169,33 @@ public class SyncService {
 
         Map<String, SyncResult> results = new HashMap<>();
 
-        // 按顺序导入各模块（独立事务）
-        if (data.getModules().containsKey("settings")) {
-            results.put("settings", importSettings(
-                (Map<String, String>) data.getModules().get("settings"), strategy));
+        // 使用类型化的 getter 方法，避免 unsafe cast
+        if (data.getSettings() != null) {
+            results.put("settings", importSettings(data.getSettings(), strategy));
         }
-        if (data.getModules().containsKey("sites")) {
-            results.put("sites", importSites(
-                (List<Site>) data.getModules().get("sites"), strategy));
+        if (data.getSites() != null) {
+            results.put("sites", importSites(data.getSites(), strategy));
         }
-        if (data.getModules().containsKey("accounts")) {
-            results.put("accounts", importAccounts(
-                (List<Account>) data.getModules().get("accounts"), strategy));
+        if (data.getAccounts() != null) {
+            results.put("accounts", importAccounts(data.getAccounts(), strategy));
         }
-        if (data.getModules().containsKey("driverAccounts")) {
-            results.put("driverAccounts", importDriverAccounts(
-                (List<DriverAccount>) data.getModules().get("driverAccounts"), strategy));
+        if (data.getDriverAccounts() != null) {
+            results.put("driverAccounts", importDriverAccounts(data.getDriverAccounts(), strategy));
         }
-        if (data.getModules().containsKey("pikpakAccounts")) {
-            results.put("pikpakAccounts", importPikPakAccounts(
-                (List<PikPakAccount>) data.getModules().get("pikpakAccounts"), strategy));
+        if (data.getPikpakAccounts() != null) {
+            results.put("pikpakAccounts", importPikPakAccounts(data.getPikpakAccounts(), strategy));
         }
-        if (data.getModules().containsKey("shares")) {
-            results.put("shares", importShares(
-                (List<Share>) data.getModules().get("shares"), strategy));
+        if (data.getShares() != null) {
+            results.put("shares", importShares(data.getShares(), strategy));
         }
-        if (data.getModules().containsKey("plugins")) {
-            results.put("plugins", importPlugins(
-                (List<Plugin>) data.getModules().get("plugins"), strategy));
+        if (data.getPlugins() != null) {
+            results.put("plugins", importPlugins(data.getPlugins(), strategy));
         }
-        if (data.getModules().containsKey("pluginFilters")) {
-            results.put("pluginFilters", importPluginFilters(
-                (List<PluginFilter>) data.getModules().get("pluginFilters"), strategy));
+        if (data.getPluginFilters() != null) {
+            results.put("pluginFilters", importPluginFilters(data.getPluginFilters(), strategy));
         }
-        if (data.getModules().containsKey("subscriptions")) {
-            results.put("subscriptions", importSubscriptions(
-                (List<Subscription>) data.getModules().get("subscriptions"), strategy));
+        if (data.getSubscriptions() != null) {
+            results.put("subscriptions", importSubscriptions(data.getSubscriptions(), strategy));
         }
 
         return results;
@@ -303,7 +293,7 @@ public class SyncService {
 
     // 占位方法，将在后续任务实现
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public SyncResult importShares(List<Share> shares, MergeStrategy strategy) {
+    public synchronized SyncResult importShares(List<Share> shares, MergeStrategy strategy) {
         SyncResult result = new SyncResult();
 
         try {
@@ -327,6 +317,7 @@ public class SyncService {
                         result.setUpdated(result.getUpdated() + 1);
                     } else {
                         // Share 没有 @GeneratedValue，需要手动分配 ID
+                        // 使用 synchronized 方法确保 ID 分配的原子性
                         Integer maxId = shareRepository.findAll().stream()
                                 .map(Share::getId)
                                 .max(Integer::compareTo)
@@ -610,7 +601,7 @@ public class SyncService {
                 }
             }
 
-            log.info("导入 Plugins 完成: 新增 {}, 更新 , 失败 {}",
+            log.info("导入 Plugins 完成: 新增 {}, 更新 {}, 失败 {}",
                     result.getImported(), result.getUpdated(), result.getFailed());
         } catch (Exception e) {
             log.error("导入 Plugins 失败", e);
@@ -682,6 +673,14 @@ public class SyncService {
             // 登录远端（创建临时会话）
             token = remoteClient.login(remoteUrl, username, password);
 
+            // 获取远端版本进行校验
+            SyncData remoteVersionData = remoteClient.fetchRemoteData(remoteUrl, token, List.of());
+            String localVersion = getLocalVersion();
+
+            if (!force && !localVersion.equals(remoteVersionData.getAppVersion())) {
+                throw new VersionMismatchException(localVersion, remoteVersionData.getAppVersion());
+            }
+
             // 导出本地数据
             SyncData data = exportData(modules);
 
@@ -693,6 +692,9 @@ public class SyncService {
             response.setResults(results);
 
             log.info("推送到远端成功: {}", remoteUrl);
+        } catch (VersionMismatchException e) {
+            log.warn("推送时版本不匹配: {} vs {}", e.getLocalVersion(), e.getRemoteVersion());
+            throw e;  // 重新抛出让 Controller 处理
         } catch (Exception e) {
             log.error("推送到远端失败: {}", remoteUrl, e);
             response.setSuccess(false);
@@ -733,7 +735,7 @@ public class SyncService {
             log.warn("版本不匹配: {} vs {}", e.getLocalVersion(), e.getRemoteVersion());
             throw e;  // 重新抛出让 Controller 处理
         } catch (Exception e) {
-            log.error("从远端拉取失败: ", remoteUrl, e);
+            log.error("从远端拉取失败: {}", remoteUrl, e);
             response.setSuccess(false);
             SyncResult errorResult = new SyncResult();
             errorResult.setFailed(1);

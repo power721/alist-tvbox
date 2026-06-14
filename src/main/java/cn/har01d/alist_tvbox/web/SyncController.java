@@ -135,13 +135,25 @@ public class SyncController {
     public SyncResponse push(@RequestBody SyncRequest request) {
         log.info("推送到远端: {}, 模块: {}, force: {}",
             request.getRemoteUrl(), request.getModules(), request.isForce());
-        return syncService.push(
-            request.getRemoteUrl(),
-            request.getUsername(),
-            request.getPassword(),
-            request.getModules(),
-            request.isForce()
-        );
+
+        try {
+            return syncService.push(
+                request.getRemoteUrl(),
+                request.getUsername(),
+                request.getPassword(),
+                request.getModules(),
+                request.isForce()
+            );
+        } catch (VersionMismatchException e) {
+            // 版本不匹配，返回特殊响应让前端处理
+            SyncResponse response = new SyncResponse();
+            response.setSuccess(false);
+            SyncResult errorResult = new SyncResult();
+            errorResult.setFailed(1);
+            errorResult.getErrors().add("VERSION_MISMATCH:" + e.getMessage());
+            response.addResult("version_error", errorResult);
+            return response;
+        }
     }
 
     @PostMapping("/pull")

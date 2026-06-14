@@ -46,3 +46,17 @@ musl-toolchain/
 *.out
 *.tar
 *.tgz
+
+/atv-cli/atv-cli
+/atv-proxy/atv-proxy
+/.codex
+/sync2server.sh
+/mylocalbuild.sh
+/rebuild.sh
+/src/main/resources/application-dev.yaml
+/qrcode/qrcode
+/docker/Dockerfile-arm
+/data/version
+/uninstall-service..sh
+/install-docker.sh
+/alist-tvbox.yaml

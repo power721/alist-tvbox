@@ -13,6 +13,35 @@
 
     <!-- 步骤 1: 连接远端 -->
     <div v-if="currentStep === 0" style="padding: 20px 0;">
+      <el-alert
+        title="安全提醒"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 15px;"
+      >
+        <template #default>
+          <div style="font-size: 13px; line-height: 1.6;">
+            • 同步功能会传输账号凭据、API Key 等敏感信息<br/>
+            • 请确保远端服务器是您信任的实例<br/>
+            • 生产环境建议使用 HTTPS 连接
+          </div>
+        </template>
+      </el-alert>
+
+      <el-alert
+        v-if="connectionForm.url && connectionForm.url.startsWith('http://')"
+        title="HTTP 警告"
+        type="error"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 15px;"
+      >
+        <template #default>
+          您正在使用 HTTP 连接，数据将明文传输。生产环境请使用 HTTPS。
+        </template>
+      </el-alert>
+
       <el-form :model="connectionForm" label-width="100px">
         <el-form-item label="远端地址">
           <el-input v-model="connectionForm.url" placeholder="http://192.168.1.100:4567" />
@@ -63,11 +92,31 @@
           <el-checkbox-group v-model="syncConfig.modules">
             <el-checkbox label="sites">外部站点 (Sites)</el-checkbox><br/>
             <el-checkbox label="shares">网盘分享 (Shares)</el-checkbox><br/>
-            <el-checkbox label="accounts">阿里云账号 (Accounts)</el-checkbox><br/>
-            <el-checkbox label="driverAccounts">网盘账号 (DriverAccounts)</el-checkbox><br/>
-            <el-checkbox label="pikpakAccounts">PikPak账号 (PikPakAccounts)</el-checkbox><br/>
+            <el-checkbox label="accounts">
+              阿里云账号 (Accounts)
+              <el-tooltip content="包含 refresh_token 等认证信息" placement="top">
+                <el-icon style="color: #E6A23C; margin-left: 4px;"><Warning /></el-icon>
+              </el-tooltip>
+            </el-checkbox><br/>
+            <el-checkbox label="driverAccounts">
+              网盘账号 (DriverAccounts)
+              <el-tooltip content="包含各网盘的 Cookie、Token、密码" placement="top">
+                <el-icon style="color: #E6A23C; margin-left: 4px;"><Warning /></el-icon>
+              </el-tooltip>
+            </el-checkbox><br/>
+            <el-checkbox label="pikpakAccounts">
+              PikPak账号 (PikPakAccounts)
+              <el-tooltip content="包含 PikPak 用户名和密码" placement="top">
+                <el-icon style="color: #E6A23C; margin-left: 4px;"><Warning /></el-icon>
+              </el-tooltip>
+            </el-checkbox><br/>
             <el-checkbox label="subscriptions">订阅配置 (Subscriptions)</el-checkbox><br/>
-            <el-checkbox label="settings">系统设置 (Settings)</el-checkbox>
+            <el-checkbox label="settings">
+              系统设置 (Settings)
+              <el-tooltip content="包含 API Key、Cookie、用户名/密码等敏感配置" placement="top">
+                <el-icon style="color: #E6A23C; margin-left: 4px;"><Warning /></el-icon>
+              </el-tooltip>
+            </el-checkbox>
           </el-checkbox-group>
         </el-form-item>
       </el-form>
@@ -119,6 +168,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Warning } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 interface SyncResult {
