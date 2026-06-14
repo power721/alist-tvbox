@@ -429,6 +429,82 @@
         </el-collapse-item>
       </el-collapse>
 
+      <!-- 智能选择对话框 -->
+      <el-dialog
+        v-model="smartSelectDialogVisible"
+        title="智能选择 GitHub 代理"
+        width="800px"
+        :close-on-click-modal="false">
+        <div style="margin-bottom: 16px;">
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon>
+            <template #title>
+              <span v-if="benchmarking">正在测速所有预设节点，请稍候...</span>
+              <span v-else>测速完成，请勾选需要的节点（最多 5 个）</span>
+            </template>
+          </el-alert>
+        </div>
+
+        <el-table
+          :data="githubProxyNodes"
+          border
+          style="width: 100%"
+          @selection-change="handleProxySelectionChange"
+          :row-key="(row: any) => row.url">
+          <el-table-column
+            type="selection"
+            width="55"
+            :selectable="(row: any) => !benchmarking"
+            reserve-selection />
+          <el-table-column label="节点" min-width="150">
+            <template #default="scope">
+              {{ scope.row.label || scope.row.host || '直连' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="地址" min-width="250" show-overflow-tooltip>
+            <template #default="scope">
+              <span v-if="!scope.row.url">无代理（直连）</span>
+              <span v-else>{{ scope.row.url }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="测速结果" width="120" align="center">
+            <template #default="scope">
+              <span v-if="benchmarkResults.get(scope.row.url)">
+                {{ formatBenchmarkResult(benchmarkResults.get(scope.row.url)) }}
+              </span>
+              <span v-else style="color: #909399">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="延迟排名" width="100" align="center">
+            <template #default="scope">
+              <span v-if="getNodeRank(scope.row.url) > 0" style="color: #67C23A; font-weight: bold;">
+                #{{ getNodeRank(scope.row.url) }}
+              </span>
+              <span v-else style="color: #909399">-</span>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <template #footer>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #909399; font-size: 14px;">
+              已选择 {{ selectedProxies.length }} / 5 个节点
+            </span>
+            <div>
+              <el-button @click="smartSelectDialogVisible = false">取消</el-button>
+              <el-button
+                type="primary"
+                @click="confirmProxySelection"
+                :disabled="selectedProxies.length === 0 || benchmarking">
+                确认选择
+              </el-button>
+            </div>
+          </div>
+        </template>
+      </el-dialog>
+
       <el-input v-model="sourceFilter" placeholder="搜索插件名称或地址" clearable style="width: 280px; margin-bottom: 10px"/>
 
       <div class="table-scroll-wrapper">
@@ -1012,6 +1088,8 @@ const githubProxyNodes = ref<any[]>([])
 const githubProxyList = ref<string[]>([])
 const githubProxyCollapseActive = ref<string[]>([]) // 默认折叠
 const benchmarking = ref(false)
+const smartSelectDialogVisible = ref(false)
+const selectedProxies = ref<string[]>([])
 const benchmarkResults = ref<Map<string, any>>(new Map())
 const addProxyDialogVisible = ref(false)
 const newProxyUrl = ref('')
@@ -1783,6 +1861,7 @@ const autoSelectFastest = () => {
 
   benchmarking.value = true
   benchmarkResults.value.clear()
+  selectedProxies.value = []
 
   // 获取所有预设节点
   const allUrls = githubProxyNodes.value.map(node => node.url)
@@ -1792,6 +1871,8 @@ const autoSelectFastest = () => {
     benchmarkResults.value.set(url, { pending: true })
   })
 
+  // 打开对话框
+  smartSelectDialogVisible.value = true
   ElMessage.info('开始测速所有预设节点...')
 
   // 启动异步测速
@@ -1804,6 +1885,7 @@ const autoSelectFastest = () => {
       ElMessage.error('启动测速失败')
       benchmarking.value = false
       benchmarkResults.value.clear()
+      smartSelectDialogVisible.value = false
     })
 }
 
@@ -1817,16 +1899,12 @@ const pollAndSelectFastest = () => {
           benchmarkResults.value.set(url, results[url])
         })
 
-        // 实时选择最快的 5 个节点并更新到列表
+        // 实时选择最快的 5 个节点并更新到列表（仅用于预览）
         const successNodes = Array.from(benchmarkResults.value.entries())
           .filter(([url, result]) => result.success && result.latency != null)
           .sort((a, b) => a[1].latency - b[1].latency)
           .slice(0, 5)
           .map(([url]) => url)
-
-        if (successNodes.length > 0) {
-          githubProxyList.value = successNodes
-        }
 
         // 检查是否还在运行
         if (data.isRunning) {
@@ -1838,7 +1916,9 @@ const pollAndSelectFastest = () => {
           if (successNodes.length === 0) {
             ElMessage.warning('没有测速成功的节点')
           } else {
-            ElMessage.success(`已自动选择最快的 ${successNodes.length} 个节点，请点击"保存代理列表"生效`)
+            // 自动勾选最快的 5 个节点
+            selectedProxies.value = successNodes
+            ElMessage.success(`已自动选择最快的 ${successNodes.length} 个节点，请确认后点击"确认选择"`)
           }
         }
       })
@@ -1908,6 +1988,44 @@ const formatBenchmarkResult = (result: any) => {
     return '失败'
   }
   return `${result.latency}ms`
+}
+
+// 处理代理节点选择变化
+const handleProxySelectionChange = (selection: any[]) => {
+  if (selection.length > 5) {
+    ElMessage.warning('最多只能选择 5 个节点')
+    return
+  }
+  selectedProxies.value = selection.map((node: any) => node.url)
+}
+
+// 确认选择代理节点
+const confirmProxySelection = () => {
+  if (selectedProxies.value.length === 0) {
+    ElMessage.warning('请至少选择一个节点')
+    return
+  }
+
+  githubProxyList.value = selectedProxies.value
+  smartSelectDialogVisible.value = false
+  ElMessage.success(`已选择 ${selectedProxies.value.length} 个节点，请点击"保存代理列表"生效`)
+}
+
+// 获取节点延迟排名
+const getNodeRank = (url: string) => {
+  const result = benchmarkResults.value.get(url)
+  if (!result || !result.success || result.latency == null) {
+    return 0
+  }
+
+  // 获取所有成功的节点并按延迟排序
+  const successNodes = Array.from(benchmarkResults.value.entries())
+    .filter(([_, r]) => r.success && r.latency != null)
+    .sort((a, b) => a[1].latency - b[1].latency)
+
+  // 找到当前节点的排名
+  const rank = successNodes.findIndex(([u]) => u === url)
+  return rank >= 0 ? rank + 1 : 0
 }
 
 const showGlobalConfig = () => {
