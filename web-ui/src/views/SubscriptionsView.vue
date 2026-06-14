@@ -433,7 +433,7 @@
       <el-dialog
         v-model="smartSelectDialogVisible"
         title="智能选择 GitHub 代理"
-        width="800px"
+        width="900px"
         :close-on-click-modal="false">
         <div style="margin-bottom: 16px;">
           <el-alert
@@ -442,14 +442,16 @@
             show-icon>
             <template #title>
               <span v-if="benchmarking">正在测速所有预设节点，请稍候...</span>
-              <span v-else>测速完成，请勾选需要的节点（最多 5 个）</span>
+              <span v-else>测速完成，已自动选择最快的 5 个节点（可手动调整）</span>
             </template>
           </el-alert>
         </div>
 
         <el-table
-          :data="githubProxyNodes"
+          ref="proxyTableRef"
+          :data="sortedProxyNodes"
           border
+          max-height="500"
           style="width: 100%"
           @selection-change="handleProxySelectionChange"
           :row-key="(row: any) => row.url">
@@ -458,6 +460,14 @@
             width="55"
             :selectable="(row: any) => !benchmarking"
             reserve-selection />
+          <el-table-column label="排名" width="80" align="center">
+            <template #default="scope">
+              <span v-if="getNodeRank(scope.row.url) > 0" style="color: #67C23A; font-weight: bold; font-size: 16px;">
+                #{{ getNodeRank(scope.row.url) }}
+              </span>
+              <span v-else style="color: #909399">-</span>
+            </template>
+          </el-table-column>
           <el-table-column label="节点" min-width="150">
             <template #default="scope">
               {{ scope.row.label || scope.row.host || '直连' }}
@@ -473,14 +483,6 @@
             <template #default="scope">
               <span v-if="benchmarkResults.get(scope.row.url)">
                 {{ formatBenchmarkResult(benchmarkResults.get(scope.row.url)) }}
-              </span>
-              <span v-else style="color: #909399">-</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="延迟排名" width="100" align="center">
-            <template #default="scope">
-              <span v-if="getNodeRank(scope.row.url) > 0" style="color: #67C23A; font-weight: bold;">
-                #{{ getNodeRank(scope.row.url) }}
               </span>
               <span v-else style="color: #909399">-</span>
             </template>
@@ -1064,6 +1066,40 @@ const filteredManagedSources = computed(() => {
     (item.url && item.url.toLowerCase().includes(keyword))
   )
 })
+
+// 排序后的代理节点列表（按测速结果排序）
+const sortedProxyNodes = computed(() => {
+  const nodes = [...githubProxyNodes.value]
+
+  // 按测速结果排序：成功的在前，按延迟升序；失败的在后；测速中的最后
+  return nodes.sort((a, b) => {
+    const resultA = benchmarkResults.value.get(a.url)
+    const resultB = benchmarkResults.value.get(b.url)
+
+    // 都没有结果，保持原顺序
+    if (!resultA && !resultB) return 0
+    if (!resultA) return 1
+    if (!resultB) return -1
+
+    // 测速中的排在最后
+    if (resultA.pending && !resultB.pending) return 1
+    if (!resultA.pending && resultB.pending) return -1
+    if (resultA.pending && resultB.pending) return 0
+
+    // 成功的在前，失败的在后
+    if (resultA.success && !resultB.success) return -1
+    if (!resultA.success && resultB.success) return 1
+
+    // 都成功，按延迟排序
+    if (resultA.success && resultB.success) {
+      return (resultA.latency || 0) - (resultB.latency || 0)
+    }
+
+    // 都失败，保持原顺序
+    return 0
+  })
+})
+
 const pluginFilters = ref<PluginFilter[]>([])
 const pluginForm = ref<Plugin>({
   id: 0,
@@ -1090,6 +1126,7 @@ const githubProxyCollapseActive = ref<string[]>([]) // 默认折叠
 const benchmarking = ref(false)
 const smartSelectDialogVisible = ref(false)
 const selectedProxies = ref<string[]>([])
+const proxyTableRef = ref()
 const benchmarkResults = ref<Map<string, any>>(new Map())
 const addProxyDialogVisible = ref(false)
 const newProxyUrl = ref('')
@@ -1918,6 +1955,23 @@ const pollAndSelectFastest = () => {
           } else {
             // 自动勾选最快的 5 个节点
             selectedProxies.value = successNodes
+
+            // 使用 nextTick 确保表格已经渲染完成
+            nextTick(() => {
+              if (proxyTableRef.value) {
+                // 先清空所有选择
+                proxyTableRef.value.clearSelection()
+
+                // 勾选最快的 5 个节点
+                const nodesToSelect = githubProxyNodes.value.filter(node =>
+                  successNodes.includes(node.url)
+                )
+                nodesToSelect.forEach(node => {
+                  proxyTableRef.value.toggleRowSelection(node, true)
+                })
+              }
+            })
+
             ElMessage.success(`已自动选择最快的 ${successNodes.length} 个节点，请确认后点击"确认选择"`)
           }
         }
