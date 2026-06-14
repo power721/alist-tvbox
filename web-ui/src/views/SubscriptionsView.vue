@@ -358,52 +358,76 @@
       </el-form>
 
       <!-- GitHub 代理列表管理 -->
-      <el-divider content-position="left">GitHub 代理配置（多个，自动 fallback，最多 5 个）</el-divider>
-      <div style="margin-bottom: 10px">
-        <el-button @click="showAddProxyDialog">添加代理</el-button>
-        <el-button @click="benchmarkAllProxies" :loading="benchmarking">
-          {{ benchmarking ? '测速中...' : '批量测速' }}
-        </el-button>
-        <el-button type="success" @click="autoSelectFastest" :loading="benchmarking" title="测速并自动选择最快5个">
-          智能选择
-        </el-button>
-        <el-button type="primary" @click="saveGitHubProxyList">保存代理列表</el-button>
-      </div>
+      <el-collapse v-model="githubProxyCollapseActive" style="margin-top: 20px">
+        <el-collapse-item name="github-proxy">
+          <template #title>
+            <span style="font-weight: 500">GitHub 代理配置（多个，自动 fallback，最多 5 个）</span>
+          </template>
 
-      <el-table :data="githubProxyList" border style="width: 100%; margin-bottom: 20px">
-        <el-table-column label="优先级" width="80" align="center">
-          <template #default="scope">
-            {{ scope.$index + 1 }}
-          </template>
-        </el-table-column>
-        <el-table-column label="代理地址" min-width="300">
-          <template #default="scope">
-            <span v-if="!scope.row">无代理（直连）</span>
-            <span v-else>{{ scope.row }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="测速结果" width="120">
-          <template #default="scope">
-            <span v-if="benchmarkResults.get(scope.row)">
-              {{ formatBenchmarkResult(benchmarkResults.get(scope.row)) }}
-            </span>
-            <span v-else style="color: #909399">-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" align="center">
-          <template #default="scope">
-            <el-button link type="primary" @click="moveProxyUp(scope.$index)" :disabled="scope.$index === 0">
-              上移
-            </el-button>
-            <el-button link type="primary" @click="moveProxyDown(scope.$index)" :disabled="scope.$index === githubProxyList.length - 1">
-              下移
-            </el-button>
-            <el-button link type="danger" @click="removeProxy(scope.$index)">
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+          <div style="margin-bottom: 10px">
+            <el-tooltip content="从预设节点中选择或输入自定义代理地址" placement="top">
+              <el-button @click="showAddProxyDialog">添加代理</el-button>
+            </el-tooltip>
+
+            <el-tooltip content="测速当前列表中的所有代理节点" placement="top">
+              <el-button @click="benchmarkAllProxies" :loading="benchmarking">
+                {{ benchmarking ? '测速中...' : '批量测速' }}
+              </el-button>
+            </el-tooltip>
+
+            <el-tooltip content="测速所有预设节点并自动选择最快的 5 个" placement="top">
+              <el-button type="success" @click="autoSelectFastest" :loading="benchmarking">
+                智能选择
+              </el-button>
+            </el-tooltip>
+
+            <el-tooltip content="保存代理列表到 /data/github_proxy.txt" placement="top">
+              <el-button type="primary" @click="saveGitHubProxyList">保存</el-button>
+            </el-tooltip>
+          </div>
+
+          <el-table :data="githubProxyList" border style="width: 100%; margin-bottom: 20px">
+            <el-table-column label="优先级" width="80" align="center">
+              <template #default="scope">
+                {{ scope.$index + 1 }}
+              </template>
+            </el-table-column>
+            <el-table-column label="代理地址" min-width="300">
+              <template #default="scope">
+                <span v-if="!scope.row">无代理（直连）</span>
+                <span v-else>{{ scope.row }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="测速结果" width="120">
+              <template #default="scope">
+                <span v-if="benchmarkResults.get(scope.row)">
+                  {{ formatBenchmarkResult(benchmarkResults.get(scope.row)) }}
+                </span>
+                <span v-else style="color: #909399">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="180" align="center">
+              <template #default="scope">
+                <el-tooltip content="提高优先级" placement="top">
+                  <el-button link type="primary" @click="moveProxyUp(scope.$index)" :disabled="scope.$index === 0">
+                    上移
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="降低优先级" placement="top">
+                  <el-button link type="primary" @click="moveProxyDown(scope.$index)" :disabled="scope.$index === githubProxyList.length - 1">
+                    下移
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="从列表中移除" placement="top">
+                  <el-button link type="danger" @click="removeProxy(scope.$index)">
+                    删除
+                  </el-button>
+                </el-tooltip>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-collapse-item>
+      </el-collapse>
 
       <el-input v-model="sourceFilter" placeholder="搜索插件名称或地址" clearable style="width: 280px; margin-bottom: 10px"/>
 
@@ -986,6 +1010,7 @@ const pluginSettingsForm = ref({
 })
 const githubProxyNodes = ref<any[]>([])
 const githubProxyList = ref<string[]>([])
+const githubProxyCollapseActive = ref<string[]>([]) // 默认折叠
 const benchmarking = ref(false)
 const benchmarkResults = ref<Map<string, any>>(new Map())
 const addProxyDialogVisible = ref(false)
