@@ -129,7 +129,6 @@ class SyncControllerTest {
 
         // When & Then
         mockMvc.perform(post("/api/sync/import")
-                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -150,7 +149,6 @@ class SyncControllerTest {
     }
 
     @Test
-    @WithMockUser
     void testExport_Success() throws Exception {
         // Given
         SyncData data = new SyncData();
@@ -159,8 +157,7 @@ class SyncControllerTest {
         when(syncService.exportData(anyList())).thenReturn(data);
 
         // When & Then
-        mockMvc.perform(post("/api/sync/export")
-                .with(csrf())
+        mockMvc.perform(get("/api/sync/export")
                 .param("modules", "sites", "shares")
                 .contentType(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())

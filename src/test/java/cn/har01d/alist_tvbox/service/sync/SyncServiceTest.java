@@ -229,11 +229,15 @@ class SyncServiceTest {
     @Test
     void testExportSettings_OnlyWhitelistedKeys() {
         // Given
+        Setting versionSetting = new Setting("app_version", "1.0");
         Setting allowedSetting = new Setting("bilibili_cookie", "test_cookie");
-        Setting disallowedSetting = new Setting("internal_secret", "secret_value");
 
+        when(settingRepository.findById("app_version")).thenReturn(Optional.of(versionSetting));
         when(settingRepository.findById("bilibili_cookie")).thenReturn(Optional.of(allowedSetting));
-        when(settingRepository.findById("internal_secret")).thenReturn(Optional.empty());
+        // 其他白名单 key 返回 empty
+        when(settingRepository.findById(argThat(key ->
+            !key.equals("app_version") && !key.equals("bilibili_cookie")
+        ))).thenReturn(Optional.empty());
 
         // When
         SyncData data = syncService.exportData(List.of("settings"));
@@ -241,7 +245,8 @@ class SyncServiceTest {
         // Then
         Map<String, String> settings = data.getSettings();
         assertNotNull(settings);
+        assertEquals(1, settings.size());  // 只有一个 key
         assertTrue(settings.containsKey("bilibili_cookie"));
-        // internal_secret 不在白名单，不会被导出
+        assertEquals("test_cookie", settings.get("bilibili_cookie"));
     }
 }
