@@ -347,13 +347,6 @@
             <el-option v-for="item in pluginRunModeOptions" :key="item.value" :label="item.label" :value="item.value"/>
           </el-select>
         </el-form-item>
-        <el-form-item label="GitHub代理">
-          <el-input
-            v-model="pluginSettingsForm.githubProxy"
-            style="width: 460px"
-            placeholder="https://gh.llkk.cc/"
-          />
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="savePluginSettings">保存设置</el-button>
         </el-form-item>
@@ -363,6 +356,51 @@
           </el-button>
         </el-form-item>
       </el-form>
+
+      <!-- GitHub 代理列表管理 -->
+      <el-divider content-position="left">GitHub 代理配置（多个，自动 fallback，最多 5 个）</el-divider>
+      <div style="margin-bottom: 10px">
+        <el-button @click="showAddProxyDialog">添加代理</el-button>
+        <el-button @click="benchmarkAllProxies" :loading="benchmarking">
+          {{ benchmarking ? '测速中...' : '批量测速' }}
+        </el-button>
+        <el-button type="primary" @click="saveGitHubProxyList">保存代理列表</el-button>
+      </div>
+
+      <el-table :data="githubProxyList" border style="width: 100%; margin-bottom: 20px">
+        <el-table-column label="优先级" width="80" align="center">
+          <template #default="scope">
+            {{ scope.$index + 1 }}
+          </template>
+        </el-table-column>
+        <el-table-column label="代理地址" min-width="300">
+          <template #default="scope">
+            <span v-if="!scope.row">无代理（直连）</span>
+            <span v-else>{{ scope.row }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="测速结果" width="120">
+          <template #default="scope">
+            <span v-if="benchmarkResults.get(scope.row)">
+              {{ formatBenchmarkResult(benchmarkResults.get(scope.row)) }}
+            </span>
+            <span v-else style="color: #909399">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="180" align="center">
+          <template #default="scope">
+            <el-button link type="primary" @click="moveProxyUp(scope.$index)" :disabled="scope.$index === 0">
+              上移
+            </el-button>
+            <el-button link type="primary" @click="moveProxyDown(scope.$index)" :disabled="scope.$index === githubProxyList.length - 1">
+              下移
+            </el-button>
+            <el-button link type="danger" @click="removeProxy(scope.$index)">
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
       <el-input v-model="sourceFilter" placeholder="搜索插件名称或地址" clearable style="width: 280px; margin-bottom: 10px"/>
 
@@ -694,6 +732,32 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="addProxyDialogVisible" title="添加 GitHub 代理" width="600px">
+      <el-form label-width="120px">
+        <el-form-item label="选择或输入">
+          <el-select
+            v-model="newProxyUrl"
+            filterable
+            allow-create
+            default-first-option
+            placeholder="选择预设节点或输入自定义代理"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="node in githubProxyNodes"
+              :key="node.url"
+              :label="formatNodeLabel(node)"
+              :value="node.url"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addProxyDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="addProxyToList">添加</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -917,6 +981,12 @@ const pluginSettingsForm = ref({
   githubProxy: '',
   pluginRunMode: 'java'
 })
+const githubProxyNodes = ref<any[]>([])
+const githubProxyList = ref<string[]>([])
+const benchmarking = ref(false)
+const benchmarkResults = ref<Map<string, any>>(new Map())
+const addProxyDialogVisible = ref(false)
+const newProxyUrl = ref('')
 const selectedPluginIds = ref<number[]>([])
 const sourceExtendTarget = ref<ManagedSource | null>(null)
 const sourceExtendText = ref('')
@@ -1549,12 +1619,141 @@ const loadPluginFilters = () => {
 }
 
 const loadPluginSettings = () => {
-  axios.get('/api/settings/github_proxy').then(({data}) => {
-    pluginSettingsForm.value.githubProxy = data?.value || ''
-  })
   axios.get('/api/settings/plugin_run_mode').then(({data}) => {
     pluginSettingsForm.value.pluginRunMode = data?.value || 'java'
   })
+  loadGitHubProxyNodes()
+  loadGitHubProxyList()
+}
+
+const loadGitHubProxyNodes = () => {
+  axios.get('/api/settings/github-proxy/nodes').then(({data}) => {
+    githubProxyNodes.value = data || []
+  })
+}
+
+const loadGitHubProxyList = () => {
+  axios.get('/api/settings/github-proxy/list').then(({data}) => {
+    githubProxyList.value = data || []
+  })
+}
+
+const showAddProxyDialog = () => {
+  if (githubProxyList.value.length >= 5) {
+    ElMessage.warning('最多只能配置 5 个代理节点')
+    return
+  }
+  newProxyUrl.value = ''
+  addProxyDialogVisible.value = true
+}
+
+const addProxyToList = () => {
+  if (githubProxyList.value.length >= 5) {
+    ElMessage.warning('最多只能配置 5 个代理节点')
+    return
+  }
+
+  const url = newProxyUrl.value.trim()
+  if (githubProxyList.value.includes(url)) {
+    ElMessage.warning('该代理已存在')
+    return
+  }
+
+  githubProxyList.value.push(url)
+  addProxyDialogVisible.value = false
+  ElMessage.success('已添加到列表，请点击"保存代理列表"生效')
+}
+
+const removeProxy = (index: number) => {
+  githubProxyList.value.splice(index, 1)
+  ElMessage.success('已从列表移除，请点击"保存代理列表"生效')
+}
+
+const moveProxyUp = (index: number) => {
+  if (index === 0) return
+  const temp = githubProxyList.value[index]
+  githubProxyList.value[index] = githubProxyList.value[index - 1]
+  githubProxyList.value[index - 1] = temp
+}
+
+const moveProxyDown = (index: number) => {
+  if (index === githubProxyList.value.length - 1) return
+  const temp = githubProxyList.value[index]
+  githubProxyList.value[index] = githubProxyList.value[index + 1]
+  githubProxyList.value[index + 1] = temp
+}
+
+const benchmarkAllProxies = () => {
+  if (benchmarking.value) return
+  if (githubProxyList.value.length === 0) {
+    ElMessage.warning('请先添加代理节点')
+    return
+  }
+
+  benchmarking.value = true
+  benchmarkResults.value.clear()
+
+  axios.post('/api/settings/github-proxy/benchmark', { urls: githubProxyList.value })
+    .then(({data}) => {
+      data.forEach((result: any) => {
+        benchmarkResults.value.set(result.url, result)
+      })
+      ElMessage.success('测速完成')
+    })
+    .catch(() => {
+      ElMessage.error('测速失败')
+    })
+    .finally(() => {
+      benchmarking.value = false
+    })
+}
+
+const saveGitHubProxyList = () => {
+  axios.post('/api/settings/github-proxy/list', githubProxyList.value)
+    .then(({data}) => {
+      ElMessage.success(`已保存 ${data.count} 个代理节点到 /data/github_proxy.txt`)
+    })
+    .catch(() => {
+      ElMessage.error('保存失败')
+    })
+}
+
+const benchmarkGitHubProxy = () => {
+  if (benchmarking.value) return
+
+  benchmarking.value = true
+  benchmarkResults.value.clear()
+
+  const urls = githubProxyNodes.value.map(node => node.url)
+
+  axios.post('/api/settings/github-proxy/benchmark', { urls })
+    .then(({data}) => {
+      data.forEach((result: any) => {
+        benchmarkResults.value.set(result.url, result)
+      })
+      ElMessage.success('测速完成')
+    })
+    .catch(() => {
+      ElMessage.error('测速失败')
+    })
+    .finally(() => {
+      benchmarking.value = false
+    })
+}
+
+const formatNodeLabel = (node: any) => {
+  if (!node.url) {
+    return '无代理（直连）'
+  }
+  return `${node.label} (${node.host || node.url})`
+}
+
+const formatBenchmarkResult = (result: any) => {
+  if (!result) return ''
+  if (!result.success) {
+    return '失败'
+  }
+  return `${result.latency}ms`
 }
 
 const showGlobalConfig = () => {
@@ -1688,17 +1887,11 @@ const importPlugins = async () => {
 }
 
 const savePluginSettings = () => {
-  Promise.all([
-    axios.post('/api/settings', {
-      name: 'github_proxy',
-      value: pluginSettingsForm.value.githubProxy
-    }),
-    axios.post('/api/settings', {
-      name: 'plugin_run_mode',
-      value: pluginSettingsForm.value.pluginRunMode
-    })
-  ]).then(() => {
-    ElMessage.success('订阅源设置已保存')
+  axios.post('/api/settings', {
+    name: 'plugin_run_mode',
+    value: pluginSettingsForm.value.pluginRunMode
+  }).then(() => {
+    ElMessage.success('插件运行模式已保存')
   })
 }
 
