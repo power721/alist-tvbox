@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.DriveId;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.OpenApiDto;
 import cn.har01d.alist_tvbox.dto.ParseRequest;
@@ -416,6 +417,7 @@ public class ShareService {
 
     public int importShares(SharesDto dto) {
         int count = 0;
+        Integer defaultType = DriveId.toTypeOrNull(dto.getType());
         log.info("import share list");
         for (String line : dto.getContent().split("\n")) {
             String[] parts = line.trim().split("\\s+");
@@ -424,11 +426,11 @@ public class ShareService {
                 try {
                     Share share = new Share();
                     share.setId(shareId);
-                    share.setType(dto.getType());
+                    share.setType(defaultType);
                     share.setPath(parts[0]);
                     String[] id = parts[1].split(":", 2);
                     if (!parts[1].contains("http") && id.length > 1) {
-                        share.setType(Integer.parseInt(id[0]));
+                        share.setType(DriveId.toType(id[0]));
                         share.setShareId(id[1]);
                     } else {
                         share.setShareId(parts[1]);
@@ -477,35 +479,11 @@ public class ShareService {
         return count;
     }
 
-    public String exportShare(HttpServletResponse response, int type) {
+    public String exportShare(HttpServletResponse response, String drive) {
+        int type = DriveId.toType(drive);
         List<Share> list = type < 0 ? shareRepository.findAll() : shareRepository.findByType(type);
         StringBuilder sb = new StringBuilder();
-        String fileName = "shares.txt";
-        if (type == 1) {
-            fileName = "pikpak_shares.txt";
-        } else if (type == 5) {
-            fileName = "quark_shares.txt";
-        } else if (type == 7) {
-            fileName = "uc_shares.txt";
-        } else if (type == 8) {
-            fileName = "115_shares.txt";
-        } else if (type == 9) {
-            fileName = "189_shares.txt";
-        } else if (type == 6) {
-            fileName = "139_shares.txt";
-        } else if (type == 2) {
-            fileName = "thunder_shares.txt";
-        } else if (type == 3) {
-            fileName = "123_shares.txt";
-        } else if (type == 0) {
-            fileName = "ali_shares.txt";
-        } else if (type == 10) {
-            fileName = "baidu_shares.txt";
-        } else if (type == 11) {
-            fileName = "strm_shares.txt";
-        } else if (type == 12) {
-            fileName = "duck_shares.txt";
-        }
+        String fileName = type < 0 ? "shares.txt" : DriveId.toDrive(type) + "_shares.txt";
 
         for (Share share : list) {
             if (share.isTemp()) {
@@ -516,13 +494,13 @@ public class ShareService {
 
             // Special handling for STRM type (type 11)
             if (share.getType() == 11) {
-                sb.append(share.getType()).append(":STRM").append("  ");
+                sb.append(DriveId.toDrive(share.getType())).append(":STRM").append("  ");
                 // Export the cookie field (Base64 encoded to avoid parsing issues)
                 String cookieJson = StringUtils.isBlank(share.getCookie()) ? "{}" : share.getCookie();
                 sb.append(java.util.Base64.getEncoder().encodeToString(cookieJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             } else {
                 // Standard format for other types
-                sb.append(share.getType()).append(":")
+                sb.append(DriveId.toDrive(share.getType())).append(":")
                         .append(share.getShareId()).append("  ")
                         .append(StringUtils.isBlank(share.getFolderId()) ? "root" : share.getFolderId()).append("  ")
                         .append(share.getPassword());
@@ -572,34 +550,22 @@ public class ShareService {
     }
 
     private Storage saveStorage(Share share, boolean disabled) {
-        Storage storage = null;
-        if (share.getType() == null || share.getType() == 0) {
-            storage = new AliyunShare(share);
-        } else if (share.getType() == 1) {
-            storage = new PikPakShare(share);
-        } else if (share.getType() == 8) {
-            storage = new Pan115Share(share);
-        } else if (share.getType() == 4) {
-            storage = new Local(share);
-        } else if (share.getType() == 5) {
-            storage = new QuarkShare(share);
-        } else if (share.getType() == 7) {
-            storage = new UCShare(share);
-        } else if (share.getType() == 9) {
-            storage = new Pan189Share(share);
-        } else if (share.getType() == 2) {
-            storage = new ThunderShare(share);
-        } else if (share.getType() == 3) {
-            storage = new Pan123Share(share);
-        } else if (share.getType() == 6) {
-            storage = new Pan139Share(share);
-        } else if (share.getType() == 10) {
-            storage = new BaiduShare(share);
-        } else if (share.getType() == 12) {
-            storage = new GuangYaPanShare(share);
-        } else if (share.getType() == 11) {
-            storage = new StrmStorage(share);
-        }
+        Storage storage = switch (share.getType() == null ? "ali" : DriveId.toDrive(share.getType())) {
+            case "ali" -> new AliyunShare(share);
+            case "pikpak" -> new PikPakShare(share);
+            case "115" -> new Pan115Share(share);
+            case "local" -> new Local(share);
+            case "quark" -> new QuarkShare(share);
+            case "uc" -> new UCShare(share);
+            case "189" -> new Pan189Share(share);
+            case "thunder" -> new ThunderShare(share);
+            case "123" -> new Pan123Share(share);
+            case "139" -> new Pan139Share(share);
+            case "baidu" -> new BaiduShare(share);
+            case "duck" -> new GuangYaPanShare(share);
+            case "strm" -> new StrmStorage(share);
+            default -> null;
+        };
 
         if (storage != null) {
             storage.setDisabled(disabled);
@@ -683,7 +649,12 @@ public class ShareService {
         return sb;
     }
 
-    public Page<Share> list(Pageable pageable, Integer type, String keyword) {
+    public Page<Share> list(Pageable pageable, String drive) {
+        return list(pageable, drive, null);
+    }
+
+    public Page<Share> list(Pageable pageable, String drive, String keyword) {
+        Integer type = DriveId.toTypeOrNull(drive);
         if (type != null && type > -1) {
             if (StringUtils.isBlank(keyword)) {
                 return shareRepository.findByType(type, pageable);
@@ -867,18 +838,18 @@ public class ShareService {
         tid = tid.split("/")[0];
         String[] parts = tid.split("@");
         String id = parts[1];
-        String url = switch (parts[0]) {
-            case "0" -> "https://www.alipan.com/s/" + id;
-            case "1" -> "https://mypikpak.com/s/" + id;
-            case "2" -> "https://pan.xunlei.com/s/" + id;
-            case "3" -> "https://123pan.com/s/" + id;
-            case "5" -> "https://pan.quark.cn/s/" + id;
-            case "6" -> "https://caiyun.139.com/w/i/" + id;
-            case "7" -> "https://drive.uc.cn/s/" + id;
-            case "8" -> "https://115.com/s/" + id;
-            case "9" -> "https://cloud.189.cn/t/" + id;
-            case "10" -> "https://pan.baidu.com/s/" + id;
-            case "12" -> "https://www.guangyapan.com/s/" + id;
+        String url = switch (DriveId.normalize(parts[0])) {
+            case "ali" -> "https://www.alipan.com/s/" + id;
+            case "pikpak" -> "https://mypikpak.com/s/" + id;
+            case "thunder" -> "https://pan.xunlei.com/s/" + id;
+            case "123" -> "https://123pan.com/s/" + id;
+            case "quark" -> "https://pan.quark.cn/s/" + id;
+            case "139" -> "https://caiyun.139.com/w/i/" + id;
+            case "uc" -> "https://drive.uc.cn/s/" + id;
+            case "115" -> "https://115.com/s/" + id;
+            case "189" -> "https://cloud.189.cn/t/" + id;
+            case "baidu" -> "https://pan.baidu.com/s/" + id;
+            case "duck" -> "https://www.guangyapan.com/s/" + id;
             default -> throw new IllegalArgumentException("Unexpected type: " + parts[0]);
         };
         if (parts.length > 2) {
@@ -939,7 +910,7 @@ public class ShareService {
         if (!url.startsWith("http")) {
             String[] parts = url.split("@");
             if (parts.length == 3 || (parts.length == 2 && url.endsWith("@"))) {
-                int type = Integer.parseInt(parts[0]);
+                int type = DriveId.toType(parts[0]);
                 share.setType(type);
                 share.setShareId(type == 10 ? normalizeBaiduShareId(parts[1]) : parts[1]);
                 if (parts.length > 2) {
@@ -1164,7 +1135,7 @@ public class ShareService {
         }
         if (StringUtils.isBlank(dto.getPath())) {
             share.setTemp(true);
-            share.setPath("temp/" + share.getType() + "@" + share.getShareId() + "@" + share.getPassword());
+            share.setPath("temp/" + DriveId.toDrive(share.getType()) + "@" + share.getShareId() + "@" + share.getPassword());
         } else {
             share.setPath(dto.getPath());
         }
@@ -1385,7 +1356,8 @@ public class ShareService {
         deleteStorage(id, token);
     }
 
-    public int deleteShares(Integer type) {
+    public int deleteShares(String drive) {
+        Integer type = DriveId.toTypeOrNull(drive);
         List<Share> shares = type != null ? shareRepository.findByType(type) : shareRepository.findAll();
         shareRepository.deleteAll(shares);
         log.info("delete {} shares type: {}", shares.size(), type);
@@ -1538,7 +1510,7 @@ public class ShareService {
                 share.setPath(parts[0]);
                 String[] sid = parts[1].split(":", 2);
                 if (sid.length > 1) {
-                    share.setType(Integer.parseInt(sid[0]));
+                    share.setType(DriveId.toType(sid[0]));
                     share.setShareId(sid[1]);
                 } else {
                     share.setType(0);

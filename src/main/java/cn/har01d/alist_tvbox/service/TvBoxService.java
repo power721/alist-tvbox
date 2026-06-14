@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.DriveId;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.FileItem;
 import cn.har01d.alist_tvbox.dto.FilesList;
@@ -105,7 +106,6 @@ public class TvBoxService {
     private static final Pattern NUMBER1 = Pattern.compile("^SE(\\d{1,2}).*");
     private static final Pattern NUMBER2 = Pattern.compile("^S(\\d{1,2}).*");
     private static final Pattern NUMBER3 = Pattern.compile("^第\\s*(.{1,2})\\s*季.*");
-    private static final Pattern SHARE_ID = Pattern.compile("^\\d+@.+@.*");
 
     private final AccountRepository accountRepository;
     private final AListAliasRepository aliasRepository;
@@ -1813,7 +1813,7 @@ public class TvBoxService {
             }
             if (fsDetail.getType() != 5 && !setMovieInfo(site, movieDetail, fsDetail.getName(), parent, true)) {
                 String newName = getNameFromPath(parent);
-                if (!SHARE_ID.matcher(newName).matches()) {
+                if (!DriveId.isShareTokenName(newName)) {
                     movieDetail.setVod_name(newName);
                     setMovieInfo(site, movieDetail, "", parent, true);
                     movieDetail.setVod_name(fsDetail.getName());
@@ -2316,7 +2316,7 @@ public class TvBoxService {
                     var m = pattern.matcher(filename);
                     if (m.matches()) {
                         String newName = getNameFromPath(getParent(path));
-                        if (!newName.equals(name) && !SHARE_ID.matcher(newName).matches()) {
+                        if (!newName.equals(name) && !DriveId.isShareTokenName(newName)) {
                             movie = doubanService.getByName(newName);
                             break;
                         }

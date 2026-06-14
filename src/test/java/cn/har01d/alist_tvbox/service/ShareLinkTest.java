@@ -415,7 +415,7 @@ class ShareLinkTest {
 
         String path = shareService.add(dto);
 
-        assertEquals("/我的115分享/temp/8@swh9gln3ffc@jce0", path);
+        assertEquals("/我的115分享/temp/115@swh9gln3ffc@jce0", path);
         Mockito.verifyNoInteractions(offlineDownloadService);
     }
 
