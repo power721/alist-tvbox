@@ -614,55 +614,106 @@ migrate_legacy_data() {
   local legacy_dir="/etc/xiaoya"
   local new_dir="${CONFIG[BASE_DIR]:-/opt/alist-tvbox}"
 
+  # 如果新旧路径相同，无需迁移
+  if [[ "$new_dir" == "$legacy_dir" ]]; then
+    return 0
+  fi
+
   mkdir -p "$new_dir"
 
+  # 检查是否已经迁移完成
   if [[ -f "$new_dir/.v3" ]]; then
-    echo -e "${GREEN}数据已迁移，跳过${NC}"
+    echo -e "${GREEN}数据已迁移（存在标记文件 .v3），跳过${NC}"
     return 0
   fi
 
-  # 目标目录已有数据则不覆盖，直接标记完成
-  if [[ -n "$(ls -A "$new_dir" 2>/dev/null)" ]]; then
-    touch "$new_dir/.v3"
-    echo -e "${GREEN}目标目录已有数据，跳过迁移${NC}"
-    return 0
-  fi
-
-  # 从现存容器的 /data 挂载反推用户实际使用的数据目录。
-  # 只有当现存容器确实把 /data 绑定到 /etc/xiaoya 时才迁移，
-  # 不假设用户数据一定在 /etc/xiaoya。
+  # 从现存容器的 /data 挂载反推用户实际使用的数据目录
   local bound_source=""
+  local container_found=""
   local name
   for name in "$(get_container_name)" "$(get_opposite_container_name)"; do
     [[ -n "$name" ]] || continue
     if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${name}\$"; then
       bound_source="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' "$name" 2>/dev/null)"
-      [[ -n "$bound_source" ]] && break
+      if [[ -n "$bound_source" ]]; then
+        container_found="$name"
+        break
+      fi
     fi
   done
 
-  if [[ "$bound_source" == "$legacy_dir" && -d "$legacy_dir" && "$new_dir" != "$legacy_dir" ]]; then
-    echo -e "${YELLOW}检测到容器数据目录为旧路径，正在迁移: $legacy_dir -> $new_dir${NC}"
+  # 场景1：容器正在使用旧路径 /etc/xiaoya，需要迁移
+  if [[ "$bound_source" == "$legacy_dir" && -d "$legacy_dir" ]]; then
+    echo -e "${CYAN}检测到容器 $container_found 正在使用旧路径: $legacy_dir${NC}"
+    echo -e "${YELLOW}正在迁移数据: $legacy_dir -> $new_dir${NC}"
+
+    # 如果目标目录非空，警告用户
+    if [[ -n "$(ls -A "$new_dir" 2>/dev/null)" ]]; then
+      echo -e "${RED}警告：目标目录 $new_dir 已存在数据！${NC}"
+      echo -e "${YELLOW}建议：请手动检查并备份目标目录，或删除后重试${NC}"
+      echo -e "${YELLOW}跳过自动迁移，将使用目标目录现有数据${NC}"
+      touch "$new_dir/.v3"
+      return 0
+    fi
+
     if cp -a "$legacy_dir/." "$new_dir/"; then
       touch "$new_dir/.v3"
-      echo -e "${GREEN}迁移完成${NC}"
+      echo -e "${GREEN}✓ 迁移完成: $legacy_dir -> $new_dir${NC}"
+      echo -e "${CYAN}提示：旧目录 $legacy_dir 仍然保留，确认无误后可手动删除${NC}"
     else
-      # 清理半成品，避免下次因目标非空被跳过而残留不完整数据
+      # 清理半成品
       if [[ -n "$new_dir" && "$new_dir" != "/" ]]; then
         find "$new_dir" -mindepth 1 -delete 2>/dev/null || true
       fi
-      echo -e "${RED}迁移失败：已清理目标目录，请检查权限（可能需要 root）后重试，或手动复制 $legacy_dir -> $new_dir${NC}"
+      echo -e "${RED}✗ 迁移失败：已清理目标目录${NC}"
+      echo -e "${YELLOW}请检查权限后重试，或手动复制: cp -a $legacy_dir/. $new_dir/${NC}"
       return 1
     fi
-  else
-    touch "$new_dir/.v3"
-    echo -e "${GREEN}未检测到绑定 /etc/xiaoya 的容器，无需迁移${NC}"
+    return 0
   fi
+
+  # 场景2：容器不存在或使用其他路径，但旧路径有数据，新路径为空
+  if [[ -d "$legacy_dir" && -n "$(ls -A "$legacy_dir" 2>/dev/null)" ]]; then
+    # 新目录为空，可以尝试迁移
+    if [[ -z "$(ls -A "$new_dir" 2>/dev/null)" ]]; then
+      echo -e "${YELLOW}检测到旧路径 $legacy_dir 存在数据，但容器未使用该路径${NC}"
+      read -p "是否从旧路径迁移数据？[Y/n] " yn
+      case "$yn" in
+        [Nn]*)
+          echo -e "${YELLOW}跳过迁移${NC}"
+          touch "$new_dir/.v3"
+          return 0
+          ;;
+        *)
+          echo -e "${CYAN}正在迁移数据: $legacy_dir -> $new_dir${NC}"
+          if cp -a "$legacy_dir/." "$new_dir/"; then
+            touch "$new_dir/.v3"
+            echo -e "${GREEN}✓ 迁移完成${NC}"
+            echo -e "${CYAN}提示：旧目录 $legacy_dir 仍然保留，确认无误后可手动删除${NC}"
+          else
+            find "$new_dir" -mindepth 1 -delete 2>/dev/null || true
+            echo -e "${RED}✗ 迁移失败${NC}"
+            return 1
+          fi
+          return 0
+          ;;
+      esac
+    else
+      # 新目录已有数据，直接标记完成
+      echo -e "${YELLOW}目标目录 $new_dir 已有数据，跳过迁移${NC}"
+      touch "$new_dir/.v3"
+      return 0
+    fi
+  fi
+
+  # 场景3：旧路径不存在或为空，无需迁移
+  touch "$new_dir/.v3"
+  echo -e "${GREEN}无需从旧路径迁移（旧路径不存在或为空）${NC}"
+  return 0
 }
 
 
 install_container() {
-  migrate_legacy_data
   # 先检查架构支持
   if ! check_architecture_support; then
     return 1
@@ -676,6 +727,15 @@ install_container() {
   fi
 
   local container_name=$(get_container_name)
+
+  # 在删除容器之前尝试迁移数据
+  # 此时容器还在，可以检测到它使用的旧路径
+  if ! migrate_legacy_data; then
+    echo -e "${RED}数据迁移失败，安装中止${NC}"
+    read -n 1 -s -r -p "按任意键继续..."
+    return 1
+  fi
+
   remove_opposite_container
 
   INIT=false
@@ -683,6 +743,12 @@ install_container() {
   if [[ ! -d "${CONFIG[BASE_DIR]}" ]]; then
     echo -e "${YELLOW}基础目录不存在，正在创建: ${CONFIG[BASE_DIR]}${NC}"
     mkdir -p "${CONFIG[BASE_DIR]}"
+    INIT=true
+  fi
+
+  # 检查基础目录是否为空（排除 .v3 标记文件）
+  local file_count=$(find "${CONFIG[BASE_DIR]}" -mindepth 1 ! -name '.v3' 2>/dev/null | wc -l)
+  if [[ "$file_count" -eq 0 ]]; then
     INIT=true
   fi
 
