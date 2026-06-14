@@ -7,6 +7,7 @@
         <el-button :icon="Film" @click="goHistory" v-else>播放记录</el-button>
         <el-button :icon="Setting" @click="settingVisible=true" v-if="store.admin">播放配置</el-button>
         <el-button :icon="Plus" @click="handleAdd">添加分享</el-button>
+        <el-button @click="showScan" v-if="store.admin">同步影视</el-button>
         <el-button type="warning" @click="openDoubanMode">豆瓣电影</el-button>
       </div>
     </div>
@@ -32,7 +33,6 @@
         </el-input>
         <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
         <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
-        <el-button @click="showScan" v-if="store.admin">同步影视</el-button>
         <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
       </div>
     </div>
