@@ -116,6 +116,45 @@ onMounted(() => {
         </el-menu>
       </el-header>
 
+      <!-- Mobile navigation drawer -->
+      <el-drawer v-model="mobileMenuOpen" direction="ltr" size="80%">
+        <template #header>
+          <span style="font-weight: 600; font-size: 18px;">菜单</span>
+        </template>
+
+        <el-menu>
+          <el-menu-item index="/" v-if="store.admin" @click="navigate('/')">首页</el-menu-item>
+          <el-menu-item index="/sites" v-if="account.authenticated && store.admin" @click="navigate('/sites')">站点</el-menu-item>
+          <el-menu-item index="/accounts" v-if="account.authenticated && show && store.admin" @click="navigate('/accounts')">账号</el-menu-item>
+          <el-menu-item index="/bilibili" v-if="account.authenticated && full && store.admin" @click="navigate('/bilibili')">BiliBili</el-menu-item>
+          <el-menu-item index="/subscriptions" v-if="account.authenticated && store.admin" @click="navigate('/subscriptions')">订阅</el-menu-item>
+          <el-menu-item index="/shares" v-if="account.authenticated && show && full && store.admin" @click="navigate('/shares')">资源</el-menu-item>
+          <el-menu-item index="/config" v-if="account.authenticated && store.admin" @click="navigate('/config')">配置</el-menu-item>
+          <el-menu-item index="/acl" v-if="account.authenticated && full && store.admin" @click="navigate('/acl')">ACL</el-menu-item>
+          <el-menu-item index="/index" v-if="account.authenticated && show && full && store.admin" @click="navigate('/index')">索引</el-menu-item>
+          <el-menu-item index="/logs" v-if="account.authenticated && store.admin" @click="navigate('/logs')">日志</el-menu-item>
+          <el-menu-item index="/files" v-if="account.authenticated && show && full && store.admin" @click="navigate('/files')">文件</el-menu-item>
+          <el-menu-item index="/alias" v-if="account.authenticated && show && full && store.admin" @click="navigate('/alias')">别名</el-menu-item>
+          <el-menu-item index="/users" v-if="account.authenticated && show && full && store.admin" @click="navigate('/users')">用户</el-menu-item>
+          <el-menu-item index="/search" v-if="account.authenticated && (full || !store.admin)" @click="navigate('/search')">搜索</el-menu-item>
+          <el-menu-item index="/vod" v-if="account.authenticated && show && (full || !store.admin)" @click="navigate('/vod')">播放</el-menu-item>
+          <el-menu-item index="/live" v-if="account.authenticated && (full || !store.admin)" @click="navigate('/live')">直播</el-menu-item>
+          <el-menu-item index="/about" v-if="account.authenticated && store.admin" @click="navigate('/about')">关于</el-menu-item>
+          <el-menu-item index="/user" v-if="account.authenticated" @click="navigate('/user')">用户</el-menu-item>
+          <el-menu-item index="/system" v-if="account.authenticated && store.admin" @click="navigate('/system')">系统</el-menu-item>
+          <el-menu-item @click="logout" v-if="account.authenticated">退出</el-menu-item>
+          <el-menu-item index="/login" v-else @click="navigate('/login')">登录</el-menu-item>
+        </el-menu>
+
+        <template #footer v-if="account.authenticated && store.admin">
+          <div style="padding: 16px 0;">
+            <el-switch v-model="full" inline-prompt active-text="高级模式" inactive-text="简单模式"
+              style="--el-switch-on-color: #13ce66; --el-switch-off-color: #409eff;"
+              @change="onModeChange" />
+          </div>
+        </template>
+      </el-drawer>
+
       <el-main v-if="mounted" class="modern-main">
         <el-config-provider :locale="zhCn">
           <RouterView />
