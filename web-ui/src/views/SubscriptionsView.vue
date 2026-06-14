@@ -13,8 +13,7 @@
       </div>
     </div>
 
-    <div class="page-card">
-      <el-table :data="subscriptions" border style="width: 100%">
+    <el-table :data="subscriptions" border style="width: 100%">
       <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="sid" label="订阅ID" sortable width="180"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
