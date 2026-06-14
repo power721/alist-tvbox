@@ -364,8 +364,8 @@
         <el-button @click="benchmarkAllProxies" :loading="benchmarking">
           {{ benchmarking ? '测速中...' : '批量测速' }}
         </el-button>
-        <el-button type="success" @click="autoSelectFastest" :loading="benchmarking">
-          智能选择（测速并自动选择最快5个）
+        <el-button type="success" @click="autoSelectFastest" :loading="benchmarking" title="测速并自动选择最快5个">
+          智能选择
         </el-button>
         <el-button type="primary" @click="saveGitHubProxyList">保存代理列表</el-button>
       </div>
