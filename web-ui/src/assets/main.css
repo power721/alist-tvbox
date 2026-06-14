@@ -1,3 +1,5 @@
+@import './theme.css';
+@import './modern.css';
 @import './base.css';
 
 span.info {
