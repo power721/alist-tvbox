@@ -1805,14 +1805,29 @@ const pollAndSelectFastest = () => {
           benchmarkResults.value.set(url, results[url])
         })
 
+        // 实时选择最快的 5 个节点并更新到列表
+        const successNodes = Array.from(benchmarkResults.value.entries())
+          .filter(([url, result]) => result.success && result.latency != null)
+          .sort((a, b) => a[1].latency - b[1].latency)
+          .slice(0, 5)
+          .map(([url]) => url)
+
+        if (successNodes.length > 0) {
+          githubProxyList.value = successNodes
+        }
+
         // 检查是否还在运行
         if (data.isRunning) {
           // 继续轮询
           setTimeout(poll, 500)
         } else {
-          // 测速完成，选择最快的 5 个
+          // 测速完成
           benchmarking.value = false
-          selectFastestNodes()
+          if (successNodes.length === 0) {
+            ElMessage.warning('没有测速成功的节点')
+          } else {
+            ElMessage.success(`已自动选择最快的 ${successNodes.length} 个节点，请点击"保存代理列表"生效`)
+          }
         }
       })
       .catch(() => {
