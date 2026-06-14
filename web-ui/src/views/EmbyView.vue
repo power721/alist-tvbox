@@ -1,13 +1,15 @@
 <template>
-  <div class="sites">
-    <h1>Emby站点列表</h1>
-    <el-row justify="end">
-      <el-button @click="load">刷新</el-button>
-      <el-button type="primary" @click="handleAdd">添加</el-button>
-    </el-row>
-    <div class="space"></div>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">Emby站点列表</h1>
+      <div class="page-actions">
+        <el-button @click="load">刷新</el-button>
+        <el-button type="primary" @click="handleAdd">添加</el-button>
+      </div>
+    </div>
 
-    <el-table :data="sites" border style="width: 100%">
+    <div class="page-card">
+      <el-table :data="sites" border style="width: 100%">
 <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="name" label="名称" sortable width="180"/>
       <el-table-column prop="order" label="顺序" sortable width="90"/>
@@ -24,6 +26,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-dialog v-model="formVisible" :title="dialogTitle">
       <el-form label-width="140" :model="form">
