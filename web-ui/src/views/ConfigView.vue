@@ -4,6 +4,18 @@
       <h1 class="page-title">系统配置</h1>
     </div>
 
+    <el-card class="box-card" style="margin-bottom: 20px;">
+      <template #header>
+        <span>远程同步</span>
+      </template>
+      <el-button type="primary" @click="openRemoteSync">
+        远程同步配置
+      </el-button>
+      <span style="margin-left: 10px; color: #909399;">
+        在不同实例之间同步配置数据
+      </span>
+    </el-card>
+
     <el-row>
       <el-col :xs="23" :sm="23" :md="23" :lg="11" :xl="11">
         <el-card class="box-card">
@@ -371,6 +383,8 @@
       </template>
     </el-dialog>
 
+    <RemoteSyncDialog ref="remoteSyncDialogRef" />
+
   </div>
 </template>
 
@@ -380,6 +394,13 @@ import {ElMessage} from "element-plus";
 import axios from "axios";
 import {onUnmounted} from "@vue/runtime-core";
 import {store} from "@/services/store";
+import RemoteSyncDialog from './RemoteSyncDialog.vue'
+
+const remoteSyncDialogRef = ref()
+
+const openRemoteSync = () => {
+  remoteSyncDialogRef.value.open()
+}
 
 let intervalId = 0
 const currentUrl = window.location.origin
