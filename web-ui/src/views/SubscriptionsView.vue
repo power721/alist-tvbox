@@ -2220,13 +2220,18 @@ const formatNodeLabel = (node: any) => {
 
 const formatBenchmarkResult = (result: any) => {
   if (!result) return ''
+  // 如果有明确的 success 字段，说明测速已完成，优先显示结果
+  if (result.success !== undefined) {
+    if (!result.success) {
+      return '失败'
+    }
+    return `${result.latency}ms`
+  }
+  // 只有在没有明确结果时，才根据 pending 显示测速中
   if (result.pending) {
     return '测速中...'
   }
-  if (!result.success) {
-    return '失败'
-  }
-  return `${result.latency}ms`
+  return ''
 }
 
 // 处理代理节点选择变化
