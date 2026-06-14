@@ -14,17 +14,19 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class GitHubProxyService {
     private static final String GITHUB_PROXY_FILE = "/data/github_proxy.txt";
-    private static final String TEST_URL = "https://github.com/har01d5/tvbox/raw/refs/heads/master/spiders_v2.json";
+    private static final String TEST_URL = "https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt";
     private static final int BENCHMARK_THREADS = 5;
     private static final int CONNECT_TIMEOUT_SECONDS = 3;
     private static final int READ_TIMEOUT_SECONDS = 3;
     private static final int MAX_PROXY_COUNT = 5; // 最多配置 5 个代理
+    private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+$"); // 匹配版本号格式，如 0.54.49
 
     private final OkHttpClient httpClient;
     private final Map<String, GitHubProxyNode> benchmarkCache = new ConcurrentHashMap<>();
@@ -226,11 +228,20 @@ public class GitHubProxyService {
             long endTime = System.currentTimeMillis();
             int latency = (int) (endTime - startTime);
 
-            if (response.isSuccessful()) {
-                node.setSuccess(true);
-                node.setLatency(latency);
-                node.setSpeed(0.0); // 这里简化处理，不计算速度
-                log.info("测速成功: {} - {}ms", node.getHost(), latency);
+            if (response.isSuccessful() && response.body() != null) {
+                String content = response.body().string().trim();
+
+                // 验证内容是否为版本号格式（如 0.54.49）
+                if (VERSION_PATTERN.matcher(content).matches()) {
+                    node.setSuccess(true);
+                    node.setLatency(latency);
+                    node.setSpeed(0.0);
+                    log.info("测速成功: {} - ms (版本: {})", node.getHost(), latency, content);
+                } else {
+                    node.setSuccess(false);
+                    node.setError("内容验证失败（非版本号）: " + content.substring(0, Math.min(20, content.length())));
+                    log.warn("测速失败: {} - 内容不符合版本号格式", node.getHost());
+                }
             } else {
                 node.setSuccess(false);
                 node.setError("HTTP " + response.code());
@@ -260,11 +271,20 @@ public class GitHubProxyService {
             long endTime = System.currentTimeMillis();
             int latency = (int) (endTime - startTime);
 
-            if (response.isSuccessful()) {
-                node.setSuccess(true);
-                node.setLatency(latency);
-                node.setSpeed(0.0);
-                log.info("直连测速成功: {}ms", latency);
+            if (response.isSuccessful() && response.body() != null) {
+                String content = response.body().string().trim();
+
+                // 验证内容是否为版本号格式（如 0.54.49）
+                if (VERSION_PATTERN.matcher(content).matches()) {
+                    node.setSuccess(true);
+                    node.setLatency(latency);
+                    node.setSpeed(0.0);
+                    log.info("直连测速成功: {}ms (版本: {})", latency, content);
+                } else {
+                    node.setSuccess(false);
+                    node.setError("内容验证失败（非版本号）: " + content.substring(0, Math.min(20, content.length())));
+                    log.warn("直连测速失败: 内容不符合版本号格式");
+                }
             } else {
                 node.setSuccess(false);
                 node.setError("HTTP " + response.code());
