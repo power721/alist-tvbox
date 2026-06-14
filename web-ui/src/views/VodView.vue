@@ -66,10 +66,16 @@
       </div>
 
       <div style="flex: 1;">
-        <div class="table-scroll-wrapper">
+        <div v-if="!files.length && !loading" class="table-scroll-wrapper">
+          <el-table :data="[]" border style="width: 100%;" empty-text="点击左侧搜索结果查看文件">
+            <el-table-column prop="vod_name" label="名称" width="300" />
+            <el-table-column prop="vod_remarks" label="大小" width="120" />
+            <el-table-column prop="vod_time" label="修改时间" width="180" />
+          </el-table>
+        </div>
+        <div v-else class="table-scroll-wrapper">
           <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border
-                    style="width: 100%; table-layout: auto;"
-                    :empty-text="files.length === 0 && !loading ? '点击左侧搜索结果查看文件' : '暂无数据'"
+                    style="width: 100%;"
                     class="clickable-table" @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
           <el-table-column prop="vod_name" label="名称" sortable min-width="200">
