@@ -25,7 +25,7 @@
     </div>
 
     <div class="page-card">
-  <el-table :data="shares" border @selection-change="handleSelection" @sort-change="handleSort" style="width: 100%">
+  <el-table :data="shares" v-loading="loading" border @selection-change="handleSelection" @sort-change="handleSort" style="width: 100%">
     <el-table-column type="selection" width="55" />
     <el-table-column prop="id" label="ID" width="70" sortable="custom" />
     <el-table-column prop="path" label="路径" sortable="custom">
@@ -127,7 +127,7 @@
     </div>
 
     <div class="page-card">
-  <el-table :data="storages" border @selection-change="handleSelectionStorages" style="width: 100%">
+  <el-table :data="storages" v-loading="loadingStorages" border @selection-change="handleSelectionStorages" style="width: 100%">
     <el-table-column type="selection" width="55" />
     <el-table-column prop="id" label="ID" width="70" />
     <el-table-column prop="mount_path" label="路径" />
@@ -467,6 +467,7 @@ const options = [
 
 const multipleSelection = ref<ShareInfo[]>([])
 const storages = ref<Storage[]>([])
+const loadingStorages = ref(false)
 const selectedStorages = ref<Storage[]>([])
 const storage = ref<Storage>({
   id: 0,
@@ -484,6 +485,7 @@ const size1 = ref(20)
 const total = ref(0)
 const total1 = ref(0)
 const shares = ref([])
+const loading = ref(false)
 const keyword = ref('')
 const dialogTitle = ref('')
 const formVisible = ref(false)
@@ -735,17 +737,23 @@ const search = () => {
 
 const loadShares = (value: number) => {
   page.value = value
+  loading.value = true
   axios.get('/api/shares?page=' + (page.value - 1) + '&size=' + size.value + '&sort=' + sort.value + '&type=' + type.value + '&keyword=' + keyword.value).then(({ data }) => {
     shares.value = data.content
     total.value = data.totalElements
+  }).finally(() => {
+    loading.value = false
   })
 }
 
 const loadStorages = (value: number) => {
   page1.value = value
+  loadingStorages.value = true
   axios.get('/api/storages?page=' + page1.value + '&size=' + size1.value).then(({ data }) => {
     storages.value = data.data.content
     total1.value = data.data.total
+  }).finally(() => {
+    loadingStorages.value = false
   })
 }
 
