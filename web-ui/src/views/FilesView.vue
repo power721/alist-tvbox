@@ -9,7 +9,8 @@
         </el-row>
         <div class="space"></div>
 
-        <el-table :data="files" border style="width: 100%">
+        <div class="table-scroll-wrapper">
+          <el-table :data="files" border style="width: 100%; min-width: 900px">
           <el-table-column prop="dir" label="文件目录" width="250"/>
           <el-table-column prop="name" label="文件名称" width="180"/>
           <el-table-column prop="path" label="完整路径"/>
@@ -26,6 +27,7 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
       </el-tab-pane>
 
       <el-tab-pane label="静态文件" name="static">

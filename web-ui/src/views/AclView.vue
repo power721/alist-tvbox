@@ -7,7 +7,8 @@
     </el-row>
     <div class="space"></div>
 
-    <el-table :data="rules" border style="width: 100%">
+    <div class="table-scroll-wrapper">
+      <el-table :data="rules" border style="width: 100%; min-width: 800px">
       <el-table-column prop="name" label="名称/Token"/>
       <el-table-column prop="url" label="默认订阅地址" sortable>
         <template #default="scope">
@@ -25,6 +26,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="divider"></div>
 
