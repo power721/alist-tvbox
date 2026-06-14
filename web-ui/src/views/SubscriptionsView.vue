@@ -1721,6 +1721,11 @@ const benchmarkAllProxies = () => {
   benchmarking.value = true
   benchmarkResults.value.clear()
 
+  // 为所有待测节点设置"测速中"状态
+  githubProxyList.value.forEach(url => {
+    benchmarkResults.value.set(url, { pending: true })
+  })
+
   // 启动异步测速任务
   axios.post('/api/settings/github-proxy/benchmark/start', { urls: githubProxyList.value })
     .then(() => {
@@ -1730,6 +1735,7 @@ const benchmarkAllProxies = () => {
     .catch(() => {
       ElMessage.error('启动测速失败')
       benchmarking.value = false
+      benchmarkResults.value.clear()
     })
 }
 
@@ -1781,6 +1787,11 @@ const autoSelectFastest = () => {
   // 获取所有预设节点
   const allUrls = githubProxyNodes.value.map(node => node.url)
 
+  // 为所有待测节点设置"测速中"状态
+  allUrls.forEach(url => {
+    benchmarkResults.value.set(url, { pending: true })
+  })
+
   ElMessage.info('开始测速所有预设节点...')
 
   // 启动异步测速
@@ -1792,6 +1803,7 @@ const autoSelectFastest = () => {
     .catch(() => {
       ElMessage.error('启动测速失败')
       benchmarking.value = false
+      benchmarkResults.value.clear()
     })
 }
 
@@ -1889,6 +1901,9 @@ const formatNodeLabel = (node: any) => {
 
 const formatBenchmarkResult = (result: any) => {
   if (!result) return ''
+  if (result.pending) {
+    return '测速中...'
+  }
   if (!result.success) {
     return '失败'
   }
