@@ -293,6 +293,52 @@
     min-height: 44px;
     padding: 10px;
   }
+
+  /* Full-width dialogs on mobile */
+  .el-dialog {
+    width: 95vw !important;
+    margin: 5px auto !important;
+  }
+
+  /* Stack form labels and inputs vertically */
+  .el-form-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .el-form-item__label {
+    width: 100% !important;
+    text-align: left;
+    margin-bottom: 8px;
+  }
+
+  .el-form-item__content {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  /* Full-width form controls */
+  .el-input,
+  .el-select,
+  .el-textarea {
+    width: 100%;
+  }
+
+  /* Touch-friendly form controls */
+  .el-button {
+    min-height: var(--tap-target-min);
+    padding: 12px 16px;
+  }
+
+  .el-switch {
+    min-height: var(--tap-target-min);
+  }
+
+  .el-checkbox,
+  .el-radio {
+    min-height: var(--tap-target-min);
+    line-height: var(--tap-target-min);
+  }
 }
 
 /* ============================================
