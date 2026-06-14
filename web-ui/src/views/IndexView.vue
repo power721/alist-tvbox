@@ -54,13 +54,17 @@
         <el-button type="info" @click="validateVisible=true">校验内置索引</el-button>
       </el-form-item>
     </el-form>
-    <div class="space"></div>
+    </div>
 
-    <h2>任务列表</h2>
-    <el-row justify="end">
-      <el-button @click="loadTasks">刷新</el-button>
-      <el-button @click="cleanVisible=true">清理</el-button>
-    </el-row>
+    <div class="page-header" style="margin-top: 24px;">
+      <h1 class="page-title">任务列表</h1>
+      <div class="page-actions">
+        <el-button @click="loadTasks">刷新</el-button>
+        <el-button @click="cleanVisible=true">清理</el-button>
+      </div>
+    </div>
+
+    <div class="page-card">
     <el-table :data="tasks.content" border style="width: 100%">
       <el-table-column prop="id" label="ID" sortable width="70"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
@@ -95,6 +99,7 @@
     </el-table>
     <el-pagination layout="total, prev, pager, next" v-model:current-page="currentPage"
                    @current-change="handleCurrentChange" :total="total"/>
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="task.name" width="60%">
       <pre>{{ task.data }}</pre>
@@ -199,7 +204,6 @@
       </span>
       </template>
     </el-dialog>
-    </div>
   </div>
 </template>
 
