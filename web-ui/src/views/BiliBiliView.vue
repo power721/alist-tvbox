@@ -16,6 +16,7 @@
     </div>
 
     <div class="page-card">
+    <div class="table-scroll-wrapper">
     <div style="margin-bottom: 12px; display: flex; justify-content: flex-end; gap: 12px;">
       <span v-if="channelDragEnabled">可以拖动行排序</span>
       <el-button @click="load">刷新</el-button>
@@ -70,6 +71,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
     </div>
   </div>
 
