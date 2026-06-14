@@ -20,7 +20,11 @@ npm run lint
 
 ./build-docker.sh
 
-docker run -d -p 4567:4567 -p 5344:80 -e ALIST_PORT=5344 -v /opt/alist-tvbox:/data --name xiaoya-tvbox haroldli/xiaoya-tvbox:latest
+docker run -d -p 4567:4567 -p 5344:80 \
+-e ALIST_PORT=5344 \
+-v /opt/alist-tvbox:/data \
+--name xiaoya-tvbox \
+haroldli/xiaoya-tvbox:latest
 
 ---
 
@@ -38,7 +42,7 @@ mvn test
 mvn test -Dtest=TvBoxServiceTest
 
 Frontend:
-- colocated .test.mjs
+- colocated .test.mjs tests
 
 ---
 
@@ -56,12 +60,12 @@ scripts → scripts/
 
 Java:
 - Lombok required
-- Service-first design
 - 4-space indent
+- Service-first design
 
 DTO:
-- top-level only
-- dto/ package required
+- Must be top-level
+- Must be in dto/
 
 Frontend:
 - Vue 3 + TypeScript
@@ -74,11 +78,27 @@ Frontend:
 Profiles:
 dev / docker / mysql / host / production / xiaoya
 
-Key configs:
-- datasource
-- app.sites
-- app.tgSearch
-- app.localProxyConfig
+---
+
+## AI CODING RULES (IMPORTANT)
+
+### Codex Mode (Execution)
+- Only minimal changes
+- No refactoring unless asked
+- Must preserve build
+- No API breaking changes
+- Patch-style edits only
+
+### Claude Mode (Thinking)
+- Analyze before acting
+- Prefer simple solutions
+- Avoid unnecessary abstraction
+- Keep existing structure stable
+
+### Shared Rules
+- Do not break service/controller boundaries
+- Do not introduce architectural drift
+- Keep diffs small and reversible
 
 ---
 
@@ -86,7 +106,7 @@ Key configs:
 
 - AList runs as subprocess
 - Telegram scraping depends on HTML structure
-- Live streams are unstable
+- Live APIs are unstable
 - Cache affects freshness
 
 ---
