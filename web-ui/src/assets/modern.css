@@ -92,6 +92,7 @@
   border: none !important;
   border-radius: 8px;
   font-weight: 500;
+  color: white !important;
 }
 
 .el-button--primary:hover {

@@ -50,7 +50,7 @@
           </el-icon>
         </template>
       </el-table-column>
-      <el-table-column fixed="right" label="操作" width="200">
+      <el-table-column fixed="right" label="操作" width="260">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">数据</el-button>
