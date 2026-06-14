@@ -52,7 +52,7 @@
           <el-button :icon="Delete" @click="clearSearch">清除</el-button>
         </div>
         <div class="table-scroll-wrapper">
-          <el-table :data="filteredResults" v-loading="searching" @row-click="loadResult" border max-height="1080" style="min-width: 400px">
+          <el-table :data="filteredResults" v-loading="searching" @row-click="loadResult" border max-height="1080" style="min-width: 400px" class="clickable-table">
             <el-table-column prop="vod_name" label="内容">
               <template #default="scope">
                 <el-tooltip :content="scope.row.vod_play_url">
