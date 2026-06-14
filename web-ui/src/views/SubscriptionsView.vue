@@ -232,7 +232,7 @@
             <a :href="scope.row.ip" target="_blank">{{ scope.row.ip }}</a>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="100">
+        <el-table-column fixed="right" label="操作" width="140">
           <template #default="scope">
             <el-button link type="primary" size="small" @click="syncHistory(scope.row.id)">同步</el-button>
             <el-button link type="danger" size="small" @click="showDelete(scope.row)">删除</el-button>

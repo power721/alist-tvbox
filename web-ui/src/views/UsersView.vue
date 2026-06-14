@@ -14,7 +14,7 @@
       <el-table-column prop="username" label="用户名"/>
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
-          <el-button type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
+          <el-button type="primary" size="small" @click="handleEdit(scope.row)" v-if="scope.row.id!=1">编辑</el-button>
           <el-button type="danger" size="small" @click="handleDelete(scope.row)" v-if="scope.row.id!=1">删除</el-button>
         </template>
       </el-table-column>
@@ -22,7 +22,7 @@
     </div>
   </div>
 
-    <el-dialog v-model="formVisible" :title="dialogTitle">
+    <el-dialog v-model="formVisible" :title="dialogTitle" width="500">
       <el-form :model="form" label-width="120">
         <el-form-item label="用户名" required>
           <el-input v-model="form.username" autocomplete="off"/>

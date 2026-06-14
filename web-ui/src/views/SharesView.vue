@@ -168,7 +168,7 @@
     </div>
   </div>
 
-  <el-dialog v-model="formVisible" width="60%" :title="dialogTitle">
+  <el-dialog v-model="formVisible" width="65%" :title="dialogTitle">
     <el-form :model="form">
       <el-form-item label="挂载路径" label-width="140" required>
         <el-input v-model="form.path" autocomplete="off" />

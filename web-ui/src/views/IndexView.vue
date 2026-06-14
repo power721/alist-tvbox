@@ -87,7 +87,7 @@
           <div>{{ formatDuration(scope.row.startTime, scope.row.endTime) }}</div>
         </template>
       </el-table-column>
-      <el-table-column fixed="right" label="操作" width="180">
+      <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="showDetails(scope.row)">数据</el-button>
           <el-button link type="danger" size="small" @click="handleCancel(scope.row)"

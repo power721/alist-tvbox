@@ -1,8 +1,5 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <h1 class="page-title">VOD管理</h1>
-    </div>
 
     <div class="page-card">
     <el-row justify="space-between">
