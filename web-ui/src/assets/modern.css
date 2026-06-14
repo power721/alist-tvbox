@@ -1,0 +1,271 @@
+/* web-ui/src/assets/modern.css */
+
+/* ============================================
+   页面容器
+   ============================================ */
+.modern-main {
+  background: var(--bg-primary);
+  min-height: calc(100vh - 60px);
+}
+
+.page-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--spacing-xl);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.page-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+/* ============================================
+   卡片组件
+   ============================================ */
+.page-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: var(--spacing-xl);
+  margin-bottom: var(--spacing-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  transition: all var(--transition-base) var(--ease);
+  animation: fadeInUp var(--transition-slow) var(--ease);
+}
+
+.page-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--divider-color);
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================
+   按钮样式
+   ============================================ */
+.el-button {
+  transition: all var(--transition-base) var(--ease);
+}
+
+.el-button--primary {
+  background: var(--primary-gradient) !important;
+  border: none !important;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.el-button--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.el-button--primary:active {
+  transform: translateY(0);
+}
+
+.el-button--default {
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+}
+
+.el-button--default:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.el-button--text {
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all var(--transition-fast) var(--ease);
+}
+
+.el-button--text:hover {
+  background: var(--bg-secondary);
+}
+
+
+/* ============================================
+   表格样式
+   ============================================ */
+.el-table {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.el-table__header th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border-color);
+  height: 56px;
+}
+
+.el-table__row {
+  height: 52px;
+  transition: all var(--transition-fast) var(--ease);
+}
+
+.el-table__row:hover {
+  background: var(--bg-secondary);
+  transform: scale(1.002);
+}
+
+.el-table .action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* ============================================
+   表单样式
+   ============================================ */
+.el-input__wrapper {
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  transition: all var(--transition-base) var(--ease);
+}
+
+.el-input__wrapper:hover {
+  border-color: var(--primary-color);
+}
+
+.el-input__wrapper.is-focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.el-select__wrapper {
+  border-radius: 8px;
+}
+
+.el-switch {
+  --el-switch-on-color: var(--primary-color);
+}
+
+.el-form-item {
+  margin-bottom: var(--spacing-md);
+}
+
+
+/* ============================================
+   导航栏样式
+   ============================================ */
+.el-header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.el-menu {
+  background: transparent;
+  border: none;
+}
+
+.el-menu-item {
+  border-radius: 8px;
+  margin: 0 4px;
+  transition: all var(--transition-base) var(--ease);
+}
+
+.el-menu-item:hover {
+  background: var(--bg-secondary);
+}
+
+.el-menu-item.is-active {
+  color: var(--primary-color);
+  background: var(--bg-secondary);
+  position: relative;
+}
+
+.el-menu-item.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 10%;
+  right: 10%;
+  height: 3px;
+  background: var(--primary-gradient);
+  border-radius: 3px 3px 0 0;
+}
+
+/* ============================================
+   响应式设计
+   ============================================ */
+@media (max-width: 1199px) {
+  .page-container {
+    max-width: 100%;
+    padding: 20px;
+  }
+
+  .page-card {
+    padding: 20px;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 767px) {
+  .page-container {
+    padding: 16px;
+  }
+
+  .page-card {
+    padding: 16px;
+    border-radius: 8px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+}
+
