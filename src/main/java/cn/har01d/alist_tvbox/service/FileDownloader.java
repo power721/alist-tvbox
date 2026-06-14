@@ -48,6 +48,8 @@ public class FileDownloader {
 
     private static final Set<String> GITHUB_PROXY = Set.of("https://slink.ltd/", "https://cors.zme.ink/", "https://git.886.be/", "https://gitdl.cn/", "https://ghfast.top/", "https://ghproxy.net/", "https://github.moeyy.xyz/", "https://gh-proxy.com/", "https://ghproxy.cc/", "https://gh.llkk.cc/", "https://gh.ddlc.top/", "https://gh-proxy.llyke.com/");
 
+    private final GitHubProxyService gitHubProxyService;
+
     private final Path pgVersionFile;
     private final Path zxBaseVersionFile;
     private final Path zxVersionFile;
@@ -68,9 +70,10 @@ public class FileDownloader {
     private final TaskService taskService;
     private final RestTemplate restTemplate;
 
-    public FileDownloader(TaskService taskService, RestTemplateBuilder builder) {
+    public FileDownloader(TaskService taskService, RestTemplateBuilder builder, GitHubProxyService gitHubProxyService) {
         this.taskService = taskService;
         this.restTemplate = builder.build();
+        this.gitHubProxyService = gitHubProxyService;
         pgVersionFile = Utils.getDataPath("pg_version.txt");
         zxBaseVersionFile = Utils.getDataPath("zx_base_version.txt");
         zxVersionFile = Utils.getDataPath("zx_version.txt");
@@ -263,10 +266,34 @@ public class FileDownloader {
 
     private List<String> getDownloadUrls(String url) {
         List<String> urls = new ArrayList<>();
-        for (String proxy : GITHUB_PROXY) {
-            urls.add(proxy + url);
+
+        // 从文件读取配置的代理列表（最多 5 个，按优先级排序）
+        List<String> configuredProxies = gitHubProxyService.readProxyListFromFile();
+
+        if (configuredProxies.isEmpty()) {
+            // 如果没有配置，使用默认代理列表作为 fallback
+            log.debug("未配置 GitHub 代理，使用默认列表");
+            for (String proxy : GITHUB_PROXY) {
+                urls.add(proxy + url);
+            }
+        } else {
+            // 使用配置的代理列表
+            log.debug("使用配置的 {} 个 GitHub 代理", configuredProxies.size());
+            for (String proxy : configuredProxies) {
+                if (proxy == null || proxy.trim().isEmpty()) {
+                    // 空字符串表示直连
+                    urls.add(url);
+                } else {
+                    urls.add(proxy + url);
+                }
+            }
         }
-        urls.add(url);
+
+        // 最后添加直连作为 fallback
+        if (!urls.contains(url)) {
+            urls.add(url);
+        }
+
         return urls;
     }
 

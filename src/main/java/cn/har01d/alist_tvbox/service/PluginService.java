@@ -40,6 +40,7 @@ public class PluginService {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
     private final SubscriptionSourceService subscriptionSourceService;
+    private final GitHubProxyService gitHubProxyService;
 
     @Autowired
     public PluginService(PluginRepository pluginRepository,
@@ -47,13 +48,15 @@ public class PluginService {
                          RestTemplateBuilder builder,
                          ObjectMapper objectMapper,
                          TransactionTemplate transactionTemplate,
-                         SubscriptionSourceService subscriptionSourceService) {
+                         SubscriptionSourceService subscriptionSourceService,
+                         GitHubProxyService gitHubProxyService) {
         this.pluginRepository = pluginRepository;
         this.settingRepository = settingRepository;
         this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
         this.transactionTemplate = transactionTemplate;
         this.subscriptionSourceService = subscriptionSourceService;
+        this.gitHubProxyService = gitHubProxyService;
     }
 
     public record ImportResult(
@@ -384,15 +387,65 @@ public class PluginService {
     }
 
     private String downloadText(String url, String message) {
-        try {
-            String body = restTemplate.getForObject(URI.create(buildRemoteUrl(url)), String.class);
-            if (StringUtils.isBlank(body)) {
-                throw new BadRequestException(message);
+        // 如果不是 GitHub URL，直接下载
+        if (!StringUtils.startsWith(url, "https://github.com/")) {
+            try {
+                String body = restTemplate.getForObject(URI.create(url), String.class);
+                if (StringUtils.isBlank(body)) {
+                    throw new BadRequestException(message);
+                }
+                return body;
+            } catch (Exception e) {
+                throw new BadRequestException(message, e);
             }
-            return body;
-        } catch (Exception e) {
-            throw new BadRequestException(message, e);
         }
+
+        // GitHub URL - 使用多代理 fallback
+        List<String> proxyList = gitHubProxyService.readProxyListFromFile();
+        Exception lastException = null;
+
+        if (proxyList.isEmpty()) {
+            // 没有配置代理，使用旧逻辑（读取单个代理配置）
+            String proxy = settingRepository.findById(GITHUB_PROXY)
+                    .map(e -> StringUtils.trimToEmpty(e.getValue()))
+                    .orElse("");
+            String finalUrl = proxy.isBlank() ? url : StringUtils.appendIfMissing(proxy, "/") + url;
+            try {
+                String body = restTemplate.getForObject(URI.create(finalUrl), String.class);
+                if (StringUtils.isBlank(body)) {
+                    throw new BadRequestException(message);
+                }
+                return body;
+            } catch (Exception e) {
+                throw new BadRequestException(message, e);
+            }
+        }
+
+        // 使用配置的多代理列表，逐个尝试（最多 5 个）
+        for (int i = 0; i < Math.min(proxyList.size(), 5); i++) {
+            String proxy = proxyList.get(i);
+            String finalUrl;
+
+            if (proxy == null || proxy.trim().isEmpty()) {
+                // 空字符串表示直连
+                finalUrl = url;
+            } else {
+                finalUrl = StringUtils.appendIfMissing(proxy, "/") + url;
+            }
+
+            try {
+                String body = restTemplate.getForObject(URI.create(finalUrl), String.class);
+                if (StringUtils.isNotBlank(body)) {
+                    return body;
+                }
+            } catch (Exception e) {
+                lastException = e;
+                // 继续尝试下一个代理
+            }
+        }
+
+        // 所有代理都失败
+        throw new BadRequestException(message + " (所有代理均失败)", lastException);
     }
 
     public String readContent(Integer id) {
