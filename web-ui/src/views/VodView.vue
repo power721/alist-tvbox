@@ -64,7 +64,7 @@
     </div>
 
     <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%"
-              @row-click="load">
+              class="clickable-table" @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
           <el-table-column prop="vod_name" label="名称" sortable>
             <template #default="scope">
@@ -2192,6 +2192,10 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.clickable-table :deep(.el-table__row) {
+  cursor: pointer;
+}
+
 video {
   width: 100%;
   height: 1080px;
