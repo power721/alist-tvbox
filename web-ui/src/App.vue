@@ -101,7 +101,7 @@ onMounted(() => {
         </el-menu>
       </el-header>
 
-      <el-main v-if="mounted">
+      <el-main v-if="mounted" class="modern-main">
         <el-config-provider :locale="zhCn">
           <RouterView />
         </el-config-provider>
