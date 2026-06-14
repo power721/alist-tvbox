@@ -14,7 +14,7 @@
     </div>
 
     <div class="page-card">
-    <el-table :data="subscriptions" border style="width: 100%">
+    <el-table :data="subscriptions" v-loading="loading" border style="width: 100%">
       <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="sid" label="订阅ID" sortable width="180"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
@@ -224,7 +224,7 @@
         </el-col>
       </el-row>
 
-      <el-table :data="devices" border style="width: 100%">
+      <el-table :data="devices" v-loading="loadingDevices" border style="width: 100%">
         <el-table-column prop="name" label="名称" sortable width="180"/>
         <el-table-column prop="uuid" label="ID" sortable width="180"/>
         <el-table-column prop="ip" label="URL地址" sortable>
@@ -818,8 +818,10 @@ const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
 const subscriptions = ref<Sub[]>([])
+const loading = ref(false)
 const tokens = ref([])
 const devices = ref<Device[]>([])
+const loadingDevices = ref(false)
 const detailVisible = ref(false)
 const detailTab = ref('json')
 const rawJsonData = computed(() => JSON.stringify(jsonData.value, null, 2))
@@ -1843,8 +1845,11 @@ const handleCancel = () => {
 }
 
 const loadDevices = () => {
+  loadingDevices.value = true
   axios.get('/api/devices').then(({data}) => {
     devices.value = data
+  }).finally(() => {
+    loadingDevices.value = false
   })
 }
 
@@ -1954,8 +1959,11 @@ const syncCat = () => {
 }
 
 const load = () => {
+  loading.value = true
   axios.get('/api/subscriptions').then(({data}) => {
     subscriptions.value = data
+  }).finally(() => {
+    loading.value = false
   })
 }
 
