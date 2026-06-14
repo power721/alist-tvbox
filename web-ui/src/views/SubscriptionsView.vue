@@ -1071,7 +1071,7 @@ const filteredManagedSources = computed(() => {
 const sortedProxyNodes = computed(() => {
   const nodes = [...githubProxyNodes.value]
 
-  // 按测速结果排序：成功的在前，按延迟升序；失败的在后；测速中的最后
+  // 按测速结果排序：成功的在前，按延迟升序；测速中的在中间；失败的在最后
   return nodes.sort((a, b) => {
     const resultA = benchmarkResults.value.get(a.url)
     const resultB = benchmarkResults.value.get(b.url)
@@ -1081,14 +1081,18 @@ const sortedProxyNodes = computed(() => {
     if (!resultA) return 1
     if (!resultB) return -1
 
-    // 测速中的排在最后
-    if (resultA.pending && !resultB.pending) return 1
-    if (!resultA.pending && resultB.pending) return -1
-    if (resultA.pending && resultB.pending) return 0
+    // 失败的排在最后
+    if (!resultA.success && !resultA.pending && resultB.success) return 1
+    if (resultA.success && !resultB.success && !resultB.pending) return -1
 
-    // 成功的在前，失败的在后
-    if (resultA.success && !resultB.success) return -1
-    if (!resultA.success && resultB.success) return 1
+    // 测速中的排在中间（成功之后，失败之前）
+    if (resultA.pending && !resultB.pending) {
+      return resultB.success ? 1 : -1  // 如果B成功，A排后面；如果B失败，A排前面
+    }
+    if (!resultA.pending && resultB.pending) {
+      return resultA.success ? -1 : 1  // 如果A成功，A排前面；如果A失败，A排后面
+    }
+    if (resultA.pending && resultB.pending) return 0
 
     // 都成功，按延迟排序
     if (resultA.success && resultB.success) {
