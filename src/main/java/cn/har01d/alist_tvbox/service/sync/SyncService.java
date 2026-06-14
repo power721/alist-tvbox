@@ -149,6 +149,15 @@ public class SyncService {
         }
     }
 
+    /**
+     * 获取本地应用版本号
+     */
+    public String getLocalVersion() {
+        return settingRepository.findById("app_version")
+                .map(Setting::getValue)
+                .orElse("unknown");
+    }
+
     @SuppressWarnings("unchecked")
     public Map<String, SyncResult> importData(SyncData data, MergeStrategy strategy, boolean force) {
         // 版本校验
@@ -317,7 +326,12 @@ public class SyncService {
                         shareRepository.save(local);
                         result.setUpdated(result.getUpdated() + 1);
                     } else {
-                        remote.setId(null);
+                        // Share 没有 @GeneratedValue，需要手动分配 ID
+                        Integer maxId = shareRepository.findAll().stream()
+                                .map(Share::getId)
+                                .max(Integer::compareTo)
+                                .orElse(0);
+                        remote.setId(maxId + 1);
                         shareRepository.save(remote);
                         result.setImported(result.getImported() + 1);
                     }
@@ -579,7 +593,8 @@ public class SyncService {
                         existing.setExtend(remote.getExtend());
                         existing.setSourceName(remote.getSourceName());
                         existing.setLocalPath(remote.getLocalPath());
-                        existing.setContent(remote.getContent());
+                        // 不更新 content（有 @JsonIgnore，同步时不传输脚本内容）
+                        // existing.setContent(remote.getContent());
                         existing.setVersion(remote.getVersion());
                         pluginRepository.save(existing);
                         result.setUpdated(result.getUpdated() + 1);
@@ -630,7 +645,8 @@ public class SyncService {
                         local.setPluginScope(remote.getPluginScope());
                         local.setPluginIds(remote.getPluginIds());
                         local.setSourceName(remote.getSourceName());
-                        local.setContent(remote.getContent());
+                        // 不更新 content（有 @JsonIgnore，同步时不传输脚本内容）
+                        // local.setContent(remote.getContent());
                         local.setVersion(remote.getVersion());
                         pluginFilterRepository.save(local);
                         result.setUpdated(result.getUpdated() + 1);
@@ -657,7 +673,8 @@ public class SyncService {
         return result;
     }
 
-    public SyncResponse push(String remoteUrl, String username, String password, List<String> modules) {
+    public SyncResponse push(String remoteUrl, String username, String password,
+                             List<String> modules, boolean force) {
         SyncResponse response = new SyncResponse();
         String token = null;
 
@@ -670,7 +687,7 @@ public class SyncService {
 
             // 推送到远端（远端使用覆盖模式）
             Map<String, SyncResult> results = remoteClient.pushToRemote(
-                remoteUrl, token, data, "OVERWRITE", false);
+                remoteUrl, token, data, "OVERWRITE", force);
 
             response.setSuccess(true);
             response.setResults(results);

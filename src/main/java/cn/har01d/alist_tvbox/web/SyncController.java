@@ -67,22 +67,26 @@ public class SyncController {
         ConnectionResult result = new ConnectionResult();
 
         try {
-            // 登录测试
-            String token = syncService.getRemoteClient().login(info.getUrl(),
-                info.getUsername(), info.getPassword());
+            // 使用 validate 端点测试连接，不创建会话
+            boolean valid = syncService.validateCredentials(info.getUsername(), info.getPassword());
 
-            // 获取远端版本
-            SyncData data = syncService.getRemoteClient().fetchRemoteData(
-                info.getUrl(), token, List.of());
+            if (!valid) {
+                result.setSuccess(false);
+                result.setMessage("用户名或密码错误");
+                return result;
+            }
 
+            // 连接成功，不返回 token（前端后续 push/pull 会重新登录）
             result.setSuccess(true);
-            result.setToken(token);
-            result.setAppVersion(data.getAppVersion());
             result.setMessage("连接成功");
 
-            log.info("连接远端成功: {}", info.getUrl());
+            // 获取本地版本号作为参考
+            String appVersion = syncService.getLocalVersion();
+            result.setAppVersion(appVersion);
+
+            log.info("连接测试成功: {}", info.getUrl());
         } catch (Exception e) {
-            log.error("连接远端失败: {}", info.getUrl(), e);
+            log.error("连接测试失败: {}", info.getUrl(), e);
             result.setSuccess(false);
             result.setMessage(e.getMessage());
         }
@@ -129,12 +133,14 @@ public class SyncController {
 
     @PostMapping("/push")
     public SyncResponse push(@RequestBody SyncRequest request) {
-        log.info("推送到远端: {}, 模块: {}", request.getRemoteUrl(), request.getModules());
+        log.info("推送到远端: {}, 模块: {}, force: {}",
+            request.getRemoteUrl(), request.getModules(), request.isForce());
         return syncService.push(
             request.getRemoteUrl(),
             request.getUsername(),
             request.getPassword(),
-            request.getModules()
+            request.getModules(),
+            request.isForce()
         );
     }
 

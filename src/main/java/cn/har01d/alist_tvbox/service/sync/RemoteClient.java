@@ -158,6 +158,14 @@ public class RemoteClient {
 
             String responseBody = response.body().string();
             Map<String, Object> result = objectMapper.readValue(responseBody, Map.class);
+
+            // 检查远端返回的 success 字段
+            Boolean success = (Boolean) result.get("success");
+            if (success == null || !success) {
+                String message = (String) result.get("message");
+                throw new IOException("远端导入失败：" + (message != null ? message : "未知错误"));
+            }
+
             return (Map<String, SyncResult>) result.get("results");
         } catch (IOException e) {
             log.error("推送数据到远端失败: {}", normalizedUrl, e);

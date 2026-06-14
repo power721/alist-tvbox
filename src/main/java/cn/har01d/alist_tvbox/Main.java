@@ -34,6 +34,7 @@ public class Main {
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto.emby"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto.tg"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto.pansou"));
+        classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.dto.sync"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.tvbox"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.domain"));
         classes.addAll(findAllClassesUsingClassLoader("cn.har01d.alist_tvbox.entity"));
