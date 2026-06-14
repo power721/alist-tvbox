@@ -39,37 +39,45 @@ public class RemoteClient {
     public String login(String remoteUrl, String username, String password) throws IOException {
         // 规范化 URL：移除末尾的斜杠
         String normalizedUrl = normalizeUrl(remoteUrl);
+        String loginUrl = normalizedUrl + "/api/accounts/login";
 
-        log.info("尝试验证远端用户: {}", username);
+        log.info("尝试登录远端获取临时 token: {}", loginUrl);
 
-        // 使用 Basic Auth 方式，避免创建新的会话 token
-        // 这样不会导致远端用户的现有会话失效
-        String credentials = username + ":" + password;
-        String basicAuth = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
+        // 构建登录请求体
+        String loginJson = String.format("{\"username\":\"%s\",\"password\":\"%s\"}",
+            escapeJson(username), escapeJson(password));
+        RequestBody body = RequestBody.create(loginJson, MediaType.get("application/json"));
 
-        // 使用 /api/sync/validate 端点验证身份（不创建会话）
-        String validateUrl = normalizedUrl + "/api/sync/validate";
         Request request = new Request.Builder()
-                .url(validateUrl)
-                .header("Authorization", basicAuth)
-                .get()
+                .url(loginUrl)
+                .post(body)
                 .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
-            log.info("收到验证响应: {} {}", response.code(), response.message());
+            log.info("收到登录响应: {} {}", response.code(), response.message());
 
             if (!response.isSuccessful()) {
                 if (response.code() == 401 || response.code() == 403) {
                     throw new IOException("认证失败：用户名或密码错误");
                 }
-                throw new IOException("连接失败：HTTP " + response.code() + " - " + response.message());
+                throw new IOException("登录失败：HTTP " + response.code() + " - " + response.message());
             }
 
-            log.info("成功验证远端用户: {}", username);
-            // 返回 Basic Auth 字符串作为后续请求的认证凭据
-            return basicAuth;
+            // 解析响应获取 token
+            String responseBody = response.body().string();
+            log.debug("登录响应: {}", responseBody);
+
+            Map<String, Object> result = objectMapper.readValue(responseBody, Map.class);
+            String token = (String) result.get("token");
+
+            if (token == null || token.isEmpty()) {
+                throw new IOException("登录成功但未返回 token");
+            }
+
+            log.info("成功获取远端 token（临时会话，仅用于同步操作）");
+            return token;
         } catch (java.net.ConnectException e) {
-            log.error("连接被拒绝: {} - {}", normalizedUrl, e.getMessage());
+            log.error("连接被拒绝:  - {}", normalizedUrl, e.getMessage());
             throw new IOException("无法连接到远端服务器：连接被拒绝，请检查地址和端口是否正确");
         } catch (java.net.UnknownHostException e) {
             log.error("主机不存在: {} - {}", normalizedUrl, e.getMessage());
@@ -82,9 +90,21 @@ public class RemoteClient {
             if (e.getMessage().startsWith("认证失败") || e.getMessage().startsWith("登录失败") || e.getMessage().startsWith("连接失败")) {
                 throw e;
             }
-            log.error("验证远端用户失败: {} - {}", normalizedUrl, e.getClass().getName() + ": " + e.getMessage(), e);
+            log.error("登录远端失败: {} - {}", normalizedUrl, e.getClass().getName() + ": " + e.getMessage(), e);
             throw new IOException("连接失败：" + e.getClass().getSimpleName() + " - " + e.getMessage());
         }
+    }
+
+    /**
+     * 转义 JSON 字符串中的特殊字符
+     */
+    private String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     public SyncData fetchRemoteData(String remoteUrl, String token, List<String> modules) throws IOException {
@@ -142,6 +162,32 @@ public class RemoteClient {
         } catch (IOException e) {
             log.error("推送数据到远端失败: {}", normalizedUrl, e);
             throw e;
+        }
+    }
+
+    /**
+     * 登出远端会话
+     * 清理临时创建的 token，避免会话数量累积
+     */
+    public void logout(String remoteUrl, String token) throws IOException {
+        String normalizedUrl = normalizeUrl(remoteUrl);
+        String logoutUrl = normalizedUrl + "/api/accounts/logout";
+
+        Request request = new Request.Builder()
+                .url(logoutUrl)
+                .header("Authorization", token)
+                .post(RequestBody.create("", MediaType.get("application/json")))
+                .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                log.info("成功登出远端会话: {}", normalizedUrl);
+            } else {
+                log.warn("登出远端会话失败: {} - HTTP {}", normalizedUrl, response.code());
+            }
+        } catch (IOException e) {
+            log.warn("登出远端会话异常: {} - {}", normalizedUrl, e.getMessage());
+            // 不重新抛出异常，登出失败不影响主流程
         }
     }
 }

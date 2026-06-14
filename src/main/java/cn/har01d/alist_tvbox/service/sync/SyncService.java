@@ -659,10 +659,11 @@ public class SyncService {
 
     public SyncResponse push(String remoteUrl, String username, String password, List<String> modules) {
         SyncResponse response = new SyncResponse();
+        String token = null;
 
         try {
-            // 登录远端
-            String token = remoteClient.login(remoteUrl, username, password);
+            // 登录远端（创建临时会话）
+            token = remoteClient.login(remoteUrl, username, password);
 
             // 导出本地数据
             SyncData data = exportData(modules);
@@ -674,7 +675,7 @@ public class SyncService {
             response.setSuccess(true);
             response.setResults(results);
 
-            log.info("推送到远端成功: ", remoteUrl);
+            log.info("推送到远端成功: {}", remoteUrl);
         } catch (Exception e) {
             log.error("推送到远端失败: {}", remoteUrl, e);
             response.setSuccess(false);
@@ -682,6 +683,11 @@ public class SyncService {
             errorResult.setFailed(1);
             errorResult.getErrors().add(e.getMessage());
             response.addResult("error", errorResult);
+        } finally {
+            // 同步完成后清理远端的临时会话
+            if (token != null) {
+                cleanupRemoteSession(remoteUrl, token);
+            }
         }
 
         return response;
@@ -690,10 +696,11 @@ public class SyncService {
     public SyncResponse pull(String remoteUrl, String username, String password,
                             List<String> modules, MergeStrategy strategy, boolean force) {
         SyncResponse response = new SyncResponse();
+        String token = null;
 
         try {
-            // 登录远端
-            String token = remoteClient.login(remoteUrl, username, password);
+            // 登录远端（创建临时会话）
+            token = remoteClient.login(remoteUrl, username, password);
 
             // 从远端获取数据
             SyncData data = remoteClient.fetchRemoteData(remoteUrl, token, modules);
@@ -709,14 +716,33 @@ public class SyncService {
             log.warn("版本不匹配: {} vs {}", e.getLocalVersion(), e.getRemoteVersion());
             throw e;  // 重新抛出让 Controller 处理
         } catch (Exception e) {
-            log.error("从远端拉取失败: {}", remoteUrl, e);
+            log.error("从远端拉取失败: ", remoteUrl, e);
             response.setSuccess(false);
             SyncResult errorResult = new SyncResult();
             errorResult.setFailed(1);
             errorResult.getErrors().add(e.getMessage());
             response.addResult("error", errorResult);
+        } finally {
+            // 同步完成后清理远端的临时会话
+            if (token != null) {
+                cleanupRemoteSession(remoteUrl, token);
+            }
         }
 
         return response;
+    }
+
+    /**
+     * 清理远端的临时会话 token
+     * 同步操作完成后主动登出，限制会话数量
+     */
+    private void cleanupRemoteSession(String remoteUrl, String token) {
+        try {
+            log.info("清理远端临时会话: {}", remoteUrl);
+            remoteClient.logout(remoteUrl, token);
+        } catch (Exception e) {
+            // 登出失败不影响主流程，只记录警告
+            log.warn("清理远端会话失败（不影响同步结果）: {}", remoteUrl, e);
+        }
     }
 }
