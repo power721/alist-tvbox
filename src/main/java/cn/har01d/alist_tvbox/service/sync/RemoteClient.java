@@ -29,13 +29,23 @@ public class RemoteClient {
                 .build();
     }
 
+    /**
+     * 规范化 URL：移除末尾的斜杠
+     */
+    private String normalizeUrl(String url) {
+        return url != null && url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
     public String login(String remoteUrl, String username, String password) throws IOException {
+        // 规范化 URL：移除末尾的斜杠
+        String normalizedUrl = normalizeUrl(remoteUrl);
+
         String credentials = username + ":" + password;
         String basicAuth = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
 
         // 使用 /api/settings 端点测试认证
         Request request = new Request.Builder()
-                .url(remoteUrl + "/api/settings")
+                .url(normalizedUrl + "/api/settings")
                 .header("Authorization", basicAuth)
                 .get()
                 .build();
@@ -48,27 +58,28 @@ public class RemoteClient {
                 throw new IOException("连接失败：HTTP " + response.code() + " - " + response.message());
             }
             // Basic Auth 成功，返回 credentials 作为 token
-            log.info("成功连接到远端: {}", remoteUrl);
+            log.info("成功连接到远端: {}", normalizedUrl);
             return basicAuth;
         } catch (java.net.ConnectException | java.net.UnknownHostException e) {
-            log.error("无法连接到远端: {}", remoteUrl, e);
+            log.error("无法连接到远端: {}", normalizedUrl, e);
             throw new IOException("无法连接到远端服务器：" + e.getMessage() + "，请检查地址和网络");
         } catch (java.net.SocketTimeoutException e) {
-            log.error("连接超时: {}", remoteUrl, e);
+            log.error("连接超时: {}", normalizedUrl, e);
             throw new IOException("连接超时，请检查网络或远端服务器是否正常运行");
         } catch (IOException e) {
             // 如果已经是我们抛出的友好错误，直接重新抛出
             if (e.getMessage().startsWith("认证失败") || e.getMessage().startsWith("连接失败")) {
                 throw e;
             }
-            log.error("登录远端失败: {}", remoteUrl, e);
+            log.error("登录远端失败: ", normalizedUrl, e);
             throw new IOException("连接失败：" + e.getMessage());
         }
     }
 
     public SyncData fetchRemoteData(String remoteUrl, String token, List<String> modules) throws IOException {
+        String normalizedUrl = normalizeUrl(remoteUrl);
         String modulesParam = String.join(",", modules);
-        String url = remoteUrl + "/api/sync/export?modules=" + modulesParam;
+        String url = normalizedUrl + "/api/sync/export?modules=" + modulesParam;
 
         Request request = new Request.Builder()
                 .url(url)
@@ -84,7 +95,7 @@ public class RemoteClient {
             String body = response.body().string();
             return objectMapper.readValue(body, SyncData.class);
         } catch (IOException e) {
-            log.error("从远端获取数据失败: {}", remoteUrl, e);
+            log.error("从远端获取数据失败: {}", normalizedUrl, e);
             throw new IOException("远端服务器不支持同步功能或版本不兼容");
         }
     }
@@ -92,6 +103,8 @@ public class RemoteClient {
     @SuppressWarnings("unchecked")
     public Map<String, SyncResult> pushToRemote(String remoteUrl, String token, SyncData data,
                                                  String strategy, boolean force) throws IOException {
+        String normalizedUrl = normalizeUrl(remoteUrl);
+
         SyncRequest request = new SyncRequest();
         request.setData(data);
         request.setStrategy(strategy != null ?
@@ -102,7 +115,7 @@ public class RemoteClient {
         RequestBody body = RequestBody.create(json, MediaType.get("application/json"));
 
         Request httpRequest = new Request.Builder()
-                .url(remoteUrl + "/api/sync/import")
+                .url(normalizedUrl + "/api/sync/import")
                 .header("Authorization", token)
                 .post(body)
                 .build();
@@ -116,7 +129,7 @@ public class RemoteClient {
             Map<String, Object> result = objectMapper.readValue(responseBody, Map.class);
             return (Map<String, SyncResult>) result.get("results");
         } catch (IOException e) {
-            log.error("推送数据到远端失败: {}", remoteUrl, e);
+            log.error("推送数据到远端失败: {}", normalizedUrl, e);
             throw e;
         }
     }
