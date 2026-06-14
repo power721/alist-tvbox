@@ -9,7 +9,7 @@
 }
 
 .page-container {
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
   padding: var(--spacing-xl);
 }
@@ -124,6 +124,7 @@
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--border-color);
+  width: 100%;
 }
 
 .el-table__header th {
