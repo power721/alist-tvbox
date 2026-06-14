@@ -361,7 +361,12 @@
       <el-collapse v-model="githubProxyCollapseActive" style="margin-top: 20px">
         <el-collapse-item name="github-proxy">
           <template #title>
-            <span style="font-weight: 500">GitHub 代理配置（多个，自动 fallback，最多 5 个）</span>
+            <div style="display: flex; align-items: center; width: 100%;">
+              <el-icon style="margin-right: 8px; transition: transform 0.3s;" :style="{ transform: githubProxyCollapseActive.includes('github-proxy') ? 'rotate(90deg)' : 'rotate(0deg)' }">
+                <ArrowRight />
+              </el-icon>
+              <span style="font-weight: 500">GitHub 代理配置（多个，自动 fallback，最多 5 个）</span>
+            </div>
           </template>
 
           <div style="margin-bottom: 10px">
@@ -870,7 +875,7 @@
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
-import {Link} from "@element-plus/icons-vue";
+import {Link, ArrowRight} from "@element-plus/icons-vue";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
 import PluginFilterConfigFieldEditor from "@/components/PluginFilterConfigFieldEditor.vue";
