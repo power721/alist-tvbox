@@ -67,7 +67,7 @@
 
       <div style="flex: 1;">
         <div class="table-scroll-wrapper">
-          <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 800px;"
+          <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%"
                   class="clickable-table" @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
           <el-table-column prop="vod_name" label="名称" sortable min-width="200">
@@ -143,7 +143,7 @@
 
     <div v-else>
       <div class="table-scroll-wrapper">
-        <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 800px;"
+        <el-table v-loading="loading" :data="files" @selection-change="handleSelectionChange" border style="width: 100%"
                 class="clickable-table" @row-click="load">
           <el-table-column type="selection" width="55" v-if="isHistory"/>
           <el-table-column prop="vod_name" label="名称" sortable min-width="200">
