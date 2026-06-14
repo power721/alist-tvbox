@@ -86,7 +86,8 @@
               <span v-else-if="scope.row.type==4">🖹</span>
               <span v-else-if="scope.row.type==5">📷</span>
               <span v-else-if="scope.row.type==9">▶️</span>
-              <span>{{ scope.row.vod_name }}</span>
+              <span v-if="scope.row.vod_name && scope.row.vod_name.trim()">{{ scope.row.vod_name }}</span>
+              <span v-else style="color: #999;">(无名称)</span>
             </template>
           </el-table-column>
           <el-table-column prop="vod_remarks" label="大小" width="120"
@@ -161,7 +162,8 @@
               <span v-else-if="scope.row.type==4">🖹</span>
               <span v-else-if="scope.row.type==5">📷</span>
               <span v-else-if="scope.row.type==9">▶️</span>
-              <span>{{ scope.row.vod_name }}</span>
+              <span v-if="scope.row.vod_name && scope.row.vod_name.trim()">{{ scope.row.vod_name }}</span>
+              <span v-else style="color: #999;">(无名称)</span>
             </template>
           </el-table-column>
           <el-table-column prop="vod_remarks" label="大小" width="120"
