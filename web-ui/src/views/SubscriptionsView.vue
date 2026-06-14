@@ -1,18 +1,20 @@
 <template>
-  <div class="subscriptions">
-    <h1>订阅列表</h1>
-    <el-row justify="end">
-      <el-button @click="load">刷新</el-button>
-      <el-button @click="showGlobalConfig">全局配置</el-button>
-      <el-button @click="showPlugins">订阅源管理</el-button>
-      <el-button @click="showPluginFilters">过滤器管理</el-button>
-      <el-button @click="showScan">同步影视</el-button>
-      <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
-      <el-button type="primary" @click="handleAdd">添加</el-button>
-    </el-row>
-    <div class="space"></div>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">订阅管理</h1>
+      <div class="page-actions">
+        <el-button @click="load">刷新</el-button>
+        <el-button @click="showGlobalConfig">全局配置</el-button>
+        <el-button @click="showPlugins">订阅源管理</el-button>
+        <el-button @click="showPluginFilters">过滤器管理</el-button>
+        <el-button @click="showScan">同步影视</el-button>
+        <el-button @click="showPush" v-if="devices.length">推送配置</el-button>
+        <el-button type="primary" @click="handleAdd">添加</el-button>
+      </div>
+    </div>
 
-    <el-table :data="subscriptions" border style="width: 100%">
+    <div class="page-card">
+      <el-table :data="subscriptions" border style="width: 100%">
       <!--      <el-table-column prop="id" label="ID" sortable width="70"/>-->
       <el-table-column prop="sid" label="订阅ID" sortable width="180"/>
       <el-table-column prop="name" label="名称" sortable width="180"/>
