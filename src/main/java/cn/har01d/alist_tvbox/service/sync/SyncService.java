@@ -432,19 +432,203 @@ public class SyncService {
         return result;
     }
 
-    private SyncResult importPikPakAccounts(List<PikPakAccount> accounts, MergeStrategy strategy) {
-        return new SyncResult();
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importPikPakAccounts(List<PikPakAccount> accounts, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                pikPakAccountRepository.deleteAll();
+            }
+
+            for (PikPakAccount remote : accounts) {
+                try {
+                    Optional<PikPakAccount> existing = Optional.ofNullable(
+                        pikPakAccountRepository.findByUsername(remote.getUsername()));
+
+                    if (existing.isPresent()) {
+                        PikPakAccount local = existing.get();
+                        local.setNickname(remote.getNickname());
+                        local.setPlatform(remote.getPlatform());
+                        local.setRefreshTokenMethod(remote.getRefreshTokenMethod());
+                        local.setPassword(remote.getPassword());
+                        local.setMaster(remote.isMaster());
+                        pikPakAccountRepository.save(local);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        remote.setId(null);
+                        pikPakAccountRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 PikPakAccount 失败: {}", remote.getUsername(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add("PikPakAccount " + remote.getUsername() + " 导入失败");
+                }
+            }
+
+            log.info("导入 PikPakAccounts 完成: 新增 {}, 更新 {}, 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 PikPakAccounts 失败", e);
+            result.setFailed(accounts.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
     }
 
-    private SyncResult importPlugins(List<Plugin> plugins, MergeStrategy strategy) {
-        return new SyncResult();
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importSubscriptions(List<Subscription> subscriptions, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                subscriptionRepository.deleteAll();
+            }
+
+            for (Subscription remote : subscriptions) {
+                try {
+                    Optional<Subscription> existing = subscriptionRepository.findByUrl(remote.getUrl());
+
+                    if (existing.isPresent()) {
+                        Subscription local = existing.get();
+                        local.setName(remote.getName());
+                        local.setSid(remote.getSid());
+                        local.setOverride(remote.getOverride());
+                        local.setSort(remote.getSort());
+                        subscriptionRepository.save(local);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        remote.setId(null);
+                        subscriptionRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 Subscription 失败: {}", remote.getUrl(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add("Subscription " + remote.getUrl() + " 导入失败");
+                }
+            }
+
+            log.info("导入 Subscriptions 完成: 新增 {}, 更新 {}, 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 Subscriptions 失败", e);
+            result.setFailed(subscriptions.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
     }
 
-    private SyncResult importPluginFilters(List<PluginFilter> filters, MergeStrategy strategy) {
-        return new SyncResult();
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importPlugins(List<Plugin> plugins, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                pluginRepository.deleteAll();
+            }
+
+            for (Plugin remote : plugins) {
+                try {
+                    Plugin existing = null;
+
+                    // 优先用 externalId
+                    if (StringUtils.isNotBlank(remote.getExternalId())) {
+                        existing = pluginRepository.findByExternalId(remote.getExternalId()).orElse(null);
+                    }
+
+                    // 回退到 url
+                    if (existing == null && StringUtils.isNotBlank(remote.getUrl())) {
+                        existing = pluginRepository.findByUrl(remote.getUrl()).orElse(null);
+                    }
+
+                    if (existing != null) {
+                        existing.setName(remote.getName());
+                        existing.setExternalId(remote.getExternalId());
+                        existing.setUrl(remote.getUrl());
+                        existing.setEnabled(remote.isEnabled());
+                        existing.setSortOrder(remote.getSortOrder());
+                        existing.setExtend(remote.getExtend());
+                        existing.setSourceName(remote.getSourceName());
+                        existing.setLocalPath(remote.getLocalPath());
+                        existing.setContent(remote.getContent());
+                        existing.setVersion(remote.getVersion());
+                        pluginRepository.save(existing);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        remote.setId(null);
+                        pluginRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 Plugin 失败: {}", remote.getName(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add("Plugin " + remote.getName() + " 导入失败");
+                }
+            }
+
+            log.info("导入 Plugins 完成: 新增 {}, 更新 , 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 Plugins 失败", e);
+            result.setFailed(plugins.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
     }
 
-    private SyncResult importSubscriptions(List<Subscription> subscriptions, MergeStrategy strategy) {
-        return new SyncResult();
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importPluginFilters(List<PluginFilter> filters, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                pluginFilterRepository.deleteAll();
+            }
+
+            for (PluginFilter remote : filters) {
+                try {
+                    Optional<PluginFilter> existing = pluginFilterRepository.findByUrl(remote.getUrl());
+
+                    if (existing.isPresent()) {
+                        PluginFilter local = existing.get();
+                        local.setName(remote.getName());
+                        local.setEnabled(remote.isEnabled());
+                        local.setSortOrder(remote.getSortOrder());
+                        local.setStages(remote.getStages());
+                        local.setExtend(remote.getExtend());
+                        local.setErrorStrategy(remote.getErrorStrategy());
+                        local.setPluginScope(remote.getPluginScope());
+                        local.setPluginIds(remote.getPluginIds());
+                        local.setSourceName(remote.getSourceName());
+                        local.setContent(remote.getContent());
+                        local.setVersion(remote.getVersion());
+                        pluginFilterRepository.save(local);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        remote.setId(null);
+                        pluginFilterRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 PluginFilter 失败: {}", remote.getName(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add("PluginFilter " + remote.getName() + " 导入失败");
+                }
+            }
+
+            log.info("导入 PluginFilters 完成: 新增 {}, 更新 {}, 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 PluginFilters 失败", e);
+            result.setFailed(filters.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
     }
 }
