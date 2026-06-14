@@ -39,45 +39,35 @@ public class RemoteClient {
     public String login(String remoteUrl, String username, String password) throws IOException {
         // 规范化 URL：移除末尾的斜杠
         String normalizedUrl = normalizeUrl(remoteUrl);
-        String loginUrl = normalizedUrl + "/api/accounts/login";
 
-        log.info("尝试登录远端: {}", loginUrl);
+        log.info("尝试验证远端用户: {}", username);
 
-        // 构建登录请求体
-        String loginJson = String.format("{\"username\":\"%s\",\"password\":\"%s\"}", username, password);
-        RequestBody body = RequestBody.create(loginJson, MediaType.get("application/json"));
+        // 使用 Basic Auth 方式，避免创建新的会话 token
+        // 这样不会导致远端用户的现有会话失效
+        String credentials = username + ":" + password;
+        String basicAuth = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
 
+        // 使用 /api/sync/validate 端点验证身份（不创建会话）
+        String validateUrl = normalizedUrl + "/api/sync/validate";
         Request request = new Request.Builder()
-                .url(loginUrl)
-                .post(body)
+                .url(validateUrl)
+                .header("Authorization", basicAuth)
+                .get()
                 .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
-            log.info("收到登录响应: {} {}", response.code(), response.message());
+            log.info("收到验证响应: {} {}", response.code(), response.message());
 
             if (!response.isSuccessful()) {
                 if (response.code() == 401 || response.code() == 403) {
-                    // 尝试解析错误消息
-                    String errorBody = response.body() != null ? response.body().string() : "";
-                    log.error("认证失败: {}", errorBody);
                     throw new IOException("认证失败：用户名或密码错误");
                 }
-                throw new IOException("登录失败：HTTP " + response.code() + " - " + response.message());
+                throw new IOException("连接失败：HTTP " + response.code() + " - " + response.message());
             }
 
-            // 解析响应获取 token
-            String responseBody = response.body().string();
-            log.debug("登录响应: {}", responseBody);
-
-            Map<String, Object> result = objectMapper.readValue(responseBody, Map.class);
-            String token = (String) result.get("token");
-
-            if (token == null || token.isEmpty()) {
-                throw new IOException("登录成功但未返回 token");
-            }
-
-            log.info("成功登录远端: {}", normalizedUrl);
-            return token;
+            log.info("成功验证远端用户: {}", username);
+            // 返回 Basic Auth 字符串作为后续请求的认证凭据
+            return basicAuth;
         } catch (java.net.ConnectException e) {
             log.error("连接被拒绝: {} - {}", normalizedUrl, e.getMessage());
             throw new IOException("无法连接到远端服务器：连接被拒绝，请检查地址和端口是否正确");
@@ -92,7 +82,7 @@ public class RemoteClient {
             if (e.getMessage().startsWith("认证失败") || e.getMessage().startsWith("登录失败") || e.getMessage().startsWith("连接失败")) {
                 throw e;
             }
-            log.error("登录远端失败: {} - {}", normalizedUrl, e.getClass().getName() + ": " + e.getMessage(), e);
+            log.error("验证远端用户失败: {} - {}", normalizedUrl, e.getClass().getName() + ": " + e.getMessage(), e);
             throw new IOException("连接失败：" + e.getClass().getSimpleName() + " - " + e.getMessage());
         }
     }

@@ -26,6 +26,8 @@ public class SyncService {
     private final PluginFilterRepository pluginFilterRepository;
     private final RemoteClient remoteClient;
     private final ObjectMapper objectMapper;
+    private final cn.har01d.alist_tvbox.service.UserService userService;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     // Setting 白名单
     private static final Set<String> SETTING_WHITELIST = Set.of(
@@ -52,7 +54,9 @@ public class SyncService {
                       PluginRepository pluginRepository,
                       PluginFilterRepository pluginFilterRepository,
                       RemoteClient remoteClient,
-                      ObjectMapper objectMapper) {
+                      ObjectMapper objectMapper,
+                      cn.har01d.alist_tvbox.service.UserService userService,
+                      org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
         this.settingRepository = settingRepository;
         this.siteRepository = siteRepository;
         this.shareRepository = shareRepository;
@@ -64,6 +68,8 @@ public class SyncService {
         this.pluginFilterRepository = pluginFilterRepository;
         this.remoteClient = remoteClient;
         this.objectMapper = objectMapper;
+        this.userService = userService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public SyncData exportData(List<String> modules) {
@@ -122,6 +128,25 @@ public class SyncService {
 
     public RemoteClient getRemoteClient() {
         return remoteClient;
+    }
+
+    /**
+     * 验证用户名和密码，但不创建会话
+     */
+    public boolean validateCredentials(String username, String password) {
+        try {
+            User user = userService.findByUsername(username);
+            if (user == null) {
+                log.warn("用户不存在: {}", username);
+                return false;
+            }
+            boolean matches = passwordEncoder.matches(password, user.getPassword());
+            log.info("验证用户凭据: {} - {}", username, matches ? "成功" : "失败");
+            return matches;
+        } catch (Exception e) {
+            log.error("验证用户凭据失败: {}", username, e);
+            return false;
+        }
     }
 
     @SuppressWarnings("unchecked")

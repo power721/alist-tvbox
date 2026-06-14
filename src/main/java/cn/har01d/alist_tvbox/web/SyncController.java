@@ -4,8 +4,11 @@ import cn.har01d.alist_tvbox.dto.sync.*;
 import cn.har01d.alist_tvbox.exception.VersionMismatchException;
 import cn.har01d.alist_tvbox.service.sync.SyncService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -17,6 +20,46 @@ public class SyncController {
 
     public SyncController(SyncService syncService) {
         this.syncService = syncService;
+    }
+
+    /**
+     * 验证用户身份但不创建会话
+     * 使用 Basic Auth，避免导致现有会话失效
+     */
+    @GetMapping("/validate")
+    public ResponseEntity<Map<String, Object>> validate(@RequestHeader("Authorization") String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Basic ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("success", false, "message", "缺少 Basic Auth"));
+            }
+
+            String base64Credentials = authHeader.substring("Basic ".length());
+            String credentials = new String(Base64.getDecoder().decode(base64Credentials));
+            String[] parts = credentials.split(":", 2);
+
+            if (parts.length != 2) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("success", false, "message", "无效的认证格式"));
+            }
+
+            String username = parts[0];
+            String password = parts[1];
+
+            // 验证用户名和密码（不创建会话）
+            boolean valid = syncService.validateCredentials(username, password);
+
+            if (valid) {
+                return ResponseEntity.ok(Map.of("success", true, "message", "验证成功"));
+            } else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("success", false, "message", "用户名或密码错误"));
+            }
+        } catch (Exception e) {
+            log.error("验证失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("success", false, "message", "验证失败: " + e.getMessage()));
+        }
     }
 
     @PostMapping("/connect")
