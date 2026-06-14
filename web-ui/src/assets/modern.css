@@ -114,15 +114,7 @@
   color: var(--primary-color);
 }
 
-.el-button--text {
-  padding: 4px 8px;
-  border-radius: 6px;
-  transition: all var(--transition-fast) var(--ease);
-}
-
-.el-button--text:hover {
-  background: var(--bg-secondary);
-}
+/* 移除了.el-button--text的通用样式，以免影响表格内的link按钮 */
 
 
 /* ============================================
@@ -155,6 +147,17 @@
 .el-table .action-buttons {
   display: flex;
   gap: 8px;
+}
+
+/* 表格内的link按钮保持正常大小 */
+.el-table .el-button--small {
+  padding: 5px 11px;
+  font-size: 12px;
+  min-height: 24px;
+}
+
+.el-table .el-button {
+  border-radius: 4px;
 }
 
 /* ============================================
