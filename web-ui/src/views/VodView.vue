@@ -67,10 +67,14 @@
 
       <div style="flex: 1;">
         <div v-if="!files.length && !loading" class="table-scroll-wrapper">
-          <el-table :data="[]" border style="width: 100%;" empty-text="点击左侧搜索结果查看文件">
-            <el-table-column prop="vod_name" label="名称" width="300" />
-            <el-table-column prop="vod_remarks" label="大小" width="120" />
-            <el-table-column prop="vod_time" label="修改时间" width="180" />
+          <el-table :data="[{placeholder: true}]" border style="width: 100%;" :show-header="true">
+            <el-table-column label="名称" width="300">
+              <template #default>
+                <span style="color: #999; font-style: italic;">暂无数据</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="大小" width="120" />
+            <el-table-column label="修改时间" width="180" />
           </el-table>
         </div>
         <div v-else class="table-scroll-wrapper">
