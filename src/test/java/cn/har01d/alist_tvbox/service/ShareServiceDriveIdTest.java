@@ -90,6 +90,21 @@ class ShareServiceDriveIdTest {
     }
 
     @Test
+    void importsSharesWithoutTypeAsAliForLegacyClients() {
+        SharesDto dto = new SharesDto();
+        dto.setContent("/Movies abc root pwd");
+
+        int count = service.importShares(dto);
+
+        ArgumentCaptor<Share> captor = ArgumentCaptor.forClass(Share.class);
+        verify(service).create(captor.capture());
+        Share share = captor.getValue();
+        assertThat(count).isEqualTo(1);
+        assertThat(share.getType()).isEqualTo(0);
+        assertThat(share.getShareId()).isEqualTo("abc");
+    }
+
+    @Test
     void importsInlineDriveIdentifierAndLegacyNumericIdentifier() {
         SharesDto dto = new SharesDto();
         dto.setType("ali");

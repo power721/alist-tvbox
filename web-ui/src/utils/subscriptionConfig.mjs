@@ -29,10 +29,10 @@ export function pickExtra(obj, modeledKeys) {
 
 export function detectFilterMode(config) {
   const wl = config['sites-whitelist']
-  if (Array.isArray(wl) && wl.length) return 'whitelist'
+  if (Array.isArray(wl) && (wl.length > 0)) return 'whitelist'
   const bl = config.blacklist
   const legacy = config['sites-blacklist']
-  if ((Array.isArray(legacy) && legacy.length) || (bl && Array.isArray(bl.sites) && bl.sites.length)) return 'blacklist'
+  if ((Array.isArray(legacy) && (legacy.length > 0)) || (bl && Array.isArray(bl.sites) && bl.sites.length)) return 'blacklist'
   return 'none'
 }
 
@@ -114,8 +114,8 @@ function buildHeaderItem(row) {
   }
   const item = { ...(row._extra || {}) }
   if (row.host) item.host = row.host
-  if (Object.keys(header).length) item.header = header
-  return Object.keys(item).length ? item : null
+  if (Object.keys(header).length > 0) item.header = header
+  return (Object.keys(item).length > 0) ? item : null
 }
 
 // --- Live helpers ---
@@ -195,18 +195,18 @@ function buildChannelItem(c) {
   const item = { ...(c._extra || {}) }
   for (const k of CHANNEL_KEYS) {
     if (k === 'header') {
-      if (c.header && typeof c.header === 'object' && Object.keys(c.header).length) item.header = { ...c.header }
+      if (c.header && typeof c.header === 'object' && (Object.keys(c.header).length > 0)) item.header = { ...c.header }
       continue
     }
     if (k === 'catchup' || k === 'drm') {
-      if (c[k] && typeof c[k] === 'object' && Object.keys(c[k]).length) item[k] = { ...c[k] }
+      if (c[k] && typeof c[k] === 'object' && (Object.keys(c[k]).length > 0)) item[k] = { ...c[k] }
       continue
     }
     const v = c[k]
-    if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue
+    if (v === undefined || v === null || v === '' || (Array.isArray(v) && (v.length === 0))) continue
     item[k] = v
   }
-  return Object.keys(item).length ? item : null
+  return (Object.keys(item).length > 0) ? item : null
 }
 
 function buildGroupsArray(groups) {
@@ -216,8 +216,8 @@ function buildGroupsArray(groups) {
     if (g.name) item.name = g.name
     if (g.pass) item.pass = g.pass
     const channels = buildChannelsArray(g.channels)
-    if (channels.length) item.channel = channels
-    return Object.keys(item).length ? item : null
+    if (channels.length > 0) item.channel = channels
+    return (Object.keys(item).length > 0) ? item : null
   }).filter(Boolean)
 }
 
@@ -232,17 +232,17 @@ function buildLiveItem(row) {
   for (const k of LIVE_KEYS) {
     if (k === 'groups') {
       const groups = buildGroupsArray(row.groups)
-      if (groups.length) item.groups = groups
+      if (groups.length > 0) item.groups = groups
       continue
     }
     if (k === 'header') {
-      if (row.header && typeof row.header === 'object' && Object.keys(row.header).length) {
+      if (row.header && typeof row.header === 'object' && (Object.keys(row.header).length > 0)) {
         item.header = { ...row.header }
       }
       continue
     }
     if (k === 'catchup') {
-      if (row.catchup && typeof row.catchup === 'object' && Object.keys(row.catchup).length) {
+      if (row.catchup && typeof row.catchup === 'object' && (Object.keys(row.catchup).length > 0)) {
         item.catchup = { ...row.catchup }
       }
       continue
@@ -251,7 +251,7 @@ function buildLiveItem(row) {
     if (v === undefined || v === null || v === '') continue
     item[k] = v
   }
-  return Object.keys(item).length ? item : null
+  return (Object.keys(item).length > 0) ? item : null
 }
 
 // --- Parse helpers ---
@@ -262,8 +262,8 @@ function buildCustomParse(row) {
   if (row.url) p.url = row.url
   const ext = {}
   if (Array.isArray(row.flag) && row.flag.length) ext.flag = row.flag
-  if (row.header && Object.keys(row.header).length) ext.header = row.header
-  if (Object.keys(ext).length) p.ext = ext
+  if (row.header && (Object.keys(row.header).length > 0)) ext.header = row.header
+  if (Object.keys(ext).length > 0) p.ext = ext
   return p
 }
 
@@ -315,7 +315,7 @@ function setOrDelete(config, key, value) {
 }
 
 function setArrOrDelete(config, key, value) {
-  if (Array.isArray(value) && value.length) config[key] = value
+  if (Array.isArray(value) && (value.length > 0)) config[key] = value
   else delete config[key]
 }
 
@@ -349,7 +349,7 @@ export function serialize(baseConfig, state) {
       else if (row.hadNameOverride && row.name) o.name = row.name
       if (row.order !== '' && row.order !== null && row.order !== undefined) o.order = Number(row.order)
       if (row.hasAdvancedOverride) Object.assign(o, buildAdvancedOverride(row))
-      if (Object.keys(o).length) {
+      if (Object.keys(o).length > 0) {
         o.key = row.key
         sites.push(o)
       }
@@ -377,7 +377,7 @@ export function serialize(baseConfig, state) {
   if (disabledParses.length) blacklist.parses = disabledParses
   else delete blacklist.parses
 
-  if (Object.keys(blacklist).length) config.blacklist = blacklist
+  if (Object.keys(blacklist).length > 0) config.blacklist = blacklist
   else delete config.blacklist
 
   // 自定义解析

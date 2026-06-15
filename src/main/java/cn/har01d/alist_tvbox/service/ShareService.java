@@ -418,6 +418,9 @@ public class ShareService {
     public int importShares(SharesDto dto) {
         int count = 0;
         Integer defaultType = DriveId.toTypeOrNull(dto.getType());
+        if (defaultType == null) {
+            defaultType = 0;
+        }
         log.info("import share list");
         for (String line : dto.getContent().split("\n")) {
             String[] parts = line.trim().split("\\s+");
@@ -430,8 +433,14 @@ public class ShareService {
                     share.setPath(parts[0]);
                     String[] id = parts[1].split(":", 2);
                     if (!parts[1].contains("http") && id.length > 1) {
-                        share.setType(DriveId.toType(id[0]));
-                        share.setShareId(id[1]);
+                        Integer parsedType = DriveId.toTypeOrNull(id[0]);
+                        if (parsedType != null) {
+                            share.setType(parsedType);
+                            share.setShareId(id[1]);
+                        } else {
+                            log.warn("Unknown drive type '{}' in line: {}", id[0], line);
+                            continue;
+                        }
                     } else {
                         share.setShareId(parts[1]);
                     }

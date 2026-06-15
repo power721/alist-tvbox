@@ -27,12 +27,19 @@ public class GitHubProxyService {
     private static final int READ_TIMEOUT_SECONDS = 3;
     private static final int MAX_PROXY_COUNT = 5; // 最多配置 5 个代理
     private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+$"); // 匹配版本号格式，如 0.54.49
+    private static final String DIRECT_PROXY = ""; // 直连（无代理）
 
     private final OkHttpClient httpClient;
+    private final Path githubProxyFile;
     private final Map<String, GitHubProxyNode> benchmarkCache = new ConcurrentHashMap<>();
     private volatile boolean isBenchmarking = false;
 
     public GitHubProxyService() {
+        this(Paths.get(GITHUB_PROXY_FILE));
+    }
+
+    GitHubProxyService(Path githubProxyFile) {
+        this.githubProxyFile = githubProxyFile;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -48,7 +55,7 @@ public class GitHubProxyService {
         List<GitHubProxyNode> nodes = new ArrayList<>();
 
         // 从脚本嵌入的节点数据构建列表
-        nodes.add(new GitHubProxyNode("无代理（直连）", "", "", "", null, null, null, null));
+        nodes.add(new GitHubProxyNode("无代理（直连）", DIRECT_PROXY, "", "", null, null, null, null));
         nodes.add(new GitHubProxyNode("默认节点", "https://gh.llkk.cc/", "gh.llkk.cc", "donate", null, null, null, null));
         nodes.add(new GitHubProxyNode("公益贡献", "https://github.starrlzy.cn/", "github.starrlzy.cn", "donate", null, null, null, null));
         nodes.add(new GitHubProxyNode("高速节点", "https://slink.ltd/", "slink.ltd", "search", null, null, null, null));
@@ -107,11 +114,13 @@ public class GitHubProxyService {
 
         // 初始化缓存（标记为进行中）
         for (String url : urls) {
-            GitHubProxyNode node = new GitHubProxyNode();
-            node.setUrl(url);
-            node.setLabel("测速中...");
-            node.setSuccess(null);
-            benchmarkCache.put(url, node);
+            benchmarkCache.computeIfAbsent(url, key -> {
+                GitHubProxyNode node = new GitHubProxyNode();
+                node.setUrl(key);
+                node.setLabel("测速中...");
+                node.setSuccess(null);
+                return node;
+            });
         }
 
         ExecutorService executor = Executors.newFixedThreadPool(BENCHMARK_THREADS);
@@ -196,9 +205,9 @@ public class GitHubProxyService {
         node.setUrl(proxyUrl);
 
         // 处理空字符串（直连）
-        if (proxyUrl == null || proxyUrl.trim().isEmpty()) {
+        if (DIRECT_PROXY.equals(proxyUrl)) {
             node.setLabel("无代理（直连）");
-            node.setHost("");
+            node.setHost(DIRECT_PROXY);
             return benchmarkDirect(node);
         }
 
@@ -304,7 +313,7 @@ public class GitHubProxyService {
      * 每个代理一行，确保以 / 结尾，最多保存 5 个
      */
     public void saveProxyListToFile(List<String> proxyUrls) throws IOException {
-        Path filePath = Paths.get(GITHUB_PROXY_FILE);
+        Path filePath = githubProxyFile;
 
         // 限制最多 5 个代理
         List<String> limitedProxies = proxyUrls.stream()
@@ -316,14 +325,14 @@ public class GitHubProxyService {
         Files.createDirectories(filePath.getParent());
         Files.write(filePath, limitedProxies, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 
-        log.info("已保存 {} 个 GitHub 代理到文件: {}", limitedProxies.size(), GITHUB_PROXY_FILE);
+        log.info("已保存 {} 个 GitHub 代理到文件: {}", limitedProxies.size(), filePath);
     }
 
     /**
      * 从文件读取 GitHub 代理列表（多行格式）
      */
     public List<String> readProxyListFromFile() {
-        Path filePath = Paths.get(GITHUB_PROXY_FILE);
+        Path filePath = githubProxyFile;
         if (!Files.exists(filePath)) {
             return Collections.emptyList();
         }
@@ -331,11 +340,10 @@ public class GitHubProxyService {
         try {
             return Files.readAllLines(filePath).stream()
                     .map(String::trim)
-                    .filter(line -> !line.isEmpty())
                     .limit(MAX_PROXY_COUNT)
                     .collect(Collectors.toList());
         } catch (IOException e) {
-            log.error("读取 GitHub 代理文件失败: {}", GITHUB_PROXY_FILE, e);
+            log.error("读取 GitHub 代理文件失败: {}", filePath, e);
             return Collections.emptyList();
         }
     }
@@ -344,8 +352,8 @@ public class GitHubProxyService {
      * 规范化代理 URL：确保以 / 结尾（空字符串除外）
      */
     private String normalizeProxyUrl(String proxyUrl) {
-        if (proxyUrl == null || proxyUrl.trim().isEmpty()) {
-            return "";
+        if (DIRECT_PROXY.equals(proxyUrl)) {
+            return DIRECT_PROXY;
         }
         String trimmed = proxyUrl.trim();
         return trimmed.endsWith("/") ? trimmed : trimmed + "/";
@@ -371,16 +379,7 @@ public class GitHubProxyService {
         for (int i = 0; i < limitedProxies.size(); i++) {
             String proxy = limitedProxies.get(i);
             try {
-                if (proxy == null || proxy.trim().isEmpty()) {
-                    // 空字符串表示直连
-                    log.info("尝试直连下载 (代理 {}/{}): {}", i + 1, limitedProxies.size(), githubUrl);
-                    return downloadDirect(githubUrl);
-                } else {
-                    // 使用代理下载
-                    String proxyUrl = normalizeProxyUrl(proxy) + githubUrl;
-                    log.info("尝试使用代理 {}/{} 下载: {} -> {}", i + 1, limitedProxies.size(), proxy, githubUrl);
-                    return downloadDirect(proxyUrl);
-                }
+                return tryDownloadWithProxy(proxy, githubUrl, i + 1, limitedProxies.size());
             } catch (IOException e) {
                 lastException = e;
                 log.warn("代理 {}/{} ({}) 下载失败: {}", i + 1, limitedProxies.size(), proxy, e.getMessage());
@@ -390,6 +389,22 @@ public class GitHubProxyService {
 
         // 所有代理都失败
         throw new IOException("所有 GitHub 代理均失败 (" + limitedProxies.size() + " 个已尝试)", lastException);
+    }
+
+    /**
+     * 尝试使用单个代理下载
+     */
+    private Response tryDownloadWithProxy(String proxy, String githubUrl, int index, int total) throws IOException {
+        if (DIRECT_PROXY.equals(proxy)) {
+            // 空字符串表示直连
+            log.info("尝试直连下载 (代理 {}/{}): {}", index, total, githubUrl);
+            return downloadDirect(githubUrl);
+        } else {
+            // 使用代理下载
+            String proxyUrl = normalizeProxyUrl(proxy) + githubUrl;
+            log.info("尝试使用代理 {}/{} 下载: {} -> {}", index, total, proxy, githubUrl);
+            return downloadDirect(proxyUrl);
+        }
     }
 
     /**

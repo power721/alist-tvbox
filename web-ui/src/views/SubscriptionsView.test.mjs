@@ -34,3 +34,8 @@ test('uses visual editor for subscription override instead of raw textarea', () 
   assert.equal(viewSource.includes('SubscriptionConfigEditor'), true)
   assert.equal(viewSource.includes("openEditor(false)"), true)
 })
+
+test('keeps null benchmark success values pending', () => {
+  assert.equal(viewSource.includes('const isBenchmarkPending = (result: any) => result?.success === null || result?.pending'), true)
+  assert.equal(viewSource.includes('result.success !== undefined && result.success !== null'), true)
+})

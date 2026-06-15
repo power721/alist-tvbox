@@ -1076,14 +1076,17 @@ const filteredManagedSources = computed(() => {
   )
 })
 
-// 排序后的代理节点列表（按测速结果排序）
-const sortedProxyNodes = computed(() => {
+const isBenchmarkPending = (result: any) => result?.success === null || result?.pending
+
+// 计算按测速结果排序的代理节点列表
+const getSortedProxyNodes = () => {
   const nodes = [...githubProxyNodes.value]
 
-  // 按测速结果排序：成功的在前，按延迟升序；测速中的在中间；失败的在最后
   return nodes.sort((a, b) => {
     const resultA = benchmarkResults.value.get(a.url)
     const resultB = benchmarkResults.value.get(b.url)
+    const pendingA = isBenchmarkPending(resultA)
+    const pendingB = isBenchmarkPending(resultB)
 
     // 都没有结果，保持原顺序
     if (!resultA && !resultB) return 0
@@ -1091,17 +1094,17 @@ const sortedProxyNodes = computed(() => {
     if (!resultB) return -1
 
     // 失败的排在最后
-    if (!resultA.success && !resultA.pending && resultB.success) return 1
-    if (resultA.success && !resultB.success && !resultB.pending) return -1
+    if (!resultA.success && !pendingA && resultB.success) return 1
+    if (resultA.success && !resultB.success && !pendingB) return -1
 
     // 测速中的排在中间（成功之后，失败之前）
-    if (resultA.pending && !resultB.pending) {
+    if (pendingA && !pendingB) {
       return resultB.success ? 1 : -1  // 如果B成功，A排后面；如果B失败，A排前面
     }
-    if (!resultA.pending && resultB.pending) {
+    if (!pendingA && pendingB) {
       return resultA.success ? -1 : 1  // 如果A成功，A排前面；如果A失败，A排后面
     }
-    if (resultA.pending && resultB.pending) return 0
+    if (pendingA && pendingB) return 0
 
     // 都成功，按延迟排序
     if (resultA.success && resultB.success) {
@@ -1111,7 +1114,10 @@ const sortedProxyNodes = computed(() => {
     // 都失败，保持原顺序
     return 0
   })
-})
+}
+
+// 排序后的代理节点列表（按测速结果排序）
+const sortedProxyNodes = computed(() => getSortedProxyNodes())
 
 const pluginFilters = ref<PluginFilter[]>([])
 const pluginForm = ref<Plugin>({
@@ -2220,16 +2226,15 @@ const formatNodeLabel = (node: any) => {
 
 const formatBenchmarkResult = (result: any) => {
   if (!result) return ''
+  if (isBenchmarkPending(result)) {
+    return '测速中...'
+  }
   // 如果有明确的 success 字段，说明测速已完成，优先显示结果
-  if (result.success !== undefined) {
+  if (result.success !== undefined && result.success !== null) {
     if (!result.success) {
       return '失败'
     }
     return `${result.latency}ms`
-  }
-  // 只有在没有明确结果时，才根据 pending 显示测速中
-  if (result.pending) {
-    return '测速中...'
   }
   return ''
 }
@@ -2238,6 +2243,15 @@ const formatBenchmarkResult = (result: any) => {
 const handleProxySelectionChange = (selection: any[]) => {
   if (selection.length > 5) {
     ElMessage.warning('最多只能选择 5 个节点')
+    // 只保留前5个选择
+    nextTick(() => {
+      if (proxyTableRef.value) {
+        proxyTableRef.value.clearSelection()
+        selection.slice(0, 5).forEach((node: any) => {
+          proxyTableRef.value.toggleRowSelection(node, true)
+        })
+      }
+    })
     return
   }
   selectedProxies.value = selection.map((node: any) => node.url)
