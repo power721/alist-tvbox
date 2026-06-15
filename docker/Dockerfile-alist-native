@@ -8,9 +8,9 @@ WORKDIR /opt/atv/
 
 COPY config/alist.json /
 
-COPY scripts/entrypoint-native.sh /entrypoint.sh
 COPY scripts/index.sh /
-COPY scripts/init.sh /
+
+COPY docker/scripts/ /docker/scripts/
 
 COPY data/tvbox.zip /
 COPY data/cat.zip /
@@ -26,6 +26,6 @@ EXPOSE 4567 5244
 
 VOLUME ["/www/static"]
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/docker/scripts/entrypoint-native.sh"]
 
 CMD ["81", "--spring.profiles.active=production,docker,native"]

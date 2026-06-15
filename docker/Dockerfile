@@ -6,8 +6,7 @@ ENV MEM_OPT="-Xmx1024M" ALIST_PORT=5344 INSTALL=new
 
 COPY config/alist.json /
 
-COPY scripts/entrypoint.sh /
-COPY scripts/init.sh /
+COPY docker/scripts/ /docker/scripts/
 
 COPY data/tvbox.zip /
 COPY data/base_version /
@@ -23,6 +22,6 @@ EXPOSE 4567 5244
 
 VOLUME ["/www/static"]
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/docker/scripts/entrypoint.sh"]
 
 CMD ["81", "--spring.profiles.active=production,docker"]
