@@ -15,6 +15,8 @@ import java.util.*;
 @Slf4j
 @Service
 public class SyncService {
+    private static final Integer BUILTIN_ALIST_SITE_ID = 1;
+
     private final SettingRepository settingRepository;
     private final SiteRepository siteRepository;
     private final ShareRepository shareRepository;
@@ -277,15 +279,27 @@ public class SyncService {
 
         try {
             if (strategy == MergeStrategy.OVERWRITE) {
-                siteRepository.deleteAll();
+                List<Site> localSites = siteRepository.findAll();
+                List<Site> deletableSites = localSites.stream()
+                        .filter(site -> !isBuiltInAListSite(site))
+                        .toList();
+                siteRepository.deleteAll(deletableSites);
             }
 
             for (Site remote : sites) {
                 try {
+                    if (isBuiltInAListSite(remote)) {
+                        continue;
+                    }
+
                     Optional<Site> existing = siteRepository.findByUrl(remote.getUrl());
                     if (existing.isPresent()) {
                         // 更新：保留本地 ID
                         Site local = existing.get();
+                        if (isBuiltInAListSite(local)) {
+                            continue;
+                        }
+
                         local.setName(remote.getName());
                         local.setPassword(remote.getPassword());
                         local.setToken(remote.getToken());
@@ -320,6 +334,10 @@ public class SyncService {
         }
 
         return result;
+    }
+
+    private boolean isBuiltInAListSite(Site site) {
+        return site != null && Objects.equals(site.getId(), BUILTIN_ALIST_SITE_ID);
     }
 
     // 占位方法，将在后续任务实现
