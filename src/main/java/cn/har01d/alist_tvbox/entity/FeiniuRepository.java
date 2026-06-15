@@ -7,5 +7,7 @@ import java.util.Optional;
 public interface FeiniuRepository extends JpaRepository<Feiniu, Integer> {
     Optional<Feiniu> findByName(String name);
 
+    Optional<Feiniu> findByUrl(String url);
+
     boolean existsByName(String name);
 }

@@ -24,6 +24,9 @@ public class SyncService {
     private final SubscriptionRepository subscriptionRepository;
     private final PluginRepository pluginRepository;
     private final PluginFilterRepository pluginFilterRepository;
+    private final JellyfinRepository jellyfinRepository;
+    private final EmbyRepository embyRepository;
+    private final FeiniuRepository feiniuRepository;
     private final RemoteClient remoteClient;
     private final ObjectMapper objectMapper;
     private final cn.har01d.alist_tvbox.service.UserService userService;
@@ -53,6 +56,9 @@ public class SyncService {
                       SubscriptionRepository subscriptionRepository,
                       PluginRepository pluginRepository,
                       PluginFilterRepository pluginFilterRepository,
+                      JellyfinRepository jellyfinRepository,
+                      EmbyRepository embyRepository,
+                      FeiniuRepository feiniuRepository,
                       RemoteClient remoteClient,
                       ObjectMapper objectMapper,
                       cn.har01d.alist_tvbox.service.UserService userService,
@@ -66,6 +72,9 @@ public class SyncService {
         this.subscriptionRepository = subscriptionRepository;
         this.pluginRepository = pluginRepository;
         this.pluginFilterRepository = pluginFilterRepository;
+        this.jellyfinRepository = jellyfinRepository;
+        this.embyRepository = embyRepository;
+        this.feiniuRepository = feiniuRepository;
         this.remoteClient = remoteClient;
         this.objectMapper = objectMapper;
         this.userService = userService;
@@ -85,7 +94,11 @@ public class SyncService {
         for (String module : modules) {
             switch (module) {
                 case "sites":
-                    data.setSites(siteRepository.findAll());
+                    // 排除 id=1 的 AList 站点
+                    List<Site> sites = siteRepository.findAll().stream()
+                            .filter(site -> site.getId() != 1)
+                            .toList();
+                    data.setSites(sites);
                     break;
                 case "shares":
                     data.setShares(shareRepository.findAll());
@@ -103,6 +116,15 @@ public class SyncService {
                     data.setSubscriptions(subscriptionRepository.findAll());
                     data.setPlugins(pluginRepository.findAll());
                     data.setPluginFilters(pluginFilterRepository.findAll());
+                    break;
+                case "jellyfins":
+                    data.setJellyfins(jellyfinRepository.findAll());
+                    break;
+                case "embys":
+                    data.setEmbys(embyRepository.findAll());
+                    break;
+                case "fenius":
+                    data.setFenius(feiniuRepository.findAll());
                     break;
                 case "settings":
                     data.setSettings(exportSettings());
@@ -196,6 +218,15 @@ public class SyncService {
         }
         if (data.getSubscriptions() != null) {
             results.put("subscriptions", importSubscriptions(data.getSubscriptions(), strategy));
+        }
+        if (data.getJellyfins() != null) {
+            results.put("jellyfins", importJellyfins(data.getJellyfins(), strategy));
+        }
+        if (data.getEmbys() != null) {
+            results.put("embys", importEmbys(data.getEmbys(), strategy));
+        }
+        if (data.getFenius() != null) {
+            results.put("fenius", importFenius(data.getFenius(), strategy));
         }
 
         return results;
@@ -658,6 +689,151 @@ public class SyncService {
         } catch (Exception e) {
             log.error("导入 PluginFilters 失败", e);
             result.setFailed(filters.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importJellyfins(List<Jellyfin> jellyfins, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                jellyfinRepository.deleteAll();
+            }
+
+            for (Jellyfin remote : jellyfins) {
+                try {
+                    Optional<Jellyfin> existing = jellyfinRepository.findByUrl(remote.getUrl());
+
+                    if (existing.isPresent()) {
+                        Jellyfin local = existing.get();
+                        local.setName(remote.getName());
+                        local.setOrder(remote.getOrder());
+                        local.setUserAgent(remote.getUserAgent());
+                        local.setUsername(remote.getUsername());
+                        local.setPassword(remote.getPassword());
+                        local.setClientName(remote.getClientName());
+                        local.setClientVersion(remote.getClientVersion());
+                        local.setDeviceId(remote.getDeviceId());
+                        local.setDeviceName(remote.getDeviceName());
+                        jellyfinRepository.save(local);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        remote.setId(null);
+                        jellyfinRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 Jellyfin 失败: {}", remote.getUrl(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add("Jellyfin " + remote.getUrl() + " 导入失败");
+                }
+            }
+
+            log.info("导入 Jellyfins 完成: 新增 {}, 更新 {}, 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 Jellyfins 失败", e);
+            result.setFailed(jellyfins.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importEmbys(List<Emby> embys, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                embyRepository.deleteAll();
+            }
+
+            for (Emby remote : embys) {
+                try {
+                    Optional<Emby> existing = embyRepository.findByUrl(remote.getUrl());
+
+                    if (existing.isPresent()) {
+                        Emby local = existing.get();
+                        local.setName(remote.getName());
+                        local.setOrder(remote.getOrder());
+                        local.setUserAgent(remote.getUserAgent());
+                        local.setUsername(remote.getUsername());
+                        local.setPassword(remote.getPassword());
+                        local.setClientName(remote.getClientName());
+                        local.setClientVersion(remote.getClientVersion());
+                        local.setDeviceId(remote.getDeviceId());
+                        local.setDeviceName(remote.getDeviceName());
+                        local.setEnableImageProxy(remote.isEnableImageProxy());
+                        embyRepository.save(local);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        remote.setId(null);
+                        embyRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 Emby 失败: {}", remote.getUrl(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add("Emby " + remote.getUrl() + " 导入失败");
+                }
+            }
+
+            log.info("导入 Embys 完成: 新增 {}, 更新 {}, 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 Embys 失败", e);
+            result.setFailed(embys.size());
+            result.getErrors().add("批量导入失败: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SyncResult importFenius(List<Feiniu> fenius, MergeStrategy strategy) {
+        SyncResult result = new SyncResult();
+
+        try {
+            if (strategy == MergeStrategy.OVERWRITE) {
+                feiniuRepository.deleteAll();
+            }
+
+            for (Feiniu remote : fenius) {
+                try {
+                    Optional<Feiniu> existing = feiniuRepository.findByUrl(remote.getUrl());
+
+                    if (existing.isPresent()) {
+                        Feiniu local = existing.get();
+                        local.setName(remote.getName());
+                        local.setOrder(remote.getOrder());
+                        local.setUserAgent(remote.getUserAgent());
+                        local.setUsername(remote.getUsername());
+                        local.setPassword(remote.getPassword());
+                        local.setToken(remote.getToken());
+                        feiniuRepository.save(local);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        remote.setId(null);
+                        feiniuRepository.save(remote);
+                        result.setImported(result.getImported() + 1);
+                    }
+                } catch (Exception e) {
+                    log.error("导入 Feiniu 失败: {}", remote.getUrl(), e);
+                    result.setFailed(result.getFailed() + 1);
+                    result.getErrors().add("Feiniu " + remote.getUrl() + " 导入失败");
+                }
+            }
+
+            log.info("导入 Fenius 完成: 新增 {}, 更新 {}, 失败 {}",
+                    result.getImported(), result.getUpdated(), result.getFailed());
+        } catch (Exception e) {
+            log.error("导入 Fenius 失败", e);
+            result.setFailed(fenius.size());
             result.getErrors().add("批量导入失败: " + e.getMessage());
         }
 

@@ -90,7 +90,18 @@
 
         <el-form-item label="选择模块">
           <el-checkbox-group v-model="syncConfig.modules">
-            <el-checkbox label="sites">外部站点 (Sites)</el-checkbox><br/>
+            <div style="margin-bottom: 8px; font-weight: bold; color: #606266;">站点配置</div>
+            <el-checkbox label="sites">
+              AList 站点 (Sites)
+              <el-tooltip content="云盘聚合站点，不包含 id=1 的默认站点" placement="top">
+                <el-icon style="color: #909399; margin-left: 4px;"><InfoFilled /></el-icon>
+              </el-tooltip>
+            </el-checkbox><br/>
+            <el-checkbox label="embys">Emby 站点 (Embys)</el-checkbox><br/>
+            <el-checkbox label="jellyfins">Jellyfin 站点 (Jellyfins)</el-checkbox><br/>
+            <el-checkbox label="fenius">飞牛影视站点 (Fenius)</el-checkbox><br/>
+
+            <div style="margin: 12px 0 8px 0; font-weight: bold; color: #606266;">网盘与分享</div>
             <el-checkbox label="shares">网盘分享 (Shares)</el-checkbox><br/>
             <el-checkbox label="accounts">
               阿里云账号 (Accounts)
@@ -110,6 +121,8 @@
                 <el-icon style="color: #E6A23C; margin-left: 4px;"><Warning /></el-icon>
               </el-tooltip>
             </el-checkbox><br/>
+
+            <div style="margin: 12px 0 8px 0; font-weight: bold; color: #606266;">订阅与设置</div>
             <el-checkbox label="subscriptions">订阅配置 (Subscriptions)</el-checkbox><br/>
             <el-checkbox label="settings">
               系统设置 (Settings)
@@ -168,7 +181,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Warning } from '@element-plus/icons-vue'
+import { Warning, InfoFilled } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 interface SyncResult {
@@ -194,7 +207,7 @@ const connectionForm = reactive({
 const syncConfig = reactive({
   direction: 'pull',
   strategy: 'merge',
-  modules: ['sites', 'shares', 'accounts', 'driverAccounts', 'pikpakAccounts', 'subscriptions', 'settings']
+  modules: ['sites', 'embys', 'jellyfins', 'fenius', 'shares', 'accounts', 'driverAccounts', 'pikpakAccounts', 'subscriptions', 'settings']
 })
 
 // 远端信息
@@ -335,7 +348,10 @@ const handleVersionMismatch = async () => {
 
 const getModuleName = (module: string) => {
   const nameMap: Record<string, string> = {
-    'sites': '外部站点',
+    'sites': 'AList 站点',
+    'embys': 'Emby 站点',
+    'jellyfins': 'Jellyfin 站点',
+    'fenius': '飞牛影视站点',
     'shares': '网盘分享',
     'accounts': '阿里云账号',
     'driverAccounts': '网盘账号',

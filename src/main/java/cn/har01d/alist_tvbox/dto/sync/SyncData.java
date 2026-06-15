@@ -52,6 +52,18 @@ public class SyncData {
         modules.put("settings", settings);
     }
 
+    public void setJellyfins(List<Jellyfin> jellyfins) {
+        modules.put("jellyfins", jellyfins);
+    }
+
+    public void setEmbys(List<Emby> embys) {
+        modules.put("embys", embys);
+    }
+
+    public void setFenius(List<Feiniu> fenius) {
+        modules.put("fenius", fenius);
+    }
+
     // 类型化的 getter 方法，处理 JSON 反序列化后的类型转换
     @SuppressWarnings("unchecked")
     public List<Site> getSites() {
@@ -103,6 +115,21 @@ public class SyncData {
             return (Map<String, String>) obj;
         }
         return MAPPER.convertValue(obj, Map.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Jellyfin> getJellyfins() {
+        return convertList(modules.get("jellyfins"), Jellyfin.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Emby> getEmbys() {
+        return convertList(modules.get("embys"), Emby.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Feiniu> getFenius() {
+        return convertList(modules.get("fenius"), Feiniu.class);
     }
 
     /**

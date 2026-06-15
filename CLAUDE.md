@@ -142,3 +142,6 @@ npm run lint
 - No cross-layer logic
 - No API break
 - Keep diffs small
+
+## Documents
+- Save all documents to folder docs/

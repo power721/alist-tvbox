@@ -207,7 +207,7 @@ jobs:
           token: ${{ secrets.BOT_TOKEN }}
           message: |
             ${{ github.actor }} created commit:
-            Commit message: ${{ github.event.commits[0].message }}
+            Commit message: ${{ github.event.head_commit.message }}
 
             Repository: ${{ github.repository }}
 
