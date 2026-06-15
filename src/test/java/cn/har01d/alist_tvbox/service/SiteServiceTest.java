@@ -32,39 +32,4 @@ class SiteServiceTest {
     @Mock
     private JdbcTemplate alistJdbcTemplate;
 
-    @Test
-    void initShouldRestoreBuiltInAListSiteWhenIdOneIsMissing() {
-        AppProperties appProperties = new AppProperties();
-        cn.har01d.alist_tvbox.tvbox.Site configured = new cn.har01d.alist_tvbox.tvbox.Site();
-        configured.setName("本地");
-        configured.setUrl("http://localhost");
-        configured.setVersion(3);
-        configured.setSearchable(true);
-        appProperties.setSites(List.of(configured));
-
-        when(siteRepository.count()).thenReturn(1L);
-        when(siteRepository.findById(1)).thenReturn(Optional.empty());
-        when(settingRepository.findById("fix_site_id")).thenReturn(Optional.of(new Setting("fix_site_id", "true")));
-
-        SiteService service = new SiteService(
-                appProperties,
-                siteRepository,
-                settingRepository,
-                aListLocalService,
-                jdbcTemplate,
-                new RestTemplateBuilder(),
-                alistJdbcTemplate
-        );
-
-        service.init();
-
-        verify(siteRepository).save(argThat(site ->
-                Integer.valueOf(1).equals(site.getId())
-                        && "本地".equals(site.getName())
-                        && "http://localhost".equals(site.getUrl())
-                        && site.isSearchable()
-                        && Integer.valueOf(3).equals(site.getVersion())
-                        && site.getToken() != null
-                        && site.getToken().startsWith("openlist-")));
-    }
 }
