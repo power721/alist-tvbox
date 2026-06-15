@@ -24,6 +24,7 @@ public class Message {
     private int id;
     private String mid;
     private Instant time;
+    private Long size;
     @JsonIgnore
     private String content;
     private String channel;
@@ -91,11 +92,12 @@ public class Message {
         this.channel = link.getSource();
     }
 
-    public Message(String type, String url, String note, Instant datetime, List<String> images, Map<String, Object> media) {
+    public Message(String type, String url, Long size, String note, Instant datetime, List<String> images, Map<String, Object> media) {
         this.time = datetime == null ? Instant.now() : datetime;
         this.content = note == null ? "" : note;
         this.link = url;
         this.type = type;
+        this.size = size;
         this.images = images == null ? List.of() : images;
         this.media = media;
         this.cover = this.images.isEmpty() ? null : this.images.getFirst();

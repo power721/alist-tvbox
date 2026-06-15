@@ -2580,7 +2580,7 @@ const loadDevices = () => {
   console.log('📱 开始加载设备列表')
   loadingDevices.value = true
 
-  api.get('/api/devices').then(({data}) => {
+  axios.get('/api/devices').then(({data}) => {
     console.log('✅ 设备加载成功:', data.length, '个')
     devices.value = data
   }).catch((error) => {
@@ -2700,7 +2700,7 @@ const load = () => {
   console.time('load-subscriptions')
   loading.value = true
 
-  api.get('/api/subscriptions').then(({data}) => {
+  axios.get('/api/subscriptions').then(({data}) => {
     console.log('✅ 订阅加载成功:', data.length, '条')
 
     // 检查数据大小

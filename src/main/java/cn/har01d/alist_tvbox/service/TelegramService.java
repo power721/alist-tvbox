@@ -99,6 +99,7 @@ public class TelegramService {
     private final Cache<String, MovieList> douban = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private final Cache<String, String> lastId = Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
     private final Cache<String, MovieDetail> movies = Caffeine.newBuilder().maximumSize(200).expireAfterWrite(Duration.ofHours(2)).build();
+    private final Cache<String, String> videoName = Caffeine.newBuilder().maximumSize(200).expireAfterWrite(Duration.ofHours(2)).build();
     private final List<String> fields = new ArrayList<>(List.of("id", "name", "genre", "description", "language", "country", "directors", "editors", "actors", "cover", "dbScore", "year"));
     private final List<FilterValue> filters = Arrays.asList(
             new FilterValue("原始顺序", ""),
@@ -351,6 +352,22 @@ public class TelegramService {
     }
 
     public MovieList detail(String tid, String ac, String title) {
+        if (tid.startsWith("/v/")) {
+            MovieList list = new MovieList();
+            MovieDetail detail = new MovieDetail();
+            detail.setVod_id(getVid(tid));
+            detail.setVod_name("视频");
+            String name = videoName.getIfPresent(getVid(tid));
+            if (name != null) {
+                detail.setVod_name(name);
+            }
+            detail.setVod_play_from("电报");
+            detail.setVod_play_url(resolveTgSearchMediaUrl(tid));
+            list.getList().add(detail);
+            log.debug("{}", list);
+            return list;
+        }
+
         ShareLink share = new ShareLink();
         share.setLink(tid);
         String path = shareService.add(share);
@@ -528,7 +545,18 @@ public class TelegramService {
         result.setTotal(searchResult.total());
         result.setLimit(safeSize);
         result.setPagecount(Math.max(1, (searchResult.total() + safeSize - 1) / safeSize));
+        if (log.isDebugEnabled()) {
+            log.debug("list result: {}", Utils.toJsonString(result));
+        }
         return result;
+    }
+
+    private String getVid(String link) {
+        int index = link.indexOf("?");
+        if (index != -1) {
+            return link.substring(0, index);
+        }
+        return link;
     }
 
     public CategoryList categoryDouban() {
@@ -976,6 +1004,7 @@ public class TelegramService {
             case "12" -> "光鸭";
             case "magnet" -> "磁力";
             case "ed2k" -> "ED2K";
+            case "video" -> "视频";
             default -> null;
         };
     }
@@ -1026,6 +1055,12 @@ public class TelegramService {
             movieDetail.setVod_time(message.getTime().toString());
         }
         applyMedia(message, movieDetail);
+        if ("video".equals(message.getType())) {
+            videoName.put(getVid(message.getLink()), movieDetail.getVod_name());
+            if (message.getSize() != null) {
+                movieDetail.setVod_remarks(Utils.byte2size(message.getSize()));
+            }
+        }
         return movieDetail;
     }
 
@@ -1245,9 +1280,11 @@ public class TelegramService {
                 });
                 Map<String, Object> media = objectMapper.convertValue(link.path("media"), new TypeReference<>() {
                 });
+                Long size = link.path("size").asLong();
                 messages.add(new Message(
                         type,
                         url,
+                        size,
                         link.path("note").asText(""),
                         parseInstant(link.path("datetime").asText(null)),
                         images,
@@ -1299,6 +1336,7 @@ public class TelegramService {
             case "guangya" -> "12";
             case "magnet" -> "magnet";
             case "ed2k" -> "ed2k";
+            case "video" -> "video";
             default -> null;
         };
     }
@@ -1321,6 +1359,7 @@ public class TelegramService {
             case "12" -> "guangya";
             case "magnet" -> "magnet";
             case "ed2k" -> "ed2k";
+            case "video" -> "video";
             default -> null;
         };
     }
