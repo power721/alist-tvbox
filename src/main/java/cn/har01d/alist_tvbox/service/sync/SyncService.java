@@ -308,8 +308,8 @@ public class SyncService {
                         local.setSearchable(remote.isSearchable());
                         local.setDisabled(remote.isDisabled());
                         local.setXiaoya(remote.isXiaoya());
-                        local.setOrder(remote.getOrder());
-                        local.setVersion(remote.getVersion());
+                        local.setSortOrder(remote.getSortOrder());
+                        local.setStorageVersion(remote.getStorageVersion());
                         siteRepository.save(local);
                         result.setUpdated(result.getUpdated() + 1);
                     } else {
@@ -729,7 +729,7 @@ public class SyncService {
                     if (existing.isPresent()) {
                         Jellyfin local = existing.get();
                         local.setName(remote.getName());
-                        local.setOrder(remote.getOrder());
+                        local.setSortOrder(remote.getSortOrder());
                         local.setUserAgent(remote.getUserAgent());
                         local.setUsername(remote.getUsername());
                         local.setPassword(remote.getPassword());
@@ -778,7 +778,7 @@ public class SyncService {
                     if (existing.isPresent()) {
                         Emby local = existing.get();
                         local.setName(remote.getName());
-                        local.setOrder(remote.getOrder());
+                        local.setSortOrder(remote.getSortOrder());
                         local.setUserAgent(remote.getUserAgent());
                         local.setUsername(remote.getUsername());
                         local.setPassword(remote.getPassword());
@@ -828,7 +828,7 @@ public class SyncService {
                     if (existing.isPresent()) {
                         Feiniu local = existing.get();
                         local.setName(remote.getName());
-                        local.setOrder(remote.getOrder());
+                        local.setSortOrder(remote.getSortOrder());
                         local.setUserAgent(remote.getUserAgent());
                         local.setUsername(remote.getUsername());
                         local.setPassword(remote.getPassword());

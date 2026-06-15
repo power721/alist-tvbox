@@ -257,7 +257,7 @@ public class TelegramService {
         var chat = getChannelByName(channel.getUsername());
         if (chat != null) {
             chat.setEnabled(channel.isEnabled());
-            chat.setOrder(channel.getOrder());
+            chat.setSortOrder(channel.getSortOrder());
             chat.setType(channel.getType());
             validateWebAccess(chat);
             telegramChannelRepository.save(chat);
@@ -266,7 +266,7 @@ public class TelegramService {
     }
 
     public List<TelegramChannel> list() {
-        return telegramChannelRepository.findAll(Sort.by("order"));
+        return telegramChannelRepository.findAll(Sort.by("sortOrder"));
     }
 
     public ObjectNode getTgSearchHealth() {
@@ -402,7 +402,7 @@ public class TelegramService {
 
         List<TelegramChannel> channels;
         if (web || (StringUtils.isBlank(appProperties.getTgSearch()))) {
-            channels = telegramChannelRepository.findByWebAccessTrue(Sort.by("order"));
+            channels = telegramChannelRepository.findByWebAccessTrue(Sort.by("sortOrder"));
         } else {
             channels = list();
         }
@@ -1553,7 +1553,7 @@ public class TelegramService {
     public List<TelegramChannel> updateAll(List<TelegramChannel> channels) {
         int order = 1;
         for (var channel : channels) {
-            channel.setOrder(order++);
+            channel.setSortOrder(order++);
         }
         return telegramChannelRepository.saveAll(channels);
     }
