@@ -113,7 +113,7 @@ public class SiteService {
         jdbcTemplate.update("""
                 INSERT INTO site
                 (id, name, url, password, token, index_file, folder, searchable, disabled, xiaoya)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 site.getId(),
                 site.getName(),
