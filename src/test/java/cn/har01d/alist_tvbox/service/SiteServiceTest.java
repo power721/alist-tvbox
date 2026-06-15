@@ -73,7 +73,9 @@ class SiteServiceTest {
                 eq(""),
                 eq(true),
                 eq(false),
-                eq(false)
+                eq(false),
+                eq(1),
+                eq(3)
         );
         verify(settingRepository).save(any(Setting.class));
         verify(aListLocalService).setSetting(eq("token"), startsWith("openlist-"), eq("string"));

@@ -112,8 +112,8 @@ public class SiteService {
     private void insertDefaultSite(Site site) {
         jdbcTemplate.update("""
                 INSERT INTO site
-                (id, name, url, password, token, index_file, folder, searchable, disabled, xiaoya)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, name, url, password, token, index_file, folder, searchable, disabled, xiaoya, `order`, `version`)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 site.getId(),
                 site.getName(),
@@ -124,7 +124,9 @@ public class SiteService {
                 site.getFolder(),
                 site.isSearchable(),
                 site.isDisabled(),
-                site.isXiaoya());
+                site.isXiaoya(),
+                site.getOrder(),
+                site.getVersion());
     }
 
     private Site createSite(cn.har01d.alist_tvbox.tvbox.Site s, int order) {
