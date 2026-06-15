@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.service.SubscriptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -66,8 +68,32 @@ public class SubscriptionController {
     }
 
     @GetMapping
+    @Transactional(timeout = 10)  // 10秒超时保护
     public List<Subscription> findAll() {
-        return subscriptionService.findAll();
+        long start = System.currentTimeMillis();
+        log.info("📋 开始查询订阅列表");
+
+        try {
+            List<Subscription> result = subscriptionService.findAll();
+            long duration = System.currentTimeMillis() - start;
+
+            log.info("✅ 订阅列表查询成功: {} 条, 耗时 {}ms", result.size(), duration);
+
+            // 检查是否有异常数据
+            for (Subscription sub : result) {
+                if (sub.getOverride() != null && sub.getOverride().length() > 100_000) {
+                    log.warn("⚠️ 发现超大 override 字段: id={}, size={}KB",
+                            sub.getId(), sub.getOverride().length() / 1024);
+                }
+            }
+
+            return result;
+        } catch (Exception e) {
+            long duration = System.currentTimeMillis() - start;
+            log.error("❌ 订阅列表查询失败, 耗时 {}ms", duration, e);
+            // 返回空列表而不是抛出异常，防止页面完全无法加载
+            return Collections.emptyList();
+        }
     }
 
     @DeleteMapping("/{id}")

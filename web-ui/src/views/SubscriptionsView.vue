@@ -878,6 +878,7 @@
 <script setup lang="ts">
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import axios from "axios"
+import api from "@/utils/api"
 import {ElMessage} from "element-plus";
 import {Link, ArrowRight} from "@element-plus/icons-vue";
 import Sortable from "sortablejs";
@@ -2576,9 +2577,14 @@ const handleCancel = () => {
 }
 
 const loadDevices = () => {
+  console.log('📱 开始加载设备列表')
   loadingDevices.value = true
-  axios.get('/api/devices').then(({data}) => {
+
+  api.get('/api/devices').then(({data}) => {
+    console.log('✅ 设备加载成功:', data.length, '个')
     devices.value = data
+  }).catch((error) => {
+    console.error('❌ 设备加载失败:', error)
   }).finally(() => {
     loadingDevices.value = false
   })
@@ -2690,9 +2696,26 @@ const syncCat = () => {
 }
 
 const load = () => {
+  console.log('📋 开始加载订阅列表')
+  console.time('load-subscriptions')
   loading.value = true
-  axios.get('/api/subscriptions').then(({data}) => {
+
+  api.get('/api/subscriptions').then(({data}) => {
+    console.log('✅ 订阅加载成功:', data.length, '条')
+
+    // 检查数据大小
+    const dataSize = JSON.stringify(data).length
+    console.log('📊 数据大小:', (dataSize / 1024).toFixed(2), 'KB')
+
+    if (dataSize > 1024 * 1024) {
+      console.error('⚠️ 数据过大！超过 1MB')
+      ElMessage.warning('订阅数据较大，加载可能较慢')
+    }
+
     subscriptions.value = data
+    console.timeEnd('load-subscriptions')
+  }).catch((error) => {
+    console.error('❌ 订阅加载失败:', error)
   }).finally(() => {
     loading.value = false
   })
