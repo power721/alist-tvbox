@@ -100,8 +100,9 @@ public class SiteService {
         }
 
         Site site = createSite(appProperties.getSites().getFirst(), 1);
+        site = updateSite(site);
         site.setId(1);
-        updateSite(site);
+        siteRepository.save(site);
         log.warn("restore default site id 1: {}", site);
     }
 
@@ -174,7 +175,7 @@ public class SiteService {
         }
     }
 
-    private void updateSite(Site site) {
+    private Site updateSite(Site site) {
         try {
             if (StringUtils.isBlank(site.getToken())) {
                 aListToken = generateToken();
@@ -187,7 +188,7 @@ public class SiteService {
         } catch (Exception e) {
             log.warn("", e);
         }
-        siteRepository.save(site);
+        return siteRepository.save(site);
     }
 
     public String generateToken() {
