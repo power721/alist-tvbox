@@ -1,5 +1,5 @@
 <template>
-  <div class="ui left aligned container">
+  <div class="ui left aligned container cards-grid">
     <el-card class="box-card">
       <template #header>
         <div class="card-header">
@@ -382,7 +382,20 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  padding: 20px;
+}
+
 .box-card {
-  width: 500px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
