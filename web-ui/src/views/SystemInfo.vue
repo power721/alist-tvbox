@@ -167,7 +167,7 @@
             v-for="(count, state) in threadsInfo.threadStates"
             :key="state"
             style="margin-right: 8px; margin-bottom: 8px;"
-            :type="state === 'BLOCKED' || state === 'WAITING' ? 'warning' : ''">
+            :type="String(state) === 'BLOCKED' || String(state) === 'WAITING' ? 'warning' : ''">
             {{ state }}: {{ count }}
           </el-tag>
         </div>
@@ -339,54 +339,8 @@ const downloadDiagnostics = async () => {
     console.error('下载诊断信息失败:', error)
   }
 }
-const load = () => {
-  axios.get('/api/system').then(({data}) => {
-    info.value = data
-  })
-}
-
 
 const KB = 1024;
-const MB = 1024 * KB;
-const GB = 1024 * MB;
-const TB = 1024 * GB;
-const PB = 1024 * TB;
-const EB = 1024 * PB;
-const ZB = 1024 * EB;
-
-const number2string = (num: number, fractionDigits = 2) => {
-  let str = num.toFixed(fractionDigits);
-  while (str.endsWith('0')) {
-    str = str.substring(0, str.length - 1);
-  }
-  if (str.endsWith('.')) {
-    str = str.substring(0, str.length - 1);
-  }
-  return str;
-}
-const byte2string = (bytes: number, unit = '') => {
-  if (bytes >= EB || unit === 'EB') {
-    return number2string(bytes / EB) + ' EB';
-  } else if (bytes >= PB || unit === 'PB') {
-    return number2string(bytes / PB) + ' PB';
-  } else if (bytes >= TB || unit === 'TB') {
-    return number2string(bytes / TB) + ' TB';
-  } else if (bytes >= GB || unit === 'GB') {
-    return number2string(bytes / GB) + ' GB';
-  } else if (bytes >= MB || unit === 'MB') {
-    return number2string(bytes / MB) + ' MB';
-  } else if (bytes >= KB || unit === 'KB') {
-    return number2string(bytes / KB) + ' KB';
-  } else {
-    return bytes + ' bytes';
-  }
-}
-
-onMounted(() => {
-  load()
-  // 自动加载健康指标
-  loadHealthMetrics()
-})
 const MB = 1024 * KB;
 const GB = 1024 * MB;
 const TB = 1024 * GB;

@@ -1,4 +1,5 @@
-import axios, { AxiosInstance } from 'axios'
+import axios from 'axios'
+import type { AxiosInstance } from 'axios'
 import { ElMessage } from 'element-plus'
 
 // 扩展 axios 配置类型
