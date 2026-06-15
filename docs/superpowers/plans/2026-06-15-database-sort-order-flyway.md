@@ -17,12 +17,12 @@
 - Modify `src/main/resources/application-mysql.yaml`: keep MySQL dialect but do not re-enable `ddl-auto=update`.
 - Move existing `src/main/resources/db/migration/*.sql` to `src/main/resources/db/migration-legacy/`.
 - Create `src/main/resources/db/migration/current/V1__Create_current_schema.sql`: fresh schema baseline with `sort_order` and `storage_version`.
-- Create `src/main/java/db/migration/V2__Normalize_reserved_columns.java`: compatibility migration for existing Hibernate-created databases.
+- Create `src/main/java/db/migration/current/V2__Normalize_reserved_columns.java`: compatibility migration for existing Hibernate-created databases. The Java package must match the configured Flyway location `classpath:db/migration/current`.
 - Modify entities: `Site`, `Navigation`, `Emby`, `Jellyfin`, `TelegramChannel`, `Feiniu`.
 - Modify DTOs: `SiteDto`, `NavigationDto` only where needed to preserve JSON field names.
 - Modify services: `SiteService`, `AListService`, `ShareService`, `Storage`, `AList`, `NavigationService`, `TelegramService`, `RemoteSearchService`, `EmbyService`, `JellyfinService`, `FeiniuService`, `SyncService`.
 - Modify tests: `SiteServiceTest`.
-- Create tests: `src/test/java/cn/har01d/alist_tvbox/entity/ReservedColumnMappingTest.java`, `src/test/java/cn/har01d/alist_tvbox/dto/SiteDtoJsonTest.java`.
+- Create tests: `src/test/java/cn/har01d/alist_tvbox/entity/ReservedColumnMappingTest.java`, `src/test/java/cn/har01d/alist_tvbox/dto/SiteDtoJsonTest.java`, `src/test/java/cn/har01d/alist_tvbox/entity/SchemaValidationTest.java`.
 
 ## Task 1: Entity And DTO Naming Tests
 
@@ -465,6 +465,7 @@ git commit -m "fix: write safe site column names"
 - Modify: `src/main/resources/application-mysql.yaml`
 - Move: `src/main/resources/db/migration/*.sql` to `src/main/resources/db/migration-legacy/`
 - Create: `src/main/resources/db/migration/current/V1__Create_current_schema.sql`
+- Create: `src/test/java/cn/har01d/alist_tvbox/entity/SchemaValidationTest.java`
 
 - [ ] **Step 1: Move legacy migration files**
 
@@ -577,32 +578,68 @@ for `navigation`, `emby`, `jellyfin`, `telegram_channel`, and `feiniu`.
 
 - [ ] **Step 5: Run a fresh H2 startup test**
 
+Create `src/test/java/cn/har01d/alist_tvbox/entity/SchemaValidationTest.java`:
+
+```java
+package cn.har01d.alist_tvbox.entity;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.test.context.TestPropertySource;
+
+@DataJpaTest
+@TestPropertySource(properties = {
+        "spring.datasource.url=jdbc:h2:mem:schema-validation;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.jpa.hibernate.ddl-auto=validate",
+        "spring.flyway.enabled=true",
+        "spring.flyway.locations=classpath:db/migration/current"
+})
+class SchemaValidationTest {
+
+    @Test
+    void flywayBaselineSatisfiesJpaValidation() {
+    }
+}
+```
+
 Run:
 
 ```bash
-mvn -Dtest=ReservedColumnMappingTest,SiteDtoJsonTest,SiteServiceTest test
+mvn -Dtest=SchemaValidationTest test
+```
+
+Expected: Spring Data JPA test context starts, Flyway applies the current schema, and Hibernate validation succeeds.
+
+- [ ] **Step 6: Run focused tests**
+
+Run:
+
+```bash
+mvn -Dtest=ReservedColumnMappingTest,SiteDtoJsonTest,SiteServiceTest,SchemaValidationTest test
 ```
 
 Expected: tests pass and Flyway does not reject duplicate migrations.
 
-- [ ] **Step 6: Commit Flyway location and baseline**
+- [ ] **Step 7: Commit Flyway location and baseline**
 
 ```bash
-git add pom.xml src/main/resources/application.yaml src/main/resources/application-mysql.yaml src/main/resources/db
+git add pom.xml src/main/resources/application.yaml src/main/resources/application-mysql.yaml src/main/resources/db src/test/java/cn/har01d/alist_tvbox/entity/SchemaValidationTest.java
 git commit -m "feat: add clean flyway schema baseline"
 ```
 
 ## Task 6: Existing Database Compatibility Migration
 
 **Files:**
-- Create: `src/main/java/db/migration/V2__Normalize_reserved_columns.java`
+- Create: `src/main/java/db/migration/current/V2__Normalize_reserved_columns.java`
 
 - [ ] **Step 1: Create Java migration**
 
-Create `src/main/java/db/migration/V2__Normalize_reserved_columns.java`:
+Create `src/main/java/db/migration/current/V2__Normalize_reserved_columns.java`:
 
 ```java
-package db.migration;
+package db.migration.current;
 
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
@@ -612,7 +649,6 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Locale;
 
 public class V2__Normalize_reserved_columns extends BaseJavaMigration {
 
@@ -629,75 +665,70 @@ public class V2__Normalize_reserved_columns extends BaseJavaMigration {
     }
 
     private void migrateSortOrder(Connection connection, String table) throws SQLException {
-        if (!tableExists(connection, table)) {
+        String actualTable = findTable(connection, table);
+        if (actualTable == null) {
             return;
         }
-        if (!columnExists(connection, table, "sort_order")) {
-            execute(connection, "ALTER TABLE " + quote(connection, table) + " ADD COLUMN " + quote(connection, "sort_order") + " INTEGER DEFAULT 0");
+        String sortOrder = findColumn(connection, actualTable, "sort_order");
+        if (sortOrder == null) {
+            execute(connection, "ALTER TABLE " + quote(connection, actualTable) + " ADD COLUMN " + quote(connection, "sort_order") + " INTEGER DEFAULT 0");
+            sortOrder = "sort_order";
         }
-        if (columnExists(connection, table, "order")) {
-            execute(connection, "UPDATE " + quote(connection, table)
-                    + " SET " + quote(connection, "sort_order") + " = " + quote(connection, "order")
-                    + " WHERE " + quote(connection, "sort_order") + " IS NULL OR " + quote(connection, "sort_order") + " = 0");
-            execute(connection, "ALTER TABLE " + quote(connection, table) + " DROP COLUMN " + quote(connection, "order"));
+        String oldOrder = findColumn(connection, actualTable, "order");
+        if (oldOrder != null) {
+            execute(connection, "UPDATE " + quote(connection, actualTable)
+                    + " SET " + quote(connection, sortOrder) + " = " + quote(connection, oldOrder)
+                    + " WHERE " + quote(connection, sortOrder) + " IS NULL OR " + quote(connection, sortOrder) + " = 0");
+            execute(connection, "ALTER TABLE " + quote(connection, actualTable) + " DROP COLUMN " + quote(connection, oldOrder));
         }
     }
 
     private void migrateSiteVersion(Connection connection) throws SQLException {
-        String table = "site";
-        if (!tableExists(connection, table)) {
+        String actualTable = findTable(connection, "site");
+        if (actualTable == null) {
             return;
         }
-        if (!columnExists(connection, table, "storage_version")) {
-            execute(connection, "ALTER TABLE " + quote(connection, table) + " ADD COLUMN " + quote(connection, "storage_version") + " INTEGER");
+        String storageVersion = findColumn(connection, actualTable, "storage_version");
+        if (storageVersion == null) {
+            execute(connection, "ALTER TABLE " + quote(connection, actualTable) + " ADD COLUMN " + quote(connection, "storage_version") + " INTEGER");
+            storageVersion = "storage_version";
         }
-        if (columnExists(connection, table, "version")) {
-            execute(connection, "UPDATE " + quote(connection, table)
-                    + " SET " + quote(connection, "storage_version") + " = " + quote(connection, "version")
-                    + " WHERE " + quote(connection, "storage_version") + " IS NULL");
-            execute(connection, "ALTER TABLE " + quote(connection, table) + " DROP COLUMN " + quote(connection, "version"));
+        String oldVersion = findColumn(connection, actualTable, "version");
+        if (oldVersion != null) {
+            execute(connection, "UPDATE " + quote(connection, actualTable)
+                    + " SET " + quote(connection, storageVersion) + " = " + quote(connection, oldVersion)
+                    + " WHERE " + quote(connection, storageVersion) + " IS NULL");
+            execute(connection, "ALTER TABLE " + quote(connection, actualTable) + " DROP COLUMN " + quote(connection, oldVersion));
         }
     }
 
-    private boolean tableExists(Connection connection, String table) throws SQLException {
+    private String findTable(Connection connection, String table) throws SQLException {
         DatabaseMetaData metaData = connection.getMetaData();
-        try (ResultSet resultSet = metaData.getTables(connection.getCatalog(), schemaPattern(connection), tablePattern(connection, table), null)) {
+        try (ResultSet resultSet = metaData.getTables(connection.getCatalog(), schemaPattern(connection), null, null)) {
             while (resultSet.next()) {
                 if (resultSet.getString("TABLE_NAME").equalsIgnoreCase(table)) {
-                    return true;
+                    return resultSet.getString("TABLE_NAME");
                 }
             }
         }
-        return false;
+        return null;
     }
 
-    private boolean columnExists(Connection connection, String table, String column) throws SQLException {
+    private String findColumn(Connection connection, String table, String column) throws SQLException {
         DatabaseMetaData metaData = connection.getMetaData();
-        try (ResultSet resultSet = metaData.getColumns(connection.getCatalog(), schemaPattern(connection), tablePattern(connection, table), columnPattern(connection, column))) {
+        try (ResultSet resultSet = metaData.getColumns(connection.getCatalog(), schemaPattern(connection), table, null)) {
             while (resultSet.next()) {
                 if (resultSet.getString("COLUMN_NAME").equalsIgnoreCase(column)) {
-                    return true;
+                    return resultSet.getString("COLUMN_NAME");
                 }
             }
         }
-        return false;
+        return null;
     }
 
     private String schemaPattern(Connection connection) throws SQLException {
         String schema = connection.getSchema();
         return schema == null || schema.isBlank() ? null : schema;
-    }
-
-    private String tablePattern(Connection connection, String table) throws SQLException {
-        return storesUpperCaseIdentifiers(connection) ? table.toUpperCase(Locale.ROOT) : table;
-    }
-
-    private String columnPattern(Connection connection, String column) throws SQLException {
-        return storesUpperCaseIdentifiers(connection) ? column.toUpperCase(Locale.ROOT) : column;
-    }
-
-    private boolean storesUpperCaseIdentifiers(Connection connection) throws SQLException {
-        return connection.getMetaData().storesUpperCaseIdentifiers();
     }
 
     private String quote(Connection connection, String identifier) throws SQLException {
@@ -729,7 +760,7 @@ Expected: passes.
 - [ ] **Step 3: Commit compatibility migration**
 
 ```bash
-git add src/main/java/db/migration/V2__Normalize_reserved_columns.java
+git add src/main/java/db/migration/current/V2__Normalize_reserved_columns.java
 git commit -m "feat: migrate reserved database columns"
 ```
 
