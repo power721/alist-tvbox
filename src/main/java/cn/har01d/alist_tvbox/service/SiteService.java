@@ -101,8 +101,32 @@ public class SiteService {
 
         Site site = createSite(appProperties.getSites().getFirst(), 1);
         site.setId(1);
-        updateSite(site);
+        aListToken = generateToken();
+        site.setToken(aListToken);
+        insertDefaultSite(site);
+        settingRepository.save(new Setting("alist_token", aListToken));
+        aListLocalService.setSetting("token", aListToken, "string");
         log.warn("restore default site id 1: {}", site);
+    }
+
+    private void insertDefaultSite(Site site) {
+        jdbcTemplate.update("""
+                INSERT INTO site
+                (id, name, url, password, token, index_file, folder, searchable, disabled, xiaoya, `order`, `version`)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                site.getId(),
+                site.getName(),
+                site.getUrl(),
+                site.getPassword(),
+                site.getToken(),
+                site.getIndexFile(),
+                site.getFolder(),
+                site.isSearchable(),
+                site.isDisabled(),
+                site.isXiaoya(),
+                site.getOrder(),
+                site.getVersion());
     }
 
     private Site createSite(cn.har01d.alist_tvbox.tvbox.Site s, int order) {
