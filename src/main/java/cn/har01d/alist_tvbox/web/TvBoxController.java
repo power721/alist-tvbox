@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -139,8 +141,22 @@ public class TvBoxController {
     }
 
     @GetMapping("/api/devices")
+    @Transactional(timeout = 5)  // 5秒超时保护
     public List<Device> devices() {
-        return deviceRepository.findAll();
+        long start = System.currentTimeMillis();
+        log.info("📱 开始查询设备列表");
+
+        try {
+            List<Device> result = deviceRepository.findAll();
+            long duration = System.currentTimeMillis() - start;
+
+            log.info("✅ 设备列表查询成功: {} 个, 耗时 {}ms", result.size(), duration);
+            return result;
+        } catch (Exception e) {
+            long duration = System.currentTimeMillis() - start;
+            log.error("❌ 设备列表查询失败, 耗时 {}ms", duration, e);
+            return Collections.emptyList();
+        }
     }
 
     @PostMapping("/api/devices")
