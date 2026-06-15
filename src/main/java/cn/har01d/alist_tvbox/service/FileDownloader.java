@@ -312,10 +312,10 @@ public class FileDownloader {
 
         if (configuredProxies.isEmpty()) {
             // 如果没有配置，使用默认代理列表作为 fallback
-            log.debug("未配置 GitHub 代理，使用默认列表");
-            for (String proxy : GITHUB_PROXY) {
-                urls.add(proxy + url);
-            }
+            log.debug("未配置 GitHub 代理");
+//            for (String proxy : GITHUB_PROXY) {
+//                urls.add(proxy + url);
+//            }
         } else {
             // 使用配置的代理列表
             log.debug("使用配置的 {} 个 GitHub 代理", configuredProxies.size());

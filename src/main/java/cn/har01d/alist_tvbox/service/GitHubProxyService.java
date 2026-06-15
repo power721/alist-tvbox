@@ -92,6 +92,9 @@ public class GitHubProxyService {
         nodes.add(new GitHubProxyNode("备用节点", "https://ghproxy.monkeyray.net/", "ghproxy.monkeyray.net", "search", null, null, null, null));
         nodes.add(new GitHubProxyNode("备用节点", "https://gh.noki.icu/", "gh.noki.icu", "search", null, null, null, null));
         nodes.add(new GitHubProxyNode("备用节点", "https://cdn.gh-proxy.com/", "cdn.gh-proxy.com", "donate", null, null, null, null));
+        nodes.add(new GitHubProxyNode("备用节点", "https://cors.zme.ink/", "cors.zme.ink", "donate", null, null, null, null));
+        nodes.add(new GitHubProxyNode("备用节点", "https://gh.ddlc.top/", "gh.ddlc.top", "donate", null, null, null, null));
+        nodes.add(new GitHubProxyNode("备用节点", "https://ghproxy.net/", "ghproxy.net", "donate", null, null, null, null));
 
         return nodes;
     }
