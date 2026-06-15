@@ -112,7 +112,7 @@ public class SiteService {
     private void insertDefaultSite(Site site) {
         jdbcTemplate.update("""
                 INSERT INTO site
-                (id, name, url, password, token, index_file, folder, searchable, disabled, xiaoya, `order`, `version`)
+                (id, name, url, password, token, index_file, folder, searchable, disabled, xiaoya, \"order\", \"version\")
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 site.getId(),
