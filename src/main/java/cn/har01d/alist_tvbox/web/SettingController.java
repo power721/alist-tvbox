@@ -78,11 +78,76 @@ public class SettingController {
     }
 
     /**
-     * 并发测速多个 GitHub 代理节点（5线程）
+     * 并发测速多个 GitHub 代理节点（5线程）- 同步版本
      */
     @PostMapping("/github-proxy/benchmark")
     public List<GitHubProxyNode> benchmarkGitHubProxyNodes(@RequestBody GitHubProxyBenchmarkRequest request) {
         return gitHubProxyService.benchmarkNodes(request.getUrls());
+    }
+
+    /**
+     * 启动异步测速任务（实时更新）
+     */
+    @PostMapping("/github-proxy/benchmark/start")
+    public Map<String, Object> startBenchmark(@RequestBody GitHubProxyBenchmarkRequest request) {
+        gitHubProxyService.benchmarkNodesAsync(request.getUrls());
+        return Map.of("success", true, "message", "测速任务已启动");
+    }
+
+    /**
+     * 获取测速结果（实时更新）
+     */
+    @GetMapping("/github-proxy/benchmark/results")
+    public Map<String, Object> getBenchmarkResults() {
+        return Map.of(
+            "results", gitHubProxyService.getBenchmarkResults(),
+            "isRunning", gitHubProxyService.isBenchmarking()
+        );
+    }
+
+    /**
+     * 获取已配置的 GitHub 代理列表
+     */
+    @GetMapping("/github-proxy/list")
+    public List<String> getGitHubProxyList() {
+        return gitHubProxyService.readProxyListFromFile();
+    }
+
+    /**
+     * 保存 GitHub 代理列表（最多 5 个）
+     */
+    @PostMapping("/github-proxy/list")
+    public Map<String, Object> saveGitHubProxyList(@RequestBody List<String> proxyList) throws IOException {
+        gitHubProxyService.saveProxyListToFile(proxyList);
+        return Map.of("success", true, "count", Math.min(proxyList.size(), 5));
+    }
+
+    /**
+     * 获取用户自定义的 GitHub 代理节点列表
+     */
+    @GetMapping("/github-proxy/custom-nodes")
+    public List<String> getCustomNodes() {
+        Setting setting = service.get("github_custom_nodes");
+        if (setting == null || setting.getValue() == null || setting.getValue().isEmpty()) {
+            return List.of();
+        }
+        return List.of(setting.getValue().split("\n"));
+    }
+
+    /**
+     * 保存用户自定义的 GitHub 代理节点列表
+     */
+    @PostMapping("/github-proxy/custom-nodes")
+    public Map<String, Object> saveCustomNodes(@RequestBody List<String> nodes) {
+        String value = String.join("\n", nodes);
+        Setting setting = service.get("github_custom_nodes");
+        if (setting == null) {
+            setting = new Setting();
+            setting.setName("github_custom_nodes");
+        }
+        setting.setValue(value);
+        service.update(setting);
+        return Map.of("success", true, "count", nodes.size());
     }
 
 }

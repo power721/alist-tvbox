@@ -1,4 +1,4 @@
-export const padZero = (number: number, padLength: number = 2) => {
+export const padZero = (number: number, padLength = 2) => {
   return number.toString().padStart(padLength, '0');
 }
 

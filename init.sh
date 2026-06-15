@@ -1,6 +1,35 @@
 #!/bin/sh
 
-gh_proxy=$(head -n 1 "/data/github_proxy.txt" 2>/dev/null || echo "")
+# 通用下载函数，支持多代理 fallback
+download_with_proxy() {
+  url=$1
+  output=$2
+
+  # 读取多代理列表，逐个尝试（最多 5 个）
+  if [ -f "/data/github_proxy.txt" ]; then
+    proxies=$(head -n 5 "/data/github_proxy.txt" 2>/dev/null | grep -v '^$')
+  else
+    proxies=""
+  fi
+
+  # 尝试使用代理下载
+  if [ -n "$proxies" ]; then
+    echo "$proxies" | while IFS= read -r proxy; do
+      if [ -n "$proxy" ]; then
+        if wget -T 30 -t 1 "${proxy}${url}" -O "${output}" 2>/dev/null; then
+          exit 0
+        fi
+      fi
+    done
+    # 检查是否下载成功
+    [ -f "$output" ] && [ -s "$output" ] && return 0
+  fi
+
+  # 所有代理失败，尝试直连
+  wget -T 30 -t 2 "${url}" -O "${output}"
+  return $?
+}
+
 init_version=$(head -n 1 "/opt/alist/data/.init" 2>/dev/null || echo "")
 
 update_movie() {
@@ -57,7 +86,7 @@ init() {
 
   sqlite3 /opt/alist/data/data.db ".read /update.sql"
 
-  wget -T 30 -t 2 ${gh_proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip -O tvbox.zip || \
+  download_with_proxy https://raw.githubusercontent.com/xiaoyaliu00/data/main/tvbox.zip tvbox.zip || \
   wget -t 3 https://d.har01d.cn/tvbox.zip -O tvbox.zip || \
   cp /tvbox.zip ./
 
@@ -139,10 +168,10 @@ fi
 
 cd /tmp/
 
-wget -T 30 -t 2 ${gh_proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt -O version.txt || \
+download_with_proxy https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt version.txt || \
 wget -t 3 https://d.har01d.cn/version.txt -O version.txt
 
-wget -T 30 -t 2 ${gh_proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/update.zip -O update.zip || \
+download_with_proxy https://raw.githubusercontent.com/xiaoyaliu00/data/main/update.zip update.zip || \
 wget -t 3 https://d.har01d.cn/update.zip -O update.zip
 
 if [ ! -f update.zip ]; then
@@ -188,7 +217,7 @@ else
   if [ "$remote" = "$local" ]; then
     echo "$(date) current index file version is updated, no need to upgrade"
   elif [ "$remote" = "$latest" ]; then
-    wget -T 30 -t 2 ${gh_proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip -O index.zip || \
+    download_with_proxy https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip index.zip || \
     wget -t 3 https://d.har01d.cn/index.zip -O index.zip
 
     if [ ! -f index.zip ]; then

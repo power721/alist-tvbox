@@ -317,7 +317,7 @@
           <el-input v-model="pluginForm.url" style="width: 460px" placeholder="https://example.com/plugin.txt"/>
         </el-form-item>
         <el-form-item label="名称">
-          <el-input v-model="pluginForm.name" style="width: 180px" placeholder="留空用文件名"/>
+          <el-input v-model="pluginForm.name" style="width: 180px" placeholder="留空用默认"/>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="addPlugin">添加插件</el-button>
@@ -347,33 +347,6 @@
             <el-option v-for="item in pluginRunModeOptions" :key="item.value" :label="item.label" :value="item.value"/>
           </el-select>
         </el-form-item>
-        <el-form-item label="GitHub代理">
-          <el-select
-            v-model="pluginSettingsForm.githubProxy"
-            filterable
-            allow-create
-            default-first-option
-            placeholder="选择或输入自定义代理"
-            style="width: 460px"
-          >
-            <el-option
-              v-for="node in githubProxyNodes"
-              :key="node.url"
-              :label="formatNodeLabel(node)"
-              :value="node.url"
-            >
-              <span style="float: left">{{ node.label }}</span>
-              <span v-if="benchmarkResults.get(node.url)" style="float: right; color: #8492a6; font-size: 13px">
-                {{ formatBenchmarkResult(benchmarkResults.get(node.url)) }}
-              </span>
-            </el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button @click="benchmarkGitHubProxy" :loading="benchmarking">
-            {{ benchmarking ? '测速中...' : '测速' }}
-          </el-button>
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="savePluginSettings">保存设置</el-button>
         </el-form-item>
@@ -383,6 +356,161 @@
           </el-button>
         </el-form-item>
       </el-form>
+
+      <!-- GitHub 代理列表管理 -->
+      <el-collapse v-model="githubProxyCollapseActive" style="margin-top: 20px">
+        <el-collapse-item name="github-proxy">
+          <template #title>
+            <div style="display: flex; align-items: center; width: 100%;">
+              <el-icon style="margin-right: 8px; transition: transform 0.3s;" :style="{ transform: githubProxyCollapseActive.includes('github-proxy') ? 'rotate(90deg)' : 'rotate(0deg)' }">
+                <ArrowRight />
+              </el-icon>
+              <span style="font-weight: 500">GitHub 代理配置（多个，自动 fallback，最多 5 个）</span>
+            </div>
+          </template>
+
+          <div style="margin-bottom: 10px">
+            <el-tooltip content="从预设节点中选择或输入自定义代理地址" placement="top">
+              <el-button @click="showAddProxyDialog">添加代理</el-button>
+            </el-tooltip>
+
+            <el-tooltip content="测速当前列表中的所有代理节点" placement="top">
+              <el-button @click="benchmarkAllProxies" :loading="benchmarking">
+                {{ benchmarking ? '测速中...' : '批量测速' }}
+              </el-button>
+            </el-tooltip>
+
+            <el-tooltip content="测速所有预设节点并自动选择最快的 5 个" placement="top">
+              <el-button type="success" @click="autoSelectFastest" :loading="benchmarking">
+                智能选择
+              </el-button>
+            </el-tooltip>
+
+            <el-tooltip content="保存代理列表到 /data/github_proxy.txt" placement="top">
+              <el-button type="primary" @click="saveGitHubProxyList">保存</el-button>
+            </el-tooltip>
+          </div>
+
+          <el-table :data="githubProxyList" border style="width: 100%; margin-bottom: 20px">
+            <el-table-column label="优先级" width="80" align="center">
+              <template #default="scope">
+                {{ scope.$index + 1 }}
+              </template>
+            </el-table-column>
+            <el-table-column label="代理地址" min-width="300">
+              <template #default="scope">
+                <span v-if="!scope.row">无代理（直连）</span>
+                <span v-else>{{ scope.row }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="测速结果" width="120">
+              <template #default="scope">
+                <span v-if="benchmarkResults.get(scope.row)">
+                  {{ formatBenchmarkResult(benchmarkResults.get(scope.row)) }}
+                </span>
+                <span v-else style="color: #909399">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="180" align="center">
+              <template #default="scope">
+                <el-tooltip content="提高优先级" placement="top">
+                  <el-button link type="primary" @click="moveProxyUp(scope.$index)" :disabled="scope.$index === 0">
+                    上移
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="降低优先级" placement="top">
+                  <el-button link type="primary" @click="moveProxyDown(scope.$index)" :disabled="scope.$index === githubProxyList.length - 1">
+                    下移
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="从列表中移除" placement="top">
+                  <el-button link type="danger" @click="removeProxy(scope.$index)">
+                    删除
+                  </el-button>
+                </el-tooltip>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-collapse-item>
+      </el-collapse>
+
+      <!-- 智能选择对话框 -->
+      <el-dialog
+        v-model="smartSelectDialogVisible"
+        title="智能选择 GitHub 代理"
+        width="900px"
+        :close-on-click-modal="false">
+        <div style="margin-bottom: 16px;">
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon>
+            <template #title>
+              <span v-if="benchmarking">正在测速所有预设节点，请稍候...</span>
+              <span v-else>测速完成，已自动选择最快的 5 个节点（可手动调整）</span>
+            </template>
+          </el-alert>
+        </div>
+
+        <el-table
+          ref="proxyTableRef"
+          :data="sortedProxyNodes"
+          border
+          max-height="500"
+          style="width: 100%"
+          @selection-change="handleProxySelectionChange"
+          :row-key="(row: any) => row.url">
+          <el-table-column
+            type="selection"
+            width="55"
+            :selectable="(row: any) => !benchmarking"
+            reserve-selection />
+          <el-table-column label="排名" width="80" align="center">
+            <template #default="scope">
+              <span v-if="getNodeRank(scope.row.url) > 0" style="color: #67C23A; font-weight: bold; font-size: 16px;">
+                #{{ getNodeRank(scope.row.url) }}
+              </span>
+              <span v-else style="color: #909399">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="节点" min-width="150">
+            <template #default="scope">
+              {{ scope.row.label || scope.row.host || '直连' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="地址" min-width="250" show-overflow-tooltip>
+            <template #default="scope">
+              <span v-if="!scope.row.url">无代理（直连）</span>
+              <span v-else>{{ scope.row.url }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="测速结果" width="120" align="center">
+            <template #default="scope">
+              <span v-if="benchmarkResults.get(scope.row.url)">
+                {{ formatBenchmarkResult(benchmarkResults.get(scope.row.url)) }}
+              </span>
+              <span v-else style="color: #909399">-</span>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <template #footer>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #909399; font-size: 14px;">
+              已选择 {{ selectedProxies.length }} / 5 个节点
+            </span>
+            <div>
+              <el-button @click="smartSelectDialogVisible = false">取消</el-button>
+              <el-button
+                type="primary"
+                @click="confirmProxySelection"
+                :disabled="selectedProxies.length === 0 || benchmarking">
+                确认选择
+              </el-button>
+            </div>
+          </div>
+        </template>
+      </el-dialog>
 
       <el-input v-model="sourceFilter" placeholder="搜索插件名称或地址" clearable style="width: 280px; margin-bottom: 10px"/>
 
@@ -714,6 +842,36 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="addProxyDialogVisible" title="添加自定义 GitHub 代理" width="700px">
+      <el-form label-width="120px">
+        <el-form-item label="代理地址">
+          <el-input
+            v-model="customProxyUrls"
+            type="textarea"
+            :rows="8"
+            placeholder="每行一个代理地址，例如：&#10;https://gh.llkk.cc/&#10;https://github.starrlzy.cn/&#10;gh.tryxd.cn&#10;&#10;支持自动补全协议和斜杠"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-alert type="info" :closable="false">
+            <template #title>
+              <span style="font-size: 13px;">
+                • 每行一个代理地址<br/>
+                • 自动添加 https:// 协议（如果缺少）<br/>
+                • 自动添加末尾斜杠（如果缺少）<br/>
+                • 空行和重复地址会自动过滤
+              </span>
+            </template>
+          </el-alert>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addProxyDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="addCustomProxiesToList">添加并测速</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -721,7 +879,7 @@
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import axios from "axios"
 import {ElMessage} from "element-plus";
-import {Link} from "@element-plus/icons-vue";
+import {Link, ArrowRight} from "@element-plus/icons-vue";
 import Sortable from "sortablejs";
 import type {Device} from "@/model/Device";
 import PluginFilterConfigFieldEditor from "@/components/PluginFilterConfigFieldEditor.vue";
@@ -917,6 +1075,50 @@ const filteredManagedSources = computed(() => {
     (item.url && item.url.toLowerCase().includes(keyword))
   )
 })
+
+const isBenchmarkPending = (result: any) => result?.success === null || result?.pending
+
+// 计算按测速结果排序的代理节点列表
+const getSortedProxyNodes = () => {
+  const nodes = [...githubProxyNodes.value]
+
+  return nodes.sort((a, b) => {
+    const resultA = benchmarkResults.value.get(a.url)
+    const resultB = benchmarkResults.value.get(b.url)
+    const pendingA = isBenchmarkPending(resultA)
+    const pendingB = isBenchmarkPending(resultB)
+
+    // 都没有结果，保持原顺序
+    if (!resultA && !resultB) return 0
+    if (!resultA) return 1
+    if (!resultB) return -1
+
+    // 失败的排在最后
+    if (!resultA.success && !pendingA && resultB.success) return 1
+    if (resultA.success && !resultB.success && !pendingB) return -1
+
+    // 测速中的排在中间（成功之后，失败之前）
+    if (pendingA && !pendingB) {
+      return resultB.success ? 1 : -1  // 如果B成功，A排后面；如果B失败，A排前面
+    }
+    if (!pendingA && pendingB) {
+      return resultA.success ? -1 : 1  // 如果A成功，A排前面；如果A失败，A排后面
+    }
+    if (pendingA && pendingB) return 0
+
+    // 都成功，按延迟排序
+    if (resultA.success && resultB.success) {
+      return (resultA.latency || 0) - (resultB.latency || 0)
+    }
+
+    // 都失败，保持原顺序
+    return 0
+  })
+}
+
+// 排序后的代理节点列表（按测速结果排序）
+const sortedProxyNodes = computed(() => getSortedProxyNodes())
+
 const pluginFilters = ref<PluginFilter[]>([])
 const pluginForm = ref<Plugin>({
   id: 0,
@@ -938,8 +1140,16 @@ const pluginSettingsForm = ref({
   pluginRunMode: 'java'
 })
 const githubProxyNodes = ref<any[]>([])
+const githubProxyList = ref<string[]>([])
+const githubProxyCollapseActive = ref<string[]>([]) // 默认折叠
 const benchmarking = ref(false)
+const smartSelectDialogVisible = ref(false)
+const selectedProxies = ref<string[]>([])
+const proxyTableRef = ref()
 const benchmarkResults = ref<Map<string, any>>(new Map())
+const addProxyDialogVisible = ref(false)
+const newProxyUrl = ref('')
+const customProxyUrls = ref('')
 const selectedPluginIds = ref<number[]>([])
 const sourceExtendTarget = ref<ManagedSource | null>(null)
 const sourceExtendText = ref('')
@@ -1572,19 +1782,416 @@ const loadPluginFilters = () => {
 }
 
 const loadPluginSettings = () => {
-  axios.get('/api/settings/github_proxy').then(({data}) => {
-    pluginSettingsForm.value.githubProxy = data?.value || ''
-  })
   axios.get('/api/settings/plugin_run_mode').then(({data}) => {
     pluginSettingsForm.value.pluginRunMode = data?.value || 'java'
   })
   loadGitHubProxyNodes()
+  loadGitHubProxyList()
 }
 
 const loadGitHubProxyNodes = () => {
+  // 加载预设节点
   axios.get('/api/settings/github-proxy/nodes').then(({data}) => {
-    githubProxyNodes.value = data || []
+    const defaultNodes = data || []
+
+    // 加载自定义节点
+    axios.get('/api/settings/github-proxy/custom-nodes').then(({data: customUrls}) => {
+      const customNodes = (customUrls || []).map((url: string) => {
+        try {
+          const urlObj = new URL(url)
+          return {
+            label: '自定义节点',
+            url: url,
+            host: urlObj.host
+          }
+        } catch (e) {
+          console.error('Invalid custom URL:', url, e)
+          return null
+        }
+      }).filter((node: any) => node !== null)
+
+      // 合并节点列表：预设节点 + 自定义节点
+      githubProxyNodes.value = [...defaultNodes, ...customNodes]
+    }).catch(() => {
+      // 如果加载自定义节点失败，只使用预设节点
+      githubProxyNodes.value = defaultNodes
+    })
   })
+}
+
+const loadGitHubProxyList = () => {
+  axios.get('/api/settings/github-proxy/list').then(({data}) => {
+    githubProxyList.value = data || []
+  })
+}
+
+const showAddProxyDialog = () => {
+  customProxyUrls.value = ''
+  addProxyDialogVisible.value = true
+}
+
+// 规范化 URL
+const normalizeProxyUrl = (url: string): string => {
+  let normalized = url.trim()
+  if (!normalized) return ''
+
+  // 添加协议
+  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    normalized = 'https://' + normalized
+  }
+
+  // 添加末尾斜杠
+  if (!normalized.endsWith('/')) {
+    normalized += '/'
+  }
+
+  return normalized
+}
+
+// 添加自定义代理到测速列表
+const addCustomProxiesToList = () => {
+  const lines = customProxyUrls.value.split('\n')
+  const newUrls: string[] = []
+  const existingUrls = new Set(githubProxyNodes.value.map(node => node.url))
+
+  for (const line of lines) {
+    const normalized = normalizeProxyUrl(line)
+    if (!normalized) continue
+
+    // 检查是否已存在
+    if (existingUrls.has(normalized)) {
+      continue
+    }
+
+    // 检查是否重复
+    if (newUrls.includes(normalized)) {
+      continue
+    }
+
+    newUrls.push(normalized)
+    existingUrls.add(normalized)
+  }
+
+  if (newUrls.length === 0) {
+    ElMessage.warning('没有有效的代理地址或所有地址已存在')
+    return
+  }
+
+  // 获取现有的自定义节点URL列表
+  axios.get('/api/settings/github-proxy/custom-nodes').then(({data}) => {
+    const existingCustomUrls = data || []
+    const allCustomUrls = [...existingCustomUrls, ...newUrls]
+
+    // 保存到 settings
+    axios.post('/api/settings/github-proxy/custom-nodes', allCustomUrls)
+      .then(() => {
+        // 添加到 githubProxyNodes
+        newUrls.forEach(url => {
+          try {
+            const urlObj = new URL(url)
+            githubProxyNodes.value.push({
+              label: '自定义节点',
+              url: url,
+              host: urlObj.host
+            })
+          } catch (e) {
+            console.error('Invalid URL:', url, e)
+          }
+        })
+
+        addProxyDialogVisible.value = false
+        ElMessage.success(`已添加 ${newUrls.length} 个自定义节点并保存`)
+
+        // 自动开始测速
+        benchmarkCustomProxies(newUrls)
+      })
+      .catch(() => {
+        ElMessage.error('保存自定义节点失败')
+      })
+  })
+}
+
+// 测速自定义代理
+const benchmarkCustomProxies = (urls: string[]) => {
+  if (benchmarking.value) {
+    ElMessage.warning('正在测速中，请稍候')
+    return
+  }
+
+  benchmarking.value = true
+
+  // 为新添加的节点设置"测速中"状态
+  urls.forEach(url => {
+    benchmarkResults.value.set(url, { pending: true })
+  })
+
+  ElMessage.info(`开始测速 ${urls.length} 个自定义节点...`)
+
+  // 启动异步测速
+  axios.post('/api/settings/github-proxy/benchmark/start', { urls })
+    .then(() => {
+      // 轮询获取结果
+      pollCustomProxiesResults(urls)
+    })
+    .catch(() => {
+      ElMessage.error('启动测速失败')
+      benchmarking.value = false
+      urls.forEach(url => {
+        benchmarkResults.value.delete(url)
+      })
+    })
+}
+
+// 轮询自定义节点测速结果
+const pollCustomProxiesResults = (urls: string[]) => {
+  const poll = () => {
+    axios.get('/api/settings/github-proxy/benchmark/results')
+      .then(({data}) => {
+        // 更新结果
+        const results = data.results || {}
+        Object.keys(results).forEach((url: string) => {
+          benchmarkResults.value.set(url, results[url])
+        })
+
+        // 检查是否还在运行
+        if (data.isRunning) {
+          setTimeout(poll, 500)
+        } else {
+          benchmarking.value = false
+
+          // 统计成功的节点
+          const successCount = urls.filter(url => {
+            const result = benchmarkResults.value.get(url)
+            return result && result.success
+          }).length
+
+          if (successCount > 0) {
+            ElMessage.success(`测速完成！${successCount}/${urls.length} 个节点可用`)
+          } else {
+            ElMessage.warning('测速完成，但没有可用节点')
+          }
+        }
+      })
+      .catch(() => {
+        benchmarking.value = false
+        ElMessage.error('获取测速结果失败')
+      })
+  }
+
+  poll()
+}
+
+const addProxyToList = () => {
+  if (githubProxyList.value.length >= 5) {
+    ElMessage.warning('最多只能配置 5 个代理节点')
+    return
+  }
+
+  const url = newProxyUrl.value.trim()
+  if (githubProxyList.value.includes(url)) {
+    ElMessage.warning('该代理已存在')
+    return
+  }
+
+  githubProxyList.value.push(url)
+  addProxyDialogVisible.value = false
+  ElMessage.success('已添加到列表，请点击"保存代理列表"生效')
+}
+
+const removeProxy = (index: number) => {
+  githubProxyList.value.splice(index, 1)
+  ElMessage.success('已从列表移除，请点击"保存代理列表"生效')
+}
+
+const moveProxyUp = (index: number) => {
+  if (index === 0) return
+  const temp = githubProxyList.value[index]
+  githubProxyList.value[index] = githubProxyList.value[index - 1]
+  githubProxyList.value[index - 1] = temp
+}
+
+const moveProxyDown = (index: number) => {
+  if (index === githubProxyList.value.length - 1) return
+  const temp = githubProxyList.value[index]
+  githubProxyList.value[index] = githubProxyList.value[index + 1]
+  githubProxyList.value[index + 1] = temp
+}
+
+const benchmarkAllProxies = () => {
+  if (benchmarking.value) return
+  if (githubProxyList.value.length === 0) {
+    ElMessage.warning('请先添加代理节点')
+    return
+  }
+
+  benchmarking.value = true
+  benchmarkResults.value.clear()
+
+  // 为所有待测节点设置"测速中"状态
+  githubProxyList.value.forEach(url => {
+    benchmarkResults.value.set(url, { pending: true })
+  })
+
+  // 启动异步测速任务
+  axios.post('/api/settings/github-proxy/benchmark/start', { urls: githubProxyList.value })
+    .then(() => {
+      // 开始轮询获取结果
+      pollBenchmarkResults()
+    })
+    .catch(() => {
+      ElMessage.error('启动测速失败')
+      benchmarking.value = false
+      benchmarkResults.value.clear()
+    })
+}
+
+const pollBenchmarkResults = () => {
+  const poll = () => {
+    axios.get('/api/settings/github-proxy/benchmark/results')
+      .then(({data}) => {
+        // 更新结果
+        const results = data.results || {}
+        Object.keys(results).forEach((url: string) => {
+          benchmarkResults.value.set(url, results[url])
+        })
+
+        // 检查是否还在运行
+        if (data.isRunning) {
+          // 继续轮询（500ms 间隔）
+          setTimeout(poll, 500)
+        } else {
+          // 测速完成
+          benchmarking.value = false
+          ElMessage.success('测速完成')
+        }
+      })
+      .catch(() => {
+        benchmarking.value = false
+        ElMessage.error('获取测速结果失败')
+      })
+  }
+
+  poll()
+}
+
+const saveGitHubProxyList = () => {
+  axios.post('/api/settings/github-proxy/list', githubProxyList.value)
+    .then(({data}) => {
+      ElMessage.success(`已保存 ${data.count} 个代理节点到 /data/github_proxy.txt`)
+    })
+    .catch(() => {
+      ElMessage.error('保存失败')
+    })
+}
+
+const autoSelectFastest = () => {
+  if (benchmarking.value) return
+
+  benchmarking.value = true
+  benchmarkResults.value.clear()
+  selectedProxies.value = []
+
+  // 获取所有预设节点
+  const allUrls = githubProxyNodes.value.map(node => node.url)
+
+  // 为所有待测节点设置"测速中"状态
+  allUrls.forEach(url => {
+    benchmarkResults.value.set(url, { pending: true })
+  })
+
+  // 打开对话框
+  smartSelectDialogVisible.value = true
+  ElMessage.info('开始测速所有预设节点...')
+
+  // 启动异步测速
+  axios.post('/api/settings/github-proxy/benchmark/start', { urls: allUrls })
+    .then(() => {
+      // 轮询获取结果并自动选择最快的 5 个
+      pollAndSelectFastest()
+    })
+    .catch(() => {
+      ElMessage.error('启动测速失败')
+      benchmarking.value = false
+      benchmarkResults.value.clear()
+      smartSelectDialogVisible.value = false
+    })
+}
+
+const pollAndSelectFastest = () => {
+  const poll = () => {
+    axios.get('/api/settings/github-proxy/benchmark/results')
+      .then(({data}) => {
+        // 更新结果
+        const results = data.results || {}
+        Object.keys(results).forEach((url: string) => {
+          benchmarkResults.value.set(url, results[url])
+        })
+
+        // 实时选择最快的 5 个节点并更新到列表（仅用于预览）
+        const successNodes = Array.from(benchmarkResults.value.entries())
+          .filter(([url, result]) => result.success && result.latency != null)
+          .sort((a, b) => a[1].latency - b[1].latency)
+          .slice(0, 5)
+          .map(([url]) => url)
+
+        // 检查是否还在运行
+        if (data.isRunning) {
+          // 继续轮询
+          setTimeout(poll, 500)
+        } else {
+          // 测速完成
+          benchmarking.value = false
+          if (successNodes.length === 0) {
+            ElMessage.warning('没有测速成功的节点')
+          } else {
+            // 自动勾选最快的 5 个节点
+            selectedProxies.value = successNodes
+
+            // 使用 nextTick 确保表格已经渲染完成
+            nextTick(() => {
+              if (proxyTableRef.value) {
+                // 先清空所有选择
+                proxyTableRef.value.clearSelection()
+
+                // 勾选最快的 5 个节点
+                const nodesToSelect = githubProxyNodes.value.filter(node =>
+                  successNodes.includes(node.url)
+                )
+                nodesToSelect.forEach(node => {
+                  proxyTableRef.value.toggleRowSelection(node, true)
+                })
+              }
+            })
+
+            ElMessage.success(`已自动选择最快的 ${successNodes.length} 个节点，请确认后点击"确认选择"`)
+          }
+        }
+      })
+      .catch(() => {
+        benchmarking.value = false
+        ElMessage.error('获取测速结果失败')
+      })
+  }
+
+  poll()
+}
+
+const selectFastestNodes = () => {
+  // 过滤成功的节点并按延迟排序
+  const successNodes = Array.from(benchmarkResults.value.entries())
+    .filter(([url, result]) => result.success && result.latency != null)
+    .sort((a, b) => a[1].latency - b[1].latency)
+    .slice(0, 5)
+    .map(([url]) => url)
+
+  if (successNodes.length === 0) {
+    ElMessage.warning('没有测速成功的节点')
+    return
+  }
+
+  // 更新代理列表
+  githubProxyList.value = successNodes
+  ElMessage.success(`已自动选择最快的 ${successNodes.length} 个节点，请点击"保存代理列表"生效`)
 }
 
 const benchmarkGitHubProxy = () => {
@@ -1619,10 +2226,64 @@ const formatNodeLabel = (node: any) => {
 
 const formatBenchmarkResult = (result: any) => {
   if (!result) return ''
-  if (!result.success) {
-    return '失败'
+  if (isBenchmarkPending(result)) {
+    return '测速中...'
   }
-  return `${result.latency}ms`
+  // 如果有明确的 success 字段，说明测速已完成，优先显示结果
+  if (result.success !== undefined && result.success !== null) {
+    if (!result.success) {
+      return '失败'
+    }
+    return `${result.latency}ms`
+  }
+  return ''
+}
+
+// 处理代理节点选择变化
+const handleProxySelectionChange = (selection: any[]) => {
+  if (selection.length > 5) {
+    ElMessage.warning('最多只能选择 5 个节点')
+    // 只保留前5个选择
+    nextTick(() => {
+      if (proxyTableRef.value) {
+        proxyTableRef.value.clearSelection()
+        selection.slice(0, 5).forEach((node: any) => {
+          proxyTableRef.value.toggleRowSelection(node, true)
+        })
+      }
+    })
+    return
+  }
+  selectedProxies.value = selection.map((node: any) => node.url)
+}
+
+// 确认选择代理节点
+const confirmProxySelection = () => {
+  if (selectedProxies.value.length === 0) {
+    ElMessage.warning('请至少选择一个节点')
+    return
+  }
+
+  githubProxyList.value = selectedProxies.value
+  smartSelectDialogVisible.value = false
+  ElMessage.success(`已选择 ${selectedProxies.value.length} 个节点，请点击"保存代理列表"生效`)
+}
+
+// 获取节点延迟排名
+const getNodeRank = (url: string) => {
+  const result = benchmarkResults.value.get(url)
+  if (!result || !result.success || result.latency == null) {
+    return 0
+  }
+
+  // 获取所有成功的节点并按延迟排序
+  const successNodes = Array.from(benchmarkResults.value.entries())
+    .filter(([_, r]) => r.success && r.latency != null)
+    .sort((a, b) => a[1].latency - b[1].latency)
+
+  // 找到当前节点的排名
+  const rank = successNodes.findIndex(([u]) => u === url)
+  return rank >= 0 ? rank + 1 : 0
 }
 
 const showGlobalConfig = () => {
@@ -1756,17 +2417,11 @@ const importPlugins = async () => {
 }
 
 const savePluginSettings = () => {
-  Promise.all([
-    axios.post('/api/settings', {
-      name: 'github_proxy',
-      value: pluginSettingsForm.value.githubProxy
-    }),
-    axios.post('/api/settings', {
-      name: 'plugin_run_mode',
-      value: pluginSettingsForm.value.pluginRunMode
-    })
-  ]).then(() => {
-    ElMessage.success('订阅源设置已保存')
+  axios.post('/api/settings', {
+    name: 'plugin_run_mode',
+    value: pluginSettingsForm.value.pluginRunMode
+  }).then(() => {
+    ElMessage.success('插件运行模式已保存')
   })
 }
 
