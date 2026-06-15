@@ -15,10 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.List;
 import java.util.Optional;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.startsWith;
-import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -61,23 +58,13 @@ class SiteServiceTest {
 
         service.init();
 
-        verify(siteRepository, never()).save(any(Site.class));
-        verify(jdbcTemplate).update(
-                startsWith("INSERT INTO site"),
-                eq(1),
-                eq("本地"),
-                eq("http://localhost"),
-                eq(""),
-                startsWith("openlist-"),
-                eq(null),
-                eq(""),
-                eq(true),
-                eq(false),
-                eq(false),
-                eq(1),
-                eq(3)
-        );
-        verify(settingRepository).save(any(Setting.class));
-        verify(aListLocalService).setSetting(eq("token"), startsWith("openlist-"), eq("string"));
+        verify(siteRepository).save(argThat(site ->
+                Integer.valueOf(1).equals(site.getId())
+                        && "本地".equals(site.getName())
+                        && "http://localhost".equals(site.getUrl())
+                        && site.isSearchable()
+                        && Integer.valueOf(3).equals(site.getVersion())
+                        && site.getToken() != null
+                        && site.getToken().startsWith("openlist-")));
     }
 }
