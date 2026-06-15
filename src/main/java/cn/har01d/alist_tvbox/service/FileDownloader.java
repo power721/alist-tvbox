@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Enumeration;
@@ -45,6 +46,8 @@ public class FileDownloader {
 
     private static final String BASE_URL = "https://d.har01d.cn/";
     private static final String REMOTE_DIFF_ZIP_URL = BASE_URL + "diff.zip";
+    private static final String PG_LATEST_URL = "https://github.com/power721/PG/releases/latest";
+    private static final String ZX_LATEST_URL = "https://github.com/power721/ZX/releases/latest";
 
     private static final Set<String> GITHUB_PROXY = Set.of("https://slink.ltd/", "https://cors.zme.ink/", "https://git.886.be/", "https://gitdl.cn/", "https://ghfast.top/", "https://ghproxy.net/", "https://github.moeyy.xyz/", "https://gh-proxy.com/", "https://ghproxy.cc/", "https://gh.llkk.cc/", "https://gh.ddlc.top/", "https://gh-proxy.llyke.com/");
 
@@ -72,7 +75,10 @@ public class FileDownloader {
 
     public FileDownloader(TaskService taskService, RestTemplateBuilder builder, GitHubProxyService gitHubProxyService) {
         this.taskService = taskService;
-        this.restTemplate = builder.build();
+        this.restTemplate = builder
+                .connectTimeout(Duration.ofSeconds(5))
+                .readTimeout(Duration.ofSeconds(10))
+                .build();
         this.gitHubProxyService = gitHubProxyService;
         pgVersionFile = Utils.getDataPath("pg_version.txt");
         zxBaseVersionFile = Utils.getDataPath("zx_base_version.txt");
@@ -247,21 +253,55 @@ public class FileDownloader {
     }
 
     public String getPgVersion() {
-        String html = restTemplate.getForObject("https://github.com/power721/PG/releases/latest", String.class);
-        var m = PG_PATTERN.matcher(html);
-        if (m.find()) {
-            return m.group(1);
+        try {
+            return getRemoteVersion("https://d.har01d.cn/pg.version.txt");
+        } catch (IOException e) {
+            log.warn("getPgVersion IOException", e);
+        }
+        return getGitHubVersion("PG", PG_LATEST_URL, PG_PATTERN);
+    }
+
+    public String getZxVersion() {
+        try {
+            return getRemoteVersion("https://d.har01d.cn/zx.version.txt");
+        } catch (IOException e) {
+            log.warn("getZxVersion IOException", e);
+        }
+        return getGitHubVersion("ZX", ZX_LATEST_URL, ZX_PATTERN);
+    }
+
+    private String getGitHubVersion(String name, String url, Pattern pattern) {
+        for (String candidate : getVersionUrls(url)) {
+            try {
+                String html = restTemplate.getForObject(candidate, String.class);
+                if (html == null) {
+                    continue;
+                }
+                var m = pattern.matcher(html);
+                if (m.find()) {
+                    return m.group(1);
+                }
+                log.warn("parse {} version failed from {}", name, candidate);
+            } catch (Exception e) {
+                log.warn("load {} version failed from {}", name, candidate, e);
+            }
         }
         return "";
     }
 
-    public String getZxVersion() {
-        String html = restTemplate.getForObject("https://github.com/power721/ZX/releases/latest", String.class);
-        var m = ZX_PATTERN.matcher(html);
-        if (m.find()) {
-            return m.group(1);
+    private List<String> getVersionUrls(String url) {
+        List<String> urls = new ArrayList<>();
+        for (String proxy : gitHubProxyService.readProxyListFromFile()) {
+            if (proxy == null || proxy.trim().isEmpty()) {
+                urls.add(url);
+            } else {
+                urls.add(proxy + url);
+            }
         }
-        return "";
+        if (!urls.contains(url)) {
+            urls.add(url);
+        }
+        return urls;
     }
 
     private List<String> getDownloadUrls(String url) {

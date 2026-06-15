@@ -5,24 +5,20 @@ download_with_proxy() {
   url=$1
   output=$2
 
-  # 读取多代理列表，逐个尝试（最多 5 个）
   if [ -f "/data/github_proxy.txt" ]; then
-    proxies=$(head -n 5 "/data/github_proxy.txt" 2>/dev/null | grep -v '^$')
-  else
-    proxies=""
-  fi
-
-  # 尝试使用代理下载
-  if [ -n "$proxies" ]; then
-    echo "$proxies" | while IFS= read -r proxy; do
+    proxy_count=0
+    while IFS= read -r proxy || [ -n "$proxy" ]; do
+      proxy_count=$((proxy_count + 1))
+      [ "$proxy_count" -gt 5 ] && break
       if [ -n "$proxy" ]; then
-        if wget -T 30 -t 1 "${proxy}${url}" -O "${output}" 2>/dev/null; then
-          exit 0
-        fi
+        candidate="${proxy}${url}"
+      else
+        candidate="${url}"
       fi
-    done
-    # 检查是否下载成功
-    [ -f "$output" ] && [ -s "$output" ] && return 0
+      if wget -T 30 -t 1 "${candidate}" -O "${output}" 2>/dev/null; then
+        return 0
+      fi
+    done < "/data/github_proxy.txt"
   fi
 
   # 所有代理失败，尝试直连

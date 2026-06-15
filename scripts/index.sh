@@ -1,21 +1,22 @@
 if [ $# -gt 0 ]; then
   remote=$1
 
-  # 读取多代理列表，逐个尝试（最多 5 个）
   downloaded=false
   if [ -f "/data/github_proxy.txt" ]; then
-    proxies=$(head -n 5 "/data/github_proxy.txt" 2>/dev/null | grep -v '^$')
-    if [ -n "$proxies" ]; then
-      echo "$proxies" | while IFS= read -r proxy; do
-        if [ -n "$proxy" ]; then
-          if wget -t 1 "${proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip" -O index.zip 2>/dev/null; then
-            exit 0
-          fi
-        fi
-      done
-      # 检查是否下载成功
-      [ -f index.zip ] && [ -s index.zip ] && downloaded=true
-    fi
+    proxy_count=0
+    while IFS= read -r proxy || [ -n "$proxy" ]; do
+      proxy_count=$((proxy_count + 1))
+      [ "$proxy_count" -gt 5 ] && break
+      if [ -n "$proxy" ]; then
+        candidate="${proxy}https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip"
+      else
+        candidate="https://raw.githubusercontent.com/xiaoyaliu00/data/main/index.zip"
+      fi
+      if wget -t 1 "${candidate}" -O index.zip 2>/dev/null; then
+        downloaded=true
+        break
+      fi
+    done < "/data/github_proxy.txt"
   fi
 
   # 所有代理失败，尝试直连和备用地址
