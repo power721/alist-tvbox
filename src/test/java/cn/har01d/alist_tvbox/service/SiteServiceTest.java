@@ -15,6 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.List;
 import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
@@ -63,7 +64,9 @@ class SiteServiceTest {
 
         verify(siteRepository, never()).save(any(Site.class));
         verify(jdbcTemplate).update(
-                startsWith("INSERT INTO site"),
+                argThat(sql -> sql.startsWith("INSERT INTO site")
+                        && sql.contains("sort_order")
+                        && sql.contains("storage_version")),
                 eq(1),
                 eq("本地"),
                 eq("http://localhost"),
@@ -73,7 +76,9 @@ class SiteServiceTest {
                 eq(""),
                 eq(true),
                 eq(false),
-                eq(false)
+                eq(false),
+                eq(1),
+                eq(3)
         );
         verify(settingRepository).save(any(Setting.class));
         verify(aListLocalService).setSetting(eq("token"), startsWith("openlist-"), eq("string"));
