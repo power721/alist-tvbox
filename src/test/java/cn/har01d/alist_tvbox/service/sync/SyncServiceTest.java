@@ -44,6 +44,12 @@ class SyncServiceTest {
     @Mock
     private PluginFilterRepository pluginFilterRepository;
     @Mock
+    private JellyfinRepository jellyfinRepository;
+    @Mock
+    private EmbyRepository embyRepository;
+    @Mock
+    private FeiniuRepository feiniuRepository;
+    @Mock
     private RemoteClient remoteClient;
     @Mock
     private cn.har01d.alist_tvbox.service.UserService userService;
@@ -248,5 +254,56 @@ class SyncServiceTest {
         assertEquals(1, settings.size());  // 只有一个 key
         assertTrue(settings.containsKey("bilibili_cookie"));
         assertEquals("test_cookie", settings.get("bilibili_cookie"));
+    }
+
+    @Test
+    void testImportSites_OverwritePreservesBuiltInAListSite() {
+        // Given
+        Site builtIn = site(1, "AList", "http://127.0.0.1:5244");
+        Site oldSite = site(2, "Old", "http://old.example.com");
+        Site remoteBuiltIn = site(1, "Remote AList", "http://127.0.0.1:5244");
+        Site remoteSite = site(9, "Remote", "http://remote.example.com");
+
+        when(siteRepository.findAll()).thenReturn(List.of(builtIn, oldSite));
+        when(siteRepository.findByUrl(remoteSite.getUrl())).thenReturn(Optional.empty());
+        when(siteRepository.save(any(Site.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // When
+        SyncResult result = syncService.importSites(List.of(remoteBuiltIn, remoteSite), MergeStrategy.OVERWRITE);
+
+        // Then
+        verify(siteRepository, never()).deleteAll();
+        verify(siteRepository).deleteAll(List.of(oldSite));
+        verify(siteRepository, never()).findByUrl(remoteBuiltIn.getUrl());
+        assertEquals(1, result.getImported());
+        assertEquals(0, result.getUpdated());
+        assertEquals(0, result.getFailed());
+    }
+
+    @Test
+    void testImportSites_DoesNotUpdateLocalBuiltInAListSiteMatchedByUrl() {
+        // Given
+        Site builtIn = site(1, "AList", "http://127.0.0.1:5244");
+        Site remote = site(9, "Remote AList", "http://127.0.0.1:5244");
+
+        when(siteRepository.findByUrl(remote.getUrl())).thenReturn(Optional.of(builtIn));
+
+        // When
+        SyncResult result = syncService.importSites(List.of(remote), MergeStrategy.MERGE);
+
+        // Then
+        verify(siteRepository, never()).save(any(Site.class));
+        assertEquals("AList", builtIn.getName());
+        assertEquals(0, result.getImported());
+        assertEquals(0, result.getUpdated());
+        assertEquals(0, result.getFailed());
+    }
+
+    private Site site(Integer id, String name, String url) {
+        Site site = new Site();
+        site.setId(id);
+        site.setName(name);
+        site.setUrl(url);
+        return site;
     }
 }

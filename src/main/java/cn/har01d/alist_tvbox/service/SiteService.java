@@ -72,32 +72,74 @@ public class SiteService {
     @PostConstruct
     public void init() {
         if (siteRepository.count() > 0) {
-            siteRepository.findById(1).ifPresent(this::updateSite);
+            siteRepository.findById(1).ifPresentOrElse(this::updateSite, this::restoreDefaultSite);
             fixId();
             return;
         }
 
         int order = 1;
         for (cn.har01d.alist_tvbox.tvbox.Site s : appProperties.getSites()) {
-            Site site = new Site();
-            site.setName(s.getName());
-            site.setUrl(s.getUrl());
-            site.setPassword(s.getPassword());
-            site.setSearchable(s.isSearchable());
-            site.setXiaoya(s.isXiaoya());
-            site.setIndexFile(s.getIndexFile());
-            site.setVersion(s.getVersion());
+            Site site = createSite(s, order);
             if (order == 1) {
                 aListToken = generateToken();
                 site.setToken(aListToken);
                 aListLocalService.executeUpdate("UPDATE x_setting_items SET value='" + aListToken + "' WHERE key='token'");
             }
-            site.setOrder(order++);
             siteRepository.save(site);
             log.info("save site to database: {}", site);
+            order++;
         }
 
         readAList(order);
+    }
+
+    private void restoreDefaultSite() {
+        if (appProperties.getSites() == null || appProperties.getSites().isEmpty()) {
+            log.warn("default site config is empty, skip restoring site id 1");
+            return;
+        }
+
+        Site site = createSite(appProperties.getSites().getFirst(), 1);
+        site.setId(1);
+        aListToken = generateToken();
+        site.setToken(aListToken);
+        insertDefaultSite(site);
+        settingRepository.save(new Setting("alist_token", aListToken));
+        aListLocalService.setSetting("token", aListToken, "string");
+        log.warn("restore default site id 1: {}", site);
+    }
+
+    private void insertDefaultSite(Site site) {
+        jdbcTemplate.update("""
+                INSERT INTO site
+                (id, name, url, password, token, index_file, folder, searchable, disabled, xiaoya, `order`, `version`)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                site.getId(),
+                site.getName(),
+                site.getUrl(),
+                site.getPassword(),
+                site.getToken(),
+                site.getIndexFile(),
+                site.getFolder(),
+                site.isSearchable(),
+                site.isDisabled(),
+                site.isXiaoya(),
+                site.getOrder(),
+                site.getVersion());
+    }
+
+    private Site createSite(cn.har01d.alist_tvbox.tvbox.Site s, int order) {
+        Site site = new Site();
+        site.setName(s.getName());
+        site.setUrl(s.getUrl());
+        site.setPassword(s.getPassword());
+        site.setSearchable(s.isSearchable());
+        site.setXiaoya(s.isXiaoya());
+        site.setIndexFile(s.getIndexFile());
+        site.setVersion(s.getVersion());
+        site.setOrder(order);
+        return site;
     }
 
     private void fixId() {
