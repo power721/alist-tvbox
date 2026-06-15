@@ -14,12 +14,10 @@ NC='\033[0m' # No Color
 declare -A VERSIONS=(
   ["1"]="haroldli/alist-tvbox              - 纯净版（推荐）"
   ["2"]="haroldli/alist-tvbox:native       - 纯净原生版"
-  ["3"]="haroldli/alist-tvbox:python       - 纯净版（Python运行环境）"
   ["4"]="haroldli/xiaoya-tvbox             - 小雅集成版（推荐）"
   ["5"]="haroldli/xiaoya-tvbox:native      - 小雅原生版"
   ["6"]="haroldli/xiaoya-tvbox:native-host - 小雅原生主机版"
   ["7"]="haroldli/xiaoya-tvbox:host        - 小雅主机模式版"
-  ["8"]="haroldli/xiaoya-tvbox:python      - 小雅版（Python运行环境）"
   ["9"]="haroldli/xiaoya-tvbox:dev         - 开发测试版"
 )
 
@@ -605,6 +603,29 @@ check_architecture_support() {
   esac
 }
 
+# 验证镜像与网络模式的兼容性
+validate_image_network_compatibility() {
+  local image="${CONFIG[IMAGE_NAME]}"
+  local network="${CONFIG[NETWORK]}"
+
+  # host镜像必须使用host网络（匹配 :host 或 -host 后缀）
+  if [[ "$image" =~ (:|-)host$ && "$network" != "host" ]]; then
+    echo -e "${RED}错误: ${image} 必须使用 host 网络模式${NC}"
+    echo -e "${YELLOW}该镜像专为 host 网络优化，不支持端口映射${NC}"
+    return 1
+  fi
+
+  # host网络必须使用host镜像
+  if [[ "$network" == "host" && ! "$image" =~ (:|-)host$ ]]; then
+    echo -e "${RED}错误: host 网络模式必须使用 :host 镜像版本${NC}"
+    echo -e "${YELLOW}普通镜像的 AList 监听 80 端口，会占用主机端口${NC}"
+    echo -e "${YELLOW}请选择版本 6 (native-host) 或版本 7 (host)${NC}"
+    return 1
+  fi
+
+  return 0
+}
+
 # 安装/更新容器
 
 # -------------------------
@@ -719,11 +740,17 @@ install_container() {
     return 1
   fi
 
-  # 如果镜像名称包含host，自动切换网络模式
-  if [[ "${CONFIG[IMAGE_NAME]}" == *"host"* ]]; then
+  # 如果镜像名称包含host后缀，自动切换网络模式
+  if [[ "${CONFIG[IMAGE_NAME]}" =~ (:|-)host$ ]]; then
     CONFIG["NETWORK"]="host"
     echo -e "${YELLOW}检测到host版本，已自动切换网络模式为host${NC}"
     save_config
+  fi
+
+  # 验证镜像与网络模式的兼容性
+  if ! validate_image_network_compatibility; then
+    read -n 1 -s -r -p "按任意键继续..."
+    return 1
   fi
 
   local container_name=$(get_container_name)
@@ -874,18 +901,29 @@ show_version_menu() {
     fi
 
     local old_version="${CONFIG[IMAGE_NAME]}"
+    local old_image_id="${CONFIG[IMAGE_ID]}"
     local image="${VERSIONS[$version_choice]}"
     image=$(echo "$image" | awk -F' - ' '{print $1}' | tr -d ' ')
     CONFIG["IMAGE_ID"]="$version_choice"
     CONFIG["IMAGE_NAME"]="${image}"
 
-    # 新增：如果镜像名称包含host，自动切换网络模式
-    if [[ "${image}" == *"host"* ]]; then
+    # 新增：如果镜像名称包含host后缀，自动切换网络模式
+    if [[ "${image}" =~ (:|-)host$ ]]; then
       CONFIG["NETWORK"]="host"
       echo -e "${YELLOW}检测到host版本，已自动切换网络模式为host${NC}"
     fi
 
     save_config
+
+    # 验证镜像与网络模式的兼容性
+    if ! validate_image_network_compatibility; then
+      echo -e "${RED}镜像与网络模式不兼容，版本切换失败${NC}"
+      CONFIG["IMAGE_ID"]="$old_image_id"
+      CONFIG["IMAGE_NAME"]="$old_version"
+      save_config
+      read -n 1 -s -r -p "按任意键继续..."
+      return
+    fi
 
     # 获取容器名称
     local container_name=$(get_container_name)
@@ -1246,11 +1284,27 @@ show_network_menu() {
       CONFIG["NETWORK"]="bridge"
       save_config
       echo -e "${GREEN}已设置为bridge模式${NC}"
+      # 验证与当前镜像的兼容性
+      if ! validate_image_network_compatibility; then
+        CONFIG["NETWORK"]="host"
+        save_config
+        echo -e "${RED}当前镜像不兼容bridge模式，已回退${NC}"
+        sleep 2
+        return
+      fi
       ;;
     2)
       CONFIG["NETWORK"]="host"
       save_config
       echo -e "${GREEN}已设置为host模式${NC}"
+      # 验证与当前镜像的兼容性
+      if ! validate_image_network_compatibility; then
+        CONFIG["NETWORK"]="bridge"
+        save_config
+        echo -e "${RED}当前镜像不兼容host模式，已回退${NC}"
+        sleep 2
+        return
+      fi
       ;;
     0)
       return
