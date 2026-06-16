@@ -27,6 +27,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
 import okhttp3.OkHttpClient;
@@ -1558,5 +1559,24 @@ public class TelegramService {
             channel.setSortOrder(order++);
         }
         return telegramChannelRepository.saveAll(channels);
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        log.info("Shutting down TelegramService executor service");
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                log.warn("Executor service did not terminate in time, forcing shutdown");
+                executorService.shutdownNow();
+                if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                    log.error("Executor service did not terminate after forced shutdown");
+                }
+            }
+        } catch (InterruptedException e) {
+            log.warn("Interrupted while waiting for executor service to terminate", e);
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }
