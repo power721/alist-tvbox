@@ -873,6 +873,67 @@ public class ShareService {
     private static final Pattern TIANYI_ACCESS_CODE = Pattern.compile("(?:（访问码：|%EF%BC%88%E8%AE%BF%E9%97%AE%E7%A0%81%EF%BC%9A)([a-zA-Z0-9]+)(?:）|%EF%BC%89)");
     private static final Pattern PAN123_EXTRACT_CODE = Pattern.compile("(?:提取码|%E6%8F%90%E5%8F%96%E7%A0%81)(?:[:：]|%EF%BC%9A|%3A)([a-zA-Z0-9]+)");
 
+    /**
+     * Validate share link to prevent open redirect and SSRF attacks
+     * Only allow whitelisted cloud storage domains
+     */
+    private boolean isValidShareLink(String link) {
+        if (StringUtils.isBlank(link)) {
+            return false;
+        }
+
+        // Allow magnet links for offline download
+        if (link.toLowerCase().startsWith("magnet:")) {
+            return true;
+        }
+
+        // Must be HTTPS
+        if (!link.toLowerCase().startsWith("https://")) {
+            log.warn("Share link must use HTTPS: {}", link);
+            return false;
+        }
+
+        // Whitelist of allowed domains
+        String[] allowedDomains = {
+            "alipan.com", "www.alipan.com",
+            "aliyundrive.com", "www.aliyundrive.com",
+            "123684.com", "123685.com", "123865.com", "123912.com", "123pan.com", "123592.com",
+            "www.123684.com", "www.123685.com", "www.123865.com", "www.123912.com", "www.123pan.com", "www.123592.com",
+            "123684.cn", "123685.cn", "123865.cn", "123912.cn", "123592.cn",
+            "www.123684.cn", "www.123685.cn", "www.123865.cn", "www.123912.cn", "www.123592.cn",
+            "guangyapan.com", "www.guangyapan.com",
+            "mypikpak.com", "www.mypikpak.com",
+            "pan.xunlei.com",
+            "pan.quark.cn",
+            "caiyun.139.com",
+            "drive.uc.cn",
+            "115.com", "www.115.com",
+            "cloud.189.cn",
+            "pan.baidu.com"
+        };
+
+        try {
+            URI uri = new URI(link);
+            String host = uri.getHost();
+            if (host == null) {
+                return false;
+            }
+
+            host = host.toLowerCase();
+            for (String domain : allowedDomains) {
+                if (host.equals(domain)) {
+                    return true;
+                }
+            }
+
+            log.warn("Share link from untrusted domain: {}", host);
+            return false;
+        } catch (Exception e) {
+            log.warn("Invalid share link URL: {}", link, e);
+            return false;
+        }
+    }
+
     private String parsePassword(String url) {
         // 天翼云盘 URL 编码的访问码
         var m = TIANYI_ACCESS_CODE.matcher(url);
@@ -1132,6 +1193,13 @@ public class ShareService {
 
     public String add(ShareLink dto) {
         String link = StringUtils.trimToEmpty(URLDecoder.decode(dto.getLink(), StandardCharsets.UTF_8));
+
+        // Validate URL to prevent open redirect and SSRF
+        if (!isValidShareLink(link)) {
+            log.warn("Blocked invalid or suspicious share link: {}", link);
+            throw new BadRequestException("Invalid share link format");
+        }
+
         if (isOfflineDownloadLink(link)) {
             return offlineDownloadService.downloadPath(new ParseRequest(link));
         }
