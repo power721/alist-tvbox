@@ -1283,7 +1283,7 @@ check_status() {
     echo -e "安装模式: ${GREEN}${install_mode}${NC}"
 
     # 应用版本
-    local app_version=$(docker exec "$container_name" cat /app_version 2>/dev/null || echo "未知")
+    local app_version=$(docker exec "$container_name" cat /app_version 2>/dev/null | head -1 || echo "未知")
     echo -e "应用版本: ${GREEN}${app_version}${NC}"
 
     # 小雅版本（如果存在）
