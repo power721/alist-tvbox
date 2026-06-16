@@ -345,16 +345,30 @@ public class IndexService {
             Enumeration<? extends ZipEntry> entries = zipFile.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
-                Path entryPath = destFolderPath.resolve(entry.getName());
-                if (entryPath.normalize().startsWith(destFolderPath.normalize())) {
-                    if (entry.isDirectory()) {
-                        Files.createDirectories(entryPath);
-                    } else {
-                        Files.createDirectories(entryPath.getParent());
-                        try (InputStream in = zipFile.getInputStream(entry);
-                             OutputStream out = Files.newOutputStream(entryPath.toFile().toPath())) {
-                            IOUtils.copy(in, out);
-                        }
+                String entryName = entry.getName();
+
+                // Validate entry name before resolving to prevent Zip Slip
+                if (entryName.contains("..") || entryName.startsWith("/") ||
+                    entryName.contains("\\") || entryName.startsWith("\\")) {
+                    log.warn("Blocked suspicious zip entry: {}", entryName);
+                    throw new IOException("Invalid zip entry path: " + entryName);
+                }
+
+                Path entryPath = destFolderPath.resolve(entryName);
+
+                // Additional check: ensure resolved path is still within destination
+                if (!entryPath.normalize().startsWith(destFolderPath.normalize())) {
+                    log.warn("Zip entry escapes destination directory: {}", entryName);
+                    throw new IOException("Zip entry attempts path traversal: " + entryName);
+                }
+
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    Files.createDirectories(entryPath.getParent());
+                    try (InputStream in = zipFile.getInputStream(entry);
+                         OutputStream out = Files.newOutputStream(entryPath.toFile().toPath())) {
+                        IOUtils.copy(in, out);
                     }
                 }
             }
