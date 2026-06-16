@@ -463,6 +463,10 @@ public class PluginService {
      * - Block private IP ranges and localhost
      * - Block special hostnames
      */
+    /**
+     * Validate URL to prevent access to obviously dangerous endpoints.
+     * Simplified for private network deployments - only blocks localhost and metadata endpoints.
+     */
     private boolean isValidUrl(String url) {
         try {
             URI uri = new URI(url);
@@ -484,54 +488,34 @@ public class PluginService {
             // Normalize host to lowercase
             host = host.toLowerCase();
 
-            // Block localhost and loopback
+            // Block localhost and loopback (prevent local service access)
             if (host.equals("localhost") || host.equals("127.0.0.1") || host.startsWith("127.") ||
                 host.equals("0.0.0.0") || host.equals("::1") || host.equals("0:0:0:0:0:0:0:1")) {
                 log.warn("Blocked localhost/loopback URL: {}", url);
                 return false;
             }
 
-            // Block private IP ranges (RFC 1918)
-            if (host.startsWith("10.") || host.startsWith("192.168.") ||
-                (host.startsWith("172.") && isPrivateRange172(host))) {
-                log.warn("Blocked private IP URL: {}", url);
-                return false;
-            }
-
-            // Block link-local addresses
+            // Block link-local addresses (169.254.x.x) - commonly used for router admin
             if (host.startsWith("169.254.")) {
                 log.warn("Blocked link-local URL: {}", url);
                 return false;
             }
 
-            // Block internal/metadata endpoints
-            if (host.equals("metadata.google.internal") || host.endsWith(".internal") ||
+            // Block cloud metadata endpoints
+            if (host.equals("metadata.google.internal") ||
                 host.equals("169.254.169.254")) {
-                log.warn("Blocked internal metadata URL: {}", url);
+                log.warn("Blocked metadata endpoint URL: {}", url);
                 return false;
             }
+
+            // Note: Private IP ranges (10.x, 192.168.x, 172.16-31.x) are allowed
+            // in private network deployments as they may be legitimate NAS/server addresses
 
             return true;
         } catch (URISyntaxException e) {
             log.warn("Invalid URL syntax: {}", url, e);
             return false;
         }
-    }
-
-    /**
-     * Check if IP is in 172.16.0.0 - 172.31.255.255 range
-     */
-    private boolean isPrivateRange172(String host) {
-        String[] parts = host.split("\\.");
-        if (parts.length >= 2) {
-            try {
-                int second = Integer.parseInt(parts[1]);
-                return second >= 16 && second <= 31;
-            } catch (NumberFormatException e) {
-                return false;
-            }
-        }
-        return false;
     }
 
     public String readContent(Integer id) {

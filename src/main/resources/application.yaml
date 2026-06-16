@@ -46,10 +46,6 @@ server:
     protocol_header: x-forwarded-proto
     port-header: X-Forwarded-Port
     use-forward-headers: true
-    max-http-form-post-size: 10MB
-    max-swallow-size: 10MB
-  # Limit HTTP request body size to prevent DoS attacks
-  max-http-request-header-size: 64KB
 
 app:
   sort: true
