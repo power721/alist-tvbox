@@ -36,16 +36,16 @@ public class V1__Create_current_schema extends BaseJavaMigration {
             if (isH2) {
                 // For H2 fresh install: use old schema with backticks
                 // H2 will store as uppercase, and we'll rely on case-insensitive matching
-                sqlFile = "/db/migration/current/templates/V1_old_upgrade.sql";
+                sqlFile = "/sql-templates/V1_old_upgrade.sql";
                 System.out.println("V1: H2 fresh install - using schema with backticks (V3 will rename)");
             } else {
                 // For MySQL fresh install: use new schema with correct names
-                sqlFile = "/db/migration/current/templates/V1_new_install.sql";
+                sqlFile = "/sql-templates/V1_new_install.sql";
                 System.out.println("V1: MySQL fresh install - using new schema with modern column names");
             }
         } else {
             // Upgrade path (though V1 never re-runs)
-            sqlFile = "/db/migration/current/templates/V1_old_upgrade.sql";
+            sqlFile = "/sql-templates/V1_old_upgrade.sql";
             System.out.println("V1: Existing data detected, using old schema for compatibility");
         }
 
