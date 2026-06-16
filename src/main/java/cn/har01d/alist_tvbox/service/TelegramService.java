@@ -1542,12 +1542,14 @@ public class TelegramService {
                 .addHeader("Referer", "https://t.me/")
                 .build();
 
+        // Use try-with-resources to ensure response is always closed
         Call call = httpClient.newCall(request);
-        Response response = call.execute();
-        String html = response.body().string();
-        response.close();
-
-        return html;
+        try (Response response = call.execute()) {
+            if (response.body() == null) {
+                throw new IOException("Response body is null for URL: " + url);
+            }
+            return response.body().string();
+        }
     }
 
     public List<TelegramChannel> updateAll(List<TelegramChannel> channels) {
