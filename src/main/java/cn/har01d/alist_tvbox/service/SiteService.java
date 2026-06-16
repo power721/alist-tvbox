@@ -72,7 +72,7 @@ public class SiteService {
     @PostConstruct
     public void init() {
         if (siteRepository.count() > 0) {
-            siteRepository.findById(1).ifPresentOrElse(this::updateSite, this::restoreDefaultSite);
+            siteRepository.findById(1).ifPresent(this::updateSite);
             fixId();
             return;
         }
@@ -91,42 +91,6 @@ public class SiteService {
         }
 
         readAList(order);
-    }
-
-    private void restoreDefaultSite() {
-        if (appProperties.getSites() == null || appProperties.getSites().isEmpty()) {
-            log.warn("default site config is empty, skip restoring site id 1");
-            return;
-        }
-
-        Site site = createSite(appProperties.getSites().getFirst(), 1);
-        site.setId(1);
-        aListToken = generateToken();
-        site.setToken(aListToken);
-        insertDefaultSite(site);
-        settingRepository.save(new Setting("alist_token", aListToken));
-        aListLocalService.setSetting("token", aListToken, "string");
-        log.warn("restore default site id 1: {}", site);
-    }
-
-    private void insertDefaultSite(Site site) {
-        jdbcTemplate.update("""
-                INSERT INTO site
-                (id, name, url, password, token, index_file, folder, searchable, disabled, xiaoya, sort_order, storage_version)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                site.getId(),
-                site.getName(),
-                site.getUrl(),
-                site.getPassword(),
-                site.getToken(),
-                site.getIndexFile(),
-                site.getFolder(),
-                site.isSearchable(),
-                site.isDisabled(),
-                site.isXiaoya(),
-                site.getSortOrder(),
-                site.getStorageVersion());
     }
 
     private Site createSite(cn.har01d.alist_tvbox.tvbox.Site s, int order) {
