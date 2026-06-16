@@ -25,6 +25,7 @@ import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
@@ -67,6 +68,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
@@ -225,7 +227,14 @@ public class IndexService {
         try {
             log.info("download xiaoya index file");
             ProcessBuilder builder = new ProcessBuilder();
-            builder.command("sh", "-c", "/index.sh", remote);
+            // Execute script directly without shell wrapper to prevent command injection
+            // Validate remote parameter to ensure it doesn't contain malicious commands
+            if (remote != null && (remote.contains(";") || remote.contains("|") || remote.contains("&") ||
+                                   remote.contains("`") || remote.contains("$") || remote.contains("\n"))) {
+                log.error("Invalid remote parameter contains shell metacharacters: {}", remote);
+                throw new IllegalArgumentException("Invalid remote parameter");
+            }
+            builder.command("/index.sh", remote);
             builder.inheritIO();
             builder.directory(new File("/tmp"));
             Process process = builder.start();
@@ -338,16 +347,30 @@ public class IndexService {
             Enumeration<? extends ZipEntry> entries = zipFile.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
-                Path entryPath = destFolderPath.resolve(entry.getName());
-                if (entryPath.normalize().startsWith(destFolderPath.normalize())) {
-                    if (entry.isDirectory()) {
-                        Files.createDirectories(entryPath);
-                    } else {
-                        Files.createDirectories(entryPath.getParent());
-                        try (InputStream in = zipFile.getInputStream(entry);
-                             OutputStream out = Files.newOutputStream(entryPath.toFile().toPath())) {
-                            IOUtils.copy(in, out);
-                        }
+                String entryName = entry.getName();
+
+                // Validate entry name before resolving to prevent Zip Slip
+                if (entryName.contains("..") || entryName.startsWith("/") ||
+                    entryName.contains("\\") || entryName.startsWith("\\")) {
+                    log.warn("Blocked suspicious zip entry: {}", entryName);
+                    throw new IOException("Invalid zip entry path: " + entryName);
+                }
+
+                Path entryPath = destFolderPath.resolve(entryName);
+
+                // Additional check: ensure resolved path is still within destination
+                if (!entryPath.normalize().startsWith(destFolderPath.normalize())) {
+                    log.warn("Zip entry escapes destination directory: {}", entryName);
+                    throw new IOException("Zip entry attempts path traversal: " + entryName);
+                }
+
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    Files.createDirectories(entryPath.getParent());
+                    try (InputStream in = zipFile.getInputStream(entry);
+                         OutputStream out = Files.newOutputStream(entryPath.toFile().toPath())) {
+                        IOUtils.copy(in, out);
                     }
                 }
             }
@@ -998,6 +1021,25 @@ public class IndexService {
             return URLDecoder.decode(url, StandardCharsets.UTF_8);
         } catch (Exception e) {
             return url;
+        }
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        log.info("Shutting down IndexService executor");
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                log.warn("Executor did not terminate in time, forcing shutdown");
+                executor.shutdownNow();
+                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                    log.error("Executor did not terminate after forced shutdown");
+                }
+            }
+        } catch (InterruptedException e) {
+            log.warn("Interrupted while waiting for executor to terminate", e);
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 }

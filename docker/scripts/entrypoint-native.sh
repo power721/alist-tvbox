@@ -26,16 +26,15 @@ ensure_dir /data/log
 
 # 根据 INSTALL 环境变量选择初始化脚本
 case "$INSTALL" in
-  native|native-host)
-    if echo "$INSTALL" | grep -q "host"; then
-      log_info "Running xiaoya native host mode initialization"
-      INSTALL=hostmode /docker/scripts/init-xiaoya.sh 2>&1 | tee /data/log/init.log
-    else
-      log_info "Running xiaoya native mode initialization"
-      INSTALL=xiaoya /docker/scripts/init-xiaoya.sh 2>&1 | tee /data/log/init.log
-    fi
+  native-host)
+    log_info "Running xiaoya native host mode initialization"
+    INSTALL=hostmode /docker/scripts/init-xiaoya.sh 2>&1 | tee /data/log/init.log
     ;;
-  *)
+  xiaoya)
+    log_info "Running xiaoya native mode initialization"
+    INSTALL=xiaoya /docker/scripts/init-xiaoya.sh 2>&1 | tee /data/log/init.log
+    ;;
+  native|*)
     log_info "Running standard native mode initialization"
     INSTALL=new /docker/scripts/init-alist.sh 2>&1 | tee /data/log/init.log
     ;;
@@ -60,4 +59,5 @@ fi
 
 # 启动 Native 应用
 log_info "Starting AList-TVBox native application"
+cd /opt/atv
 exec ./atv "$@"

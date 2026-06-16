@@ -49,4 +49,22 @@ public class RestErrorHandler extends ResponseEntityExceptionHandler {
         ProblemDetail body = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
         return handleExceptionInternal(ex, body, headers, status, request);
     }
+
+    /**
+     * Catch-all exception handler for unhandled exceptions.
+     * Logs full exception details for debugging.
+     */
+    @ExceptionHandler({Exception.class})
+    public ResponseEntity<Object> handleGenericException(Exception ex, WebRequest request) {
+        // Log full exception with stack trace for debugging
+        log.error("Unhandled exception in request: {}", request.getDescription(false), ex);
+
+        HttpHeaders headers = new HttpHeaders();
+        HttpStatusCode status = HttpStatusCode.valueOf(500);
+
+        // Return error message as-is for easier debugging in private network environments
+        String message = ex.getMessage() != null ? ex.getMessage() : "An internal error occurred";
+        ProblemDetail body = ProblemDetail.forStatusAndDetail(status, message);
+        return handleExceptionInternal(ex, body, headers, status, request);
+    }
 }

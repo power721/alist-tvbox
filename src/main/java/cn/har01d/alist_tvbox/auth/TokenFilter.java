@@ -34,10 +34,16 @@ public class TokenFilter extends OncePerRequestFilter {
     @Autowired(required = false)
     private SubscriptionService subscriptionService;
     private volatile String apiKey;
+    private volatile String basicAuthCredentials;
 
     public TokenFilter(TokenService tokenService, SettingRepository settingRepository) {
         this.tokenService = tokenService;
         apiKey = settingRepository.findById("api_key").map(Setting::getValue).orElse("");
+        // Load Basic Auth credentials from database instead of hardcoding
+        // Default to "alist:alist" (Base64: YWxpc3Q6YWxpc3Q=) for backward compatibility
+        basicAuthCredentials = settingRepository.findById("basic_auth_credentials")
+                .map(Setting::getValue)
+                .orElse("Basic YWxpc3Q6YWxpc3Q=");
     }
 
     public void setApiKey(String apiKey) {
@@ -59,7 +65,7 @@ public class TokenFilter extends OncePerRequestFilter {
 
             if (request.getRequestURI().startsWith("/open") || request.getRequestURI().startsWith("/node") || request.getRequestURI().startsWith("/cat")) {
                 String auth = request.getHeader("Authorization");
-                if (StringUtils.isBlank(auth) || !"Basic YWxpc3Q6YWxpc3Q=".equals(auth)) {
+                if (StringUtils.isBlank(auth) || !basicAuthCredentials.equals(auth)) {
                     response.setHeader("Www-Authenticate", "Basic realm=\"alist\"");
                     response.sendError(401);
                     return;

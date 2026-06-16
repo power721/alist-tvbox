@@ -14,7 +14,7 @@ import lombok.ToString;
 
 @Getter
 @Setter
-@ToString
+@ToString(exclude = "token")
 @RequiredArgsConstructor
 @Entity
 public class Session {

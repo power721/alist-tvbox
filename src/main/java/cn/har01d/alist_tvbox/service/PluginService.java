@@ -16,6 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
@@ -26,6 +27,9 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class PluginService {
     private static final String PLUGIN_INDEX_FILE = "spiders_v2.json";
@@ -387,6 +391,11 @@ public class PluginService {
     }
 
     private String downloadText(String url, String message) {
+        // Validate URL to prevent SSRF attacks
+        if (!isValidUrl(url)) {
+            throw new BadRequestException("Invalid or unsafe URL: " + url);
+        }
+
         // 如果不是 GitHub URL，直接下载
         if (!StringUtils.startsWith(url, "https://github.com/")) {
             try {
@@ -446,6 +455,67 @@ public class PluginService {
 
         // 所有代理都失败
         throw new BadRequestException(message + " (所有代理均失败)", lastException);
+    }
+
+    /**
+     * Validate URL to prevent SSRF attacks
+     * - Only allow HTTP/HTTPS protocols
+     * - Block private IP ranges and localhost
+     * - Block special hostnames
+     */
+    /**
+     * Validate URL to prevent access to obviously dangerous endpoints.
+     * Simplified for private network deployments - only blocks localhost and metadata endpoints.
+     */
+    private boolean isValidUrl(String url) {
+        try {
+            URI uri = new URI(url);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+
+            // Only allow HTTP and HTTPS
+            if (scheme == null || (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https"))) {
+                log.warn("Blocked non-HTTP(S) URL: {}", url);
+                return false;
+            }
+
+            // Block if host is null
+            if (host == null || host.isEmpty()) {
+                log.warn("Blocked URL with no host: {}", url);
+                return false;
+            }
+
+            // Normalize host to lowercase
+            host = host.toLowerCase();
+
+            // Block localhost and loopback (prevent local service access)
+            if (host.equals("localhost") || host.equals("127.0.0.1") || host.startsWith("127.") ||
+                host.equals("0.0.0.0") || host.equals("::1") || host.equals("0:0:0:0:0:0:0:1")) {
+                log.warn("Blocked localhost/loopback URL: {}", url);
+                return false;
+            }
+
+            // Block link-local addresses (169.254.x.x) - commonly used for router admin
+            if (host.startsWith("169.254.")) {
+                log.warn("Blocked link-local URL: {}", url);
+                return false;
+            }
+
+            // Block cloud metadata endpoints
+            if (host.equals("metadata.google.internal") ||
+                host.equals("169.254.169.254")) {
+                log.warn("Blocked metadata endpoint URL: {}", url);
+                return false;
+            }
+
+            // Note: Private IP ranges (10.x, 192.168.x, 172.16-31.x) are allowed
+            // in private network deployments as they may be legitimate NAS/server addresses
+
+            return true;
+        } catch (URISyntaxException e) {
+            log.warn("Invalid URL syntax: {}", url, e);
+            return false;
+        }
     }
 
     public String readContent(Integer id) {

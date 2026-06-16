@@ -27,6 +27,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
 import okhttp3.OkHttpClient;
@@ -301,6 +302,8 @@ public class TelegramService {
                 total += list.size();
                 result.add(channel + "$$$" + list.stream().filter(e -> e.getContent().contains("http")).map(Message::toZxString).collect(Collectors.joining("##")));
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Search interrupted for channel: {}", channel);
                 break;
             } catch (ExecutionException | TimeoutException e) {
                 log.warn("", e);
@@ -1380,7 +1383,11 @@ public class TelegramService {
                 results.addAll(result);
             } catch (TimeoutException e) {
                 incompleteFutures.add(future);
-            } catch (InterruptedException | ExecutionException e) {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Interrupted while waiting for search results", e);
+                incompleteFutures.add(future);
+            } catch (ExecutionException e) {
                 log.warn("", e);
             }
         }
@@ -1392,7 +1399,10 @@ public class TelegramService {
                 try {
                     results.addAll(future.get());
                     iterator.remove();
-                } catch (InterruptedException | ExecutionException e) {
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Interrupted while retrieving completed future", e);
+                } catch (ExecutionException e) {
                     log.warn("", e);
                 }
             }
@@ -1493,7 +1503,9 @@ public class TelegramService {
 
         int total = 0;
         List<String> result = new ArrayList<>();
+        int index = 0;
         for (Future<List<String>> future : futures) {
+            String currentChannel = channels[index++];
             try {
                 List<String> list = future.get(appProperties.getTgTimeout(), TimeUnit.MILLISECONDS);
                 total += list.size();
@@ -1505,6 +1517,8 @@ public class TelegramService {
                     }
                 }
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Search interrupted for channel: {}", currentChannel);
                 break;
             } catch (ExecutionException | TimeoutException e) {
                 log.warn("", e);
@@ -1542,12 +1556,14 @@ public class TelegramService {
                 .addHeader("Referer", "https://t.me/")
                 .build();
 
+        // Use try-with-resources to ensure response is always closed
         Call call = httpClient.newCall(request);
-        Response response = call.execute();
-        String html = response.body().string();
-        response.close();
-
-        return html;
+        try (Response response = call.execute()) {
+            if (response.body() == null) {
+                throw new IOException("Response body is null for URL: " + url);
+            }
+            return response.body().string();
+        }
     }
 
     public List<TelegramChannel> updateAll(List<TelegramChannel> channels) {
@@ -1556,5 +1572,24 @@ public class TelegramService {
             channel.setSortOrder(order++);
         }
         return telegramChannelRepository.saveAll(channels);
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        log.info("Shutting down TelegramService executor service");
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                log.warn("Executor service did not terminate in time, forcing shutdown");
+                executorService.shutdownNow();
+                if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                    log.error("Executor service did not terminate after forced shutdown");
+                }
+            }
+        } catch (InterruptedException e) {
+            log.warn("Interrupted while waiting for executor service to terminate", e);
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }
