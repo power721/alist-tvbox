@@ -1245,9 +1245,9 @@ check_status() {
       echo -e "httpd端口: ${GREEN}5233${NC}"
       echo -e "AList端口: ${GREEN}5234${NC}"
     else
-      # 纯净版镜像的端口
+      # 纯净版镜像的端口（host模式直接使用容器端口）
       echo -e "管理端口: ${GREEN}4567${NC}"
-      echo -e "AList端口: ${GREEN}5344${NC}"
+      echo -e "AList端口: ${GREEN}5244${NC}"
     fi
   else
     # 使用更安全的方式获取端口映射
