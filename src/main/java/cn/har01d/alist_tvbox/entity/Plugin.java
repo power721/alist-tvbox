@@ -37,7 +37,7 @@ public class Plugin {
     @Column(name = "sort_order")
     private int sortOrder;
 
-    @Column(name = "`extend`", columnDefinition = "TEXT")
+    @Column(name = "\"extend\"", columnDefinition = "TEXT")
     private String extend;
 
     @Column(name = "source_name")
@@ -50,7 +50,7 @@ public class Plugin {
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    @Column(name = "`version`")
+    @Column(name = "\"version\"")
     private Integer version;
 
     @Column(name = "last_checked_at")

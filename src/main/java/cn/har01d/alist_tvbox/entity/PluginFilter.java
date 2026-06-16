@@ -36,7 +36,7 @@ public class PluginFilter {
 
     private String stages = "";
 
-    @Column(name = "`extend`", columnDefinition = "TEXT")
+    @Column(name = "\"extend\"", columnDefinition = "TEXT")
     private String extend;
 
     @Column(name = "error_strategy")
@@ -57,7 +57,7 @@ public class PluginFilter {
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    @Column(name = "`version`")
+    @Column(name = "\"version\"")
     private Integer version;
 
     @Column(name = "last_checked_at")

@@ -33,6 +33,6 @@ public class Tmdb {
     private String actors;
     private String cover;
     private String score;
-    @Column(name = "`year`")
+    @Column(name = "\"year\"")
     private Integer year;
 }

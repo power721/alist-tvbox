@@ -21,7 +21,7 @@ download_with_proxy() {
         log_info "Trying direct connection"
       fi
 
-      if wget -T 30 -t 1 "${candidate}" -O "${output}" 2>/dev/null; then
+      if wget -T 30 -t 1 "${candidate}" -O "${output}"; then
         log_info "Downloaded successfully: $output"
         return 0
       else
@@ -32,7 +32,7 @@ download_with_proxy() {
 
   # 所有代理失败，尝试直连
   log_warn "All proxies failed, trying direct connection"
-  if wget -T 30 -t 2 "${url}" -O "${output}" 2>/dev/null; then
+  if wget -T 30 -t 2 "${url}" -O "${output}"; then
     log_info "Downloaded successfully (direct): $output"
     return 0
   fi

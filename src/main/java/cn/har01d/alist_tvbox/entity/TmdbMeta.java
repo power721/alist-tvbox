@@ -28,7 +28,7 @@ public class TmdbMeta {
     private String path;
     private String name;
     private String type = "movie";
-    @Column(name = "`year`")
+    @Column(name = "\"year\"")
     private Integer year;
     private Integer score;
     private Integer tid;

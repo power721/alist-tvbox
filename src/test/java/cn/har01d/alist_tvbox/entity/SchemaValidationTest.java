@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:schema-validation;MODE=MySQL;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:schema-validation;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=validate",
