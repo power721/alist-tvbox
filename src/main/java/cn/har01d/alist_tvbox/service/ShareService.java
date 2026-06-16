@@ -68,6 +68,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
+import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -429,7 +430,7 @@ public class ShareService {
             if (parts.length > 1) {
                 try {
                     Share share = new Share();
-                    share.setId(shareId);
+                    share.setId(shareId.get());
                     share.setType(defaultType);
                     share.setPath(parts[0]);
                     String[] id = parts[1].split(":", 2);
@@ -540,7 +541,7 @@ public class ShareService {
                         pikpak = true;
                     }
                     if (share.getId() < offset) {
-                        shareId = Math.max(shareId, share.getId() + 1);
+                        shareId.set(Math.max(shareId.get(), share.getId() + 1));
                     }
                     if (share.getType() == null) {
                         share.setType(0);
