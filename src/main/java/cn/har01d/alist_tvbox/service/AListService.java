@@ -313,8 +313,8 @@ public class AListService {
     }
 
     private Integer getVersion(Site site) {
-        if (site.getVersion() != null) {
-            return site.getVersion();
+        if (site.getStorageVersion() != null) {
+            return site.getStorageVersion();
         }
 
         String url = getUrl(site) + "/api/public/settings";
@@ -327,7 +327,7 @@ public class AListService {
             version = 2;
         }
         log.info("site {}:{} version: {}", site.getId(), site.getName(), version);
-        site.setVersion(version);
+        site.setStorageVersion(version);
         siteService.save(site);
 
         return version;

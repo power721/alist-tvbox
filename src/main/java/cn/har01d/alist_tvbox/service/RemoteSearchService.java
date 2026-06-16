@@ -130,7 +130,7 @@ public class RemoteSearchService {
         var result = new MovieList();
         List<MovieDetail> list = new ArrayList<>();
 
-        List<String> channels = telegramChannelRepository.findByEnabledTrue(Sort.by("order")).stream()
+        List<String> channels = telegramChannelRepository.findByEnabledTrue(Sort.by("sortOrder")).stream()
                 .filter(TelegramChannel::isValid)
                 .map(TelegramChannel::getUsername)
                 .toList();

@@ -406,7 +406,7 @@ public class NavigationService {
         for (Navigation item : list) {
             NavigationDto updated = map.get(item.getId());
             if (updated != null) {
-                item.setOrder(updated.getOrder());
+                item.setSortOrder(updated.getOrder());
                 item.setShow(updated.isShow());
             }
         }
@@ -447,7 +447,7 @@ public class NavigationService {
         navigation.setName(dto.getName());
         navigation.setValue(dto.getValue());
         navigation.setType(dto.getType());
-        navigation.setOrder(dto.getOrder());
+        navigation.setSortOrder(dto.getOrder());
         navigation.setShow(dto.isShow());
         navigation.setReserved(dto.isReserved());
         navigation.setParentId(dto.getParentId());

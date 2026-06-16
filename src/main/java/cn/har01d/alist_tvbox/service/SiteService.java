@@ -72,7 +72,7 @@ public class SiteService {
     @PostConstruct
     public void init() {
         if (siteRepository.count() > 0) {
-            siteRepository.findById(1).ifPresentOrElse(this::updateSite, this::restoreDefaultSite);
+            siteRepository.findById(1).ifPresent(this::updateSite);
             fixId();
             return;
         }
@@ -93,42 +93,6 @@ public class SiteService {
         readAList(order);
     }
 
-    private void restoreDefaultSite() {
-        if (appProperties.getSites() == null || appProperties.getSites().isEmpty()) {
-            log.warn("default site config is empty, skip restoring site id 1");
-            return;
-        }
-
-        Site site = createSite(appProperties.getSites().getFirst(), 1);
-        site.setId(1);
-        aListToken = generateToken();
-        site.setToken(aListToken);
-        insertDefaultSite(site);
-        settingRepository.save(new Setting("alist_token", aListToken));
-        aListLocalService.setSetting("token", aListToken, "string");
-        log.warn("restore default site id 1: {}", site);
-    }
-
-    private void insertDefaultSite(Site site) {
-        jdbcTemplate.update("""
-                INSERT INTO site
-                (id, name, url, password, token, index_file, folder, searchable, disabled, xiaoya, `order`, `version`)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                site.getId(),
-                site.getName(),
-                site.getUrl(),
-                site.getPassword(),
-                site.getToken(),
-                site.getIndexFile(),
-                site.getFolder(),
-                site.isSearchable(),
-                site.isDisabled(),
-                site.isXiaoya(),
-                site.getOrder(),
-                site.getVersion());
-    }
-
     private Site createSite(cn.har01d.alist_tvbox.tvbox.Site s, int order) {
         Site site = new Site();
         site.setName(s.getName());
@@ -137,8 +101,8 @@ public class SiteService {
         site.setSearchable(s.isSearchable());
         site.setXiaoya(s.isXiaoya());
         site.setIndexFile(s.getIndexFile());
-        site.setVersion(s.getVersion());
-        site.setOrder(order);
+        site.setStorageVersion(s.getVersion());
+        site.setSortOrder(order);
         return site;
     }
 
@@ -187,10 +151,10 @@ public class SiteService {
         try {
             Site site = new Site();
             site.setName(parts[0]);
-            site.setVersion(Integer.parseInt(parts[1].replace("v", "")));
+            site.setStorageVersion(Integer.parseInt(parts[1].replace("v", "")));
             site.setUrl(parts[2]);
             site.setFolder(fixPath(parts[3]));
-            site.setOrder(order);
+            site.setSortOrder(order);
             siteRepository.save(site);
             log.info("save site to database: {}", site);
         } catch (Exception e) {
@@ -259,12 +223,12 @@ public class SiteService {
     }
 
     public List<Site> findAll() {
-        Sort sort = Sort.by("order");
+        Sort sort = Sort.by("sortOrder");
         return siteRepository.findAll(sort);
     }
 
     public List<Site> list() {
-        Sort sort = Sort.by("order");
+        Sort sort = Sort.by("sortOrder");
         return siteRepository.findAllByDisabledFalse(sort);
     }
 
@@ -282,7 +246,7 @@ public class SiteService {
         siteRepository.save(site);
 
         try {
-            Storage storage = site.getVersion() == 4 ? new OpenList(site) : new AList(site);
+            Storage storage = site.getStorageVersion() != null && site.getStorageVersion() == 4 ? new OpenList(site) : new AList(site);
             aListLocalService.saveStorage(storage);
         } catch (Exception e) {
             log.warn("{}", e.getMessage());
@@ -296,12 +260,12 @@ public class SiteService {
         site.setPassword(dto.getPassword());
         site.setToken(dto.getToken());
         site.setFolder(fixPath(dto.getFolder()));
-        site.setOrder(dto.getOrder());
+        site.setSortOrder(dto.getSortOrder());
         site.setSearchable(dto.isSearchable());
         site.setXiaoya(dto.isXiaoya());
         site.setIndexFile(dto.getIndexFile());
         site.setDisabled(dto.isDisabled());
-        site.setVersion(dto.getVersion());
+        site.setStorageVersion(dto.getStorageVersion());
 
         if (StringUtils.isBlank(site.getUrl())) {
             site.setUrl("http://localhost");
@@ -336,7 +300,7 @@ public class SiteService {
         siteRepository.save(site);
 
         try {
-            Storage storage = site.getVersion() == 4 ? new OpenList(site) : new AList(site);
+            Storage storage = site.getStorageVersion() != null && site.getStorageVersion() == 4 ? new OpenList(site) : new AList(site);
             aListLocalService.saveStorage(storage);
         } catch (Exception e) {
             log.warn("{}", e.getMessage());

@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -21,8 +22,9 @@ public class TelegramChannel {
     private String title;
     private long accessHash;
 
-    @Column(name = "`order`")
-    private int order;
+    @Column(name = "sort_order")
+    @JsonProperty("order")
+    private int sortOrder;
     private int type = -1;
     private boolean valid = true;
     private boolean enabled = false;
