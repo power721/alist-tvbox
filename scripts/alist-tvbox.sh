@@ -2072,21 +2072,21 @@ health_check() {
   echo -e "${CYAN}============== 健康检查 ==============${NC}"
 
   # 根据镜像名称判断是否为xiaoya host系列
-  local image_name="${CONFIG[IMAGE_NAME]}"
+  local image_name="${CONFIG[IMAGE_NAME]:-}"
   if [[ "$image_name" =~ xiaoya.*host ]]; then
-    # xiaoya host系列镜像的健康检查
+    # xiaoya host系列镜像的健康检查（特殊端口5234）
     check_url "管理应用" "http://${ip}:4567/"
     check_url "Nginx" "http://${ip}:5678/"
     check_url "httpd" "http://${ip}:5233/"
     check_url "AList" "http://${ip}:5234/"
-  elif [[ "${CONFIG[NETWORK]}" == "host" ]]; then
-    # 纯净版host模式
+  elif [[ "${CONFIG[NETWORK]:-bridge}" == "host" ]]; then
+    # 所有其他镜像的host模式（标准端口5244）
     check_url "管理应用" "http://${ip}:4567/"
     check_url "AList" "http://${ip}:5244/"
   else
-    # bridge模式
-    check_url "管理应用" "http://${ip}:${CONFIG[PORT1]}/"
-    check_url "入口服务" "http://${ip}:${CONFIG[PORT2]}/"
+    # bridge模式（所有镜像）
+    check_url "管理应用" "http://${ip}:${CONFIG[PORT1]:-4567}/"
+    check_url "入口服务" "http://${ip}:${CONFIG[PORT2]:-5344}/"
   fi
 }
 
