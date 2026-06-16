@@ -618,7 +618,7 @@ validate_image_network_compatibility() {
   fi
 
   # host网络必须使用host镜像
-  if [[ "$network" == "host" && ! "$image" =~ (:|-)host$ ]]; then
+  if [[ "$network" == "host" && ! "$image" =~ (:|-)host ]]; then
     echo -e "${RED}错误: host 网络模式必须使用 :host 镜像版本${NC}"
     echo -e "${YELLOW}普通镜像的 AList 监听 80 端口，会占用主机端口${NC}"
     echo -e "${YELLOW}请选择版本 6 (native-host) 或版本 7 (host)${NC}"
