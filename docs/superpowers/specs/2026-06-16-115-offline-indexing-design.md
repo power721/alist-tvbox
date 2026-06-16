@@ -2,17 +2,17 @@
 
 **创建日期：** 2026-06-16  
 **目标：** 实现类似webdavsim的离线索引机制，支持260万+文件高效搜索，规避115风控  
-**最终方案：** 集成到telegram-search，提供独立搜索服务
+**最终方案：** 集成到PowerList（Docker内已运行），利用已有115分享配置，提供独立索引服务
 
 ---
 
 ## 1. 核心问题与解决方案
 
 ### 问题1：如何高效索引260万+文件？
-**方案：** 复用telegram-search的bleve全文索引引擎
+**方案：** 复用PowerList内嵌的bleve全文索引引擎
 - 搜索速度：50-150ms
 - 内存占用：100-300MB（可配置）
-- 已有基础设施：telegram-search `internal/alist115/`
+- 已有基础设施：PowerList `/internal/search/bleve/`
 
 ### 问题2：如何避免触发115风控？
 **方案：** 混合模式 - 批量导入 + 限速增量更新
@@ -24,43 +24,62 @@
 **方案：** 流式处理 + bleve磁盘存储
 - Java：流式读取txt，10k批次分批导入
 - Go：bleve磁盘模式，缓存可配置100-200MB
-- 总预算：1-2GB JVM + 300MB telegram-search
+- 总预算：1-2GB JVM + 300MB PowerList
 
 ---
 
-## 2. 架构设计（telegram-search方案）
+## 2. 架构设计（PowerList集成方案）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ alist-tvbox (Java)                                           │
-│  ├─ Index115Service         索引管理                         │
-│  ├─ Index115Controller      API入口                         │
-│  ├─ Index115Task (Entity)   任务状态                         │
-│  └─ @Scheduled Jobs         定时扫描/验证                    │
-└──────────────────┬──────────────────────────────────────────┘
-                   │ HTTP
-┌──────────────────▼──────────────────────────────────────────┐
-│ telegram-search (Go standalone service)                      │
-│  ├─ POST /api/external/115/import-batch  批量导入            │
-│  ├─ GET  /api/external/115/search        搜索API            │
-│  ├─ DELETE /api/external/115/clear        清空索引           │
-│  └─ internal/alist115/                    115索引模块        │
-│      ├─ service.go           bleve索引管理                   │
-│      ├─ importer.go          批量导入逻辑                     │
-│      ├─ searcher.go          搜索封装                        │
-│      └─ model.go             数据模型                        │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-           ┌──────▼──────┐
-           │ data/indexes/115/  │  bleve索引文件（磁盘）
-           └─────────────┘
+│ Docker Container: alist-tvbox                                │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ alist-tvbox (Java进程)                                │  │
+│  │  ├─ Index115Service         索引管理                  │  │
+│  │  ├─ Index115Controller      API入口                  │  │
+│  │  ├─ Index115Task (Entity)   任务状态                  │  │
+│  │  └─ @Scheduled Jobs         定时扫描/验证             │  │
+│  └────────────────┬─────────────────────────────────────┘  │
+│                   │ localhost HTTP                          │
+│  ┌────────────────▼─────────────────────────────────────┐  │
+│  │ PowerList (Go进程)                                    │  │
+│  │  ├─ 115分享存储配置（已有）                           │  │
+│  │  ├─ POST /api/fs/115/import-batch  批量导入          │  │
+│  │  ├─ GET  /api/fs/115/search        搜索API           │  │
+│  │  ├─ DELETE /api/fs/115/clear        清空索引          │  │
+│  │  ├─ GET  /d/我的115分享/...         播放链接（已有） │  │
+│  │  └─ internal/search/alist115/      115索引模块       │  │
+│  │      ├─ service.go           bleve索引管理            │  │
+│  │      ├─ importer.go          批量导入逻辑             │  │
+│  │      ├─ searcher.go          搜索封装                 │  │
+│  │      └─ model.go             数据模型                 │  │
+│  └────────────────┬─────────────────────────────────────┘  │
+│                   │                                         │
+└───────────────────┼─────────────────────────────────────────┘
+                    │
+             ┌──────▼──────┐
+             │ data/indexes/115/  │  bleve索引文件（磁盘）
+             └─────────────┘
 ```
 
 **关键变化：**
-- telegram-search → telegram-search（独立Go服务）
-- 复用telegram-search的external API框架
-- 新增`internal/alist115/`模块
-- 索引路径：`data/indexes/115/`
+- PowerList与alist-tvbox在同一Docker容器内运行
+- localhost通信，延迟最低
+- PowerList已配置115分享存储，搜索结果可直接播放
+- 新增`internal/search/alist115/`模块，与主索引隔离
+- 索引路径：`data/indexes/115/`（独立目录）
+
+**播放链路：**
+```
+搜索: /api/fs/115/search?q=电影
+  ↓ 返回: /我的115分享/电影/xxx.mkv
+  ↓
+播放: /d/我的115分享/电影/xxx.mkv
+  ↓ PowerList匹配到115存储配置
+  ↓
+返回: 115播放链接
+```
 
 ---
 
@@ -155,10 +174,10 @@ docMapping.AddFieldMappingsAt("indexed_at", numberFieldMapping)
 3. 异步任务：
    - 解压 .xz
    - 流式读取（BufferedReader）
-   - 分批10k条 → HTTP POST /api/external/115/import-batch
+   - 分批10k条 → HTTP POST /api/fs/115/import-batch
    - 更新 indexedCount
    ↓
-4. telegram-search 接收批次：
+4. PowerList 接收批次：
    - 解析 SearchNode115[]
    - bleve.NewBatch()
    - batch.Index(uuid, node)
@@ -181,13 +200,13 @@ public void importFromFile(Integer taskId, String filePath) {
             batch.add(node);
             
             if (batch.size() >= 10000) {
-                sendToTgSearch(batch);
+                sendToPowerList(batch);
                 updateTaskProgress(taskId, batch.size());
                 batch.clear();
             }
         }
         if (!batch.isEmpty()) {
-            sendToTgSearch(batch);
+            sendToPowerList(batch);
         }
         updateTaskStatus(taskId, SUCCESS);
     }
@@ -221,7 +240,7 @@ private SearchNode115 parseLine(String line, long defaultTime) {
    - 对比Meta表indexed_at
    - 新增/变化 → 收集到batch
    ↓
-4. 批量发送到telegram-search /import-batch
+4. 批量发送到PowerList /import-batch
    ↓
 5. 递归所有子目录（无深度限制）
    ↓
@@ -244,11 +263,11 @@ class ScanConfig {
 ### 4.3 搜索流程
 
 ```
-用户请求 GET /api/external/115/search?q=侏罗纪&page=1
+用户请求 GET /api/fs/115/search?q=侏罗纪&page=1
    ↓
 1. Java Controller 代理请求
    ↓
-2. telegram-search /api/external/115/search
+2. PowerList /api/fs/115/search
    - 构建bleve.MatchQuery
    - index.Search(request)
    - 返回 {nodes, total}
@@ -336,9 +355,9 @@ Response:
   }
 ```
 
-**GET /api/external/115/search**
+**GET /api/fs/115/search**
 ```
-搜索115文件（代理到telegram-search）
+搜索115文件（代理到PowerList）
 
 Query:
   q: 关键词
@@ -362,9 +381,9 @@ Response:
   }
 ```
 
-### 5.2 Go API（telegram-search扩展）
+### 5.2 Go API（PowerList扩展）
 
-**POST /api/external/115/import-batch**
+**POST /api/fs/115/import-batch**
 ```
 批量导入节点到bleve索引
 
@@ -386,7 +405,7 @@ Response:
   }
 ```
 
-**GET /api/external/115/search**
+**GET /api/fs/115/search**
 ```
 搜索索引
 
@@ -403,7 +422,7 @@ Response:
   }
 ```
 
-**DELETE /api/external/115/clear**
+**DELETE /api/fs/115/clear**
 ```
 清空索引（需要admin权限）
 
@@ -459,7 +478,7 @@ public ThreadPoolExecutor index115Executor() {
 - 预留：450MB
 - **总计：1GB（推荐）~ 2GB（性能优化）**
 
-### 6.2 Go侧（telegram-search）
+### 6.2 Go侧（PowerList）
 
 **bleve配置：**
 ```go
@@ -498,7 +517,7 @@ func (a *Alist115Searcher) BatchIndex(nodes []SearchNode115) error {
 ```
 
 **内存预算：**
-- telegram-search基础：100MB
+- PowerList基础：100MB
 - bleve缓存：100-200MB（可调整）
 - 批量处理缓冲：50MB
 - **总计：250-350MB**
@@ -646,8 +665,8 @@ alist-tvbox/
 index115:
   enabled: true
   
-  # telegram-search连接
-  tg-search:
+  # PowerList连接
+  powerlist:
     base-url: http://localhost:5244
     
   # 扫描配置
@@ -676,8 +695,8 @@ index115:
 ### 8.3 环境要求
 
 **内存：**
-- 最小：1GB JVM + 250MB telegram-search = **1.25GB**
-- 推荐：2GB JVM + 350MB telegram-search = **2.35GB**
+- 最小：1GB JVM + 250MB PowerList = **1.25GB**
+- 推荐：2GB JVM + 350MB PowerList = **2.35GB**
 - 说明：更大内存可提升批量导入速度和搜索性能
 
 **磁盘：**
@@ -894,7 +913,7 @@ class Index115IntegrationTest {
 - [ ] Flyway迁移脚本
 - [ ] 单元测试
 
-### Go侧（telegram-search）
+### Go侧（PowerList）
 - [ ] `/internal/search/alist115/` 目录
 - [ ] `search.go` - searcher实现
 - [ ] `importer.go` - 批量导入
@@ -912,7 +931,7 @@ class Index115IntegrationTest {
 ## 14. 里程碑
 
 **Phase 1：基础功能（2周）**
-- telegram-search bleve集成
+- PowerList bleve集成
 - 批量导入API
 - 基础搜索功能
 
@@ -946,46 +965,71 @@ class Index115IntegrationTest {
 
 ---
 
-## 16. 方案对比：telegram-search集成 vs telegram-search集成
+## 16. 方案对比与最终决策
 
-### 方案A：telegram-search集成（当前方案）
+### 最终选择：PowerList集成方案
+
+**决策理由：**
+1. ✅ **部署最简** - PowerList已在Docker内运行，localhost通信
+2. ✅ **115配置就绪** - PowerList已内置115分享配置，覆盖大部分webdavsim资源
+3. ✅ **播放链路打通** - 搜索结果路径直接匹配PowerList存储，无需转存
+4. ✅ **bleve基础设施现成** - 复用`/internal/search/bleve/`
+5. ✅ **内存隔离** - 独立索引目录`data/indexes/115/`，不影响主索引
+
+**架构优势：**
+```
+搜索: /api/fs/115/search?q=侏罗纪
+  ↓ 返回: /我的115分享/4KRemux/侏罗纪世界3.mkv
+  ↓
+播放: /d/我的115分享/4KRemux/侏罗纪世界3.mkv
+  ↓ PowerList自动匹配已配置的115存储
+  ↓ 调用115 API获取真实播放链接（已有逻辑）
+```
+
+**vs telegram-search方案：**
+- telegram-search在Docker外，需要跨容器通信
+- 搜索结果无法直接关联115存储配置
+- 需要alist-tvbox二次调用PowerList获取播放链接
+- 多一层转发，延迟+复杂度增加
+
+---
 
 **架构：**
 ```
-alist-tvbox (Java) ←→ telegram-search (Go embedded)
+alist-tvbox (Java) ←→ PowerList (Go embedded)
                         └─ bleve索引
 ```
 
 **优势：**
-✅ telegram-search已内嵌，零额外部署  
+✅ PowerList已内嵌，零额外部署  
 ✅ bleve基础设施现成  
 ✅ 内存共享（1进程）  
 ✅ 同域部署，无跨域问题  
 ✅ 直接集成AList API，路径天然对齐  
 
 **劣势：**
-❌ telegram-search是文件管理器，职责耦合  
+❌ PowerList是文件管理器，职责耦合  
 ❌ 索引与AList主索引混在一起（需隔离）  
-❌ Go代码需修改telegram-search源码  
+❌ Go代码需修改PowerList源码  
 
 **内存占用：**
-- 总计：1.25-2.35GB（Java 1-2GB + telegram-search 250-350MB）
+- 总计：1.25-2.35GB（Java 1-2GB + PowerList 250-350MB）
 
 **部署复杂度：** ⭐（最简单，已嵌入）
 
 ---
 
-### 方案B：telegram-search集成（新方案）
+### 方案B：PowerList集成（新方案）
 
 **架构：**
 ```
-alist-tvbox (Java) ─HTTP→ telegram-search (Go standalone)
+alist-tvbox (Java) ─HTTP→ PowerList (Go standalone)
                            └─ SQLite FTS5 / 新增bleve
 ```
 
 **优势：**
 ✅ 独立服务，职责清晰（专注搜索）  
-✅ telegram-search已有搜索基础设施  
+✅ PowerList已有搜索基础设施  
 ✅ 已有external_search API框架  
 ✅ 内存隔离，进程独立  
 ✅ 可复用给其他项目（通用搜索服务）  
@@ -999,7 +1043,7 @@ alist-tvbox (Java) ─HTTP→ telegram-search (Go standalone)
 
 **内存占用：**
 - alist-tvbox：1-2GB
-- telegram-search：200-400MB（含索引）
+- PowerList：200-400MB（含索引）
 - **总计：1.2-2.4GB**
 
 **部署复杂度：** ⭐⭐（需配置HTTP端点）
@@ -1035,7 +1079,7 @@ alist-tvbox (Java) ─HTTP→ 115-index-service (Go new project)
 
 ### 关键对比
 
-| 维度 | telegram-search集成 | telegram-search集成 | 独立Go服务 |
+| 维度 | PowerList集成 | PowerList集成 | 独立Go服务 |
 |------|--------------|---------------------|-----------|
 | **搜索速度** | 50-150ms | 50-200ms（+HTTP） | 50-150ms |
 | **开发成本** | ⭐⭐（修改现有） | ⭐（复用基础） | ⭐⭐⭐（全新） |
@@ -1052,25 +1096,25 @@ alist-tvbox (Java) ─HTTP→ 115-index-service (Go new project)
 
 **1秒搜索延迟可接受** → HTTP开销（10-50ms）不是问题
 
-**推荐：方案B（telegram-search集成）**
+**推荐：方案B（PowerList集成）**
 
 **理由：**
-1. ✅ 职责清晰：telegram-search专注搜索，符合架构
+1. ✅ 职责清晰：PowerList专注搜索，符合架构
 2. ✅ 已有external_search API框架，开发最快
 3. ✅ 内存隔离，不影响alist-tvbox稳定性
 4. ✅ 可复用：未来其他项目可调用同一搜索服务
-5. ✅ 你已熟悉telegram-search代码，维护成本低
+5. ✅ 你已熟悉PowerList代码，维护成本低
 6. ✅ 1秒内响应充裕（实际200-300ms）
 
 **实施建议：**
-- telegram-search新增 `/api/external/115/search` 端点
+- PowerList新增 `/api/fs/115/search` 端点
 - 复用existing external_search框架
 - 添加bleve索引目录：`data/indexes/115/`
 - alist-tvbox通过HTTP调用
 - Docker compose统一编排
 
 **需要确认：**
-- telegram-search是否适合承担通用搜索服务角色？
+- PowerList是否适合承担通用搜索服务角色？
 - 是否介意多部署1个服务？
 
 ---

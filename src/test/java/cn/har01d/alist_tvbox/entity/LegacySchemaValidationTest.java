@@ -1,7 +1,7 @@
 package cn.har01d.alist_tvbox.entity;
 
 import db.migration.current.V2__Normalize_reserved_columns;
-import db.migration.current.V3__Rename_reserved_columns;
+import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.configuration.Configuration;
 import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.Test;
@@ -74,7 +74,14 @@ class LegacySchemaValidationTest {
             applyFreshSchema(connection);
             restoreLegacyReservedColumns(connection);
             new V2__Normalize_reserved_columns().migrate(new TestMigrationContext(connection));
-            new V3__Rename_reserved_columns().migrate(new TestMigrationContext(connection));
+            // V3 is now SQL-based, use Flyway to execute it
+            Flyway flyway = Flyway.configure()
+                    .dataSource(JDBC_URL, "sa", "")
+                    .locations("classpath:db/migration/current")
+                    .baselineVersion("2")
+                    .baselineOnMigrate(true)
+                    .load();
+            flyway.migrate();
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
