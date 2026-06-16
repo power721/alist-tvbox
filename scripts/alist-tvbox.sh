@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 脚本版本
+SCRIPT_VERSION="4.0.0"
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -553,7 +556,8 @@ show_menu() {
   echo -e "${YELLOW} 网络模式: ${CONFIG[NETWORK]}${NC}"
   echo -e "${YELLOW} 重启策略: ${CONFIG[RESTART]}${NC}"
   echo -e "${YELLOW} 系统信息: ${sys}${NC}"
-  echo -e "${YELLOW} Docker Server: ${docker_version}${NC}"
+  echo -e "${YELLOW} Docker: ${docker_version}${NC}"
+  echo -e "${YELLOW} 脚本版本: ${SCRIPT_VERSION}${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
   echo -e "${GREEN} 1. 安装/更新${NC}"
 
@@ -569,14 +573,16 @@ show_menu() {
 
   echo -e "${GREEN} 3. 重启容器${NC}"
   echo -e "${GREEN} 4. 查看状态${NC}"
-  echo -e "${GREEN} 5. 查看日志${NC}"
+  echo -e "${GREEN} 5. 日志管理${NC}"
   echo -e "${GREEN} 6. 卸载容器${NC}"
   echo -e "${GREEN} 7. 选择版本${NC}"
   echo -e "${GREEN} 8. 配置管理${NC}"
   echo -e "${GREEN} 9. 自动修复${NC}"
+  echo -e "${GREEN} c. 清理资源${NC}"
+  echo -e "${GREEN} w. 打开Web界面${NC}"
   echo -e "${GREEN} 0. 退出${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请输入选项 [0-9]: " choice
+  read -p "请输入选项 [0-9/c/w]: " choice
 }
 
 # 检查系统架构支持
@@ -1268,6 +1274,29 @@ check_status() {
   echo -e "\n${CYAN}============= 资源使用情况 ============${NC}"
   docker stats --no-stream "$container_name" 2>/dev/null || echo -e "${YELLOW}容器未运行${NC}"
 
+  # 显示容器内部版本信息
+  if [[ "$status" == "running" ]]; then
+    echo -e "\n${CYAN}============ 容器版本信息 ============${NC}"
+
+    # 安装模式
+    local install_mode=$(docker exec "$container_name" sh -c 'echo $INSTALL' 2>/dev/null || echo "未知")
+    echo -e "安装模式: ${GREEN}${install_mode}${NC}"
+
+    # 应用版本
+    local app_version=$(docker exec "$container_name" cat /app_version 2>/dev/null || echo "未知")
+    echo -e "应用版本: ${GREEN}${app_version}${NC}"
+
+    # 小雅版本（如果存在）
+    local xiaoya_version=$(docker exec "$container_name" sh -c 'head -n1 /docker.version 2>/dev/null' || echo "")
+    if [[ -n "$xiaoya_version" ]]; then
+      echo -e "小雅版本: ${GREEN}${xiaoya_version}${NC}"
+    fi
+
+    # 容器系统信息
+    local container_os=$(docker exec "$container_name" uname -mor 2>/dev/null || echo "未知")
+    echo -e "容器系统: ${GREEN}${container_os}${NC}"
+  fi
+
   # 检查AList服务状态
   if [[ "$status" == "running" ]]; then
     echo -e "\n${CYAN}============ AList服务状态 ============${NC}"
@@ -1276,6 +1305,54 @@ check_status() {
     # 执行健康检查
     echo ""
     health_check
+  fi
+
+  read -n 1 -s -r -p "按任意键继续..."
+}
+
+# 立即备份数据库
+backup_database_now() {
+  echo -e "${CYAN}=============================================${NC}"
+  echo -e "${GREEN}          立即备份数据库          ${NC}"
+  echo -e "${CYAN}=============================================${NC}"
+
+  local backup_dir="${CONFIG[BASE_DIR]}/backup"
+  local db_file="${CONFIG[BASE_DIR]}/atv.mv.db"
+
+  # 检查数据库文件是否存在
+  if [[ ! -f "$db_file" ]]; then
+    echo -e "${RED}数据库文件不存在: $db_file${NC}"
+    echo -e "${YELLOW}可能原因：容器未运行或数据库未初始化${NC}"
+    read -n 1 -s -r -p "按任意键继续..."
+    return
+  fi
+
+  # 创建备份目录
+  mkdir -p "$backup_dir" 2>/dev/null || {
+    echo -e "${RED}无法创建备份目录 (权限不足)${NC}"
+    read -n 1 -s -r -p "按任意键继续..."
+    return
+  }
+
+  # 生成备份文件名（格式: database-YYYY-MM-DD-HHMMSS.zip）
+  local timestamp=$(date +"%Y-%m-%d-%H%M%S")
+  local backup_file="${backup_dir}/database-${timestamp}.zip"
+
+  echo -e "${CYAN}正在备份数据库...${NC}"
+
+  # 使用zip命令打包数据库文件
+  if command -v zip >/dev/null 2>&1; then
+    if (cd "${CONFIG[BASE_DIR]}" && zip -q "$backup_file" atv.mv.db 2>/dev/null); then
+      local filesize=$(ls -lh "$backup_file" | awk '{print $5}')
+      echo -e "${GREEN}✓ 备份成功${NC}"
+      echo -e "备份文件: ${GREEN}${backup_file}${NC}"
+      echo -e "文件大小: ${filesize}"
+    else
+      echo -e "${RED}备份失败${NC}"
+    fi
+  else
+    echo -e "${RED}错误: 系统未安装 zip 命令${NC}"
+    echo -e "${YELLOW}请安装: apt install zip 或 yum install zip${NC}"
   fi
 
   read -n 1 -s -r -p "按任意键继续..."
@@ -1318,9 +1395,10 @@ manage_github_proxy() {
     echo -e "${GREEN} 1. 添加代理"
     echo -e " 2. 删除代理"
     echo -e " 3. 清空所有代理"
+    echo -e " 4. 测速对比"
     echo -e " 0. 返回配置菜单${NC}"
     echo -e "${CYAN}---------------------------------------------${NC}"
-    read -p "请选择操作 [0-3]: " choice
+    read -p "请选择操作 [0-4]: " choice
 
     case $choice in
       1)
@@ -1398,6 +1476,10 @@ manage_github_proxy() {
         esac
         ;;
 
+      4)
+        test_github_proxy_speed "${current_proxies[@]}"
+        ;;
+
       0)
         return
         ;;
@@ -1408,6 +1490,113 @@ manage_github_proxy() {
         ;;
     esac
   done
+}
+
+# GitHub代理测速
+test_github_proxy_speed() {
+  local proxies=("$@")
+  local test_url="https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt"
+
+  echo -e "\n${CYAN}============== 代理测速对比 ==============${NC}"
+  echo -e "${YELLOW}测试文件: version.txt${NC}\n"
+
+  # 验证版本号格式 (x.y.z 或 vx.y.z)
+  validate_version() {
+    local content="$1"
+    # 匹配版本号格式: 数字.数字.数字 (可选的v前缀)
+    if [[ "$content" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      return 0
+    else
+      return 1
+    fi
+  }
+
+  # 测试直连
+  echo -e "${CYAN}测试 直连...${NC}"
+  local start_time=$(date +%s%3N)
+  local direct_result=$(curl -fsS --connect-timeout 5 --max-time 10 "$test_url" 2>/dev/null | tr -d '[:space:]')
+  local end_time=$(date +%s%3N)
+  local direct_time=$((end_time - start_time))
+
+  if [[ -n "$direct_result" ]] && validate_version "$direct_result"; then
+    echo -e "  ${GREEN}✓ 成功${NC} - 耗时: ${GREEN}${direct_time}ms${NC}"
+    echo -e "  版本号: ${direct_result}"
+  else
+    if [[ -n "$direct_result" ]]; then
+      echo -e "  ${RED}× 失败${NC} - 返回内容无效: ${direct_result}"
+    else
+      echo -e "  ${RED}× 失败${NC} - 连接超时或无法访问"
+    fi
+    direct_time=99999
+  fi
+
+  # 测试所有代理
+  if [[ ${#proxies[@]} -eq 0 ]]; then
+    echo -e "\n${YELLOW}当前未配置代理${NC}"
+    read -n 1 -s -r -p "按任意键继续..."
+    return
+  fi
+
+  echo ""
+  local best_proxy=""
+  local best_time=99999
+  local proxy_times=()
+
+  for proxy in "${proxies[@]}"; do
+    echo -e "${CYAN}测试 ${proxy}${NC}"
+    local proxy_url="${proxy}${test_url}"
+
+    start_time=$(date +%s%3N)
+    local proxy_result=$(curl -fsS --connect-timeout 5 --max-time 10 "$proxy_url" 2>/dev/null | tr -d '[:space:]')
+    end_time=$(date +%s%3N)
+    local proxy_time=$((end_time - start_time))
+
+    if [[ -n "$proxy_result" ]] && validate_version "$proxy_result"; then
+      echo -e "  ${GREEN}✓ 成功${NC} - 耗时: ${GREEN}${proxy_time}ms${NC}"
+      echo -e "  版本号: ${proxy_result}"
+      proxy_times+=("$proxy_time:$proxy")
+
+      if [[ $proxy_time -lt $best_time ]]; then
+        best_time=$proxy_time
+        best_proxy=$proxy
+      fi
+    else
+      if [[ -n "$proxy_result" ]]; then
+        echo -e "  ${RED}× 失败${NC} - 返回内容无效: ${proxy_result}"
+      else
+        echo -e "  ${RED}× 失败${NC} - 连接超时或无法访问"
+      fi
+      proxy_times+=("99999:$proxy")
+    fi
+    echo ""
+  done
+
+  # 显示推荐
+  echo -e "${CYAN}============== 测速结果 ==============${NC}"
+  if [[ $direct_time -lt $best_time ]]; then
+    echo -e "${GREEN}推荐: 直连${NC} (${direct_time}ms)"
+    echo -e "${YELLOW}当前网络环境下，直连速度最快，建议清空代理${NC}"
+  elif [[ $best_time -lt 99999 ]]; then
+    echo -e "${GREEN}推荐: ${best_proxy}${NC} (${best_time}ms)"
+    echo -e "${YELLOW}该代理速度最快，建议保留此代理${NC}"
+  else
+    echo -e "${RED}所有代理均无法访问${NC}"
+    echo -e "${YELLOW}建议检查网络连接或更换其他代理${NC}"
+  fi
+
+  # 显示排序结果
+  if [[ ${#proxy_times[@]} -gt 1 ]]; then
+    echo -e "\n${CYAN}速度排行:${NC}"
+    printf '%s\n' "${proxy_times[@]}" | sort -t: -k1 -n | while IFS=: read -r time proxy; do
+      if [[ $time -eq 99999 ]]; then
+        echo -e "  ${RED}× ${proxy}${NC} - 失败"
+      else
+        echo -e "  ${GREEN}✓ ${proxy}${NC} - ${time}ms"
+      fi
+    done
+  fi
+
+  read -n 1 -s -r -p "按任意键继续..."
 }
 
 # 保存代理列表
@@ -1459,11 +1648,11 @@ restore_database() {
     return
   fi
 
-  # 列出所有备份文件
+  # 列出所有备份文件（按修改时间倒序，最新的在前）
   local backups=()
   while IFS= read -r file; do
     backups+=("$file")
-  done < <(find "$backup_dir" -maxdepth 1 -type f -name "*.zip" 2>/dev/null | sort -r)
+  done < <(find "$backup_dir" -maxdepth 1 -type f -name "*.zip" -printf "%T@ %p\n" 2>/dev/null | sort -rn | cut -d' ' -f2-)
 
   if [[ ${#backups[@]} -eq 0 ]]; then
     echo -e "${YELLOW}未找到备份文件${NC}"
@@ -1686,9 +1875,10 @@ show_config_menu() {
     echo -e " 7. 重启策略: ${CONFIG[RESTART]}"
     echo -e " 8. 重置管理员密码"
     echo -e " 9. GitHub代理设置"
+    echo -e " b. 立即备份数据库"
     echo -e " 0. 返回主菜单"
     echo -e "${CYAN}---------------------------------------------${NC}"
-    read -p "选择要修改的配置 [0-9]: " config_choice
+    read -p "选择要修改的配置 [0-9/b]: " config_choice
 
     local need_recreate=false
 
@@ -1765,6 +1955,10 @@ show_config_menu() {
         ;;
       9)
         manage_github_proxy
+        continue
+        ;;
+      b|B)
+        backup_database_now
         continue
         ;;
       0)
@@ -1873,6 +2067,108 @@ check_port_in_use() {
   else
     return 1
   fi
+}
+
+# 网络诊断
+network_diagnostics() {
+  echo -e "\n${CYAN}============== 网络诊断 ==============${NC}"
+
+  # 1. 测试外网连通性
+  echo -e "${CYAN}1. 外网连通性测试${NC}"
+  local test_sites=("1.1.1.1" "8.8.8.8" "114.114.114.114")
+  local connectivity_ok=false
+
+  for site in "${test_sites[@]}"; do
+    if ping -c 1 -W 2 "$site" >/dev/null 2>&1; then
+      echo -e "  ${GREEN}✓${NC} $site 连接正常"
+      connectivity_ok=true
+      break
+    else
+      echo -e "  ${RED}×${NC} $site 无法连接"
+    fi
+  done
+
+  if [[ "$connectivity_ok" == "false" ]]; then
+    echo -e "  ${RED}× 外网连接失败，请检查网络配置${NC}"
+    return 1
+  fi
+
+  # 2. DNS解析测试
+  echo -e "\n${CYAN}2. DNS解析测试${NC}"
+  local dns_test_domains=("www.baidu.com" "github.com" "docker.io")
+  local dns_ok=false
+
+  for domain in "${dns_test_domains[@]}"; do
+    if nslookup "$domain" >/dev/null 2>&1 || host "$domain" >/dev/null 2>&1; then
+      echo -e "  ${GREEN}✓${NC} $domain 解析成功"
+      dns_ok=true
+    else
+      echo -e "  ${YELLOW}⚠${NC} $domain 解析失败"
+    fi
+  done
+
+  if [[ "$dns_ok" == "false" ]]; then
+    echo -e "  ${RED}× DNS解析失败，请检查DNS配置${NC}"
+    echo -e "  ${YELLOW}建议: 修改 /etc/resolv.conf 添加公共DNS${NC}"
+  fi
+
+  # 3. GitHub连通性测试（含代理）
+  echo -e "\n${CYAN}3. GitHub连通性测试${NC}"
+
+  # 测试直连
+  if curl -fsS --connect-timeout 3 https://github.com >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} GitHub直连正常"
+  else
+    echo -e "  ${RED}×${NC} GitHub直连失败"
+
+    # 测试配置的代理
+    local proxy_file="${CONFIG[BASE_DIR]}/github_proxy.txt"
+    if [[ -f "$proxy_file" && -s "$proxy_file" ]]; then
+      echo -e "  ${CYAN}测试配置的GitHub代理:${NC}"
+      while IFS= read -r proxy; do
+        [[ -z "$proxy" ]] && continue
+        local test_url="${proxy}https://github.com"
+        if curl -fsS --connect-timeout 3 "$test_url" >/dev/null 2>&1; then
+          echo -e "    ${GREEN}✓${NC} $proxy"
+        else
+          echo -e "    ${RED}×${NC} $proxy"
+        fi
+      done < "$proxy_file"
+    else
+      echo -e "  ${YELLOW}提示: 可通过配置管理添加GitHub代理${NC}"
+    fi
+  fi
+
+  # 4. Docker Hub连通性测试
+  echo -e "\n${CYAN}4. Docker Hub连通性测试${NC}"
+  if curl -fsS --connect-timeout 3 https://hub.docker.com >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} Docker Hub连接正常"
+  else
+    echo -e "  ${RED}×${NC} Docker Hub连接失败"
+    echo -e "  ${YELLOW}建议: 配置Docker镜像加速${NC}"
+  fi
+
+  # 5. 容器网络测试（如果容器运行中）
+  local container_name=$(get_container_name)
+  if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    echo -e "\n${CYAN}5. 容器网络测试${NC}"
+
+    # 测试容器内网络
+    if docker exec "$container_name" ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1; then
+      echo -e "  ${GREEN}✓${NC} 容器内网络正常"
+    else
+      echo -e "  ${RED}×${NC} 容器内网络异常"
+    fi
+
+    # 测试容器DNS
+    if docker exec "$container_name" nslookup www.baidu.com >/dev/null 2>&1; then
+      echo -e "  ${GREEN}✓${NC} 容器DNS正常"
+    else
+      echo -e "  ${YELLOW}⚠${NC} 容器DNS可能异常"
+    fi
+  fi
+
+  echo -e "\n${GREEN}网络诊断完成${NC}"
 }
 
 auto_repair() {
@@ -1992,7 +2288,233 @@ auto_repair() {
   echo -e "\n${CYAN}============== 服务健康检查 ==============${NC}"
   health_check
 
+  # 4. 网络诊断
+  network_diagnostics
+
   echo -e "\n${GREEN}诊断完成${NC}"
+  read -n 1 -s -r -p "按任意键继续..."
+}
+
+# 清理Docker资源
+cleanup_docker_resources() {
+  echo -e "${CYAN}=============================================${NC}"
+  echo -e "${GREEN}          Docker资源清理          ${NC}"
+  echo -e "${CYAN}=============================================${NC}"
+
+  # 显示当前磁盘使用情况
+  echo -e "${YELLOW}正在分析Docker磁盘使用情况...${NC}\n"
+  docker system df 2>/dev/null || {
+    echo -e "${RED}无法获取Docker磁盘信息${NC}"
+    read -n 1 -s -r -p "按任意键继续..."
+    return
+  }
+
+  echo -e "\n${CYAN}可执行的清理操作:${NC}"
+  echo -e " 1. 清理未使用的镜像"
+  echo -e " 2. 清理已停止的容器"
+  echo -e " 3. 清理未使用的数据卷"
+  echo -e " 4. 清理构建缓存"
+  echo -e " 5. 一键清理所有未使用资源"
+  echo -e " 0. 返回"
+  echo -e "${CYAN}---------------------------------------------${NC}"
+  read -p "请选择清理操作 [0-5]: " choice
+
+  case $choice in
+    1)
+      echo -e "${YELLOW}正在清理未使用的镜像...${NC}"
+      docker image prune -a -f
+      echo -e "${GREEN}✓ 清理完成${NC}"
+      ;;
+    2)
+      echo -e "${YELLOW}正在清理已停止的容器...${NC}"
+      docker container prune -f
+      echo -e "${GREEN}✓ 清理完成${NC}"
+      ;;
+    3)
+      echo -e "${YELLOW}正在清理未使用的数据卷...${NC}"
+      docker volume prune -f
+      echo -e "${GREEN}✓ 清理完成${NC}"
+      ;;
+    4)
+      echo -e "${YELLOW}正在清理构建缓存...${NC}"
+      docker builder prune -a -f
+      echo -e "${GREEN}✓ 清理完成${NC}"
+      ;;
+    5)
+      echo -e "${RED}警告: 此操作将清理所有未使用的Docker资源${NC}"
+      read -p "确认继续? [y/N] " confirm
+      case "$confirm" in
+        [Yy]*)
+          echo -e "${YELLOW}正在清理...${NC}"
+          docker system prune -a -f --volumes
+          echo -e "${GREEN}✓ 清理完成${NC}"
+          ;;
+        *)
+          echo -e "${YELLOW}已取消${NC}"
+          ;;
+      esac
+      ;;
+    0)
+      return
+      ;;
+    *)
+      echo -e "${RED}无效选择${NC}"
+      ;;
+  esac
+
+  # 显示清理后的磁盘使用情况
+  if [[ "$choice" =~ ^[1-5]$ && "$choice" != "0" ]]; then
+    echo -e "\n${CYAN}清理后磁盘使用情况:${NC}"
+    docker system df 2>/dev/null
+  fi
+
+  read -n 1 -s -r -p "按任意键继续..."
+}
+
+# 打开Web界面
+open_web_interface() {
+  sync_runtime_config || true
+  local ip=$(get_host_ip)
+
+  echo -e "${CYAN}=============================================${NC}"
+  echo -e "${GREEN}          打开Web界面          ${NC}"
+  echo -e "${CYAN}=============================================${NC}"
+
+  local manage_url admin_url
+  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
+    manage_url="http://${ip}:4567/"
+    admin_url="http://${ip}:5234/"
+  else
+    manage_url="http://${ip}:${CONFIG[PORT1]}/"
+    admin_url="http://${ip}:${CONFIG[PORT2]}/"
+  fi
+
+  echo -e " 1. 管理界面: ${GREEN}${manage_url}${NC}"
+  echo -e " 2. AList界面: ${GREEN}${admin_url}${NC}"
+  echo -e " 0. 返回"
+  echo -e "${CYAN}---------------------------------------------${NC}"
+  read -p "请选择要打开的界面 [0-2]: " choice
+
+  local target_url=""
+  case $choice in
+    1) target_url="$manage_url" ;;
+    2) target_url="$admin_url" ;;
+    0) return ;;
+    *)
+      echo -e "${RED}无效选择${NC}"
+      sleep 1
+      return
+      ;;
+  esac
+
+  echo -e "${CYAN}正在打开浏览器...${NC}"
+
+  # 尝试多种方式打开浏览器
+  if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$target_url" 2>/dev/null &
+    echo -e "${GREEN}✓ 已在浏览器中打开${NC}"
+  elif command -v open >/dev/null 2>&1; then
+    open "$target_url" 2>/dev/null &
+    echo -e "${GREEN}✓ 已在浏览器中打开${NC}"
+  elif command -v start >/dev/null 2>&1; then
+    start "$target_url" 2>/dev/null &
+    echo -e "${GREEN}✓ 已在浏览器中打开${NC}"
+  else
+    echo -e "${YELLOW}无法自动打开浏览器${NC}"
+    echo -e "${YELLOW}请手动访问: ${target_url}${NC}"
+  fi
+
+  sleep 2
+}
+
+# 日志管理
+manage_logs() {
+  local container_name=$(get_container_name)
+
+  while true; do
+    clear
+    echo -e "${CYAN}=============================================${NC}"
+    echo -e "${GREEN}          日志管理          ${NC}"
+    echo -e "${CYAN}=============================================${NC}"
+    echo -e " 1. 实时查看日志 (Ctrl+C退出)"
+    echo -e " 2. 查看最近N行"
+    echo -e " 3. 按关键词过滤"
+    echo -e " 4. 导出日志文件"
+    echo -e " 5. 查看日志文件大小"
+    echo -e " 0. 返回主菜单"
+    echo -e "${CYAN}---------------------------------------------${NC}"
+    read -p "请选择操作 [0-5]: " log_choice
+
+    case $log_choice in
+      1)
+        echo -e "${CYAN}实时查看日志 (按 Ctrl+C 退出)...${NC}"
+        sleep 1
+        docker logs -f "$container_name" 2>&1
+        ;;
+      2)
+        read -p "请输入要查看的行数 [默认100]: " lines
+        lines=${lines:-100}
+        if [[ "$lines" =~ ^[0-9]+$ ]]; then
+          docker logs --tail "$lines" "$container_name" 2>&1 | less -R
+        else
+          echo -e "${RED}无效的行数${NC}"
+          sleep 1
+        fi
+        ;;
+      3)
+        read -p "请输入关键词: " keyword
+        if [[ -n "$keyword" ]]; then
+          echo -e "${CYAN}包含 '${keyword}' 的日志:${NC}\n"
+          docker logs "$container_name" 2>&1 | grep --color=always -i "$keyword" | less -R
+        else
+          echo -e "${RED}关键词不能为空${NC}"
+          sleep 1
+        fi
+        ;;
+      4)
+        local export_dir="${CONFIG[BASE_DIR]}/logs"
+        mkdir -p "$export_dir" 2>/dev/null || {
+          echo -e "${RED}无法创建导出目录 (权限不足)${NC}"
+          read -n 1 -s -r -p "按任意键继续..."
+          continue
+        }
+
+        local timestamp=$(date +"%Y%m%d-%H%M%S")
+        local log_file="${export_dir}/${container_name}-${timestamp}.log"
+
+        echo -e "${CYAN}正在导出日志...${NC}"
+        if docker logs "$container_name" > "$log_file" 2>&1; then
+          local filesize=$(ls -lh "$log_file" | awk '{print $5}')
+          echo -e "${GREEN}✓ 日志已导出${NC}"
+          echo -e "文件位置: ${GREEN}${log_file}${NC}"
+          echo -e "文件大小: ${filesize}"
+        else
+          echo -e "${RED}导出失败${NC}"
+        fi
+        read -n 1 -s -r -p "按任意键继续..."
+        ;;
+      5)
+        echo -e "${CYAN}正在获取日志大小...${NC}"
+        local log_info=$(docker inspect --format='{{.LogPath}}' "$container_name" 2>/dev/null)
+        if [[ -n "$log_info" && -f "$log_info" ]]; then
+          local log_size=$(ls -lh "$log_info" | awk '{print $5}')
+          echo -e "日志文件: ${YELLOW}${log_info}${NC}"
+          echo -e "文件大小: ${GREEN}${log_size}${NC}"
+          echo -e "\n${YELLOW}提示: Docker日志占用磁盘空间过大时，可通过配置日志轮转限制大小${NC}"
+        else
+          echo -e "${RED}无法获取日志信息${NC}"
+        fi
+        read -n 1 -s -r -p "按任意键继续..."
+        ;;
+      0)
+        return
+        ;;
+      *)
+        echo -e "${RED}无效选择${NC}"
+        sleep 1
+        ;;
+    esac
+  done
 }
 
 interactive_mode() {
@@ -2047,7 +2569,7 @@ interactive_mode() {
         ;;
       5)
         if [ "$status" != "not_exist" ]; then
-          docker logs -f "$container_name"
+          manage_logs
         else
           echo -e "${YELLOW}容器不存在${NC}"
           sleep 1
@@ -2071,6 +2593,12 @@ interactive_mode() {
         ;;
       9)
         auto_repair
+        ;;
+      c|C)
+        cleanup_docker_resources
+        ;;
+      w|W)
+        open_web_interface
         ;;
       0)
         echo -e "${GREEN}再见!${NC}"
