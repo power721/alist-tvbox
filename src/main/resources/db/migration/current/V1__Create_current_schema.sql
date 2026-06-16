@@ -420,13 +420,13 @@ CREATE TABLE IF NOT EXISTS x_user
     username     VARCHAR(255)
 );
 
-CREATE INDEX IF NOT EXISTS idx_account_nickname ON account (nickname);
-CREATE INDEX IF NOT EXISTS idx_driver_account_type_username ON driver_account (type, username);
-CREATE INDEX IF NOT EXISTS idx_driver_account_type_name ON driver_account (type, name);
-CREATE INDEX IF NOT EXISTS idx_share_type_shareid ON share (type, share_id);
-CREATE INDEX IF NOT EXISTS idx_subscription_url ON subscription (url);
-CREATE INDEX IF NOT EXISTS idx_plugin_external_id ON plugin (external_id);
-CREATE INDEX IF NOT EXISTS idx_plugin_url ON plugin (url);
-CREATE INDEX IF NOT EXISTS idx_plugin_filter_url ON plugin_filter (url);
-CREATE INDEX IF NOT EXISTS idx_pikpak_account_username ON pik_pak_account (username);
-CREATE INDEX IF NOT EXISTS idx_site_url ON site (url);
+CREATE INDEX idx_account_nickname ON account (nickname);
+CREATE INDEX idx_driver_account_type_username ON driver_account (type, username);
+CREATE INDEX idx_driver_account_type_name ON driver_account (type, name);
+CREATE INDEX idx_share_type_shareid ON share (type, share_id);
+CREATE INDEX idx_subscription_url ON subscription (url);
+CREATE INDEX idx_plugin_external_id ON plugin (external_id);
+CREATE INDEX idx_plugin_url ON plugin (url);
+CREATE INDEX idx_plugin_filter_url ON plugin_filter (url);
+CREATE INDEX idx_pikpak_account_username ON pik_pak_account (username);
+CREATE INDEX idx_site_url ON site (url);
