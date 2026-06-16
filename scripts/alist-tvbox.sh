@@ -948,6 +948,17 @@ show_version_menu() {
       docker rm -f "$container_name" >/dev/null
     fi
 
+    # 拉取最新镜像
+    echo -e "${YELLOW}正在拉取最新镜像...${NC}"
+    if ! docker pull "${CONFIG[IMAGE_NAME]}"; then
+      echo -e "${RED}拉取镜像失败，版本切换终止${NC}"
+      CONFIG["IMAGE_ID"]="$old_image_id"
+      CONFIG["IMAGE_NAME"]="$old_version"
+      save_config
+      read -n 1 -s -r -p "按任意键继续..."
+      return
+    fi
+
     # 启动新容器
     echo -e "${YELLOW}正在启动新版本容器...${NC}"
     start_container
