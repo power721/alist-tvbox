@@ -2641,14 +2641,22 @@ interactive_mode() {
         fi
         ;;
       6)
-        echo "卸载容器..."
         if [ "$status" != "not_exist" ]; then
-          docker rm -f "$container_name"
-          echo -e "${GREEN}容器已卸载${NC}"
+          echo -e "${YELLOW}警告: 此操作将删除容器，但不会删除数据目录${NC}"
+          echo -e "${YELLOW}数据目录: ${CONFIG[BASE_DIR]}${NC}"
+          read -p "确认卸载容器? (y/N): " confirm
+          if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            echo "正在卸载容器..."
+            docker rm -f "$container_name"
+            echo -e "${GREEN}容器已卸载${NC}"
+            echo -e "${CYAN}数据目录已保留，如需删除请手动清理${NC}"
+          else
+            echo -e "${CYAN}已取消卸载${NC}"
+          fi
         else
           echo -e "${YELLOW}容器不存在${NC}"
         fi
-        sleep 1
+        sleep 2
         ;;
       7)
         show_version_menu
