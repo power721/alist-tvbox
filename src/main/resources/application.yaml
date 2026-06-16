@@ -23,7 +23,9 @@ spring:
       # Use 'none' to let Flyway handle all schema management
       ddl-auto: none
       naming:
-        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        # Use SpringPhysicalNamingStrategy to convert camelCase to snake_case
+        # This matches Flyway SQL: indexFile -> index_file, vodName -> vod_name
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
     database-platform: org.hibernate.dialect.H2Dialect
     open-in-view: false
     properties:
