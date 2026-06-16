@@ -16,6 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
@@ -387,6 +388,11 @@ public class PluginService {
     }
 
     private String downloadText(String url, String message) {
+        // Validate URL to prevent SSRF attacks
+        if (!isValidUrl(url)) {
+            throw new BadRequestException("Invalid or unsafe URL: " + url);
+        }
+
         // 如果不是 GitHub URL，直接下载
         if (!StringUtils.startsWith(url, "https://github.com/")) {
             try {
@@ -446,6 +452,83 @@ public class PluginService {
 
         // 所有代理都失败
         throw new BadRequestException(message + " (所有代理均失败)", lastException);
+    }
+
+    /**
+     * Validate URL to prevent SSRF attacks
+     * - Only allow HTTP/HTTPS protocols
+     * - Block private IP ranges and localhost
+     * - Block special hostnames
+     */
+    private boolean isValidUrl(String url) {
+        try {
+            URI uri = new URI(url);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+
+            // Only allow HTTP and HTTPS
+            if (scheme == null || (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https"))) {
+                log.warn("Blocked non-HTTP(S) URL: {}", url);
+                return false;
+            }
+
+            // Block if host is null
+            if (host == null || host.isEmpty()) {
+                log.warn("Blocked URL with no host: {}", url);
+                return false;
+            }
+
+            // Normalize host to lowercase
+            host = host.toLowerCase();
+
+            // Block localhost and loopback
+            if (host.equals("localhost") || host.equals("127.0.0.1") || host.startsWith("127.") ||
+                host.equals("0.0.0.0") || host.equals("::1") || host.equals("0:0:0:0:0:0:0:1")) {
+                log.warn("Blocked localhost/loopback URL: {}", url);
+                return false;
+            }
+
+            // Block private IP ranges (RFC 1918)
+            if (host.startsWith("10.") || host.startsWith("192.168.") ||
+                (host.startsWith("172.") && isPrivateRange172(host))) {
+                log.warn("Blocked private IP URL: {}", url);
+                return false;
+            }
+
+            // Block link-local addresses
+            if (host.startsWith("169.254.")) {
+                log.warn("Blocked link-local URL: {}", url);
+                return false;
+            }
+
+            // Block internal/metadata endpoints
+            if (host.equals("metadata.google.internal") || host.endsWith(".internal") ||
+                host.equals("169.254.169.254")) {
+                log.warn("Blocked internal metadata URL: {}", url);
+                return false;
+            }
+
+            return true;
+        } catch (URISyntaxException e) {
+            log.warn("Invalid URL syntax: {}", url, e);
+            return false;
+        }
+    }
+
+    /**
+     * Check if IP is in 172.16.0.0 - 172.31.255.255 range
+     */
+    private boolean isPrivateRange172(String host) {
+        String[] parts = host.split("\\.");
+        if (parts.length >= 2) {
+            try {
+                int second = Integer.parseInt(parts[1]);
+                return second >= 16 && second <= 31;
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        return false;
     }
 
     public String readContent(Integer id) {
