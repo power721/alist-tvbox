@@ -883,13 +883,14 @@ public class ShareService {
             return false;
         }
 
-        // Allow magnet links for offline download
-        if (link.toLowerCase().startsWith("magnet:")) {
+        // Allow magnet and ed2k links for offline download
+        String lowerLink = link.toLowerCase();
+        if (lowerLink.startsWith("magnet:") || lowerLink.startsWith("ed2k:")) {
             return true;
         }
 
         // Must be HTTPS
-        if (!link.toLowerCase().startsWith("https://")) {
+        if (!lowerLink.startsWith("https://")) {
             log.warn("Share link must use HTTPS: {}", link);
             return false;
         }
