@@ -49,24 +49,12 @@ public class V3__Rename_reserved_columns extends BaseJavaMigration {
 
         if (actualOldColumn != null && actualNewColumn == null) {
             // Old column exists, new column doesn't exist -> rename
-            // Database-specific naming:
-            // - H2: Hibernate uses unquoted lowercase in SQL, H2 converts to uppercase for lookup
-            //       BUT if we create with quotes, H2 preserves case and requires exact match
-            //       Solution: Create with quotes in lowercase to match Hibernate exactly
-            // - MySQL: preserves case, needs lowercase to match Hibernate
-            String dbProduct = connection.getMetaData().getDatabaseProductName().toLowerCase();
-            String finalNewName;
-            if (dbProduct.contains("h2")) {
-                // H2: Use quoted lowercase to force case-sensitive storage
-                finalNewName = "\"" + newName.toLowerCase() + "\"";
-            } else {
-                // MySQL: unquoted lowercase (MySQL is case-sensitive by default)
-                finalNewName = newName.toLowerCase();
-            }
-
+            // Use lowercase unquoted identifiers to match Hibernate's @Column annotations
+            // H2 configured with DATABASE_TO_LOWER=TRUE will store all identifiers in lowercase
+            // MySQL preserves case and needs lowercase to match Hibernate
             String sql = "ALTER TABLE " + quote(connection, actualTable)
                     + " RENAME COLUMN " + quote(connection, actualOldColumn)
-                    + " TO " + finalNewName;
+                    + " TO " + newName.toLowerCase();
             System.out.println("V3: Executing: " + sql);
             execute(connection, sql);
             System.out.println("V3: Successfully renamed " + tableName + "." + oldName + " to " + newName);
