@@ -88,5 +88,12 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.box-card :deep(.el-card__header) {
+  border-bottom: none;
+  padding-bottom: 6px;
+}
 
+.box-card :deep(.el-card__body) {
+  padding-top: 6px;
+}
 </style>

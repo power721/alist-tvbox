@@ -393,6 +393,15 @@ onMounted(() => {
   width: 100%;
 }
 
+.box-card :deep(.el-card__header) {
+  border-bottom: none;
+  padding-bottom: 6px;
+}
+
+.box-card :deep(.el-card__body) {
+  padding-top: 6px;
+}
+
 @media (max-width: 768px) {
   .cards-grid {
     grid-template-columns: 1fr;

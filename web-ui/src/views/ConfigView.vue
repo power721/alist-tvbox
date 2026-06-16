@@ -772,6 +772,15 @@ onUnmounted(() => {
   margin-bottom: 12px;
 }
 
+.box-card .el-card__header {
+  border-bottom: none;
+  padding-bottom: 6px;
+}
+
+.box-card .el-card__body {
+  padding-top: 6px;
+}
+
 .changelog {
   color: #67c23a;
 }
