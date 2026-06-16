@@ -19,8 +19,9 @@ spring:
       allow-comments: true
   jpa:
     hibernate:
-      # possible values: validate | update | create | create-drop
-      ddl-auto: validate
+      # possible values: validate | update | create | create-drop | none
+      # Use 'none' to let Flyway handle all schema management
+      ddl-auto: none
     database-platform: org.hibernate.dialect.H2Dialect
     open-in-view: false
   flyway:
