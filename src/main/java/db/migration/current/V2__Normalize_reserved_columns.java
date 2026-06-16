@@ -14,16 +14,16 @@ public class V2__Normalize_reserved_columns extends BaseJavaMigration {
     @Override
     public void migrate(Context context) throws Exception {
         Connection connection = context.getConnection();
-        migrateSortOrder(connection, "site");
-        migrateSortOrder(connection, "navigation");
-        migrateSortOrder(connection, "emby");
-        migrateSortOrder(connection, "jellyfin");
-        migrateSortOrder(connection, "telegram_channel");
-        migrateSortOrder(connection, "feiniu");
+        migrateSortOrder(connection, "site", true);
+        migrateSortOrder(connection, "navigation", true);
+        migrateSortOrder(connection, "emby", false);
+        migrateSortOrder(connection, "jellyfin", false);
+        migrateSortOrder(connection, "telegram_channel", true);
+        migrateSortOrder(connection, "feiniu", false);
         migrateSiteVersion(connection);
     }
 
-    private void migrateSortOrder(Connection connection, String table) throws SQLException {
+    private void migrateSortOrder(Connection connection, String table, boolean required) throws SQLException {
         String actualTable = findTable(connection, table);
         if (actualTable == null) {
             return;
@@ -31,13 +31,16 @@ public class V2__Normalize_reserved_columns extends BaseJavaMigration {
 
         boolean hasSortOrder = findColumn(connection, actualTable, "sort_order") != null;
         if (!hasSortOrder) {
-            execute(connection, "ALTER TABLE " + quote(connection, actualTable) + " ADD COLUMN sort_order INTEGER DEFAULT 0");
+            String nullability = required ? " NOT NULL" : "";
+            execute(connection, "ALTER TABLE " + quote(connection, actualTable)
+                    + " ADD COLUMN sort_order INTEGER" + nullability + " DEFAULT 0");
         }
 
         String oldOrder = findColumn(connection, actualTable, "order");
         if (oldOrder != null) {
+            String value = required ? "COALESCE(" + quote(connection, oldOrder) + ", 0)" : quote(connection, oldOrder);
             execute(connection, "UPDATE " + quote(connection, actualTable)
-                    + " SET sort_order = " + quote(connection, oldOrder)
+                    + " SET sort_order = " + value
                     + " WHERE sort_order IS NULL OR sort_order = 0");
             execute(connection, "ALTER TABLE " + quote(connection, actualTable) + " DROP COLUMN " + quote(connection, oldOrder));
         }
