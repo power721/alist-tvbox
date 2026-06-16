@@ -23,16 +23,28 @@ public class V1__Create_current_schema extends BaseJavaMigration {
     public void migrate(Context context) throws Exception {
         Connection connection = context.getConnection();
 
-        // Check if this is a fresh install by looking for V1 in flyway history
-        // If V1 was already executed, this is an impossible state (Flyway won't re-run V1)
-        // So we check for OTHER application tables instead
+        // Detect database type
+        String dbProduct = connection.getMetaData().getDatabaseProductName().toLowerCase();
+        boolean isH2 = dbProduct.contains("h2");
+        boolean isMySql = dbProduct.contains("mysql");
+
+        // Check if this is a fresh install
         boolean isFreshInstall = isEmptySchema(connection);
 
         String sqlFile;
         if (isFreshInstall) {
-            sqlFile = "/db/migration/current/V1_new_install.sql";
-            System.out.println("V1: Fresh install detected, using new schema with modern column names");
+            if (isH2) {
+                // For H2 fresh install: use old schema with backticks
+                // H2 will store as uppercase, and we'll rely on case-insensitive matching
+                sqlFile = "/db/migration/current/V1_old_upgrade.sql";
+                System.out.println("V1: H2 fresh install - using schema with backticks (V3 will rename)");
+            } else {
+                // For MySQL fresh install: use new schema with correct names
+                sqlFile = "/db/migration/current/V1_new_install.sql";
+                System.out.println("V1: MySQL fresh install - using new schema with modern column names");
+            }
         } else {
+            // Upgrade path (though V1 never re-runs)
             sqlFile = "/db/migration/current/V1_old_upgrade.sql";
             System.out.println("V1: Existing data detected, using old schema for compatibility");
         }
