@@ -225,7 +225,14 @@ public class IndexService {
         try {
             log.info("download xiaoya index file");
             ProcessBuilder builder = new ProcessBuilder();
-            builder.command("sh", "-c", "/index.sh", remote);
+            // Execute script directly without shell wrapper to prevent command injection
+            // Validate remote parameter to ensure it doesn't contain malicious commands
+            if (remote != null && (remote.contains(";") || remote.contains("|") || remote.contains("&") ||
+                                   remote.contains("`") || remote.contains("$") || remote.contains("\n"))) {
+                log.error("Invalid remote parameter contains shell metacharacters: {}", remote);
+                throw new IllegalArgumentException("Invalid remote parameter");
+            }
+            builder.command("/index.sh", remote);
             builder.inheritIO();
             builder.directory(new File("/tmp"));
             Process process = builder.start();
