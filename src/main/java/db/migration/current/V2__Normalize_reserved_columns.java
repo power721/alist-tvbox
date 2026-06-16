@@ -29,13 +29,14 @@ public class V2__Normalize_reserved_columns extends BaseJavaMigration {
             return;
         }
 
+        // Step 1: Add nullable column with default
         boolean hasSortOrder = findColumn(connection, actualTable, "sort_order") != null;
         if (!hasSortOrder) {
-            String nullability = required ? " NOT NULL" : "";
             execute(connection, "ALTER TABLE " + quote(connection, actualTable)
-                    + " ADD COLUMN sort_order INTEGER" + nullability + " DEFAULT 0");
+                    + " ADD COLUMN sort_order INTEGER DEFAULT 0");
         }
 
+        // Step 2: Migrate data from old column if it exists
         String oldOrder = findColumn(connection, actualTable, "order");
         if (oldOrder != null) {
             String value = required ? "COALESCE(" + quote(connection, oldOrder) + ", 0)" : quote(connection, oldOrder);
@@ -43,6 +44,27 @@ public class V2__Normalize_reserved_columns extends BaseJavaMigration {
                     + " SET sort_order = " + value
                     + " WHERE sort_order IS NULL OR sort_order = 0");
             execute(connection, "ALTER TABLE " + quote(connection, actualTable) + " DROP COLUMN " + quote(connection, oldOrder));
+        }
+
+        // Step 3: Add NOT NULL constraint after data is populated (if required)
+        if (required && !hasSortOrder) {
+            // Ensure all nulls are filled before adding constraint
+            execute(connection, "UPDATE " + quote(connection, actualTable)
+                    + " SET sort_order = 0 WHERE sort_order IS NULL");
+
+            // Add NOT NULL constraint (database-specific syntax)
+            String dbProduct = connection.getMetaData().getDatabaseProductName().toLowerCase();
+            if (dbProduct.contains("mysql") || dbProduct.contains("mariadb")) {
+                execute(connection, "ALTER TABLE " + quote(connection, actualTable)
+                        + " MODIFY COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+            } else if (dbProduct.contains("postgresql")) {
+                execute(connection, "ALTER TABLE " + quote(connection, actualTable)
+                        + " ALTER COLUMN sort_order SET NOT NULL");
+            } else if (dbProduct.contains("h2")) {
+                execute(connection, "ALTER TABLE " + quote(connection, actualTable)
+                        + " ALTER COLUMN sort_order SET NOT NULL");
+            }
+            // For other databases, leave as nullable (safe fallback)
         }
     }
 
