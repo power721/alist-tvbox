@@ -10,8 +10,7 @@ COPY config/alist-host.json /alist.json
 
 COPY scripts/index.sh /
 
-COPY entrypoint-native.sh /entrypoint.sh
-COPY init.sh /
+COPY docker/scripts/ /docker/scripts/
 
 COPY data/update.sql /
 COPY data/tvbox.zip /
@@ -30,6 +29,6 @@ EXPOSE 4567 5678
 
 VOLUME ["/www/static"]
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/docker/scripts/entrypoint-native.sh"]
 
 CMD ["5233", "--spring.profiles.active=production,xiaoya,native,host"]

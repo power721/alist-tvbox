@@ -6,8 +6,7 @@ ENV MEM_OPT="-Xmx1024M" ALIST_PORT=5678 INSTALL=hostmode
 
 COPY config/alist-host.json /alist.json
 
-COPY entrypoint.sh /
-COPY init.sh /
+COPY docker/scripts/ /docker/scripts/
 
 COPY data/tvbox.zip /
 COPY data/base_version /
@@ -25,6 +24,6 @@ EXPOSE 4567 5678
 
 VOLUME ["/www/static"]
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/docker/scripts/entrypoint.sh"]
 
 CMD ["5233", "--spring.profiles.active=production,xiaoya,host"]

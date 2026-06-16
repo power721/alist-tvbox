@@ -6,8 +6,7 @@ ENV MEM_OPT="-Xmx1024M" ALIST_PORT=5344 INSTALL=xiaoya
 
 COPY config/alist.json /
 
-COPY entrypoint.sh /
-COPY init.sh /
+COPY docker/scripts/ /docker/scripts/
 
 COPY data/tvbox.zip /
 COPY data/index.share.zip /
@@ -25,6 +24,6 @@ EXPOSE 4567 80
 
 VOLUME ["/www/static"]
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/docker/scripts/entrypoint.sh"]
 
 CMD ["81", "--spring.profiles.active=production,xiaoya"]
