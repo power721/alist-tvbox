@@ -25,9 +25,13 @@ public class UpperCaseNamingStrategy implements PhysicalNamingStrategy {
 
     @Override
     public Identifier toPhysicalTableName(Identifier name, JdbcEnvironment jdbcEnvironment) {
-        // Don't convert table names - Flyway SQL uses lowercase table names
-        // Only convert column names for H2 compatibility
-        return name;
+        // Convert table names to lowercase snake_case to match Flyway SQL
+        // ConfigFile -> config_file (not CONFIGFILE)
+        if (name == null) {
+            return null;
+        }
+        String snakeCase = camelToSnakeCase(name.getText());
+        return Identifier.toIdentifier(snakeCase.toLowerCase(Locale.ROOT));
     }
 
     @Override
