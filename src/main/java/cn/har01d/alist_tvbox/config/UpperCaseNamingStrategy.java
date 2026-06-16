@@ -71,11 +71,24 @@ public class UpperCaseNamingStrategy implements PhysicalNamingStrategy {
         }
 
         // Convert camelCase to snake_case
+        // Handle consecutive uppercase letters: AListAlias -> alist_alias (not a_list_alias)
         StringBuilder result = new StringBuilder();
         for (int i = 0; i < str.length(); i++) {
             char c = str.charAt(i);
+
+            // Add underscore before uppercase letter if:
+            // 1. Not at start (i > 0)
+            // 2. Previous char is lowercase OR next char is lowercase (end of acronym)
             if (Character.isUpperCase(c) && i > 0) {
-                result.append('_');
+                char prev = str.charAt(i - 1);
+                boolean hasNext = i + 1 < str.length();
+                char next = hasNext ? str.charAt(i + 1) : '\0';
+
+                // Add underscore if previous is lowercase (camelCase boundary)
+                // OR if this is end of acronym (next is lowercase): HTMLParser -> html_parser
+                if (Character.isLowerCase(prev) || (hasNext && Character.isLowerCase(next))) {
+                    result.append('_');
+                }
             }
             result.append(c);
         }
