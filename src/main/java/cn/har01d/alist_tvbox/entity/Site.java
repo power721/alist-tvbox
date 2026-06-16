@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -33,10 +34,12 @@ public class Site {
     private boolean disabled;
     @Column(columnDefinition = "boolean default false")
     private boolean xiaoya;
-    @Column(name = "`order`")
-    private int order;
-    @Column(name = "`version`")
-    private Integer version;
+    @Column(name = "sort_order")
+    @JsonProperty("order")
+    private int sortOrder;
+    @Column(name = "storage_version")
+    @JsonProperty("version")
+    private Integer storageVersion;
 
     @Override
     public boolean equals(Object o) {

@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data
@@ -13,6 +14,8 @@ public class SiteDto {
     private boolean searchable;
     private boolean disabled;
     private boolean xiaoya;
-    private int order;
-    private Integer version;
+    @JsonProperty("order")
+    private int sortOrder;
+    @JsonProperty("version")
+    private Integer storageVersion;
 }

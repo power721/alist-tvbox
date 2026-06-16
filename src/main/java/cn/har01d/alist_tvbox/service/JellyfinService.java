@@ -466,7 +466,7 @@ public class JellyfinService {
 
     public List<Jellyfin> findAll() {
         List<Jellyfin> list = new ArrayList<>(jellyfinRepository.findAll());
-        list.sort(Comparator.comparing(Jellyfin::getOrder));
+        list.sort(Comparator.comparing(Jellyfin::getSortOrder));
         return list;
     }
 

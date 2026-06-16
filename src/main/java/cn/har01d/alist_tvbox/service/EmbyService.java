@@ -123,7 +123,7 @@ public class EmbyService {
         int i = 1;
         List<Emby> list = embyRepository.findAll();
         for (Emby emby : list) {
-            emby.setOrder(i++);
+            emby.setSortOrder(i++);
         }
         embyRepository.saveAll(list);
         settingRepository.save(new Setting("fix_emby_order", "true"));
@@ -157,7 +157,7 @@ public class EmbyService {
 
     public List<Emby> findAll() {
         List<Emby> list = new ArrayList<>(embyRepository.findAll());
-        list.sort(Comparator.comparing(Emby::getOrder));
+        list.sort(Comparator.comparing(Emby::getSortOrder));
         return list;
     }
 

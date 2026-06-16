@@ -68,7 +68,7 @@ public class FeiniuService {
 
     public List<Feiniu> findAll() {
         List<Feiniu> list = new ArrayList<>(feiniuRepository.findAll());
-        list.sort(Comparator.comparing(item -> Objects.requireNonNullElse(item.getOrder(), 0)));
+        list.sort(Comparator.comparing(item -> Objects.requireNonNullElse(item.getSortOrder(), 0)));
         return list;
     }
 

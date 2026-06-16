@@ -26,7 +26,7 @@ public class NavigationDto {
         setName(navigation.getName());
         setValue(navigation.getValue());
         setType(navigation.getType());
-        setOrder(navigation.getOrder());
+        setOrder(navigation.getSortOrder());
         setShow(navigation.isShow());
         setReserved(navigation.isReserved());
         setParentId(navigation.getParentId());

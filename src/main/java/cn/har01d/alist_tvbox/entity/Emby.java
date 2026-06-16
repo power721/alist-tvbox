@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -17,8 +18,9 @@ public class Emby {
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
     private Integer id;
 
-    @Column(name = "`order`")
-    private Integer order;
+    @Column(name = "sort_order")
+    @JsonProperty("order")
+    private Integer sortOrder;
     private String name;
     private String url;
     private String userAgent;
