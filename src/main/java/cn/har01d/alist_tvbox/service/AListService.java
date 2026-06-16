@@ -143,21 +143,35 @@ public class AListService {
         if (response == null) {
             return null;
         }
+
+        // Check for null files list to prevent NPE
+        List<FsInfo> files = response.getFiles();
+        if (files == null) {
+            log.warn("Response has null files list");
+            return response;
+        }
+
         if (version == 2) {
-            for (FsInfo fsInfo : response.getFiles()) {
+            for (FsInfo fsInfo : files) {
                 fsInfo.setThumb(fsInfo.getThumbnail());
             }
-        } else if (response != null && response.getContent() != null) {
+        } else if (response.getContent() != null) {
             response.setFiles(response.getContent());
+            files = response.getFiles();
         }
-        response.setFiles(filter(response.getFiles()));
-        for (var file : response.getFiles()) {
-            try {
-                file.setModified(OffsetDateTime.parse(file.getModified()).toLocalDateTime().truncatedTo(ChronoUnit.SECONDS).toString());
-            } catch (Exception e) {
-                log.debug("{}", e.getMessage());
+
+        // Filter files if list is not null
+        if (files != null) {
+            response.setFiles(filter(files));
+            for (var file : response.getFiles()) {
+                try {
+                    file.setModified(OffsetDateTime.parse(file.getModified()).toLocalDateTime().truncatedTo(ChronoUnit.SECONDS).toString());
+                } catch (Exception e) {
+                    log.debug("{}", e.getMessage());
+                }
             }
         }
+
         return response;
     }
 
