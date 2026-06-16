@@ -37,27 +37,36 @@ public class V3__Rename_reserved_columns extends BaseJavaMigration {
         String actualTable = findTable(connection, tableName);
         if (actualTable == null) {
             // Table doesn't exist, skip
+            System.out.println("V3: Table " + tableName + " not found, skipping");
             return;
         }
 
         String actualOldColumn = findColumn(connection, actualTable, oldName);
         String actualNewColumn = findColumn(connection, actualTable, newName);
 
+        System.out.println("V3: " + tableName + "." + oldName + " -> " + newName +
+                           " (old=" + actualOldColumn + ", new=" + actualNewColumn + ")");
+
         if (actualOldColumn != null && actualNewColumn == null) {
             // Old column exists, new column doesn't exist -> rename
             String sql = "ALTER TABLE " + quote(connection, actualTable)
                     + " RENAME COLUMN " + quote(connection, actualOldColumn)
                     + " TO " + newName;
+            System.out.println("V3: Executing: " + sql);
             execute(connection, sql);
+            System.out.println("V3: Successfully renamed " + tableName + "." + oldName + " to " + newName);
         } else if (actualOldColumn == null && actualNewColumn != null) {
             // New column already exists, old column doesn't -> already renamed, skip
+            System.out.println("V3: Column already renamed, skipping");
             return;
         } else if (actualOldColumn != null && actualNewColumn != null) {
             // Both columns exist -> unexpected state, but don't fail
             // This might happen if migration was partially applied
+            System.out.println("V3: Both columns exist, skipping");
             return;
+        } else {
+            System.out.println("V3: Neither column exists, skipping");
         }
-        // else: neither column exists -> skip
     }
 
     private String findTable(Connection connection, String table) throws SQLException {
@@ -76,8 +85,11 @@ public class V3__Rename_reserved_columns extends BaseJavaMigration {
         DatabaseMetaData metaData = connection.getMetaData();
         try (ResultSet resultSet = metaData.getColumns(connection.getCatalog(), schemaPattern(connection), table, null)) {
             while (resultSet.next()) {
-                if (resultSet.getString("COLUMN_NAME").equalsIgnoreCase(column)) {
-                    return resultSet.getString("COLUMN_NAME");
+                String columnName = resultSet.getString("COLUMN_NAME");
+                // H2 stores unquoted reserved keywords in uppercase
+                // Try both exact match and case-insensitive match
+                if (columnName.equalsIgnoreCase(column)) {
+                    return columnName;
                 }
             }
         }
