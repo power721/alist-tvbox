@@ -20,11 +20,11 @@ spring:
   jpa:
     hibernate:
       # possible values: validate | update | create | create-drop
-      ddl-auto: validate
+      ddl-auto: update
     database-platform: org.hibernate.dialect.H2Dialect
     open-in-view: false
   flyway:
-    enabled: true
+    enabled: false
     baseline-on-migrate: true
     locations: classpath:db/migration/current
   sql:
