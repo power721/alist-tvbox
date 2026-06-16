@@ -450,7 +450,8 @@ start_container() {
   migrate_www_static || true
 
   if [[ -n "${CONFIG[GITHUB_PROXY]}" ]]; then
-    echo "${CONFIG[GITHUB_PROXY]}" > "${CONFIG[BASE_DIR]}/github_proxy.txt"
+    # 支持多个代理，用逗号分隔，写入时每行一个
+    echo "${CONFIG[GITHUB_PROXY]}" | tr ',' '\n' | sed '/^[[:space:]]*$/d' > "${CONFIG[BASE_DIR]}/github_proxy.txt"
   else
     rm -f "${CONFIG[BASE_DIR]}/github_proxy.txt"
   fi
@@ -572,12 +573,10 @@ show_menu() {
   echo -e "${GREEN} 6. 卸载容器${NC}"
   echo -e "${GREEN} 7. 选择版本${NC}"
   echo -e "${GREEN} 8. 配置管理${NC}"
-  echo -e "${GREEN} 9. 检查更新${NC}"
-  echo -e "${GREEN} h. 健康检查${NC}"
-  echo -e "${GREEN} r. 自动修复${NC}"
+  echo -e "${GREEN} 9. 自动修复${NC}"
   echo -e "${GREEN} 0. 退出${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请输入选项 [0-9/h/r]: " choice
+  read -p "请输入选项 [0-9]: " choice
 }
 
 # 检查系统架构支持
@@ -1030,7 +1029,11 @@ manage_custom_mounts() {
     # 显示当前挂载
     if [[ -f "${CONFIG[BASE_DIR]}/mounts.conf" ]]; then
       echo -e "${YELLOW}当前挂载配置:${NC}"
-      cat "${CONFIG[BASE_DIR]}/mounts.conf" | awk '{print " " NR ". " $0}'
+      if cat "${CONFIG[BASE_DIR]}/mounts.conf" 2>/dev/null | awk '{print " " NR ". " $0}'; then
+        :
+      else
+        echo -e "${RED}无法读取挂载配置文件 (权限不足)${NC}"
+      fi
     else
       echo -e "${YELLOW}暂无自定义挂载${NC}"
     fi
@@ -1067,12 +1070,18 @@ add_custom_mount() {
 
   # 基本格式验证
   if [[ "$mount_config" =~ ^[^:]+:[^:]+(:ro|:rw)?$ ]]; then
-    mkdir -p "${CONFIG[BASE_DIR]}"
-    echo "$mount_config" >> "${CONFIG[BASE_DIR]}/mounts.conf"
-    echo -e "${GREEN}挂载配置已添加!${NC}"
-
-    # 自动重建容器使挂载生效
-    recreate_container_for_mounts
+    mkdir -p "${CONFIG[BASE_DIR]}" 2>/dev/null || {
+      echo -e "${RED}无法创建数据目录 (权限不足)${NC}"
+      sleep 1
+      return
+    }
+    if echo "$mount_config" >> "${CONFIG[BASE_DIR]}/mounts.conf" 2>/dev/null; then
+      echo -e "${GREEN}挂载配置已添加!${NC}"
+      # 自动重建容器使挂载生效
+      recreate_container_for_mounts
+    else
+      echo -e "${RED}添加失败 (权限不足)${NC}"
+    fi
   else
     echo -e "${RED}无效格式! 请使用 主机目录:容器目录[:权限] 格式${NC}"
   fi
@@ -1088,18 +1097,26 @@ remove_custom_mount() {
   fi
 
   read -p "请输入要删除的挂载编号: " mount_num
-  local total_lines=$(wc -l < "${CONFIG[BASE_DIR]}/mounts.conf")
+  local total_lines
+  total_lines=$(wc -l < "${CONFIG[BASE_DIR]}/mounts.conf" 2>/dev/null) || {
+    echo -e "${RED}无法读取挂载配置文件 (权限不足)${NC}"
+    sleep 1
+    return
+  }
 
   if [[ "$mount_num" =~ ^[0-9]+$ ]] && [[ "$mount_num" -ge 1 ]] && [[ "$mount_num" -le "$total_lines" ]]; then
     # 创建临时文件
     local temp_file=$(mktemp)
     # 删除指定行
-    sed "${mount_num}d" "${CONFIG[BASE_DIR]}/mounts.conf" > "$temp_file"
-    mv "$temp_file" "${CONFIG[BASE_DIR]}/mounts.conf"
-    echo -e "${GREEN}挂载配置已删除!${NC}"
-
-    # 自动重建容器使挂载生效
-    recreate_container_for_mounts
+    if sed "${mount_num}d" "${CONFIG[BASE_DIR]}/mounts.conf" > "$temp_file" 2>/dev/null && \
+       mv "$temp_file" "${CONFIG[BASE_DIR]}/mounts.conf" 2>/dev/null; then
+      echo -e "${GREEN}挂载配置已删除!${NC}"
+      # 自动重建容器使挂载生效
+      recreate_container_for_mounts
+    else
+      echo -e "${RED}删除失败 (权限不足)${NC}"
+      rm -f "$temp_file" 2>/dev/null
+    fi
   else
     echo -e "${RED}无效编号!${NC}"
   fi
@@ -1195,18 +1212,28 @@ check_status() {
   docker ps -a --filter "name=$container_name" --format \
     "table {{.Names}}\t{{.Status}}\t{{.Image}}"
 
+  # 从容器实际配置读取网络模式
+  local actual_network=$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$container_name" 2>/dev/null)
+
   # 显示端口映射（支持host和bridge模式）
   echo -e "\n${CYAN}============== 端口映射 ==============${NC}"
-  if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
+  if [[ "$actual_network" == "host" ]]; then
     echo -e "${YELLOW}host模式使用主机网络，无独立端口映射${NC}"
     echo -e "管理端口: ${GREEN}4567${NC}"
     echo -e "Nginx端口: ${GREEN}5678${NC}"
     echo -e "httpd端口: ${GREEN}5233${NC}"
     echo -e "AList端口: ${GREEN}5234${NC}"
   else
-    docker inspect --format \
-      '{{range $p, $conf := .NetworkSettings.Ports}}{{$p}} -> {{(index $conf 0).HostPort}}{{"\n"}}{{end}}' \
-      "$container_name" 2>/dev/null || echo -e "${RED}无端口映射信息${NC}"
+    # 使用更安全的方式获取端口映射
+    local port_info
+    port_info=$(docker port "$container_name" 2>/dev/null)
+    if [[ -n "$port_info" ]]; then
+      echo "$port_info" | while IFS= read -r line; do
+        echo "  $line"
+      done
+    else
+      echo -e "${RED}无端口映射信息${NC}"
+    fi
   fi
 
   # 显示挂载信息（包括自定义挂载）
@@ -1245,7 +1272,274 @@ check_status() {
   if [[ "$status" == "running" ]]; then
     echo -e "\n${CYAN}============ AList服务状态 ============${NC}"
     check_alist_status
+
+    # 执行健康检查
+    echo ""
+    health_check
   fi
+
+  read -n 1 -s -r -p "按任意键继续..."
+}
+
+# GitHub代理管理
+manage_github_proxy() {
+  while true; do
+    clear
+    echo -e "${CYAN}=============================================${NC}"
+    echo -e "${GREEN}          GitHub代理设置          ${NC}"
+    echo -e "${CYAN}=============================================${NC}"
+
+    # 显示当前代理列表
+    local proxy_file="${CONFIG[BASE_DIR]}/github_proxy.txt"
+    local current_proxies=()
+
+    if [[ -f "$proxy_file" && -s "$proxy_file" ]]; then
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && current_proxies+=("$line")
+      done < "$proxy_file"
+    fi
+
+    if [[ ${#current_proxies[@]} -gt 0 ]]; then
+      echo -e "${YELLOW}当前代理列表 (最多5个):${NC}\n"
+      for i in "${!current_proxies[@]}"; do
+        echo -e " $((i+1)). ${GREEN}${current_proxies[$i]}${NC}"
+      done
+      echo ""
+    else
+      echo -e "${YELLOW}当前未设置代理${NC}\n"
+    fi
+
+    echo -e "${CYAN}支持的代理前缀:${NC}"
+    echo -e " - https://ghp.ci/"
+    echo -e " - https://github.moeyy.xyz/"
+    echo -e " - https://gh-proxy.com/"
+    echo -e " 等其他GitHub镜像加速服务\n"
+
+    echo -e "${GREEN} 1. 添加代理"
+    echo -e " 2. 删除代理"
+    echo -e " 3. 清空所有代理"
+    echo -e " 0. 返回配置菜单${NC}"
+    echo -e "${CYAN}---------------------------------------------${NC}"
+    read -p "请选择操作 [0-3]: " choice
+
+    case $choice in
+      1)
+        if [[ ${#current_proxies[@]} -ge 5 ]]; then
+          echo -e "${RED}已达到最大代理数量 (5个)${NC}"
+          sleep 2
+          continue
+        fi
+
+        echo -e "${YELLOW}请输入代理URL (必须以 http:// 或 https:// 开头)${NC}"
+        echo -e "${YELLOW}示例: https://ghp.ci/${NC}"
+        read -p "代理URL: " new_proxy
+
+        # 验证URL格式
+        if [[ ! "$new_proxy" =~ ^https?:// ]]; then
+          echo -e "${RED}无效的URL格式，必须以 http:// 或 https:// 开头${NC}"
+          sleep 2
+          continue
+        fi
+
+        # 检查是否已存在
+        if printf '%s\n' "${current_proxies[@]}" | grep -Fxq "$new_proxy"; then
+          echo -e "${YELLOW}该代理已存在${NC}"
+          sleep 2
+          continue
+        fi
+
+        # 添加到列表
+        current_proxies+=("$new_proxy")
+        save_proxy_list "${current_proxies[@]}"
+        echo -e "${GREEN}代理已添加${NC}"
+        sleep 1
+        ;;
+
+      2)
+        if [[ ${#current_proxies[@]} -eq 0 ]]; then
+          echo -e "${YELLOW}当前没有代理可删除${NC}"
+          sleep 2
+          continue
+        fi
+
+        read -p "请输入要删除的代理编号 [1-${#current_proxies[@]}]: " del_num
+
+        if [[ "$del_num" =~ ^[0-9]+$ ]] && [[ "$del_num" -ge 1 ]] && [[ "$del_num" -le ${#current_proxies[@]} ]]; then
+          # 删除指定索引的元素
+          unset 'current_proxies[$((del_num-1))]'
+          current_proxies=("${current_proxies[@]}")  # 重新索引数组
+          save_proxy_list "${current_proxies[@]}"
+          echo -e "${GREEN}代理已删除${NC}"
+          sleep 1
+        else
+          echo -e "${RED}无效的编号${NC}"
+          sleep 2
+        fi
+        ;;
+
+      3)
+        if [[ ${#current_proxies[@]} -eq 0 ]]; then
+          echo -e "${YELLOW}当前没有代理${NC}"
+          sleep 2
+          continue
+        fi
+
+        read -p "确认清空所有代理? [y/N] " confirm
+        case "$confirm" in
+          [Yy]*)
+            save_proxy_list
+            echo -e "${GREEN}已清空所有代理${NC}"
+            sleep 1
+            ;;
+          *)
+            echo -e "${YELLOW}已取消${NC}"
+            sleep 1
+            ;;
+        esac
+        ;;
+
+      0)
+        return
+        ;;
+
+      *)
+        echo -e "${RED}无效选择${NC}"
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+# 保存代理列表
+save_proxy_list() {
+  local proxy_file="${CONFIG[BASE_DIR]}/github_proxy.txt"
+
+  if [[ $# -eq 0 ]]; then
+    # 清空代理
+    rm -f "$proxy_file" 2>/dev/null
+    CONFIG["GITHUB_PROXY"]=""
+  else
+    # 写入代理列表（一行一个）
+    printf '%s\n' "$@" > "$proxy_file" 2>/dev/null || {
+      echo -e "${RED}写入失败 (权限不足)${NC}"
+      sleep 2
+      return 1
+    }
+    # 保存到配置（用逗号分隔）
+    CONFIG["GITHUB_PROXY"]=$(IFS=','; echo "$*")
+  fi
+
+  save_config
+
+  # 提示重启容器
+  local container_name=$(get_container_name)
+  if docker ps --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    read -p "代理配置已更新，是否重启容器使其生效? [Y/n] " yn
+    case "$yn" in
+      [Nn]*) ;;
+      *) docker restart "$container_name" >/dev/null && echo -e "${GREEN}容器已重启${NC}" || echo -e "${RED}重启失败${NC}"
+         sleep 1 ;;
+    esac
+  fi
+}
+
+# 数据库恢复
+restore_database() {
+  local backup_dir="${CONFIG[BASE_DIR]}/backup"
+
+  echo -e "${CYAN}=============================================${NC}"
+  echo -e "${GREEN}          数据库恢复          ${NC}"
+  echo -e "${CYAN}=============================================${NC}"
+
+  # 检查备份目录是否存在
+  if [[ ! -d "$backup_dir" ]]; then
+    echo -e "${YELLOW}备份目录不存在: $backup_dir${NC}"
+    echo -e "${YELLOW}提示: 系统会在每天6点自动备份数据库到此目录${NC}"
+    read -n 1 -s -r -p "按任意键继续..."
+    return
+  fi
+
+  # 列出所有备份文件
+  local backups=()
+  while IFS= read -r file; do
+    backups+=("$file")
+  done < <(find "$backup_dir" -maxdepth 1 -type f -name "*.zip" 2>/dev/null | sort -r)
+
+  if [[ ${#backups[@]} -eq 0 ]]; then
+    echo -e "${YELLOW}未找到备份文件${NC}"
+    echo -e "${YELLOW}提示: 备份文件应为 .zip 格式，保存在 $backup_dir 目录${NC}"
+    read -n 1 -s -r -p "按任意键继续..."
+    return
+  fi
+
+  echo -e "${YELLOW}可用的备份文件:${NC}\n"
+  for i in "${!backups[@]}"; do
+    local file="${backups[$i]}"
+    local filename=$(basename "$file")
+    local filesize=$(ls -lh "$file" | awk '{print $5}')
+    local filetime=$(ls -l --time-style='+%Y-%m-%d %H:%M:%S' "$file" | awk '{print $6, $7}')
+    echo -e " $((i+1)). ${GREEN}${filename}${NC}"
+    echo -e "    大小: ${filesize}  时间: ${filetime}"
+    echo ""
+  done
+
+  echo -e " 0. 取消"
+  echo -e "${CYAN}---------------------------------------------${NC}"
+  read -p "请选择要恢复的备份 [0-${#backups[@]}]: " choice
+
+  # 验证输入
+  if [[ "$choice" == "0" ]]; then
+    return
+  fi
+
+  if ! [[ "$choice" =~ ^[0-9]+$ ]] || [[ "$choice" -lt 1 ]] || [[ "$choice" -gt ${#backups[@]} ]]; then
+    echo -e "${RED}无效选择!${NC}"
+    sleep 2
+    return
+  fi
+
+  local selected_backup="${backups[$((choice-1))]}"
+  local backup_name=$(basename "$selected_backup")
+
+  echo -e "\n${RED}警告: 恢复操作将覆盖当前数据库!${NC}"
+  read -p "确认恢复备份 ${backup_name}? [y/N] " confirm
+
+  case "$confirm" in
+    [Yy]*)
+      echo -e "${CYAN}正在恢复数据库...${NC}"
+
+      # 1. 复制备份文件到 database.zip
+      if ! cp "$selected_backup" "${CONFIG[BASE_DIR]}/database.zip" 2>/dev/null; then
+        echo -e "${RED}复制备份文件失败 (权限不足)${NC}"
+        read -n 1 -s -r -p "按任意键继续..."
+        return
+      fi
+      echo -e "${GREEN}✓ 备份文件已复制${NC}"
+
+      # 2. 删除现有数据库文件
+      rm -f "${CONFIG[BASE_DIR]}/atv.mv.db" 2>/dev/null && echo -e "${GREEN}✓ 已删除 atv.mv.db${NC}"
+      rm -f "${CONFIG[BASE_DIR]}/atv.trace.db" 2>/dev/null && echo -e "${GREEN}✓ 已删除 atv.trace.db${NC}"
+
+      # 3. 重启容器
+      local container_name=$(get_container_name)
+      if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+        echo -e "${YELLOW}正在重启容器...${NC}"
+        if docker restart "$container_name" >/dev/null 2>&1; then
+          echo -e "${GREEN}✓ 容器已重启${NC}"
+          echo -e "\n${GREEN}数据库恢复完成!${NC}"
+          echo -e "${YELLOW}提示: 容器正在初始化，请稍等片刻后访问管理界面${NC}"
+        else
+          echo -e "${RED}容器重启失败${NC}"
+        fi
+      else
+        echo -e "${YELLOW}容器不存在，数据库文件已准备就绪${NC}"
+        echo -e "${YELLOW}请通过菜单 '1. 安装/更新' 启动容器${NC}"
+      fi
+      ;;
+    *)
+      echo -e "${YELLOW}已取消恢复${NC}"
+      ;;
+  esac
 
   read -n 1 -s -r -p "按任意键继续..."
 }
@@ -1388,7 +1682,7 @@ show_config_menu() {
     echo -e " 3. AList端口: ${CONFIG[PORT2]}"
     echo -e " 4. 挂载/www目录: ${CONFIG[MOUNT_WWW]}"
     echo -e " 5. 自定义挂载目录"
-    echo -e " 6. 网络模式: ${CONFIG[NETWORK]}"
+    echo -e " 6. 数据恢复"
     echo -e " 7. 重启策略: ${CONFIG[RESTART]}"
     echo -e " 8. 重置管理员密码"
     echo -e " 9. GitHub代理设置"
@@ -1454,8 +1748,7 @@ show_config_menu() {
         continue
         ;;
       6)
-        show_network_menu
-        # show_network_menu 内部已处理重建逻辑
+        restore_database
         continue
         ;;
       7)
@@ -1471,12 +1764,8 @@ show_config_menu() {
         continue
         ;;
       9)
-        read -p "输入GitHub代理URL [${CONFIG[GITHUB_PROXY]}]: " url
-        if [[ "$url" != "${CONFIG[GITHUB_PROXY]}" ]]; then
-          CONFIG[GITHUB_PROXY]="$url"
-          save_config
-          need_recreate=true
-        fi
+        manage_github_proxy
+        continue
         ;;
       0)
         break
@@ -1574,28 +1863,136 @@ health_check() {
   fi
 }
 
+# 检查端口是否被占用
+check_port_in_use() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -lnt 2>/dev/null | awk '{print $4}' | grep -Eq "(:|\.)${port}$"
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -lnt 2>/dev/null | awk '{print $4}' | grep -Eq "(:|\.)${port}$"
+  else
+    return 1
+  fi
+}
+
 auto_repair() {
   local container_name
   container_name="$(get_container_name)"
 
-  echo -e "${CYAN}正在执行自动修复...${NC}"
+  echo -e "${CYAN}============== 自动修复诊断 ==============${NC}"
 
-  if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-    local running
-    running="$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null || echo false)"
-    if [[ "$running" != "true" ]]; then
-      echo -e "${YELLOW}容器未运行，正在启动...${NC}"
-      if ! docker start "$container_name" >/dev/null; then
-        echo -e "${RED}容器启动失败，请查看日志：docker logs -f $container_name${NC}"
-      fi
-    else
-      echo -e "${GREEN}容器正在运行${NC}"
-    fi
-  else
-    echo -e "${YELLOW}容器不存在，请先安装${NC}"
+  # 1. 检查容器是否存在
+  if ! docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+    echo -e "${RED}× 容器不存在${NC}"
+    echo -e "${YELLOW}建议：选择菜单 '1. 安装/更新' 创建容器${NC}"
+    read -n 1 -s -r -p "按任意键继续..."
+    return 1
   fi
 
+  echo -e "${GREEN}✓ 容器存在${NC}"
+
+  # 2. 检查容器运行状态
+  local running
+  running="$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null || echo false)"
+
+  if [[ "$running" != "true" ]]; then
+    echo -e "${RED}× 容器未运行${NC}"
+
+    # 检查退出状态
+    local exit_code
+    local exit_error
+    exit_code="$(docker inspect -f '{{.State.ExitCode}}' "$container_name" 2>/dev/null || echo 0)"
+    exit_error="$(docker inspect -f '{{.State.Error}}' "$container_name" 2>/dev/null || echo '')"
+
+    if [[ "$exit_code" != "0" ]]; then
+      echo -e "${YELLOW}  容器异常退出 (退出码: $exit_code)${NC}"
+      [[ -n "$exit_error" ]] && echo -e "${YELLOW}  错误: $exit_error${NC}"
+    fi
+
+    # 检查端口冲突
+    echo -e "${CYAN}  检查端口冲突...${NC}"
+    local has_conflict=false
+    if [[ "${CONFIG[NETWORK]}" == "host" ]]; then
+      for p in 4567 5678 5233 5234; do
+        if check_port_in_use "$p"; then
+          echo -e "${RED}  × 端口 $p 被占用${NC}"
+          has_conflict=true
+        fi
+      done
+    else
+      if check_port_in_use "${CONFIG[PORT1]}"; then
+        echo -e "${RED}  × 管理端口 ${CONFIG[PORT1]} 被占用${NC}"
+        has_conflict=true
+      fi
+      if check_port_in_use "${CONFIG[PORT2]}"; then
+        echo -e "${RED}  × AList端口 ${CONFIG[PORT2]} 被占用${NC}"
+        has_conflict=true
+      fi
+    fi
+
+    if [[ "$has_conflict" == "true" ]]; then
+      echo -e "${YELLOW}建议：通过菜单 '8. 配置管理' 修改端口，或停止占用端口的进程${NC}"
+      read -n 1 -s -r -p "按任意键继续..."
+      return 1
+    fi
+    echo -e "${GREEN}  ✓ 端口无冲突${NC}"
+
+    # 检查数据目录权限
+    if [[ ! -w "${CONFIG[BASE_DIR]}" ]]; then
+      echo -e "${RED}  × 数据目录无写权限: ${CONFIG[BASE_DIR]}${NC}"
+      echo -e "${YELLOW}  尝试修复权限...${NC}"
+      if chmod 755 "${CONFIG[BASE_DIR]}" 2>/dev/null; then
+        echo -e "${GREEN}  ✓ 权限已修复${NC}"
+      else
+        echo -e "${RED}  × 权限修复失败${NC}"
+        echo -e "${YELLOW}  请手动执行: sudo chmod 755 ${CONFIG[BASE_DIR]}${NC}"
+        read -n 1 -s -r -p "按任意键继续..."
+        return 1
+      fi
+    else
+      echo -e "${GREEN}  ✓ 数据目录权限正常${NC}"
+    fi
+
+    # 尝试启动容器
+    echo -e "${YELLOW}  正在启动容器...${NC}"
+    if docker start "$container_name" >/dev/null 2>&1; then
+      echo -e "${GREEN}✓ 容器已启动${NC}"
+      echo -e "${CYAN}等待服务初始化...${NC}"
+      sleep 3
+    else
+      echo -e "${RED}× 容器启动失败${NC}"
+      echo -e "${YELLOW}可能的原因：${NC}"
+      echo -e "  1. 配置文件损坏"
+      echo -e "  2. 镜像与网络模式不匹配"
+      echo -e "  3. 挂载目录问题"
+      echo ""
+      read -p "是否尝试重建容器以修复？[y/N] " yn
+      case "$yn" in
+        [Yy]*)
+          echo -e "${YELLOW}正在重建容器...${NC}"
+          docker rm -f "$container_name" >/dev/null
+          start_container
+          echo -e "${GREEN}✓ 容器已重建并启动${NC}"
+          echo -e "${CYAN}等待服务初始化...${NC}"
+          sleep 3
+          ;;
+        *)
+          echo -e "${YELLOW}已取消重建${NC}"
+          echo -e "${YELLOW}请查看日志排查问题: docker logs $container_name${NC}"
+          read -n 1 -s -r -p "按任意键继续..."
+          return 1
+          ;;
+      esac
+    fi
+  else
+    echo -e "${GREEN}✓ 容器正在运行${NC}"
+  fi
+
+  # 3. 检查容器健康状态
+  echo -e "\n${CYAN}============== 服务健康检查 ==============${NC}"
   health_check
+
+  echo -e "\n${GREEN}诊断完成${NC}"
 }
 
 interactive_mode() {
@@ -1673,17 +2070,7 @@ interactive_mode() {
         show_config_menu
         ;;
       9)
-        if ! check_update; then
-          sleep 3
-        fi
-        ;;
-      h|H)
-        health_check
-        read -n 1 -s -r -p "按任意键继续..."
-        ;;
-      r|R)
         auto_repair
-        read -n 1 -s -r -p "按任意键继续..."
         ;;
       0)
         echo -e "${GREEN}再见!${NC}"
