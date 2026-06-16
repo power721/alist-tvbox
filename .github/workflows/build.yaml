@@ -96,7 +96,70 @@ jobs:
             web-ui/dist/
           retention-days: 1
 
-  # Job 2: 构建 JVM 镜像（并行）
+  # Job 2: 快速测试（AMD64 only，本地构建）
+  quick-test:
+    needs: build-base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build test image (AMD64 only, local)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: alist-tvbox:test
+          cache-from: type=gha,scope=master-quick-test
+          cache-to: type=gha,mode=max,scope=master-quick-test
+
+      - name: Test image
+        run: |
+          docker run -d --name quick-test -p 4567:4567 alist-tvbox:test
+
+          echo "Waiting for AList to start (max 60 seconds)..."
+          SUCCESS=false
+          for i in {1..30}; do
+            RESPONSE=$(curl -s http://localhost:4567/api/alist/status || echo "0")
+            echo "Attempt $i/30: status=$RESPONSE"
+
+            if [ "$RESPONSE" == "2" ]; then
+              echo "✅ AList is running (status=2)"
+              SUCCESS=true
+              break
+            elif [ "$RESPONSE" == "1" ]; then
+              echo "⏳ AList is starting, waiting..."
+            else
+              echo "❌ AList not responding, waiting..."
+            fi
+
+            sleep 2
+          done
+
+          if [ "$SUCCESS" != "true" ]; then
+            echo "❌ Quick test failed: AList did not reach status 2 within 60 seconds"
+            docker logs quick-test
+            docker stop quick-test
+            docker rm quick-test
+            exit 1
+          fi
+
+          echo "✅ Quick test passed"
+          docker stop quick-test
+          docker rm quick-test
+
+  # Job 3: 构建 JVM 镜像（并行）
   build-jvm-images:
     needs: build-base
     runs-on: ubuntu-latest
@@ -134,9 +197,9 @@ jobs:
           cache-from: type=gha,scope=master-${{ matrix.image.name }}
           cache-to: type=gha,mode=max,scope=master-${{ matrix.image.name }}
 
-  # Job 3: 构建 Native 二进制 + 镜像
+  # Job 4: 构建 Native 镜像（快速测试通过后才执行）
   build-native:
-    needs: build-base
+    needs: quick-test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -180,7 +243,7 @@ jobs:
           cache-from: type=gha,scope=master-native
           cache-to: type=gha,mode=max,scope=master-native
 
-  # Job 4: 测试镜像（并行）
+  # Job 5: 测试镜像（并行）
   test-images:
     needs: [build-jvm-images, build-native]
     runs-on: ubuntu-latest
