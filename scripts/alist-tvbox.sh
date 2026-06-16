@@ -2461,13 +2461,19 @@ manage_logs() {
         read -p "请输入要查看的行数 [默认100]: " lines
         lines=${lines:-100}
         if [[ "$lines" =~ ^[0-9]+$ ]]; then
-          docker logs --tail "$lines" "$container_name" 2>&1 | \
-            if command -v less >/dev/null 2>&1; then
-              less -R
+          if command -v less >/dev/null 2>&1; then
+            # 有 less 时使用分页器
+            docker logs --tail "$lines" "$container_name" 2>&1 | less -R
+          else
+            # 没有 less 时使用 more 或直接输出（限制行数）
+            if command -v more >/dev/null 2>&1; then
+              docker logs --tail "$lines" "$container_name" 2>&1 | more
             else
-              cat
+              echo -e "${CYAN}显示最近 ${lines} 行日志:${NC}\n"
+              docker logs --tail "$lines" "$container_name" 2>&1
               read -n 1 -s -r -p "按任意键继续..."
             fi
+          fi
         else
           echo -e "${RED}无效的行数${NC}"
           sleep 1
@@ -2477,13 +2483,27 @@ manage_logs() {
         read -p "请输入关键词: " keyword
         if [[ -n "$keyword" ]]; then
           echo -e "${CYAN}包含 '${keyword}' 的日志:${NC}\n"
-          docker logs "$container_name" 2>&1 | grep -i "$keyword" | \
-            if command -v less >/dev/null 2>&1; then
-              grep --color=always -i "$keyword" | less -R
+
+          if command -v less >/dev/null 2>&1; then
+            # 有 less 时使用分页器
+            docker logs "$container_name" 2>&1 | grep --color=always -i "$keyword" | less -R
+          elif command -v more >/dev/null 2>&1; then
+            # 有 more 时使用它
+            docker logs "$container_name" 2>&1 | grep --color=always -i "$keyword" | more
+          else
+            # 都没有时，限制显示前200行
+            local result=$(docker logs "$container_name" 2>&1 | grep --color=always -i "$keyword")
+            local line_count=$(echo "$result" | wc -l)
+
+            if [[ $line_count -gt 200 ]]; then
+              echo -e "${YELLOW}找到 ${line_count} 行匹配结果，显示前200行:${NC}\n"
+              echo "$result" | head -n 200
+              echo -e "\n${YELLOW}...省略 $((line_count - 200)) 行，建议使用选项4导出完整日志${NC}"
             else
-              grep --color=always -i "$keyword"
-              read -n 1 -s -r -p "按任意键继续..."
+              echo "$result"
             fi
+            read -n 1 -s -r -p "按任意键继续..."
+          fi
         else
           echo -e "${RED}关键词不能为空${NC}"
           sleep 1
