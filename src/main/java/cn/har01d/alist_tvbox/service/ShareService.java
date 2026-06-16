@@ -79,6 +79,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -112,7 +113,7 @@ public class ShareService {
     private final Environment environment;
 
     private final int offset = 99900;
-    private int shareId = 20000;
+    private final AtomicInteger shareId = new AtomicInteger(20000);
     private final ObjectMapper objectMapper;
 
     public ShareService(AppProperties appProperties,
@@ -1188,12 +1189,13 @@ public class ShareService {
 
         try {
             String token = accountService.login();
-            synchronized (this) {
-                if (environment.acceptsProfiles(Profiles.of("docker"))) {
-                    shareId = aListLocalService.getNextStorageId();
-                }
-                share.setId(shareId++);
+            int id;
+            if (environment.acceptsProfiles(Profiles.of("docker"))) {
+                id = aListLocalService.getNextStorageId();
+            } else {
+                id = shareId.getAndIncrement();
             }
+            share.setId(id);
 
             share.setPath(Storage.getMountPath(share));
             saveStorage(share, true);
