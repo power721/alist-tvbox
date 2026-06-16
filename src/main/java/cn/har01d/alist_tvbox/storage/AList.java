@@ -9,7 +9,7 @@ public class AList extends Storage {
         super(site);
         addAddition("root_folder_path", StringUtils.isBlank(site.getFolder()) ? "/" : site.getFolder());
         addAddition("url", site.getUrl());
-        if (site.getStorageVersion() == 3) {
+        if (site.getStorageVersion() == null || site.getStorageVersion() == 3) {
             addAddition("meta_password", site.getPassword());
             addAddition("token", site.getToken());
         } else {

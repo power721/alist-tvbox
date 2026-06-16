@@ -306,7 +306,7 @@ public class ShareService {
                 continue;
             }
             try {
-                Storage storage = site.getStorageVersion() == 4 ? new OpenList(site) : new AList(site);
+                Storage storage = site.getStorageVersion() != null && site.getStorageVersion() == 4 ? new OpenList(site) : new AList(site);
                 aListLocalService.saveStorage(storage);
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());
