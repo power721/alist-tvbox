@@ -6,138 +6,344 @@ on:
       - '*'
 
 jobs:
-  release:
+  # Job 1: 构建基础资源（web UI + Maven jar）
+  build-base:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: ./web-ui
+
       - name: Install npm
         working-directory: ./web-ui
         run: npm ci
+
       - name: Build web UI
         working-directory: ./web-ui
         run: npm run build
+
       - name: setup graalvm
         uses: graalvm/setup-graalvm@v1
         with:
           java-version: '21'
-          distribution: 'graalvm' # See 'Options' for all available distributions
-          native-image-musl: 'true'
+          distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: 'maven'
+
       - name: Build with Maven
         run: mvn -B package --file pom.xml
+
       - name: Extract Spring Boot layers
         working-directory: ./target
         run: java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Set APP version
         run: |
           [ -d data ] || mkdir data
           echo "${{ github.ref_name }}" > data/version
           cp data/version data/app_version
-      - name: Build docker and push
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            target/
+            data/
+            src/
+            pom.xml
+            web-ui/dist/
+          retention-days: 1
+
+  # Job 2: 构建 JVM 镜像（只推送版本标签）
+  build-jvm-images:
+    needs: build-base
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image:
+          - name: xiaoya-tvbox
+            dockerfile: docker/Dockerfile-xiaoya
+            version_tag: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ github.ref_name }}
+          - name: xiaoya-tvbox-host
+            dockerfile: docker/Dockerfile-host
+            version_tag: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-hostmode:${{ github.ref_name }}
+            additional_tags: |
+              ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-host:${{ github.ref_name }}
+          - name: alist-tvbox
+            dockerfile: docker/Dockerfile
+            version_tag: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build tags list
+        id: tags
+        run: |
+          TAGS="${{ matrix.image.version_tag }}"
+          if [ -n "${{ matrix.image.additional_tags }}" ]; then
+            TAGS="$TAGS,${{ matrix.image.additional_tags }}"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push ${{ matrix.image.name }} (version tag only)
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile-xiaoya
+          file: ${{ matrix.image.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox:${{ github.ref_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-#      - name: Build xiaoya TG docker and push
-#        uses: docker/build-push-action@v6
-#        with:
-#          context: .
-#          file: docker/Dockerfile-xiaoya-tg
-#          platforms: linux/amd64,linux/arm64
-#          push: true
-#          tags: |
-#            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-tg:${{ github.ref_name }}
-#            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-python:${{ github.ref_name }}
-#          cache-from: type=gha
-#          cache-to: type=gha,mode=max
-      - name: Build host mode docker and push
-        uses: docker/build-push-action@v6
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
+
+  # Job 3: 构建 Native 二进制
+  build-native:
+    needs: build-base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          file: docker/Dockerfile-host
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-host:${{ github.ref_name }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-hostmode:${{ github.ref_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Build standalone docker and push
-        uses: docker/build-push-action@v6
+          name: build-artifacts
+
+      - name: setup graalvm
+        uses: graalvm/setup-graalvm@v1
         with:
-          context: .
-          file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:${{ github.ref_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-#      - name: Build tg docker and push
-#        uses: docker/build-push-action@v6
-#        with:
-#          context: .
-#          file: docker/Dockerfile-tg
-#          platforms: linux/amd64,linux/arm64
-#          push: true
-#          tags: |
-#            ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-tg:${{ github.ref_name }}
-#            ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-python:${{ github.ref_name }}
-#          cache-from: type=gha
-#          cache-to: type=gha,mode=max
+          java-version: '21'
+          distribution: 'graalvm'
+          native-image-musl: 'true'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'maven'
+
       - name: Build native with Maven
         run: |
           mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
           chmod a+x target/atv
           ls -l target
-      - name: Build alist native docker and push
+
+      - name: Upload native binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-binary
+          path: target/atv
+          retention-days: 1
+
+  # Job 4: 构建 Native 镜像（只推送版本标签）
+  build-native-images:
+    needs: [build-base, build-native]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image:
+          - name: alist-tvbox-native
+            dockerfile: docker/Dockerfile-alist-native
+            version_tag: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-native:${{ github.ref_name }}
+          - name: xiaoya-tvbox-native
+            dockerfile: docker/Dockerfile-native
+            version_tag: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native:${{ github.ref_name }}
+          - name: xiaoya-tvbox-native-host
+            dockerfile: docker/Dockerfile-native-host
+            version_tag: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native-host:${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Download native binary
+        uses: actions/download-artifact@v4
+        with:
+          name: native-binary
+          path: target
+
+      - name: Fix permissions
+        run: chmod a+x target/atv
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.image.name }} (version tag only)
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile-alist-native
+          file: ${{ matrix.image.dockerfile }}
           platforms: linux/amd64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox-native:${{ github.ref_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Build native docker and push
-        uses: docker/build-push-action@v6
+          tags: ${{ matrix.image.version_tag }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
+
+  # Job 5: 测试镜像（测试版本标签）
+  test-images:
+    needs: [build-jvm-images, build-native-images]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test:
+          - name: xiaoya-tvbox
+            image: xiaoya-tvbox-hostmode
+            port: 4567
+          - name: alist-tvbox
+            image: alist-tvbox
+            port: 4568
+          - name: alist-tvbox-native
+            image: alist-tvbox-native
+            port: 4569
+    steps:
+      - name: Test ${{ matrix.test.name }} container
+        run: |
+          docker run -d --name test-${{ matrix.test.name }} -p ${{ matrix.test.port }}:4567 ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.test.image }}:${{ github.ref_name }}
+
+          echo "Waiting for AList to start (max 60 seconds)..."
+          SUCCESS=false
+          for i in {1..30}; do
+            RESPONSE=$(curl -s http://localhost:${{ matrix.test.port }}/api/alist/status || echo "0")
+            echo "Attempt $i/30: status=$RESPONSE"
+
+            if [ "$RESPONSE" == "2" ]; then
+              echo "✅ AList is running (status=2)"
+              SUCCESS=true
+              break
+            elif [ "$RESPONSE" == "1" ]; then
+              echo "⏳ AList is starting, waiting..."
+            else
+              echo "❌ AList not responding, waiting..."
+            fi
+
+            sleep 2
+          done
+
+          if [ "$SUCCESS" != "true" ]; then
+            echo "❌ Test failed: AList did not reach status 2 within 60 seconds"
+            docker logs test-${{ matrix.test.name }}
+            docker stop test-${{ matrix.test.name }}
+            docker rm test-${{ matrix.test.name }}
+            exit 1
+          fi
+
+          echo "✅ Test passed: AList status is 2 (running)"
+          docker stop test-${{ matrix.test.name }}
+          docker rm test-${{ matrix.test.name }}
+
+  # Job 6: 添加 latest 标签（测试通过后）
+  tag-latest:
+    needs: test-images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image:
+          - source: xiaoya-tvbox-hostmode:${{ github.ref_name }}
+            targets:
+              - xiaoya-tvbox:latest
+              - xiaoya-tvbox:hostmode
+              - xiaoya-tvbox:host
+              - xiaoya-tvbox-hostmode:latest
+              - xiaoya-tvbox-host:latest
+          - source: alist-tvbox:${{ github.ref_name }}
+            targets:
+              - alist-tvbox:latest
+          - source: alist-tvbox-native:${{ github.ref_name }}
+            targets:
+              - alist-tvbox:native
+              - alist-tvbox-native:latest
+          - source: xiaoya-tvbox-native:${{ github.ref_name }}
+            targets:
+              - xiaoya-tvbox:native
+              - xiaoya-tvbox-native:latest
+          - source: xiaoya-tvbox-native-host:${{ github.ref_name }}
+            targets:
+              - xiaoya-tvbox:native-host
+              - xiaoya-tvbox-native-host:latest
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
         with:
-          context: .
-          file: docker/Dockerfile-native
-          platforms: linux/amd64
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native:${{ github.ref_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Build host native docker and push
-        uses: docker/build-push-action@v6
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Pull source image
+        run: docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image.source }}
+
+      - name: Tag and push latest tags
+        run: |
+          SOURCE_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image.source }}"
+          for TARGET in ${{ join(matrix.image.targets, ' ') }}; do
+            TARGET_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${TARGET}"
+            echo "Tagging $SOURCE_IMAGE as $TARGET_IMAGE"
+            docker tag "$SOURCE_IMAGE" "$TARGET_IMAGE"
+            docker push "$TARGET_IMAGE"
+          done
+
+  # Job 7: 发送通知（仅测试成功时）
+  notify:
+    needs: tag-latest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read release notes
+        id: release_notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_BODY="$(gh release view "$GITHUB_REF_NAME" --json body --jq .body || true)"
+          {
+            echo "body<<EOF"
+            printf '%s\n' "$RELEASE_BODY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send telegram message
+        uses: appleboy/telegram-action@master
         with:
-          context: .
-          file: docker/Dockerfile-native-host
-          platforms: linux/amd64
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/xiaoya-tvbox-native-host:${{ github.ref_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          to: ${{ secrets.CHANNEL_ID }}
+          token: ${{ secrets.BOT_TOKEN }}
+          message: |
+            AList-TvBox 发布新版本 ✅
+            版本: ${{ github.ref_name }}
+            仓库: ${{ github.repository }}
+            发布人: ${{ github.actor }}
+            Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+
+            更新内容:
+            ${{ steps.release_notes.outputs.body }}

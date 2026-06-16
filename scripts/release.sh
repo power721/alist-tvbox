@@ -59,7 +59,7 @@ branch="$(git rev-parse --abbrev-ref HEAD)"
 head_sha="$(git rev-parse HEAD)"
 printf 'branch=%s\nHEAD=%s\nversion=%s\ntag=%s\n' "$branch" "$head_sha" "$version" "$tag"
 
-[[ "$branch" == "main" ]] || die "只能在 main 分支执行发布脚本"
+[[ "$branch" == "main" || "$branch" == "master" ]] || die "只能在 main/master 分支执行发布脚本"
 require_clean_release_notes_only
 
 git fetch origin main --tags

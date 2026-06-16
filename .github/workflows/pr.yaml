@@ -1,40 +1,16 @@
-name: 'build master branch'
+name: 'build PR'
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - master
+  pull_request:
+    types: [opened, synchronize, reopened]
     paths-ignore:
-      - 'build*'
-      - 'release*'
       - 'config/**'
       - 'doc/**'
       - 'docs/**'
       - '*.md'
-      - 'pom.xml'
-      - 'pom-standalone.xml'
-      - 'docker/Dockerfile-v7'
-      - 'docker/Dockerfile-base'
-      - 'docker/Dockerfile-base-new'
-      - 'docker/Dockerfile-native-base'
-      - 'docker/Dockerfile-jre'
       - 'scripts/install.sh'
       - 'scripts/install-service.sh'
       - 'scripts/alist-tvbox.sh'
-      - 'scripts/update_hostmode.sh'
-      - 'scripts/update_native.sh'
-      - 'scripts/update_native_host.sh'
-      - 'scripts/update_new.sh'
-      - 'scripts/update_xiaoya.sh'
-      - '.github/workflows/build-base.yaml'
-      - '.github/workflows/build-base-new.yaml'
-      - '.github/workflows/build-native-dev.yaml'
-      - '.github/workflows/build-native-base.yaml'
-      - '.github/workflows/build-dev.yaml'
-      - '.github/workflows/build-java.yaml'
-      - '.github/workflows/build-v7.yaml'
-      - '.github/workflows/release.yaml'
       - '.github/ISSUE_TEMPLATE/**'
 
 jobs:
@@ -78,9 +54,7 @@ jobs:
       - name: Set APP version
         run: |
           [ -d data ] || mkdir data
-          export TZ=Asia/Shanghai
-          echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
-          echo "${{ github.event.head_commit.message }}" >> data/version
+          echo "PR-${{ github.event.pull_request.number }}" > data/version
           cp data/version data/app_version
           cat data/version
 
@@ -97,7 +71,7 @@ jobs:
           retention-days: 1
 
   # Job 2: 构建 JVM 镜像（并行）
-  build-jvm-images:
+  build-images:
     needs: build-base
     runs-on: ubuntu-latest
     strategy:
@@ -130,59 +104,13 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image.name }}:test
-          cache-from: type=gha,scope=master-${{ matrix.image.name }}
-          cache-to: type=gha,mode=max,scope=master-${{ matrix.image.name }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image.name }}:pr-test
+          cache-from: type=gha,scope=pr-${{ matrix.image.name }}
+          cache-to: type=gha,mode=max,scope=pr-${{ matrix.image.name }}
 
-  # Job 3: 构建 Native 二进制 + 镜像
-  build-native:
-    needs: build-base
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts
-
-      - name: setup graalvm
-        uses: graalvm/setup-graalvm@v1
-        with:
-          java-version: '21'
-          distribution: 'graalvm'
-          native-image-musl: 'true'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          cache: 'maven'
-
-      - name: Build native with Maven (AMD64)
-        run: |
-          mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
-          chmod a+x target/atv
-          ls -l target
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Build alist native docker (local only)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile-alist-native
-          platforms: linux/amd64
-          push: false
-          load: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/alist-tvbox:native-test
-          cache-from: type=gha,scope=master-native
-          cache-to: type=gha,mode=max,scope=master-native
-
-  # Job 4: 测试镜像（并行）
+  # Job 3: 测试镜像（并行）
   test-images:
-    needs: [build-jvm-images, build-native]
+    needs: build-images
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -191,14 +119,10 @@ jobs:
             port: 4567
           - name: alist-tvbox
             port: 4568
-          - name: alist-tvbox-native
-            port: 4569
     steps:
       - name: Test ${{ matrix.test.name }} container
         run: |
-          IMAGE_TAG="${{ matrix.test.name == 'alist-tvbox-native' && 'native-test' || 'test' }}"
-          IMAGE_NAME="${{ matrix.test.name == 'alist-tvbox-native' && 'alist-tvbox' || matrix.test.name }}"
-          docker run -d --name test-${{ matrix.test.name }} -p ${{ matrix.test.port }}:4567 ${{ secrets.DOCKERHUB_USERNAME }}/${IMAGE_NAME}:${IMAGE_TAG}
+          docker run -d --name test-${{ matrix.test.name }} -p ${{ matrix.test.port }}:4567 ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.test.name }}:pr-test
 
           echo "Waiting for AList to start (max 60 seconds)..."
           SUCCESS=false
