@@ -12,15 +12,15 @@ NC='\033[0m' # No Color
 
 # 版本定义
 declare -A VERSIONS=(
-  ["1"]="haroldli/alist-tvbox              - 纯净版（推荐）"
-  ["2"]="haroldli/alist-tvbox:native       - 纯净原生版"
-  ["3"]="haroldli/alist-tvbox:python       - 纯净版（Python运行环境）"
-  ["4"]="haroldli/xiaoya-tvbox             - 小雅集成版（推荐）"
-  ["5"]="haroldli/xiaoya-tvbox:native      - 小雅原生版"
-  ["6"]="haroldli/xiaoya-tvbox:native-host - 小雅原生主机版"
-  ["7"]="haroldli/xiaoya-tvbox:host        - 小雅主机模式版"
-  ["8"]="haroldli/xiaoya-tvbox:python      - 小雅版（Python运行环境）"
-  ["9"]="haroldli/xiaoya-tvbox:dev         - 开发测试版"
+  ["1"]="haroldli/alist-tvbox               - 纯净版（推荐）"
+  ["2"]="haroldli/alist-tvbox:native        - 纯净原生版"
+  ["3"]="haroldli/alist-tvbox:python        - 纯净版（Python运行环境）"
+  ["4"]="haroldli/xiaoya-tvbox              - 小雅集成版（推荐）"
+  ["5"]="haroldli/xiaoya-tvbox:native       - 小雅原生版"
+  ["6"]="haroldli/xiaoya-tvbox:native-host  - 小雅原生主机版"
+  ["7"]="haroldli/xiaoya-tvbox:host         - 小雅主机模式版"
+  ["8"]="haroldli/xiaoya-tvbox:hostmode-dev - 开发测试版host网络"
+  ["9"]="haroldli/xiaoya-tvbox:dev          - 开发测试版"
 )
 
 # 默认配置
@@ -618,7 +618,7 @@ validate_image_network_compatibility() {
   fi
 
   # host网络必须使用host镜像
-  if [[ "$network" == "host" && ! "$image" =~ (:|-)host$ ]]; then
+  if [[ "$network" == "host" && ! "$image" =~ (:|-)host ]]; then
     echo -e "${RED}错误: host 网络模式必须使用 :host 镜像版本${NC}"
     echo -e "${YELLOW}普通镜像的 AList 监听 80 端口，会占用主机端口${NC}"
     echo -e "${YELLOW}请选择版本 6 (native-host) 或版本 7 (host)${NC}"
