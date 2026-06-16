@@ -25,6 +25,7 @@ import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
@@ -1019,6 +1020,25 @@ public class IndexService {
             return URLDecoder.decode(url, StandardCharsets.UTF_8);
         } catch (Exception e) {
             return url;
+        }
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        log.info("Shutting down IndexService executor");
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                log.warn("Executor did not terminate in time, forcing shutdown");
+                executor.shutdownNow();
+                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                    log.error("Executor did not terminate after forced shutdown");
+                }
+            }
+        } catch (InterruptedException e) {
+            log.warn("Interrupted while waiting for executor to terminate", e);
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 }
