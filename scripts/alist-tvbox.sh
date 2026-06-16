@@ -1477,7 +1477,13 @@ manage_github_proxy() {
         ;;
 
       4)
-        test_github_proxy_speed "${current_proxies[@]}"
+        if [[ ${#current_proxies[@]} -eq 0 ]]; then
+          echo -e "\n${YELLOW}当前未配置代理，无法测速${NC}"
+          echo -e "${YELLOW}请先添加代理后再进行测速对比${NC}"
+          read -n 1 -s -r -p "按任意键继续..."
+        else
+          test_github_proxy_speed "${current_proxies[@]}"
+        fi
         ;;
 
       0)
@@ -2455,7 +2461,13 @@ manage_logs() {
         read -p "请输入要查看的行数 [默认100]: " lines
         lines=${lines:-100}
         if [[ "$lines" =~ ^[0-9]+$ ]]; then
-          docker logs --tail "$lines" "$container_name" 2>&1 | less -R
+          docker logs --tail "$lines" "$container_name" 2>&1 | \
+            if command -v less >/dev/null 2>&1; then
+              less -R
+            else
+              cat
+              read -n 1 -s -r -p "按任意键继续..."
+            fi
         else
           echo -e "${RED}无效的行数${NC}"
           sleep 1
@@ -2465,7 +2477,13 @@ manage_logs() {
         read -p "请输入关键词: " keyword
         if [[ -n "$keyword" ]]; then
           echo -e "${CYAN}包含 '${keyword}' 的日志:${NC}\n"
-          docker logs "$container_name" 2>&1 | grep --color=always -i "$keyword" | less -R
+          docker logs "$container_name" 2>&1 | grep -i "$keyword" | \
+            if command -v less >/dev/null 2>&1; then
+              grep --color=always -i "$keyword" | less -R
+            else
+              grep --color=always -i "$keyword"
+              read -n 1 -s -r -p "按任意键继续..."
+            fi
         else
           echo -e "${RED}关键词不能为空${NC}"
           sleep 1
