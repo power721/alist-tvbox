@@ -1269,7 +1269,7 @@ check_status() {
     "$container_name" 2>/dev/null | \
   while IFS= read -r line; do
     [[ -n "$line" ]] && echo "  $line"
-  done
+  done || true
 
   echo -e "\n${CYAN}============== 镜像信息 ==============${NC}"
   local image_id=$(docker inspect --format '{{.Image}}' "$container_name" 2>/dev/null | cut -d: -f2 | cut -c1-12)
