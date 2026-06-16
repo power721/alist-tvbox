@@ -116,6 +116,14 @@ npm run lint
 ## Database
 - use Flyway migration
 
+## Native Image
+- All resource files MUST be registered in `META-INF/native-image/resource-config.json`
+- Common patterns:
+  - Text/config files: `{"pattern": "filename.txt"}`
+  - Directories: `{"pattern": "path/to/dir/.*"}`
+  - SQL migrations: `{"pattern": "db/migration/.*"}`, `{"pattern": "db/migration/current/.*\\.sql"}`
+- GraalVM only includes explicitly declared resources
+
 ---
 
 # 7. Git Workflow

@@ -6,7 +6,9 @@
       {"pattern": "115_shares.txt"},
       {"pattern": "channels.json"},
       {"pattern": "channels.txt"},
-      {"pattern": "countries.json"}
+      {"pattern": "countries.json"},
+      {"pattern": "db/migration/.*"},
+      {"pattern": "db/migration/current/.*\\.sql"}
     ]
   }
 }
