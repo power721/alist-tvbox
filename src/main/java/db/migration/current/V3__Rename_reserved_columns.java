@@ -49,11 +49,20 @@ public class V3__Rename_reserved_columns extends BaseJavaMigration {
 
         if (actualOldColumn != null && actualNewColumn == null) {
             // Old column exists, new column doesn't exist -> rename
-            // Use unquoted uppercase identifier for H2 compatibility
-            // H2 stores unquoted identifiers in uppercase, which matches how Hibernate queries them
+            // Database-specific naming:
+            // - H2: uses uppercase for unquoted identifiers (RELEASE_YEAR)
+            // - MySQL: preserves case, Hibernate expects lowercase (release_year)
+            String dbProduct = connection.getMetaData().getDatabaseProductName().toLowerCase();
+            String finalNewName;
+            if (dbProduct.contains("h2")) {
+                finalNewName = newName.toUpperCase();  // H2: unquoted uppercase
+            } else {
+                finalNewName = newName;  // MySQL/others: preserve case (lowercase)
+            }
+
             String sql = "ALTER TABLE " + quote(connection, actualTable)
                     + " RENAME COLUMN " + quote(connection, actualOldColumn)
-                    + " TO " + newName.toUpperCase();
+                    + " TO " + finalNewName;
             System.out.println("V3: Executing: " + sql);
             execute(connection, sql);
             System.out.println("V3: Successfully renamed " + tableName + "." + oldName + " to " + newName);
