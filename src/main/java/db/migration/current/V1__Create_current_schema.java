@@ -42,15 +42,19 @@ public class V1__Create_current_schema extends BaseJavaMigration {
 
     private boolean isEmptySchema(Connection connection) throws Exception {
         DatabaseMetaData metaData = connection.getMetaData();
-        try (ResultSet tables = metaData.getTables(connection.getCatalog(), null, "%", new String[]{"TABLE"})) {
+        String schema = connection.getSchema();
+        try (ResultSet tables = metaData.getTables(connection.getCatalog(), schema, "%", new String[]{"TABLE"})) {
             while (tables.next()) {
                 String tableName = tables.getString("TABLE_NAME");
-                // Ignore Flyway's own table
-                if (!tableName.equalsIgnoreCase("flyway_schema_history")) {
+                // Ignore Flyway's own table and system tables
+                if (!tableName.equalsIgnoreCase("flyway_schema_history")
+                    && !tableName.toUpperCase().startsWith("INFORMATION_")) {
+                    System.out.println("V1: Found existing table: " + tableName);
                     return false;
                 }
             }
         }
+        System.out.println("V1: No existing tables found (empty schema)");
         return true;
     }
 
