@@ -4,10 +4,12 @@ import org.hibernate.boot.model.naming.Identifier;
 import org.hibernate.boot.model.naming.PhysicalNamingStrategy;
 import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
 
+import java.util.Locale;
+
 /**
  * Database-aware naming strategy:
- * - H2: converts to uppercase to match H2's uppercase storage
- * - MySQL: preserves original case (lowercase) to match Linux MySQL
+ * - H2: converts camelCase to UPPER_CASE to match H2's uppercase storage
+ * - MySQL: converts camelCase to lower_case to match Linux MySQL
  */
 public class UpperCaseNamingStrategy implements PhysicalNamingStrategy {
 
@@ -42,13 +44,35 @@ public class UpperCaseNamingStrategy implements PhysicalNamingStrategy {
         }
 
         String databaseName = jdbcEnvironment.getDialect().getClass().getSimpleName().toLowerCase();
+        String text = identifier.getText();
 
-        // For H2: convert to uppercase to match H2's uppercase storage
+        // Convert camelCase to snake_case first
+        String snakeCase = camelToSnakeCase(text);
+
+        // For H2: convert to uppercase
         if (databaseName.contains("h2")) {
-            return Identifier.toIdentifier(identifier.getText().toUpperCase());
+            return Identifier.toIdentifier(snakeCase.toUpperCase(Locale.ROOT));
         }
 
-        // For MySQL and others: keep original case (lowercase from @Column annotations)
-        return identifier;
+        // For MySQL and others: keep lowercase
+        return Identifier.toIdentifier(snakeCase.toLowerCase(Locale.ROOT));
+    }
+
+    private String camelToSnakeCase(String str) {
+        // If already in snake_case (contains underscore), return as-is
+        if (str.contains("_")) {
+            return str;
+        }
+
+        // Convert camelCase to snake_case
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (Character.isUpperCase(c) && i > 0) {
+                result.append('_');
+            }
+            result.append(c);
+        }
+        return result.toString();
     }
 }
