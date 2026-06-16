@@ -223,7 +223,7 @@ public class ShareService {
         if (!settingRepository.existsByName("migrate_share_ids")) {
             List<Share> list = shareRepository.findAll();
             for (Share share : list) {
-                share.setId(shareId++);
+                share.setId(shareId.getAndIncrement());
             }
             shareRepository.deleteAll();
             shareRepository.saveAll(list);
@@ -360,7 +360,7 @@ public class ShareService {
                     if (parts.length > 1) {
                         try {
                             Share share = new Share();
-                            share.setId(shareId++);
+                            share.setId(shareId.getAndIncrement());
                             share.setPath(parts[0]);
                             share.setShareId(parts[1]);
                             if (parts.length > 2) {
@@ -394,7 +394,7 @@ public class ShareService {
                     if (parts.length > 1) {
                         try {
                             Share share = new Share();
-                            share.setId(shareId++);
+                            share.setId(shareId.getAndIncrement());
                             share.setPath(parts[0]);
                             share.setShareId(parts[1]);
                             if (parts.length > 2) {
