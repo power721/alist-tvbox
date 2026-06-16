@@ -23,7 +23,9 @@ public class V1__Create_current_schema extends BaseJavaMigration {
     public void migrate(Context context) throws Exception {
         Connection connection = context.getConnection();
 
-        // Check if this is a fresh install by looking for any existing tables
+        // Check if this is a fresh install by looking for V1 in flyway history
+        // If V1 was already executed, this is an impossible state (Flyway won't re-run V1)
+        // So we check for OTHER application tables instead
         boolean isFreshInstall = isEmptySchema(connection);
 
         String sqlFile;
@@ -41,20 +43,30 @@ public class V1__Create_current_schema extends BaseJavaMigration {
     }
 
     private boolean isEmptySchema(Connection connection) throws Exception {
+        // Check if any of our application tables exist
+        // These are tables that V1 creates, so if they exist, V1 was already run with old schema
+        String[] appTables = {"account", "movie", "meta", "history", "setting"};
+
         DatabaseMetaData metaData = connection.getMetaData();
         String schema = connection.getSchema();
-        try (ResultSet tables = metaData.getTables(connection.getCatalog(), schema, "%", new String[]{"TABLE"})) {
-            while (tables.next()) {
-                String tableName = tables.getString("TABLE_NAME");
-                // Ignore Flyway's own table and system tables
-                if (!tableName.equalsIgnoreCase("flyway_schema_history")
-                    && !tableName.toUpperCase().startsWith("INFORMATION_")) {
-                    System.out.println("V1: Found existing table: " + tableName);
+
+        for (String tableName : appTables) {
+            try (ResultSet tables = metaData.getTables(connection.getCatalog(), schema, tableName, new String[]{"TABLE"})) {
+                if (tables.next()) {
+                    System.out.println("V1: Found existing application table: " + tableName);
+                    return false;
+                }
+            }
+            // Also try uppercase (H2 stores uppercase)
+            try (ResultSet tables = metaData.getTables(connection.getCatalog(), schema, tableName.toUpperCase(), new String[]{"TABLE"})) {
+                if (tables.next()) {
+                    System.out.println("V1: Found existing application table: " + tableName.toUpperCase());
                     return false;
                 }
             }
         }
-        System.out.println("V1: No existing tables found (empty schema)");
+
+        System.out.println("V1: No application tables found - fresh install");
         return true;
     }
 
