@@ -1887,14 +1887,15 @@ show_config_menu() {
     echo -e " 3. AList端口: ${CONFIG[PORT2]}"
     echo -e " 4. 挂载/www目录: ${CONFIG[MOUNT_WWW]}"
     echo -e " 5. 自定义挂载目录"
-    echo -e " 6. 数据恢复"
+    echo -e " 6. 网络模式: ${CONFIG[NETWORK]}"
     echo -e " 7. 重启策略: ${CONFIG[RESTART]}"
     echo -e " 8. 重置管理员密码"
     echo -e " 9. GitHub代理设置"
+    echo -e " a. 数据恢复"
     echo -e " b. 立即备份数据库"
     echo -e " 0. 返回主菜单"
     echo -e "${CYAN}---------------------------------------------${NC}"
-    read -p "选择要修改的配置 [0-9/b]: " config_choice
+    read -p "选择要修改的配置 [0-9/a-b]: " config_choice
 
     local need_recreate=false
 
@@ -1954,7 +1955,8 @@ show_config_menu() {
         continue
         ;;
       6)
-        restore_database
+        show_network_menu
+        # show_network_menu 内部已处理重建逻辑
         continue
         ;;
       7)
@@ -1971,6 +1973,10 @@ show_config_menu() {
         ;;
       9)
         manage_github_proxy
+        continue
+        ;;
+      a|A)
+        restore_database
         continue
         ;;
       b|B)
