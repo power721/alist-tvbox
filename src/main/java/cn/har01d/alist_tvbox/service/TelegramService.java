@@ -302,6 +302,8 @@ public class TelegramService {
                 total += list.size();
                 result.add(channel + "$$$" + list.stream().filter(e -> e.getContent().contains("http")).map(Message::toZxString).collect(Collectors.joining("##")));
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Search interrupted for channel: {}", channel);
                 break;
             } catch (ExecutionException | TimeoutException e) {
                 log.warn("", e);
@@ -1381,7 +1383,11 @@ public class TelegramService {
                 results.addAll(result);
             } catch (TimeoutException e) {
                 incompleteFutures.add(future);
-            } catch (InterruptedException | ExecutionException e) {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Interrupted while waiting for search results", e);
+                incompleteFutures.add(future);
+            } catch (ExecutionException e) {
                 log.warn("", e);
             }
         }
@@ -1393,7 +1399,10 @@ public class TelegramService {
                 try {
                     results.addAll(future.get());
                     iterator.remove();
-                } catch (InterruptedException | ExecutionException e) {
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Interrupted while retrieving completed future", e);
+                } catch (ExecutionException e) {
                     log.warn("", e);
                 }
             }
@@ -1506,6 +1515,8 @@ public class TelegramService {
                     }
                 }
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Search interrupted for channel: {}", channel);
                 break;
             } catch (ExecutionException | TimeoutException e) {
                 log.warn("", e);
