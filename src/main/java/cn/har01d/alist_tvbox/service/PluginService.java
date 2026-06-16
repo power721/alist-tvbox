@@ -27,6 +27,9 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class PluginService {
     private static final String PLUGIN_INDEX_FILE = "spiders_v2.json";

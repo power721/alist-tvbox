@@ -1503,7 +1503,9 @@ public class TelegramService {
 
         int total = 0;
         List<String> result = new ArrayList<>();
+        int index = 0;
         for (Future<List<String>> future : futures) {
+            String currentChannel = channels[index++];
             try {
                 List<String> list = future.get(appProperties.getTgTimeout(), TimeUnit.MILLISECONDS);
                 total += list.size();
@@ -1516,7 +1518,7 @@ public class TelegramService {
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.warn("Search interrupted for channel: {}", channel);
+                log.warn("Search interrupted for channel: {}", currentChannel);
                 break;
             } catch (ExecutionException | TimeoutException e) {
                 log.warn("", e);
