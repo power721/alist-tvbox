@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS movie
     genre       VARCHAR(255),
     language    VARCHAR(255),
     name        VARCHAR(255),
-    release_year      INTEGER
+    "release_year"      INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS alias
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS history
     ending       BIGINT NOT NULL,
     episode      INTEGER NOT NULL,
     episode_url  TEXT,
-    item_key        TEXT,
+    "item_key"        TEXT,
     opening      BIGINT NOT NULL,
     position     BIGINT NOT NULL,
     rev_play     BOOLEAN NOT NULL,
@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS tmdb
     score       VARCHAR(255),
     tmdb_id     INTEGER,
     type        VARCHAR(255),
-    release_year      INTEGER
+    "release_year"      INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS meta
@@ -205,7 +205,7 @@ CREATE TABLE IF NOT EXISTS meta
     tm_id    INTEGER,
     tmdb_id  INTEGER,
     type     VARCHAR(255),
-    release_year   INTEGER
+    "release_year"   INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS navigation
@@ -217,7 +217,7 @@ CREATE TABLE IF NOT EXISTS navigation
     visible    BOOLEAN DEFAULT TRUE,
     sort_order INTEGER NOT NULL,
     type       INTEGER NOT NULL,
-    nav_value    VARCHAR(255)
+    "nav_value"    VARCHAR(255)
 );
 
 CREATE TABLE IF NOT EXISTS offline_download_task
@@ -272,7 +272,7 @@ CREATE TABLE IF NOT EXISTS plugin
     id              INTEGER NOT NULL PRIMARY KEY,
     content         TEXT,
     enabled         BOOLEAN NOT NULL,
-    extension        TEXT,
+    "extension"        TEXT,
     external_id     VARCHAR(255),
     last_checked_at TIMESTAMP,
     last_error      TEXT,
@@ -281,7 +281,7 @@ CREATE TABLE IF NOT EXISTS plugin
     sort_order      INTEGER NOT NULL,
     source_name     VARCHAR(255),
     url             TEXT,
-    plugin_version       INTEGER
+    "plugin_version"       INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS plugin_filter
@@ -290,7 +290,7 @@ CREATE TABLE IF NOT EXISTS plugin_filter
     content         TEXT,
     enabled         BOOLEAN NOT NULL,
     error_strategy  VARCHAR(255),
-    extension        TEXT,
+    "extension"        TEXT,
     last_checked_at TIMESTAMP,
     last_error      TEXT,
     name            VARCHAR(255),
@@ -300,7 +300,7 @@ CREATE TABLE IF NOT EXISTS plugin_filter
     source_name     VARCHAR(255),
     stages          VARCHAR(255),
     url             TEXT,
-    plugin_version       INTEGER
+    "plugin_version"       INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS session
@@ -317,7 +317,7 @@ CREATE TABLE IF NOT EXISTS session
 CREATE TABLE IF NOT EXISTS setting
 (
     name   VARCHAR(255) NOT NULL PRIMARY KEY,
-    setting_value TEXT
+    "setting_value" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS share
@@ -408,7 +408,7 @@ CREATE TABLE IF NOT EXISTS tmdb_meta
     tm_id   INTEGER,
     tmdb_id INTEGER,
     type    VARCHAR(255),
-    release_year  INTEGER
+    "release_year"  INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS x_user
