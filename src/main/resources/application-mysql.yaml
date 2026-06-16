@@ -7,5 +7,5 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.MySQL8Dialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     show-sql: false
