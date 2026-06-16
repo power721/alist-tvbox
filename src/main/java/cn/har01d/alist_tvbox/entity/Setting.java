@@ -19,6 +19,6 @@ import lombok.ToString;
 public class Setting {
     @Id
     private String name;
-    @Column(name = "\"svalue\"", columnDefinition = "TEXT")
+    @Column(name = "setting_value", columnDefinition = "TEXT")
     private String value;
 }

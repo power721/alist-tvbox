@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.entity;
 
 import db.migration.current.V2__Normalize_reserved_columns;
+import db.migration.current.V3__Rename_reserved_columns;
 import org.flywaydb.core.api.configuration.Configuration;
 import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 class LegacySchemaValidationTest {
     private static final String JDBC_URL = "jdbc:h2:mem:legacy-schema-validation-" + UUID.randomUUID()
-            + ";MODE=MySQL;DB_CLOSE_DELAY=-1";
+            + ";DB_CLOSE_DELAY=-1";
 
     @Autowired
     private DataSource dataSource;
@@ -73,6 +74,7 @@ class LegacySchemaValidationTest {
             applyFreshSchema(connection);
             restoreLegacyReservedColumns(connection);
             new V2__Normalize_reserved_columns().migrate(new TestMigrationContext(connection));
+            new V3__Rename_reserved_columns().migrate(new TestMigrationContext(connection));
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
