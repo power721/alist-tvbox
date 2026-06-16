@@ -118,11 +118,26 @@ npm run lint
 
 ## Native Image
 - All resource files MUST be registered in `META-INF/native-image/resource-config.json`
+    - GraalVM only includes explicitly declared resources
+    - Missing resources cause runtime "unsupported protocol: resource" errors
 - Common patterns:
     - Text/config files: `{"pattern": "filename.txt"}`
     - Directories: `{"pattern": "path/to/dir/.*"}`
     - SQL migrations: `{"pattern": "db/migration/.*"}`, `{"pattern": "db/migration/current/.*\\.sql"}`
-- GraalVM only includes explicitly declared resources
+- Reflection configuration:
+    - **New DTO/entity packages MUST be added to Main.java scan list first**
+    - After adding packages or classes, regenerate `reflect-config.json`:
+      ```bash
+      mvn compile
+      java -cp target/classes cn.har01d.alist_tvbox.Main
+      ```
+    - Main.java scans configured packages (dto/entity/model/domain/storage/etc)
+    - Individual classes can be added to `CUSTOM_REFLECTION_CLASSES` list
+- Test native build locally before deployment:
+  ```bash
+  mvn clean package -Pnative
+  ./target/alist-tvbox
+  ```
 
 ---
 
