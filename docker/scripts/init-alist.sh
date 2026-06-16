@@ -40,10 +40,14 @@ else
     sed -i 's/127.0.0.1/0.0.0.0/' /opt/alist/data/config.json
   fi
 
-  # 显示 AList 管理员密码
-  cd /opt/alist
-  /opt/alist/alist admin || true
-  cd /www
+  # 显示 AList 管理员密码（仅在独立 AList 二进制存在时）
+  if [ -f /opt/alist/alist ]; then
+    cd /opt/alist
+    /opt/alist/alist admin || true
+    cd /www
+  else
+    log_info "Embedded AList mode (native), admin password managed by application"
+  fi
 
   # 下载 tvbox 资源
   download_tvbox
