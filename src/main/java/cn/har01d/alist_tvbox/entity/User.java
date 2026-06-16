@@ -21,7 +21,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Getter
 @Setter
-@ToString
+@ToString(exclude = "password")
 @RequiredArgsConstructor
 @Entity
 @Table(name = "x_user")

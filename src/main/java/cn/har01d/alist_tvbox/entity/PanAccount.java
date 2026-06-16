@@ -9,7 +9,7 @@ import lombok.ToString;
 
 @Getter
 @Setter
-@ToString
+@ToString(exclude = {"cookie", "token"})
 @RequiredArgsConstructor
 @Entity
 @Deprecated

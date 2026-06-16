@@ -12,7 +12,7 @@ import java.util.Objects;
 
 @Getter
 @Setter
-@ToString
+@ToString(exclude = {"password", "cookie"})
 @RequiredArgsConstructor
 @Entity
 @Table(indexes = {
