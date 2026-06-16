@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS movie
     genre       VARCHAR(255),
     language    VARCHAR(255),
     name        VARCHAR(255),
-    year      INTEGER
+    release_year      INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS alias
@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS tmdb
     score       VARCHAR(255),
     tmdb_id     INTEGER,
     type        VARCHAR(255),
-    year      INTEGER
+    release_year      INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS meta
@@ -205,7 +205,7 @@ CREATE TABLE IF NOT EXISTS meta
     tm_id    INTEGER,
     tmdb_id  INTEGER,
     type     VARCHAR(255),
-    year   INTEGER
+    release_year   INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS navigation
@@ -408,7 +408,7 @@ CREATE TABLE IF NOT EXISTS tmdb_meta
     tm_id   INTEGER,
     tmdb_id INTEGER,
     type    VARCHAR(255),
-    year  INTEGER
+    release_year  INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS x_user
