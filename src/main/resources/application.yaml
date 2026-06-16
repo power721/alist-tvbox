@@ -22,6 +22,8 @@ spring:
       # possible values: validate | update | create | create-drop | none
       # Use 'none' to let Flyway handle all schema management
       ddl-auto: none
+      naming:
+        physical-strategy: cn.har01d.alist_tvbox.config.UpperCaseNamingStrategy
     database-platform: org.hibernate.dialect.H2Dialect
     open-in-view: false
   flyway:
