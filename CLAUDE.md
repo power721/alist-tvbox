@@ -113,6 +113,9 @@ npm run lint
 - Vue 3 + TypeScript
 - PascalCase components
 
+## Database
+- use Flyway migration
+
 ---
 
 # 7. Git Workflow

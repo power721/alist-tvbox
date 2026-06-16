@@ -113,6 +113,9 @@ npm run lint
 - Vue 3 + TypeScript
 - PascalCase components
 
+## Database
+- use Flyway migration
+
 ---
 
 # 7. Git Workflow
@@ -142,3 +145,6 @@ npm run lint
 - No cross-layer logic
 - No API break
 - Keep diffs small
+
+## Documents
+- Save all documents to folder docs/
