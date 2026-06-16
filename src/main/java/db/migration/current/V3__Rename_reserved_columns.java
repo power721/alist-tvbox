@@ -49,9 +49,11 @@ public class V3__Rename_reserved_columns extends BaseJavaMigration {
 
         if (actualOldColumn != null && actualNewColumn == null) {
             // Old column exists, new column doesn't exist -> rename
+            // Use quoted lowercase identifier for new column name to match Hibernate's expectations
+            String quotedNewName = "\"" + newName.toLowerCase() + "\"";
             String sql = "ALTER TABLE " + quote(connection, actualTable)
                     + " RENAME COLUMN " + quote(connection, actualOldColumn)
-                    + " TO " + newName;
+                    + " TO " + quotedNewName;
             System.out.println("V3: Executing: " + sql);
             execute(connection, sql);
             System.out.println("V3: Successfully renamed " + tableName + "." + oldName + " to " + newName);
