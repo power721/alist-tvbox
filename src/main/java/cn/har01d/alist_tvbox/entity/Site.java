@@ -39,7 +39,7 @@ public class Site {
     private int sortOrder;
     @Column(name = "storage_version")
     @JsonProperty("version")
-    private Integer storageVersion = 4;
+    private Integer storageVersion;
 
     @Override
     public boolean equals(Object o) {
