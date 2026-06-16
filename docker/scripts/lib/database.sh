@@ -35,9 +35,11 @@ upgrade_h2() {
 
       echo "2.3.232" > /data/h2.version.txt
       log_info "H2 database upgraded to 2.3.232"
+      rm -f backup.sql  # Clean up backup
       return 0
     else
       log_error "Failed to import database"
+      log_error "Backup SQL remains at ./backup.sql for manual recovery"
       return 1
     fi
   else

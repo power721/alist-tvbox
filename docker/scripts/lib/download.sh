@@ -24,6 +24,8 @@ download_with_proxy() {
       if wget -T 30 -t 1 "${candidate}" -O "${output}" 2>/dev/null; then
         log_info "Downloaded successfully: $output"
         return 0
+      else
+        rm -f "${output}"  # Clean up partial downloads
       fi
     done < "/data/github_proxy.txt"
   fi
@@ -36,6 +38,7 @@ download_with_proxy() {
   fi
 
   log_error "Failed to download: $url"
+  rm -f "${output}"  # Clean up partial downloads
   return 1
 }
 

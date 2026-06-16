@@ -10,8 +10,14 @@ compare_version() {
     return 0
   fi
 
-  # 使用 sort 判断哪个版本更新
-  latest=$(printf "%s\n%s\n" "$remote_ver" "$local_ver" | sort -V | tail -n1)
+  # 检查 sort 是否支持 -V（版本号排序）
+  if echo "1.0.0" | sort -V >/dev/null 2>&1; then
+    latest=$(printf "%s\n%s\n" "$remote_ver" "$local_ver" | sort -V | tail -n1)
+  else
+    # Fallback: 使用简单字符串比较
+    log_warn "Version-aware sort not available, using string comparison"
+    latest=$(printf "%s\n%s\n" "$remote_ver" "$local_ver" | sort | tail -n1)
+  fi
 
   if [ "$remote_ver" = "$latest" ]; then
     return 1  # 远程更新

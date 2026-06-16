@@ -107,7 +107,8 @@ update_xiaoya_data() {
     entries=$(grep -c 'INSERT INTO x_storages' update.sql 2>/dev/null || echo 0)
     log_info "Database has $entries storage records"
 
-    # 清理 WAL 文件
+    # 清理 WAL 文件（先执行 checkpoint 再删除）
+    sqlite3 /opt/alist/data/data.db "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true
     rm -f /opt/alist/data/data.db-shm /opt/alist/data/data.db-wal
 
     # 修正SQL
