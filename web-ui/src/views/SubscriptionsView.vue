@@ -55,26 +55,6 @@
     </div>
 
     <el-row>
-      猫影视配置接口：
-      <a
-        :href="currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')+'/open'+token"
-        target="_blank">
-        {{
-          currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')
-        }}/open{{ token }}
-      </a>
-    </el-row>
-    <el-row>
-      猫影视node配置接口：
-      <a
-        :href="currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')+'/node'+(token ? token : '/-')+'/index.config.js'"
-        target="_blank">
-        {{
-          currentUrl.replace('http://', 'http://alist:alist@').replace('https://', 'https://alist:alist@')
-        }}/node{{ token ? token : '/-' }}/index.js.md5
-      </a>
-    </el-row>
-    <el-row>
       PG包本地： {{ pgLocal }}
       &nbsp;&nbsp;
       <a href="https://github.com/power721/pg/releases" target="_blank">PG包远程</a>： {{ pgRemote }}
