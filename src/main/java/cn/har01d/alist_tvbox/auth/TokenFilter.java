@@ -23,6 +23,7 @@ import org.springframework.util.StreamUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.security.MessageDigest;
 import java.util.Set;
 
 @Slf4j
@@ -55,7 +56,7 @@ public class TokenFilter extends OncePerRequestFilter {
         try {
             if (StringUtils.isNotBlank(apiKey)) {
                 String key = request.getHeader("X-API-KEY");
-                if (apiKey.equals(key)) {
+                if (constantTimeEquals(apiKey, key)) {
                     Authentication authentication = new UsernamePasswordAuthenticationToken("client", key, Set.of(new SimpleGrantedAuthority(Role.CLIENT.name())));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                     filterChain.doFilter(request, response);
@@ -65,7 +66,7 @@ public class TokenFilter extends OncePerRequestFilter {
 
             if (request.getRequestURI().startsWith("/open") || request.getRequestURI().startsWith("/node") || request.getRequestURI().startsWith("/cat")) {
                 String auth = request.getHeader("Authorization");
-                if (StringUtils.isBlank(auth) || !basicAuthCredentials.equals(auth)) {
+                if (StringUtils.isBlank(auth) || !constantTimeEquals(basicAuthCredentials, auth)) {
                     response.setHeader("Www-Authenticate", "Basic realm=\"alist\"");
                     response.sendError(401);
                     return;
@@ -122,5 +123,43 @@ public class TokenFilter extends OncePerRequestFilter {
             logger.warn("Token失效", e);
             throw new UserUnauthorizedException("Token失效", 40100, e);
         }
+    }
+
+    /**
+     * Constant-time string comparison to prevent timing attacks.
+     * Compares two strings by always checking all bytes, making timing
+     * independent of where strings differ.
+     *
+     * @param expected The expected value (stored credential)
+     * @param actual The actual value (user-provided input)
+     * @return true if strings match, false otherwise
+     */
+    private boolean constantTimeEquals(String expected, String actual) {
+        if (expected == null || actual == null) {
+            return expected == actual;
+        }
+
+        byte[] expectedBytes = expected.getBytes();
+        byte[] actualBytes = actual.getBytes();
+
+        // Always compare the same number of bytes to avoid length-based timing leaks
+        int expectedLength = expectedBytes.length;
+        int actualLength = actualBytes.length;
+
+        // XOR the lengths to check equality, then OR with result
+        int result = expectedLength ^ actualLength;
+
+        // Compare bytes, always iterate through the minimum length
+        int compareLength = Math.min(expectedLength, actualLength);
+        for (int i = 0; i < compareLength; i++) {
+            result |= expectedBytes[i] ^ actualBytes[i];
+        }
+
+        // If lengths differ, XOR remaining bytes with themselves (constant time)
+        for (int i = compareLength; i < expectedLength; i++) {
+            result |= expectedBytes[i] ^ expectedBytes[i % compareLength];
+        }
+
+        return result == 0;
     }
 }
