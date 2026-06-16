@@ -1265,18 +1265,11 @@ check_status() {
   # 显示挂载信息（包括自定义挂载）
   echo -e "\n${CYAN}============== 挂载目录 ==============${NC}"
   docker inspect --format \
-    '{{range $mount := .Mounts}}{{.Source}}:{{.Destination}}:{{.Mode}}'$'\n''{{end}}' \
+    '{{range $mount := .Mounts}}{{.Source}} -> {{.Destination}} ({{.Mode}})'$'\n''{{end}}' \
     "$container_name" 2>/dev/null | \
-  awk -F: '{
-    max_source = (length($1) > max_source) ? length($1) : max_source;
-    max_dest = (length($2) > max_dest) ? length($2) : max_dest;
-    mounts[NR] = $0
-  } END {
-    for(i=1; i<NR; i++) {
-      split(mounts[i], arr, ":");
-      printf "  %-*s -> %-*s (%s)\n", max_source, arr[1], max_dest, arr[2], arr[3]
-    }
-  }'
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && echo "  $line"
+  done
 
   echo -e "\n${CYAN}============== 镜像信息 ==============${NC}"
   local image_id=$(docker inspect --format '{{.Image}}' "$container_name" 2>/dev/null | cut -d: -f2 | cut -c1-12)
