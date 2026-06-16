@@ -3,16 +3,14 @@ package cn.har01d.alist_tvbox.config;
 import org.hibernate.dialect.H2Dialect;
 
 /**
- * Custom H2 dialect that preserves identifier case to match H2's uppercase storage.
+ * Custom H2 dialect that works with H2's uppercase identifier storage.
+ * Relies on H2's case-insensitive identifier matching to connect
+ * Hibernate's lowercase column references to H2's uppercase storage.
  */
 public class CustomH2Dialect extends H2Dialect {
 
-    @Override
-    public String quote(String name) {
-        // Don't quote identifiers - let H2 store them as uppercase
-        // This makes Hibernate's unquoted lowercase references match H2's uppercase storage
-        // via H2's case-insensitive matching
-        return name;
+    public CustomH2Dialect() {
+        super();
     }
 
     @Override
