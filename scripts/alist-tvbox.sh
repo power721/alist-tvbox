@@ -1235,10 +1235,20 @@ check_status() {
   echo -e "\n${CYAN}============== 端口映射 ==============${NC}"
   if [[ "$actual_network" == "host" ]]; then
     echo -e "${YELLOW}host模式使用主机网络，无独立端口映射${NC}"
-    echo -e "管理端口: ${GREEN}4567${NC}"
-    echo -e "Nginx端口: ${GREEN}5678${NC}"
-    echo -e "httpd端口: ${GREEN}5233${NC}"
-    echo -e "AList端口: ${GREEN}5234${NC}"
+
+    # 根据镜像类型显示端口
+    local image_name=$(docker inspect --format '{{.Config.Image}}' "$container_name" 2>/dev/null)
+    if [[ "$image_name" =~ xiaoya.*host ]]; then
+      # xiaoya host系列镜像的端口
+      echo -e "管理端口: ${GREEN}4567${NC}"
+      echo -e "Nginx端口: ${GREEN}5678${NC}"
+      echo -e "httpd端口: ${GREEN}5233${NC}"
+      echo -e "AList端口: ${GREEN}5234${NC}"
+    else
+      # 纯净版镜像的端口
+      echo -e "管理端口: ${GREEN}4567${NC}"
+      echo -e "AList端口: ${GREEN}5344${NC}"
+    fi
   else
     # 使用更安全的方式获取端口映射
     local port_info
