@@ -44,7 +44,6 @@ else
   if [ -f /opt/alist/alist ]; then
     cd /opt/alist
     /opt/alist/alist admin || true
-    cd /www
   else
     log_info "Embedded AList mode (native), admin password managed by application"
   fi

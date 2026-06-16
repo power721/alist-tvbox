@@ -59,4 +59,5 @@ fi
 
 # 启动 Native 应用
 log_info "Starting AList-TVBox native application"
+cd /opt/atv
 exec ./atv "$@"
