@@ -138,6 +138,7 @@ npm run lint
   mvn clean package -Pnative
   ./target/alist-tvbox
   ```
+- Flyway Java migration file must add to src/main/resources/META-INF/services/org.flywaydb.core.api.migration.JavaMigration
 
 ---
 
