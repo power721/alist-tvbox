@@ -67,7 +67,7 @@ public class V3__Fix_null_sort_order extends BaseJavaMigration {
             String newCol = findColumnInsensitive(connection, actualTable, newName);
 
             if (oldCol != null && newCol == null) {
-                String sql = "ALTER TABLE " + actualTable + " ALTER COLUMN \"" + oldCol + "\" RENAME TO " + newName;
+                String sql = "ALTER TABLE " + actualTable + " ALTER COLUMN \"" + oldCol + "\" RENAME TO \"" + newName + "\"";
                 System.out.println("V3: Renaming " + table + "." + oldCol + " to " + newName);
                 execute(connection, sql);
             } else if (newCol != null) {
