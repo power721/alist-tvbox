@@ -26,6 +26,6 @@ public class Movie {
     private String actors;
     private String cover;
     private String dbScore;
-    @Column(name = "`year`")
+    @Column(name = "\"YEAR\"")
     private Integer year;
 }

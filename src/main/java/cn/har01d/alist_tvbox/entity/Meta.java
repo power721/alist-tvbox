@@ -29,7 +29,7 @@ public class Meta {
     @Column(unique = true)
     private String path;
     private String name;
-    @Column(name = "`year`")
+    @Column(name = "\"YEAR\"")
     private Integer year;
     private Integer score;
     @ManyToOne
