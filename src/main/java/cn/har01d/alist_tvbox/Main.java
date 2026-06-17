@@ -25,7 +25,8 @@ public class Main {
             "com.zaxxer.hikari.HikariConfig",
             "org.sqlite.JDBC",
             "org.sqlite.SQLiteConfig",
-            "org.sqlite.SQLiteConnection"
+            "org.sqlite.SQLiteConnection",
+            "org.hibernate.bytecode.internal.none.BytecodeProviderImpl"
     );
 
     public static void main(String[] args) throws IOException, ClassNotFoundException {
