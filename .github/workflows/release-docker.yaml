@@ -47,7 +47,7 @@ jobs:
         run: |
           [ -d data ] || mkdir data
           echo "${{ github.ref_name }}" > data/version
-          cp data/version data/app_version
+          echo "${{ github.ref_name }}" > data/app_version
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
