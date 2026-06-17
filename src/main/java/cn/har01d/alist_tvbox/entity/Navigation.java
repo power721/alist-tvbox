@@ -26,7 +26,7 @@ public class Navigation {
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
     private Integer id;
     private String name;
-    @Column(name = "\"VALUE\"")
+    @Column(name = "nav_value")
     private String value;
     private int type;
     @Column(name = "visible", columnDefinition = "boolean default true")

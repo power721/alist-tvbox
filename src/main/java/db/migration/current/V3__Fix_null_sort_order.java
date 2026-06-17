@@ -14,6 +14,8 @@ public class V3__Fix_null_sort_order extends BaseJavaMigration {
     public void migrate(Context context) throws Exception {
         Connection connection = context.getConnection();
 
+        System.out.println("V3: Starting migration");
+
         // Fix NULL values in sort_order columns
         execute(connection, "UPDATE site SET sort_order = 0 WHERE sort_order IS NULL");
         execute(connection, "UPDATE navigation SET sort_order = 0 WHERE sort_order IS NULL");
@@ -27,45 +29,66 @@ public class V3__Fix_null_sort_order extends BaseJavaMigration {
         // Migrate old column names to new ones (for very old users)
         migrateSettingValue(connection);
 
-        // Normalize case for columns that were created with backticks
-        normalizeCaseSensitiveColumns(connection);
+        // Rename reserved word columns to non-reserved names
+        renameReservedColumns(connection);
+
+        System.out.println("V3: Migration completed successfully");
     }
 
-    private void normalizeCaseSensitiveColumns(Connection connection) {
-        // Rename lowercase columns to uppercase for H2 compatibility
-        // All columns (including reserved words) need to be uppercase for consistent access
-        renameIfExists(connection, "setting", "svalue", "SVALUE");
-        renameIfExists(connection, "navigation", "value", "VALUE");
-        renameIfExists(connection, "history", "key", "KEY");
-        renameIfExists(connection, "movie", "year", "YEAR");
-        renameIfExists(connection, "meta", "year", "YEAR");
-        renameIfExists(connection, "tmdb_meta", "year", "YEAR");
-        renameIfExists(connection, "tmdb", "year", "YEAR");
-        renameIfExists(connection, "plugin", "extend", "EXTEND");
-        renameIfExists(connection, "plugin", "version", "VERSION");
-        renameIfExists(connection, "plugin_filter", "extend", "EXTEND");
-        renameIfExists(connection, "plugin_filter", "version", "VERSION");
+    private void renameReservedColumns(Connection connection) {
+        // Rename reserved word columns to avoid H2 syntax errors
+        // year -> release_year
+        // key -> item_key
+        // value -> nav_value
+        // extend -> extension
+        // version -> plugin_version
+
+        renameColumn(connection, "movie", "year", "release_year");
+        renameColumn(connection, "meta", "year", "release_year");
+        renameColumn(connection, "tmdb_meta", "year", "release_year");
+        renameColumn(connection, "tmdb", "year", "release_year");
+        renameColumn(connection, "history", "key", "item_key");
+        renameColumn(connection, "navigation", "value", "nav_value");
+        renameColumn(connection, "plugin", "extend", "extension");
+        renameColumn(connection, "plugin", "version", "plugin_version");
+        renameColumn(connection, "plugin_filter", "extend", "extension");
+        renameColumn(connection, "plugin_filter", "version", "plugin_version");
     }
 
-    private void renameIfExists(Connection connection, String table, String fromCol, String toCol) {
+    private void renameColumn(Connection connection, String table, String oldName, String newName) {
         try {
             String actualTable = findTable(connection, table);
             if (actualTable == null) {
                 return;
             }
 
-            String existing = findColumn(connection, actualTable, fromCol);
-            String target = findColumn(connection, actualTable, toCol);
+            // Check if old column exists (case-insensitive)
+            String oldCol = findColumnInsensitive(connection, actualTable, oldName);
+            String newCol = findColumnInsensitive(connection, actualTable, newName);
 
-            if (existing != null && target == null) {
-                // Lowercase exists, uppercase doesn't - rename it
-                String sql = "ALTER TABLE " + actualTable + " ALTER COLUMN \"" + fromCol + "\" RENAME TO " + toCol;
-                System.out.println("V3: Renaming " + table + "." + fromCol + " to " + toCol);
+            if (oldCol != null && newCol == null) {
+                String sql = "ALTER TABLE " + actualTable + " ALTER COLUMN \"" + oldCol + "\" RENAME TO " + newName;
+                System.out.println("V3: Renaming " + table + "." + oldCol + " to " + newName);
                 execute(connection, sql);
+            } else if (newCol != null) {
+                System.out.println("V3: " + table + "." + newName + " already exists, skipping rename");
             }
         } catch (Exception e) {
-            System.err.println("V3: Error renaming " + table + "." + fromCol + ": " + e.getMessage());
+            System.err.println("V3: Error renaming " + table + "." + oldName + ": " + e.getMessage());
         }
+    }
+
+    private String findColumnInsensitive(Connection connection, String table, String column) throws Exception {
+        DatabaseMetaData metaData = connection.getMetaData();
+        try (ResultSet resultSet = metaData.getColumns(connection.getCatalog(), null, table, null)) {
+            while (resultSet.next()) {
+                String colName = resultSet.getString("COLUMN_NAME");
+                if (colName.equalsIgnoreCase(column)) {
+                    return colName;
+                }
+            }
+        }
+        return null;
     }
 
     private void migrateSettingValue(Connection connection) {
@@ -99,10 +122,10 @@ public class V3__Fix_null_sort_order extends BaseJavaMigration {
             System.out.println("V3: old column: " + oldCol + ", new column: " + newCol);
 
             if (oldCol != null && newCol == null) {
-                // Add new column
-                execute(connection, "ALTER TABLE " + actualTable + " ADD COLUMN SVALUE TEXT");
+                // Add new column with quoted lowercase name
+                execute(connection, "ALTER TABLE " + actualTable + " ADD COLUMN \"svalue\" TEXT");
                 // Copy data - need to quote the old column name
-                String copySQL = "UPDATE " + actualTable + " SET SVALUE = \"" + oldCol + "\"";
+                String copySQL = "UPDATE " + actualTable + " SET \"svalue\" = \"" + oldCol + "\"";
                 System.out.println("V3: Executing: " + copySQL);
                 execute(connection, copySQL);
                 // Drop old column
