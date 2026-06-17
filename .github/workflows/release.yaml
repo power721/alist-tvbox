@@ -56,6 +56,7 @@ jobs:
       - name: Create release and upload binary
         uses: softprops/action-gh-release@v2
         with:
+          body_path: RELEASE_NOTES.md
           files: |
             target/alist-tvbox-1.0.jar
             target/alist-tvbox-1.0.jar.original
