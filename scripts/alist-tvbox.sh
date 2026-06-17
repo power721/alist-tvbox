@@ -13,7 +13,7 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 
-# 版本定义
+# 镜像定义
 declare -A VERSIONS=(
   ["1"]="haroldli/alist-tvbox               - 纯净版（推荐）"
   ["2"]="haroldli/alist-tvbox:native        - 纯净原生版"
@@ -242,7 +242,7 @@ get_container_config() {
 }
 
 # 从现存容器同步运行时配置（镜像/网络/端口/重启策略）到内存 CONFIG，
-# 用于显示真实状态——即使用户绕过脚本手动改动了容器（如切换版本、host<->bridge）。
+# 用于显示真实状态——即使用户绕过脚本手动改动了容器（如切换镜像、host<->bridge）。
 # 故意不覆盖 BASE_DIR（以免影响 install/update 的迁移逻辑），也不写回 app.conf。
 sync_runtime_config() {
   local name="" n
@@ -544,7 +544,7 @@ show_menu() {
   echo -e "${CYAN}==============================================${NC}"
   echo -e "${GREEN}          AList TvBox 安装升级配置管理          ${NC}"
   echo -e "${CYAN}==============================================${NC}"
-  echo -e "${YELLOW} 镜像版本: ${CONFIG[IMAGE_NAME]}${NC}"
+  echo -e "${YELLOW} 镜像名称: ${CONFIG[IMAGE_NAME]}${NC}"
   echo -e "${YELLOW} 容器名称: ${container_name}${NC}"
   echo -e "${YELLOW} 容器状态: $(
     case "$status" in
@@ -575,7 +575,7 @@ show_menu() {
   echo -e "${GREEN} 4. 查看状态${NC}"
   echo -e "${GREEN} 5. 日志管理${NC}"
   echo -e "${GREEN} 6. 卸载容器${NC}"
-  echo -e "${GREEN} 7. 选择版本${NC}"
+  echo -e "${GREEN} 7. 选择镜像${NC}"
   echo -e "${GREEN} 8. 配置管理${NC}"
   echo -e "${GREEN} 9. 自动修复${NC}"
   echo -e "${GREEN} c. 清理资源${NC}"
@@ -592,10 +592,10 @@ check_architecture_support() {
   case "$arch" in
     x86_64)  return 0 ;;  # 支持 amd64
     aarch64)
-      # ARM64 平台，检查是否选择了不支持的版本
+      # ARM64 平台，检查是否选择了不支持的镜像
       if [[ "${CONFIG[IMAGE_ID]}" == "2" || "${CONFIG[IMAGE_ID]}" == "5" || "${CONFIG[IMAGE_ID]}" == "6" ]]; then
-        echo -e "${RED}错误: ARM64 不支持native版本${NC}"
-        echo -e "请选择其他版本（如 1、3、4、7、8）"
+        echo -e "${RED}错误: ARM64 不支持native镜像${NC}"
+        echo -e "请选择其他镜像（如 1、3、4、7、8）"
         return 1
       fi
       return 0 ;;  # 支持 arm64
@@ -624,9 +624,9 @@ validate_image_network_compatibility() {
 
   # host网络必须使用host镜像
   if [[ "$network" == "host" && ! "$image" =~ (:|-)host ]]; then
-    echo -e "${YELLOW}host 网络模式建议使用 host 镜像版本${NC}"
+    echo -e "${YELLOW}host 网络模式建议使用 host 镜像${NC}"
     echo -e "${YELLOW}普通镜像的 AList 监听 80 端口，会占用主机端口${NC}"
-    echo -e "${YELLOW}请选择版本 6 (native-host) 或版本 7 (host)${NC}"
+    echo -e "${YELLOW}请选择镜像 6 (native-host) 或镜像 7 (host)${NC}"
   fi
 
   return 0
@@ -749,7 +749,7 @@ install_container() {
   # 如果镜像名称包含host后缀，自动切换网络模式
   if [[ "${CONFIG[IMAGE_NAME]}" =~ (:|-)host$ ]]; then
     CONFIG["NETWORK"]="host"
-    echo -e "${YELLOW}检测到host版本，已自动切换网络模式为host${NC}"
+    echo -e "${YELLOW}检测到host镜像，已自动切换网络模式为host${NC}"
     save_config
   fi
 
@@ -860,19 +860,19 @@ replace_container() {
   start_container
 }
 
-# 显示版本选择菜单
-show_version_menu() {
+# 显示镜像选择菜单
+show_image_menu() {
   while true; do
     clear
     echo -e "${CYAN}=============================================${NC}"
-    echo -e "${GREEN}          请选择要使用的版本          ${NC}"
+    echo -e "${GREEN}          请选择要使用的镜像          ${NC}"
     echo -e "${CYAN}=============================================${NC}"
 
     local arch=$(uname -m)
     local current_version="${CONFIG[IMAGE_ID]}"
 
     for key in {1..9}; do
-      # 如果是 ARM64 并且是版本 2、5、6，则跳过
+      # 如果是 ARM64 并且是镜像 2、5、6，则跳过
       if [[ "$arch" == "aarch64" && ("$key" == "2" || "$key" == "5" || "$key" == "6") ]]; then
         continue
       fi
@@ -887,10 +887,10 @@ show_version_menu() {
     echo -e "${CYAN}---------------------------------------------${NC}"
 
     while true; do
-      read -p "请输入版本编号 [0-9]: " version_choice
+      read -p "请输入镜像编号 [0-9]: " version_choice
       # 如果是 ARM64，不允许选择 2、5、6
       if [[ "$arch" == "aarch64" && ("$version_choice" == "2" || "$version_choice" == "5" || "$version_choice" == "6") ]]; then
-        echo -e "${RED}ARM64 不支持该版本，请选择其他选项${NC}"
+        echo -e "${RED}ARM64 不支持该镜像，请选择其他选项${NC}"
         continue
       fi
       # 验证输入是否为0-9的数字
@@ -916,14 +916,14 @@ show_version_menu() {
     # 新增：如果镜像名称包含host后缀，自动切换网络模式
     if [[ "${image}" =~ (:|-)host$ ]]; then
       CONFIG["NETWORK"]="host"
-      echo -e "${YELLOW}检测到host版本，已自动切换网络模式为host${NC}"
+      echo -e "${YELLOW}检测到host镜像，已自动切换网络模式为host${NC}"
     fi
 
     save_config
 
     # 验证镜像与网络模式的兼容性
     if ! validate_image_network_compatibility; then
-      echo -e "${RED}镜像与网络模式不兼容，版本切换失败${NC}"
+      echo -e "${RED}镜像与网络模式不兼容，镜像切换失败${NC}"
       CONFIG["IMAGE_ID"]="$old_image_id"
       CONFIG["IMAGE_NAME"]="$old_version"
       save_config
@@ -950,7 +950,7 @@ show_version_menu() {
     # 拉取最新镜像
     echo -e "${YELLOW}正在拉取最新镜像...${NC}"
     if ! docker pull "${CONFIG[IMAGE_NAME]}"; then
-      echo -e "${RED}拉取镜像失败，版本切换终止${NC}"
+      echo -e "${RED}拉取镜像失败，镜像切换终止${NC}"
       CONFIG["IMAGE_ID"]="$old_image_id"
       CONFIG["IMAGE_NAME"]="$old_version"
       save_config
@@ -959,10 +959,10 @@ show_version_menu() {
     fi
 
     # 启动新容器
-    echo -e "${YELLOW}正在启动新版本容器...${NC}"
+    echo -e "${YELLOW}正在启动新镜像容器...${NC}"
     start_container
 
-    echo -e "${GREEN}版本已切换为: ${image}${NC}"
+    echo -e "${GREEN}镜像已切换为: ${image}${NC}"
     show_access_info false
     read -n 1 -s -r -p "按任意键继续..."
     return
@@ -2659,7 +2659,7 @@ interactive_mode() {
         sleep 2
         ;;
       7)
-        show_version_menu
+        show_image_menu
         ;;
       8)
         show_config_menu
