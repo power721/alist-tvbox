@@ -306,18 +306,10 @@ public class DoubanService {
     }
 
     public String getAppRemoteVersion() {
-        if (environment.matchesProfiles("standalone")) {
-            try {
-                return restTemplate.getForObject("https://d.har01d.cn/app.version.txt", String.class);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        } else {
-            try {
-                return restTemplate.getForObject("https://d.har01d.cn/app_version", String.class);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
+        try {
+            return restTemplate.getForObject("https://d.har01d.cn/app.version.txt", String.class);
+        } catch (Exception e) {
+            log.warn("", e);
         }
         return "";
     }
