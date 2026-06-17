@@ -301,9 +301,9 @@ jobs:
           - name: alist-tvbox
             image: alist-tvbox
             port: 4568
-#          - name: alist-tvbox-native
-#            image: alist-tvbox-native
-#            port: 4569
+          - name: alist-tvbox-native
+            image: alist-tvbox-native
+            port: 4569
     steps:
       - name: Test ${{ matrix.test.name }} container
         run: |
