@@ -70,8 +70,8 @@ jobs:
             web-ui/dist/
           retention-days: 1
 
-  # Job 2: 构建 JVM 镜像（并行）
-  build-images:
+  # Job 2: 构建并测试镜像（并行）
+  build-and-test-images:
     needs: build-base
     runs-on: ubuntu-latest
     strategy:
@@ -79,8 +79,10 @@ jobs:
         image:
           - name: xiaoya-tvbox
             dockerfile: docker/Dockerfile-xiaoya
+            port: 4567
           - name: alist-tvbox
             dockerfile: docker/Dockerfile
+            port: 4568
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,30 +106,18 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image.name }}:pr-test
+          tags: ${{ matrix.image.name }}:pr-test
           cache-from: type=gha,scope=pr-${{ matrix.image.name }}
           cache-to: type=gha,mode=max,scope=pr-${{ matrix.image.name }}
 
-  # Job 3: 测试镜像（并行）
-  test-images:
-    needs: build-images
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        test:
-          - name: xiaoya-tvbox
-            port: 4567
-          - name: alist-tvbox
-            port: 4568
-    steps:
-      - name: Test ${{ matrix.test.name }} container
+      - name: Test ${{ matrix.image.name }} container
         run: |
-          docker run -d --name test-${{ matrix.test.name }} -p ${{ matrix.test.port }}:4567 ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.test.name }}:pr-test
+          docker run -d --name test-${{ matrix.image.name }} -p ${{ matrix.image.port }}:4567 ${{ matrix.image.name }}:pr-test
 
           echo "Waiting for AList to start (max 60 seconds)..."
           SUCCESS=false
           for i in {1..30}; do
-            RESPONSE=$(curl -s http://localhost:${{ matrix.test.port }}/api/alist/status || echo "0")
+            RESPONSE=$(curl -s http://localhost:${{ matrix.image.port }}/api/alist/status || echo "0")
             echo "Attempt $i/30: status=$RESPONSE"
 
             if [ "$RESPONSE" == "2" ]; then
@@ -145,12 +135,12 @@ jobs:
 
           if [ "$SUCCESS" != "true" ]; then
             echo "❌ Test failed: AList did not reach status 2 within 60 seconds"
-            docker logs test-${{ matrix.test.name }}
-            docker stop test-${{ matrix.test.name }}
-            docker rm test-${{ matrix.test.name }}
+            docker logs test-${{ matrix.image.name }}
+            docker stop test-${{ matrix.image.name }}
+            docker rm test-${{ matrix.image.name }}
             exit 1
           fi
 
           echo "✅ Test passed: AList status is 2 (running)"
-          docker stop test-${{ matrix.test.name }}
-          docker rm test-${{ matrix.test.name }}
+          docker stop test-${{ matrix.image.name }}
+          docker rm test-${{ matrix.image.name }}
