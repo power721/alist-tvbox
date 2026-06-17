@@ -95,6 +95,7 @@ public class IndexService {
     private final TaskService taskService;
     private final AListLocalService aListLocalService;
     private final TmdbService tmdbService;
+    private final GitHubProxyService gitHubProxyService;
     private final AppProperties appProperties;
     private final SettingRepository settingRepository;
     private final IndexTemplateRepository indexTemplateRepository;
@@ -109,6 +110,7 @@ public class IndexService {
                         TaskService taskService,
                         AListLocalService aListLocalService,
                         TmdbService tmdbService,
+                        GitHubProxyService gitHubProxyService,
                         AppProperties appProperties,
                         SettingRepository settingRepository,
                         IndexTemplateRepository indexTemplateRepository,
@@ -121,6 +123,7 @@ public class IndexService {
         this.taskService = taskService;
         this.aListLocalService = aListLocalService;
         this.tmdbService = tmdbService;
+        this.gitHubProxyService = gitHubProxyService;
         this.appProperties = appProperties;
         this.settingRepository = settingRepository;
         this.indexTemplateRepository = indexTemplateRepository;
@@ -216,11 +219,43 @@ public class IndexService {
     private String getVersion() {
         String remote;
         try {
-            remote = restTemplate.getForObject("http://docker.xiaoya.pro/version.txt", String.class);
+            remote = getGitHubVersion("https://raw.githubusercontent.com/xiaoyaliu00/data/main/version.txt");
         } catch (ResourceAccessException e) {
             remote = restTemplate.getForObject("https://d.har01d.cn/version.txt", String.class);
         }
         return Utils.trim(remote);
+    }
+
+    private String getGitHubVersion(String url) {
+        for (String candidate : getVersionUrls(url)) {
+            try {
+                String text = restTemplate.getForObject(candidate, String.class);
+                if (text == null) {
+                    continue;
+                }
+                text = text.trim();
+                log.debug("get index version: {}", text);
+                return text;
+            } catch (Exception e) {
+                log.warn("load index version failed from {}", candidate, e);
+            }
+        }
+        return "";
+    }
+
+    private List<String> getVersionUrls(String url) {
+        List<String> urls = new ArrayList<>();
+        for (String proxy : gitHubProxyService.readProxyListFromFile()) {
+            if (proxy == null || proxy.trim().isEmpty()) {
+                urls.add(url);
+            } else {
+                urls.add(proxy + url);
+            }
+        }
+        if (!urls.contains(url)) {
+            urls.add(url);
+        }
+        return urls;
     }
 
     public void updateXiaoyaIndexFile(String remote) {
