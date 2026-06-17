@@ -95,6 +95,7 @@ public class RemoteSearchService {
     }
 
     public void refreshPanSouInfoAsync() {
+        log.debug("refresh pan sou info async");
         String url = appProperties.getPanSouUrl();
         checkedPanSouUrl = StringUtils.defaultString(url);
         if (StringUtils.isBlank(url)) {
