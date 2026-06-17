@@ -216,6 +216,7 @@
                                 <buildArg>--enable-http</buildArg>
                                 <buildArg>--enable-https</buildArg>
                                 <buildArg>-march=compatibility</buildArg>
+                                <buildArg>--initialize-at-build-time=org.flywaydb</buildArg>
                                 <buildArg>-Dorg.sqlite.lib.exportPath=${project.build.directory}</buildArg>
                             </buildArgs>
                         </configuration>
