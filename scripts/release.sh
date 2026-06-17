@@ -62,9 +62,9 @@ printf 'branch=%s\nHEAD=%s\nversion=%s\ntag=%s\n' "$branch" "$head_sha" "$versio
 [[ "$branch" == "main" || "$branch" == "master" ]] || die "只能在 main/master 分支执行发布脚本"
 require_clean_release_notes_only
 
-git fetch origin main --tags
-read -r behind ahead < <(git rev-list --left-right --count origin/main...HEAD)
-[[ "$behind" == "0" ]] || die "当前分支落后远端，请先同步 origin/main"
+git fetch origin "$branch" --tags
+read -r behind ahead < <(git rev-list --left-right --count "origin/$branch"...HEAD)
+[[ "$behind" == "0" ]] || die "当前分支落后远端，请先同步 origin/$branch"
 
 [[ -z "$(git tag --list "$tag")" ]] || die "本地已存在 tag: $tag"
 [[ -z "$(git ls-remote --tags origin "$tag")" ]] || die "远端已存在 tag: $tag"
