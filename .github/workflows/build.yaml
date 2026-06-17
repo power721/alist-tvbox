@@ -180,10 +180,6 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: build-artifacts
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -261,10 +257,6 @@ jobs:
           mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
           chmod a+x target/atv
           ls -l target
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
