@@ -254,7 +254,7 @@ jobs:
 
       - name: Build native with Maven (AMD64)
         run: |
-          mvn -B -Pnative -Dnative.image.cache=true -Dnative-image.parallelism=4 package --file pom.xml
+          mvn -B -Pnative -DskipTests -Dnative.image.cache=true -Dnative-image.parallelism=8 package --file pom.xml
           chmod a+x target/atv
           ls -l target
       - name: Set up Docker Buildx
