@@ -100,7 +100,7 @@
             </div>
           </template>
           <div v-if="appVersion">应用版本：{{ appVersion }}</div>
-          <div v-if="appRemoteVersion&&appRemoteVersion>appVersion">
+          <div v-if="appRemoteVersion&&compareVersion(appRemoteVersion,appVersion)>0">
             <el-tooltip
               class="box-item"
               effect="dark"
@@ -112,7 +112,7 @@
             <div class="changelog" v-if="changelog">更新日志： {{ changelog }}</div>
           </div>
           <div v-if="aListVersion">AList版本：{{ aListVersion }}</div>
-          <div v-if="aListRemoteVersion&&aListRemoteVersion>aListVersion">
+          <div v-if="aListRemoteVersion&&compareVersion(aListRemoteVersion,aListVersion)>0">
             <el-tooltip
               class="box-item"
               effect="dark"
@@ -150,7 +150,7 @@
             </el-form-item>
           </el-form>
           <div>本地版本：<a href="/#/meta">{{ movieVersion }}</a></div>
-          <div v-if="movieRemoteVersion&&movieRemoteVersion>movieVersion">
+          <div v-if="movieRemoteVersion&&compareVersion(movieRemoteVersion,movieVersion)>0">
             最新版本：{{
               movieRemoteVersion
             }}，后台更新中。
@@ -477,6 +477,43 @@ const form = ref({
 
 const formatTime = (value: string | number) => {
   return new Date(value).toLocaleString('zh-cn')
+}
+
+// 比较版本号：支持语义化版本（1.2.3）和日期格式（1234.5678）
+const compareVersion = (v1: string | number, v2: string | number): number => {
+  const ver1 = String(v1).trim()
+  const ver2 = String(v2).trim()
+
+  // 如果任一版本为空，返回相等
+  if (!ver1 || !ver2) return 0
+
+  // 检测是否为语义化版本（包含至少一个点号且非纯数字）
+  const isSemVer1 = ver1.includes('.') && !/^\d+\.\d+$/.test(ver1)
+  const isSemVer2 = ver2.includes('.') && !/^\d+\.\d+$/.test(ver2)
+
+  // 如果都是语义化版本，按段比较
+  if (isSemVer1 && isSemVer2) {
+    const parts1 = ver1.split('.').map(p => parseInt(p) || 0)
+    const parts2 = ver2.split('.').map(p => parseInt(p) || 0)
+    const maxLen = Math.max(parts1.length, parts2.length)
+
+    for (let i = 0; i < maxLen; i++) {
+      const p1 = parts1[i] || 0
+      const p2 = parts2[i] || 0
+      if (p1 > p2) return 1
+      if (p1 < p2) return -1
+    }
+    return 0
+  }
+
+  // 否则转为浮点数比较（兼容旧的日期格式）
+  const num1 = parseFloat(ver1)
+  const num2 = parseFloat(ver2)
+
+  if (isNaN(num1) || isNaN(num2)) return 0
+  if (num1 > num2) return 1
+  if (num1 < num2) return -1
+  return 0
 }
 
 const updateToken = () => {

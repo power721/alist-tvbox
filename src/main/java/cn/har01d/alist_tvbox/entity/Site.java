@@ -36,7 +36,7 @@ public class Site {
     private boolean xiaoya;
     @Column(name = "sort_order")
     @JsonProperty("order")
-    private int sortOrder;
+    private Integer sortOrder;
     @Column(name = "storage_version")
     @JsonProperty("version")
     private Integer storageVersion;

@@ -35,7 +35,7 @@ public class Navigation {
     private boolean reserved;
     @Column(name = "sort_order")
     @JsonProperty("order")
-    private int sortOrder;
+    private Integer sortOrder;
     private int parentId;
 
     public Navigation(String name, String value, int type, boolean show, boolean reserved, int order) {

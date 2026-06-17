@@ -35,7 +35,7 @@ public class Plugin {
     private boolean enabled = true;
 
     @Column(name = "sort_order")
-    private int sortOrder;
+    private Integer sortOrder;
 
     @Column(name = "`extend`", columnDefinition = "TEXT")
     private String extend;

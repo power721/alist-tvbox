@@ -32,7 +32,7 @@ public class PluginFilter {
     private boolean enabled = true;
 
     @Column(name = "sort_order")
-    private int sortOrder;
+    private Integer sortOrder;
 
     private String stages = "";
 

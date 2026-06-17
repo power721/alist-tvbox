@@ -24,7 +24,7 @@ public class TelegramChannel {
 
     @Column(name = "sort_order")
     @JsonProperty("order")
-    private int sortOrder;
+    private Integer sortOrder;
     private int type = -1;
     private boolean valid = true;
     private boolean enabled = false;
