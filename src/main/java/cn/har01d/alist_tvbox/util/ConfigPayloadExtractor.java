@@ -50,7 +50,7 @@ public final class ConfigPayloadExtractor {
             return result;
         }
 
-        return null;
+        return text;
     }
 
     private static String tryWebp(byte[] bytes) {
@@ -81,7 +81,7 @@ public final class ConfigPayloadExtractor {
 
         int end = riffSize + 8;
 
-        if (end >= bytes.length) {
+        if (end <= 0 || end >= bytes.length) {
             return null;
         }
 
