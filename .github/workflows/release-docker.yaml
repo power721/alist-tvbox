@@ -376,7 +376,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASE_BODY="$(gh release view "$GITHUB_REF_NAME" --json body --jq .body || true)"
+          RELEASE_BODY="$(gh release view "${{ github.ref_name }}" --json body --jq .body || true)"
           {
             echo "body<<EOF"
             printf '%s\n' "$RELEASE_BODY"
