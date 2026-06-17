@@ -368,7 +368,9 @@ jobs:
             target/alist-tvbox-1.0.jar.original
             target/atv.tar.gz
 
-  # Job 8: 添加 latest 标签（测试通过后）
+  # Job 8: 添加 latest 标签 - JVM 镜像（多架构，保留 linux/arm64）
+  # 用 buildx imagetools 在 registry 侧复制 manifest list，
+  # 避免 pull/tag/push 在 amd64 runner 上只取本地架构而丢失 arm64。
   tag-latest:
     needs: test-images
     runs-on: ubuntu-latest
@@ -379,6 +381,32 @@ jobs:
             target_tags: "xiaoya-tvbox:latest xiaoya-tvbox:hostmode xiaoya-tvbox:host xiaoya-tvbox-hostmode:latest xiaoya-tvbox-host:latest"
           - source_image: alist-tvbox
             target_tags: "alist-tvbox:latest"
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Retag multi-arch manifest (amd64 + arm64)
+        run: |
+          SOURCE_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.source_image }}:${{ github.ref_name }}"
+          for TARGET in ${{ matrix.target_tags }}; do
+            TARGET_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${TARGET}"
+            echo "Tagging $SOURCE_IMAGE as $TARGET_IMAGE"
+            docker buildx imagetools create -t "$TARGET_IMAGE" "$SOURCE_IMAGE"
+          done
+
+  # Job 8b: 添加 latest 标签 - Native 镜像（仅 linux/amd64，无 arm64，分开处理）
+  tag-latest-native:
+    needs: test-images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
           - source_image: alist-tvbox-native
             target_tags: "alist-tvbox:native alist-tvbox-native:latest"
           - source_image: xiaoya-tvbox-native
@@ -407,7 +435,7 @@ jobs:
 
   # Job 9: 发送通知（Release 创建后）
   notify:
-    needs: [create-release, tag-latest]
+    needs: [create-release, tag-latest, tag-latest-native]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
