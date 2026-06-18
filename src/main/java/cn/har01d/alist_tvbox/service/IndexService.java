@@ -269,7 +269,7 @@ public class IndexService {
                 log.error("Invalid remote parameter contains shell metacharacters: {}", remote);
                 throw new IllegalArgumentException("Invalid remote parameter");
             }
-            builder.command("/index.sh", remote);
+            builder.command("bash", "-c", "/index.sh", remote);
             builder.inheritIO();
             builder.directory(new File("/tmp"));
             Process process = builder.start();
