@@ -154,7 +154,7 @@ public class DoubanService {
                 }
 
                 log.debug("reset data.sql");
-                writeText("data.sql", "SELECT COUNT(*) FROM META;");
+                writeText("data.sql", "SELECT 1;");
             }
         }
 
