@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.ZipOutputStream;
 
@@ -190,6 +191,7 @@ public class SettingService {
                     .filter(t -> blacklist.stream().noneMatch(b -> b.equalsIgnoreCase(t)))
                     .collect(Collectors.joining(", "));
 
+            log.info("backup database tables: {}", tableList);
             File dir = new File("/tmp");
             File sqlFile = new File(dir, "script.sql");
 
@@ -220,12 +222,17 @@ public class SettingService {
         );
     }
 
+    private static final Pattern DATE_TIME = Pattern.compile("\\d{4}-\\d{2}-\\d{2}-\\d{6}");
+
     private void cleanBackups() {
         LocalDate day = LocalDate.now().minusDays(7);
         for (File file : Utils.listFiles(Utils.getDataPath("backup"), "zip")) {
             if (file.getName().startsWith("database-")) {
                 try {
                     String name = file.getName().replace("database-", "").replace(".zip", "");
+                    if (DATE_TIME.matcher(name).matches()) {
+                        name = name.substring(0, "2026-06-16".length());
+                    }
                     LocalDate date = LocalDate.parse(name);
                     if (date.isBefore(day)) {
                         file.delete();
