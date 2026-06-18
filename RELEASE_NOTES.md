@@ -1,5 +1,5 @@
-# Release Notes - v1.9.0
+# Release Notes - v1.9.1
 
 ## 修复
 
-- 修复豆瓣电影数据
+- 修复数据库备份
