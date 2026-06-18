@@ -1,6 +1,5 @@
-# Release Notes - v1.8.7
+# Release Notes - v1.8.8
 
-## 优化
+## 修复
 
-- 优化 GitHub Actions 构建和发布流程
-- 优化订阅源解密
+- 修复普通镜像被host版本覆盖
