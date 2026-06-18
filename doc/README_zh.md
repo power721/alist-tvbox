@@ -109,11 +109,7 @@ docker run -d \
 ```
 
 #### 小雅集成版 host 网络模式
-使用host网络模式运行，占用端口：
-- 4567 - 管理应用
-- 5678 - nginx
-- 5233 - httpd
-- 5234 - AList
+使用host网络模式运行。
 
 ```bash
 docker run -d \
@@ -138,6 +134,23 @@ docker run -d \
   --name=alist-tvbox \
   haroldli/alist-tvbox:latest
 ```
+
+####  容器端口
+纯净版
+- 4567 - 管理应用
+- 5244 - AList
+
+小雅集成版
+- 4567 - 管理应用
+- 80   - nginx
+- 81   - httpd
+- 5244 - AList
+
+小雅集成版 host 网络模式
+- 4567 - 管理应用
+- 5678 - nginx
+- 5233 - httpd
+- 5234 - AList
 
 ### NAS 部署 (群辉/威联通等)
 

@@ -16,12 +16,12 @@ NC='\033[0m' # No Color
 # 镜像定义
 declare -A VERSIONS=(
   ["1"]="haroldli/alist-tvbox               - 纯净版（推荐）"
-  ["2"]="haroldli/alist-tvbox:native        - 纯净原生版"
-  ["3"]="haroldli/alist-tvbox:python        - 纯净版（Python运行环境）"
+  ["2"]="haroldli/alist-tvbox-native        - 纯净原生版"
+  ["3"]="haroldli/alist-tvbox-python        - 不再更新"
   ["4"]="haroldli/xiaoya-tvbox              - 小雅集成版（推荐）"
-  ["5"]="haroldli/xiaoya-tvbox:native       - 小雅原生版"
-  ["6"]="haroldli/xiaoya-tvbox:native-host  - 小雅原生主机版"
-  ["7"]="haroldli/xiaoya-tvbox:host         - 小雅主机模式版"
+  ["5"]="haroldli/xiaoya-tvbox-native       - 小雅原生版"
+  ["6"]="haroldli/xiaoya-tvbox-native-host  - 小雅原生主机版"
+  ["7"]="haroldli/xiaoya-tvbox-host         - 小雅主机模式版"
   ["8"]="haroldli/xiaoya-tvbox:hostmode-dev - 开发测试版host网络"
   ["9"]="haroldli/xiaoya-tvbox:dev          - 开发测试版"
 )
@@ -504,6 +504,7 @@ start_container() {
     run_args+=("-p" "${CONFIG[PORT1]}:4567" "-p" "${CONFIG[PORT2]}:${aList_port}")
   fi
 
+  echo "docker run ${run_args[@]} $image"
   docker run "${run_args[@]}" "$image"
 }
 

@@ -269,7 +269,7 @@ jobs:
       matrix:
         include:
           - source_image: xiaoya-tvbox-hostmode
-            target_tags: "xiaoya-tvbox:latest xiaoya-tvbox:hostmode xiaoya-tvbox:host xiaoya-tvbox-hostmode:latest xiaoya-tvbox-host:latest"
+            target_tags: "xiaoya-tvbox:hostmode xiaoya-tvbox:host xiaoya-tvbox-hostmode:latest xiaoya-tvbox-host:latest"
           - source_image: alist-tvbox
             target_tags: "alist-tvbox:latest"
     steps:
