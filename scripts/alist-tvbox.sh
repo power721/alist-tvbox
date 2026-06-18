@@ -819,9 +819,11 @@ install_container() {
     INIT=true
   fi
 
-  # 检查基础目录是否为空（排除 .v3 标记文件）
-  local file_count=$(find "${CONFIG[BASE_DIR]}" -mindepth 1 ! -name '.v3' 2>/dev/null | wc -l)
-  if [[ "$file_count" -eq 0 ]]; then
+  # 检查基础目录是否为空（排除 .v3 标记文件）。
+  # 用 -print -quit 探测到首个条目即停止，避免对大目录（NAS 上可能数十万文件）全量遍历。
+  local sample
+  sample="$(find "${CONFIG[BASE_DIR]}" -mindepth 1 ! -name '.v3' -print -quit 2>/dev/null)"
+  if [[ -z "$sample" ]]; then
     INIT=true
   fi
 
