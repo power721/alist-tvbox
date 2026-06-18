@@ -175,19 +175,18 @@ public class SettingService {
             return null;
         }
 
+        Set<String> blacklist = Set.of(
+                "FLYWAY_SCHEMA_HISTORY",
+                "META",
+                "MOVIE",
+                "INFORMATION_SCHEMA"
+        );
+
         try {
             List<String> tables = listTables();
-            log.debug("tables: {}", tables);
-
-            Set<String> blacklist = Set.of(
-                    "FLYWAY_SCHEMA_HISTORY",
-                    "META",
-                    "MOVIE",
-                    "INFORMATION_SCHEMA"
-            );
+            log.debug("tables: {}  blacklist: {}", tables, blacklist);
 
             String tableList = tables.stream()
-                    .map(String::toUpperCase)
                     .filter(t -> blacklist.stream().noneMatch(b -> b.equalsIgnoreCase(t)))
                     .collect(Collectors.joining(", "));
 
