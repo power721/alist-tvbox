@@ -175,20 +175,48 @@ public class SettingService {
         }
 
         try {
-            jdbcTemplate.execute("SCRIPT TO '/tmp/script.sql' TABLE ACCOUNT, ALIST_ALIAS, CONFIG_FILE, ID_GENERATOR, INDEX_TEMPLATE, NAVIGATION, PIK_PAK_ACCOUNT, SETTING, SHARE, SITE, SUBSCRIPTION, TASK, x_user, TMDB, TMDB_META, DEVICE, DRIVER_ACCOUNT, EMBY, HISTORY, JELLYFIN, PLAY_URL, TENANT, SESSION");
-            File out = Utils.getDataPath("backup", "database-" + LocalDate.now() + ".zip").toFile();
-            out.createNewFile();
+            List<String> tables = listTables();
+            log.debug("tables: {}", tables);
+
+            Set<String> blacklist = Set.of(
+                    "FLYWAY_SCHEMA_HISTORY",
+                    "META",
+                    "MOVIE",
+                    "INFORMATION_SCHEMA"
+            );
+
+            String tableList = tables.stream()
+                    .map(String::toUpperCase)
+                    .filter(t -> blacklist.stream().noneMatch(b -> b.equalsIgnoreCase(t)))
+                    .collect(Collectors.joining(", "));
+
+            File sqlFile = File.createTempFile("h2-backup-", ".sql");
+
+            jdbcTemplate.execute("SCRIPT TO '" + sqlFile.getAbsolutePath() + "' TABLE " + tableList);
+
+            File out = Utils.getDataPath(
+                    "backup",
+                    "database-" + LocalDate.now() + ".zip"
+            ).toFile();
+
             try (FileOutputStream fos = new FileOutputStream(out);
                  ZipOutputStream zipOut = new ZipOutputStream(fos)) {
-                File fileToZip = new File("/tmp/script.sql");
-                Utils.zipFile(fileToZip, fileToZip.getName(), zipOut);
+                Utils.zipFile(sqlFile, sqlFile.getName(), zipOut);
             }
             cleanBackups();
             return out;
         } catch (Exception e) {
             log.warn("backup database failed", e);
         }
+
         return null;
+    }
+
+    private List<String> listTables() {
+        return jdbcTemplate.query(
+                "SHOW TABLES",
+                (rs, rowNum) -> rs.getString(1)
+        );
     }
 
     private void cleanBackups() {
@@ -370,7 +398,8 @@ public class SettingService {
             try {
                 // 解析 JSON 数组
                 List<String> proxyList = objectMapper.readValue(setting.getValue(),
-                    new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+                        new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {
+                        });
                 gitHubProxyService.saveProxyListToFile(proxyList);
             } catch (IOException e) {
                 log.error("保存 GitHub 代理列表到文件失败", e);
