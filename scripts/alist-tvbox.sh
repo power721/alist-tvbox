@@ -261,13 +261,42 @@ sync_runtime_config() {
   return 0
 }
 
+# 从镜像名提取基础名（去除 :tag，正确处理 registry:port）
+get_image_base() {
+  local image="$1"
+  local name="${image##*/}"
+  if [[ "$name" == *:* ]]; then
+    echo "${image%:*}"
+  else
+    echo "$image"
+  fi
+}
+
+# 从镜像名提取 tag（无 tag 返回空，表示 latest）
+get_image_tag() {
+  local image="$1"
+  local name="${image##*/}"
+  if [[ "$name" == *:* ]]; then
+    echo "${name#*:}"
+  fi
+}
+
 get_image_id_from_name() {
   local image="$1"
   local key candidate
+  # Pass 1: 精确匹配（处理 :dev 等预定义 tag）
   for key in "${!VERSIONS[@]}"; do
     candidate="${VERSIONS[$key]%% - *}"
     candidate="${candidate//[[:space:]]/}"
-    if [[ "$candidate" == "$image" || "${candidate}:latest" == "$image" || "$candidate" == "${image%:latest}" ]]; then
+    [[ "$candidate" == "$image" ]] && { echo "$key"; return 0; }
+  done
+  # Pass 2: 按基础名匹配（处理 :1.9.0 等自定义 tag，仅匹配无预定义 tag 的 latest 型镜像）
+  local ibase
+  ibase="$(get_image_base "$image")"
+  for key in "${!VERSIONS[@]}"; do
+    candidate="${VERSIONS[$key]%% - *}"
+    candidate="${candidate//[[:space:]]/}"
+    if [[ "$(get_image_base "$candidate")" == "$ibase" && -z "$(get_image_tag "$candidate")" ]]; then
       echo "$key"
       return 0
     fi
@@ -615,16 +644,19 @@ check_architecture_support() {
 validate_image_network_compatibility() {
   local image="${CONFIG[IMAGE_NAME]}"
   local network="${CONFIG[NETWORK]}"
+  # 以基础名（去除 :tag）判断 host 镜像，兼容带版本 tag 的 host 镜像
+  local base
+  base="$(get_image_base "$image")"
 
   # host镜像必须使用host网络（匹配 :host 或 -host 后缀）
-  if [[ "$image" =~ (:|-)host$ && "$network" != "host" ]]; then
+  if [[ "$base" =~ (:|-)host$ && "$network" != "host" ]]; then
     echo -e "${RED}错误: ${image} 必须使用 host 网络模式${NC}"
     echo -e "${YELLOW}该镜像专为 host 网络优化，不支持端口映射${NC}"
     return 1
   fi
 
   # host网络必须使用host镜像
-  if [[ "$network" == "host" && ! "$image" =~ (:|-)host ]]; then
+  if [[ "$network" == "host" && ! "$base" =~ (:|-)host ]]; then
     echo -e "${YELLOW}host 网络模式建议使用 host 镜像${NC}"
     echo -e "${YELLOW}普通镜像的 AList 监听 80 端口，会占用主机端口${NC}"
     echo -e "${YELLOW}请选择镜像 6 (native-host) 或镜像 7 (host)${NC}"
@@ -911,11 +943,47 @@ show_image_menu() {
     local old_image_id="${CONFIG[IMAGE_ID]}"
     local image="${VERSIONS[$version_choice]}"
     image=$(echo "$image" | awk -F' - ' '{print $1}' | tr -d ' ')
+
+    # 步骤2：选择版本（docker tag）
+    local image_base image_tag cur_base cur_tag display_version version_input result_tag
+    image_base="$(get_image_base "$image")"
+    image_tag="$(get_image_tag "$image")"
+    if [[ -n "$image_tag" ]]; then
+      # 预定义 tag 镜像（如 :dev），版本即为其预定义 tag
+      display_version="$image_tag"
+    else
+      cur_base="$(get_image_base "${CONFIG[IMAGE_NAME]}")"
+      if [[ "$cur_base" == "$image_base" ]]; then
+        # 同一镜像：沿用当前 tag（latest 或之前输入的版本号）
+        cur_tag="$(get_image_tag "${CONFIG[IMAGE_NAME]}")"
+        display_version="${cur_tag:-latest}"
+      else
+        display_version="latest"
+      fi
+    fi
+
+    echo -e "${CYAN}---------------------------------------------${NC}"
+    echo -e "当前版本: ${GREEN}${display_version}${NC}"
+    read -p "请输入版本号（直接回车使用当前版本，如 1.9.0）: " version_input
+    version_input="$(echo "$version_input" | tr -d '[:space:]')"
+    if [[ -n "$version_input" ]]; then
+      result_tag="$version_input"
+    else
+      result_tag="$display_version"
+    fi
+
+    # 组装最终镜像名（latest 不附加 tag）
+    if [[ -n "$result_tag" && "$result_tag" != "latest" ]]; then
+      image="${image_base}:${result_tag}"
+    else
+      image="${image_base}"
+    fi
+
     CONFIG["IMAGE_ID"]="$version_choice"
     CONFIG["IMAGE_NAME"]="${image}"
 
-    # 新增：如果镜像名称包含host后缀，自动切换网络模式
-    if [[ "${image}" =~ (:|-)host$ ]]; then
+    # 新增：如果镜像基础名包含host后缀，自动切换网络模式
+    if [[ "$image_base" =~ (:|-)host$ ]]; then
       CONFIG["NETWORK"]="host"
       echo -e "${YELLOW}检测到host镜像，已自动切换网络模式为host${NC}"
     fi
