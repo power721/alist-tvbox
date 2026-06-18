@@ -196,11 +196,14 @@ jobs:
       matrix:
         test:
           - name: xiaoya-tvbox
-            image: xiaoya-tvbox-hostmode
+            image: xiaoya-tvbox
             port: 4567
+          - name: xiaoya-tvbox-hostmode
+            image: xiaoya-tvbox-hostmode
+            port: 4568
           - name: alist-tvbox
             image: alist-tvbox
-            port: 4568
+            port: 4569
     steps:
       - name: Test ${{ matrix.test.name }} container
         run: |
@@ -270,6 +273,8 @@ jobs:
         include:
           - source_image: xiaoya-tvbox-hostmode
             target_tags: "xiaoya-tvbox:hostmode xiaoya-tvbox:host xiaoya-tvbox-hostmode:latest xiaoya-tvbox-host:latest"
+          - source_image: xiaoya-tvbox
+            target_tags: "xiaoya-tvbox:latest"
           - source_image: alist-tvbox
             target_tags: "alist-tvbox:latest"
     steps:
