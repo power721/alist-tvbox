@@ -190,7 +190,8 @@ public class SettingService {
                     .filter(t -> blacklist.stream().noneMatch(b -> b.equalsIgnoreCase(t)))
                     .collect(Collectors.joining(", "));
 
-            File sqlFile = File.createTempFile("h2-backup-", ".sql");
+            File dir = new File("/tmp");
+            File sqlFile = new File(dir, "script.sql");
 
             jdbcTemplate.execute("SCRIPT TO '" + sqlFile.getAbsolutePath() + "' TABLE " + tableList);
 
