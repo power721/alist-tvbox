@@ -428,7 +428,14 @@ check_image_update() {
     echo -e "${GREEN}检测到新版本镜像${NC}"
     return 0
   else
+    local tag
+    tag="$(get_image_tag "$image")"
     echo -e "${YELLOW}当前已是最新版本${NC}"
+    # 版本被锁定（带固定 tag 且非 latest）时，该 tag 的镜像 digest 不会变，
+    # “更新”是空操作——明确指出升级路径，避免误以为已是最新发行版。
+    if [[ -n "$tag" && "$tag" != "latest" ]]; then
+      echo -e "${YELLOW}已锁定版本 ${tag}，该版本镜像未变化。如需升级请更换版本号：交互模式选菜单 7「选择镜像」，命令行运行 menu 或编辑配置中的 IMAGE_NAME。${NC}"
+    fi
     return 1
   fi
 }
@@ -876,7 +883,12 @@ check_update() {
       esac
     fi
   else
+    local tag
+    tag="$(get_image_tag "$image")"
     echo -e "${YELLOW}当前已是最新版本${NC}"
+    if [[ -n "$tag" && "$tag" != "latest" ]]; then
+      echo -e "${YELLOW}已锁定版本 ${tag}，该版本镜像未变化。如需升级请更换版本号：交互模式选菜单 7「选择镜像」，命令行运行 menu 或编辑配置中的 IMAGE_NAME。${NC}"
+    fi
     return 1
   fi
 }
