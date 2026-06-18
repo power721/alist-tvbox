@@ -1,5 +1,5 @@
-# Release Notes - v1.8.8
+# Release Notes - v1.9.0
 
 ## 修复
 
-- 修复普通镜像被host版本覆盖
+- 修复豆瓣电影数据
