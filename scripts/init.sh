@@ -3,6 +3,10 @@
 init_version=$(head -n 1 "/opt/alist/data/.init" 2>/dev/null || echo "")
 
 restore_database() {
+  if [ -f "/data/database-yaml.zip" ]; then
+    echo "=== skip sql restore because yaml restore package exists ==="
+    return
+  fi
   if [ -f "/data/database.zip" ]; then
     echo "=== restore database ==="
     rm -f /data/atv.mv.db /data/atv.trace.db

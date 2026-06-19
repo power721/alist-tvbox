@@ -9,6 +9,7 @@ import cn.har01d.alist_tvbox.entity.User;
 import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.service.backup.RestoreState;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -37,11 +38,16 @@ public class UserService {
     private final SessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
+    private final RestoreState restoreState;
 
     private final Set<String> usernames = new HashSet<>();
 
     @PostConstruct
     public void init() {
+        if (restoreState.shouldSkipInitializationWrites()) {
+            log.info("Skip user initialization during startup YAML restore");
+            return;
+        }
         try {
             initializeAdminUser();
         } catch (Exception e) {
