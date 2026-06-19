@@ -7,10 +7,13 @@ import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.SearchSetting;
+import cn.har01d.alist_tvbox.dto.backup.BackupRestoreMode;
+import cn.har01d.alist_tvbox.dto.backup.BackupRestoreResponse;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.service.backup.DatabaseBackupService;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -57,6 +60,7 @@ public class SettingService {
     private final DriverAccountRepository driverAccountRepository;
     private final ObjectMapper objectMapper;
     private final GitHubProxyService gitHubProxyService;
+    private final DatabaseBackupService databaseBackupService;
 
     public SettingService(JdbcTemplate jdbcTemplate,
                           Environment environment,
@@ -67,7 +71,8 @@ public class SettingService {
                           SettingRepository settingRepository,
                           DriverAccountRepository driverAccountRepository,
                           ObjectMapper objectMapper,
-                          GitHubProxyService gitHubProxyService) {
+                          GitHubProxyService gitHubProxyService,
+                          DatabaseBackupService databaseBackupService) {
         this.jdbcTemplate = jdbcTemplate;
         this.environment = environment;
         this.appProperties = appProperties;
@@ -78,6 +83,7 @@ public class SettingService {
         this.driverAccountRepository = driverAccountRepository;
         this.objectMapper = objectMapper;
         this.gitHubProxyService = gitHubProxyService;
+        this.databaseBackupService = databaseBackupService;
     }
 
     @PostConstruct
@@ -167,6 +173,21 @@ public class SettingService {
             throw new IOException("备份数据库失败");
         }
         return new FileSystemResource(out);
+    }
+
+    public FileSystemResource exportYamlDatabase() throws Exception {
+        return new FileSystemResource(databaseBackupService.exportBackupZip());
+    }
+
+    public BackupRestoreResponse importYamlDatabase(org.springframework.web.multipart.MultipartFile file,
+                                                    BackupRestoreMode mode) throws Exception {
+        Path temp = Files.createTempFile("database-yaml-upload-", ".zip");
+        try {
+            file.transferTo(temp);
+            return databaseBackupService.restoreBackupZip(temp.toFile(), mode);
+        } finally {
+            Files.deleteIfExists(temp);
+        }
     }
 
     @Scheduled(cron = "0 0 6 * * *")

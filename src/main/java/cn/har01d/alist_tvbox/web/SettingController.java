@@ -2,6 +2,8 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.GitHubProxyBenchmarkRequest;
 import cn.har01d.alist_tvbox.dto.GitHubProxyNode;
+import cn.har01d.alist_tvbox.dto.backup.BackupRestoreMode;
+import cn.har01d.alist_tvbox.dto.backup.BackupRestoreResponse;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.service.GitHubProxyService;
 import cn.har01d.alist_tvbox.service.SettingService;
@@ -17,7 +19,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -67,6 +71,19 @@ public class SettingController {
         response.addHeader("Content-Disposition", "attachment; filename=\"database-" + LocalDate.now() + ".zip\"");
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
         return service.exportDatabase();
+    }
+
+    @GetMapping("/export-yaml")
+    public FileSystemResource exportYamlDatabase(HttpServletResponse response) throws Exception {
+        response.addHeader("Content-Disposition", "attachment; filename=\"database-yaml-" + LocalDate.now() + ".zip\"");
+        response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+        return service.exportYamlDatabase();
+    }
+
+    @PostMapping("/import-yaml")
+    public BackupRestoreResponse importYamlDatabase(@RequestParam("file") MultipartFile file,
+                                                    @RequestParam(name = "mode", defaultValue = "OVERWRITE") BackupRestoreMode mode) throws Exception {
+        return service.importYamlDatabase(file, mode);
     }
 
     /**
