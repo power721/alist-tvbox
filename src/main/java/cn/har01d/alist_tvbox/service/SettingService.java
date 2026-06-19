@@ -179,6 +179,7 @@ public class SettingService {
                 "FLYWAY_SCHEMA_HISTORY",
                 "META",
                 "MOVIE",
+                "ALIAS",
                 "INFORMATION_SCHEMA"
         );
 
