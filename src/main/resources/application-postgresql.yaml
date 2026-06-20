@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    jdbc-url: jdbc:postgresql://localhost:5432/alist_tvbox
+    username: atv
+    password: AList_TvBox
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
