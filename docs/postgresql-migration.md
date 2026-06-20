@@ -18,10 +18,10 @@ AList-TvBox 支持三种主应用数据库：**H2**（内置默认）、**MySQL*
 
 脚本会把数据库配置写入 `~/.config/alist-tvbox/app.conf`，并在重建容器时注入以下环境变量：
 
-- `SPRING_DATASOURCE_JDBC-URL`
+- `SPRING_DATASOURCE_JDBC_URL`
 - `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD`
-- `SPRING_DATASOURCE_DRIVER-CLASS-NAME` = `org.postgresql.Driver`
-- `SPRING_JPA_DATABASE-PLATFORM` = `org.hibernate.dialect.PostgreSQLDialect`
+- `SPRING_DATASOURCE_DRIVER_CLASS_NAME` = `org.postgresql.Driver`
+- `SPRING_JPA_DATABASE_PLATFORM` = `org.hibernate.dialect.PostgreSQLDialect`
 - `SPRING_PROFILES_ACTIVE` = `postgresql`（叠加在镜像默认 profile 之上）
 
 ### 方式 B：直接用环境变量
@@ -31,11 +31,11 @@ AList-TvBox 支持三种主应用数据库：**H2**（内置默认）、**MySQL*
 ```bash
 docker run -d ... \
   -e SPRING_PROFILES_ACTIVE=postgresql \
-  -e SPRING_DATASOURCE_JDBC-URL='jdbc:postgresql://<host>:5432/alist_tvbox' \
+  -e SPRING_DATASOURCE_JDBC_URL='jdbc:postgresql://<host>:5432/alist_tvbox' \
   -e SPRING_DATASOURCE_USERNAME=atv \
   -e SPRING_DATASOURCE_PASSWORD='<密码>' \
-  -e SPRING_DATASOURCE_DRIVER-CLASS-NAME=org.postgresql.Driver \
-  -e SPRING_JPA_DATABASE-PLATFORM=org.hibernate.dialect.PostgreSQLDialect \
+  -e SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver \
+  -e SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect \
   <镜像>
 ```
 

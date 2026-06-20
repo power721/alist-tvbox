@@ -598,12 +598,13 @@ start_container() {
   )
 
   # 主应用数据库覆盖（config-db 子命令写入）。未配置时走镜像内置的 H2 默认。
+  # 环境变量用下划线形式（Spring Boot relaxed binding 标准写法，避免连字符在 shell 中非法）。
   if [[ -n "${CONFIG[DB_TYPE]:-}" ]]; then
-    run_args+=("-e" "SPRING_DATASOURCE_JDBC-URL=${CONFIG[DB_JDBC_URL]}")
+    run_args+=("-e" "SPRING_DATASOURCE_JDBC_URL=${CONFIG[DB_JDBC_URL]}")
     run_args+=("-e" "SPRING_DATASOURCE_USERNAME=${CONFIG[DB_USERNAME]}")
     run_args+=("-e" "SPRING_DATASOURCE_PASSWORD=${CONFIG[DB_PASSWORD]}")
-    run_args+=("-e" "SPRING_DATASOURCE_DRIVER-CLASS-NAME=${CONFIG[DB_DRIVER]}")
-    run_args+=("-e" "SPRING_JPA_DATABASE-PLATFORM=${CONFIG[DB_DIALECT]}")
+    run_args+=("-e" "SPRING_DATASOURCE_DRIVER_CLASS_NAME=${CONFIG[DB_DRIVER]}")
+    run_args+=("-e" "SPRING_JPA_DATABASE_PLATFORM=${CONFIG[DB_DIALECT]}")
     run_args+=("-e" "SPRING_PROFILES_ACTIVE=${CONFIG[DB_TYPE]}")
   fi
 
