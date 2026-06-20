@@ -34,6 +34,7 @@ public class WebSecurityConfiguration {
                                 "/parse/**",
                                 "/ali/access_token",
                                 "/api/local/admin/password",
+                                "/api/local/backup",
                                 "/api/alist/status",
                                 "/api/profiles",
                                 "/api/accounts/login",
