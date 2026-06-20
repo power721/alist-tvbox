@@ -1406,49 +1406,94 @@ check_status() {
   read -n 1 -s -r -p "按任意键继续..."
 }
 
-# 立即备份数据库
+# 生成本地备份一次性 token（32 位），写入容器后供 /api/local/backup 校验
+generate_backup_token() {
+  local token=""
+  while [[ ${#token} -lt 32 ]]; do
+    token="${token}$(dd if=/dev/urandom bs=24 count=1 2>/dev/null | base64 | tr -dc 'A-Za-z0-9')"
+  done
+  printf '%s' "${token:0:32}"
+}
+
+# 把一次性 token 写入容器内 /data/atv/backup_token（0600）
+write_backup_token() {
+  local container_name="$1" token="$2"
+  docker exec "$container_name" sh -lc "mkdir -p /data/atv && umask 077 && printf '%s' '$token' > /data/atv/backup_token"
+}
+
+# 调用容器内本地备份端点；$3=type(json|sql)。成功打印产物文件名，失败返回非 0
+call_backup_api() {
+  local container_name="$1" token="$2" type="$3"
+  docker exec "$container_name" sh -lc "curl -fsS -X POST -H 'X-BACKUP-TOKEN: $token' 'http://127.0.0.1:4567/api/local/backup?type=$type'" \
+    | tr -d '\n' | sed -n 's/.*"file"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+}
+
+# 立即备份数据库（JSON 优先，SQL 与裸 atv.mv.db 为 fallback）
 backup_database_now() {
   echo -e "${CYAN}=============================================${NC}"
-  echo -e "${GREEN}          立即备份数据库          ${NC}"
+  echo -e "${GREEN}          立即备份数据库 (JSON 优先)          ${NC}"
   echo -e "${CYAN}=============================================${NC}"
 
-  local backup_dir="${CONFIG[BASE_DIR]}/backup"
-  local db_file="${CONFIG[BASE_DIR]}/atv.mv.db"
+  local container_name
+  container_name="$(get_container_name)"
+  local status
+  status="$(check_container_status)"
 
-  # 检查数据库文件是否存在
-  if [[ ! -f "$db_file" ]]; then
-    echo -e "${RED}数据库文件不存在: $db_file${NC}"
-    echo -e "${YELLOW}可能原因：容器未运行或数据库未初始化${NC}"
-    read -n 1 -s -r -p "按任意键继续..."
-    return
-  fi
-
-  # 创建备份目录
-  mkdir -p "$backup_dir" 2>/dev/null || {
+  mkdir -p "${CONFIG[BASE_DIR]}/backup" 2>/dev/null || {
     echo -e "${RED}无法创建备份目录 (权限不足)${NC}"
     read -n 1 -s -r -p "按任意键继续..."
     return
   }
 
-  # 生成备份文件名（格式: database-YYYY-MM-DD-HHMMSS.zip）
-  local timestamp=$(date +"%Y-%m-%d-%H%M%S")
-  local backup_file="${backup_dir}/database-${timestamp}.zip"
-
-  echo -e "${CYAN}正在备份数据库...${NC}"
-
-  # 使用zip命令打包数据库文件
-  if command -v zip >/dev/null 2>&1; then
-    if (cd "${CONFIG[BASE_DIR]}" && zip -q "$backup_file" atv.mv.db 2>/dev/null); then
-      local filesize=$(ls -lh "$backup_file" | awk '{print $5}')
-      echo -e "${GREEN}✓ 备份成功${NC}"
-      echo -e "备份文件: ${GREEN}${backup_file}${NC}"
-      echo -e "文件大小: ${filesize}"
-    else
-      echo -e "${RED}备份失败${NC}"
+  # 容器未运行 → 退回裸 atv.mv.db 复制（兜底，与历史行为一致）
+  if [[ "$status" != "running" ]]; then
+    echo -e "${YELLOW}容器未运行，退回裸文件备份 atv.mv.db${NC}"
+    local db_file="${CONFIG[BASE_DIR]}/atv.mv.db"
+    if [[ ! -f "$db_file" ]]; then
+      echo -e "${RED}数据库文件不存在: $db_file${NC}"
+      echo -e "${YELLOW}可能原因：数据库未初始化${NC}"
+      read -n 1 -s -r -p "按任意键继续..."
+      return
     fi
+    local timestamp
+    timestamp="$(date +"%Y-%m-%d-%H%M%S")"
+    local backup_file="${CONFIG[BASE_DIR]}/backup/database-${timestamp}.zip"
+    if command -v zip >/dev/null 2>&1 && (cd "${CONFIG[BASE_DIR]}" && zip -q "$backup_file" atv.mv.db 2>/dev/null); then
+      echo -e "${GREEN}✓ 备份成功 (atv.mv.db)${NC}"
+      echo -e "备份文件: ${GREEN}${backup_file}${NC}"
+      echo -e "文件大小: $(ls -lh "$backup_file" | awk '{print $5}')"
+    else
+      echo -e "${RED}备份失败（未安装 zip 或权限不足）${NC}"
+      echo -e "${YELLOW}请安装: apt install zip 或 yum install zip${NC}"
+    fi
+    read -n 1 -s -r -p "按任意键继续..."
+    return
+  fi
+
+  # 主：JSON 备份（JPA 导出，DB 无关，可移植）
+  local token file
+  token="$(generate_backup_token)"
+  write_backup_token "$container_name" "$token"
+  echo -e "${CYAN}正在生成 JSON 备份...${NC}"
+  if file="$(call_backup_api "$container_name" "$token" "json" 2>/dev/null)" && [[ -n "$file" ]]; then
+    local path="${CONFIG[BASE_DIR]}/backup/$file"
+    echo -e "${GREEN}✓ JSON 备份成功${NC}"
+    echo -e "备份文件: ${GREEN}${path}${NC}"
+    echo -e "文件大小: $(ls -lh "$path" 2>/dev/null | awk '{print $5}')"
+    read -n 1 -s -r -p "按任意键继续..."
+    return
+  fi
+
+  # fallback：SQL 备份（H2 SCRIPT TO，仅 H2）
+  echo -e "${YELLOW}JSON 备份失败，尝试 SQL 备份...${NC}"
+  token="$(generate_backup_token)"
+  write_backup_token "$container_name" "$token"
+  if file="$(call_backup_api "$container_name" "$token" "sql" 2>/dev/null)" && [[ -n "$file" ]]; then
+    echo -e "${GREEN}✓ SQL 备份成功${NC}"
+    echo -e "备份文件: ${GREEN}${CONFIG[BASE_DIR]}/backup/$file${NC}"
   else
-    echo -e "${RED}错误: 系统未安装 zip 命令${NC}"
-    echo -e "${YELLOW}请安装: apt install zip 或 yum install zip${NC}"
+    echo -e "${RED}备份失败：JSON 与 SQL 均失败${NC}"
+    echo -e "${YELLOW}请查看容器日志: docker logs $container_name${NC}"
   fi
 
   read -n 1 -s -r -p "按任意键继续..."
