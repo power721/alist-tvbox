@@ -26,7 +26,10 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
-    locations: classpath:db/migration/{vendor},classpath:db/migration/common
+    # {vendor} = per-DB SQL V1; common = portable SQL V4/V5; current = Java V2/V3
+    # (package db.migration.current; no SQL lives there). All three needed so the Java
+    # migrations are discovered via package scan in JVM mode.
+    locations: classpath:db/migration/{vendor},classpath:db/migration/common,classpath:db/migration/current
   sql:
     init:
       mode: always
