@@ -1734,6 +1734,17 @@ save_proxy_list() {
   fi
 }
 
+# 探测备份类型：文件名含 -json- 为 JSON 备份，否则视为 SQL 备份
+detect_backup_type() {
+  local name
+  name="$(basename "$1")"
+  if [[ "$name" == *"-json-"* ]]; then
+    echo "JSON"
+  else
+    echo "SQL"
+  fi
+}
+
 # 数据库恢复
 restore_database() {
   local backup_dir="${CONFIG[BASE_DIR]}/backup"
