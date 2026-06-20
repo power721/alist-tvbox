@@ -2975,18 +2975,72 @@ cli_mode() {
       ;;
     *)
       echo -e "${RED}未知命令: $1${NC}"
-      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, health, repair, menu"
+      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, health, repair, menu, help"
       exit 1
       ;;
   esac
 }
 
+# 打印帮助（不依赖 Docker，help/-h/--help 可在任何环境直接查看）
+show_help() {
+  printf '%b\n' "$(cat <<EOF
+${GREEN}AList-TvBox 安装升级配置管理脚本 v${SCRIPT_VERSION}${NC}
+
+${CYAN}用法:${NC}
+  ./alist-tvbox.sh                交互式菜单（默认）
+  ./alist-tvbox.sh <命令>         执行单次命令
+  ./alist-tvbox.sh help|-h|--help 显示本帮助
+
+${CYAN}命令行命令:${NC}
+  install    安装/更新容器
+  start      启动容器
+  stop       停止容器
+  restart    重启容器
+  status     查看容器状态
+  logs       查看日志（logs -f 实时跟踪）
+  update     检查并更新镜像（update -y 自动更新）
+  uninstall  卸载容器（uninstall -f 同时删除数据目录）
+  health     健康检查
+  repair     自动修复诊断
+  menu        进入交互式菜单
+  help        显示本帮助
+
+${CYAN}交互式主菜单:${NC}
+  1 安装/更新   2 启动/停止   3 重启   4 查看状态
+  5 日志管理    6 卸载容器    7 选择镜像   8 配置管理
+  9 自动修复    c 清理资源    w 打开Web界面   0 退出
+
+${CYAN}配置管理 (菜单 8) 子菜单:${NC}
+  1 数据目录    2 管理端口    3 AList端口   4 挂载/www
+  5 自定义挂载  6 网络模式    7 重启策略    8 重置管理员密码
+  9 GitHub代理  a 数据恢复    b 立即备份数据库   0 返回
+
+${CYAN}数据库备份与恢复 (JSON 优先, SQL 为兜底):${NC}
+  - 自动备份: SQL 每日 06:00、JSON 每日 06:30，保存到 <数据目录>/backup/
+  - 文件名: database[-json]-yyyy-MM-dd-HHmmss.zip（带时间戳，多次备份互不覆盖），保留 7 天
+  - 立即备份: 菜单 8 → b（JSON 为主；JSON 失败回退 SQL；容器未运行回退裸 atv.mv.db）
+  - 恢复:     菜单 8 → a（按文件名识别 [JSON]/[SQL]，JSON 优先；选择后自动复制并重启恢复）
+  - JSON 走 JPA，可移植 (H2/MySQL/PostgreSQL)；SQL 走 H2 SCRIPT，仅 H2 可用
+
+${CYAN}配置:${NC}
+  配置文件: ~/.config/alist-tvbox/app.conf
+  数据目录默认: /opt/alist-tvbox (NAS: /volume1/docker/alist-tvbox)
+
+${CYAN}更多信息:${NC}
+  帮助文档: doc/README_zh.md    日志: docker logs -f <容器名>
+EOF
+  )"
+}
+
 main() {
   if [ $# -eq 0 ]; then
     interactive_mode
-  else
-    cli_mode "$@"
+    return
   fi
+  case "$1" in
+    -h|--help|help) show_help ;;
+    *) cli_mode "$@" ;;
+  esac
 }
 
 if [[ "${ALIST_TVBOX_SOURCE_ONLY:-}" != "1" ]]; then
