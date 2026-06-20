@@ -24,13 +24,16 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/settings")
 public class SettingController {
+    private static final DateTimeFormatter BACKUP_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss");
+
     private final SettingService service;
     private final GitHubProxyService gitHubProxyService;
 
@@ -68,14 +71,14 @@ public class SettingController {
 
     @GetMapping("/export")
     public FileSystemResource exportDatabase(HttpServletResponse response) throws IOException {
-        response.addHeader("Content-Disposition", "attachment; filename=\"database-" + LocalDate.now() + ".zip\"");
+        response.addHeader("Content-Disposition", "attachment; filename=\"database-" + LocalDateTime.now().format(BACKUP_FMT) + ".zip\"");
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
         return service.exportDatabase();
     }
 
     @GetMapping("/export-json")
     public FileSystemResource exportJsonDatabase(HttpServletResponse response) throws Exception {
-        response.addHeader("Content-Disposition", "attachment; filename=\"database-json-" + LocalDate.now() + ".zip\"");
+        response.addHeader("Content-Disposition", "attachment; filename=\"database-json-" + LocalDateTime.now().format(BACKUP_FMT) + ".zip\"");
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
         return service.exportJsonDatabase();
     }
