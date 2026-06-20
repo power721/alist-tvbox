@@ -1815,13 +1815,13 @@ restore_database() {
   local backup_dir="${CONFIG[BASE_DIR]}/backup"
 
   echo -e "${CYAN}=============================================${NC}"
-  echo -e "${GREEN}          数据库恢复          ${NC}"
+  echo -e "${GREEN}          数据库恢复 (JSON 优先)          ${NC}"
   echo -e "${CYAN}=============================================${NC}"
 
   # 检查备份目录是否存在
   if [[ ! -d "$backup_dir" ]]; then
     echo -e "${YELLOW}备份目录不存在: $backup_dir${NC}"
-    echo -e "${YELLOW}提示: 系统会在每天6点自动备份数据库到此目录${NC}"
+    echo -e "${YELLOW}提示: 系统每天自动备份 (SQL 06:00 / JSON 06:30) 到此目录${NC}"
     read -n 1 -s -r -p "按任意键继续..."
     return
   fi
@@ -1834,79 +1834,63 @@ restore_database() {
 
   if [[ ${#backups[@]} -eq 0 ]]; then
     echo -e "${YELLOW}未找到备份文件${NC}"
-    echo -e "${YELLOW}提示: 备份文件应为 .zip 格式，保存在 $backup_dir 目录${NC}"
+    echo -e "${YELLOW}提示: 备份文件为 .zip 格式，保存在 $backup_dir 目录${NC}"
     read -n 1 -s -r -p "按任意键继续..."
     return
   fi
 
-  echo -e "${YELLOW}可用的备份文件:${NC}\n"
+  # 探测每个备份类型，构造显示顺序：JSON 在前（优先），SQL 在后。
+  # 用 order+= 条件追加而非展开可能为空的数组，规避 NAS bash 4.3 下 set -u 的 unbound variable。
+  local types=()
+  local order=()
+  local i
   for i in "${!backups[@]}"; do
+    types[$i]="$(detect_backup_type "${backups[$i]}")"
+  done
+  for i in "${!backups[@]}"; do
+    [[ "${types[$i]}" == "JSON" ]] && order+=("$i")
+  done
+  for i in "${!backups[@]}"; do
+    [[ "${types[$i]}" == "SQL" ]] && order+=("$i")
+  done
+
+  echo -e "${YELLOW}可用的备份文件 (JSON 优先):${NC}\n"
+  local n=0
+  for i in "${order[@]}"; do
+    n=$((n+1))
     local file="${backups[$i]}"
     local filename=$(basename "$file")
     local filesize=$(ls -lh "$file" | awk '{print $5}')
     local filetime=$(ls -l --time-style='+%Y-%m-%d %H:%M:%S' "$file" | awk '{print $6, $7}')
-    echo -e " $((i+1)). ${GREEN}${filename}${NC}"
+    echo -e " $n. [${types[$i]}] ${GREEN}${filename}${NC}"
     echo -e "    大小: ${filesize}  时间: ${filetime}"
     echo ""
   done
 
   echo -e " 0. 取消"
   echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请选择要恢复的备份 [0-${#backups[@]}]: " choice
+  read -p "请选择要恢复的备份 [0-${#order[@]}]: " choice
 
   # 验证输入
   if [[ "$choice" == "0" ]]; then
     return
   fi
 
-  if ! [[ "$choice" =~ ^[0-9]+$ ]] || [[ "$choice" -lt 1 ]] || [[ "$choice" -gt ${#backups[@]} ]]; then
+  if ! [[ "$choice" =~ ^[0-9]+$ ]] || [[ "$choice" -lt 1 ]] || [[ "$choice" -gt ${#order[@]} ]]; then
     echo -e "${RED}无效选择!${NC}"
     sleep 2
     return
   fi
 
-  local selected_backup="${backups[$((choice-1))]}"
-  local backup_name=$(basename "$selected_backup")
+  local sel="${order[$((choice-1))]}"
+  local selected_backup="${backups[$sel]}"
+  local kind="${types[$sel]}"
 
-  echo -e "\n${RED}警告: 恢复操作将覆盖当前数据库!${NC}"
-  read -p "确认恢复备份 ${backup_name}? [y/N] " confirm
-
-  case "$confirm" in
-    [Yy]*)
-      echo -e "${CYAN}正在恢复数据库...${NC}"
-
-      # 1. 复制备份文件到 database.zip
-      if ! cp "$selected_backup" "${CONFIG[BASE_DIR]}/database.zip" 2>/dev/null; then
-        echo -e "${RED}复制备份文件失败 (权限不足)${NC}"
-        read -n 1 -s -r -p "按任意键继续..."
-        return
-      fi
-      echo -e "${GREEN}✓ 备份文件已复制${NC}"
-
-      # 2. 删除现有数据库文件
-      rm -f "${CONFIG[BASE_DIR]}/atv.mv.db" 2>/dev/null && echo -e "${GREEN}✓ 已删除 atv.mv.db${NC}"
-      rm -f "${CONFIG[BASE_DIR]}/atv.trace.db" 2>/dev/null && echo -e "${GREEN}✓ 已删除 atv.trace.db${NC}"
-
-      # 3. 重启容器
-      local container_name=$(get_container_name)
-      if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
-        echo -e "${YELLOW}正在重启容器...${NC}"
-        if docker restart "$container_name" >/dev/null 2>&1; then
-          echo -e "${GREEN}✓ 容器已重启${NC}"
-          echo -e "\n${GREEN}数据库恢复完成!${NC}"
-          echo -e "${YELLOW}提示: 容器正在初始化，请稍等片刻后访问管理界面${NC}"
-        else
-          echo -e "${RED}容器重启失败${NC}"
-        fi
-      else
-        echo -e "${YELLOW}容器不存在，数据库文件已准备就绪${NC}"
-        echo -e "${YELLOW}请通过菜单 '1. 安装/更新' 启动容器${NC}"
-      fi
-      ;;
-    *)
-      echo -e "${YELLOW}已取消恢复${NC}"
-      ;;
-  esac
+  if [[ "$kind" == "JSON" ]]; then
+    restore_json_backup "$selected_backup"
+  else
+    restore_sql_backup "$selected_backup"
+  fi
 
   read -n 1 -s -r -p "按任意键继续..."
 }
