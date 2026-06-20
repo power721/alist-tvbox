@@ -365,6 +365,59 @@ save_config() {
   chmod 600 "$CONFIG_FILE"
 }
 
+# 配置主应用数据库（H2/MySQL/PostgreSQL）。写入 CONFIG_FILE，下次安装/重建容器时生效。
+config_db() {
+  echo -e "${CYAN}=== 配置主应用数据库 ===${NC}"
+  echo "当前: ${CONFIG[DB_TYPE]:-H2（默认）}"
+  echo "1) H2（内置默认，清空外部数据库配置）"
+  echo "2) MySQL"
+  echo "3) PostgreSQL"
+  read -rp "请选择 [1-3]: " db_choice
+
+  case "$db_choice" in
+    1)
+      unset 'CONFIG[DB_TYPE]';      unset 'CONFIG[DB_JDBC_URL]'
+      unset 'CONFIG[DB_USERNAME]';  unset 'CONFIG[DB_PASSWORD]'
+      unset 'CONFIG[DB_DRIVER]';    unset 'CONFIG[DB_DIALECT]'
+      save_config
+      echo -e "${GREEN}已切换回 H2 默认。重新安装/更新容器后生效。${NC}"
+      ;;
+    2|3)
+      if [[ "$db_choice" == "2" ]]; then
+        CONFIG[DB_TYPE]="mysql"
+        CONFIG[DB_DRIVER]="com.mysql.cj.jdbc.Driver"
+        CONFIG[DB_DIALECT]="org.hibernate.dialect.MySQL8Dialect"
+        local default_url="jdbc:mysql://localhost:3306/alist_tvbox"
+      else
+        CONFIG[DB_TYPE]="postgresql"
+        CONFIG[DB_DRIVER]="org.postgresql.Driver"
+        CONFIG[DB_DIALECT]="org.hibernate.dialect.PostgreSQLDialect"
+        local default_url="jdbc:postgresql://localhost:5432/alist_tvbox"
+      fi
+      read -rp "JDBC URL [$default_url]: " jdbc_url
+      read -rp "用户名 [atv]: " username
+      read -rsp "密码: " password; echo
+      CONFIG[DB_JDBC_URL]="${jdbc_url:-$default_url}"
+      CONFIG[DB_USERNAME]="${username:-atv}"
+      CONFIG[DB_PASSWORD]="$password"
+      save_config
+      echo -e "${GREEN}已保存 ${CONFIG[DB_TYPE]} 配置。执行安装/更新（菜单 1）或 '${0##*/} config-db apply' 重建容器后生效。${NC}"
+      ;;
+    *)
+      echo -e "${RED}无效选择${NC}"; return 1 ;;
+  esac
+}
+
+# 用当前 CONFIG 中的数据库配置重建容器（停止+删除+start_container）。
+config_db_apply() {
+  local container_name=$(get_container_name)
+  echo -e "${CYAN}使用新数据库配置重建容器 $container_name ...${NC}"
+  docker stop "$container_name" 2>/dev/null || true
+  docker rm "$container_name" 2>/dev/null || true
+  start_container
+  show_access_info
+}
+
 # Get container name
 get_container_name() {
   case "${CONFIG[IMAGE_NAME]}" in
@@ -506,6 +559,16 @@ start_container() {
     -v "${CONFIG[BASE_DIR]}/www-static":/www/static
     --restart="${CONFIG[RESTART]}"
   )
+
+  # 主应用数据库覆盖（config-db 子命令写入）。未配置时走镜像内置的 H2 默认。
+  if [[ -n "${CONFIG[DB_TYPE]:-}" ]]; then
+    run_args+=("-e" "SPRING_DATASOURCE_JDBC-URL=${CONFIG[DB_JDBC_URL]}")
+    run_args+=("-e" "SPRING_DATASOURCE_USERNAME=${CONFIG[DB_USERNAME]}")
+    run_args+=("-e" "SPRING_DATASOURCE_PASSWORD=${CONFIG[DB_PASSWORD]}")
+    run_args+=("-e" "SPRING_DATASOURCE_DRIVER-CLASS-NAME=${CONFIG[DB_DRIVER]}")
+    run_args+=("-e" "SPRING_JPA_DATABASE-PLATFORM=${CONFIG[DB_DIALECT]}")
+    run_args+=("-e" "SPRING_PROFILES_ACTIVE=${CONFIG[DB_TYPE]}")
+  fi
 
   if [[ "${CONFIG[IMAGE_NAME]}" == *"alist-tvbox"* ]]; then
     aList_port=5244
@@ -2973,9 +3036,15 @@ cli_mode() {
     menu)
       interactive_mode
       ;;
+    config-db)
+      case "${2:-}" in
+        apply) config_db_apply ;;
+        *)     config_db ;;
+      esac
+      ;;
     *)
       echo -e "${RED}未知命令: $1${NC}"
-      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, health, repair, menu, help"
+      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, health, repair, menu, config-db, migrate-db, help"
       exit 1
       ;;
   esac
@@ -3002,6 +3071,7 @@ ${CYAN}命令行命令:${NC}
   uninstall  卸载容器（uninstall -f 同时删除数据目录）
   health     健康检查
   repair     自动修复诊断
+  config-db  配置/切换主应用数据库 (H2/MySQL/PostgreSQL)；config-db apply 用新配置重建容器
   menu        进入交互式菜单
   help        显示本帮助
 
