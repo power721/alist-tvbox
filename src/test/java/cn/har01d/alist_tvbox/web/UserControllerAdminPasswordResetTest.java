@@ -50,7 +50,8 @@ class UserControllerAdminPasswordResetTest {
         UserService userService = new UserService(userRepository, sessionRepository, passwordEncoder, tokenService,
             new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-json.zip"),
             jdbcTemplate);
-        userController = new UserController(userService, passwordEncoder);
+        userController = new UserController(userService, passwordEncoder,
+            org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.SettingService.class));
     }
 
     @AfterEach
