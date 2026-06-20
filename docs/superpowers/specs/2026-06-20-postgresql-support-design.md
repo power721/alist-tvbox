@@ -153,10 +153,24 @@ Mechanism: reuse the existing modular JSON backup/restore (JPA-backed, cross-dat
 
 Deliverables (lightweight, no new dump format):
 
-- A CLI subcommand `migrate-db` that orchestrates export → switch → import and verifies row counts per module. Built on the recently-shipped script/help command system.
-- A migration guide under `docs/`.
+- A user-facing migration tool exposed as a `migrate-db` subcommand of `scripts/alist-tvbox.sh` (per maintainer preference: script-based, not a new in-app CLI). Two operations, both reusing existing infrastructure:
+  - `migrate-db export` — reads `/data/atv/backup_token`, calls the existing token-guarded `POST /api/local/backup?format=json` endpoint, saves `database-json.zip`. Run against the **source** (H2/MySQL) instance.
+  - `migrate-db import <zip>` — copies the zip to the startup-restore path (`/data/database-json.zip`, i.e. `app.backup.json-restore-path`), restarts the service; `StartupJsonRestoreRunner` restores on the next boot. Run on the **target** PostgreSQL instance.
+- A migration guide under `docs/` covering the end-to-end procedure and caveats.
 
-**Key verification:** explicit-id preservation for the three IDENTITY tables (`account`, `session`, `user`) under PostgreSQL. `BY DEFAULT AS IDENTITY` makes this possible at the DDL level; the restore path's id-write logic for IDENTITY columns must be confirmed (relates to the prior Hibernate id-preservation findings).
+A UI wizard is a possible future enhancement but is intentionally out of scope here: the script approach fits the existing single-DB-per-instance + startup-restore architecture with far less risk than a dual-DataSource in-app feature.
+
+**Key verification:** explicit-id preservation for the three IDENTITY tables (`account`, `session`, `user`) under PostgreSQL. `BY DEFAULT AS IDENTITY` permits explicit-id inserts at the DDL level; the existing restore path (`BackupModuleHandler.restoreIdentity`) already upserts by business key and `DatabaseBackupService` calls `userService.ensureAdminOccupiesIdOne()` to re-establish the admin=1 invariant. This is confirmed by code inspection — the migration tool reuses it unchanged.
+
+## Phase 3b — DB Switching Tool (`config-db`)
+
+Per maintainer direction, users must be able to change the main app DB JDBC URL without redeploying. Delivered as a `config-db` subcommand of `scripts/alist-tvbox.sh` (script-based, not UI; main app DB only — the embedded AList DB keeps its `config.json` mechanism).
+
+- `config-db` (interactive) — choose H2 / MySQL / PostgreSQL, enter JDBC URL + username + password. Persists `DB_TYPE`, `DB_JDBC_URL`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DRIVER`, `DB_DIALECT` into the script's existing `CONFIG_FILE`.
+- `config-db apply` — stops/removes/recreates the container so `start_container` injects the saved values as env (`SPRING_DATASOURCE_JDBC-URL`, `...USERNAME`, `...PASSWORD`, `...DRIVER-CLASS-NAME`, `SPRING_JPA_DATABASE-PLATFORM`, and `SPRING_PROFILES_ACTIVE=<type>`, which adds the `postgresql`/`mysql` profile to the image CMD's defaults).
+- Choosing H2 unsets the keys → the container reverts to the image's built-in H2 default.
+
+The `start_container` `run_args` array is extended to emit these `-e` entries only when `DB_TYPE` is set, so existing H2 deployments that never run `config-db` are untouched.
 
 ## Phase 4 — Native Image Verification
 
