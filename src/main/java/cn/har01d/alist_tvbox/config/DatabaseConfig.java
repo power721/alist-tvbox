@@ -65,6 +65,15 @@ public class DatabaseConfig {
                     .password(database.get("password").asText())
                     .driverClassName("com.mysql.cj.jdbc.Driver")
                     .build();
+        } else if ("postgres".equals(type) || "postgresql".equals(type)) {
+            String url = generatePostgresJdbcUrl(database);
+            log.info("===> AList use postgresql database url: {}", url);
+            return DataSourceBuilder.create()
+                    .url(url)
+                    .username(database.get("user").asText())
+                    .password(database.get("password").asText())
+                    .driverClassName("org.postgresql.Driver")
+                    .build();
         } else {
             throw new IllegalArgumentException("unknown database type: " + type);
         }
