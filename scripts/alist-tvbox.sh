@@ -1745,6 +1745,71 @@ detect_backup_type() {
   fi
 }
 
+# SQL 备份恢复：复制到 database.zip，删除 mv.db，重启容器（init.sh 执行 RunScript）
+restore_sql_backup() {
+  local selected_backup="$1"
+  local backup_name
+  backup_name="$(basename "$selected_backup")"
+  echo -e "${RED}警告: 将以 SQL 方式覆盖当前数据库!${NC}"
+  read -p "确认恢复 ${backup_name}? [y/N] " confirm
+  case "$confirm" in
+    [Yy]*)
+      echo -e "${CYAN}正在恢复数据库 (SQL)...${NC}"
+      if ! cp "$selected_backup" "${CONFIG[BASE_DIR]}/database.zip" 2>/dev/null; then
+        echo -e "${RED}复制备份文件失败 (权限不足)${NC}"
+        return 1
+      fi
+      echo -e "${GREEN}✓ 备份文件已复制${NC}"
+      rm -f "${CONFIG[BASE_DIR]}/atv.mv.db" 2>/dev/null && echo -e "${GREEN}✓ 已删除 atv.mv.db${NC}"
+      rm -f "${CONFIG[BASE_DIR]}/atv.trace.db" 2>/dev/null && echo -e "${GREEN}✓ 已删除 atv.trace.db${NC}"
+      local container_name
+      container_name="$(get_container_name)"
+      if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+        echo -e "${YELLOW}正在重启容器...${NC}"
+        docker restart "$container_name" >/dev/null 2>&1 && echo -e "${GREEN}✓ 容器已重启${NC}" || echo -e "${RED}容器重启失败${NC}"
+      else
+        echo -e "${YELLOW}容器不存在，请通过菜单 '1. 安装/更新' 启动容器${NC}"
+      fi
+      ;;
+    *)
+      echo -e "${YELLOW}已取消恢复${NC}"
+      ;;
+  esac
+}
+
+# JSON 备份恢复：复制到 database-json.zip，重启容器（StartupJsonRestoreRunner OVERWRITE + exit 85 干净重启）
+# 不删除 atv.mv.db：JSON 恢复通过 JPA 原地覆盖，init.sh 检测到 database-json.zip 时会跳过 SQL 恢复
+restore_json_backup() {
+  local selected_backup="$1"
+  local backup_name
+  backup_name="$(basename "$selected_backup")"
+  echo -e "${RED}警告: 将以 JSON 方式覆盖恢复当前数据库 (OVERWRITE)!${NC}"
+  read -p "确认恢复 ${backup_name}? [y/N] " confirm
+  case "$confirm" in
+    [Yy]*)
+      echo -e "${CYAN}正在恢复数据库 (JSON)...${NC}"
+      if ! cp "$selected_backup" "${CONFIG[BASE_DIR]}/database-json.zip" 2>/dev/null; then
+        echo -e "${RED}复制备份文件失败 (权限不足)${NC}"
+        return 1
+      fi
+      echo -e "${GREEN}✓ 备份文件已复制${NC}"
+      local container_name
+      container_name="$(get_container_name)"
+      if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}\$"; then
+        echo -e "${YELLOW}正在重启容器...${NC}"
+        docker restart "$container_name" >/dev/null 2>&1 && echo -e "${GREEN}✓ 容器已重启${NC}" || echo -e "${RED}容器重启失败${NC}"
+        echo -e "\n${GREEN}JSON 数据库恢复已触发!${NC}"
+        echo -e "${YELLOW}容器将恢复后自动重启一次以加载恢复数据，请稍候${NC}"
+      else
+        echo -e "${YELLOW}容器不存在，请通过菜单 '1. 安装/更新' 启动容器${NC}"
+      fi
+      ;;
+    *)
+      echo -e "${YELLOW}已取消恢复${NC}"
+      ;;
+  esac
+}
+
 # 数据库恢复
 restore_database() {
   local backup_dir="${CONFIG[BASE_DIR]}/backup"
