@@ -39,6 +39,8 @@ class UserControllerAdminPasswordResetTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private TokenService tokenService;
+    @Mock
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     private UserController userController;
 
@@ -46,7 +48,8 @@ class UserControllerAdminPasswordResetTest {
     void setUp() {
         System.setProperty("atv.data.dir", dataDir.toString());
         UserService userService = new UserService(userRepository, sessionRepository, passwordEncoder, tokenService,
-            new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-yaml.zip"));
+            new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-yaml.zip"),
+            jdbcTemplate);
         userController = new UserController(userService, passwordEncoder);
     }
 

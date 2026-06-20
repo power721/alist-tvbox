@@ -7,6 +7,7 @@ import cn.har01d.alist_tvbox.dto.backup.BackupRestoreResponse;
 import cn.har01d.alist_tvbox.dto.backup.BackupRestoreResult;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
+import cn.har01d.alist_tvbox.service.UserService;
 import cn.har01d.alist_tvbox.service.backup.BackupModuleHandler.IdStrategy;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.yaml.snakeyaml.LoaderOptions;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -47,24 +49,41 @@ public class DatabaseBackupService {
     private final BackupModuleRegistry registry;
     private final SettingRepository settingRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final UserService userService;
 
     @PersistenceContext
     private EntityManager entityManager;
 
+    // SnakeYAML's default code-point limit (3 MB) is too small once @JsonIgnore TEXT/LONGTEXT blobs
+    // (Plugin.content, ConfigFile.content, Device.config, ...) are included in the export — restoring a
+    // large backup failed with "The incoming YAML document exceeds the limit: 3145728 code points".
+    private static final int YAML_CODE_POINT_LIMIT = 256 * 1024 * 1024;
+
     // JavaTimeModule is mandatory – Instant fields (exportedAt, TmdbMeta.time, ...) fail to
     // serialize without it. Disable timestamps so output matches ISO-8601.
-    private final ObjectMapper yamlMapper = new ObjectMapper(
-        new YAMLFactory().disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER))
-        .registerModule(new JavaTimeModule())
-        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private final ObjectMapper yamlMapper = createYamlMapper();
+
+    private static ObjectMapper createYamlMapper() {
+        LoaderOptions loaderOptions = new LoaderOptions();
+        loaderOptions.setCodePointLimit(YAML_CODE_POINT_LIMIT);
+        YAMLFactory yamlFactory = YAMLFactory.builder()
+            .loaderOptions(loaderOptions)
+            .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
+            .build();
+        return new ObjectMapper(yamlFactory)
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    }
 
     public DatabaseBackupService(BackupModuleRegistry registry,
                                  SettingRepository settingRepository,
-                                 JdbcTemplate jdbcTemplate) {
+                                 JdbcTemplate jdbcTemplate,
+                                 UserService userService) {
         this.registry = registry;
         this.settingRepository = settingRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.userService = userService;
     }
 
     public BackupManifestDto buildManifest() {
@@ -127,6 +146,11 @@ public class DatabaseBackupService {
             BackupRestoreResult result = handler.restore(module.getItems(), mode);
             response.getResults().put(handler.moduleName(), result);
         }
+
+        // The IDENTITY-backed User id cannot be preserved, so a restored admin may not land on id=1.
+        // Re-establish the id=1 invariant inside this transaction before restart so init() does not
+        // re-create the admin on every boot.
+        userService.ensureAdminOccupiesIdOne();
 
         // Flush inserts so the JDBC max(id) scan in rebuildIdGenerator sees the restored rows.
         entityManager.flush();

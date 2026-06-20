@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Static registration of every backup module: repository binding, export/restore order, id
@@ -72,8 +73,8 @@ public class BackupModuleRegistry {
         add("panAccounts", "pan_account", PanAccount.class, panAccountRepository, mapper, IdStrategy.TABLE, "id");
         add("pikpakAccounts", "pik_pak_account", PikPakAccount.class, pikPakAccountRepository, mapper, IdStrategy.TABLE, "id");
         add("subscriptions", "subscription", Subscription.class, subscriptionRepository, mapper, IdStrategy.TABLE, "id");
-        add("plugins", "plugin", Plugin.class, pluginRepository, mapper, IdStrategy.TABLE, "id");
-        add("pluginFilters", "plugin_filter", PluginFilter.class, pluginFilterRepository, mapper, IdStrategy.TABLE, "id");
+        add("plugins", "plugin", Plugin.class, pluginRepository, mapper, IdStrategy.TABLE, "id", Set.of("content"));
+        add("pluginFilters", "plugin_filter", PluginFilter.class, pluginFilterRepository, mapper, IdStrategy.TABLE, "id", Set.of("content"));
         add("jellyfins", "jellyfin", Jellyfin.class, jellyfinRepository, mapper, IdStrategy.TABLE, "id");
         add("embys", "emby", Emby.class, embyRepository, mapper, IdStrategy.TABLE, "id");
         add("feinius", "feiniu", Feiniu.class, feiniuRepository, mapper, IdStrategy.TABLE, "id");
@@ -93,7 +94,13 @@ public class BackupModuleRegistry {
     private <T> void add(String moduleName, String tableName, Class<T> entityClass,
                          JpaRepository<T, ?> repository, ObjectMapper mapper,
                          IdStrategy idStrategy, String keyField) {
-        handlers.add(new BackupModuleHandler<>(moduleName, tableName, entityClass, repository, mapper, entityManager, idStrategy, keyField));
+        add(moduleName, tableName, entityClass, repository, mapper, idStrategy, keyField, Set.of());
+    }
+
+    private <T> void add(String moduleName, String tableName, Class<T> entityClass,
+                         JpaRepository<T, ?> repository, ObjectMapper mapper,
+                         IdStrategy idStrategy, String keyField, Set<String> excludedIgnoredFields) {
+        handlers.add(new BackupModuleHandler<>(moduleName, tableName, entityClass, repository, mapper, entityManager, idStrategy, keyField, excludedIgnoredFields));
     }
 
     public List<BackupModuleHandler<?>> orderedHandlers() {

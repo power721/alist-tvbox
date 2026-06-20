@@ -1,7 +1,10 @@
 package cn.har01d.alist_tvbox.service.backup;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
+import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.backup.BackupRestoreMode;
+import cn.har01d.alist_tvbox.entity.ConfigFile;
+import cn.har01d.alist_tvbox.entity.ConfigFileRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.entity.Site;
@@ -41,6 +44,8 @@ class DatabaseBackupServiceIntegrationTest {
     private UserRepository userRepository;
     @Autowired
     private SiteRepository siteRepository;
+    @Autowired
+    private ConfigFileRepository configFileRepository;
     @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
@@ -136,6 +141,61 @@ class DatabaseBackupServiceIntegrationTest {
         assertThat(settingRepository.findById("yaml_merge_added")).isPresent();
         // New TABLE-entity row inserted via the persister with its preserved id.
         assertThat(siteRepository.findById(4242)).isPresent();
+    }
+
+    @Test
+    @Transactional
+    void overwriteRestorePreservesUserPasswordAndKeepsSingleAdminAtIdOne() throws Exception {
+        // Startup seeds the admin at id=1 with a random password; pin a known hash to verify round-trip.
+        User admin = userRepository.findById(1).orElseThrow();
+        String username = admin.getUsername();
+        admin.setPassword("known-hash");
+        admin.setRole(Role.ADMIN);
+        userRepository.save(admin);
+        userRepository.flush();
+
+        File zip = databaseBackupService.exportBackupZip();
+
+        // Fix A: the @JsonIgnore password must actually be present in the exported YAML.
+        try (ZipFile zf = new ZipFile(zip)) {
+            String yaml = new String(zf.getInputStream(zf.getEntry("database.yaml")).readAllBytes(),
+                StandardCharsets.UTF_8);
+            assertThat(yaml).contains("known-hash");
+        }
+
+        databaseBackupService.restoreBackupZip(zip, BackupRestoreMode.OVERWRITE);
+
+        // Password round-tripped (Fix A) and exactly one admin survives at id=1 (Fix B).
+        User restored = userRepository.findByUsername(username);
+        assertThat(restored).isNotNull();
+        assertThat(restored.getPassword()).isEqualTo("known-hash");
+        assertThat(userRepository.findById(1)).isPresent();
+        assertThat(userRepository.findById(1).get().getRole()).isEqualTo(Role.ADMIN);
+    }
+
+    @Test
+    @Transactional
+    void overwriteRestoreHandlesContentExceedingSnakeYamlDefaultLimit() throws Exception {
+        // A 4 MB @JsonIgnore content blob makes the exported YAML exceed SnakeYAML's 3 MB default
+        // code-point limit; restore must not throw "exceeds the limit: 3145728 code points".
+        char[] chars = new char[4 * 1024 * 1024];
+        java.util.Arrays.fill(chars, 'x');
+        String largeContent = new String(chars);
+
+        ConfigFile file = new ConfigFile();
+        file.setPath("config/large.json");
+        file.setName("large.json");
+        file.setDir("config");
+        file.setContent(largeContent);
+        configFileRepository.save(file);
+        configFileRepository.flush();
+
+        File zip = databaseBackupService.exportBackupZip();
+        databaseBackupService.restoreBackupZip(zip, BackupRestoreMode.OVERWRITE);
+
+        ConfigFile restored = configFileRepository.findByPath("config/large.json");
+        assertThat(restored).isNotNull();
+        assertThat(restored.getContent()).isEqualTo(largeContent);
     }
 
     private File createZip(String yaml) throws Exception {

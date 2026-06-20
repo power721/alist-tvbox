@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service.backup;
 
 import cn.har01d.alist_tvbox.dto.backup.BackupRestoreMode;
 import cn.har01d.alist_tvbox.dto.backup.BackupRestoreResult;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
@@ -9,6 +10,9 @@ import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.persister.entity.EntityPersister;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -43,6 +47,19 @@ public class BackupModuleHandler<T> {
     private final EntityManager entityManager;
     private final IdStrategy idStrategy;
     private final String keyField;
+    /**
+     * Instance fields annotated {@link JsonIgnore} (e.g. {@code User.password}, {@code ConfigFile.content}).
+     * Jackson drops them from {@code convertValue} on both serialization and deserialization, so they must
+     * be copied in/out manually for the backup to round-trip. Computed once per entity class, minus any
+     * names in {@link #excludedIgnoredFields}.
+     */
+    private final List<Field> ignoredFields;
+    /**
+     * Names of {@code @JsonIgnore} fields to skip on export/restore (e.g. {@code Plugin.content} and
+     * {@code PluginFilter.content}, which are re-downloaded from the public internet and should not bloat
+     * the backup).
+     */
+    private final Set<String> excludedIgnoredFields;
 
     public BackupModuleHandler(String moduleName,
                                String tableName,
@@ -52,6 +69,18 @@ public class BackupModuleHandler<T> {
                                EntityManager entityManager,
                                IdStrategy idStrategy,
                                String keyField) {
+        this(moduleName, tableName, entityClass, repository, objectMapper, entityManager, idStrategy, keyField, Set.of());
+    }
+
+    public BackupModuleHandler(String moduleName,
+                               String tableName,
+                               Class<T> entityClass,
+                               JpaRepository<T, ?> repository,
+                               ObjectMapper objectMapper,
+                               EntityManager entityManager,
+                               IdStrategy idStrategy,
+                               String keyField,
+                               Set<String> excludedIgnoredFields) {
         this.moduleName = moduleName;
         this.tableName = tableName;
         this.entityClass = entityClass;
@@ -60,6 +89,26 @@ public class BackupModuleHandler<T> {
         this.entityManager = entityManager;
         this.idStrategy = idStrategy;
         this.keyField = keyField;
+        this.excludedIgnoredFields = excludedIgnoredFields;
+        this.ignoredFields = collectIgnoredFields(entityClass, excludedIgnoredFields);
+    }
+
+    private static List<Field> collectIgnoredFields(Class<?> clazz, Set<String> excluded) {
+        List<Field> fields = new ArrayList<>();
+        for (Field field : clazz.getDeclaredFields()) {
+            int mods = field.getModifiers();
+            if (Modifier.isStatic(mods) || Modifier.isFinal(mods)) {
+                continue;
+            }
+            if (excluded.contains(field.getName())) {
+                continue;
+            }
+            if (field.isAnnotationPresent(JsonIgnore.class)) {
+                field.setAccessible(true);
+                fields.add(field);
+            }
+        }
+        return fields;
     }
 
     public String moduleName() {
@@ -80,7 +129,19 @@ public class BackupModuleHandler<T> {
 
     public List<Map<String, Object>> exportItems() {
         return repository.findAll().stream()
-            .map(e -> objectMapper.convertValue(e, MAP_TYPE))
+            .map(e -> {
+                Map<String, Object> map = objectMapper.convertValue(e, MAP_TYPE);
+                // @JsonIgnore fields are absent from convertValue's output; copy their raw values in
+                // (including null) so the backup is self-contained (e.g. User.password).
+                for (Field field : ignoredFields) {
+                    try {
+                        map.put(field.getName(), field.get(e));
+                    } catch (IllegalAccessException ex) {
+                        throw new IllegalStateException("Failed to read ignored field " + field.getName(), ex);
+                    }
+                }
+                return map;
+            })
             .collect(Collectors.toList());
     }
 
@@ -214,7 +275,20 @@ public class BackupModuleHandler<T> {
     }
 
     private T toEntity(Map<String, Object> item) {
-        return objectMapper.convertValue(item, entityClass);
+        T entity = objectMapper.convertValue(item, entityClass);
+        // convertValue honors @JsonIgnore on the way in too, so the ignored fields (password, content,
+        // ...) must be set explicitly from the map after conversion.
+        for (Field field : ignoredFields) {
+            if (!item.containsKey(field.getName())) {
+                continue;
+            }
+            try {
+                field.set(entity, item.get(field.getName()));
+            } catch (IllegalAccessException ex) {
+                throw new IllegalStateException("Failed to set ignored field " + field.getName(), ex);
+            }
+        }
+        return entity;
     }
 
     private static long asLong(Object value) {

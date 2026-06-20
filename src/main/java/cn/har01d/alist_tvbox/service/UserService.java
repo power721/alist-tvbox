@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -39,6 +40,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final RestoreState restoreState;
+    private final JdbcTemplate jdbcTemplate;
 
     private final Set<String> usernames = new HashSet<>();
 
@@ -48,6 +50,7 @@ public class UserService {
             log.info("Skip user initialization during startup YAML restore");
             return;
         }
+        ensureAdminOccupiesIdOne();
         try {
             initializeAdminUser();
         } catch (Exception e) {
@@ -57,6 +60,29 @@ public class UserService {
 
         fixUserRole();
         loadUsernames();
+    }
+
+    /**
+     * Guarantee the admin occupies id=1. The IDENTITY-backed {@link User} id cannot be preserved across a
+     * YAML restore (the handler falls back to DB auto-increment), so a restored admin may land at id≠1.
+     * {@code initializeAdminUser}/{@code resetAdminPassword}/{@code delete} all key on id=1, and a missing
+     * id=1 makes {@code createNewAdmin()} fire every boot — silently producing duplicate {@code admin}
+     * rows (no unique constraint) that crash {@code findByUsername} on login. If id=1 is empty but an
+     * ADMIN exists elsewhere, move the lowest-id admin into id=1 via native SQL. Idempotent; no-op on a
+     * fresh DB (no admin yet — {@code createNewAdmin} then seeds id=1 naturally).
+     */
+    public void ensureAdminOccupiesIdOne() {
+        if (userRepository.findById(1).isPresent()) {
+            return;
+        }
+        userRepository.findFirstByRoleOrderByIdAsc(Role.ADMIN).ifPresent(admin -> {
+            Integer oldId = admin.getId();
+            if (oldId == null || oldId == 1) {
+                return;
+            }
+            log.warn("Moving admin user from id={} to id=1 to restore the id=1 invariant", oldId);
+            jdbcTemplate.update("update x_user set id = 1 where id = ?", oldId);
+        });
     }
 
     private void fixUserRole() {

@@ -16,9 +16,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,8 +28,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +44,8 @@ class UserServiceTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private TokenService tokenService;
+    @Mock
+    private JdbcTemplate jdbcTemplate;
 
     private UserService userService;
 
@@ -47,7 +53,8 @@ class UserServiceTest {
     void setUp() {
         SecurityContextHolder.clearContext();
         userService = new UserService(userRepository, sessionRepository, passwordEncoder, tokenService,
-            new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-yaml.zip"));
+            new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-yaml.zip"),
+            jdbcTemplate);
     }
 
     @Test
@@ -142,5 +149,43 @@ class UserServiceTest {
         assertEquals("encoded-new", user.getPassword());
         assertEquals("token", token.getToken());
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void ensureAdminOccupiesIdOneShouldMoveAdminWhenIdOneEmpty() {
+        User admin = new User();
+        admin.setId(5);
+        admin.setUsername("admin");
+        admin.setRole(Role.ADMIN);
+
+        when(userRepository.findById(1)).thenReturn(Optional.empty());
+        when(userRepository.findFirstByRoleOrderByIdAsc(Role.ADMIN)).thenReturn(Optional.of(admin));
+
+        userService.ensureAdminOccupiesIdOne();
+
+        verify(jdbcTemplate).update(eq("update x_user set id = 1 where id = ?"), eq(5));
+    }
+
+    @Test
+    void ensureAdminOccupiesIdOneShouldNoopWhenIdOneOccupied() {
+        User admin = new User();
+        admin.setId(1);
+        admin.setRole(Role.ADMIN);
+        when(userRepository.findById(1)).thenReturn(Optional.of(admin));
+
+        userService.ensureAdminOccupiesIdOne();
+
+        verify(userRepository, never()).findFirstByRoleOrderByIdAsc(any());
+        verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Test
+    void ensureAdminOccupiesIdOneShouldNoopWhenNoAdminExists() {
+        when(userRepository.findById(1)).thenReturn(Optional.empty());
+        when(userRepository.findFirstByRoleOrderByIdAsc(Role.ADMIN)).thenReturn(Optional.empty());
+
+        userService.ensureAdminOccupiesIdOne();
+
+        verifyNoInteractions(jdbcTemplate);
     }
 }
