@@ -1123,9 +1123,9 @@ public class TelegramService {
                         .toList();
                 searchedChannelCount = remoteSearchService.getSearchChannels(ids).size();
                 results = remoteSearchService.search(keyword, ids);
-            } else if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
-                String search = channels.stream().map(TelegramChannel::getUsername).collect(Collectors.joining(","));
-                results = searchRemote(search, keyword, size);
+            }
+            if (results.isEmpty() && StringUtils.isNotBlank(appProperties.getTgSearch())) {
+                results = searchTgSearchApi(keyword, null, 1, size).messages();
             }
         }
 

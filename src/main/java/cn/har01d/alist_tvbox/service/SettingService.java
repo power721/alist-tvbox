@@ -35,6 +35,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -236,6 +237,28 @@ public class SettingService {
         return null;
     }
 
+    /**
+     * Daily repository-based (database-independent) JSON backup, scheduled alongside the SQL backup.
+     * Unlike {@link #backupDatabase()} this works on MySQL too – it exports through JPA repositories,
+     * not H2's {@code SCRIPT TO}. Archive is written to {@code backup/database-json-<date>.zip} and
+     * pruned by {@link #cleanBackups()}.
+     */
+    @Scheduled(cron = "0 30 6 * * *")
+    public void backupJsonDatabase() {
+        try {
+            File exported = databaseBackupService.exportBackupZip();
+            File out = Utils.getDataPath("backup", "database-json-" + LocalDate.now() + ".zip").toFile();
+            Files.copy(exported.toPath(), out.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            if (!exported.delete()) {
+                exported.deleteOnExit();
+            }
+            log.info("JSON database backup saved to {}", out.getAbsolutePath());
+            cleanBackups();
+        } catch (Exception e) {
+            log.warn("JSON database backup failed", e);
+        }
+    }
+
     private List<String> listTables() {
         return jdbcTemplate.query(
                 "SHOW TABLES",
@@ -250,7 +273,7 @@ public class SettingService {
         for (File file : Utils.listFiles(Utils.getDataPath("backup"), "zip")) {
             if (file.getName().startsWith("database-")) {
                 try {
-                    String name = file.getName().replace("database-", "").replace(".zip", "");
+                    String name = file.getName().replace("database-", "").replace(".zip", "").replace("json-", "");
                     if (DATE_TIME.matcher(name).matches()) {
                         name = name.substring(0, "2026-06-16".length());
                     }
