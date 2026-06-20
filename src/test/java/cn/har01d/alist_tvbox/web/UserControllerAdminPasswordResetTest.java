@@ -48,7 +48,7 @@ class UserControllerAdminPasswordResetTest {
     void setUp() {
         System.setProperty("atv.data.dir", dataDir.toString());
         UserService userService = new UserService(userRepository, sessionRepository, passwordEncoder, tokenService,
-            new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-yaml.zip"),
+            new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-json.zip"),
             jdbcTemplate);
         userController = new UserController(userService, passwordEncoder);
     }

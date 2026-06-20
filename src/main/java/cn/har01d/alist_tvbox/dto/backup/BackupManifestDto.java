@@ -12,5 +12,6 @@ public class BackupManifestDto {
     private String appVersion;
     private Instant exportedAt = Instant.now();
     private String mode = "repository";
-    private Map<String, BackupModuleDto> modules = new LinkedHashMap<>();
+    /** moduleName -> entityName. Metadata only; item data lives in the per-module JSON files. */
+    private Map<String, String> modules = new LinkedHashMap<>();
 }

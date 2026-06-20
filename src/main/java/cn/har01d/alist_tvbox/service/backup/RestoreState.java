@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import java.io.File;
 
 /**
- * Tracks whether a startup YAML restore is pending/running so that initializer services can skip
+ * Tracks whether a startup JSON restore is pending/running so that initializer services can skip
  * default-record creation while a restore package is present.
  * <p>
  * The pending flag is decided in the constructor: every guarded initializer injects this bean, so
@@ -20,7 +20,7 @@ public class RestoreState {
     private volatile boolean startupRestoreRunning;
     private volatile boolean startupRestoreCompleted;
 
-    public RestoreState(@Value("${app.backup.yaml-restore-path:/data/database-yaml.zip}") String startupRestorePath) {
+    public RestoreState(@Value("${app.backup.json-restore-path:/data/database-json.zip}") String startupRestorePath) {
         this.startupRestorePending = new File(startupRestorePath).exists();
     }
 

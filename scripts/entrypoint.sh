@@ -22,12 +22,12 @@ ln -sf /data/log /opt/atv/log
 
 /init.sh 2>&1 | tee /opt/atv/log/init.log 2>&1
 
-# Exit code 85 = startup YAML restore completed; relaunch for a clean boot on restored data.
+# Exit code 85 = startup JSON restore completed; relaunch for a clean boot on restored data.
 while true; do
   /jre/bin/java "$MEM_OPT" -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication "$@"
   code=$?
   if [ "$code" = "85" ]; then
-    echo "=== restart after yaml restore ==="
+    echo "=== restart after json restore ==="
     continue
   fi
   exit $code

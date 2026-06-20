@@ -1,0 +1,6 @@
+# Test profile: isolate @SpringBootTest tests from the real dev database.
+# Profile config merges over the base application.yaml, so only the datasource URL is overridden
+# (in-memory H2). Flyway still runs the real migrations, giving a fresh, hermetic schema per run.
+spring:
+  datasource:
+    jdbc-url: jdbc:h2:mem:atv-test;DB_CLOSE_DELAY=-1

@@ -29,23 +29,23 @@ class SettingControllerBackupTest {
     void setUp() throws Exception {
         settingService = Mockito.mock(SettingService.class);
         File temp = File.createTempFile("backup-", ".zip");
-        Mockito.when(settingService.exportYamlDatabase()).thenReturn(new FileSystemResource(temp));
-        Mockito.when(settingService.importYamlDatabase(any(), eq(BackupRestoreMode.OVERWRITE)))
+        Mockito.when(settingService.exportJsonDatabase()).thenReturn(new FileSystemResource(temp));
+        Mockito.when(settingService.importJsonDatabase(any(), eq(BackupRestoreMode.OVERWRITE)))
             .thenReturn(new BackupRestoreResponse());
         mockMvc = MockMvcBuilders.standaloneSetup(new SettingController(settingService, null)).build();
     }
 
     @Test
-    void shouldDownloadYamlZip() throws Exception {
-        mockMvc.perform(get("/api/settings/export-yaml"))
+    void shouldDownloadJsonZip() throws Exception {
+        mockMvc.perform(get("/api/settings/export-json"))
             .andExpect(status().isOk())
-            .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("database-yaml-")));
+            .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("database-json-")));
     }
 
     @Test
-    void shouldAcceptYamlZipUpload() throws Exception {
-        MockMultipartFile file = new MockMultipartFile("file", "database-yaml.zip", "application/zip", new byte[]{1, 2, 3});
-        mockMvc.perform(multipart("/api/settings/import-yaml")
+    void shouldAcceptJsonZipUpload() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "database-json.zip", "application/zip", new byte[]{1, 2, 3});
+        mockMvc.perform(multipart("/api/settings/import-json")
                 .file(file)
                 .param("mode", "OVERWRITE")
                 .contentType(MediaType.MULTIPART_FORM_DATA))

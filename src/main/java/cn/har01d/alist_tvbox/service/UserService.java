@@ -47,7 +47,7 @@ public class UserService {
     @PostConstruct
     public void init() {
         if (restoreState.shouldSkipInitializationWrites()) {
-            log.info("Skip user initialization during startup YAML restore");
+            log.info("Skip user initialization during startup JSON restore");
             return;
         }
         ensureAdminOccupiesIdOne();
@@ -64,7 +64,7 @@ public class UserService {
 
     /**
      * Guarantee the admin occupies id=1. The IDENTITY-backed {@link User} id cannot be preserved across a
-     * YAML restore (the handler falls back to DB auto-increment), so a restored admin may land at id≠1.
+     * JSON restore (the handler falls back to DB auto-increment), so a restored admin may land at id≠1.
      * {@code initializeAdminUser}/{@code resetAdminPassword}/{@code delete} all key on id=1, and a missing
      * id=1 makes {@code createNewAdmin()} fire every boot — silently producing duplicate {@code admin}
      * rows (no unique constraint) that crash {@code findByUsername} on login. If id=1 is empty but an

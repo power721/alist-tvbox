@@ -175,13 +175,13 @@ public class SettingService {
         return new FileSystemResource(out);
     }
 
-    public FileSystemResource exportYamlDatabase() throws Exception {
+    public FileSystemResource exportJsonDatabase() throws Exception {
         return new FileSystemResource(databaseBackupService.exportBackupZip());
     }
 
-    public BackupRestoreResponse importYamlDatabase(org.springframework.web.multipart.MultipartFile file,
+    public BackupRestoreResponse importJsonDatabase(org.springframework.web.multipart.MultipartFile file,
                                                     BackupRestoreMode mode) throws Exception {
-        Path temp = Files.createTempFile("database-yaml-upload-", ".zip");
+        Path temp = Files.createTempFile("database-json-upload-", ".zip");
         try {
             file.transferTo(temp);
             return databaseBackupService.restoreBackupZip(temp.toFile(), mode);

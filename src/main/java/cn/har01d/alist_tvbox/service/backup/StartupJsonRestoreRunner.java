@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import java.io.File;
 
 /**
- * Performs the actual startup YAML restore from {@code /data/database-yaml.zip}. The restore-pending
+ * Performs the actual startup JSON restore from {@code /data/database-json.zip}. The restore-pending
  * flag is already set by {@link RestoreState}'s constructor, so initializer writes are skipped where
  * guarded. After a successful restore the package is removed and the JVM exits with
  * {@link #RESTART_EXIT_CODE} to request a clean restart, so the next boot re-runs all initializers
@@ -26,8 +26,8 @@ import java.io.File;
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
-public class StartupYamlRestoreRunner implements ApplicationRunner {
-    private static final Logger log = LoggerFactory.getLogger(StartupYamlRestoreRunner.class);
+public class StartupJsonRestoreRunner implements ApplicationRunner {
+    private static final Logger log = LoggerFactory.getLogger(StartupJsonRestoreRunner.class);
 
     /** Exit code understood by entrypoint scripts / systemd to trigger a clean restart. */
     public static final int RESTART_EXIT_CODE = 85;
@@ -36,9 +36,9 @@ public class StartupYamlRestoreRunner implements ApplicationRunner {
     private final RestoreState restoreState;
     private final String startupRestorePath;
 
-    public StartupYamlRestoreRunner(DatabaseBackupService databaseBackupService,
+    public StartupJsonRestoreRunner(DatabaseBackupService databaseBackupService,
                                     RestoreState restoreState,
-                                    @Value("${app.backup.yaml-restore-path:/data/database-yaml.zip}") String startupRestorePath) {
+                                    @Value("${app.backup.json-restore-path:/data/database-json.zip}") String startupRestorePath) {
         this.databaseBackupService = databaseBackupService;
         this.restoreState = restoreState;
         this.startupRestorePath = startupRestorePath;
@@ -50,7 +50,7 @@ public class StartupYamlRestoreRunner implements ApplicationRunner {
         if (!file.exists()) {
             return;
         }
-        log.info("Startup YAML restore package found at {}, restoring...", startupRestorePath);
+        log.info("Startup JSON restore package found at {}, restoring...", startupRestorePath);
         restoreState.markRunning();
         databaseBackupService.restoreBackupZip(file, BackupRestoreMode.OVERWRITE);
         restoreState.markCompleted();
@@ -60,7 +60,7 @@ public class StartupYamlRestoreRunner implements ApplicationRunner {
                 log.warn("Failed to remove or rename restore package {}", startupRestorePath);
             }
         }
-        log.info("Startup YAML restore completed. Restarting (exit {}) for a clean boot on restored data.",
+        log.info("Startup JSON restore completed. Restarting (exit {}) for a clean boot on restored data.",
             RESTART_EXIT_CODE);
         requestRestart();
     }

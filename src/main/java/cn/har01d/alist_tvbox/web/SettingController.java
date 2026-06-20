@@ -73,17 +73,17 @@ public class SettingController {
         return service.exportDatabase();
     }
 
-    @GetMapping("/export-yaml")
-    public FileSystemResource exportYamlDatabase(HttpServletResponse response) throws Exception {
-        response.addHeader("Content-Disposition", "attachment; filename=\"database-yaml-" + LocalDate.now() + ".zip\"");
+    @GetMapping("/export-json")
+    public FileSystemResource exportJsonDatabase(HttpServletResponse response) throws Exception {
+        response.addHeader("Content-Disposition", "attachment; filename=\"database-json-" + LocalDate.now() + ".zip\"");
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
-        return service.exportYamlDatabase();
+        return service.exportJsonDatabase();
     }
 
-    @PostMapping("/import-yaml")
-    public BackupRestoreResponse importYamlDatabase(@RequestParam("file") MultipartFile file,
+    @PostMapping("/import-json")
+    public BackupRestoreResponse importJsonDatabase(@RequestParam("file") MultipartFile file,
                                                     @RequestParam(name = "mode", defaultValue = "OVERWRITE") BackupRestoreMode mode) throws Exception {
-        return service.importYamlDatabase(file, mode);
+        return service.importJsonDatabase(file, mode);
     }
 
     /**

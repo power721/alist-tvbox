@@ -12,18 +12,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-class StartupYamlRestoreRunnerTest {
+class StartupJsonRestoreRunnerTest {
 
     @Test
-    void shouldRestoreDatabaseYamlZipAndRequestRestartWhenPresent() throws Exception {
+    void shouldRestoreDatabaseJsonZipAndRequestRestartWhenPresent() throws Exception {
         DatabaseBackupService backupService = mock(DatabaseBackupService.class);
-        Path tempDir = Files.createTempDirectory("yaml-restore");
-        Path restoreFile = tempDir.resolve("database-yaml.zip");
+        Path tempDir = Files.createTempDirectory("json-restore");
+        Path restoreFile = tempDir.resolve("database-json.zip");
         Files.write(restoreFile, new byte[]{1});
         RestoreState restoreState = new RestoreState(restoreFile.toString());
 
         AtomicBoolean restarted = new AtomicBoolean(false);
-        StartupYamlRestoreRunner runner = new StartupYamlRestoreRunner(backupService, restoreState, restoreFile.toString()) {
+        StartupJsonRestoreRunner runner = new StartupJsonRestoreRunner(backupService, restoreState, restoreFile.toString()) {
             @Override
             protected void requestRestart() {
                 restarted.set(true);
@@ -41,9 +41,9 @@ class StartupYamlRestoreRunnerTest {
     @Test
     void shouldDoNothingWhenNoPackage() throws Exception {
         DatabaseBackupService backupService = mock(DatabaseBackupService.class);
-        RestoreState state = new RestoreState("/data/does-not-exist-database-yaml.zip");
+        RestoreState state = new RestoreState("/data/does-not-exist-database-json.zip");
         AtomicBoolean restarted = new AtomicBoolean(false);
-        StartupYamlRestoreRunner runner = new StartupYamlRestoreRunner(backupService, state, "/data/does-not-exist-database-yaml.zip") {
+        StartupJsonRestoreRunner runner = new StartupJsonRestoreRunner(backupService, state, "/data/does-not-exist-database-json.zip") {
             @Override
             protected void requestRestart() {
                 restarted.set(true);
@@ -57,8 +57,8 @@ class StartupYamlRestoreRunnerTest {
 
     @Test
     void shouldDetectPendingFromConstructor() throws Exception {
-        Path tempDir = Files.createTempDirectory("yaml-guard");
-        Path restoreFile = tempDir.resolve("database-yaml.zip");
+        Path tempDir = Files.createTempDirectory("json-guard");
+        Path restoreFile = tempDir.resolve("database-json.zip");
         Files.write(restoreFile, new byte[]{1});
         RestoreState state = new RestoreState(restoreFile.toString());
         assertThat(state.shouldSkipInitializationWrites()).isTrue();
@@ -66,7 +66,7 @@ class StartupYamlRestoreRunnerTest {
 
     @Test
     void shouldNotSkipWhenNoRestorePackage() {
-        RestoreState state = new RestoreState("/data/does-not-exist-database-yaml.zip");
+        RestoreState state = new RestoreState("/data/does-not-exist-database-json.zip");
         assertThat(state.shouldSkipInitializationWrites()).isFalse();
     }
 }

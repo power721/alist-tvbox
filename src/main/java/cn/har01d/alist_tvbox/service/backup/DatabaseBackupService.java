@@ -9,12 +9,12 @@ import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.service.UserService;
 import cn.har01d.alist_tvbox.service.backup.BackupModuleHandler.IdStrategy;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.slf4j.Logger;
@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.yaml.snakeyaml.LoaderOptions;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -35,16 +34,27 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Repository-based, database-independent backup and restore. Exports included entities to a
- * zip-compressed {@code database.yaml} and restores them through Spring Data repositories. The
- * existing SQL backup ({@code SettingService.exportDatabase}) is left untouched.
+ * Repository-based, database-independent backup and restore. Each included entity is exported as its own
+ * JSON file inside a zip: a lightweight {@code manifest.json} (formatVersion, appVersion, module list)
+ * plus one {@code modules/<name>.json} per table holding {@code {entity, items}}. Restore streams the
+ * zip one module at a time, so peak memory is one table, not the whole backup, and no single document
+ * has to carry the entire dump. The existing SQL backup ({@code SettingService.exportDatabase}) is left
+ * untouched.
  */
 @Service
 public class DatabaseBackupService {
     private static final Logger log = LoggerFactory.getLogger(DatabaseBackupService.class);
 
-    static final String YAML_ENTRY = "database.yaml";
+    static final String MANIFEST_ENTRY = "manifest.json";
+    static final String MODULES_DIR = "modules/";
     private static final int SUPPORTED_FORMAT_VERSION = 1;
+
+    // Jackson caps individual strings at 5 MB and (since 2.16) the whole document at a modest default.
+    // Large @JsonIgnore TEXT/LONGTEXT fields (Device.config, ConfigFile.content, ...) exceed those, so
+    // raise both generously. Per-module files keep each document small, but a single content blob can
+    // still be large.
+    private static final int JSON_MAX_STRING_LEN = 256 * 1024 * 1024;
+    private static final long JSON_MAX_DOCUMENT_LEN = 512L * 1024 * 1024;
 
     private final BackupModuleRegistry registry;
     private final SettingRepository settingRepository;
@@ -54,23 +64,19 @@ public class DatabaseBackupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    // SnakeYAML's default code-point limit (3 MB) is too small once @JsonIgnore TEXT/LONGTEXT blobs
-    // (Plugin.content, ConfigFile.content, Device.config, ...) are included in the export — restoring a
-    // large backup failed with "The incoming YAML document exceeds the limit: 3145728 code points".
-    private static final int YAML_CODE_POINT_LIMIT = 256 * 1024 * 1024;
-
     // JavaTimeModule is mandatory – Instant fields (exportedAt, TmdbMeta.time, ...) fail to
     // serialize without it. Disable timestamps so output matches ISO-8601.
-    private final ObjectMapper yamlMapper = createYamlMapper();
+    private final ObjectMapper jsonMapper = createJsonMapper();
 
-    private static ObjectMapper createYamlMapper() {
-        LoaderOptions loaderOptions = new LoaderOptions();
-        loaderOptions.setCodePointLimit(YAML_CODE_POINT_LIMIT);
-        YAMLFactory yamlFactory = YAMLFactory.builder()
-            .loaderOptions(loaderOptions)
-            .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
+    private static ObjectMapper createJsonMapper() {
+        StreamReadConstraints constraints = StreamReadConstraints.builder()
+            .maxStringLength(JSON_MAX_STRING_LEN)
+            .maxDocumentLength(JSON_MAX_DOCUMENT_LEN)
             .build();
-        return new ObjectMapper(yamlFactory)
+        JsonFactory jsonFactory = JsonFactory.builder()
+            .streamReadConstraints(constraints)
+            .build();
+        return new ObjectMapper(jsonFactory)
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
@@ -86,25 +92,24 @@ public class DatabaseBackupService {
         this.userService = userService;
     }
 
-    public BackupManifestDto buildManifest() {
+    public File exportBackupZip() throws Exception {
         BackupManifestDto manifest = new BackupManifestDto();
         manifest.setAppVersion(settingRepository.findById("app_version").map(Setting::getValue).orElse("unknown"));
-        for (BackupModuleHandler<?> handler : registry.orderedHandlers()) {
-            BackupModuleDto module = new BackupModuleDto();
-            module.setEntity(handler.entityName());
-            module.setItems(handler.exportItems());
-            manifest.getModules().put(handler.moduleName(), module);
-        }
-        return manifest;
-    }
 
-    public File exportBackupZip() throws Exception {
-        BackupManifestDto manifest = buildManifest();
-        byte[] yaml = yamlMapper.writeValueAsString(manifest).getBytes(StandardCharsets.UTF_8);
-        File out = File.createTempFile("database-yaml-" + LocalDate.now() + "-", ".zip");
+        File out = File.createTempFile("database-backup-" + LocalDate.now() + "-", ".zip");
         try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(out))) {
-            zip.putNextEntry(new ZipEntry(YAML_ENTRY));
-            zip.write(yaml);
+            // One JSON file per table keeps each document small and lets restore stream module by module.
+            for (BackupModuleHandler<?> handler : registry.orderedHandlers()) {
+                BackupModuleDto module = new BackupModuleDto();
+                module.setEntity(handler.entityName());
+                module.setItems(handler.exportItems());
+                zip.putNextEntry(new ZipEntry(MODULES_DIR + handler.moduleName() + ".json"));
+                zip.write(jsonMapper.writeValueAsBytes(module));
+                zip.closeEntry();
+                manifest.getModules().put(handler.moduleName(), handler.entityName());
+            }
+            zip.putNextEntry(new ZipEntry(MANIFEST_ENTRY));
+            zip.write(jsonMapper.writeValueAsBytes(manifest));
             zip.closeEntry();
         }
         return out;
@@ -112,65 +117,70 @@ public class DatabaseBackupService {
 
     @Transactional
     public BackupRestoreResponse restoreBackupZip(File zipFile, BackupRestoreMode mode) throws Exception {
-        BackupManifestDto manifest = readManifest(zipFile);
-        if (manifest.getFormatVersion() > SUPPORTED_FORMAT_VERSION) {
-            throw new IllegalArgumentException("Unsupported backup formatVersion: " + manifest.getFormatVersion());
-        }
+        try (ZipFile zip = new ZipFile(zipFile)) {
+            BackupManifestDto manifest = readManifest(zip);
+            if (manifest.getFormatVersion() > SUPPORTED_FORMAT_VERSION) {
+                throw new IllegalArgumentException("Unsupported backup formatVersion: " + manifest.getFormatVersion());
+            }
 
-        BackupRestoreResponse response = new BackupRestoreResponse();
-        response.setSuccess(true);
+            BackupRestoreResponse response = new BackupRestoreResponse();
+            response.setSuccess(true);
 
-        List<BackupModuleHandler<?>> handlers = registry.orderedHandlers();
+            List<BackupModuleHandler<?>> handlers = registry.orderedHandlers();
 
-        if (mode == BackupRestoreMode.OVERWRITE) {
-            // Delete non-IDENTITY entities in reverse dependency order via raw SQL so the rows are
-            // gone from the DB immediately (within the transaction). IDENTITY entities are NOT
-            // deleted here: their handler upserts by id and removes missing rows, preserving
-            // existing ids (e.g. admin user = 1) without DDL that would break this transaction.
-            for (int i = handlers.size() - 1; i >= 0; i--) {
-                BackupModuleHandler<?> handler = handlers.get(i);
-                if (handler.idStrategy() != IdStrategy.IDENTITY) {
-                    jdbcTemplate.update("delete from " + handler.tableName());
+            if (mode == BackupRestoreMode.OVERWRITE) {
+                // Delete non-IDENTITY entities in reverse dependency order via raw SQL so the rows are
+                // gone from the DB immediately (within the transaction). IDENTITY entities are NOT
+                // deleted here: their handler upserts by id and removes missing rows, preserving
+                // existing ids (e.g. admin user = 1) without DDL that would break this transaction.
+                for (int i = handlers.size() - 1; i >= 0; i--) {
+                    BackupModuleHandler<?> handler = handlers.get(i);
+                    if (handler.idStrategy() != IdStrategy.IDENTITY) {
+                        jdbcTemplate.update("delete from " + handler.tableName());
+                    }
                 }
+                // Drop any managed (pre-loaded) instances so the subsequent inserts, which reuse the
+                // same ids, do not resolve to stale UPDATEs against the now-deleted rows.
+                entityManager.clear();
             }
-            // Drop any managed (pre-loaded) instances so the subsequent inserts, which reuse the
-            // same ids, do not resolve to stale UPDATEs against the now-deleted rows.
-            entityManager.clear();
-        }
 
-        for (BackupModuleHandler<?> handler : handlers) {
-            BackupModuleDto module = manifest.getModules().get(handler.moduleName());
-            if (module == null) {
-                continue;
+            // Stream one module file at a time: read it, restore it, let it be GC'd before the next.
+            for (BackupModuleHandler<?> handler : handlers) {
+                ZipEntry entry = zip.getEntry(MODULES_DIR + handler.moduleName() + ".json");
+                if (entry == null) {
+                    continue;
+                }
+                BackupModuleDto module;
+                try (InputStream in = zip.getInputStream(entry)) {
+                    module = jsonMapper.readValue(in, BackupModuleDto.class);
+                }
+                BackupRestoreResult result = handler.restore(module.getItems(), mode);
+                response.getResults().put(handler.moduleName(), result);
             }
-            BackupRestoreResult result = handler.restore(module.getItems(), mode);
-            response.getResults().put(handler.moduleName(), result);
+
+            // The IDENTITY-backed User id cannot be preserved, so a restored admin may not land on id=1.
+            // Re-establish the id=1 invariant inside this transaction before restart so init() does not
+            // re-create the admin on every boot.
+            userService.ensureAdminOccupiesIdOne();
+
+            // Flush inserts so the JDBC max(id) scan in rebuildIdGenerator sees the restored rows.
+            entityManager.flush();
+            rebuildIdGenerator();
+            return response;
         }
-
-        // The IDENTITY-backed User id cannot be preserved, so a restored admin may not land on id=1.
-        // Re-establish the id=1 invariant inside this transaction before restart so init() does not
-        // re-create the admin on every boot.
-        userService.ensureAdminOccupiesIdOne();
-
-        // Flush inserts so the JDBC max(id) scan in rebuildIdGenerator sees the restored rows.
-        entityManager.flush();
-        rebuildIdGenerator();
-        return response;
     }
 
-    private BackupManifestDto readManifest(File zipFile) throws Exception {
-        try (ZipFile file = new ZipFile(zipFile)) {
-            ZipEntry entry = file.getEntry(YAML_ENTRY);
-            if (entry == null) {
-                throw new IllegalArgumentException(YAML_ENTRY + " not found in backup zip");
+    private BackupManifestDto readManifest(ZipFile zip) throws Exception {
+        ZipEntry entry = zip.getEntry(MANIFEST_ENTRY);
+        if (entry == null) {
+            throw new IllegalArgumentException(MANIFEST_ENTRY + " not found in backup zip");
+        }
+        try (InputStream in = zip.getInputStream(entry)) {
+            BackupManifestDto manifest = jsonMapper.readValue(in, BackupManifestDto.class);
+            if (manifest == null) {
+                throw new IllegalArgumentException("Invalid backup manifest");
             }
-            try (InputStream in = file.getInputStream(entry)) {
-                BackupManifestDto manifest = yamlMapper.readValue(in, BackupManifestDto.class);
-                if (manifest == null || manifest.getModules() == null) {
-                    throw new IllegalArgumentException("Invalid backup manifest");
-                }
-                return manifest;
-            }
+            return manifest;
         }
     }
 

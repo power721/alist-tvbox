@@ -53,7 +53,7 @@ class UserServiceTest {
     void setUp() {
         SecurityContextHolder.clearContext();
         userService = new UserService(userRepository, sessionRepository, passwordEncoder, tokenService,
-            new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-yaml.zip"),
+            new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-json.zip"),
             jdbcTemplate);
     }
 

@@ -7,14 +7,14 @@ import cn.har01d.alist_tvbox.entity.ConfigFile;
 import cn.har01d.alist_tvbox.entity.ConfigFileRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
-import cn.har01d.alist_tvbox.entity.Site;
-import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.entity.User;
 import cn.har01d.alist_tvbox.entity.UserRepository;
+import cn.har01d.alist_tvbox.entity.SiteRepository;
 import cn.har01d.alist_tvbox.service.AListService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -29,7 +30,8 @@ import java.util.zip.ZipOutputStream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-@TestPropertySource(properties = "app.backup.yaml-restore-path=/tmp/atv-test-nonexistent-database-yaml.zip")
+@ActiveProfiles("test")
+@TestPropertySource(properties = "app.backup.json-restore-path=/tmp/atv-test-nonexistent-database-json.zip")
 class DatabaseBackupServiceIntegrationTest {
     @MockitoBean
     private AListService aListService;
@@ -50,22 +52,25 @@ class DatabaseBackupServiceIntegrationTest {
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @Test
-    void exportZipContainsDatabaseYamlAndExcludesDerivedEntities() throws Exception {
+    void exportZipHasPerModuleJsonAndExcludesDerivedEntities() throws Exception {
         File file = databaseBackupService.exportBackupZip();
         assertThat(file).exists();
 
         try (ZipFile zipFile = new ZipFile(file)) {
-            ZipEntry entry = zipFile.getEntry("database.yaml");
-            assertThat(entry).isNotNull();
-            String yaml = new String(zipFile.getInputStream(entry).readAllBytes(), StandardCharsets.UTF_8);
-            assertThat(yaml).contains("formatVersion: 1");
-            assertThat(yaml).contains("modules:");
-            assertThat(yaml).contains("settings:");
-            assertThat(yaml).contains("users:");
-            // Derived / runtime entities must not be present as modules.
-            assertThat(yaml).doesNotContain("\"Movie\"");
-            assertThat(yaml).doesNotContain("\"Meta\"");
-            assertThat(yaml).doesNotContain("\"Session\"");
+            assertThat(zipFile.getEntry("manifest.json")).isNotNull();
+            assertThat(zipFile.getEntry("modules/users.json")).isNotNull();
+            assertThat(zipFile.getEntry("modules/settings.json")).isNotNull();
+
+            String manifest = new String(
+                zipFile.getInputStream(zipFile.getEntry("manifest.json")).readAllBytes(),
+                StandardCharsets.UTF_8);
+            assertThat(manifest).contains("\"formatVersion\":1");
+            assertThat(manifest).contains("\"users\"");
+            // Derived / runtime entities must not be present as modules (quoted so "Meta" does not
+            // match the legitimate "TmdbMeta" module).
+            assertThat(manifest).doesNotContain("\"Movie\"");
+            assertThat(manifest).doesNotContain("\"Meta\"");
+            assertThat(manifest).doesNotContain("\"Session\"");
         }
     }
 
@@ -75,27 +80,12 @@ class DatabaseBackupServiceIntegrationTest {
         // Admin user is created at startup with id 1.
         assertThat(userRepository.findById(1)).isPresent();
 
-        String yaml = """
-            formatVersion: 1
-            mode: "repository"
-            modules:
-              settings:
-                entity: "Setting"
-                items:
-                  - name: "ow_key"
-                    value: "ow_value"
-              sites:
-                entity: "Site"
-                items:
-                  - id: 7
-                    name: "restored-site"
-                    url: "http://restored"
-                    order: 1
-                    searchable: false
-                    xiaoya: false
-            """;
+        String manifest = "{\"formatVersion\":1,\"mode\":\"repository\",\"modules\":{\"settings\":\"Setting\",\"sites\":\"Site\"}}";
+        Map<String, String> modules = Map.of(
+            "settings", "{\"entity\":\"Setting\",\"items\":[{\"name\":\"ow_key\",\"value\":\"ow_value\"}]}",
+            "sites", "{\"entity\":\"Site\",\"items\":[{\"id\":7,\"name\":\"restored-site\",\"url\":\"http://restored\",\"order\":1,\"searchable\":false,\"xiaoya\":false}]}");
 
-        databaseBackupService.restoreBackupZip(createZip(yaml), BackupRestoreMode.OVERWRITE);
+        databaseBackupService.restoreBackupZip(createBackupZip(manifest, modules), BackupRestoreMode.OVERWRITE);
 
         // Preserved explicit id from the backup.
         assertThat(siteRepository.findById(7)).isPresent();
@@ -110,35 +100,18 @@ class DatabaseBackupServiceIntegrationTest {
     @Test
     @Transactional
     void mergeRestoreUpdatesByBusinessKeyAndInsertsNew() throws Exception {
-        settingRepository.save(new Setting("yaml_merge_key", "old"));
+        settingRepository.save(new Setting("merge_key", "old"));
 
-        String yaml = """
-            formatVersion: 1
-            mode: "repository"
-            modules:
-              settings:
-                entity: "Setting"
-                items:
-                  - name: "yaml_merge_key"
-                    value: "new"
-                  - name: "yaml_merge_added"
-                    value: "value"
-              sites:
-                entity: "Site"
-                items:
-                  - id: 4242
-                    name: "merge-new-site"
-                    url: "http://merge-new"
-                    order: 1
-                    searchable: false
-                    xiaoya: false
-            """;
+        String manifest = "{\"formatVersion\":1,\"mode\":\"repository\",\"modules\":{\"settings\":\"Setting\",\"sites\":\"Site\"}}";
+        Map<String, String> modules = Map.of(
+            "settings", "{\"entity\":\"Setting\",\"items\":[{\"name\":\"merge_key\",\"value\":\"new\"},{\"name\":\"merge_added\",\"value\":\"value\"}]}",
+            "sites", "{\"entity\":\"Site\",\"items\":[{\"id\":4242,\"name\":\"merge-new-site\",\"url\":\"http://merge-new\",\"order\":1,\"searchable\":false,\"xiaoya\":false}]}");
 
-        databaseBackupService.restoreBackupZip(createZip(yaml), BackupRestoreMode.MERGE);
+        databaseBackupService.restoreBackupZip(createBackupZip(manifest, modules), BackupRestoreMode.MERGE);
 
-        assertThat(settingRepository.findById("yaml_merge_key")).get()
+        assertThat(settingRepository.findById("merge_key")).get()
             .extracting(Setting::getValue).isEqualTo("new");
-        assertThat(settingRepository.findById("yaml_merge_added")).isPresent();
+        assertThat(settingRepository.findById("merge_added")).isPresent();
         // New TABLE-entity row inserted via the persister with its preserved id.
         assertThat(siteRepository.findById(4242)).isPresent();
     }
@@ -156,11 +129,12 @@ class DatabaseBackupServiceIntegrationTest {
 
         File zip = databaseBackupService.exportBackupZip();
 
-        // Fix A: the @JsonIgnore password must actually be present in the exported YAML.
+        // Fix A: the @JsonIgnore password must actually be present in the exported users module.
         try (ZipFile zf = new ZipFile(zip)) {
-            String yaml = new String(zf.getInputStream(zf.getEntry("database.yaml")).readAllBytes(),
+            String usersJson = new String(
+                zf.getInputStream(zf.getEntry("modules/users.json")).readAllBytes(),
                 StandardCharsets.UTF_8);
-            assertThat(yaml).contains("known-hash");
+            assertThat(usersJson).contains("known-hash");
         }
 
         databaseBackupService.restoreBackupZip(zip, BackupRestoreMode.OVERWRITE);
@@ -175,10 +149,10 @@ class DatabaseBackupServiceIntegrationTest {
 
     @Test
     @Transactional
-    void overwriteRestoreHandlesContentExceedingSnakeYamlDefaultLimit() throws Exception {
-        // A 4 MB @JsonIgnore content blob makes the exported YAML exceed SnakeYAML's 3 MB default
-        // code-point limit; restore must not throw "exceeds the limit: 3145728 code points".
-        char[] chars = new char[4 * 1024 * 1024];
+    void overwriteRestoreHandlesContentExceedingJacksonDefaultLimit() throws Exception {
+        // A 6 MB @JsonIgnore content blob exceeds Jackson's 5 MB default maxStringLength; restore must
+        // not throw. The backup mapper raises the string/document limits to handle large content.
+        char[] chars = new char[6 * 1024 * 1024];
         java.util.Arrays.fill(chars, 'x');
         String largeContent = new String(chars);
 
@@ -198,12 +172,17 @@ class DatabaseBackupServiceIntegrationTest {
         assertThat(restored.getContent()).isEqualTo(largeContent);
     }
 
-    private File createZip(String yaml) throws Exception {
+    private File createBackupZip(String manifestJson, Map<String, String> moduleJsonByName) throws Exception {
         File file = File.createTempFile("backup-test-", ".zip");
         try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(file))) {
-            out.putNextEntry(new ZipEntry("database.yaml"));
-            out.write(yaml.getBytes(StandardCharsets.UTF_8));
+            out.putNextEntry(new ZipEntry("manifest.json"));
+            out.write(manifestJson.getBytes(StandardCharsets.UTF_8));
             out.closeEntry();
+            for (Map.Entry<String, String> e : moduleJsonByName.entrySet()) {
+                out.putNextEntry(new ZipEntry("modules/" + e.getKey() + ".json"));
+                out.write(e.getValue().getBytes(StandardCharsets.UTF_8));
+                out.closeEntry();
+            }
         }
         return file;
     }

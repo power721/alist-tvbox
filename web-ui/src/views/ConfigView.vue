@@ -361,8 +361,8 @@
         <el-form-item>
           <el-button @click="resetAListToken">重置AList认证Token</el-button>
           <el-button @click="exportDatabase">导出数据库</el-button>
-          <el-button type="success" @click="exportYamlDatabase">导出 YAML</el-button>
-          <el-button type="warning" @click="yamlImportVisible = true">导入 YAML</el-button>
+          <el-button @click="exportJsonDatabase">导出 JSON</el-button>
+          <el-button @click="jsonImportVisible = true">导入 JSON</el-button>
           <el-button @click="openRemoteSync">远程同步配置</el-button>
         </el-form-item>
       </el-form>
@@ -373,7 +373,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="yamlImportVisible" title="导入 YAML 备份" width="520px">
+    <el-dialog v-model="jsonImportVisible" title="导入 JSON 备份" width="520px">
       <el-alert
         title="覆盖恢复会清空纳入备份的业务数据后再导入，请谨慎操作。建议恢复完成后重启应用。"
         type="warning"
@@ -382,7 +382,7 @@
       />
       <el-form label-width="100px" style="margin-top: 12px">
         <el-form-item label="恢复模式">
-          <el-radio-group v-model="yamlRestoreMode">
+          <el-radio-group v-model="jsonRestoreMode">
             <el-radio label="OVERWRITE">覆盖恢复</el-radio>
             <el-radio label="MERGE">合并恢复</el-radio>
           </el-radio-group>
@@ -392,15 +392,15 @@
             :auto-upload="false"
             :limit="1"
             accept=".zip"
-            :on-change="handleYamlFileChange"
+            :on-change="handleJsonFileChange"
           >
             <el-button type="primary">选择 ZIP 文件</el-button>
           </el-upload>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="yamlImportVisible = false">取消</el-button>
-        <el-button type="warning" :loading="yamlImporting" @click="importYamlDatabase">开始恢复</el-button>
+        <el-button @click="jsonImportVisible = false">取消</el-button>
+        <el-button type="warning" :loading="jsonImporting" @click="importJsonDatabase">开始恢复</el-button>
       </template>
     </el-dialog>
 
@@ -710,42 +710,42 @@ const exportDatabase = () => {
   window.location.href = '/api/settings/export' + '?t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
 }
 
-const yamlImportVisible = ref(false)
-const yamlImporting = ref(false)
-const yamlRestoreMode = ref<'OVERWRITE' | 'MERGE'>('OVERWRITE')
-const yamlSelectedFile = ref<File | null>(null)
+const jsonImportVisible = ref(false)
+const jsonImporting = ref(false)
+const jsonRestoreMode = ref<'OVERWRITE' | 'MERGE'>('OVERWRITE')
+const jsonSelectedFile = ref<File | null>(null)
 
-const exportYamlDatabase = () => {
-  window.location.href = '/api/settings/export-yaml' + '?t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
+const exportJsonDatabase = () => {
+  window.location.href = '/api/settings/export-json' + '?t=' + new Date().getTime() + '&X-ACCESS-TOKEN=' + localStorage.getItem("token");
 }
 
-const handleYamlFileChange = (uploadFile: any) => {
-  yamlSelectedFile.value = uploadFile?.raw || null
+const handleJsonFileChange = (uploadFile: any) => {
+  jsonSelectedFile.value = uploadFile?.raw || null
 }
 
-const importYamlDatabase = async () => {
-  if (!yamlSelectedFile.value) {
+const importJsonDatabase = async () => {
+  if (!jsonSelectedFile.value) {
     ElMessage.warning('请选择备份文件')
     return
   }
-  yamlImporting.value = true
+  jsonImporting.value = true
   const formData = new FormData()
-  formData.append('file', yamlSelectedFile.value)
-  formData.append('mode', yamlRestoreMode.value)
+  formData.append('file', jsonSelectedFile.value)
+  formData.append('mode', jsonRestoreMode.value)
   try {
-    const {data} = await axios.post('/api/settings/import-yaml', formData, {
+    const {data} = await axios.post('/api/settings/import-json', formData, {
       headers: {'Content-Type': 'multipart/form-data'}
     })
     if (data.success) {
       ElMessage.success('恢复成功，建议重启应用')
-      yamlImportVisible.value = false
+      jsonImportVisible.value = false
     } else {
       ElMessage.error('恢复失败')
     }
   } catch (e) {
     ElMessage.error('恢复失败')
   } finally {
-    yamlImporting.value = false
+    jsonImporting.value = false
   }
 }
 
