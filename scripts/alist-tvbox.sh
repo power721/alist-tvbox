@@ -418,6 +418,43 @@ config_db_apply() {
   show_access_info
 }
 
+# 从当前容器导出 JSON 备份（需要先存在 backup_token）。复用 /api/local/backup?format=json。
+migrate_db_export() {
+  local out="${2:-$(pwd)/database-json.zip}"
+  local container_name=$(get_container_name)
+  local base="${CONFIG[BASE_DIR]}"
+  local token_file="$base/backup_token"
+
+  if [[ ! -f "$token_file" ]]; then
+    echo -e "${RED}未找到 $token_file。请先通过管理界面或重置流程生成 backup_token。${NC}" >&2
+    return 1
+  fi
+  local token; token=$(<"$token_file")
+
+  echo -e "${CYAN}从容器 $container_name 导出 JSON 备份到 $out ...${NC}"
+  curl -fsS -X POST \
+    -H "X-BACKUP-TOKEN: $token" \
+    "http://127.0.0.1:${CONFIG[PORT1]}/api/local/backup?format=json" \
+    -o "$out" || { echo -e "${RED}导出失败${NC}" >&2; return 1; }
+  echo -e "${GREEN}已导出: $out${NC}"
+  echo -e "${YELLOW}下一步：在目标 PostgreSQL 实例上执行 '${0##*/} migrate-db import $out'${NC}"
+}
+
+# 把 JSON 备份放进容器启动恢复路径并重启；StartupJsonRestoreRunner 会在下次启动恢复。
+migrate_db_import() {
+  local zip="${2:-}"
+  if [[ -z "$zip" || ! -f "$zip" ]]; then
+    echo -e "${RED}用法: migrate-db import <database-json.zip>${NC}" >&2; return 1
+  fi
+  local container_name=$(get_container_name)
+  local base="${CONFIG[BASE_DIR]}"
+  echo -e "${CYAN}将 $zip 放入启动恢复路径并重启容器 $container_name ...${NC}"
+  mkdir -p "$base"
+  cp "$zip" "$base/database-json.zip"
+  docker restart "$container_name" || { echo -e "${RED}重启失败${NC}" >&2; return 1; }
+  echo -e "${GREEN}已触发恢复。观察 'docker logs -f $container_name'，应用恢复后会自动重启(exit 85)。${NC}"
+}
+
 # Get container name
 get_container_name() {
   case "${CONFIG[IMAGE_NAME]}" in
@@ -3042,6 +3079,13 @@ cli_mode() {
         *)     config_db ;;
       esac
       ;;
+    migrate-db)
+      case "${2:-}" in
+        export) migrate_db_export "$@" ;;
+        import) migrate_db_import "$@" ;;
+        *) echo "用法: migrate-db <export|import> [zip]" ;;
+      esac
+      ;;
     *)
       echo -e "${RED}未知命令: $1${NC}"
       echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, health, repair, menu, config-db, migrate-db, help"
@@ -3072,6 +3116,8 @@ ${CYAN}命令行命令:${NC}
   health     健康检查
   repair     自动修复诊断
   config-db  配置/切换主应用数据库 (H2/MySQL/PostgreSQL)；config-db apply 用新配置重建容器
+  migrate-db export [zip]   从当前实例导出 JSON 备份（H2/MySQL→PG 迁移第一步）
+  migrate-db import <zip>   将备份导入当前实例（恢复后自动重启；迁移第二步，目标为 PG）
   menu        进入交互式菜单
   help        显示本帮助
 
