@@ -18,8 +18,8 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class UserControllerLocalBackupTest {
@@ -48,7 +48,8 @@ class UserControllerLocalBackupTest {
 
     @Test
     void jsonBackupSucceedsWithValidToken() throws Exception {
-        doNothing().when(settingService).backupJsonDatabase();
+        java.io.File backupFile = new java.io.File("/data/backup/database-json-2026-06-20-124705.zip");
+        when(settingService.backupJsonDatabase()).thenReturn(backupFile);
         Files.createDirectories(dataDir.resolve("atv"));
         Files.writeString(dataDir.resolve("atv").resolve("backup_token"), "tok");
 
@@ -57,6 +58,8 @@ class UserControllerLocalBackupTest {
 
         Map<String, String> result = controller.backupLocal(request, "json");
         assertTrue(result.get("file").startsWith("database-json-"));
+        assertTrue(result.get("file").endsWith(".zip"));
+        assertTrue(result.get("path").endsWith("database-json-2026-06-20-124705.zip"));
         verify(settingService).backupJsonDatabase();
     }
 

@@ -1,7 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
 import java.io.File;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -135,18 +134,13 @@ public class UserController {
                 throw new BadRequestException("备份令牌无效");
             }
             authorized = true;
-            String filename;
-            if ("sql".equalsIgnoreCase(type)) {
-                File out = settingService.backupDatabase();
-                if (out == null) {
-                    throw new BadRequestException("SQL 备份不可用（非 H2 数据库）");
-                }
-                filename = out.getName();
-            } else {
-                settingService.backupJsonDatabase();
-                filename = "database-json-" + LocalDate.now() + ".zip";
+            File out = "sql".equalsIgnoreCase(type)
+                    ? settingService.backupDatabase()
+                    : settingService.backupJsonDatabase();
+            if (out == null) {
+                throw new BadRequestException("备份失败（SQL 备份仅 H2 可用，或备份过程出错）");
             }
-            return Map.of("file", filename, "path", Utils.getDataPath("backup", filename).toString());
+            return Map.of("file", out.getName(), "path", out.getAbsolutePath());
         } catch (BadRequestException e) {
             throw e;
         } catch (Exception e) {

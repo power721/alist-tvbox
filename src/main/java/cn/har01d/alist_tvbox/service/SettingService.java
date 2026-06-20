@@ -37,6 +37,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -221,7 +223,7 @@ public class SettingService {
 
             File out = Utils.getDataPath(
                     "backup",
-                    "database-" + LocalDate.now() + ".zip"
+                    backupFilename("database-")
             ).toFile();
 
             try (FileOutputStream fos = new FileOutputStream(out);
@@ -244,19 +246,21 @@ public class SettingService {
      * pruned by {@link #cleanBackups()}.
      */
     @Scheduled(cron = "0 30 6 * * *")
-    public void backupJsonDatabase() {
+    public File backupJsonDatabase() {
         try {
             File exported = databaseBackupService.exportBackupZip();
-            File out = Utils.getDataPath("backup", "database-json-" + LocalDate.now() + ".zip").toFile();
+            File out = Utils.getDataPath("backup", backupFilename("database-json-")).toFile();
             Files.copy(exported.toPath(), out.toPath(), StandardCopyOption.REPLACE_EXISTING);
             if (!exported.delete()) {
                 exported.deleteOnExit();
             }
             log.info("JSON database backup saved to {}", out.getAbsolutePath());
             cleanBackups();
+            return out;
         } catch (Exception e) {
             log.warn("JSON database backup failed", e);
         }
+        return null;
     }
 
     private List<String> listTables() {
@@ -267,6 +271,14 @@ public class SettingService {
     }
 
     private static final Pattern DATE_TIME = Pattern.compile("\\d{4}-\\d{2}-\\d{2}-\\d{6}");
+
+    /** 备份文件名时间戳：database[-json]-yyyy-MM-dd-HHmmss.zip。用 LocalDateTime.now() 取单一原子时刻，
+     *  一天内多次备份（定时 + 立即）互不覆盖；cleanBackups 仍按日期保留 7 天。 */
+    private static final DateTimeFormatter BACKUP_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss");
+
+    private static String backupFilename(String prefix) {
+        return prefix + LocalDateTime.now().format(BACKUP_FMT) + ".zip";
+    }
 
     private void cleanBackups() {
         LocalDate day = LocalDate.now().minusDays(7);
