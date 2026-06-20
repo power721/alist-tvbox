@@ -26,7 +26,7 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
-    locations: classpath:db/migration/current
+    locations: classpath:db/migration/{vendor},classpath:db/migration/common
   sql:
     init:
       mode: always
