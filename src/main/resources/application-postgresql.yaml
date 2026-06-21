@@ -9,3 +9,6 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: false
+  sql:
+    init:
+      mode: never

@@ -75,6 +75,9 @@ reset_config_for_tests() {
   CONFIG["RESTART"]="always"
   CONFIG["MOUNT_WWW"]="false"
   CONFIG["GITHUB_PROXY"]=""
+  unset 'CONFIG[DB_TYPE]' 'CONFIG[DB_HOST]' 'CONFIG[DB_PORT]' 'CONFIG[DB_NAME]' 'CONFIG[DB_USER]' 'CONFIG[DB_PASSWORD]' \
+        'CONFIG[DB_JDBC_URL]' 'CONFIG[DB_USERNAME]' 'CONFIG[DB_DRIVER]' 'CONFIG[DB_DIALECT]' 'CONFIG[DB_RAW_URL]' \
+        'CONFIG[DB_PREV_TYPE]'
 }
 
 test_source_only_loads_helpers() {
@@ -276,16 +279,177 @@ test_start_container_preserves_volume_paths_with_spaces() {
   unset -f docker 2>/dev/null || true
   CONFIG["IMAGE_NAME"]="haroldli/alist-tvbox"
   CONFIG["BASE_DIR"]="$TEST_TMP_DIR/base dir"
+  CONFIG["DB_TYPE"]="mysql"
+  CONFIG["DB_RAW_URL"]="jdbc:mysql://192.168.50.60:3306/atv"
+  CONFIG["DB_USER"]="atv"
+  CONFIG["DB_PASSWORD"]="secret"
   local docker_args="$TEST_TMP_DIR/docker-args.log"
 
   docker() {
     printf '%s\n' "$@" > "$docker_args"
   }
 
+  write_db_config_file
   start_container >/dev/null
 
   assert_file_has_line "${CONFIG[BASE_DIR]}/alist:/opt/alist/data" "$docker_args" "alist volume path containing spaces should remain one docker argument"
   assert_file_lacks_line "$TEST_TMP_DIR/base" "$docker_args" "base path should not be split at spaces"
+  assert_not_contains "/opt/atv/config/application.yaml" "$(cat "$docker_args")" "database config should be loaded from /data/atv/config without a separate docker mount"
+}
+
+test_external_db_config_disables_sql_init() {
+  reset_config_for_tests
+  CONFIG["DB_TYPE"]="mysql"
+  CONFIG["DB_RAW_URL"]="jdbc:mysql://192.168.50.60:3306/atv"
+  CONFIG["DB_USER"]="atv"
+  CONFIG["DB_PASSWORD"]="secret"
+
+  write_db_config_file
+
+  local db_config
+  db_config="$(db_config_file)"
+  assert_file_has_line "  sql:" "$db_config" "external database config should override Spring SQL init"
+  assert_file_has_line "    init:" "$db_config" "external database config should override Spring SQL init"
+  assert_file_has_line "      mode: never" "$db_config" "external database config must not run H2 data.sql on MySQL"
+}
+
+test_config_db_apply_refreshes_external_db_config() {
+  reset_config_for_tests
+  unset -f docker 2>/dev/null || true
+  CONFIG["DB_TYPE"]="mysql"
+  CONFIG["DB_RAW_URL"]="jdbc:mysql://192.168.50.60:3306/atv"
+  CONFIG["DB_USER"]="atv"
+  CONFIG["DB_PASSWORD"]="secret"
+  mkdir -p "${CONFIG[BASE_DIR]}/db"
+  printf 'spring:\n  datasource:\n    jdbc-url: stale\n' > "${CONFIG[BASE_DIR]}/db/application.yaml"
+
+  docker() {
+    :
+  }
+  start_container() {
+    :
+  }
+  show_access_info() {
+    :
+  }
+
+  config_db_apply >/dev/null
+
+  local db_config
+  db_config="$(db_config_file)"
+  assert_file_has_line "      mode: never" "$db_config" "config-db apply should migrate and refresh stale external database config"
+  [[ ! -f "${CONFIG[BASE_DIR]}/db/application.yaml" ]] || {
+    printf 'ASSERT FAIL: legacy database config should be moved to /atv/config\n' >&2
+    exit 1
+  }
+}
+
+test_external_db_profiles_disable_sql_init() {
+  local profile
+  for profile in mysql postgresql; do
+    assert_file_has_line "      mode: never" "$ROOT_DIR/src/main/resources/application-${profile}.yaml" "${profile} profile should not run H2 data.sql"
+  done
+}
+
+test_migrate_wizard_requires_explicit_target_choice() {
+  reset_config_for_tests
+  clear() {
+    :
+  }
+
+  local output
+  output="$(printf '\nx' | migrate_wizard)"
+
+  assert_contains "无效选择" "$output" "blank migrate target should be rejected"
+  assert_not_contains "PostgreSQL（默认）" "$output" "migrate wizard should not advertise a default database target"
+}
+
+test_migrate_db_without_args_opens_wizard() {
+  reset_config_for_tests
+  local output
+
+  migrate_wizard() {
+    printf 'wizard-called\n'
+  }
+
+  output="$(dispatch_migrate_db migrate-db)"
+  assert_contains "wizard-called" "$output" "migrate-db without arguments should open migration wizard"
+}
+
+test_headless_migrate_db_writes_external_db_config_without_mysql_profile() {
+  reset_config_for_tests
+
+  test_db_full() {
+    return 0
+  }
+
+  do_migration_steps() {
+    write_db_config_file
+  }
+
+  migrate_db_headless migrate-db \
+    --jdbc-url jdbc:mysql://192.168.50.60:3306/atv \
+    --username atv \
+    --password b24ee077 >/dev/null
+
+  local db_config
+  db_config="$(db_config_file)"
+  assert_file_has_line "    jdbc-url: jdbc:mysql://192.168.50.60:3306/atv" "$db_config" "headless migrate-db should write the provided JDBC URL"
+  assert_file_has_line "      mode: never" "$db_config" "headless migrate-db must disable SQL init without relying on mysql profile"
+}
+
+test_headless_migrate_db_supports_h2_target() {
+  reset_config_for_tests
+  CONFIG_FILE="$TEST_TMP_DIR/config/h2-target.conf"
+
+  do_migration_steps() {
+    assert_eq "h2" "$1" "headless migrate-db --type h2 should target h2"
+    printf 'yes\n' > "$TEST_TMP_DIR/h2-called"
+  }
+
+  migrate_db_headless migrate-db --type h2 >/dev/null
+
+  assert_file_has_line "yes" "$TEST_TMP_DIR/h2-called" "headless h2 migration should run migration steps"
+}
+
+test_h2_migration_clears_external_config_and_backs_up_existing_h2() {
+  reset_config_for_tests
+  CONFIG_FILE="$TEST_TMP_DIR/config/h2-migration.conf"
+  CONFIG["DB_TYPE"]="mysql"
+  CONFIG["DB_RAW_URL"]="jdbc:mysql://192.168.50.60:3306/atv"
+  CONFIG["DB_USER"]="atv"
+  CONFIG["DB_PASSWORD"]="secret"
+  write_db_config_file
+  printf 'old-h2\n' > "${CONFIG[BASE_DIR]}/atv.mv.db"
+  printf 'trace\n' > "${CONFIG[BASE_DIR]}/atv.trace.db"
+
+  migrate_db_export() {
+    printf 'zip\n' > "$2"
+  }
+  config_db_apply() {
+    [[ ! -f "$(db_config_file)" ]] || {
+      printf 'ASSERT FAIL: h2 migration should remove external database override before rebuild\n' >&2
+      exit 1
+    }
+  }
+  migrate_db_import() {
+    [[ -f "$2" ]]
+  }
+
+  do_migration_steps h2 >/dev/null
+
+  [[ ! -f "${CONFIG[BASE_DIR]}/atv.mv.db" ]] || {
+    printf 'ASSERT FAIL: old H2 mv.db should be moved away before H2 rebuild\n' >&2
+    exit 1
+  }
+  [[ ! -f "${CONFIG[BASE_DIR]}/atv.trace.db" ]] || {
+    printf 'ASSERT FAIL: old H2 trace.db should be moved away before H2 rebuild\n' >&2
+    exit 1
+  }
+  find "${CONFIG[BASE_DIR]}/backup" -name atv.mv.db -print -quit | grep -q atv.mv.db || {
+    printf 'ASSERT FAIL: old H2 mv.db should be backed up before migration\n' >&2
+    exit 1
+  }
 }
 
 test_source_only_loads_helpers
@@ -298,5 +462,13 @@ test_host_access_info_uses_host_mode_ports
 test_load_config_imports_opposite_existing_container
 test_blank_port_input_keeps_existing_value
 test_start_container_preserves_volume_paths_with_spaces
+test_external_db_config_disables_sql_init
+test_config_db_apply_refreshes_external_db_config
+test_external_db_profiles_disable_sql_init
+test_migrate_wizard_requires_explicit_target_choice
+test_migrate_db_without_args_opens_wizard
+test_h2_migration_clears_external_config_and_backs_up_existing_h2
+test_headless_migrate_db_writes_external_db_config_without_mysql_profile
+test_headless_migrate_db_supports_h2_target
 
 printf 'alist_tvbox tests: PASS\n'

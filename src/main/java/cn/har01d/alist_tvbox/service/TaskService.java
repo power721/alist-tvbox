@@ -10,11 +10,10 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,13 +27,22 @@ import java.util.List;
 public class TaskService {
     private final TaskRepository taskRepository;
 
-    public TaskService(TaskRepository taskRepository, JdbcTemplate jdbcTemplate, Environment environment) {
+    public TaskService(TaskRepository taskRepository, JdbcTemplate jdbcTemplate) {
         this.taskRepository = taskRepository;
-        if (environment.acceptsProfiles(Profiles.of("mysql"))) {
-            jdbcTemplate.execute("ALTER TABLE task MODIFY COLUMN summary TEXT");
-        } else {
-            jdbcTemplate.execute("ALTER TABLE task ALTER COLUMN summary TEXT");
+        String databaseProductName = jdbcTemplate.execute(
+                (ConnectionCallback<String>) connection -> connection.getMetaData().getDatabaseProductName());
+        jdbcTemplate.execute(summaryColumnTextSql(databaseProductName));
+    }
+
+    static String summaryColumnTextSql(String databaseProductName) {
+        String product = databaseProductName == null ? "" : databaseProductName.toLowerCase();
+        if (product.contains("mysql") || product.contains("mariadb")) {
+            return "ALTER TABLE task MODIFY COLUMN summary TEXT";
         }
+        if (product.contains("postgresql")) {
+            return "ALTER TABLE task ALTER COLUMN summary TYPE TEXT";
+        }
+        return "ALTER TABLE task ALTER COLUMN summary TEXT";
     }
 
     @PostConstruct
