@@ -40,7 +40,7 @@ public class SessionTokenService implements TokenService {
     }
 
     @Override
-    public String encodeToken(int userId, String username, String authority) {
+    public String encodeToken(int userId, String username, String authority, String loginIp, String userAgent) {
         if (sessionRepository.countByUsername(username) >= 5) {
             var session = sessionRepository.findFirstByUsername(username);
             sessionRepository.delete(session);
@@ -50,8 +50,17 @@ public class SessionTokenService implements TokenService {
         session.setUserId(userId);
         session.setUsername(username);
         session.setRole(authority);
+        session.setLoginIp(loginIp);
+        session.setUserAgent(truncate(userAgent, 512));
         session.setExpireTime(Instant.now().plus(30, ChronoUnit.DAYS));
         sessionRepository.save(session);
         return session.getToken();
+    }
+
+    private String truncate(String value, int max) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= max ? value : value.substring(0, max);
     }
 }

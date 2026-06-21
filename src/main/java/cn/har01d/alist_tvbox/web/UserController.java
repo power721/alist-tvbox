@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import java.util.List;
 
 import cn.har01d.alist_tvbox.dto.UserDto;
+import cn.har01d.alist_tvbox.dto.SessionDto;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,6 +19,8 @@ import cn.har01d.alist_tvbox.auth.UserToken;
 import cn.har01d.alist_tvbox.entity.User;
 import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
 import cn.har01d.alist_tvbox.service.UserService;
+import cn.har01d.alist_tvbox.util.Utils;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -47,12 +50,12 @@ public class UserController {
     }
 
     @PostMapping("/api/accounts/login")
-    public UserToken login(@RequestBody LoginDto account) {
+    public UserToken login(@RequestBody LoginDto account, HttpServletRequest request) {
         User user = userService.findByUsername(account.getUsername());
         if (user == null || !passwordEncoder.matches(account.getPassword(), user.getPassword())) {
             throw new UserUnauthorizedException("用户或密码错误", 40001);
         }
-        return userService.generateToken(user);
+        return userService.generateToken(user, Utils.getClientIp(request), request.getHeader("User-Agent"));
     }
 
     @PostMapping("/api/accounts/logout")
@@ -66,7 +69,18 @@ public class UserController {
     }
 
     @PostMapping("/api/accounts/update")
-    public UserToken updateAccount(@RequestBody UserDto user) {
-        return userService.updateAccount(user);
+    public UserToken updateAccount(@RequestBody UserDto user, HttpServletRequest request) {
+        return userService.updateAccount(user, Utils.getClientIp(request), request.getHeader("User-Agent"));
+    }
+
+    @GetMapping("/api/accounts/sessions")
+    public List<SessionDto> sessions() {
+        String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
+        return userService.listSessions(token);
+    }
+
+    @DeleteMapping("/api/accounts/sessions/{id}")
+    public void revokeSession(@PathVariable int id) {
+        userService.revokeSession(id);
     }
 }
