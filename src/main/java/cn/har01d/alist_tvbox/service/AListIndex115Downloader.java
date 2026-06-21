@@ -17,7 +17,7 @@ import java.nio.file.StandardCopyOption;
  * Mounts the published share as a Pan115Share storage and streams 115.index.zip
  * through the bundled AList download endpoint. Pan115Share auto-转存 the file into
  * /alist-tvbox-temp to resolve the link and auto-deletes it afterwards.
- *
+ * <p>
  * Mount/enable mirrors AListAliasService: accountService.login() for the alist
  * admin token, a reserved storage id, saveStorage + enableStorage.
  */
@@ -29,13 +29,19 @@ public class AListIndex115Downloader implements Index115Downloader {
     private static final String FILE_NAME = "115.index.zip";
 
     private final AListLocalService aListLocalService;
+    private final AListService aListService;
+    private final SiteService siteService;
     private final ShareService shareService;
     private final AccountService accountService;
 
     public AListIndex115Downloader(AListLocalService aListLocalService,
+                                   AListService aListService,
+                                   SiteService siteService,
                                    ShareService shareService,
                                    AccountService accountService) {
         this.aListLocalService = aListLocalService;
+        this.aListService = aListService;
+        this.siteService = siteService;
         this.shareService = shareService;
         this.accountService = accountService;
     }
@@ -53,6 +59,7 @@ public class AListIndex115Downloader implements Index115Downloader {
         // folderId defaults to "root"
 
         Pan115Share storage = new Pan115Share(share);
+        storage.setDisabled(true);
         String token = accountService.login();
         aListLocalService.saveStorage(storage);
         String error = shareService.enableStorage(STORAGE_ID, token);
@@ -60,13 +67,8 @@ public class AListIndex115Downloader implements Index115Downloader {
             throw new IOException("enable 115 share storage failed: " + error);
         }
 
-        URI uri;
-        try {
-            uri = new URI("http", null, "127.0.0.1", aListLocalService.getInternalPort(),
-                    "/d" + storage.getPath() + "/" + FILE_NAME, null, null);
-        } catch (java.net.URISyntaxException e) {
-            throw new IOException("build download uri failed", e);
-        }
+        var fsDetail = aListService.getFile(siteService.getById(1), storage.getPath() + "/" + FILE_NAME);
+        URI uri = URI.create(fsDetail.getRawUrl());
         streamToFile(uri.toURL(), localDest, token);
         log.info("downloaded {} ({} bytes) from share {}", FILE_NAME, Files.size(localDest), shareCode);
     }

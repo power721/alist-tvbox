@@ -28,9 +28,11 @@ public class Index115Config {
 
     @Bean
     public Index115Downloader index115Downloader(AListLocalService aListLocalService,
+                                                  AListService aListService,
+                                                  SiteService siteService,
                                                   ShareService shareService,
                                                   AccountService accountService) {
-        return new AListIndex115Downloader(aListLocalService, shareService, accountService);
+        return new AListIndex115Downloader(aListLocalService, aListService, siteService, shareService, accountService);
     }
 
     @Bean
