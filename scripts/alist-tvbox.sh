@@ -577,16 +577,22 @@ test_db_connection() {
 
 # 真正的数据库连接测试：调用应用的 /api/local/db-test 端点，用其自带 JDBC 驱动真实登录
 # （SELECT 1），能抓住 TCP 测不出来的问题：主机未授权(Host not allowed)、账号密码错、库不存在，
-# 并打印数据库原始错误。无需拉取 client 镜像。容器未运行时退化为 TCP 可达测试。
+# 并打印数据库原始错误。无需拉取 client 镜像。容器未运行时退化为 TCP 可达测试；
+# 已有 JSON 的离线迁移可允许 TCP 检测不可用时继续，避免因源容器停止而阻塞迁移。
 test_db_full() {
   local type="$1" host="$2" port="$3" db="$4" user="$5" pass="$6"
+  local allow_stopped_skip="${7:-false}"
   local url="${CONFIG[DB_RAW_URL]:-$(build_jdbc_url "$type" "$host" "$port" "$db")}"
   url="$(normalize_jdbc_url "$type" "$url")"
   local container_name; container_name="$(get_container_name)"
 
   if [[ "$(check_container_status)" != "running" ]]; then
-    echo -e "${YELLOW}容器未运行，仅做 TCP 可达测试（无法验证账号/主机授权）。${NC}"
+    echo -e "${YELLOW}容器未运行，无法调用应用 JDBC 校验，仅做 TCP 可达测试（无法验证账号/主机授权）。${NC}"
     if ! test_db_connection "$host" "$port"; then
+      if [[ "$allow_stopped_skip" == "true" ]]; then
+        echo -e "${YELLOW}  ! TCP 测试失败或不可用；已找到可复用 JSON 备份，继续离线迁移。目标库如不可用，会在重建容器时失败。${NC}" >&2
+        return 0
+      fi
       echo -e "${RED}  ✗ TCP 不可达。若数据库在宿主机且容器为 bridge 网络，localhost 不可达——用宿主机 IP / host 网络。${NC}" >&2
       return 1
     fi
@@ -613,6 +619,10 @@ test_db_full() {
   echo "$resp" | sed 's/^/      /' | tail -5 >&2
   echo -e "${YELLOW}  常见：MySQL 'Host ... is not allowed'→给用户授权容器网段(atv@'172.17.0.0/16' 或 atv@'%'，并 FLUSH PRIVILEGES)；库不存在→先 CREATE DATABASE。${NC}" >&2
   return 1
+}
+
+allow_stopped_db_test_for_migration() {
+  [[ "$(check_container_status)" != "running" ]] && find_existing_migration_export >/dev/null 2>&1
 }
 
 # 交互式收集连接信息：host/port/database/username 提供默认值（回车采用），password 必填。
@@ -953,7 +963,11 @@ migrate_db_headless() {
   CONFIG[DB_PASSWORD]="$password"
 
   echo -e "${CYAN}目标: $db_type  ${PARSED_HOST}:${PARSED_PORT}/${PARSED_DB}  用户=$username${NC}"
-  test_db_full "$db_type" "$PARSED_HOST" "$PARSED_PORT" "$PARSED_DB" "$username" "$password" || { clear_db_config; return 1; }
+  local allow_stopped_db_test=false
+  if allow_stopped_db_test_for_migration; then
+    allow_stopped_db_test=true
+  fi
+  test_db_full "$db_type" "$PARSED_HOST" "$PARSED_PORT" "$PARSED_DB" "$username" "$password" "$allow_stopped_db_test" || { clear_db_config; return 1; }
   do_migration_steps "$db_type"
 }
 
@@ -989,7 +1003,11 @@ migrate_wizard() {
   if [[ "$db_type" != "h2" ]]; then
     prompt_db_connection "$db_type" || { clear_db_config; echo -e "${RED}已取消${NC}"; read -n 1 -s -r -p "按任意键继续..."; return; }
 
-    if ! test_db_full "${CONFIG[DB_TYPE]}" "${CONFIG[DB_HOST]}" "${CONFIG[DB_PORT]}" "${CONFIG[DB_NAME]}" "${CONFIG[DB_USER]}" "${CONFIG[DB_PASSWORD]}"; then
+    local allow_stopped_db_test=false
+    if allow_stopped_db_test_for_migration; then
+      allow_stopped_db_test=true
+    fi
+    if ! test_db_full "${CONFIG[DB_TYPE]}" "${CONFIG[DB_HOST]}" "${CONFIG[DB_PORT]}" "${CONFIG[DB_NAME]}" "${CONFIG[DB_USER]}" "${CONFIG[DB_PASSWORD]}" "$allow_stopped_db_test"; then
       clear_db_config
       read -n 1 -s -r -p "按任意键继续..."
       return

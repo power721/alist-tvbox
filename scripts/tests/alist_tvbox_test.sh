@@ -623,6 +623,62 @@ test_migration_accepts_old_json_export_with_confirmation() {
   assert_eq "old-json" "$(cat "$out")" "confirmed old JSON export should be prepared for migration"
 }
 
+test_headless_migration_allows_stopped_container_db_test_with_existing_json_export() {
+  reset_config_for_tests
+  rm -f "${CONFIG[BASE_DIR]}/migration-export.zip" "${CONFIG[BASE_DIR]}/database-json.zip"
+  rm -rf "${CONFIG[BASE_DIR]}/backup"
+  mkdir -p "${CONFIG[BASE_DIR]}/backup"
+  printf 'today-json\n' > "${CONFIG[BASE_DIR]}/backup/database-json-20260621090000.zip"
+
+  today_yyyymmdd() {
+    printf '20260621\n'
+  }
+  check_container_status() {
+    printf 'stopped\n'
+  }
+  test_db_connection() {
+    return 1
+  }
+  do_migration_steps() {
+    assert_eq "mysql" "$1" "headless migration should continue to migration steps when existing JSON allows offline migration"
+    printf 'called\n' > "$TEST_TMP_DIR/offline-headless-called"
+  }
+
+  local output
+  output="$(migrate_db_headless migrate-db \
+    --jdbc-url jdbc:mysql://192.168.50.60:3306/atv \
+    --username atv \
+    --password secret 2>&1)"
+
+  assert_contains "继续离线迁移" "$output" "offline headless migration should explain skipped database precheck"
+  assert_file_has_line "called" "$TEST_TMP_DIR/offline-headless-called" "offline headless migration should not stop at database precheck"
+}
+
+test_headless_migration_rejects_stopped_container_db_test_without_json_export() {
+  reset_config_for_tests
+  rm -f "${CONFIG[BASE_DIR]}/migration-export.zip" "${CONFIG[BASE_DIR]}/database-json.zip"
+  rm -rf "${CONFIG[BASE_DIR]}/backup"
+
+  check_container_status() {
+    printf 'stopped\n'
+  }
+  test_db_connection() {
+    return 1
+  }
+  do_migration_steps() {
+    printf 'ASSERT FAIL: migration should not continue without a reusable JSON export\n' >&2
+    exit 1
+  }
+
+  if migrate_db_headless migrate-db \
+      --jdbc-url jdbc:mysql://192.168.50.60:3306/atv \
+      --username atv \
+      --password secret >/dev/null 2>&1; then
+    printf 'ASSERT FAIL: stopped container without reusable JSON export should fail database precheck\n' >&2
+    exit 1
+  fi
+}
+
 test_source_only_loads_helpers
 test_parse_reset_password_response
 test_generate_admin_reset_token
@@ -646,6 +702,8 @@ test_migration_reuses_existing_json_export_when_container_stopped
 test_migration_prefers_today_backup_over_old_stable_export
 test_migration_rejects_old_json_export_without_confirmation
 test_migration_accepts_old_json_export_with_confirmation
+test_headless_migration_allows_stopped_container_db_test_with_existing_json_export
+test_headless_migration_rejects_stopped_container_db_test_without_json_export
 test_headless_postgresql_url_adds_timezone_when_missing
 test_headless_migrate_db_writes_external_db_config_without_mysql_profile
 test_headless_migrate_db_supports_h2_target
