@@ -178,9 +178,9 @@ public class UserService {
         }
     }
 
-    public UserToken generateToken(User user) {
+    public UserToken generateToken(User user, String loginIp, String userAgent) {
         var authorities = List.of(new SimpleGrantedAuthority(user.getRole().name()));
-        String token = tokenService.encodeToken(user.getId(), user.getUsername(), user.getRole().name());
+        String token = tokenService.encodeToken(user.getId(), user.getUsername(), user.getRole().name(), loginIp, userAgent);
         return new UserToken(user.getId(), user.getUsername(), authorities, token);
     }
 
@@ -249,7 +249,7 @@ public class UserService {
         loadUsernames();
     }
 
-    public UserToken updateAccount(UserDto dto) {
+    public UserToken updateAccount(UserDto dto, String loginIp, String userAgent) {
         String username = SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString();
         User user = userRepository.findByUsername(username);
         if (user == null) {
@@ -277,6 +277,6 @@ public class UserService {
         userRepository.save(user);
         usernames.remove(username);
         usernames.add(user.getUsername());
-        return generateToken(user);
+        return generateToken(user, loginIp, userAgent);
     }
 }

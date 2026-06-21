@@ -92,7 +92,7 @@ class UserServiceTest {
         when(passwordEncoder.matches("wrong-old", "encoded-old")).thenReturn(false);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("admin", "token"));
 
-        assertThrows(BadRequestException.class, () -> userService.updateAccount(dto));
+        assertThrows(BadRequestException.class, () -> userService.updateAccount(dto, null, null));
         SecurityContextHolder.clearContext();
     }
 
@@ -111,10 +111,10 @@ class UserServiceTest {
         when(userRepository.findByUsername("admin")).thenReturn(user);
         when(userRepository.findByUsername("new-admin")).thenReturn(null);
         when(userRepository.save(user)).thenReturn(user);
-        when(tokenService.encodeToken(1, "new-admin", "ADMIN")).thenReturn("token");
+        when(tokenService.encodeToken(1, "new-admin", "ADMIN", null, null)).thenReturn("token");
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("admin", "token"));
 
-        UserToken token = userService.updateAccount(dto);
+        UserToken token = userService.updateAccount(dto, null, null);
 
         assertEquals("new-admin", user.getUsername());
         assertEquals("encoded-old", user.getPassword());
@@ -141,10 +141,10 @@ class UserServiceTest {
         when(passwordEncoder.matches("old-pass", "encoded-old")).thenReturn(true);
         when(passwordEncoder.encode("new-pass")).thenReturn("encoded-new");
         when(userRepository.save(user)).thenReturn(user);
-        when(tokenService.encodeToken(1, "admin", "ADMIN")).thenReturn("token");
+        when(tokenService.encodeToken(1, "admin", "ADMIN", null, null)).thenReturn("token");
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("admin", "token"));
 
-        UserToken token = userService.updateAccount(dto);
+        UserToken token = userService.updateAccount(dto, null, null);
 
         assertEquals("encoded-new", user.getPassword());
         assertEquals("token", token.getToken());
