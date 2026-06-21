@@ -6,4 +6,5 @@ public enum TaskType {
     SCRAPE,
     SYNC_META,
     DOWNLOAD,
+    INDEX115,
 }

@@ -88,6 +88,14 @@ public class TaskService {
         return taskRepository.save(task);
     }
 
+    public Task addIndex115Task() {
+        Task task = new Task();
+        task.setType(TaskType.INDEX115);
+        task.setName("更新115索引");
+        task.setCreatedTime(Instant.now());
+        return taskRepository.save(task);
+    }
+
     public Task addScrapeTask(Site site) {
         Task task = new Task();
         task.setType(TaskType.SCRAPE);
