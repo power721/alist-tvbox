@@ -294,6 +294,7 @@ test_start_container_preserves_volume_paths_with_spaces() {
 
   assert_file_has_line "${CONFIG[BASE_DIR]}/alist:/opt/alist/data" "$docker_args" "alist volume path containing spaces should remain one docker argument"
   assert_file_lacks_line "$TEST_TMP_DIR/base" "$docker_args" "base path should not be split at spaces"
+  assert_file_has_line "TZ=Asia/Shanghai" "$docker_args" "container should use PostgreSQL-compatible timezone"
   assert_not_contains "/opt/atv/config/application.yaml" "$(cat "$docker_args")" "database config should be loaded from /data/atv/config without a separate docker mount"
 }
 
@@ -311,6 +312,57 @@ test_external_db_config_disables_sql_init() {
   assert_file_has_line "  sql:" "$db_config" "external database config should override Spring SQL init"
   assert_file_has_line "    init:" "$db_config" "external database config should override Spring SQL init"
   assert_file_has_line "      mode: never" "$db_config" "external database config must not run H2 data.sql on MySQL"
+}
+
+test_prompt_db_connection_defaults_to_host_ip() {
+  reset_config_for_tests
+  local original_get_host_ip
+  original_get_host_ip="$(declare -f get_host_ip)"
+
+  get_host_ip() {
+    printf '192.168.50.60\n'
+  }
+
+  prompt_db_connection postgresql >/dev/null <<< $'\n\n\n\nsecret\n'
+
+  assert_eq "192.168.50.60" "${CONFIG[DB_HOST]}" "interactive database host default should be host IP"
+  assert_eq "5432" "${CONFIG[DB_PORT]}" "PostgreSQL default port should be preserved"
+  assert_eq "alist_tvbox" "${CONFIG[DB_NAME]}" "PostgreSQL default database should be preserved"
+
+  eval "$original_get_host_ip"
+}
+
+test_postgresql_jdbc_url_sets_timezone() {
+  local url
+  url="$(build_jdbc_url postgresql 192.168.50.60 5432 atv)"
+
+  assert_eq "jdbc:postgresql://192.168.50.60:5432/atv?options=-c%20TimeZone=Asia/Shanghai" "$url" "PostgreSQL JDBC URL should set a server-compatible timezone"
+}
+
+test_entrypoints_set_jvm_timezone_for_postgresql() {
+  assert_contains "-Duser.timezone=Asia/Shanghai" "$(cat "$ROOT_DIR/docker/scripts/entrypoint.sh")" "JVM entrypoint should not let PostgreSQL JDBC send PRC timezone"
+  assert_contains "-Duser.timezone=Asia/Shanghai" "$(cat "$ROOT_DIR/docker/scripts/entrypoint-native.sh")" "native entrypoint should not let PostgreSQL JDBC send PRC timezone"
+}
+
+test_headless_postgresql_url_adds_timezone_when_missing() {
+  reset_config_for_tests
+
+  test_db_full() {
+    return 0
+  }
+
+  do_migration_steps() {
+    write_db_config_file
+  }
+
+  migrate_db_headless migrate-db \
+    --jdbc-url jdbc:postgresql://192.168.50.60:5432/atv \
+    --username atv \
+    --password secret >/dev/null
+
+  local db_config
+  db_config="$(db_config_file)"
+  assert_file_has_line "    jdbc-url: jdbc:postgresql://192.168.50.60:5432/atv?options=-c%20TimeZone=Asia/Shanghai" "$db_config" "headless PostgreSQL URL should add timezone option"
 }
 
 test_config_db_apply_refreshes_external_db_config() {
@@ -463,11 +515,15 @@ test_load_config_imports_opposite_existing_container
 test_blank_port_input_keeps_existing_value
 test_start_container_preserves_volume_paths_with_spaces
 test_external_db_config_disables_sql_init
+test_prompt_db_connection_defaults_to_host_ip
+test_postgresql_jdbc_url_sets_timezone
+test_entrypoints_set_jvm_timezone_for_postgresql
 test_config_db_apply_refreshes_external_db_config
 test_external_db_profiles_disable_sql_init
 test_migrate_wizard_requires_explicit_target_choice
 test_migrate_db_without_args_opens_wizard
 test_h2_migration_clears_external_config_and_backs_up_existing_h2
+test_headless_postgresql_url_adds_timezone_when_missing
 test_headless_migrate_db_writes_external_db_config_without_mysql_profile
 test_headless_migrate_db_supports_h2_target
 

@@ -62,4 +62,4 @@ mkdir -p /data/atv/config/
 # 启动 Native 应用
 log_info "Starting AList-TVBox native application"
 cd /opt/atv
-exec ./atv -Dspring.config.additional-location=file:/data/atv/config/ "$@"
+exec ./atv -Duser.timezone=Asia/Shanghai -Dspring.config.additional-location=file:/data/atv/config/ "$@"

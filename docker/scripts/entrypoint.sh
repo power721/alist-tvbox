@@ -57,4 +57,4 @@ mkdir -p /data/atv/config/
 
 # 启动 Java 应用
 log_info "Starting AList-TVBox application"
-exec /jre/bin/java "$MEM_OPT" -Dspring.config.additional-location=file:/data/atv/config/ -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication "$@"
+exec /jre/bin/java "$MEM_OPT" -Duser.timezone=Asia/Shanghai -Dspring.config.additional-location=file:/data/atv/config/ -cp BOOT-INF/classes:BOOT-INF/lib/* cn.har01d.alist_tvbox.AListApplication "$@"

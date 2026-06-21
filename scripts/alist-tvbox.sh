@@ -388,8 +388,31 @@ build_jdbc_url() {
     mysql)
       echo "jdbc:mysql://${host}:${port}/${db}?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8" ;;
     postgresql)
-      echo "jdbc:postgresql://${host}:${port}/${db}" ;;
+      echo "jdbc:postgresql://${host}:${port}/${db}?options=-c%20TimeZone=Asia/Shanghai" ;;
   esac
+}
+
+default_db_host() {
+  local host
+  host="$(get_host_ip)"
+  if [[ -n "$host" ]]; then
+    echo "$host"
+  else
+    echo "localhost"
+  fi
+}
+
+normalize_jdbc_url() {
+  local type="$1" url="$2"
+  if [[ "$type" == "postgresql" && "$url" != *"options="* ]]; then
+    if [[ "$url" == *\?* ]]; then
+      printf '%s&options=-c%%20TimeZone=Asia/Shanghai\n' "$url"
+    else
+      printf '%s?options=-c%%20TimeZone=Asia/Shanghai\n' "$url"
+    fi
+  else
+    printf '%s\n' "$url"
+  fi
 }
 
 db_config_file() {
@@ -472,6 +495,7 @@ write_db_config_file() {
   local url file
   # 若调用方提供了完整原始 URL（非交互 --jdbc-url），原样保留其自定义参数；否则按 host/port/db 拼装。
   url="${CONFIG[DB_RAW_URL]:-$(build_jdbc_url "${CONFIG[DB_TYPE]}" "${CONFIG[DB_HOST]}" "${CONFIG[DB_PORT]}" "${CONFIG[DB_NAME]}")}"
+  url="$(normalize_jdbc_url "${CONFIG[DB_TYPE]}" "$url")"
   file="$(db_config_file)"
   mkdir -p "$(dirname "$file")"
   cat > "$file" <<EOF
@@ -550,6 +574,7 @@ test_db_connection() {
 test_db_full() {
   local type="$1" host="$2" port="$3" db="$4" user="$5" pass="$6"
   local url="${CONFIG[DB_RAW_URL]:-$(build_jdbc_url "$type" "$host" "$port" "$db")}"
+  url="$(normalize_jdbc_url "$type" "$url")"
   local container_name; container_name="$(get_container_name)"
 
   if [[ "$(check_container_status)" != "running" ]]; then
@@ -587,9 +612,10 @@ test_db_full() {
 # 结果写入 CONFIG[DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD]。
 prompt_db_connection() {
   local type="$1" d_host d_port d_db host port db user pass
+  d_host="$(default_db_host)"
   case "$type" in
-    mysql)      d_host=localhost; d_port=3306; d_db=alist_tvbox ;;
-    postgresql) d_host=localhost; d_port=5432;  d_db=alist_tvbox ;;
+    mysql)      d_port=3306; d_db=alist_tvbox ;;
+    postgresql) d_port=5432;  d_db=alist_tvbox ;;
     *) return 1 ;;
   esac
   read -rp "数据库主机 [$d_host]: " host
@@ -782,7 +808,7 @@ migrate_db_headless() {
   [[ -z "$PARSED_PORT" ]] && PARSED_PORT="$([[ "$db_type" == mysql ]] && echo 3306 || echo 5432)"
 
   CONFIG[DB_TYPE]="$db_type"
-  CONFIG[DB_RAW_URL]="$jdbc_url"
+  CONFIG[DB_RAW_URL]="$(normalize_jdbc_url "$db_type" "$jdbc_url")"
   CONFIG[DB_HOST]="$PARSED_HOST"
   CONFIG[DB_PORT]="$PARSED_PORT"
   CONFIG[DB_NAME]="$PARSED_DB"
@@ -1057,6 +1083,7 @@ start_container() {
     --name "$container_name"
     -e ALIST_PORT="${CONFIG[PORT2]}"
     -e MEM_OPT="-Xmx512M"
+    -e TZ="Asia/Shanghai"
     -v "${CONFIG[BASE_DIR]}":/data
     -v "${CONFIG[BASE_DIR]}/www-static":/www/static
     --restart="${CONFIG[RESTART]}"

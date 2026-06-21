@@ -60,7 +60,7 @@ public class StartupJsonRestoreRunner implements ApplicationRunner {
                 log.warn("Failed to remove or rename restore package {}", startupRestorePath);
             }
         }
-        log.info("Startup JSON restore completed. Restarting (exit {}) for a clean boot on restored data.",
+        log.info("=== Startup JSON restore completed. Restarting (exit {}) for a clean boot on restored data. ===",
             RESTART_EXIT_CODE);
         requestRestart();
     }
