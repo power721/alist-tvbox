@@ -1,7 +1,10 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.domain.TaskType;
 import cn.har01d.alist_tvbox.dto.Index115ShareRef;
+import cn.har01d.alist_tvbox.entity.DriverAccount;
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
@@ -15,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.nio.file.Path;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -22,6 +27,7 @@ import static org.mockito.Mockito.*;
 class Index115ServiceTest {
     @Mock TaskService taskService;
     @Mock SettingRepository settingRepository;
+    @Mock DriverAccountRepository driverAccountRepository;
     @Mock Index115VersionClient versionClient;
     @Mock Index115Downloader downloader;
     @Mock Index115Extractor extractor;
@@ -33,8 +39,8 @@ class Index115ServiceTest {
     void setup() {
         task = new Task();
         task.setId(7);
-        when(taskService.addIndex115Task()).thenReturn(task);
-        when(taskService.isTaskRunning(TaskType.INDEX115)).thenReturn(false);
+        lenient().when(taskService.addIndex115Task()).thenReturn(task);
+        lenient().when(taskService.isTaskRunning(TaskType.INDEX115)).thenReturn(false);
     }
 
     @Test
@@ -81,6 +87,18 @@ class Index115ServiceTest {
 
         verify(extractor, never()).extractAndSwap(any(Path.class), any(Path.class));
         verify(taskService).failTask(eq(7), contains("boom"));
+    }
+
+    @Test
+    void has115AccountTrueWhenPan115MasterExists() {
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.of(new DriverAccount()));
+        assertTrue(service.has115Account());
+    }
+
+    @Test
+    void has115AccountFalseWhenNone() {
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.empty());
+        assertFalse(service.has115Account());
     }
 
     private Setting setting(String value) {

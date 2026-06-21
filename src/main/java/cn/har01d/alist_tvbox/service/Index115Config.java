@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
@@ -35,9 +36,10 @@ public class Index115Config {
     @Bean
     public Index115Service index115Service(TaskService taskService,
                                            SettingRepository settingRepository,
+                                           DriverAccountRepository driverAccountRepository,
                                            Index115VersionClient versionClient,
                                            Index115Downloader downloader,
                                            Index115Extractor extractor) {
-        return new Index115Service(taskService, settingRepository, versionClient, downloader, extractor);
+        return new Index115Service(taskService, settingRepository, driverAccountRepository, versionClient, downloader, extractor);
     }
 }
