@@ -206,6 +206,9 @@
           <el-input v-model="tmdbApiKey" type="password" show-password/>
           <el-button type="primary" @click="updateTmdbApiKey">更新</el-button>
         </el-form-item>
+        <el-form-item label="115索引" v-if="has115Account">
+          <el-button type="primary" :loading="index115Loading" @click="updateIndex115">下载</el-button>
+        </el-form-item>
         <el-form-item label="User Agent">
           <el-input v-model="userAgent"/>
           <el-button type="primary" @click="setUserAgent">更新</el-button>
@@ -471,6 +474,8 @@ const cleanInvalidShares = ref(false)
 const enableHttps = ref(false)
 const autoCheckin = ref(false)
 const dialogVisible = ref(false)
+const has115Account = ref(false)
+const index115Loading = ref(false)
 const changelog = ref('')
 const aListVersion = ref('')
 const aListRemoteVersion = ref('')
@@ -777,6 +782,17 @@ const getAListStatus = () => {
   })
 }
 
+const updateIndex115 = () => {
+  index115Loading.value = true
+  axios.post('/api/index115/update').then(() => {
+    ElMessage.success('115索引更新完成')
+  }).catch((e) => {
+    ElMessage.error('115索引更新失败：' + (e?.response?.data?.message || e.message))
+  }).finally(() => {
+    index115Loading.value = false
+  })
+}
+
 onMounted(() => {
   axios.get('/api/settings').then(({data}) => {
     form.value.token = data.token
@@ -837,6 +853,9 @@ onMounted(() => {
     appRemoteVersion.value = data.app
     aListRemoteVersion.value = data.alist
     changelog.value = data.changelog
+  })
+  axios.get('/api/index115/status').then(({data}) => {
+    has115Account.value = data.hasAccount
   })
 })
 
