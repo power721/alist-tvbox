@@ -4,10 +4,13 @@ import cn.har01d.alist_tvbox.auth.TokenService;
 import cn.har01d.alist_tvbox.auth.UserToken;
 import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.UserDto;
+import cn.har01d.alist_tvbox.dto.SessionDto;
+import cn.har01d.alist_tvbox.entity.Session;
 import cn.har01d.alist_tvbox.entity.SessionRepository;
 import cn.har01d.alist_tvbox.entity.User;
 import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -187,5 +190,64 @@ class UserServiceTest {
         userService.ensureAdminOccupiesIdOne();
 
         verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Test
+    void listSessionsMarksCurrentAndParsesDevice() {
+        Session a = new Session();
+        a.setId(10);
+        a.setToken("token-a");
+        a.setUsername("admin");
+        a.setRole("ADMIN");
+        a.setLoginIp("1.2.3.4");
+        a.setUserAgent("Mozilla/5.0 (Windows NT 10.0) Chrome/120.0 Safari/537.36");
+        Session b = new Session();
+        b.setId(11);
+        b.setToken("token-b");
+        b.setUsername("admin");
+        b.setRole("ADMIN");
+        b.setLoginIp("9.9.9.9");
+        b.setUserAgent(null);
+
+        when(sessionRepository.findAllByUsername("admin")).thenReturn(List.of(a, b));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("admin", "token-b"));
+
+        var sessions = userService.listSessions("token-b");
+
+        assertEquals(2, sessions.size());
+        SessionDto current = sessions.stream().filter(SessionDto::isCurrent).findFirst().orElseThrow();
+        assertEquals(11, current.getId());
+        assertEquals("1.2.3.4", sessions.get(0).getLoginIp());
+        assertEquals("Chrome 120", sessions.get(0).getBrowser());
+        assertEquals("Windows", sessions.get(0).getOs());
+        assertEquals("未知", sessions.get(1).getBrowser());
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void revokeSessionRejectsOtherUsersSession() {
+        Session s = new Session();
+        s.setId(20);
+        s.setUsername("alice");
+        when(sessionRepository.findById(20)).thenReturn(Optional.of(s));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("admin", "token"));
+
+        assertThrows(UserUnauthorizedException.class, () -> userService.revokeSession(20));
+        verify(sessionRepository, never()).delete(any(Session.class));
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void revokeSessionDeletesOwnedSession() {
+        Session s = new Session();
+        s.setId(21);
+        s.setUsername("admin");
+        when(sessionRepository.findById(21)).thenReturn(Optional.of(s));
+
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("admin", "token"));
+        userService.revokeSession(21);
+
+        verify(sessionRepository).delete(s);
+        SecurityContextHolder.clearContext();
     }
 }

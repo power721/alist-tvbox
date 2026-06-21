@@ -4,12 +4,16 @@ import cn.har01d.alist_tvbox.auth.TokenService;
 import cn.har01d.alist_tvbox.auth.UserToken;
 import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.dto.UserDto;
+import cn.har01d.alist_tvbox.dto.SessionDto;
+import cn.har01d.alist_tvbox.entity.Session;
 import cn.har01d.alist_tvbox.entity.SessionRepository;
 import cn.har01d.alist_tvbox.entity.User;
 import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
 import cn.har01d.alist_tvbox.service.backup.RestoreState;
+import cn.har01d.alist_tvbox.util.UserAgentParser;
 import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -176,6 +180,38 @@ public class UserService {
         if (token != null) {
             sessionRepository.findByToken(token).ifPresent(sessionRepository::delete);
         }
+    }
+
+    public List<SessionDto> listSessions(String currentToken) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString();
+        return sessionRepository.findAllByUsername(username).stream()
+                .map(s -> toDto(s, currentToken))
+                .toList();
+    }
+
+    public void revokeSession(int id) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString();
+        Session session = sessionRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("会话不存在"));
+        if (!username.equals(session.getUsername())) {
+            throw new UserUnauthorizedException("无权操作该会话", 40301);
+        }
+        sessionRepository.delete(session);
+    }
+
+    private SessionDto toDto(Session s, String currentToken) {
+        SessionDto dto = new SessionDto();
+        dto.setId(s.getId());
+        dto.setUsername(s.getUsername());
+        dto.setRole(s.getRole());
+        dto.setLoginIp(s.getLoginIp());
+        dto.setUserAgent(s.getUserAgent());
+        dto.setBrowser(UserAgentParser.parseBrowser(s.getUserAgent()));
+        dto.setOs(UserAgentParser.parseOs(s.getUserAgent()));
+        dto.setLoginTime(s.getCreateTime());
+        dto.setExpireTime(s.getExpireTime());
+        dto.setCurrent(currentToken != null && currentToken.equals(s.getToken()));
+        return dto;
     }
 
     public UserToken generateToken(User user, String loginIp, String userAgent) {
