@@ -1,0 +1,2 @@
+ALTER TABLE session ADD COLUMN login_ip VARCHAR(45);
+ALTER TABLE session ADD COLUMN user_agent VARCHAR(512);

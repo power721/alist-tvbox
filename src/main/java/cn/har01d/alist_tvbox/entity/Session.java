@@ -31,6 +31,12 @@ public class Session {
 
     private String role;
 
+    @Column(name = "login_ip")
+    private String loginIp;
+
+    @Column(name = "user_agent")
+    private String userAgent;
+
     private Instant expireTime;
 
     private Instant createTime = Instant.now();
