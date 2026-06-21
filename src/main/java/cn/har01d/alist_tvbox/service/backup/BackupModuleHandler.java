@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.persister.entity.EntityPersister;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,6 +26,7 @@ import java.util.stream.Collectors;
  * included entity in {@link BackupModuleRegistry}. It converts entities to/from plain maps with
  * Jackson so the manifest stays database-independent.
  */
+@Slf4j
 public class BackupModuleHandler<T> {
 
     public enum IdStrategy {
@@ -209,11 +211,15 @@ public class BackupModuleHandler<T> {
 
     /** Insert a row with the entity's current (preserved) identifier, bypassing id generation. */
     private void insertWithId(T entity) {
-        SharedSessionContractImplementor session = entityManager.unwrap(SharedSessionContractImplementor.class);
-        EntityPersister persister = session.getFactory().getMappingMetamodel().getEntityDescriptor(entityClass);
-        Object id = persister.getIdentifier(entity, session);
-        Object[] state = persister.getValues(entity);
-        persister.getInsertCoordinator().insert(entity, id, state, session);
+        try {
+            SharedSessionContractImplementor session = entityManager.unwrap(SharedSessionContractImplementor.class);
+            EntityPersister persister = session.getFactory().getMappingMetamodel().getEntityDescriptor(entityClass);
+            Object id = persister.getIdentifier(entity, session);
+            Object[] state = persister.getValues(entity);
+            persister.getInsertCoordinator().insert(entity, id, state, session);
+        } catch (Exception ex) {
+            log.warn("insertWithId exception: {}", ex.getMessage());
+        }
     }
 
     private BackupRestoreResult restoreIdentity(List<Map<String, Object>> items, BackupRestoreMode mode,
