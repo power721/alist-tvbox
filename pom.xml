@@ -241,6 +241,7 @@
                                 <buildArg>--enable-https</buildArg>
                                 <buildArg>-march=compatibility</buildArg>
                                 <buildArg>--initialize-at-build-time=org.flywaydb</buildArg>
+                                <buildArg>--initialize-at-run-time=org.flywaydb.core.internal.database.InsertRowLock</buildArg>
                                 <buildArg>-Dorg.sqlite.lib.exportPath=${project.build.directory}</buildArg>
                             </buildArgs>
                         </configuration>
