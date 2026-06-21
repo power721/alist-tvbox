@@ -376,8 +376,7 @@ db_driver_for() {
 # 数据库类型 -> Hibernate 方言
 db_dialect_for() {
   case "$1" in
-    mysql)      echo "org.hibernate.dialect.MySQL8Dialect" ;;
-    postgresql) echo "org.hibernate.dialect.PostgreSQLDialect" ;;
+    mysql) echo "org.hibernate.dialect.MySQLDialect" ;;
   esac
 }
 
@@ -492,23 +491,30 @@ rollback_db() {
 # 其余配置（app.*/server.*/spring.jackson.* 等）原样来自 classpath，不受影响。
 # 数据库信息只存在此文件 + app.conf，绝不进入 docker run 启动参数。
 write_db_config_file() {
-  local url file
+  local url file dialect
   # 若调用方提供了完整原始 URL（非交互 --jdbc-url），原样保留其自定义参数；否则按 host/port/db 拼装。
   url="${CONFIG[DB_RAW_URL]:-$(build_jdbc_url "${CONFIG[DB_TYPE]}" "${CONFIG[DB_HOST]}" "${CONFIG[DB_PORT]}" "${CONFIG[DB_NAME]}")}"
   url="$(normalize_jdbc_url "${CONFIG[DB_TYPE]}" "$url")"
   file="$(db_config_file)"
+  dialect="$(db_dialect_for "${CONFIG[DB_TYPE]}")"
   mkdir -p "$(dirname "$file")"
   cat > "$file" <<EOF
 # 由 config-db / 迁移向导生成；容器通过 /data/atv/config/ 加载，覆盖 H2 默认数据源。
-# Spring 按 key 合并：只覆盖下面的数据源/方言，其余配置沿用 classpath application.yaml。
+# Spring 按 key 合并：只覆盖下面的数据源配置，其余配置沿用 classpath application.yaml。
 spring:
   datasource:
     jdbc-url: ${url}
     username: ${CONFIG[DB_USER]}
     password: ${CONFIG[DB_PASSWORD]}
     driver-class-name: $(db_driver_for "${CONFIG[DB_TYPE]}")
+EOF
+  if [[ -n "$dialect" ]]; then
+    cat >> "$file" <<EOF
   jpa:
-    database-platform: $(db_dialect_for "${CONFIG[DB_TYPE]}")
+    database-platform: ${dialect}
+EOF
+  fi
+  cat >> "$file" <<EOF
   sql:
     init:
       mode: never

@@ -312,6 +312,9 @@ test_external_db_config_disables_sql_init() {
   assert_file_has_line "  sql:" "$db_config" "external database config should override Spring SQL init"
   assert_file_has_line "    init:" "$db_config" "external database config should override Spring SQL init"
   assert_file_has_line "      mode: never" "$db_config" "external database config must not run H2 data.sql on MySQL"
+  assert_file_has_line "    database-platform: org.hibernate.dialect.MySQLDialect" "$db_config" "generated MySQL config should use non-deprecated MySQL dialect"
+  assert_file_has_line "    database-platform: org.hibernate.dialect.MySQLDialect" "$ROOT_DIR/src/main/resources/application-mysql.yaml" "MySQL profile should use non-deprecated MySQL dialect"
+  assert_not_contains "MySQL8Dialect" "$(cat "$ROOT_DIR/src/main/resources/application-mysql.yaml")" "MySQL profile should not use deprecated MySQL8Dialect"
 }
 
 test_prompt_db_connection_defaults_to_host_ip() {
@@ -363,6 +366,8 @@ test_headless_postgresql_url_adds_timezone_when_missing() {
   local db_config
   db_config="$(db_config_file)"
   assert_file_has_line "    jdbc-url: jdbc:postgresql://192.168.50.60:5432/atv?options=-c%20TimeZone=Asia/Shanghai" "$db_config" "headless PostgreSQL URL should add timezone option"
+  assert_not_contains "database-platform" "$(cat "$db_config")" "generated PostgreSQL config should let Hibernate auto-detect dialect"
+  assert_not_contains "PostgreSQLDialect" "$(cat "$ROOT_DIR/src/main/resources/application-postgresql.yaml")" "PostgreSQL profile should let Hibernate auto-detect dialect"
 }
 
 test_config_db_apply_refreshes_external_db_config() {
