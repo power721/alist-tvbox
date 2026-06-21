@@ -22,6 +22,18 @@ public class Index115Config {
     }
 
     @Bean
+    public Index115Client index115Client(RestTemplate index115RestTemplate) {
+        return new Index115Client(index115RestTemplate);
+    }
+
+    @Bean
+    public Index115TvBoxAdapter index115TvBoxAdapter(Index115Client index115Client,
+                                                     ProxyService proxyService,
+                                                     DriverAccountRepository driverAccountRepository) {
+        return new Index115TvBoxAdapter(index115Client, proxyService, driverAccountRepository);
+    }
+
+    @Bean
     public Index115Extractor index115Extractor() {
         return new Index115Extractor();
     }

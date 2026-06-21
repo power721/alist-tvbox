@@ -126,6 +126,7 @@ public class TvBoxService {
     private final SettingService settingService;
     private final AListLocalService aListLocalService;
     private final ProxyService proxyService;
+    private final Index115TvBoxAdapter index115Adapter;
     private final ShareService shareService;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
@@ -189,6 +190,7 @@ public class TvBoxService {
                         ObjectMapper objectMapper,
                         DriverAccountRepository driverAccountRepository,
                         ProxyService proxyService,
+                        Index115TvBoxAdapter index115Adapter,
                         RestTemplateBuilder builder,
                         PikPakAccountRepository pikPakAccountRepository) {
         this.accountRepository = accountRepository;
@@ -211,6 +213,7 @@ public class TvBoxService {
         this.objectMapper = objectMapper;
         this.driverAccountRepository = driverAccountRepository;
         this.proxyService = proxyService;
+        this.index115Adapter = index115Adapter;
         this.restTemplate = builder.build();
         this.pikPakAccountRepository = pikPakAccountRepository;
     }
@@ -879,6 +882,9 @@ public class TvBoxService {
     }
 
     private List<MovieDetail> searchByApi(Site site, String ac, String keyword) throws IOException {
+        if (site.getStorageVersion() != null && site.getStorageVersion() == 1) {
+            return index115Adapter.search(site, keyword);
+        }
         if (site.isXiaoya()) {
             try {
                 return searchByXiaoya(site, ac, keyword);
@@ -1036,6 +1042,9 @@ public class TvBoxService {
         }
 
         Site site = getSite(tid);
+        if (site.getStorageVersion() != null && site.getStorageVersion() == 1) {
+            return index115Adapter.list(site, path, page, size);
+        }
         if (path.contains(PLAYLIST)) {
             return getPlaylist("", site, path, 0);
         }
@@ -1376,6 +1385,9 @@ public class TvBoxService {
 
     public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub, String client, String type) {
         Site site = siteService.getById(siteId);
+        if (site.getStorageVersion() != null && site.getStorageVersion() == 1) {
+            return index115Adapter.play(site, path);
+        }
         String url = null;
         String name = getNameFromPath(path);
         String fullPath = path;
