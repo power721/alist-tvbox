@@ -18,6 +18,7 @@ public class Movie {
     private Integer id;
     private String name;
     private String genre;
+    @Column(length = 1024)
     private String description;
     private String language;
     private String country;

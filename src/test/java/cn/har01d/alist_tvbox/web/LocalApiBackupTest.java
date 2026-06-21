@@ -47,24 +47,39 @@ class LocalApiBackupTest {
     @Test
     void jsonBackupSucceedsWithValidToken() throws Exception {
         java.io.File backupFile = new java.io.File("/data/backup/database-json-2026-06-20-124705.zip");
-        when(settingService.backupJsonDatabase()).thenReturn(backupFile);
+        when(settingService.backupJsonDatabase(false)).thenReturn(backupFile);
         Files.createDirectories(dataDir.resolve("atv"));
         Files.writeString(dataDir.resolve("atv").resolve("backup_token"), "tok");
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-BACKUP-TOKEN", "tok");
 
-        Map<String, String> result = controller.backupLocal(request, "json");
+        Map<String, String> result = controller.backupLocal(request, "json", false);
         assertTrue(result.get("file").startsWith("database-json-"));
         assertTrue(result.get("file").endsWith(".zip"));
         assertTrue(result.get("path").endsWith("database-json-2026-06-20-124705.zip"));
-        verify(settingService).backupJsonDatabase();
+        verify(settingService).backupJsonDatabase(false);
+    }
+
+    @Test
+    void jsonBackupIncludesDoubanWhenRequested() throws Exception {
+        java.io.File backupFile = new java.io.File("/data/backup/database-json-2026-06-20-124705.zip");
+        when(settingService.backupJsonDatabase(true)).thenReturn(backupFile);
+        Files.createDirectories(dataDir.resolve("atv"));
+        Files.writeString(dataDir.resolve("atv").resolve("backup_token"), "tok");
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-BACKUP-TOKEN", "tok");
+
+        controller.backupLocal(request, "json", true);
+        // migration path passes includeDouban=true through to the JSON backup service
+        verify(settingService).backupJsonDatabase(true);
     }
 
     @Test
     void rejectsMissingToken() {
         MockHttpServletRequest request = new MockHttpServletRequest();
-        assertThrows(BadRequestException.class, () -> controller.backupLocal(request, "json"));
+        assertThrows(BadRequestException.class, () -> controller.backupLocal(request, "json", false));
     }
 
     @Test
@@ -75,7 +90,7 @@ class LocalApiBackupTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-BACKUP-TOKEN", "wrong");
 
-        assertThrows(BadRequestException.class, () -> controller.backupLocal(request, "json"));
+        assertThrows(BadRequestException.class, () -> controller.backupLocal(request, "json", false));
     }
 
     @Test

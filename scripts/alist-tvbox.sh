@@ -710,8 +710,8 @@ migrate_db_export() {
   local token file
   token="$(generate_backup_token)"
   write_backup_token "$container_name" "$token"
-  echo -e "${CYAN}从容器 $container_name 导出 JSON 备份...${NC}"
-  if file="$(call_backup_api "$container_name" "$token" "json")" && [[ -n "$file" ]]; then
+  echo -e "${CYAN}从容器 $container_name 导出 JSON 备份（含豆瓣数据 movie/meta/alias）...${NC}"
+  if file="$(call_backup_api "$container_name" "$token" "json" "true")" && [[ -n "$file" ]]; then
     cp -f "${CONFIG[BASE_DIR]}/backup/$file" "$out"
     echo -e "${GREEN}已导出: $out${NC}"
     echo -e "${YELLOW}下一步：在目标实例上执行 '${0##*/} migrate-db import $out'${NC}"
@@ -2159,10 +2159,11 @@ write_backup_token() {
   docker exec "$container_name" sh -lc "mkdir -p /data/atv && umask 077 && printf '%s' '$token' > /data/atv/backup_token"
 }
 
-# 调用容器内本地备份端点；$3=type(json|sql)。成功打印产物文件名，失败返回非 0
+# 调用容器内本地备份端点；$3=type(json|sql)，$4=includeDouban(true|false，默认 false)。
+# 成功打印产物文件名，失败返回非 0。迁移导出传 includeDouban=true 以把 movie/meta/alias 带到目标库。
 call_backup_api() {
-  local container_name="$1" token="$2" type="$3"
-  docker exec "$container_name" sh -lc "curl -fsS -X POST -H 'X-BACKUP-TOKEN: $token' 'http://127.0.0.1:4567/api/local/backup?type=$type'" \
+  local container_name="$1" token="$2" type="$3" include_douban="${4:-false}"
+  docker exec "$container_name" sh -lc "curl -fsS -X POST -H 'X-BACKUP-TOKEN: $token' 'http://127.0.0.1:4567/api/local/backup?type=$type&includeDouban=$include_douban'" \
     | tr -d '\n' | sed -n 's/.*"file"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
 }
 

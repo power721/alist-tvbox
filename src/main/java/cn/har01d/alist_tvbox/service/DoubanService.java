@@ -19,6 +19,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.H2SqlConverter;
 import cn.har01d.alist_tvbox.util.TextUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -70,6 +71,7 @@ import static cn.har01d.alist_tvbox.util.Constants.USER_AGENT;
 @Slf4j
 @Service
 public class DoubanService {
+    private static final int BATCH_SIZE = 1000;
     private static final Pattern NUMBER = Pattern.compile("Season (\\d{1,2})");
     private static final Pattern NUMBER2 = Pattern.compile("SE(\\d{1,2})");
     private static final Pattern NUMBER3 = Pattern.compile("^S(\\d{1,2})$");
@@ -289,13 +291,32 @@ public class DoubanService {
     private void upgradeSqlFile(Path file) {
         try {
             //jdbcTemplate.execute("RUNSCRIPT FROM '" + file.toString() + "'");
+            H2SqlConverter.Dialect dialect = H2SqlConverter.detect(environment);
             List<String> lines = Files.readAllLines(file);
-            for (String line : lines) {
-                try {
-                    jdbcTemplate.execute(line);
-                } catch (Exception e) {
-                    log.debug("execute sql failed: {}", e);
+            if (dialect == H2SqlConverter.Dialect.H2) {
+                for (String line : lines) {
+                    try {
+                        jdbcTemplate.execute(line);
+                    } catch (Exception e) {
+                        log.debug("execute sql failed: {}", e);
+                    }
                 }
+            } else {
+                // diff files are H2 dialect (U& escapes, "PUBLIC" identifiers) — convert
+                // each statement to the target dialect and apply in batches, falling back
+                // to per-statement execution so one bad line never aborts the whole file.
+                List<String> batch = new ArrayList<>(BATCH_SIZE);
+                for (String line : lines) {
+                    String sql = H2SqlConverter.convert(line, dialect);
+                    if (sql == null) {
+                        continue;
+                    }
+                    batch.add(sql);
+                    if (batch.size() >= BATCH_SIZE) {
+                        executeBatch(batch);
+                    }
+                }
+                executeBatch(batch);
             }
             String version = getVersion(file);
             settingRepository.save(new Setting(MOVIE_VERSION, version));
@@ -303,6 +324,25 @@ public class DoubanService {
         } catch (Exception e) {
             log.warn("upgrade SQL file failed: {}", file, e);
         }
+    }
+
+    private void executeBatch(List<String> batch) {
+        if (batch.isEmpty()) {
+            return;
+        }
+        try {
+            jdbcTemplate.batchUpdate(batch.toArray(new String[0]));
+        } catch (Exception e) {
+            log.debug("batch update failed, falling back to per-statement execution", e);
+            for (String sql : batch) {
+                try {
+                    jdbcTemplate.execute(sql);
+                } catch (Exception ex) {
+                    log.debug("execute sql failed: {}", ex);
+                }
+            }
+        }
+        batch.clear();
     }
 
     public String getAppRemoteVersion() {

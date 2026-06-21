@@ -247,8 +247,17 @@ public class SettingService {
      */
     @Scheduled(cron = "0 30 6 * * *")
     public File backupJsonDatabase() {
+        return backupJsonDatabase(false);
+    }
+
+    /**
+     * On-demand JSON backup. {@code includeDouban=true} also exports the large movie/meta/alias tables
+     * — used by the DB migration path so the target instance receives douban data. The daily scheduled
+     * backup omits them to stay small.
+     */
+    public File backupJsonDatabase(boolean includeDouban) {
         try {
-            File exported = databaseBackupService.exportBackupZip();
+            File exported = databaseBackupService.exportBackupZip(includeDouban);
             File out = Utils.getDataPath("backup", backupFilename("database-json-")).toFile();
             Files.copy(exported.toPath(), out.toPath(), StandardCopyOption.REPLACE_EXISTING);
             if (!exported.delete()) {

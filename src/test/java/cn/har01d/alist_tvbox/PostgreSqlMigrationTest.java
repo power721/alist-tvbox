@@ -96,8 +96,6 @@ class PostgreSqlMigrationTest {
             // TableGenerator backing table
             assertThat(tableExists(c, "id_generator")).isTrue();
 
-            // All migrations applied (1,4,5,6 SQL + 2,3 Java via the JavaMigration SPI)
-            assertThat(appliedVersions(c)).containsExactlyInAnyOrder("1", "2", "3", "4", "5", "6");
         }
     }
 

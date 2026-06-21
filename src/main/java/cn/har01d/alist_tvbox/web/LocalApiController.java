@@ -77,7 +77,8 @@ public class LocalApiController {
      */
     @PostMapping("/api/local/backup")
     public Map<String, String> backupLocal(HttpServletRequest request,
-                                           @RequestParam(name = "type", defaultValue = "json") String type) {
+                                           @RequestParam(name = "type", defaultValue = "json") String type,
+                                           @RequestParam(name = "includeDouban", defaultValue = "false") boolean includeDouban) {
         String requestToken = request.getHeader("X-BACKUP-TOKEN");
         Path tokenFile = Utils.getDataPath("atv", BACKUP_TOKEN_FILE);
         boolean authorized = false;
@@ -92,7 +93,7 @@ public class LocalApiController {
             authorized = true;
             File out = "sql".equalsIgnoreCase(type)
                     ? settingService.backupDatabase()
-                    : settingService.backupJsonDatabase();
+                    : settingService.backupJsonDatabase(includeDouban);
             if (out == null) {
                 throw new BadRequestException("备份失败（SQL 备份仅 H2 可用，或备份过程出错）");
             }

@@ -26,8 +26,9 @@ public class Meta {
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
     private Integer id;
-    @Column(unique = true)
+    @Column(length = 1024, unique = true)
     private String path;
+    @Column(length = 512)
     private String name;
     @Column(name = "\"year\"")
     private Integer year;

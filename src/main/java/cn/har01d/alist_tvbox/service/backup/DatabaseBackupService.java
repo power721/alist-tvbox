@@ -29,6 +29,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -93,13 +94,22 @@ public class DatabaseBackupService {
     }
 
     public File exportBackupZip() throws Exception {
+        return exportBackupZip(false);
+    }
+
+    /**
+     * Export the backup zip. When {@code includeDouban} is true the large douban modules
+     * (movie/meta/alias) are included — used by the migration path so the target DB receives the
+     * douban data; daily backups pass false to stay small.
+     */
+    public File exportBackupZip(boolean includeDouban) throws Exception {
         BackupManifestDto manifest = new BackupManifestDto();
         manifest.setAppVersion(settingRepository.findById("app_version").map(Setting::getValue).orElse("unknown"));
 
         File out = File.createTempFile("database-backup-" + LocalDate.now() + "-", ".zip");
         try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(out))) {
             // One JSON file per table keeps each document small and lets restore stream module by module.
-            for (BackupModuleHandler<?> handler : registry.orderedHandlers()) {
+            for (BackupModuleHandler<?> handler : registry.exportHandlers(includeDouban)) {
                 BackupModuleDto module = new BackupModuleDto();
                 module.setEntity(handler.entityName());
                 module.setItems(handler.exportItems());
@@ -133,9 +143,13 @@ public class DatabaseBackupService {
                 // gone from the DB immediately (within the transaction). IDENTITY entities are NOT
                 // deleted here: their handler upserts by id and removes missing rows, preserving
                 // existing ids (e.g. admin user = 1) without DDL that would break this transaction.
+                // Only clear tables actually present in this backup: a base-only backup (no douban)
+                // must not wipe movie/meta/alias rows that aren't being restored.
+                Set<String> manifestModules = manifest.getModules().keySet();
                 for (int i = handlers.size() - 1; i >= 0; i--) {
                     BackupModuleHandler<?> handler = handlers.get(i);
-                    if (handler.idStrategy() != IdStrategy.IDENTITY) {
+                    if (manifestModules.contains(handler.moduleName())
+                            && handler.idStrategy() != IdStrategy.IDENTITY) {
                         jdbcTemplate.update("delete from " + handler.tableName());
                     }
                 }

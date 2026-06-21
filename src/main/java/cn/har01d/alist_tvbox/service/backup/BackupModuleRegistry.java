@@ -25,6 +25,13 @@ import java.util.Set;
 public class BackupModuleRegistry {
 
     private final List<BackupModuleHandler<?>> handlers = new ArrayList<>();
+    /**
+     * The large douban modules (movie/meta/alias). They live in {@link #handlers} too, so restore and
+     * id_generator rebuild still see them, but {@link #exportHandlers(boolean)} omits them unless the
+     * caller opts in (migration only) — keeps daily JSON backups small. Restore is manifest-driven, so
+     * a base-only backup never touches existing douban rows.
+     */
+    private final List<BackupModuleHandler<?>> doubanHandlers = new ArrayList<>();
     private final EntityManager entityManager;
 
     public BackupModuleRegistry(EntityManager entityManager,
@@ -54,7 +61,10 @@ public class BackupModuleRegistry {
                                 OfflineDownloadTaskRepository offlineDownloadTaskRepository,
                                 PlayUrlRepository playUrlRepository,
                                 HistoryRepository historyRepository,
-                                TaskRepository taskRepository) {
+                                TaskRepository taskRepository,
+                                MovieRepository movieRepository,
+                                MetaRepository metaRepository,
+                                AliasRepository aliasRepository) {
         this.entityManager = entityManager;
         ObjectMapper mapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
@@ -89,6 +99,21 @@ public class BackupModuleRegistry {
         add("playUrls", "play_url", PlayUrl.class, playUrlRepository, mapper, IdStrategy.TABLE, "id");
         add("histories", "history", History.class, historyRepository, mapper, IdStrategy.TABLE, "id");
         add("tasks", "task", Task.class, taskRepository, mapper, IdStrategy.TABLE, "id");
+
+        // Douban movie data is large and only carried by migration exports (exportHandlers(true));
+        // daily JSON backups skip it. Restore order matters: movie before alias/meta (FK movie_id),
+        // and tmdb (registered above) before meta (FK tmdb_id).
+        addDouban("movies", "movie", Movie.class, movieRepository, mapper, IdStrategy.ASSIGNED, "id");
+        addDouban("aliases", "alias", Alias.class, aliasRepository, mapper, IdStrategy.ASSIGNED, "name");
+        addDouban("metas", "meta", Meta.class, metaRepository, mapper, IdStrategy.TABLE, "id");
+    }
+
+    private <T> void addDouban(String moduleName, String tableName, Class<T> entityClass,
+                               JpaRepository<T, ?> repository, ObjectMapper mapper,
+                               IdStrategy idStrategy, String keyField) {
+        BackupModuleHandler<T> handler = new BackupModuleHandler<>(moduleName, tableName, entityClass, repository, mapper, entityManager, idStrategy, keyField);
+        handlers.add(handler);
+        doubanHandlers.add(handler);
     }
 
     private <T> void add(String moduleName, String tableName, Class<T> entityClass,
@@ -105,6 +130,24 @@ public class BackupModuleRegistry {
 
     public List<BackupModuleHandler<?>> orderedHandlers() {
         return handlers;
+    }
+
+    /**
+     * Handlers to export. Douban modules (movie/meta/alias) are included only when
+     * {@code includeDouban} is true — used by the migration path so the target DB receives the douban
+     * data, while daily backups stay small.
+     */
+    public List<BackupModuleHandler<?>> exportHandlers(boolean includeDouban) {
+        if (includeDouban || doubanHandlers.isEmpty()) {
+            return handlers;
+        }
+        List<BackupModuleHandler<?>> base = new ArrayList<>(handlers.size() - doubanHandlers.size());
+        for (BackupModuleHandler<?> handler : handlers) {
+            if (!doubanHandlers.contains(handler)) {
+                base.add(handler);
+            }
+        }
+        return base;
     }
 
     public Map<String, BackupModuleHandler<?>> handlerMap() {
