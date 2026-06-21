@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import java.util.List;
 
 import cn.har01d.alist_tvbox.dto.UserDto;
+import cn.har01d.alist_tvbox.dto.SessionDto;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -70,5 +71,16 @@ public class UserController {
     @PostMapping("/api/accounts/update")
     public UserToken updateAccount(@RequestBody UserDto user, HttpServletRequest request) {
         return userService.updateAccount(user, Utils.getClientIp(request), request.getHeader("User-Agent"));
+    }
+
+    @GetMapping("/api/accounts/sessions")
+    public List<SessionDto> sessions() {
+        String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
+        return userService.listSessions(token);
+    }
+
+    @DeleteMapping("/api/accounts/sessions/{id}")
+    public void revokeSession(@PathVariable int id) {
+        userService.revokeSession(id);
     }
 }
