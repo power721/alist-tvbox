@@ -365,6 +365,185 @@ save_config() {
   chmod 600 "$CONFIG_FILE"
 }
 
+# 数据库类型 -> JDBC 驱动类名
+db_driver_for() {
+  case "$1" in
+    mysql)      echo "com.mysql.cj.jdbc.Driver" ;;
+    postgresql) echo "org.postgresql.Driver" ;;
+  esac
+}
+
+# 数据库类型 -> Hibernate 方言
+db_dialect_for() {
+  case "$1" in
+    mysql)      echo "org.hibernate.dialect.MySQL8Dialect" ;;
+    postgresql) echo "org.hibernate.dialect.PostgreSQLDialect" ;;
+  esac
+}
+
+# 根据数据库类型拼装 JDBC URL。
+build_jdbc_url() {
+  local type="$1" host="$2" port="$3" db="$4"
+  case "$type" in
+    mysql)
+      echo "jdbc:mysql://${host}:${port}/${db}?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8" ;;
+    postgresql)
+      echo "jdbc:postgresql://${host}:${port}/${db}" ;;
+  esac
+}
+
+# 清空主应用数据库覆盖配置（切回镜像内置 H2 默认）。只删除 application.yaml，
+# 保留 application.yaml.bak 快照（供回退）。同时清理旧版键名（DB_JDBC_URL 等）兼容历史 app.conf。
+clear_db_config() {
+  unset 'CONFIG[DB_TYPE]' 'CONFIG[DB_HOST]' 'CONFIG[DB_PORT]' 'CONFIG[DB_NAME]' 'CONFIG[DB_USER]' 'CONFIG[DB_PASSWORD]' \
+        'CONFIG[DB_JDBC_URL]' 'CONFIG[DB_USERNAME]' 'CONFIG[DB_DRIVER]' 'CONFIG[DB_DIALECT]' 'CONFIG[DB_RAW_URL]'
+  rm -f "${CONFIG[BASE_DIR]}/db/application.yaml"
+}
+
+# 在切换数据库前快照当前配置，供 rollback_db 一键回退。
+# 记录 DB_PREV_TYPE（迁移前的库类型）；若当前有覆盖文件则备份为 application.yaml.bak，
+# 否则（当前为 H2）清除残留旧 .bak，避免误回退到更早状态。
+snapshot_db_config() {
+  CONFIG[DB_PREV_TYPE]="${CONFIG[DB_TYPE]:-H2}"
+  if [[ -f "${CONFIG[BASE_DIR]}/db/application.yaml" ]]; then
+    cp -f "${CONFIG[BASE_DIR]}/db/application.yaml" "${CONFIG[BASE_DIR]}/db/application.yaml.bak"
+  else
+    rm -f "${CONFIG[BASE_DIR]}/db/application.yaml.bak"
+  fi
+}
+
+# 一键回退到上次切换前的数据库配置（恢复 .bak 或回 H2），并重建容器。
+rollback_db() {
+  local base="${CONFIG[BASE_DIR]}"
+  local bak="$base/db/application.yaml.bak"
+  local cur="${CONFIG[DB_TYPE]:-H2}"
+  local prev="${CONFIG[DB_PREV_TYPE]:-}"
+
+  if [[ ! -f "$bak" && -z "$prev" ]]; then
+    echo -e "${YELLOW}没有可回退的快照（尚未做过数据库切换）。${NC}"
+    read -n 1 -s -r -p "按任意键继续..."
+    return 1
+  fi
+
+  local target
+  if [[ -f "$bak" ]]; then target="${prev:-外部数据库}"; else target="H2（默认）"; fi
+  echo -e "${CYAN}当前: ${cur}   →   回退到: ${target}${NC}"
+  echo -e "${YELLOW}将用迁移前的配置重建容器（原库数据未被迁移改动，仍在原处）。${NC}"
+  read -p "确认回退? [y/N] " yn
+  [[ "$yn" =~ ^[Yy]$ ]] || { echo "已取消"; read -n 1 -s -r -p "按任意键继续..."; return; }
+
+  if [[ -f "$bak" ]]; then
+    mv -f "$bak" "$base/db/application.yaml"
+    chmod 600 "$base/db/application.yaml"
+    CONFIG[DB_TYPE]="${prev:-}"
+  else
+    clear_db_config
+  fi
+  unset 'CONFIG[DB_PREV_TYPE]'
+  save_config
+  config_db_apply
+  echo -e "${GREEN}✓ 已回退到 ${target} 并重建容器。${NC}"
+  read -n 1 -s -r -p "按任意键继续..."
+}
+
+# 写入 Spring 覆盖配置 <数据目录>/db/application.yaml。该文件挂载到容器
+# /opt/atv/config/application.yaml（镜像 WORKDIR=/opt/atv，Spring 自动加载 file:./config/，
+# 优先级高于 classpath），按 key 合并覆盖 classpath application.yaml 的 H2 数据源/方言。
+# 其余配置（app.*/server.*/spring.jackson.* 等）原样来自 classpath，不受影响。
+# 数据库信息只存在此文件 + app.conf，绝不进入 docker run 启动参数。
+write_db_config_file() {
+  mkdir -p "${CONFIG[BASE_DIR]}/db"
+  local url file
+  # 若调用方提供了完整原始 URL（非交互 --jdbc-url），原样保留其自定义参数；否则按 host/port/db 拼装。
+  url="${CONFIG[DB_RAW_URL]:-$(build_jdbc_url "${CONFIG[DB_TYPE]}" "${CONFIG[DB_HOST]}" "${CONFIG[DB_PORT]}" "${CONFIG[DB_NAME]}")}"
+  file="${CONFIG[BASE_DIR]}/db/application.yaml"
+  cat > "$file" <<EOF
+# 由 config-db / 迁移向导生成；挂载到容器 /opt/atv/config/application.yaml，覆盖 H2 默认数据源。
+# Spring 按 key 合并：只覆盖下面的数据源/方言，其余配置沿用 classpath application.yaml。
+spring:
+  datasource:
+    jdbc-url: ${url}
+    username: ${CONFIG[DB_USER]}
+    password: ${CONFIG[DB_PASSWORD]}
+    driver-class-name: $(db_driver_for "${CONFIG[DB_TYPE]}")
+  jpa:
+    database-platform: $(db_dialect_for "${CONFIG[DB_TYPE]}")
+EOF
+  chmod 600 "$file"
+}
+
+# 从容器视角测试 host:port 是否可达（用与 app 容器相同的网络模式，镜像内置 nc）。
+# 这比从宿主机测试更准确：bridge 容器里的 localhost ≠ 宿主机。返回 0=可达。
+test_db_connection() {
+  local host="$1" port="$2"
+  local net_arg=()
+  if [[ "${CONFIG[NETWORK]:-bridge}" == "host" ]]; then
+    net_arg=(--network host)
+  fi
+  docker run --rm --entrypoint sh "${net_arg[@]}" "${CONFIG[IMAGE_NAME]}" \
+    -c "nc -z -w3 $host $port" 2>/dev/null
+}
+
+# 真正的数据库连接测试：调用应用的 /api/local/db-test 端点，用其自带 JDBC 驱动真实登录
+# （SELECT 1），能抓住 TCP 测不出来的问题：主机未授权(Host not allowed)、账号密码错、库不存在，
+# 并打印数据库原始错误。无需拉取 client 镜像。容器未运行时退化为 TCP 可达测试。
+test_db_full() {
+  local type="$1" host="$2" port="$3" db="$4" user="$5" pass="$6"
+  local url="${CONFIG[DB_RAW_URL]:-$(build_jdbc_url "$type" "$host" "$port" "$db")}"
+  local container_name; container_name="$(get_container_name)"
+
+  if [[ "$(check_container_status)" != "running" ]]; then
+    echo -e "${YELLOW}容器未运行，仅做 TCP 可达测试（无法验证账号/主机授权）。${NC}"
+    if ! test_db_connection "$host" "$port"; then
+      echo -e "${RED}  ✗ TCP 不可达。若数据库在宿主机且容器为 bridge 网络，localhost 不可达——用宿主机 IP / host 网络。${NC}" >&2
+      return 1
+    fi
+    echo -e "${GREEN}  ✓ TCP 可达${NC}"
+    return 0
+  fi
+
+  echo -e "${CYAN}测试连接（应用 JDBC 真实登录）${host}:${port}/${db} ...${NC}"
+  local token; token="$(generate_backup_token)"
+  write_backup_token "$container_name" "$token"
+  # JSON 转义用户名/密码里的 \ 和 "
+  local uesc="${user//\\/\\\\}"; uesc="${uesc//\"/\\\"}"
+  local pesc="${pass//\\/\\\\}"; pesc="${pesc//\"/\\\"}"
+  local resp
+  resp=$(docker exec "$container_name" sh -lc \
+    "curl -fsS -X POST -H 'X-BACKUP-TOKEN: $token' -H 'Content-Type: application/json' \
+     -d '{\"url\":\"$url\",\"username\":\"$uesc\",\"password\":\"$pesc\"}' \
+     'http://127.0.0.1:4567/api/local/db-test'" 2>&1)
+  if echo "$resp" | grep -qE '"success"[[:space:]]*:[[:space:]]*true'; then
+    echo -e "${GREEN}  ✓ 连接成功${NC}"
+    return 0
+  fi
+  echo -e "${RED}  ✗ 连接失败，数据库返回：${NC}" >&2
+  echo "$resp" | sed 's/^/      /' | tail -5 >&2
+  echo -e "${YELLOW}  常见：MySQL 'Host ... is not allowed'→给用户授权容器网段(atv@'172.17.0.0/16' 或 atv@'%'，并 FLUSH PRIVILEGES)；库不存在→先 CREATE DATABASE。${NC}" >&2
+  return 1
+}
+
+# 交互式收集连接信息：host/port/database/username 提供默认值（回车采用），password 必填。
+# 结果写入 CONFIG[DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD]。
+prompt_db_connection() {
+  local type="$1" d_host d_port d_db host port db user pass
+  case "$type" in
+    mysql)      d_host=localhost; d_port=3306; d_db=alist_tvbox ;;
+    postgresql) d_host=localhost; d_port=5432;  d_db=alist_tvbox ;;
+    *) return 1 ;;
+  esac
+  read -rp "数据库主机 [$d_host]: " host
+  read -rp "端口 [$d_port]: " port
+  read -rp "数据库名 [$d_db]: " db
+  read -rp "用户名 [atv]: " user
+  read -rsp "密码: " pass; echo
+  CONFIG[DB_HOST]="${host:-$d_host}"
+  CONFIG[DB_PORT]="${port:-$d_port}"
+  CONFIG[DB_NAME]="${db:-$d_db}"
+  CONFIG[DB_USER]="${user:-atv}"
+  CONFIG[DB_PASSWORD]="$pass"
+}
+
 # 配置主应用数据库（H2/MySQL/PostgreSQL）。写入 CONFIG_FILE，下次安装/重建容器时生效。
 config_db() {
   echo -e "${CYAN}=== 配置主应用数据库 ===${NC}"
@@ -376,35 +555,26 @@ config_db() {
 
   case "$db_choice" in
     1)
-      unset 'CONFIG[DB_TYPE]';      unset 'CONFIG[DB_JDBC_URL]'
-      unset 'CONFIG[DB_USERNAME]';  unset 'CONFIG[DB_PASSWORD]'
-      unset 'CONFIG[DB_DRIVER]';    unset 'CONFIG[DB_DIALECT]'
+      snapshot_db_config
+      clear_db_config
       save_config
       echo -e "${GREEN}已切换回 H2 默认。重新安装/更新容器后生效。${NC}"
       ;;
     2|3)
-      if [[ "$db_choice" == "2" ]]; then
-        CONFIG[DB_TYPE]="mysql"
-        CONFIG[DB_DRIVER]="com.mysql.cj.jdbc.Driver"
-        CONFIG[DB_DIALECT]="org.hibernate.dialect.MySQL8Dialect"
-        local default_url="jdbc:mysql://localhost:3306/alist_tvbox"
-      else
-        CONFIG[DB_TYPE]="postgresql"
-        CONFIG[DB_DRIVER]="org.postgresql.Driver"
-        CONFIG[DB_DIALECT]="org.hibernate.dialect.PostgreSQLDialect"
-        local default_url="jdbc:postgresql://localhost:5432/alist_tvbox"
+      CONFIG[DB_TYPE]="$([[ "$db_choice" == "2" ]] && echo mysql || echo postgresql)"
+      prompt_db_connection "${CONFIG[DB_TYPE]}" || { echo -e "${RED}已取消${NC}"; read -n 1 -s -r -p "按任意键继续..."; return 1; }
+      if ! test_db_full "${CONFIG[DB_TYPE]}" "${CONFIG[DB_HOST]}" "${CONFIG[DB_PORT]}" "${CONFIG[DB_NAME]}" "${CONFIG[DB_USER]}" "${CONFIG[DB_PASSWORD]}"; then
+        clear_db_config
+        read -n 1 -s -r -p "按任意键继续..."
+        return 1
       fi
-      read -rp "JDBC URL [$default_url]: " jdbc_url
-      read -rp "用户名 [atv]: " username
-      read -rsp "密码: " password; echo
-      CONFIG[DB_JDBC_URL]="${jdbc_url:-$default_url}"
-      CONFIG[DB_USERNAME]="${username:-atv}"
-      CONFIG[DB_PASSWORD]="$password"
+      snapshot_db_config
+      write_db_config_file
       save_config
-      echo -e "${GREEN}已保存 ${CONFIG[DB_TYPE]} 配置。执行安装/更新（菜单 1）或 '${0##*/} config-db apply' 重建容器后生效。${NC}"
+      echo -e "${GREEN}已保存 ${CONFIG[DB_TYPE]} 配置（${CONFIG[BASE_DIR]}/db/application.yaml）。执行安装/更新（菜单 1）或 '${0##*/} config-db apply' 重建容器后生效。${NC}"
       ;;
     *)
-      echo -e "${RED}无效选择${NC}"; return 1 ;;
+      echo -e "${RED}无效选择${NC}"; read -n 1 -s -r -p "按任意键继续..."; return 1 ;;
   esac
 }
 
@@ -418,26 +588,33 @@ config_db_apply() {
   show_access_info
 }
 
-# 从当前容器导出 JSON 备份（需要先存在 backup_token）。复用 /api/local/backup?format=json。
+# 从当前容器导出 JSON 备份（迁移第一步，DB 无关）。复用与“立即备份”相同的 token +
+# /api/local/backup?type=json 路径：每次生成一次性 token 写入容器，调用端点，产物落在
+# <数据目录>/backup/，再复制为稳定的 database-json.zip 供 migrate-db import 使用。
 migrate_db_export() {
-  local out="${2:-$(pwd)/database-json.zip}"
-  local container_name=$(get_container_name)
-  local base="${CONFIG[BASE_DIR]}"
-  local token_file="$base/backup_token"
-
-  if [[ ! -f "$token_file" ]]; then
-    echo -e "${RED}未找到 $token_file。请先通过管理界面或重置流程生成 backup_token。${NC}" >&2
+  local out="${2:-${CONFIG[BASE_DIR]}/database-json.zip}"
+  local container_name
+  container_name="$(get_container_name)"
+  local status
+  status="$(check_container_status)"
+  if [[ "$status" != "running" ]]; then
+    echo -e "${RED}容器未运行，无法导出。请先启动容器。${NC}" >&2
     return 1
   fi
-  local token; token=$(<"$token_file")
 
-  echo -e "${CYAN}从容器 $container_name 导出 JSON 备份到 $out ...${NC}"
-  curl -fsS -X POST \
-    -H "X-BACKUP-TOKEN: $token" \
-    "http://127.0.0.1:${CONFIG[PORT1]}/api/local/backup?format=json" \
-    -o "$out" || { echo -e "${RED}导出失败${NC}" >&2; return 1; }
-  echo -e "${GREEN}已导出: $out${NC}"
-  echo -e "${YELLOW}下一步：在目标 PostgreSQL 实例上执行 '${0##*/} migrate-db import $out'${NC}"
+  mkdir -p "${CONFIG[BASE_DIR]}/backup" 2>/dev/null
+  local token file
+  token="$(generate_backup_token)"
+  write_backup_token "$container_name" "$token"
+  echo -e "${CYAN}从容器 $container_name 导出 JSON 备份...${NC}"
+  if file="$(call_backup_api "$container_name" "$token" "json")" && [[ -n "$file" ]]; then
+    cp -f "${CONFIG[BASE_DIR]}/backup/$file" "$out"
+    echo -e "${GREEN}已导出: $out${NC}"
+    echo -e "${YELLOW}下一步：在目标实例上执行 '${0##*/} migrate-db import $out'${NC}"
+  else
+    echo -e "${RED}导出失败。请查看容器日志: docker logs $container_name${NC}" >&2
+    return 1
+  fi
 }
 
 # 把 JSON 备份放进容器启动恢复路径并重启；StartupJsonRestoreRunner 会在下次启动恢复。
@@ -453,6 +630,190 @@ migrate_db_import() {
   cp "$zip" "$base/database-json.zip"
   docker restart "$container_name" || { echo -e "${RED}重启失败${NC}" >&2; return 1; }
   echo -e "${GREEN}已触发恢复。观察 'docker logs -f $container_name'，应用恢复后会自动重启(exit 85)。${NC}"
+}
+
+# 执行迁移三步（快照→导出→切换重建→导入）。CONFIG[DB_*] 须已设置并通过连接测试。
+# 纯逻辑、无交互确认/暂停；返回 0 成功，1 失败。供 migrate_wizard（交互）与 migrate-db --jdbc-url（非交互）复用。
+do_migration_steps() {
+  local db_type="$1"
+  local export_zip="${CONFIG[BASE_DIR]}/migration-export.zip"
+  local container_name
+  container_name="$(get_container_name)"
+
+  snapshot_db_config
+  write_db_config_file
+  save_config
+
+  echo -e "${CYAN}[1/3] 自动导出当前数据...${NC}"
+  migrate_db_export "" "$export_zip" || { echo -e "${RED}导出失败，迁移中止。${NC}" >&2; return 1; }
+
+  echo -e "${CYAN}[2/3] 切换到 $db_type 并重建容器（Flyway 建空表）...${NC}"
+  config_db_apply || { echo -e "${RED}重建失败，迁移中止（备份已保留：$export_zip）。${NC}" >&2; return 1; }
+  echo "等待容器启动与 Flyway 建表..."
+  sleep 8
+
+  echo -e "${CYAN}[3/3] 自动导入恢复到 $db_type...${NC}"
+  migrate_db_import "" "$export_zip" || { echo -e "${RED}导入失败: docker logs $container_name${NC}" >&2; return 1; }
+
+  echo -e "${GREEN}✓ 迁移完成，应用恢复后会自动重启(exit 85)加载新数据。${NC}"
+  echo -e "${YELLOW}观察: docker logs -f $container_name${NC}"
+  return 0
+}
+
+# 从 JDBC URL 解析 host/port/database 到给定变量名（按引用赋值）。
+parse_jdbc_url() {
+  local url="$1"
+  local core="${url#*://}"        # host:port/db?params
+  local hp="${core%%/*}"          # host:port
+  local dbpart="${core#*/}"
+  [[ "$dbpart" == "$core" ]] && dbpart=""
+  PARSED_HOST="${hp%%:*}"
+  PARSED_PORT="${hp#*:}"
+  [[ "$PARSED_PORT" == "$hp" ]] && PARSED_PORT=""
+  PARSED_DB="${dbpart%%\?*}"
+}
+
+# 非交互一键迁移：从 --jdbc-url 自动识别类型（mysql/postgresql），解析 host/port 做连接预检，
+# 然后导出→切换→导入。用法见 migrate-db 分支。
+migrate_db_headless() {
+  shift  # 丢弃 "migrate-db"
+  local jdbc_url="" username="atv" password="" db_type=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --jdbc-url) jdbc_url="$2"; shift 2 ;;
+      --username) username="$2"; shift 2 ;;
+      --password) password="$2"; shift 2 ;;
+      --type)     db_type="$2"; shift 2 ;;
+      *) echo -e "${RED}未知参数: $1${NC}" >&2; return 1 ;;
+    esac
+  done
+
+  if [[ -z "$jdbc_url" || -z "$password" ]]; then
+    echo "用法: $0 migrate-db --jdbc-url <url> --username <u> --password <p> [--type mysql|postgresql]" >&2
+    return 1
+  fi
+
+  # 自动识别类型
+  if [[ -z "$db_type" ]]; then
+    case "$jdbc_url" in
+      jdbc:mysql:*)      db_type="mysql" ;;
+      jdbc:postgresql:*) db_type="postgresql" ;;
+      *) echo -e "${RED}无法从 JDBC URL 识别数据库类型，请用 --type 指定${NC}" >&2; return 1 ;;
+    esac
+  fi
+
+  local PARSED_HOST PARSED_PORT PARSED_DB
+  parse_jdbc_url "$jdbc_url"
+  [[ -z "$PARSED_PORT" ]] && PARSED_PORT="$([[ "$db_type" == mysql ]] && echo 3306 || echo 5432)"
+
+  CONFIG[DB_TYPE]="$db_type"
+  CONFIG[DB_RAW_URL]="$jdbc_url"
+  CONFIG[DB_HOST]="$PARSED_HOST"
+  CONFIG[DB_PORT]="$PARSED_PORT"
+  CONFIG[DB_NAME]="$PARSED_DB"
+  CONFIG[DB_USER]="$username"
+  CONFIG[DB_PASSWORD]="$password"
+
+  echo -e "${CYAN}目标: $db_type  ${PARSED_HOST}:${PARSED_PORT}/${PARSED_DB}  用户=$username${NC}"
+  test_db_full "$db_type" "$PARSED_HOST" "$PARSED_PORT" "$PARSED_DB" "$username" "$password" || { clear_db_config; return 1; }
+  do_migration_steps "$db_type"
+}
+
+# 引导式迁移向导：用户只需提供目标数据库类型 + 连接信息，向导自动完成
+# 导出当前数据 → 切换数据库并重建容器 → 导入恢复。
+# 用独立文件名 migration-export.zip，避免与启动恢复路径 database-json.zip 重名而在步骤 2 重建时被误恢复。
+migrate_wizard() {
+  clear
+  echo -e "${CYAN}============== 数据库迁移向导 ==============${NC}"
+  echo -e "当前数据库: ${YELLOW}${CONFIG[DB_TYPE]:-H2（默认）}${NC}  →  目标: MySQL 或 PostgreSQL"
+  echo "支持 H2→MySQL、H2→PostgreSQL、MySQL↔PostgreSQL（任意方向）"
+  echo "只需提供目标数据库类型与连接信息，向导自动完成："
+  echo "  导出当前数据 → 切换数据库并重建容器 → 导入恢复"
+  echo ""
+  echo -e "${YELLOW}注意：将重建容器并切换数据库；原 H2/MySQL 数据保留在磁盘可回退${NC}"
+  echo -e "${YELLOW}      （回退：重新运行 config-db 选 H2）。请先确认目标数据库已就绪。${NC}"
+  echo ""
+  echo "请选择目标数据库类型："
+  echo "  1) MySQL"
+  echo "  2) PostgreSQL（默认）"
+  read -rp "请选择 [1/2]: " tchoice
+
+  local db_type
+  case "${tchoice:-2}" in
+    1) db_type="mysql" ;;
+    2) db_type="postgresql" ;;
+    *) echo -e "${RED}无效选择${NC}"; read -n 1 -s -r -p "按任意键继续..."; return ;;
+  esac
+  CONFIG[DB_TYPE]="$db_type"
+
+  prompt_db_connection "$db_type" || { clear_db_config; echo -e "${RED}已取消${NC}"; read -n 1 -s -r -p "按任意键继续..."; return; }
+
+  if ! test_db_full "${CONFIG[DB_TYPE]}" "${CONFIG[DB_HOST]}" "${CONFIG[DB_PORT]}" "${CONFIG[DB_NAME]}" "${CONFIG[DB_USER]}" "${CONFIG[DB_PASSWORD]}"; then
+    clear_db_config
+    read -n 1 -s -r -p "按任意键继续..."
+    return
+  fi
+
+  echo ""
+  echo -e "${CYAN}将自动执行：导出当前数据 → 切换到 $db_type 重建容器 → 导入恢复${NC}"
+  read -p "确认开始迁移? [y/N] " go
+  [[ "$go" =~ ^[Yy]$ ]] || { clear_db_config; echo "已取消（未保存任何配置）。"; read -n 1 -s -r -p "按任意键继续..."; return; }
+
+  do_migration_steps "$db_type"
+  read -n 1 -s -r -p "按任意键返回..."
+}
+
+# 数据库迁移与配置子菜单（主菜单 m）。集中数据导出、切换数据库、导入迁移三个流程。
+show_migrate_menu() {
+  while true; do
+    clear
+    sync_runtime_config || true
+    local cur_db="${CONFIG[DB_TYPE]:-H2（默认）}"
+    echo -e "${CYAN}============== 数据库迁移与配置 ==============${NC}"
+    echo -e "${YELLOW} 当前主应用数据库: ${cur_db}${NC}"
+    echo -e "${YELLOW} 支持: H2→MySQL / H2→PostgreSQL / MySQL↔PostgreSQL${NC}"
+    echo -e "${CYAN}---------------------------------------------${NC}"
+    echo -e "${GREEN} 1. 迁移向导（自动备份+切换+恢复，推荐）${NC}"
+    echo -e "${GREEN} 2. 配置/切换主应用数据库 (H2/MySQL/PostgreSQL)${NC}"
+    echo -e "${GREEN} 3. 导出数据 (JSON 备份)${NC}"
+    echo -e "${GREEN} 4. 导入迁移 (恢复到当前实例)${NC}"
+    echo -e "${GREEN} 5. 回退到迁移前的数据库（一键还原上次切换）${NC}"
+    echo -e "${GREEN} 0. 返回主菜单${NC}"
+    echo -e "${CYAN}---------------------------------------------${NC}"
+    read -p "请输入选项 [0-5]: " mc
+    case "$mc" in
+      1)
+        migrate_wizard
+        ;;
+      5)
+        rollback_db
+        ;;
+      2)
+        if config_db; then
+          read -p "是否立即用新配置重建容器以应用? [y/N] " apply_yn
+          if [[ "$apply_yn" =~ ^[Yy]$ ]]; then
+            config_db_apply
+          fi
+        fi
+        read -n 1 -s -r -p "按任意键继续..."
+        ;;
+      3)
+        local default_out="${CONFIG[BASE_DIR]}/database-json.zip"
+        read -rp "导出路径 [${default_out}]: " mout
+        migrate_db_export "" "${mout:-$default_out}"
+        read -n 1 -s -r -p "按任意键继续..."
+        ;;
+      4)
+        local default_zip="${CONFIG[DB_TYPE]:+${CONFIG[BASE_DIR]}/database-json.zip}"
+        default_zip="${default_zip:-${CONFIG[BASE_DIR]}/database-json.zip}"
+        read -rp "要导入的备份 zip [${default_zip}]: " mzip
+        migrate_db_import "" "${mzip:-$default_zip}"
+        read -n 1 -s -r -p "按任意键继续..."
+        ;;
+      0) return ;;
+      *) echo -e "${RED}无效选项!${NC}"; sleep 1 ;;
+    esac
+  done
 }
 
 # Get container name
@@ -597,15 +958,12 @@ start_container() {
     --restart="${CONFIG[RESTART]}"
   )
 
-  # 主应用数据库覆盖（config-db 子命令写入）。未配置时走镜像内置的 H2 默认。
-  # 环境变量用下划线形式（Spring Boot relaxed binding 标准写法，避免连字符在 shell 中非法）。
-  if [[ -n "${CONFIG[DB_TYPE]:-}" ]]; then
-    run_args+=("-e" "SPRING_DATASOURCE_JDBC_URL=${CONFIG[DB_JDBC_URL]}")
-    run_args+=("-e" "SPRING_DATASOURCE_USERNAME=${CONFIG[DB_USERNAME]}")
-    run_args+=("-e" "SPRING_DATASOURCE_PASSWORD=${CONFIG[DB_PASSWORD]}")
-    run_args+=("-e" "SPRING_DATASOURCE_DRIVER_CLASS_NAME=${CONFIG[DB_DRIVER]}")
-    run_args+=("-e" "SPRING_JPA_DATABASE_PLATFORM=${CONFIG[DB_DIALECT]}")
-    run_args+=("-e" "SPRING_PROFILES_ACTIVE=${CONFIG[DB_TYPE]}")
+  # 主应用数据库覆盖：挂载 application.yaml 到 Spring 自动加载位置（镜像 WORKDIR=/opt/atv，
+  # file:./config/，优先级高于 classpath）。Spring 按 key 合并，只覆盖数据源/方言，
+  # 其余配置沿用 classpath application.yaml。数据库信息只在该文件中，绝不进入 docker run
+  # 启动参数（避免凭证出现在 docker inspect / ps）。未配置（H2）时不挂载。
+  if [[ -f "${CONFIG[BASE_DIR]}/db/application.yaml" ]]; then
+    run_args+=("-v" "${CONFIG[BASE_DIR]}/db/application.yaml:/opt/atv/config/application.yaml:ro")
   fi
 
   if [[ "${CONFIG[IMAGE_NAME]}" == *"alist-tvbox"* ]]; then
@@ -716,11 +1074,12 @@ show_menu() {
   echo -e "${GREEN} 7. 选择镜像${NC}"
   echo -e "${GREEN} 8. 配置管理${NC}"
   echo -e "${GREEN} 9. 自动修复${NC}"
+  echo -e "${GREEN} m. 数据库迁移${NC}"
   echo -e "${GREEN} c. 清理资源${NC}"
   echo -e "${GREEN} w. 打开Web界面${NC}"
   echo -e "${GREEN} 0. 退出${NC}"
   echo -e "${CYAN}---------------------------------------------${NC}"
-  read -p "请输入选项 [0-9/c/w]: " choice
+  read -p "请输入选项 [0-9/c/m/w]: " choice
 }
 
 # 检查系统架构支持
@@ -2956,6 +3315,9 @@ interactive_mode() {
       9)
         auto_repair
         ;;
+      m|M)
+        show_migrate_menu
+        ;;
       c|C)
         cleanup_docker_resources
         ;;
@@ -3081,15 +3443,24 @@ cli_mode() {
       esac
       ;;
     migrate-db)
-      case "${2:-}" in
-        export) migrate_db_export "$@" ;;
-        import) migrate_db_import "$@" ;;
-        *) echo "用法: migrate-db <export|import> [zip]" ;;
-      esac
+      if [[ "${2:-}" == --* ]]; then
+        migrate_db_headless "$@"
+      else
+        case "${2:-}" in
+          export) migrate_db_export "$@" ;;
+          import) migrate_db_import "$@" ;;
+          *) echo "用法:"
+            echo "  迁移(非交互): migrate-db --jdbc-url <url> --username <u> --password <p> [--type mysql|postgresql]"
+            echo "  导出/导入:    migrate-db <export|import> [zip]" ;;
+        esac
+      fi
+      ;;
+    rollback-db)
+      rollback_db
       ;;
     *)
       echo -e "${RED}未知命令: $1${NC}"
-      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, health, repair, menu, config-db, migrate-db, help"
+      echo "可用命令: install, start, stop, restart, status, logs, uninstall, update, health, repair, menu, config-db, migrate-db, rollback-db, help"
       exit 1
       ;;
   esac
@@ -3117,15 +3488,18 @@ ${CYAN}命令行命令:${NC}
   health     健康检查
   repair     自动修复诊断
   config-db  配置/切换主应用数据库 (H2/MySQL/PostgreSQL)；config-db apply 用新配置重建容器
-  migrate-db export [zip]   从当前实例导出 JSON 备份（H2/MySQL→PG 迁移第一步）
-  migrate-db import <zip>   将备份导入当前实例（恢复后自动重启；迁移第二步，目标为 PG）
+  migrate-db --jdbc-url <url> --username <u> --password <p>
+                            非交互一键迁移（自动从 URL 识别 mysql/postgresql，导出→切换→导入）
+  migrate-db export [zip]   从当前实例导出 JSON 备份（跨机迁移第一步：在源实例导出）
+  migrate-db import <zip>   将备份导入当前实例（恢复后自动重启；跨机迁移第二步，在目标实例执行）
+  rollback-db               回退到上次切换前的数据库（恢复快照并重建容器）
   menu        进入交互式菜单
   help        显示本帮助
 
 ${CYAN}交互式主菜单:${NC}
   1 安装/更新   2 启动/停止   3 重启   4 查看状态
   5 日志管理    6 卸载容器    7 选择镜像   8 配置管理
-  9 自动修复    c 清理资源    w 打开Web界面   0 退出
+  9 自动修复    m 数据库迁移  c 清理资源    w 打开Web界面   0 退出
 
 ${CYAN}配置管理 (菜单 8) 子菜单:${NC}
   1 数据目录    2 管理端口    3 AList端口   4 挂载/www

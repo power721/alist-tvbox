@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.SettingService;
+import cn.har01d.alist_tvbox.service.UserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,7 +11,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,23 +22,21 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class UserControllerLocalBackupTest {
+class LocalApiBackupTest {
     @TempDir
     Path dataDir;
 
     @Mock
-    private PasswordEncoder passwordEncoder;
-    @Mock
-    private cn.har01d.alist_tvbox.service.UserService userService;
+    private UserService userService;
     @Mock
     private SettingService settingService;
 
-    private UserController controller;
+    private LocalApiController controller;
 
     @BeforeEach
     void setUp() {
         System.setProperty("atv.data.dir", dataDir.toString());
-        controller = new UserController(userService, passwordEncoder, settingService);
+        controller = new LocalApiController(userService, settingService);
     }
 
     @AfterEach
@@ -78,5 +76,13 @@ class UserControllerLocalBackupTest {
         request.addHeader("X-BACKUP-TOKEN", "wrong");
 
         assertThrows(BadRequestException.class, () -> controller.backupLocal(request, "json"));
+    }
+
+    @Test
+    void dbTestRejectsMissingToken() {
+        // token guard is shared with backup; a missing token must be rejected before any JDBC attempt.
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        assertThrows(BadRequestException.class, () ->
+                controller.testDatabaseConnection(request, java.util.Map.of("url", "jdbc:h2:mem:x", "username", "sa", "password", "")));
     }
 }

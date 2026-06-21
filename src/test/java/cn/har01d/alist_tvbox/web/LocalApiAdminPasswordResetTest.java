@@ -5,19 +5,21 @@ import cn.har01d.alist_tvbox.entity.SessionRepository;
 import cn.har01d.alist_tvbox.entity.User;
 import cn.har01d.alist_tvbox.entity.UserRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.service.SettingService;
 import cn.har01d.alist_tvbox.service.UserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.junit.jupiter.api.io.TempDir;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.util.Map;
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -27,7 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class UserControllerAdminPasswordResetTest {
+class LocalApiAdminPasswordResetTest {
     @TempDir
     Path dataDir;
 
@@ -40,9 +42,9 @@ class UserControllerAdminPasswordResetTest {
     @Mock
     private TokenService tokenService;
     @Mock
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private JdbcTemplate jdbcTemplate;
 
-    private UserController userController;
+    private LocalApiController controller;
 
     @BeforeEach
     void setUp() {
@@ -50,8 +52,7 @@ class UserControllerAdminPasswordResetTest {
         UserService userService = new UserService(userRepository, sessionRepository, passwordEncoder, tokenService,
             new cn.har01d.alist_tvbox.service.backup.RestoreState("/data/does-not-exist-database-json.zip"),
             jdbcTemplate);
-        userController = new UserController(userService, passwordEncoder,
-            org.mockito.Mockito.mock(cn.har01d.alist_tvbox.service.SettingService.class));
+        controller = new LocalApiController(userService, org.mockito.Mockito.mock(SettingService.class));
     }
 
     @AfterEach
@@ -80,7 +81,7 @@ class UserControllerAdminPasswordResetTest {
             throw new RuntimeException(e);
         }
 
-        Map<String, String> response = userController.resetAdminPassword(request);
+        Map<String, String> response = controller.resetAdminPassword(request);
 
         assertEquals("admin", response.get("username"));
         assertEquals(12, response.get("password").length());
@@ -99,7 +100,7 @@ class UserControllerAdminPasswordResetTest {
             throw new RuntimeException(e);
         }
 
-        assertThrows(BadRequestException.class, () -> userController.resetAdminPassword(request));
+        assertThrows(BadRequestException.class, () -> controller.resetAdminPassword(request));
         assertTrue(java.nio.file.Files.exists(dataDir.resolve("atv").resolve("admin_reset_token")));
     }
 }

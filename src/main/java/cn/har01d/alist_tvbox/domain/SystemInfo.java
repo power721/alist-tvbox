@@ -24,4 +24,11 @@ public class SystemInfo {
     public String workDir;
     public String pid;
     public String alistPort;
+    public String dbType;
+    public String dbProductName;
+    public String dbVersion;
+    public String dbUrl;
+    public String dbDriverName;
+    public String dbDriverVersion;
+    public String dbDialect;
 }

@@ -13,6 +13,19 @@
     <el-card class="box-card">
       <template #header>
         <div class="card-header">
+          <span>数据库</span>
+        </div>
+      </template>
+      <div>类型： {{ info.dbType || '-' }}</div>
+      <div>产品： {{ info.dbProductName || '-' }} {{ info.dbVersion }}</div>
+      <div>JDBC URL： {{ info.dbUrl || '-' }}</div>
+      <div>驱动： {{ info.dbDriverName || '-' }} {{ info.dbDriverVersion }}</div>
+      <div>方言： {{ info.dbDialect || '-' }}</div>
+    </el-card>
+
+    <el-card class="box-card">
+      <template #header>
+        <div class="card-header">
           <span>Java</span>
         </div>
       </template>
