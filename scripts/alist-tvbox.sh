@@ -376,7 +376,8 @@ db_driver_for() {
 # 数据库类型 -> Hibernate 方言
 db_dialect_for() {
   case "$1" in
-    mysql) echo "org.hibernate.dialect.MySQLDialect" ;;
+    mysql)      echo "org.hibernate.dialect.MySQLDialect" ;;
+    postgresql) echo "org.hibernate.dialect.PostgreSQLDialect" ;;
   esac
 }
 
@@ -710,6 +711,134 @@ migrate_db_export() {
   fi
 }
 
+find_existing_migration_export() {
+  local base="${CONFIG[BASE_DIR]}"
+  local backup_dir="$base/backup"
+  local candidate first_old="" newest_today="" newest_old="" backup_date
+  local today
+  today="$(today_yyyymmdd)"
+
+  for candidate in "$base/migration-export.zip" "$base/database-json.zip"; do
+    [[ -s "$candidate" ]] || continue
+    backup_date="$(migration_export_date_yyyymmdd "$candidate")"
+    if [[ -n "$backup_date" && "$backup_date" == "$today" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    [[ -n "$first_old" ]] || first_old="$candidate"
+  done
+
+  if [[ -d "$backup_dir" ]]; then
+    local nullglob_was_set=0
+    shopt -q nullglob && nullglob_was_set=1
+    shopt -s nullglob
+    local files=("$backup_dir"/database-json*.zip)
+    (( nullglob_was_set )) || shopt -u nullglob
+
+    for candidate in "${files[@]}"; do
+      [[ -s "$candidate" ]] || continue
+      backup_date="$(migration_export_date_yyyymmdd "$candidate")"
+      if [[ -n "$backup_date" && "$backup_date" == "$today" ]]; then
+        if [[ -z "$newest_today" || "$candidate" -nt "$newest_today" ]]; then
+          newest_today="$candidate"
+        fi
+      elif [[ -z "$newest_old" || "$candidate" -nt "$newest_old" ]]; then
+        newest_old="$candidate"
+      fi
+    done
+  fi
+
+  if [[ -n "$newest_today" ]]; then
+    printf '%s\n' "$newest_today"
+    return 0
+  fi
+
+  if [[ -n "$first_old" ]]; then
+    printf '%s\n' "$first_old"
+    return 0
+  fi
+
+  if [[ -n "$newest_old" ]]; then
+    printf '%s\n' "$newest_old"
+    return 0
+  fi
+
+  return 1
+}
+
+today_yyyymmdd() {
+  date +%Y%m%d
+}
+
+migration_export_date_yyyymmdd() {
+  local file="$1"
+  local name="${file##*/}"
+
+  if [[ "$name" =~ ([0-9]{4})-([0-9]{2})-([0-9]{2}) ]]; then
+    printf '%s%s%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+    return 0
+  fi
+
+  if [[ "$name" =~ ([0-9]{8}) ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  date -r "$file" +%Y%m%d 2>/dev/null || true
+}
+
+confirm_migration_export_date() {
+  local source="$1"
+  local allow_confirm="${2:-false}"
+  local backup_date today
+
+  backup_date="$(migration_export_date_yyyymmdd "$source")"
+  today="$(today_yyyymmdd)"
+
+  if [[ -n "$backup_date" && "$backup_date" == "$today" ]]; then
+    return 0
+  fi
+
+  echo -e "${YELLOW}找到的 JSON 备份不是今天生成的: $source${NC}" >&2
+  [[ -n "$backup_date" ]] && echo -e "${YELLOW}备份日期: $backup_date，今天: $today${NC}" >&2
+
+  if [[ "$allow_confirm" == "true" ]]; then
+    local answer
+    read -rp "确认使用这份旧备份继续迁移? [y/N] " answer
+    [[ "$answer" =~ ^[Yy]$ ]] && return 0
+  fi
+
+  echo -e "${RED}旧 JSON 备份未经确认，迁移中止。${NC}" >&2
+  return 1
+}
+
+prepare_migration_export() {
+  local out="$1"
+  local allow_old_confirm="${2:-false}"
+  local status source
+  status="$(check_container_status)"
+
+  if [[ "$status" == "running" ]]; then
+    migrate_db_export "" "$out"
+    return
+  fi
+
+  if source="$(find_existing_migration_export)"; then
+    confirm_migration_export_date "$source" "$allow_old_confirm" || return 1
+    mkdir -p "$(dirname "$out")"
+    if [[ "$source" != "$out" ]]; then
+      cp -f "$source" "$out"
+    fi
+    echo -e "${YELLOW}容器未运行，复用已有 JSON 备份: $source${NC}"
+    echo -e "${GREEN}已准备迁移备份: $out${NC}"
+    return 0
+  fi
+
+  echo -e "${RED}容器未运行，且未找到已导出的 JSON 备份，迁移中止。${NC}" >&2
+  echo -e "${YELLOW}请先启动容器执行 '${0##*/} migrate-db export'，或把 database-json.zip 放到 ${CONFIG[BASE_DIR]}/。${NC}" >&2
+  return 1
+}
+
 # 把 JSON 备份放进容器启动恢复路径并重启；StartupJsonRestoreRunner 会在下次启动恢复。
 migrate_db_import() {
   local zip="${2:-}"
@@ -726,9 +855,11 @@ migrate_db_import() {
 }
 
 # 执行迁移三步（快照→导出→切换重建→导入）。CONFIG[DB_*] 须已设置并通过连接测试。
-# 纯逻辑、无交互确认/暂停；返回 0 成功，1 失败。供 migrate_wizard（交互）与 migrate-db --jdbc-url（非交互）复用。
+# 返回 0 成功，1 失败。供 migrate_wizard（交互）与 migrate-db --jdbc-url（非交互）复用；
+# 交互模式可确认使用旧 JSON 备份，非交互模式遇到旧备份会中止。
 do_migration_steps() {
   local db_type="$1"
+  local allow_old_export_confirm="${2:-false}"
   local export_zip="${CONFIG[BASE_DIR]}/migration-export.zip"
   local container_name
   container_name="$(get_container_name)"
@@ -742,7 +873,7 @@ do_migration_steps() {
   save_config
 
   echo -e "${CYAN}[1/3] 自动导出当前数据...${NC}"
-  migrate_db_export "" "$export_zip" || { echo -e "${RED}导出失败，迁移中止。${NC}" >&2; return 1; }
+  prepare_migration_export "$export_zip" "$allow_old_export_confirm" || { echo -e "${RED}导出失败，迁移中止。${NC}" >&2; return 1; }
 
   echo -e "${CYAN}[2/3] 切换到 $db_type 并重建容器（Flyway 建空表）...${NC}"
   if [[ "$db_type" == "h2" ]]; then
@@ -870,7 +1001,7 @@ migrate_wizard() {
   read -p "确认开始迁移? [y/N] " go
   [[ "$go" =~ ^[Yy]$ ]] || { clear_db_config; echo "已取消（未保存任何配置）。"; read -n 1 -s -r -p "按任意键继续..."; return; }
 
-  do_migration_steps "$db_type"
+  do_migration_steps "$db_type" true
   read -n 1 -s -r -p "按任意键返回..."
 }
 

@@ -366,8 +366,8 @@ test_headless_postgresql_url_adds_timezone_when_missing() {
   local db_config
   db_config="$(db_config_file)"
   assert_file_has_line "    jdbc-url: jdbc:postgresql://192.168.50.60:5432/atv?options=-c%20TimeZone=Asia/Shanghai" "$db_config" "headless PostgreSQL URL should add timezone option"
-  assert_not_contains "database-platform" "$(cat "$db_config")" "generated PostgreSQL config should let Hibernate auto-detect dialect"
-  assert_not_contains "PostgreSQLDialect" "$(cat "$ROOT_DIR/src/main/resources/application-postgresql.yaml")" "PostgreSQL profile should let Hibernate auto-detect dialect"
+  assert_file_has_line "    database-platform: org.hibernate.dialect.PostgreSQLDialect" "$db_config" "generated PostgreSQL config should override base H2 dialect"
+  assert_file_has_line "    database-platform: org.hibernate.dialect.PostgreSQLDialect" "$ROOT_DIR/src/main/resources/application-postgresql.yaml" "PostgreSQL profile should override base H2 dialect"
 }
 
 test_config_db_apply_refreshes_external_db_config() {
@@ -480,6 +480,9 @@ test_h2_migration_clears_external_config_and_backs_up_existing_h2() {
   printf 'old-h2\n' > "${CONFIG[BASE_DIR]}/atv.mv.db"
   printf 'trace\n' > "${CONFIG[BASE_DIR]}/atv.trace.db"
 
+  check_container_status() {
+    printf 'running\n'
+  }
   migrate_db_export() {
     printf 'zip\n' > "$2"
   }
@@ -509,6 +512,117 @@ test_h2_migration_clears_external_config_and_backs_up_existing_h2() {
   }
 }
 
+test_migration_reuses_existing_json_export_when_container_stopped() {
+  reset_config_for_tests
+  CONFIG_FILE="$TEST_TMP_DIR/config/offline-migration.conf"
+  CONFIG["DB_TYPE"]="mysql"
+  CONFIG["DB_RAW_URL"]="jdbc:mysql://192.168.50.60:3306/atv"
+  CONFIG["DB_USER"]="atv"
+  CONFIG["DB_PASSWORD"]="secret"
+  rm -f "${CONFIG[BASE_DIR]}/migration-export.zip" "${CONFIG[BASE_DIR]}/database-json.zip"
+  rm -rf "${CONFIG[BASE_DIR]}/backup"
+  mkdir -p "${CONFIG[BASE_DIR]}/backup"
+  printf 'existing-json\n' > "${CONFIG[BASE_DIR]}/backup/database-json-20260621090000.zip"
+
+  today_yyyymmdd() {
+    printf '20260621\n'
+  }
+  check_container_status() {
+    printf 'stopped\n'
+  }
+  migrate_db_export() {
+    printf 'ASSERT FAIL: stopped container should reuse existing JSON export instead of calling migrate_db_export\n' >&2
+    exit 1
+  }
+  config_db_apply() {
+    :
+  }
+  migrate_db_import() {
+    assert_eq "${CONFIG[BASE_DIR]}/migration-export.zip" "$2" "offline migration should import the stable migration export"
+    assert_eq "existing-json" "$(cat "$2")" "offline migration should copy the existing JSON export"
+  }
+
+  do_migration_steps mysql >/dev/null
+}
+
+test_migration_prefers_today_backup_over_old_stable_export() {
+  reset_config_for_tests
+  local out="${CONFIG[BASE_DIR]}/migration-export.zip"
+  rm -rf "${CONFIG[BASE_DIR]}/backup"
+  mkdir -p "${CONFIG[BASE_DIR]}/backup"
+  printf 'old-stable\n' > "$out"
+  touch -t 202606200900 "$out"
+  printf 'today-json\n' > "${CONFIG[BASE_DIR]}/backup/database-json-20260621090000.zip"
+
+  today_yyyymmdd() {
+    printf '20260621\n'
+  }
+  check_container_status() {
+    printf 'stopped\n'
+  }
+
+  prepare_migration_export "$out" false >/dev/null
+
+  assert_eq "today-json" "$(cat "$out")" "today JSON backup should be preferred over an old stable migration export"
+}
+
+test_migration_rejects_old_json_export_without_confirmation() {
+  reset_config_for_tests
+  CONFIG_FILE="$TEST_TMP_DIR/config/offline-old-migration.conf"
+  CONFIG["DB_TYPE"]="mysql"
+  CONFIG["DB_RAW_URL"]="jdbc:mysql://192.168.50.60:3306/atv"
+  CONFIG["DB_USER"]="atv"
+  CONFIG["DB_PASSWORD"]="secret"
+  rm -f "${CONFIG[BASE_DIR]}/migration-export.zip" "${CONFIG[BASE_DIR]}/database-json.zip"
+  rm -rf "${CONFIG[BASE_DIR]}/backup"
+  mkdir -p "${CONFIG[BASE_DIR]}/backup"
+  printf 'old-json\n' > "${CONFIG[BASE_DIR]}/backup/database-json-20260620090000.zip"
+
+  today_yyyymmdd() {
+    printf '20260621\n'
+  }
+  check_container_status() {
+    printf 'stopped\n'
+  }
+  migrate_db_export() {
+    printf 'ASSERT FAIL: stopped container should not call migrate_db_export\n' >&2
+    exit 1
+  }
+  config_db_apply() {
+    printf 'ASSERT FAIL: old JSON export without confirmation should not rebuild container\n' >&2
+    exit 1
+  }
+
+  if do_migration_steps mysql >/dev/null 2>&1; then
+    printf 'ASSERT FAIL: old JSON export should require confirmation before migration\n' >&2
+    exit 1
+  fi
+}
+
+test_migration_accepts_old_json_export_with_confirmation() {
+  reset_config_for_tests
+  local out="${CONFIG[BASE_DIR]}/migration-export.zip"
+  rm -f "$out" "${CONFIG[BASE_DIR]}/database-json.zip"
+  rm -rf "${CONFIG[BASE_DIR]}/backup"
+  mkdir -p "${CONFIG[BASE_DIR]}/backup"
+  printf 'old-json\n' > "${CONFIG[BASE_DIR]}/backup/database-json-20260620090000.zip"
+
+  today_yyyymmdd() {
+    printf '20260621\n'
+  }
+  check_container_status() {
+    printf 'stopped\n'
+  }
+  migrate_db_export() {
+    printf 'ASSERT FAIL: stopped container should not call migrate_db_export\n' >&2
+    exit 1
+  }
+
+  prepare_migration_export "$out" true >/dev/null 2>&1 <<<"y"
+
+  assert_eq "old-json" "$(cat "$out")" "confirmed old JSON export should be prepared for migration"
+}
+
 test_source_only_loads_helpers
 test_parse_reset_password_response
 test_generate_admin_reset_token
@@ -528,6 +642,10 @@ test_external_db_profiles_disable_sql_init
 test_migrate_wizard_requires_explicit_target_choice
 test_migrate_db_without_args_opens_wizard
 test_h2_migration_clears_external_config_and_backs_up_existing_h2
+test_migration_reuses_existing_json_export_when_container_stopped
+test_migration_prefers_today_backup_over_old_stable_export
+test_migration_rejects_old_json_export_without_confirmation
+test_migration_accepts_old_json_export_with_confirmation
 test_headless_postgresql_url_adds_timezone_when_missing
 test_headless_migrate_db_writes_external_db_config_without_mysql_profile
 test_headless_migrate_db_supports_h2_target
