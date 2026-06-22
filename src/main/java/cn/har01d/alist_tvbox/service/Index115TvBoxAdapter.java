@@ -79,11 +79,13 @@ public class Index115TvBoxAdapter {
     }
 
     public List<MovieDetail> search(Site site, String keyword) {
+        log.debug("search site: {}, keyword: {}", site, keyword);
         var data = client.search(site, keyword, 1, PER_PAGE);
         List<MovieDetail> list = new ArrayList<>();
         if (data == null || data.getItems() == null) {
             return list;
         }
+        log.debug("search result: {}", data.getItems().size());
         for (Index115File f : data.getItems()) {
             if (f.isDir()) {
                 continue;

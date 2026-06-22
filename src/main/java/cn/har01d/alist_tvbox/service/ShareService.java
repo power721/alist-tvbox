@@ -31,6 +31,7 @@ import cn.har01d.alist_tvbox.storage.BaiduShare;
 import cn.har01d.alist_tvbox.storage.GuangYaPanShare;
 import cn.har01d.alist_tvbox.storage.Local;
 import cn.har01d.alist_tvbox.storage.OpenList;
+import cn.har01d.alist_tvbox.storage.Pan115Index;
 import cn.har01d.alist_tvbox.storage.Pan115Share;
 import cn.har01d.alist_tvbox.storage.Pan123Share;
 import cn.har01d.alist_tvbox.storage.Pan139Share;
@@ -84,8 +85,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.ALIST_LOGIN;
+import static cn.har01d.alist_tvbox.util.Constants.ALI_SECRET;
 import static cn.har01d.alist_tvbox.util.Constants.ATV_PASSWORD;
 import static cn.har01d.alist_tvbox.util.Constants.BILIBILI_COOKIE;
 import static cn.har01d.alist_tvbox.util.Constants.OPEN_TOKEN_URL;
@@ -185,6 +186,7 @@ public class ShareService {
         loadAListAlias();
         loadSites();
         pikPakService.loadPikPak();
+        loadIndex115();
         configFileService.writeFiles();
         readTvTxt();
 
@@ -313,6 +315,18 @@ public class ShareService {
             } catch (Exception e) {
                 log.warn("{}", e.getMessage());
             }
+        }
+    }
+
+    private void loadIndex115() {
+        try {
+            Share share = new Share();
+            share.setId(7999);
+            share.setPath("/115分享索引");
+            Pan115Index storage = new Pan115Index(share);
+            aListLocalService.saveStorage(storage);
+        } catch (Exception e) {
+            log.warn("register index115 storage failed: {}", e.getMessage());
         }
     }
 
@@ -897,21 +911,21 @@ public class ShareService {
 
         // Whitelist of allowed domains
         String[] allowedDomains = {
-            "alipan.com", "www.alipan.com",
-            "aliyundrive.com", "www.aliyundrive.com",
-            "123684.com", "123685.com", "123865.com", "123912.com", "123pan.com", "123592.com",
-            "www.123684.com", "www.123685.com", "www.123865.com", "www.123912.com", "www.123pan.com", "www.123592.com",
-            "123684.cn", "123685.cn", "123865.cn", "123912.cn", "123592.cn",
-            "www.123684.cn", "www.123685.cn", "www.123865.cn", "www.123912.cn", "www.123592.cn",
-            "guangyapan.com", "www.guangyapan.com",
-            "mypikpak.com", "www.mypikpak.com",
-            "pan.xunlei.com",
-            "pan.quark.cn",
-            "caiyun.139.com",
-            "drive.uc.cn",
-            "115.com", "www.115.com",
-            "cloud.189.cn",
-            "pan.baidu.com"
+                "alipan.com", "www.alipan.com",
+                "aliyundrive.com", "www.aliyundrive.com",
+                "123684.com", "123685.com", "123865.com", "123912.com", "123pan.com", "123592.com",
+                "www.123684.com", "www.123685.com", "www.123865.com", "www.123912.com", "www.123pan.com", "www.123592.com",
+                "123684.cn", "123685.cn", "123865.cn", "123912.cn", "123592.cn",
+                "www.123684.cn", "www.123685.cn", "www.123865.cn", "www.123912.cn", "www.123592.cn",
+                "guangyapan.com", "www.guangyapan.com",
+                "mypikpak.com", "www.mypikpak.com",
+                "pan.xunlei.com",
+                "pan.quark.cn",
+                "caiyun.139.com",
+                "drive.uc.cn",
+                "115.com", "www.115.com",
+                "cloud.189.cn",
+                "pan.baidu.com"
         };
 
         try {

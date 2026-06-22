@@ -51,7 +51,7 @@ public class ProxyService {
     private final AListLocalService aListLocalService;
     private final HuyaParseService huyaParseService;
     private final Set<String> proxyDrivers = Set.of("AliyundriveOpen", "AliyunShare", "BaiduNetdisk", "BaiduShare2",
-            "Quark", "UC", "UCTV", "QuarkShare", "UCShare", "115 Cloud", "115 Share", "GuangYaPan", "GuangYaPanShare");
+            "Quark", "UC", "UCTV", "QuarkShare", "UCShare", "115 Cloud", "115 Share", "115 Index", "GuangYaPan", "GuangYaPanShare");
     private final OkHttpClient okHttpClient = new OkHttpClient();
 
     public ProxyService(AppProperties appProperties,

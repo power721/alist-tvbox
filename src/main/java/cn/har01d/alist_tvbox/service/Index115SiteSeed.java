@@ -20,19 +20,13 @@ public class Index115SiteSeed implements ApplicationRunner {
     private final SiteRepository siteRepository;
     private final SettingRepository settingRepository;
     private final AListLocalService aListLocalService;
-    private final ShareService shareService;
-    private final AccountService accountService;
 
     public Index115SiteSeed(SiteRepository siteRepository,
                             SettingRepository settingRepository,
-                            AListLocalService aListLocalService,
-                            ShareService shareService,
-                            AccountService accountService) {
+                            AListLocalService aListLocalService) {
         this.siteRepository = siteRepository;
         this.settingRepository = settingRepository;
         this.aListLocalService = aListLocalService;
-        this.shareService = shareService;
-        this.accountService = accountService;
     }
 
     @Override
@@ -58,22 +52,14 @@ public class Index115SiteSeed implements ApplicationRunner {
         registerStorage(site);
     }
 
-    // Register the site as an OpenList nested storage so the bundled alist
-    // recognizes it (mounts at /我的套娃/index115). storageVersion=1 would otherwise
-    // produce driver "AList V1", which OpenList rejects — force "OpenList".
     private void registerStorage(Site site) {
         try {
             OpenList storage = new OpenList(site);
             storage.setDriver("OpenList");
-            storage.setDisabled(true);
             aListLocalService.saveStorage(storage);
-            String token = accountService.login();
-            String error = shareService.enableStorage(storage.getId(), token);
-            if (error != null) {
-                log.warn("enable index115 storage returned: {}", error);
-            }
+            log.info("register index115 site success");
         } catch (Exception e) {
-            log.warn("register index115 storage failed: {}", e.getMessage());
+            log.warn("register index115 site failed: {}", e.getMessage());
         }
     }
 }

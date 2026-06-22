@@ -1042,9 +1042,9 @@ public class TvBoxService {
         }
 
         Site site = getSite(tid);
-//        if (site.getStorageVersion() != null && site.getStorageVersion() == 1) {
-//            return index115Adapter.list(site, path, page, size);
-//        }
+        if (site.getStorageVersion() != null && site.getStorageVersion() == 1) {
+            return index115Adapter.list(site, path, page, size);
+        }
         if (path.contains(PLAYLIST)) {
             return getPlaylist("", site, path, 0);
         }
@@ -1057,6 +1057,10 @@ public class TvBoxService {
         List<MovieDetail> files = new ArrayList<>();
         List<MovieDetail> images = new ArrayList<>();
         MovieList result = new MovieList();
+
+        if (path.equals("/\uD83C\uDF8E我的套娃/115分享")) {
+            return result;
+        }
 
         FsResponse fsResponse = aListService.listFiles(site, path, page, size);
         int total = fsResponse.getTotal();
@@ -1431,7 +1435,7 @@ public class TvBoxService {
             case "QuarkShare", "Quark", "QuarkTV" -> DriverType.QUARK;
             case "UCShare", "UC", "UCTV" -> DriverType.UC;
             case "ThunderBrowser", "ThunderShare" -> DriverType.THUNDER;
-            case "115 Cloud", "115 Share" -> DriverType.PAN115;
+            case "115 Cloud", "115 Share", "115 Index" -> DriverType.PAN115;
             case "BaiduNetdisk", "BaiduShare2" -> DriverType.BAIDU;
             case "123Pan", "123PanShare" -> DriverType.PAN123;
             case "139Yun", "Yun139Share" -> DriverType.PAN139;
