@@ -2,21 +2,24 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.dto.Index115ShareRef;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 @Slf4j
+@Service
 public class Index115VersionClient {
-    private final RestTemplate restTemplate;
-    private final String url;
+    private static final String VERSION_URL = "https://d.har01d.cn/115.version.txt";
 
-    public Index115VersionClient(RestTemplate restTemplate, String url) {
-        this.restTemplate = restTemplate;
-        this.url = url;
+    private final RestTemplate restTemplate;
+
+    public Index115VersionClient(RestTemplateBuilder builder) {
+        this.restTemplate = builder.build();
     }
 
     public Index115ShareRef fetch() {
         try {
-            return parse(restTemplate.getForObject(url, String.class));
+            return parse(restTemplate.getForObject(VERSION_URL, String.class));
         } catch (Exception e) {
             log.warn("fetch 115.version.txt failed", e);
             return null;

@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.entity.Share;
 import cn.har01d.alist_tvbox.storage.Pan115Share;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,6 +23,7 @@ import java.nio.file.StandardCopyOption;
  * admin token, a reserved storage id, saveStorage + enableStorage.
  */
 @Slf4j
+@Service
 public class AListIndex115Downloader implements Index115Downloader {
     private static final int SHARE_TYPE_115 = 8;
     private static final String MOUNT_NAME = "index115";

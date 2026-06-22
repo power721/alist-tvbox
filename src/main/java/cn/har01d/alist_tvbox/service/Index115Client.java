@@ -8,12 +8,14 @@ import cn.har01d.alist_tvbox.entity.Site;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Constants;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
@@ -21,11 +23,12 @@ import java.util.List;
 import java.util.Map;
 
 @Slf4j
+@Service
 public class Index115Client {
     private final RestTemplate restTemplate;
 
-    public Index115Client(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
+    public Index115Client(RestTemplateBuilder builder) {
+        this.restTemplate = builder.build();
     }
 
     public List<Index115File> browse(Site site, String shareCode, String receiveCode, String parentId) {

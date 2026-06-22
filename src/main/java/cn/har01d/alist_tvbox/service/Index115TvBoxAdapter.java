@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.service;
 
+import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.Index115File;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
@@ -9,7 +10,10 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,14 +23,17 @@ import java.util.Map;
  * Version-1 site TVBox backend: browse/search/play against PowerList /index115.
  */
 @Slf4j
+@Service
 public class Index115TvBoxAdapter {
     private static final int PER_PAGE = 60;
 
+    private final AppProperties appProperties;
     private final Index115Client client;
     private final ProxyService proxyService;
     private final DriverAccountRepository driverAccountRepository;
 
-    public Index115TvBoxAdapter(Index115Client client, ProxyService proxyService, DriverAccountRepository driverAccountRepository) {
+    public Index115TvBoxAdapter(AppProperties appProperties, Index115Client client, ProxyService proxyService, DriverAccountRepository driverAccountRepository) {
+        this.appProperties = appProperties;
         this.client = client;
         this.proxyService = proxyService;
         this.driverAccountRepository = driverAccountRepository;
@@ -90,17 +97,28 @@ public class Index115TvBoxAdapter {
             return list;
         }
         log.debug("[Pan115Index] search result: {}", data.getItems().size());
+        String cover = getCover();
         for (Index115File f : data.getItems()) {
             // Search only carries file id + name + isDir; the full play path is
             // assembled later in TvBoxService#getDetail via the detail API.
             MovieDetail md = new MovieDetail();
             md.setVod_id(site.getId() + "$" + f.getFileId() + "$1");
             md.setVod_name(f.getName());
+            md.setVod_remarks(Utils.byte2size(f.getSize()));
             md.setVod_tag(Constants.FILE);
-            md.setVod_pic(Constants.ALIST_PIC);
+            md.setVod_pic(cover);
             list.add(md);
         }
         return list;
+    }
+
+    private String getCover() {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("/115.jpg")
+                .replaceQuery(null)
+                .build()
+                .toUriString();
     }
 
     /** Fetches the file by id and assembles the mounted-storage play path

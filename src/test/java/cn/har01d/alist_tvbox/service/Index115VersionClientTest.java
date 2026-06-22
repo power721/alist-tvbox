@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.dto.Index115ShareRef;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
@@ -19,13 +20,13 @@ class Index115VersionClientTest {
     @BeforeEach
     void setup() {
         restTemplate = new RestTemplate();
-        client = new Index115VersionClient(restTemplate, "https://example.test/115.version.txt");
         server = MockRestServiceServer.createServer(restTemplate);
+        client = new Index115VersionClient(new RestTemplateBuilder().detectRequestFactory(false).requestFactory(() -> restTemplate.getRequestFactory()));
     }
 
     @Test
     void fetchParsesShareRef() {
-        server.expect(requestTo("https://example.test/115.version.txt"))
+        server.expect(requestTo("https://d.har01d.cn/115.version.txt"))
                 .andRespond(withSuccess("swf01d43zby:6666\n", MediaType.TEXT_PLAIN));
         Index115ShareRef ref = client.fetch();
         server.verify();

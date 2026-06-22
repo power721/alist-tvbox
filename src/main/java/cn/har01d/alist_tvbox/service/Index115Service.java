@@ -11,11 +11,13 @@ import cn.har01d.alist_tvbox.entity.Task;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 @Slf4j
+@Service
 public class Index115Service {
     private static final String SHARE_CODE_KEY = "index115.share_code";
 

@@ -6,7 +6,7 @@ import lombok.ToString;
 import java.time.Instant;
 
 @Data
-@ToString(exclude = {"accessToken", "refreshToken", "openToken"})
+@ToString(exclude = {"accessToken", "refreshToken", "openToken", "openAccessToken"})
 public class AccountDto {
     private String nickname;
     private String refreshToken = "";

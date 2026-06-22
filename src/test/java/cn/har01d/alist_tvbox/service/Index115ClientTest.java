@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.entity.Site;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
@@ -20,8 +21,8 @@ class Index115ClientTest {
     @BeforeEach
     void setup() {
         rt = new RestTemplate();
-        client = new Index115Client(rt);
         server = MockRestServiceServer.createServer(rt);
+        client = new Index115Client(new RestTemplateBuilder().detectRequestFactory(false).requestFactory(() -> rt.getRequestFactory()));
     }
 
     @Test

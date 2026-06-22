@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,6 +15,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 @Slf4j
+@Service
 public class Index115Extractor {
     public void extractAndSwap(Path zip, Path dir) throws IOException {
         Path parent = dir.getParent();
