@@ -69,6 +69,8 @@ class TvBoxServiceTest {
     @Mock
     private ProxyService proxyService;
     @Mock
+    private cn.har01d.alist_tvbox.service.Index115TvBoxAdapter index115Adapter;
+    @Mock
     private PikPakAccountRepository pikPakAccountRepository;
 
     private TvBoxService tvBoxService;
@@ -96,6 +98,7 @@ class TvBoxServiceTest {
                 new com.fasterxml.jackson.databind.ObjectMapper(),
                 driverAccountRepository,
                 proxyService,
+                index115Adapter,
                 new RestTemplateBuilder(),
                 pikPakAccountRepository
         );
