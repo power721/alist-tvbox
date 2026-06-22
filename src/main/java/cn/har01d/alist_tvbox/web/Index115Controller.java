@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.dto.Index115CheckResult;
 import cn.har01d.alist_tvbox.service.Index115Service;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +23,11 @@ public class Index115Controller {
     @GetMapping("/status")
     public Map<String, Object> status() {
         return Map.of("hasAccount", index115Service.has115Account());
+    }
+
+    @GetMapping("/check")
+    public Index115CheckResult check() {
+        return index115Service.check();
     }
 
     @ResponseStatus(HttpStatus.ACCEPTED)
