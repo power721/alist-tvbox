@@ -14,19 +14,25 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class Index115SiteSeed implements ApplicationRunner {
-    private static final String NAME = "index115";
+    private static final String NAME = "115分享";
     private static final String TOKEN_SETTING = "alist_token";
 
     private final SiteRepository siteRepository;
     private final SettingRepository settingRepository;
     private final AListLocalService aListLocalService;
+    private final ShareService shareService;
+    private final AccountService accountService;
 
     public Index115SiteSeed(SiteRepository siteRepository,
                             SettingRepository settingRepository,
-                            AListLocalService aListLocalService) {
+                            AListLocalService aListLocalService,
+                            ShareService shareService,
+                            AccountService accountService) {
         this.siteRepository = siteRepository;
         this.settingRepository = settingRepository;
         this.aListLocalService = aListLocalService;
+        this.shareService = shareService;
+        this.accountService = accountService;
     }
 
     @Override
@@ -60,6 +66,11 @@ public class Index115SiteSeed implements ApplicationRunner {
             OpenList storage = new OpenList(site);
             storage.setDriver("OpenList");
             aListLocalService.saveStorage(storage);
+            String token = accountService.login();
+            String error = shareService.enableStorage(storage.getId(), token);
+            if (error != null) {
+                log.warn("enable index115 storage returned: {}", error);
+            }
         } catch (Exception e) {
             log.warn("register index115 storage failed: {}", e.getMessage());
         }
