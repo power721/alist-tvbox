@@ -26,7 +26,7 @@ class Index115ClientTest {
 
     @Test
     void browseRootReturnsShares() {
-        server.expect(requestTo("http://p/index115/browse?share_code=&receive_code=&parent_id="))
+        server.expect(requestTo("http://p/api/index115/browse?share_code=&receive_code=&parent_id="))
                 .andRespond(withSuccess("{\"code\":200,\"data\":[{\"FileID\":\"\",\"ShareCode\":\"sw1\",\"ReceiveCode\":\"6666\",\"Name\":\"Lib\",\"IsDir\":true}]}", MediaType.APPLICATION_JSON));
         var items = client.browse(site, "", "", "");
         server.verify();
@@ -37,7 +37,7 @@ class Index115ClientTest {
 
     @Test
     void searchReturnsItems() {
-        server.expect(requestTo("http://p/index115/search?q=foo&page=1&per_page=20"))
+        server.expect(requestTo("http://p/api/index115/search?q=foo&page=1&per_page=20"))
                 .andRespond(withSuccess("{\"code\":200,\"data\":{\"total\":1,\"items\":[{\"FileID\":\"f1\",\"ShareCode\":\"sw1\",\"ReceiveCode\":\"6666\",\"Name\":\"a.mkv\",\"IsDir\":false}]}}", MediaType.APPLICATION_JSON));
         var data = client.search(site, "foo", 1, 20);
         assertEquals(1, data.getTotal());
@@ -46,7 +46,7 @@ class Index115ClientTest {
 
     @Test
     void resolveLinkReturnsUrl() {
-        server.expect(requestTo("http://p/index115/link"))
+        server.expect(requestTo("http://p/api/index115/link"))
                 .andExpect(jsonPath("$.share_code").value("sw1"))
                 .andExpect(jsonPath("$.file_id").value("f1"))
                 .andRespond(withSuccess("{\"code\":200,\"data\":{\"url\":\"http://play/x\",\"expired_in\":600}}", MediaType.APPLICATION_JSON));

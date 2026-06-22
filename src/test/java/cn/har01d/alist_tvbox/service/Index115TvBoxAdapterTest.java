@@ -91,7 +91,7 @@ class Index115TvBoxAdapterTest {
         Index115SearchData data = new Index115SearchData();
         data.setTotal(1);
         data.setItems(List.of(file("f1", "sw1", "6666", "a.mkv", false)));
-        when(client.search(s, "foo", 1, 20)).thenReturn(data);
+        when(client.search(s, "foo", 1, anyInt())).thenReturn(data);
         when(proxyService.generatePath(eq(s), anyString())).thenReturn(5);
 
         List<MovieDetail> list = adapter.search(s, "foo");

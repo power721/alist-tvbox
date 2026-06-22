@@ -29,7 +29,7 @@ public class Index115Client {
     }
 
     public List<Index115File> browse(Site site, String shareCode, String receiveCode, String parentId) {
-        String url = site.getUrl() + "/index115/browse?share_code={sc}&receive_code={rc}&parent_id={pid}";
+        String url = site.getUrl() + "/api/index115/browse?share_code={sc}&receive_code={rc}&parent_id={pid}";
         Map<String, String> vars = new HashMap<>();
         vars.put("sc", shareCode == null ? "" : shareCode);
         vars.put("rc", receiveCode == null ? "" : receiveCode);
@@ -38,7 +38,7 @@ public class Index115Client {
     }
 
     public Index115SearchData search(Site site, String query, int page, int perPage) {
-        String url = site.getUrl() + "/index115/search?q={q}&page={page}&per_page={pp}";
+        String url = site.getUrl() + "/api/index115/search?q={q}&page={page}&per_page={pp}";
         Map<String, String> vars = new HashMap<>();
         vars.put("q", query);
         vars.put("page", String.valueOf(page));
@@ -47,7 +47,7 @@ public class Index115Client {
     }
 
     public String resolveLink(Site site, String cookie, String shareCode, String receiveCode, String fileId) {
-        String url = site.getUrl() + "/index115/link";
+        String url = site.getUrl() + "/api/index115/link";
         HttpHeaders h = headers(site);
         h.setContentType(MediaType.APPLICATION_JSON);
         Map<String, Object> body = new HashMap<>();

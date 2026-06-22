@@ -18,7 +18,7 @@ import java.util.Map;
 /** Version-1 site TVBox backend: browse/search/play against PowerList /index115. */
 @Slf4j
 public class Index115TvBoxAdapter {
-    private static final int PER_PAGE = 20;
+    private static final int PER_PAGE = 60;
 
     private final Index115Client client;
     private final ProxyService proxyService;
@@ -31,6 +31,7 @@ public class Index115TvBoxAdapter {
     }
 
     public MovieList list(Site site, String path, int page, int size) {
+        log.debug("[Pan115Index] list: {} {}", site.getId(), path);
         String[] ref = Index115PathCodec.decode(path);
         List<Index115File> items;
         if (ref == null) {
@@ -63,6 +64,7 @@ public class Index115TvBoxAdapter {
     }
 
     public Map<String, Object> play(Site site, String path) {
+        log.debug("[Pan115Index] play: {} {}", site.getId(), path);
         String[] ref = Index115PathCodec.decode(path);
         if (ref == null || ref[2] == null) {
             throw new BadRequestException("无效的115索引播放路径: " + path);
@@ -79,13 +81,13 @@ public class Index115TvBoxAdapter {
     }
 
     public List<MovieDetail> search(Site site, String keyword) {
-        log.debug("search site: {}, keyword: {}", site, keyword);
+        log.debug("[Pan115Index] search site: {}, keyword: {}", site.getId(), keyword);
         var data = client.search(site, keyword, 1, PER_PAGE);
         List<MovieDetail> list = new ArrayList<>();
         if (data == null || data.getItems() == null) {
             return list;
         }
-        log.debug("search result: {}", data.getItems().size());
+        log.debug("[Pan115Index] search result: {}", data.getItems().size());
         for (Index115File f : data.getItems()) {
             if (f.isDir()) {
                 continue;
