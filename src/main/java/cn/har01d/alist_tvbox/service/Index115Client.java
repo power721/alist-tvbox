@@ -46,6 +46,13 @@ public class Index115Client {
         return get(site, url, vars, new ParameterizedTypeReference<>() {});
     }
 
+    public Index115File getFile(Site site, String fileId) {
+        String url = site.getUrl() + "/api/index115/detail?id={id}";
+        Map<String, String> vars = new HashMap<>();
+        vars.put("id", fileId == null ? "" : fileId);
+        return get(site, url, vars, new ParameterizedTypeReference<>() {});
+    }
+
     public String resolveLink(Site site, String cookie, String shareCode, String receiveCode, String fileId) {
         String url = site.getUrl() + "/api/index115/link";
         HttpHeaders h = headers(site);

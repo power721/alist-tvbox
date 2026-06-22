@@ -43,6 +43,7 @@ import cn.har01d.alist_tvbox.storage.StrmStorage;
 import cn.har01d.alist_tvbox.storage.ThunderShare;
 import cn.har01d.alist_tvbox.storage.UCShare;
 import cn.har01d.alist_tvbox.storage.UrlTree;
+import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -326,7 +327,7 @@ public class ShareService {
         try {
             Share share = new Share();
             share.setId(7999);
-            share.setPath("/115分享索引");
+            share.setPath(Constants.INDEX_115_NAME);
             Pan115Index storage = new Pan115Index(share);
             aListLocalService.saveStorage(storage);
         } catch (Exception e) {

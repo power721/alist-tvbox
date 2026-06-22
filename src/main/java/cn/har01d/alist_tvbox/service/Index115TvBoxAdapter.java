@@ -15,7 +15,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** Version-1 site TVBox backend: browse/search/play against PowerList /index115. */
+/**
+ * Version-1 site TVBox backend: browse/search/play against PowerList /index115.
+ */
 @Slf4j
 public class Index115TvBoxAdapter {
     private static final int PER_PAGE = 60;
@@ -89,17 +91,30 @@ public class Index115TvBoxAdapter {
         }
         log.debug("[Pan115Index] search result: {}", data.getItems().size());
         for (Index115File f : data.getItems()) {
-            if (f.isDir()) {
-                continue;
-            }
-            int pid = proxyService.generatePath(site, Index115PathCodec.child(f.getShareCode(), f.getReceiveCode(), f.getFileId()));
+            // Search only carries file id + name + isDir; the full play path is
+            // assembled later in TvBoxService#getDetail via the detail API.
             MovieDetail md = new MovieDetail();
-            md.setVod_id(site.getId() + "$" + pid + "$1");
+            md.setVod_id(site.getId() + "$" + f.getFileId() + "$1");
             md.setVod_name(f.getName());
             md.setVod_tag(Constants.FILE);
             md.setVod_pic(Constants.ALIST_PIC);
             list.add(md);
         }
         return list;
+    }
+
+    /** Fetches the file by id and assembles the mounted-storage play path
+     *  (/115分享索引/&lt;shareTitle&gt;/&lt;full path&gt;[/~playlist]) so the caller can
+     *  play it through the normal AList flow. The full path is rebuilt server-side
+     *  by walking the file table's parent_id chain. */
+    public String resolvePlayPath(Site site, String fileId) {
+        log.debug("[Pan115Index] resolvePlayPath: {} {}", site.getId(), fileId);
+        Index115File f = client.getFile(site, fileId);
+        String path = Constants.INDEX_115_NAME + "/" + f.getShareTitle() + f.getPath();
+        if (f.isDir()) {
+            path = path + Constants.PLAYLIST;
+        }
+        log.debug("resolvePlayPath: {}", path);
+        return path;
     }
 }

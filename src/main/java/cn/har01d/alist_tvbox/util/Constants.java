@@ -25,6 +25,7 @@ public final class Constants {
     public static final String FOLDER = "folder";
     public static final String COLLECTION = "collection";
     public static final String LIST = "list";
+    public static final String INDEX_115_NAME = "/115分享索引";
 
     public static final String TG_DRIVERS = "9,10,5,7,8,3,2,0,6,1,12,magnet,ed2k";
 

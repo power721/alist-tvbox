@@ -1389,7 +1389,11 @@ public class TvBoxService {
 
     public Map<String, Object> getPlayUrl(Integer siteId, String path, boolean getSub, String client, String type) {
         Site site = siteService.getById(siteId);
-        if (site.getStorageVersion() != null && site.getStorageVersion() == 1) {
+        // Only virtual /idx/... paths go through the index115 link resolver.
+        // Search-detail plays resolve to real mounted-storage paths (/115分享索引/...)
+        // and must use the normal AList play flow.
+        if (site.getStorageVersion() != null && site.getStorageVersion() == 1
+                && Index115PathCodec.decode(path) != null) {
             return index115Adapter.play(site, path);
         }
         String url = null;
@@ -1738,14 +1742,21 @@ public class TvBoxService {
         Site site = getSite(tid);
         String[] parts = tid.split("\\$");
         String path = parts[1];
-        try {
-            if (!path.contains(PLAYLIST)) {
-                path = proxyService.getPath(Integer.parseInt(path));
+        if (site.getStorageVersion() != null && site.getStorageVersion() == 1 && !isProxyPid(path)) {
+            // Search result carries a raw 115 file id (not a proxy pid). Resolve the
+            // full mounted-storage path (/115分享索引/...[/~playlist]) and play it via
+            // the normal AList flow.
+            path = index115Adapter.resolvePlayPath(site, path);
+        } else {
+            try {
+                if (!path.contains(PLAYLIST)) {
+                    path = proxyService.getPath(Integer.parseInt(path));
+                }
+            } catch (NumberFormatException e) {
+                log.debug("", e);
+            } catch (Exception e) {
+                log.warn("", e);
             }
-        } catch (NumberFormatException e) {
-            log.debug("", e);
-        } catch (Exception e) {
-            log.warn("", e);
         }
         updateShareTime(path);
         if (path.contains(PLAYLIST)) {
@@ -1860,6 +1871,19 @@ public class TvBoxService {
                 log.debug("update share time: {} {}", share.getId(), path);
                 shareRepository.save(share);
             }
+        }
+    }
+
+    /** Distinguishes a browse proxy pid (registered in ProxyService) from a raw
+     *  115 file id carried by search results. 115 file ids overflow int, so they
+     *  fail Integer.parseInt; any value that parses but isn't registered also
+     *  returns false. */
+    private boolean isProxyPid(String value) {
+        try {
+            proxyService.getPath(Integer.parseInt(value));
+            return true;
+        } catch (Exception e) {
+            return false;
         }
     }
 
