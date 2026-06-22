@@ -188,6 +188,9 @@ public final class Utils {
     }
 
     public static String byte2size(long size) {
+        if (size <= 0) {
+            return "";
+        }
         String result;
         String unit = "B";
         if (size > 999 * MB) {
