@@ -1,10 +1,12 @@
 package cn.har01d.alist_tvbox.dto;
 
 import lombok.Data;
+import lombok.ToString;
 
 import java.time.Instant;
 
 @Data
+@ToString(exclude = {"accessToken", "refreshToken", "openToken"})
 public class AccountDto {
     private String nickname;
     private String refreshToken = "";

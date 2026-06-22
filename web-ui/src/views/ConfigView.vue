@@ -208,6 +208,11 @@
         </el-form-item>
         <el-form-item label="115索引" v-if="has115Account">
           <el-button type="primary" :loading="index115Loading" @click="updateIndex115">下载</el-button>
+          <el-tag v-if="index115Checking" type="info" style="margin-left: 8px">检查中</el-tag>
+          <el-tag v-else-if="index115Check.error" type="danger" style="margin-left: 8px">检查失败</el-tag>
+          <el-tag v-else-if="index115Check.hasUpdate" type="warning" style="margin-left: 8px">有更新</el-tag>
+          <el-tag v-else type="success" style="margin-left: 8px">已是最新</el-tag>
+          <span class="hint" style="margin-left: 8px">当前: {{ index115Check.localVersion || '未下载' }}　最新: {{ index115Check.remoteVersion || '-' }}</span>
         </el-form-item>
         <el-form-item label="User Agent">
           <el-input v-model="userAgent"/>
@@ -476,6 +481,8 @@ const autoCheckin = ref(false)
 const dialogVisible = ref(false)
 const has115Account = ref(false)
 const index115Loading = ref(false)
+const index115Checking = ref(false)
+const index115Check = ref<{hasAccount: boolean, hasUpdate: boolean, localVersion: string, remoteVersion: string, error: string | null}>({hasAccount: false, hasUpdate: false, localVersion: '', remoteVersion: '', error: null})
 const changelog = ref('')
 const aListVersion = ref('')
 const aListRemoteVersion = ref('')
@@ -782,6 +789,17 @@ const getAListStatus = () => {
   })
 }
 
+const checkIndex115 = () => {
+  index115Checking.value = true
+  axios.get('/api/index115/check').then(({data}) => {
+    index115Check.value = data
+  }).catch(() => {
+    index115Check.value = {hasAccount: true, hasUpdate: false, localVersion: '', remoteVersion: '', error: '检查失败'}
+  }).finally(() => {
+    index115Checking.value = false
+  })
+}
+
 const updateIndex115 = () => {
   index115Loading.value = true
   axios.post('/api/index115/update').then(() => {
@@ -856,6 +874,9 @@ onMounted(() => {
   })
   axios.get('/api/index115/status').then(({data}) => {
     has115Account.value = data.hasAccount
+    if (data.hasAccount) {
+      checkIndex115()
+    }
   })
 })
 
