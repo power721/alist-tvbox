@@ -35,6 +35,7 @@ public class Index115SiteSeed implements ApplicationRunner {
         site.setUrl("http://localhost");
         site.setSearchable(true);
         site.setStorageVersion(1);
+        site.setSortOrder(2);
         if (StringUtils.isNotBlank(token)) {
             site.setToken(token);
         }

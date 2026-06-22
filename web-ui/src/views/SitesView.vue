@@ -72,7 +72,7 @@
           <el-input v-model="form.url" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="版本" label-width="140">
-          <el-input-number v-model="form.version" min="2" autocomplete="off"/>
+          <el-input-number v-model="form.version" min="1" autocomplete="off"/>
         </el-form-item>
         <el-form-item label="根目录" label-width="140">
           <el-input v-model="form.folder" :readonly="form.id===1" autocomplete="off"/>
