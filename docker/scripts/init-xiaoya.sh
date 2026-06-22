@@ -226,6 +226,9 @@ fi
 # 解压资源包（每次启动都检查）
 extract_resource_zips
 
+# 初始化 115 索引（仅当 /data/index115 不存在）
+seed_index115
+
 # 更新 xiaoya 数据
 update_xiaoya_data
 

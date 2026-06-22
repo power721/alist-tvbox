@@ -347,6 +347,56 @@ test_entrypoints_set_jvm_timezone_for_postgresql() {
   assert_contains "-Duser.timezone=Asia/Shanghai" "$(cat "$ROOT_DIR/docker/scripts/entrypoint-native.sh")" "native entrypoint should not let PostgreSQL JDBC send PRC timezone"
 }
 
+build_init_common_harness() {
+  local harness="$TEST_TMP_DIR/init-common-harness.sh"
+  {
+    printf 'log_info() { :; }\n'
+    printf 'log_warn() { :; }\n'
+    printf 'ensure_dir() { mkdir -p "$@"; }\n'
+    sed '/^\. \/docker\/scripts\//d' "$ROOT_DIR/docker/scripts/init-common.sh" \
+      | sed "s|/115.index.zip|$TEST_TMP_DIR/image/115.index.zip|g" \
+      | sed "s|/data/index115|$TEST_TMP_DIR/data/index115|g"
+  } > "$harness"
+  printf '%s\n' "$harness"
+}
+
+test_seed_index115_extracts_once_when_directory_missing() {
+  mkdir -p "$TEST_TMP_DIR/image" "$TEST_TMP_DIR/zip-src"
+  printf 'seeded-index\n' > "$TEST_TMP_DIR/zip-src/index.115.txt"
+  (cd "$TEST_TMP_DIR/zip-src" && zip -qr "$TEST_TMP_DIR/image/115.index.zip" .)
+
+  local harness
+  harness="$(build_init_common_harness)"
+  # shellcheck source=/dev/null
+  source "$harness"
+
+  type seed_index115 >/dev/null
+  seed_index115
+
+  assert_file_has_line "seeded-index" "$TEST_TMP_DIR/data/index115/index.115.txt" "missing index115 directory should be created from embedded zip"
+
+  printf 'user-index\n' > "$TEST_TMP_DIR/data/index115/index.115.txt"
+  rm -f "$TEST_TMP_DIR/image/115.index.zip"
+
+  seed_index115
+
+  assert_file_has_line "user-index" "$TEST_TMP_DIR/data/index115/index.115.txt" "existing index115 directory should not be overwritten"
+}
+
+test_runtime_dockerfiles_copy_index115_zip() {
+  local dockerfile
+  for dockerfile in \
+    docker/Dockerfile \
+    docker/Dockerfile-xiaoya \
+    docker/Dockerfile-host \
+    docker/Dockerfile-native \
+    docker/Dockerfile-alist-native \
+    docker/Dockerfile-native-host
+  do
+    assert_file_has_line "COPY data/115.index.zip /" "$ROOT_DIR/$dockerfile" "$dockerfile should include the 115 index seed archive"
+  done
+}
+
 test_headless_postgresql_url_adds_timezone_when_missing() {
   reset_config_for_tests
 
@@ -693,6 +743,8 @@ test_external_db_config_disables_sql_init
 test_prompt_db_connection_defaults_to_host_ip
 test_postgresql_jdbc_url_sets_timezone
 test_entrypoints_set_jvm_timezone_for_postgresql
+test_seed_index115_extracts_once_when_directory_missing
+test_runtime_dockerfiles_copy_index115_zip
 test_config_db_apply_refreshes_external_db_config
 test_external_db_profiles_disable_sql_init
 test_migrate_wizard_requires_explicit_target_choice

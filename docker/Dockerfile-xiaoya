@@ -9,6 +9,7 @@ COPY config/alist.json /
 COPY docker/scripts/ /docker/scripts/
 
 COPY data/tvbox.zip /
+COPY data/115.index.zip /
 COPY data/index.share.zip /
 COPY data/cat.zip /
 COPY data/pg.zip /

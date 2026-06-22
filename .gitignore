@@ -9,6 +9,7 @@ src/main/resources/static/
 *.info
 *.txt
 *.zip
+!data/115.index.zip
 *.gz
 
 ### STS ###

@@ -54,6 +54,25 @@ extract_resource_zips() {
   fi
 }
 
+# 解压内置 115 索引，仅在用户数据目录不存在时初始化
+seed_index115() {
+  if [ -d /data/index115 ]; then
+    log_info "115 index already exists, skipping seed"
+    return 0
+  fi
+
+  if [ ! -f /115.index.zip ]; then
+    log_warn "115.index.zip not found, skipping seed"
+    return 0
+  fi
+
+  log_info "Seeding 115 index"
+  rm -rf /data/index115.tmp
+  mkdir -p /data/index115.tmp
+  unzip -q /115.index.zip -d /data/index115.tmp
+  mv /data/index115.tmp /data/index115
+}
+
 # 下载并解压 tvbox.zip
 download_tvbox() {
   log_info "Downloading tvbox.zip"
