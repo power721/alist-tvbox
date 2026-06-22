@@ -1105,7 +1105,7 @@ public class TvBoxService {
                     }
                     movieDetail.setCate(new CategoryList());
                 }
-                if (!"/".equals(path) && !"gui".equals(ac) && !newPath.contains("短剧")) {
+                if (!"/".equals(path) && !"gui".equals(ac) && !newPath.contains("短剧") && !path.startsWith("/115分享索引")) {
                     setMovieInfo(site, movieDetail, fsInfo.getName(), newPath, false);
                 }
                 folders.add(movieDetail);
