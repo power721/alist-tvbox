@@ -97,7 +97,6 @@ public class Index115TvBoxAdapter {
             return list;
         }
         log.debug("[Pan115Index] search result: {}", data.getItems().size());
-        String cover = getCover();
         for (Index115File f : data.getItems()) {
             // Search only carries file id + name + isDir; the full play path is
             // assembled later in TvBoxService#getDetail via the detail API.
@@ -106,19 +105,10 @@ public class Index115TvBoxAdapter {
             md.setVod_name(f.getName());
             md.setVod_remarks(Utils.byte2size(f.getSize()));
             md.setVod_tag(Constants.FILE);
-            md.setVod_pic(cover);
+            md.setVod_pic(Constants.ALIST_PIC);
             list.add(md);
         }
         return list;
-    }
-
-    private String getCover() {
-        return ServletUriComponentsBuilder.fromCurrentRequest()
-                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
-                .replacePath("/115.jpg")
-                .replaceQuery(null)
-                .build()
-                .toUriString();
     }
 
     /** Fetches the file by id and assembles the mounted-storage play path
