@@ -11,7 +11,7 @@ import java.time.Instant;
 
 @Getter
 @Setter
-@ToString
+@ToString(exclude = {"accessToken", "refreshToken"})
 @RequiredArgsConstructor
 @Entity
 @Table(indexes = {

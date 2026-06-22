@@ -65,6 +65,7 @@ public class Index115SiteSeed implements ApplicationRunner {
         try {
             OpenList storage = new OpenList(site);
             storage.setDriver("OpenList");
+            storage.setDisabled(true);
             aListLocalService.saveStorage(storage);
             String token = accountService.login();
             String error = shareService.enableStorage(storage.getId(), token);
