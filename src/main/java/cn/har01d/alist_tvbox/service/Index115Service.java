@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.domain.TaskType;
+import cn.har01d.alist_tvbox.dto.Index115CheckResult;
 import cn.har01d.alist_tvbox.dto.Index115ShareRef;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
@@ -41,6 +42,20 @@ public class Index115Service {
 
     public boolean has115Account() {
         return driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115).isPresent();
+    }
+
+    public Index115CheckResult check() {
+        if (!has115Account()) {
+            return new Index115CheckResult(false, false, "", "", null);
+        }
+        String local = settingRepository.findById(SHARE_CODE_KEY).map(Setting::getValue).orElse("");
+        Index115ShareRef ref = versionClient.fetch();
+        if (ref == null) {
+            return new Index115CheckResult(true, false, local, "", "无法获取远端版本");
+        }
+        String remote = ref.shareCode();
+        boolean hasUpdate = !local.equals(remote);
+        return new Index115CheckResult(true, hasUpdate, local, remote, null);
     }
 
     public void update() {

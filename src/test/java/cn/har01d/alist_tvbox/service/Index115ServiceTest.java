@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.domain.TaskType;
+import cn.har01d.alist_tvbox.dto.Index115CheckResult;
 import cn.har01d.alist_tvbox.dto.Index115ShareRef;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
 import cn.har01d.alist_tvbox.entity.DriverAccountRepository;
@@ -18,7 +19,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.nio.file.Path;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -99,6 +103,71 @@ class Index115ServiceTest {
     void has115AccountFalseWhenNone() {
         when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.empty());
         assertFalse(service.has115Account());
+    }
+
+    @Test
+    void checkReturnsNoAccountWhenPan115Absent() {
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.empty());
+
+        Index115CheckResult result = service.check();
+
+        assertFalse(result.hasAccount());
+        assertFalse(result.hasUpdate());
+        verify(versionClient, never()).fetch();
+    }
+
+    @Test
+    void checkNoUpdateWhenLocalEqualsRemote() {
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.of(new DriverAccount()));
+        when(versionClient.fetch()).thenReturn(new Index115ShareRef("sw1", "6666"));
+        when(settingRepository.findById("index115.share_code")).thenReturn(Optional.of(setting("sw1")));
+
+        Index115CheckResult result = service.check();
+
+        assertTrue(result.hasAccount());
+        assertFalse(result.hasUpdate());
+        assertEquals("sw1", result.localVersion());
+        assertEquals("sw1", result.remoteVersion());
+        assertNull(result.error());
+    }
+
+    @Test
+    void checkHasUpdateWhenLocalDiffersFromRemote() {
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.of(new DriverAccount()));
+        when(versionClient.fetch()).thenReturn(new Index115ShareRef("sw2", "7777"));
+        when(settingRepository.findById("index115.share_code")).thenReturn(Optional.of(setting("sw1")));
+
+        Index115CheckResult result = service.check();
+
+        assertTrue(result.hasAccount());
+        assertTrue(result.hasUpdate());
+        assertEquals("sw1", result.localVersion());
+        assertEquals("sw2", result.remoteVersion());
+    }
+
+    @Test
+    void checkReturnsErrorWhenRemoteFetchFails() {
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.of(new DriverAccount()));
+        when(versionClient.fetch()).thenReturn(null);
+
+        Index115CheckResult result = service.check();
+
+        assertTrue(result.hasAccount());
+        assertFalse(result.hasUpdate());
+        assertNotNull(result.error());
+    }
+
+    @Test
+    void checkHasUpdateWhenLocalEmptyAndRemotePresent() {
+        when(driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN115)).thenReturn(Optional.of(new DriverAccount()));
+        when(versionClient.fetch()).thenReturn(new Index115ShareRef("sw2", "7777"));
+        when(settingRepository.findById("index115.share_code")).thenReturn(Optional.empty());
+
+        Index115CheckResult result = service.check();
+
+        assertTrue(result.hasUpdate());
+        assertEquals("", result.localVersion());
+        assertEquals("sw2", result.remoteVersion());
     }
 
     private Setting setting(String value) {
