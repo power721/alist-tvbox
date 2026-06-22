@@ -23,7 +23,6 @@ import java.nio.file.StandardCopyOption;
  */
 @Slf4j
 public class AListIndex115Downloader implements Index115Downloader {
-    private static final int STORAGE_ID = 7000;
     private static final int SHARE_TYPE_115 = 8;
     private static final String MOUNT_NAME = "index115";
     private static final String FILE_NAME = "115.index.zip";
@@ -50,8 +49,9 @@ public class AListIndex115Downloader implements Index115Downloader {
     public void download(String shareCode, String receiveCode, Path localDest) throws IOException {
         aListLocalService.validateAListStatus();
 
+        int id = shareService.getNextId();
         Share share = new Share();
-        share.setId(STORAGE_ID);
+        share.setId(id);
         share.setType(SHARE_TYPE_115); // mount path: /我的115分享/<name>
         share.setPath(MOUNT_NAME);
         share.setShareId(shareCode);
@@ -62,7 +62,7 @@ public class AListIndex115Downloader implements Index115Downloader {
         storage.setDisabled(true);
         String token = accountService.login();
         aListLocalService.saveStorage(storage);
-        String error = shareService.enableStorage(STORAGE_ID, token);
+        String error = shareService.enableStorage(id, token);
         if (error != null) {
             throw new IOException("enable 115 share storage failed: " + error);
         }
@@ -71,6 +71,7 @@ public class AListIndex115Downloader implements Index115Downloader {
         URI uri = URI.create(fsDetail.getRawUrl());
         streamToFile(uri.toURL(), localDest, token);
         log.info("downloaded {} ({} bytes) from share {}", FILE_NAME, Files.size(localDest), shareCode);
+        shareService.deleteShare(id);
     }
 
     private void streamToFile(URL url, Path dest, String token) throws IOException {

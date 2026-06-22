@@ -239,6 +239,10 @@ public class ShareService {
         cleanInvalidShares();
     }
 
+    public int getNextId() {
+        return shareId.getAndIncrement();
+    }
+
     private void cleanTempShares(boolean delete) {
         List<Share> list = shareRepository.findByTempTrue();
         Instant time = Instant.now().minus(appProperties.getTempShareExpiration(), ChronoUnit.HOURS);
