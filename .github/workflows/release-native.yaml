@@ -213,6 +213,25 @@ jobs:
           docker stop test-${{ matrix.test.name }}
           docker rm test-${{ matrix.test.name }}
 
+  # Job 7: 上传 Native 制品到 release.yaml 已创建的 GitHub Release
+  upload-native-release-artifacts:
+    needs: test-images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download native binary
+        uses: actions/download-artifact@v7
+        with:
+          name: native-binary
+          path: target
+
+      - name: Upload native artifact to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "${{ github.ref_name }}" target/atv.tar.gz --clobber
+
   # Job 8b: 添加 latest 标签 - Native 镜像（仅 linux/amd64，无 arm64，分开处理）
   tag-latest-native:
     needs: test-images
