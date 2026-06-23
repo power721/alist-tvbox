@@ -2214,6 +2214,22 @@ const showPrevImage = () => {
   loadDetail(images.value[currentImageIndex.value - 1].vod_id)
 }
 
+const getRouteVodId = () => {
+  const queryId = route.query.id
+  if (typeof queryId === 'string' && queryId) {
+    return queryId
+  }
+  const paramId = route.params.id
+  if (typeof paramId === 'string' && paramId) {
+    return paramId
+  }
+  const path = route.params.path
+  if (Array.isArray(path) && path.length == 1 && /^\d+\$[^$]+\$\d+$/.test(path[0])) {
+    return path[0]
+  }
+  return ''
+}
+
 onMounted(async () => {
   if (!store.token) {
     store.token = await axios.get("/api/token").then(({data}) => {
@@ -2225,9 +2241,14 @@ onMounted(async () => {
   if (link) {
     loadShare(link)
   } else {
-    const newPath = route.params.path
-    filePath.value = newPath ? '/' + newPath.join('/') : '/'
-    fetchData()
+    const routeVodId = getRouteVodId()
+    if (routeVodId) {
+      loadDetail(routeVodId)
+    } else {
+      const newPath = route.params.path
+      filePath.value = newPath ? '/' + newPath.join('/') : '/'
+      fetchData()
+    }
   }
 
   if (store.admin) {
@@ -2256,7 +2277,7 @@ watch(
     if (newPage !== oldPage || newSize !== oldSize) {
       if (newPage) page.value = parseInt(newPage) || 1
       if (newSize) size.value = parseInt(newSize) || 50
-      if (store.token) {
+      if (store.token && !getRouteVodId()) {
         debouncedFetch()
       }
     }
@@ -2265,8 +2286,26 @@ watch(
 )
 
 watch(
+  () => route.query.id,
+  (newId, oldId) => {
+    if (newId === oldId || !store.token) {
+      return
+    }
+    const routeVodId = getRouteVodId()
+    if (routeVodId) {
+      loadDetail(routeVodId)
+    }
+  }
+)
+
+watch(
   () => route.params.path,
   (newPath, oldPath) => {
+    const routeVodId = getRouteVodId()
+    if (routeVodId) {
+      loadDetail(routeVodId)
+      return
+    }
     const newFilePath = newPath ? '/' + newPath.join('/') : '/'
     const oldFilePath = oldPath ? '/' + oldPath.join('/') : '/'
     if (newFilePath === oldFilePath) {

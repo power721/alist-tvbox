@@ -16,8 +16,14 @@ test('search page persists search keyword in localStorage', () => {
   assert.equal(componentSource.includes(`localStorage.setItem('search_keyword', keyword.value.trim())`), true)
 })
 
+test('disk search result name links to vod detail by id', () => {
+  assert.equal(componentSource.includes(`:href="getSearchResultHref(scope.row)"`), true)
+  assert.equal(componentSource.includes(`const getSearchResultHref = (row: any) => {`), true)
+  assert.equal(componentSource.includes(`return '/#/vod?id=' + encodeURIComponent(row.vod_id)`), true)
+})
+
 test('PanSou search result table supports local header sorting', () => {
-  assert.equal(componentSource.includes(`<el-table v-if="(type=='6')&&config" :data="filteredPanSouResults" border style="width: 100%" v-loading="searching">`), true)
+  assert.equal(componentSource.includes(`<el-table v-if="(type=='6')&&config" :data="filteredPanSouResults" border style="width: 100%; min-width: 800px" v-loading="searching">`), true)
   assert.equal(componentSource.includes(`<el-table-column prop="vod_name" label="名称" sortable>`), true)
   assert.equal(componentSource.includes(`<el-table-column prop="vod_id" label="链接" width="350" sortable>`), true)
   assert.equal(componentSource.includes(`<el-table-column prop="vod_remarks" label="类型" width="100" sortable/>`), true)

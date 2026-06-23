@@ -25,6 +25,7 @@
         <el-radio label="4" size="large">Emby</el-radio>
         <el-radio label="5" size="large">Jellyfin</el-radio>
         <el-radio label="7" size="large">飞牛影视</el-radio>
+        <el-radio label="8" size="large">电报频道</el-radio>
         <el-radio label="6" size="large">鱼佬盘搜</el-radio>
       </el-radio-group>
     </el-form-item>
@@ -52,10 +53,10 @@
     </div>
 
     <div class="table-scroll-wrapper">
-      <el-table v-if="(type==''||type=='1')&&config" :data="config.list" border style="width: 100%; min-width: 800px">
+      <el-table v-if="(type==''||type=='1'||type=='8')&&config" :data="config.list" border style="width: 100%; min-width: 800px">
       <el-table-column prop="vod_name" label="名称" width="300">
         <template #default="scope">
-          <a :href="'/#/vod'+scope.row.vod_content" target="_blank">
+          <a :href="getSearchResultHref(scope.row)" target="_blank">
             {{ scope.row.vod_name }}
           </a>
         </template>
@@ -174,9 +175,18 @@ const getPath = (type: string) => {
     return '/feiniu'
   } else if (type == '6') {
     return '/pansou'
+  } else if (type == '8') {
+    return '/tgsc'
   } else {
     return '/vod'
   }
+}
+
+const getSearchResultHref = (row: any) => {
+  if (type.value == '') {
+    return '/#/vod?id=' + encodeURIComponent(row.vod_id)
+  }
+  return '/#/vod' + row.vod_content
 }
 
 const diskTypeMap: Record<string, string> = {
