@@ -206,7 +206,7 @@
           <el-input v-model="tmdbApiKey" type="password" show-password/>
           <el-button type="primary" @click="updateTmdbApiKey">更新</el-button>
         </el-form-item>
-        <el-form-item label="115索引" v-if="has115Account">
+        <el-form-item label="115分享本地索引" v-if="has115Account">
           <el-button type="primary" :loading="index115Loading" @click="updateIndex115">下载</el-button>
           <el-tag v-if="index115Checking" type="info" style="margin-left: 8px">检查中</el-tag>
           <el-tag v-else-if="index115Check.error" type="danger" style="margin-left: 8px">检查失败</el-tag>

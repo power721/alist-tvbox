@@ -753,6 +753,7 @@ public class TvBoxService {
             }
         } else {
             List<Future<List<MovieDetail>>> futures = new ArrayList<>();
+            String baseUrl = getBaseUrl();
             for (Site site : siteService.list()) {
                 if (site.isSearchable()) {
                     String tenant = tenantService.getCurrent();
@@ -764,7 +765,7 @@ public class TvBoxService {
                     } else {
                         futures.add(executorService.submit(() -> {
                             tenantService.setTenant(tenant);
-                            return searchByApi(site, ac, keyword);
+                            return searchByApi(site, ac, keyword, baseUrl);
                         }));
                     }
                 }
@@ -881,9 +882,22 @@ public class TvBoxService {
         return list;
     }
 
-    private List<MovieDetail> searchByApi(Site site, String ac, String keyword) throws IOException {
+    private String getBaseUrl() {
+        return ServletUriComponentsBuilder.fromCurrentRequest()
+                .scheme(appProperties.isEnableHttps() && !Utils.isLocalAddress() ? "https" : "http") // nginx https
+                .replacePath("")
+                .replaceQuery(null)
+                .build()
+                .toUriString();
+    }
+
+    private List<MovieDetail> searchByApi(Site site, String ac, String keyword, String baseUrl) throws IOException {
         if (site.getStorageVersion() != null && site.getStorageVersion() == 1) {
-            return index115Adapter.search(site, keyword);
+            List<MovieDetail> list = index115Adapter.search(site, keyword);
+            for (var movie : list) {
+                movie.setVod_pic(baseUrl + "/115.jpg");
+            }
+            return list;
         }
         if (site.isXiaoya()) {
             try {
@@ -1874,10 +1888,12 @@ public class TvBoxService {
         }
     }
 
-    /** Distinguishes a browse proxy pid (registered in ProxyService) from a raw
-     *  115 file id carried by search results. 115 file ids overflow int, so they
-     *  fail Integer.parseInt; any value that parses but isn't registered also
-     *  returns false. */
+    /**
+     * Distinguishes a browse proxy pid (registered in ProxyService) from a raw
+     * 115 file id carried by search results. 115 file ids overflow int, so they
+     * fail Integer.parseInt; any value that parses but isn't registered also
+     * returns false.
+     */
     private boolean isProxyPid(String value) {
         try {
             proxyService.getPath(Integer.parseInt(value));

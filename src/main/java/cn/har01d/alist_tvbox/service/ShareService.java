@@ -928,7 +928,7 @@ public class ShareService {
                 "pan.quark.cn",
                 "caiyun.139.com",
                 "drive.uc.cn",
-                "115.com", "www.115.com",
+                "115.com", "115cdn.com", "www.115.com", "anxia.com",
                 "cloud.189.cn",
                 "pan.baidu.com"
         };

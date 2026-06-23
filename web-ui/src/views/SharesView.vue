@@ -92,7 +92,7 @@
     <el-table-column type="selection" width="55" />
     <el-table-column prop="id" label="ID" width="70" />
     <el-table-column prop="mount_path" label="路径" />
-    <el-table-column prop="status" label="状态" width="260">
+    <el-table-column prop="status" label="状态" width="300">
       <template #default="scope">
         <div v-html="scope.row.status"></div>
       </template>
@@ -115,7 +115,7 @@
         <span v-else>{{ scope.row.driver }}</span>
       </template>
     </el-table-column>
-    <el-table-column fixed="right" label="操作" width="155">
+    <el-table-column fixed="right" label="操作" width="175">
       <template #default="scope">
         <el-button link type="primary" size="small" @click="reloadStorage(scope.row.id)">重新加载</el-button>
         <el-button link type="danger" size="small" @click="handleDeleteStorage(scope.row)">删除</el-button>
