@@ -90,7 +90,7 @@ public class TaskService {
 
     public Task addIndex115Task() {
         Task task = new Task();
-        task.setType(TaskType.INDEX115);
+        task.setType(TaskType.DOWNLOAD);
         task.setName("更新115索引");
         task.setCreatedTime(Instant.now());
         return taskRepository.save(task);

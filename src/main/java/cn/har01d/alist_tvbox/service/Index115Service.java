@@ -61,7 +61,7 @@ public class Index115Service {
     }
 
     public void update() {
-        if (taskService.isTaskRunning(TaskType.INDEX115)) {
+        if (taskService.isTaskRunning(TaskType.DOWNLOAD)) {
             throw new BadRequestException("115索引更新任务进行中");
         }
         Task task = taskService.addIndex115Task();

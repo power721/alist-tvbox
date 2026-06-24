@@ -44,7 +44,7 @@ class Index115ServiceTest {
         task = new Task();
         task.setId(7);
         lenient().when(taskService.addIndex115Task()).thenReturn(task);
-        lenient().when(taskService.isTaskRunning(TaskType.INDEX115)).thenReturn(false);
+        lenient().when(taskService.isTaskRunning(TaskType.DOWNLOAD)).thenReturn(false);
     }
 
     @Test
