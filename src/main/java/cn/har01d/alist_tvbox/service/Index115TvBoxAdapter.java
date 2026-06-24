@@ -1,6 +1,5 @@
 package cn.har01d.alist_tvbox.service;
 
-import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.domain.DriverType;
 import cn.har01d.alist_tvbox.dto.Index115File;
 import cn.har01d.alist_tvbox.entity.DriverAccount;
@@ -13,7 +12,6 @@ import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,13 +25,11 @@ import java.util.Map;
 public class Index115TvBoxAdapter {
     private static final int PER_PAGE = 60;
 
-    private final AppProperties appProperties;
     private final Index115Client client;
     private final ProxyService proxyService;
     private final DriverAccountRepository driverAccountRepository;
 
-    public Index115TvBoxAdapter(AppProperties appProperties, Index115Client client, ProxyService proxyService, DriverAccountRepository driverAccountRepository) {
-        this.appProperties = appProperties;
+    public Index115TvBoxAdapter(Index115Client client, ProxyService proxyService, DriverAccountRepository driverAccountRepository) {
         this.client = client;
         this.proxyService = proxyService;
         this.driverAccountRepository = driverAccountRepository;
@@ -101,7 +97,7 @@ public class Index115TvBoxAdapter {
             // Search only carries file id + name + isDir; the full play path is
             // assembled later in TvBoxService#getDetail via the detail API.
             MovieDetail md = new MovieDetail();
-            md.setVod_id(site.getId() + "$" + f.getFileId() + "$1");
+            md.setVod_id(site.getId() + "$" + f.getShareCode() + "-" + f.getFileId() + "$1");
             md.setVod_name(f.getName());
             md.setVod_remarks(Utils.byte2size(f.getSize()));
             md.setVod_tag(Constants.FILE);
@@ -111,13 +107,15 @@ public class Index115TvBoxAdapter {
         return list;
     }
 
-    /** Fetches the file by id and assembles the mounted-storage play path
-     *  (/115分享索引/&lt;shareTitle&gt;/&lt;full path&gt;[/~playlist]) so the caller can
-     *  play it through the normal AList flow. The full path is rebuilt server-side
-     *  by walking the file table's parent_id chain. */
-    public String resolvePlayPath(Site site, String fileId) {
-        log.debug("[Pan115Index] resolvePlayPath: {} {}", site.getId(), fileId);
-        Index115File f = client.getFile(site, fileId);
+    /**
+     * Fetches the file by id and assembles the mounted-storage play path
+     * (/115分享索引/&lt;shareTitle&gt;/&lt;full path&gt;[/~playlist]) so the caller can
+     * play it through the normal AList flow. The full path is rebuilt server-side
+     * by walking the file table's parent_id chain.
+     */
+    public String resolvePlayPath(Site site, String id) {
+        log.debug("[Pan115Index] resolvePlayPath: {} {}", site.getId(), id);
+        Index115File f = client.getFile(site, id);
         String path = Constants.INDEX_115_NAME + "/" + f.getShareTitle() + f.getPath();
         if (f.isDir()) {
             path = path + Constants.PLAYLIST;

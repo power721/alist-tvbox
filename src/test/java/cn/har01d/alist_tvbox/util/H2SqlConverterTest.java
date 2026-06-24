@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.util;
 import cn.har01d.alist_tvbox.util.H2SqlConverter.Dialect;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.springframework.mock.env.MockEnvironment;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -106,6 +107,51 @@ class H2SqlConverterTest {
         String line = "INSERT INTO \"PUBLIC\".\"MOVIE\" VALUES(1, U&'A\\'B', 'x', '', '', '', '', '', '', '', '', 2000);";
         String sql = H2SqlConverter.convert(line, Dialect.POSTGRESQL);
         assertTrue(sql.contains("'A''B'"), "embedded quote must be doubled: " + sql);
+    }
+
+    // ---- detect(Environment) ----
+    // MySQL/PG are wired in this project via config-file overrides that set
+    // spring.datasource.jdbc-url — NOT via Spring profiles. So detect() must read
+    // the live JDBC URL; otherwise a real MySQL deployment silently takes the H2
+    // pass-through path and crashes on "PUBLIC"."MOVIE" / U& escapes.
+
+    @Test
+    void detect_mysql_fromJdbcUrlWithoutProfile() {
+        MockEnvironment env = new MockEnvironment();
+        env.setProperty("spring.datasource.jdbc-url",
+                "jdbc:mysql://localhost:3306/alist_tvbox?useSSL=false&serverTimezone=Asia/Shanghai");
+        assertEquals(Dialect.MYSQL, H2SqlConverter.detect(env));
+    }
+
+    @Test
+    void detect_postgresql_fromJdbcUrlWithoutProfile() {
+        MockEnvironment env = new MockEnvironment();
+        env.setProperty("spring.datasource.jdbc-url", "jdbc:postgresql://localhost:5432/alist_tvbox");
+        assertEquals(Dialect.POSTGRESQL, H2SqlConverter.detect(env));
+    }
+
+    @Test
+    void detect_h2_fromJdbcUrl() {
+        MockEnvironment env = new MockEnvironment();
+        env.setProperty("spring.datasource.jdbc-url", "jdbc:h2:file:/data/atv/data");
+        assertEquals(Dialect.H2, H2SqlConverter.detect(env));
+    }
+
+    @Test
+    void detect_mysql_profileStillHonoredAsFallback() {
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("mysql");
+        assertEquals(Dialect.MYSQL, H2SqlConverter.detect(env));
+    }
+
+    @Test
+    void detect_nullEnv_defaultsToH2() {
+        assertEquals(Dialect.H2, H2SqlConverter.detect(null));
+    }
+
+    @Test
+    void detect_noUrlNoProfile_defaultsToH2() {
+        assertEquals(Dialect.H2, H2SqlConverter.detect(new MockEnvironment()));
     }
 
     /**

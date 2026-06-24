@@ -49,10 +49,10 @@ public class Index115Client {
         return get(site, url, vars, new ParameterizedTypeReference<>() {});
     }
 
-    public Index115File getFile(Site site, String fileId) {
+    public Index115File getFile(Site site, String id) {
         String url = site.getUrl() + "/api/index115/detail?id={id}";
         Map<String, String> vars = new HashMap<>();
-        vars.put("id", fileId == null ? "" : fileId);
+        vars.put("id", id == null ? "" : id);
         return get(site, url, vars, new ParameterizedTypeReference<>() {});
     }
 

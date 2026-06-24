@@ -53,16 +53,38 @@ public final class H2SqlConverter {
     private H2SqlConverter() {
     }
 
-    /** Resolve the active dialect from Spring profiles (mysql / postgresql), defaulting to H2. */
+    /**
+     * Resolve the active dialect from the live JDBC URL first, then Spring profiles,
+     * defaulting to H2.
+     *
+     * <p>The JDBC URL is the ground truth: in this project MySQL/PG are configured via
+     * {@code config-db} config-file overrides that set {@code spring.datasource.jdbc-url}
+     * — the {@code mysql}/{@code postgresql} Spring profiles are template-only and never
+     * active in a real deployment, so relying on profiles alone made every MySQL/PG box
+     * silently take the H2 pass-through path and crash on {@code "PUBLIC"."MOVIE"} /
+     * {@code U&} escapes. Profiles are still honored as a fallback.
+     */
     public static Dialect detect(Environment env) {
-        if (env == null) {
-            return Dialect.H2;
-        }
-        if (env.matchesProfiles("mysql")) {
-            return Dialect.MYSQL;
-        }
-        if (env.matchesProfiles("postgresql")) {
-            return Dialect.POSTGRESQL;
+        if (env != null) {
+            String url = env.getProperty("spring.datasource.jdbc-url");
+            if (url == null) {
+                url = env.getProperty("spring.datasource.url");
+            }
+            if (url != null) {
+                String lower = url.toLowerCase();
+                if (lower.contains("jdbc:mysql:")) {
+                    return Dialect.MYSQL;
+                }
+                if (lower.contains("jdbc:postgresql:")) {
+                    return Dialect.POSTGRESQL;
+                }
+            }
+            if (env.matchesProfiles("mysql")) {
+                return Dialect.MYSQL;
+            }
+            if (env.matchesProfiles("postgresql")) {
+                return Dialect.POSTGRESQL;
+            }
         }
         return Dialect.H2;
     }

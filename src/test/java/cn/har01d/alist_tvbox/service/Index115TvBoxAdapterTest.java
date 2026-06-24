@@ -33,7 +33,7 @@ class Index115TvBoxAdapterTest {
 
     @BeforeEach
     void setup() {
-        adapter = new Index115TvBoxAdapter(appProperties, client, proxyService, driverAccountRepository);
+        adapter = new Index115TvBoxAdapter(client, proxyService, driverAccountRepository);
     }
 
     private Site site() {
@@ -89,20 +89,18 @@ class Index115TvBoxAdapterTest {
     }
 
     @Test
-    @Disabled
     void searchMapsItems() {
         Site s = site();
         Index115SearchData data = new Index115SearchData();
         data.setTotal(1);
         data.setItems(List.of(file("f1", "sw1", "6666", "a.mkv", false)));
         when(client.search(any(), anyString(), anyInt(), anyInt())).thenReturn(data);
-//        when(proxyService.generatePath(any(), anyString())).thenReturn(5);
 
         List<MovieDetail> list = adapter.search(s, "foo");
 
         assertEquals(1, list.size());
         assertEquals("a.mkv", list.get(0).getVod_name());
-        assertEquals("9$f1$1", list.get(0).getVod_id());
+        assertEquals("9$sw1-f1$1", list.get(0).getVod_id());
     }
 
     private Index115File file(String fileId, String sc, String rc, String name, boolean dir) {
