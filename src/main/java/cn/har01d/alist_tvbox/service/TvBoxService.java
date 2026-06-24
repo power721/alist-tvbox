@@ -2002,7 +2002,7 @@ public class TvBoxService {
         if (depth == null || depth == 0) {
             if ("detail".equals(ac) || "web".equals(ac)) {
                 depth = 1;
-            } else if ("gui".equals(ac)) {
+            } else if ("gui".equals(ac) || "search".equals(ac)) {
                 depth = 3;
             } else {
                 depth = 3;

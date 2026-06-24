@@ -1389,9 +1389,9 @@ const extractPaths = (id: string) => {
   return '1$' + encodeURIComponent(path) + '$1'
 }
 
-const loadDetail = (id: string) => {
+const loadDetail = (id: string, ac: string = 'web') => {
   loading.value = true
-  axios.get('/vod/' + store.token + '?ac=web&ids=' + id).then(({data}) => {
+  axios.get('/vod/' + store.token + '?ac=' + ac + '&ids=' + id).then(({data}) => {
     if (isHistory.value) {
       goParent(data.list[0].path)
     }
@@ -2293,7 +2293,7 @@ watch(
     }
     const routeVodId = getRouteVodId()
     if (routeVodId) {
-      loadDetail(routeVodId)
+      loadDetail(routeVodId, 'search')
     }
   }
 )
