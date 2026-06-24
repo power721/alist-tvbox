@@ -307,24 +307,6 @@ public class SubscriptionService {
         throw new BadRequestException();
     }
 
-    /**
-     * 严格 token 校验:不检查 enabledToken,总是校验 rawToken 为有效订阅 token 或已存在用户名。
-     * 用于历史写操作(push),即使全局 enabledToken=false 也强制校验,防止无效 token 篡改。
-     */
-    public void checkTokenStrict(String rawToken) {
-        currentToken.set(rawToken);
-        tenantService.setTenant(rawToken);
-        if (userService.isUsernameExist(rawToken)) {
-            return;
-        }
-        for (String t : tokens.split(",")) {
-            if (t.equals(rawToken)) {
-                return;
-            }
-        }
-        throw new BadRequestException();
-    }
-
     public TokenDto getTokens() {
         TokenDto tokenDto = new TokenDto();
         tokenDto.setEnabledToken(appProperties.isEnabledToken());

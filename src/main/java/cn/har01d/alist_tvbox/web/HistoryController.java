@@ -69,7 +69,7 @@ public class HistoryController {
 
     @PostMapping("/history/{token}")
     public void push(@PathVariable String token, @RequestBody List<History> history) {
-        subscriptionService.checkTokenStrict(token);
+        subscriptionService.checkToken(token);
 
         historyService.saveAll(history);
     }

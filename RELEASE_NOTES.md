@@ -1,4 +1,4 @@
-# Release Notes - 1.12.1
+# Release Notes - 1.12.2
 
 ## 新增
 
@@ -16,3 +16,4 @@
 
 - 修复 MySQL、PostgreSQL 环境下豆瓣电影数据相关的问题
 - 115分享索引：修复任务
+- 支持新版索引id
