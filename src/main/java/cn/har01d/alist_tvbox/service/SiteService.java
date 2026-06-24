@@ -180,14 +180,14 @@ public class SiteService {
 
     public String generateToken() {
         String token = "openlist-" + UUID.randomUUID() + IdUtils.generate(64);
-        log.info("generate token {}", token);
+        log.info("generate token {}", Utils.mask(token));
         return token;
     }
 
     public void resetToken() {
         String url = "http://localhost:" + aListLocalService.getInternalPort();
         String token = postRestToken(url + "/api/admin/setting/reset_token");
-        log.info("new token {}", token);
+        log.info("new token {}", Utils.mask(token));
         if (StringUtils.isBlank(token)) {
             token = generateToken();
             aListLocalService.executeUpdate("UPDATE x_setting_items SET value='" + token + "' WHERE key='token'");

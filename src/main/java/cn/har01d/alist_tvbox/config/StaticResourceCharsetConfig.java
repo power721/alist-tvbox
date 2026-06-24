@@ -21,7 +21,7 @@ public class StaticResourceCharsetConfig {
     public FilterRegistrationBean<Filter> staticResourceCharsetFilter() {
         FilterRegistrationBean<Filter> registration = new FilterRegistrationBean<>();
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
-        registration.addUrlPatterns("/static/*", "/tvbox/*", "/files/*", "/cat/*", "/pg/*", "/zx/*");
+        registration.addUrlPatterns("/static/*", "/tvbox/*", "/files/*", "/pg/*", "/zx/*");
         registration.setFilter((request, response, chain) -> {
             chain.doFilter(request, new CharsetAttributeWrapper((HttpServletResponse) response));
         });

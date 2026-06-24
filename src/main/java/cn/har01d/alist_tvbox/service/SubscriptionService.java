@@ -307,6 +307,24 @@ public class SubscriptionService {
         throw new BadRequestException();
     }
 
+    /**
+     * 严格 token 校验:不检查 enabledToken,总是校验 rawToken 为有效订阅 token 或已存在用户名。
+     * 用于历史写操作(push),即使全局 enabledToken=false 也强制校验,防止无效 token 篡改。
+     */
+    public void checkTokenStrict(String rawToken) {
+        currentToken.set(rawToken);
+        tenantService.setTenant(rawToken);
+        if (userService.isUsernameExist(rawToken)) {
+            return;
+        }
+        for (String t : tokens.split(",")) {
+            if (t.equals(rawToken)) {
+                return;
+            }
+        }
+        throw new BadRequestException();
+    }
+
     public TokenDto getTokens() {
         TokenDto tokenDto = new TokenDto();
         tokenDto.setEnabledToken(appProperties.isEnabledToken());
@@ -378,41 +396,7 @@ public class SubscriptionService {
         return subscriptionRepository.findAll();
     }
 
-    public String node(String file) throws IOException {
-        log.debug("load file {}", file);
-        if (file.contains("index.config.js")) {
-            Path config = Utils.getWebPath("cat", "index.config.js");
-            String json = Files.readString(config);
-            String secret = appProperties.isEnabledToken() ? ("/" + tokens.split(",")[0]) : "";
-            json = json.replace("VOD_URL", readHostAddress("/vod" + secret));
-            json = json.replace("VOD1_URL", readHostAddress("/vod1" + secret));
-            json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret));
-            json = json.replace("YOUTUBE_URL", readHostAddress("/youtube" + secret));
-            json = json.replace("EMBY_URL", readHostAddress("/emby" + secret));
-            String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
-            json = json.replace("ALI_TOKEN", ali);
-            ali = accountRepository.getFirstByMasterTrue().map(Account::getOpenToken).orElse("");
-            json = json.replace("ALI_OPEN_TOKEN", ali);
-
-            String quarkCookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("");
-            json = json.replace("QUARK_COOKIE", quarkCookie);
-
-            String address = readHostAddress();
-            json = json.replace("DOCKER_ADDRESS", address);
-            json = json.replace("ATV_ADDRESS", address);
-
-            if ("index.config.js".equals(file)) {
-                return json;
-            } else if ("index.config.js.md5".equals(file)) {
-                return Utils.md5(json);
-            }
-        }
-        return Files.readString(Utils.getWebPath("cat", file));
-    }
-
     public int syncCat() {
-        // TODO:
-        Utils.execute("rm -rf /www/cat/* && unzip -q -o /cat.zip -d /www/cat && [ -d /data/cat ] && cp -r /data/cat/* /www/cat/");
         fileDownloader.runTask("pg");
         fileDownloader.runTask("zx");
 
@@ -428,32 +412,6 @@ public class SubscriptionService {
         }
 
         return 0;
-    }
-
-    public Map<String, Object> open() throws IOException {
-        Path path = Utils.getWebPath("cat", "config_open.json");
-        String json = Files.readString(path).replace("\ufeff", "");
-
-        Map<String, Object> config = objectMapper.readValue(json, Map.class);
-
-        path = Utils.getWebPath("cat", "my.json");
-        if (Files.exists(path)) {
-            try {
-                log.info("read {}", path);
-                String ext = Files.readString(path);
-                Map<String, Object> source = objectMapper.readValue(ext, Map.class);
-                mergeOpen(config, source);
-            } catch (Exception e) {
-                log.warn("", e);
-            }
-        }
-
-        addCatSites(config);
-
-        json = objectMapper.writeValueAsString(config);
-        json = replaceOpen(json);
-
-        return objectMapper.readValue(json, Map.class);
     }
 
     private void addCatSites(Map<String, Object> config) {

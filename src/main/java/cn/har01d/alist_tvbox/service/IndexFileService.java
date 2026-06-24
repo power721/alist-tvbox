@@ -46,6 +46,8 @@ public class IndexFileService {
     }
 
     public Page<String> getIndexContent(Pageable pageable, String siteId, String index) throws IOException {
+        Utils.requireSafePathSegment(siteId);
+        Utils.requireSafePathSegment(index);
         List<String> list = new ArrayList<>();
         Path file = Utils.getIndexPath(siteId, index + ".txt");
         if (!Files.exists(file)) {
@@ -68,6 +70,8 @@ public class IndexFileService {
     }
 
     public void toggleExcluded(String siteId, int index, String indexName) throws IOException {
+        Utils.requireSafePathSegment(siteId);
+        Utils.requireSafePathSegment(indexName);
         if (index < 0) {
             throw new BadRequestException("行数不正确");
         }
@@ -105,6 +109,8 @@ public class IndexFileService {
     }
 
     public void uploadIndexFile(String siteId, String indexName, MultipartFile file) throws IOException {
+        Utils.requireSafePathSegment(siteId);
+        Utils.requireSafePathSegment(indexName);
         Path temp = Files.createTempFile("index-upload-", ".txt");
         try {
             FileUtils.copyToFile(file.getInputStream(), temp.toFile());
@@ -131,6 +137,8 @@ public class IndexFileService {
     }
 
     public void deleteIndexFile(String siteId, String indexName) throws IOException {
+        Utils.requireSafePathSegment(siteId);
+        Utils.requireSafePathSegment(indexName);
         Path path = Utils.getIndexPath(siteId, indexName + ".txt");
         Files.delete(path);
     }

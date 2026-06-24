@@ -4,6 +4,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -51,7 +52,7 @@ public class LocalApiController {
                 throw new BadRequestException("管理员重置令牌无效");
             }
             String expectedToken = Files.readString(tokenFile, StandardCharsets.UTF_8).trim();
-            if (!requestToken.equals(expectedToken)) {
+            if (!constantTimeEquals(requestToken, expectedToken)) {
                 throw new BadRequestException("管理员重置令牌无效");
             }
             deleteTokenFile = true;
@@ -87,7 +88,7 @@ public class LocalApiController {
                 throw new BadRequestException("备份令牌无效");
             }
             String expected = Files.readString(tokenFile, StandardCharsets.UTF_8).trim();
-            if (!requestToken.equals(expected)) {
+            if (!constantTimeEquals(requestToken, expected)) {
                 throw new BadRequestException("备份令牌无效");
             }
             authorized = true;
@@ -112,6 +113,13 @@ public class LocalApiController {
         }
     }
 
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
+    }
+
     /** 校验一次性备份令牌（X-BACKUP-TOKEN 与 /data/atv/backup_token 比对）。无效抛 BadRequestException。 */
     private void requireBackupToken(HttpServletRequest request) {
         String requestToken = request.getHeader("X-BACKUP-TOKEN");
@@ -121,7 +129,7 @@ public class LocalApiController {
                 throw new BadRequestException("备份令牌无效");
             }
             String expected = Files.readString(tokenFile, StandardCharsets.UTF_8).trim();
-            if (!requestToken.equals(expected)) {
+            if (!constantTimeEquals(requestToken, expected)) {
                 throw new BadRequestException("备份令牌无效");
             }
         } catch (BadRequestException e) {

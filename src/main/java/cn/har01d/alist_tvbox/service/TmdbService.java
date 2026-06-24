@@ -304,6 +304,7 @@ public class TmdbService {
 
     @Async
     public void scrape(Integer siteId, String indexName, boolean force) throws IOException {
+        Utils.requireSafePathSegment(indexName);
         Path path = Utils.getIndexPath(String.valueOf(siteId), indexName + ".txt");
         if (!Files.exists(path)) {
             throw new BadRequestException("索引文件不存在");

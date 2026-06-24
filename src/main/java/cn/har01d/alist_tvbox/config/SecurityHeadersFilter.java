@@ -29,6 +29,19 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
         // Enable XSS protection in older browsers
         response.setHeader("X-XSS-Protection", "1; mode=block");
 
+        // Prevent clickjacking
+        response.setHeader("X-Frame-Options", "SAMEORIGIN");
+        response.setHeader("Content-Security-Policy", "frame-ancestors 'self'");
+
+        // Limit referrer leakage
+        response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+
+        // Force HTTPS in browsers (ignored over plain HTTP, harmless for HTTP-only deployments)
+        response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+
+        // Lock down powerful APIs
+        response.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+
         filterChain.doFilter(request, response);
     }
 }

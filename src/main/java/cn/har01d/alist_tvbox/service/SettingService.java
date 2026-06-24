@@ -164,7 +164,7 @@ public class SettingService {
 
     public String generateApiKey() {
         String apiKey = UUID.randomUUID().toString().replace("-", "");
-        log.debug("generate api key: {}", apiKey);
+        log.debug("generate api key: {}", Utils.mask(apiKey));
         settingRepository.save(new Setting("api_key", apiKey));
         tokenFilter.setApiKey(apiKey);
         return apiKey;

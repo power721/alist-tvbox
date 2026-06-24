@@ -212,25 +212,6 @@ public class TvBoxController {
         return subscriptionService.subscription(token, id);
     }
 
-    @GetMapping("/open")
-    public Map<String, Object> open() throws IOException {
-        return open("");
-    }
-
-    @GetMapping("/open/{token}")
-    public Map<String, Object> open(@PathVariable String token) throws IOException {
-        subscriptionService.checkToken(token);
-
-        return subscriptionService.open();
-    }
-
-    @GetMapping("/node/{token}/{file}")
-    public String node(@PathVariable String token, @PathVariable String file) throws IOException {
-        subscriptionService.checkToken(token);
-
-        return subscriptionService.node(file);
-    }
-
     @PostMapping("/api/cat/sync")
     public int syncCat() {
         return subscriptionService.syncCat();

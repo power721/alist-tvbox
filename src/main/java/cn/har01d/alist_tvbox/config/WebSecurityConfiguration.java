@@ -54,6 +54,7 @@ public class WebSecurityConfiguration {
                                 "/api/accounts/principal"
                         ).authenticated()
                         .requestMatchers("/api/history/**").hasAnyAuthority(Role.ADMIN.name(), Role.USER.name())
+                        .requestMatchers(HttpMethod.DELETE, "/history/**").hasAuthority(Role.ADMIN.name())
                         .requestMatchers("/api/**").hasAnyAuthority(Role.ADMIN.name(), Role.CLIENT.name())
                         .requestMatchers(HttpMethod.POST).authenticated()
                         .requestMatchers(HttpMethod.PUT).authenticated()
