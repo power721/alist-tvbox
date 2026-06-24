@@ -2243,7 +2243,7 @@ onMounted(async () => {
   } else {
     const routeVodId = getRouteVodId()
     if (routeVodId) {
-      loadDetail(routeVodId)
+      loadDetail(routeVodId, 'search')
     } else {
       const newPath = route.params.path
       filePath.value = newPath ? '/' + newPath.join('/') : '/'
