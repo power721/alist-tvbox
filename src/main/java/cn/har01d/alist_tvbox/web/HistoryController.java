@@ -1,9 +1,13 @@
 package cn.har01d.alist_tvbox.web;
 
+import cn.har01d.alist_tvbox.domain.Role;
 import cn.har01d.alist_tvbox.entity.History;
+import cn.har01d.alist_tvbox.exception.UserUnauthorizedException;
 import cn.har01d.alist_tvbox.service.HistoryService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -78,9 +82,19 @@ public class HistoryController {
     public void delete(@PathVariable String token, String key) {
         subscriptionService.checkToken(token);
         if (StringUtils.isBlank(key)) {
+            // 无 key = 清空全部历史(跨用户,破坏性),仅 ADMIN;带 key 删单条对认证客户端开放
+            if (!isAdmin()) {
+                throw new UserUnauthorizedException("仅管理员可清空全部历史", 40301);
+            }
             historyService.deleteAll();
         } else {
             historyService.delete(key);
         }
+    }
+
+    private boolean isAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> Role.ADMIN.name().equals(a.getAuthority()));
     }
 }
