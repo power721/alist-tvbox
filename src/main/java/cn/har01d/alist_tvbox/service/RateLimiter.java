@@ -46,7 +46,7 @@ public class RateLimiter {
                 return new Attempt(1, now, 0);
             }
             int count = v.count + 1;
-            return new Attempt(count, v.firstAttempt, count >= MAX_ATTEMPTS ? now : v.lockedUntil);
+            return new Attempt(count, v.firstAttempt, count >= MAX_ATTEMPTS ? now + LOCK_MS : v.lockedUntil);
         });
     }
 

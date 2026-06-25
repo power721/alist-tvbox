@@ -24,6 +24,13 @@ class UtilsSecurityTest {
     }
 
     @Test
+    void shouldRejectIPv6LoopbackBracket() {
+        // URI.getHost() 返回带方括号的 [::1],必须去掉方括号并解析才能拦住
+        assertFalse(Utils.isSafeExternalUrl("http://[::1]:8080/admin"));
+        assertFalse(Utils.isSafeExternalUrl("http://[0:0:0:0:0:0:0:1]/x"));
+    }
+
+    @Test
     void shouldRejectMetadataAndLinkLocalUrls() {
         assertFalse(Utils.isSafeExternalUrl("http://169.254.169.254/latest/meta-data/"));
         assertFalse(Utils.isSafeExternalUrl("http://169.254.1.1/x"));

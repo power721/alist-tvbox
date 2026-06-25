@@ -23,9 +23,11 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -234,6 +236,10 @@ public final class Utils {
                 log.warn("Blocked URL with no host: {}", url);
                 return false;
             }
+            // URI.getHost() 对 IPv6 literal 返回带方括号(如 [::1]),去掉方括号再判断
+            if (host.startsWith("[") && host.endsWith("]")) {
+                host = host.substring(1, host.length() - 1);
+            }
             host = host.toLowerCase();
             if (host.equals("localhost") || host.startsWith("127.") || host.equals("0.0.0.0")
                     || host.equals("::1") || host.equals("0:0:0:0:0:0:0:1")) {
@@ -243,6 +249,17 @@ public final class Utils {
             if (host.startsWith("169.254.") || host.equals("metadata.google.internal") || host.equals("169.254.169.254")) {
                 log.warn("Blocked link-local/metadata URL: {}", url);
                 return false;
+            }
+            // 解析为 InetAddress,拦截所有 loopback/link-local/wildcard 变体
+            // (含 IPv4-mapped IPv6、[::1]、[fe80::] 等字符串匹配漏掉的情况)
+            try {
+                InetAddress addr = InetAddress.getByName(host);
+                if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isAnyLocalAddress()) {
+                    log.warn("Blocked loopback/link-local/wildcard IP: {} -> {}", url, addr.getHostAddress());
+                    return false;
+                }
+            } catch (UnknownHostException e) {
+                // 无法解析(可能是内网本地名),放行;请求时若仍无法解析会自然失败
             }
             return true;
         } catch (URISyntaxException e) {
