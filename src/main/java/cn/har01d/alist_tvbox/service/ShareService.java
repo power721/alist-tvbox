@@ -335,6 +335,15 @@ public class ShareService {
         }
     }
 
+    public void reloadIndex115() {
+        aListLocalService.validateAListStatus();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, accountService.login());
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(null, headers);
+        ResponseEntity<Response> response = restTemplate.exchange("/api/admin/index115/reload", HttpMethod.POST, entity, Response.class);
+        log.info("reload index115 response: {}", response.getBody());
+    }
+
     private void loadOpenTokenUrl() {
         if (settingRepository.existsById(OPEN_TOKEN_URL)) {
             return;
