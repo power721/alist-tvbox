@@ -22,6 +22,7 @@ public class Index115Service {
     private static final String SHARE_CODE_KEY = "index115.share_code";
 
     private final TaskService taskService;
+    private final ShareService shareService;
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
     private final Index115VersionClient versionClient;
@@ -29,12 +30,14 @@ public class Index115Service {
     private final Index115Extractor extractor;
 
     public Index115Service(TaskService taskService,
+                           ShareService shareService,
                            SettingRepository settingRepository,
                            DriverAccountRepository driverAccountRepository,
                            Index115VersionClient versionClient,
                            Index115Downloader downloader,
                            Index115Extractor extractor) {
         this.taskService = taskService;
+        this.shareService = shareService;
         this.settingRepository = settingRepository;
         this.driverAccountRepository = driverAccountRepository;
         this.versionClient = versionClient;
@@ -83,6 +86,7 @@ public class Index115Service {
                 extractor.extractAndSwap(zip, Utils.getDataPath("index115"));
                 saveShareCode(ref.shareCode());
                 taskService.completeTask(task.getId(), "更新到 " + ref.shareCode(), null);
+                shareService.reloadIndex115();
             } finally {
                 Files.deleteIfExists(zip);
             }
