@@ -1056,7 +1056,8 @@ public class TvBoxService {
         }
 
         Site site = getSite(tid);
-        if (site.getStorageVersion() != null && site.getStorageVersion() == 1) {
+        if (site.getStorageVersion() != null && site.getStorageVersion() == 1
+                && Index115PathCodec.decode(path) != null) {
             return index115Adapter.list(site, path, page, size);
         }
         if (path.contains(PLAYLIST)) {
@@ -1757,9 +1758,25 @@ public class TvBoxService {
         String[] parts = tid.split("\\$");
         String path = parts[1];
         if (site.getStorageVersion() != null && site.getStorageVersion() == 1 && !isProxyPid(path)) {
-            // Search result carries a raw 115 file id (not a proxy pid). Resolve the
-            // full mounted-storage path (/115分享索引/...[/~playlist]) and play it via
-            // the normal AList flow.
+            // Search result carries a raw 115 file id (not a proxy pid). For the web UI,
+            // resolve it to the mounted-storage folder and hand it back so the file browser
+            // navigates folder-by-folder (a dfs-built flat playlist would explode on large
+            // shares). Other clients keep the flat-playlist flow below.
+            if ("web".equals(ac)) {
+                String mounted = index115Adapter.resolvePlayPath(site, path);
+                String folder = mounted.endsWith(PLAYLIST)
+                        ? mounted.substring(0, mounted.length() - PLAYLIST.length())
+                        : getParent(mounted);
+                MovieList result = new MovieList();
+                MovieDetail md = new MovieDetail();
+                md.setVod_id(encodeUrl(tid));
+                md.setPath(folder);
+                md.setType(1);
+                result.getList().add(md);
+                result.setTotal(1);
+                result.setLimit(1);
+                return result;
+            }
             path = index115Adapter.resolvePlayPath(site, path);
         } else {
             try {

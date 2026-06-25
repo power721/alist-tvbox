@@ -1405,6 +1405,12 @@ const loadDetail = (id: string, ac: string = 'web') => {
       return
     }
 
+    if (data.list[0].type == 1) {
+      loading.value = false
+      loadFolder(data.list[0].path)
+      return
+    }
+
     movies.value = data.list
     //movies.value[0].vod_id = id
     const pic = movies.value[0].vod_pic
@@ -2243,7 +2249,7 @@ onMounted(async () => {
   } else {
     const routeVodId = getRouteVodId()
     if (routeVodId) {
-      loadDetail(routeVodId, 'search')
+      loadDetail(routeVodId, 'web')
     } else {
       const newPath = route.params.path
       filePath.value = newPath ? '/' + newPath.join('/') : '/'
@@ -2293,7 +2299,7 @@ watch(
     }
     const routeVodId = getRouteVodId()
     if (routeVodId) {
-      loadDetail(routeVodId, 'search')
+      loadDetail(routeVodId, 'web')
     }
   }
 )
