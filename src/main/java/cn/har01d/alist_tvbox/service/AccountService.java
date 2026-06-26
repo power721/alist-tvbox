@@ -241,8 +241,8 @@ public class AccountService {
         log.info("generate new password");
         String password = IdUtils.generate(12);
         settingRepository.save(new Setting(ATV_PASSWORD, password));
-        String sql = "UPDATE x_users SET password = '" + password + "' WHERE username = 'atv'";
-        aListLocalService.executeUpdate(sql);
+        String sql = "UPDATE x_users SET password = ? WHERE username = 'atv'";
+        aListLocalService.executeUpdate(sql, password);
         return password;
     }
 

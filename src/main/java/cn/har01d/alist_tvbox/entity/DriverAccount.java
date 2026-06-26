@@ -21,6 +21,7 @@ public class DriverAccount {
     @Id
     @GeneratedValue(strategy = GenerationType.TABLE, generator = "tableGenerator")
     private Integer id;
+    @Enumerated(EnumType.ORDINAL)
     private DriverType type;
     private String name;
     @Column(columnDefinition = "TEXT")

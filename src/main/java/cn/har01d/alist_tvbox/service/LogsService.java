@@ -32,7 +32,8 @@ public class LogsService {
     }
 
     private String fixLine(String text) {
-        return text
+        // 先 HTML 实体转义(防日志内容中的 <script> 等被前端 v-html 执行),再做着色替换
+        return htmlEscape(text)
                 .replace(" ERROR ", " <span class=\"error\">ERROR</span> ")
                 .replace(" WARN ", " <span class=\"error\">WARN</span> ")
                 .replace(" INFO ", " <span class=\"info\">INFO</span> ")
@@ -42,6 +43,17 @@ public class LogsService {
                 .replace("\u001b[37m", "<span class=\"debug\">")
                 .replace("\u001b[0m", "</span> ")
                 ;
+    }
+
+    private String htmlEscape(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#x27;");
     }
 
     private Path getLogFile(String type) {
@@ -74,7 +86,7 @@ public class LogsService {
                     if (isLogLine(next)) {
                         break;
                     }
-                    sb.append(next).append("\n");
+                    sb.append(htmlEscape(next)).append("\n");
                     i++;
                 }
                 sb.append("</pre>");

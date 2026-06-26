@@ -73,6 +73,7 @@ import cn.har01d.alist_tvbox.util.BiliBiliUtils;
 import cn.har01d.alist_tvbox.util.BiliCookieRefreshUtils;
 import cn.har01d.alist_tvbox.util.Constants;
 import cn.har01d.alist_tvbox.util.DashUtils;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -1990,6 +1991,9 @@ public class BiliBiliService {
     }
 
     public String getSubtitle(String url) {
+        if (!Utils.isSafeExternalUrl(url)) {
+            throw new BadRequestException("Invalid subtitle URL");
+        }
         StringBuilder text = new StringBuilder();
         try {
             HttpEntity<Void> entity = buildHttpEntity(null);

@@ -23,6 +23,8 @@ import org.springframework.util.StreamUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Set;
 
 @Slf4j
@@ -34,16 +36,10 @@ public class TokenFilter extends OncePerRequestFilter {
     @Autowired(required = false)
     private SubscriptionService subscriptionService;
     private volatile String apiKey;
-    private volatile String basicAuthCredentials;
 
     public TokenFilter(TokenService tokenService, SettingRepository settingRepository) {
         this.tokenService = tokenService;
         apiKey = settingRepository.findById("api_key").map(Setting::getValue).orElse("");
-        // Load Basic Auth credentials from database instead of hardcoding
-        // Default to "alist:alist" (Base64: YWxpc3Q6YWxpc3Q=) for backward compatibility
-        basicAuthCredentials = settingRepository.findById("basic_auth_credentials")
-                .map(Setting::getValue)
-                .orElse("Basic YWxpc3Q6YWxpc3Q=");
     }
 
     public void setApiKey(String apiKey) {
@@ -55,7 +51,7 @@ public class TokenFilter extends OncePerRequestFilter {
         try {
             if (StringUtils.isNotBlank(apiKey)) {
                 String key = request.getHeader("X-API-KEY");
-                if (apiKey.equals(key)) {
+                if (key != null && MessageDigest.isEqual(apiKey.getBytes(StandardCharsets.UTF_8), key.getBytes(StandardCharsets.UTF_8))) {
                     Authentication authentication = new UsernamePasswordAuthenticationToken("client", key, Set.of(new SimpleGrantedAuthority(Role.CLIENT.name())));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                     filterChain.doFilter(request, response);
@@ -63,19 +59,10 @@ public class TokenFilter extends OncePerRequestFilter {
                 }
             }
 
-            if (request.getRequestURI().startsWith("/open") || request.getRequestURI().startsWith("/node") || request.getRequestURI().startsWith("/cat")) {
-                String auth = request.getHeader("Authorization");
-                if (StringUtils.isBlank(auth) || !basicAuthCredentials.equals(auth)) {
-                    response.setHeader("Www-Authenticate", "Basic realm=\"alist\"");
-                    response.sendError(401);
-                    return;
-                }
-            } else {
-                String token = getToken(request);
-                if (StringUtils.isNotBlank(token)) {
-                    Authentication authentication = buildAuthentication(token);
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                }
+            String token = getToken(request);
+            if (StringUtils.isNotBlank(token)) {
+                Authentication authentication = buildAuthentication(token);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
             filterChain.doFilter(request, response);
         } catch (UserUnauthorizedException e) {

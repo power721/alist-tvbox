@@ -138,6 +138,13 @@ public class ConfigFileService {
         if (StringUtils.isBlank(dto.getName())) {
             throw new BadRequestException("文件名不能为空");
         }
+        // 防路径穿越:目录不得含 ..,文件名不得含路径分隔符或 ..
+        if (dto.getDir().contains("..")) {
+            throw new BadRequestException("非法目录");
+        }
+        if (dto.getName().contains("..") || dto.getName().contains("/") || dto.getName().contains("\\")) {
+            throw new BadRequestException("非法文件名");
+        }
         dto.setPath(new File(dto.getDir(), dto.getName()).getAbsolutePath());
         if (dto.getName().endsWith(".json")) {
             if (StringUtils.isNotBlank(dto.getContent())) {

@@ -266,14 +266,14 @@ public class AListLocalService {
     }
 
     public void saveStorage(Storage storage) {
-        executeUpdate("DELETE FROM x_storages WHERE id = " + storage.getId());
+        executeUpdate("DELETE FROM x_storages WHERE id = ?", storage.getId());
         String time = storage.getTime().truncatedTo(ChronoUnit.SECONDS).atZone(ZoneId.systemDefault()).toLocalDateTime().toString();
         String sql = "INSERT INTO x_storages " +
                 "(id,mount_path,`order`,driver,cache_expiration,custom_cache_policies,status,addition,modified,disabled,order_by,order_direction,extract_folder,web_proxy,webdav_policy) " +
-                "VALUES (%d,'%s',0,'%s',%d,'%s','work','%s','%s',%d,'name','asc','front',%d,'%s');";
-        executeUpdate(String.format(sql, storage.getId(), storage.getPath(), storage.getDriver(),
+                "VALUES (?, ?, 0, ?, ?, ?, 'work', ?, ?, ?, 'name','asc','front', ?, ?)";
+        executeUpdate(sql, storage.getId(), storage.getPath(), storage.getDriver(),
                 storage.getCacheExpiration(), storage.getCustomCachePolicies(),
-                storage.getAddition(), time, storage.isDisabled() ? 1 : 0, storage.isWebProxy() ? 1 : 0, storage.getWebdavPolicy()));
+                storage.getAddition(), time, storage.isDisabled() ? 1 : 0, storage.isWebProxy() ? 1 : 0, storage.getWebdavPolicy());
         log.info("[{}] insert {} storage : {}", storage.getId(), storage.getDriver(), storage.getPath());
     }
 
@@ -288,6 +288,44 @@ public class AListLocalService {
             log.warn("execute update failed", e);
             return 0;
         }
+    }
+
+    /**
+     * 参数化执行(JDBC 路径真参数化,防 SQL 注入;NATIVE/CLI 路径转义单引号后渲染为字面量)。
+     */
+    public int executeUpdate(String sql, Object... args) {
+        if (System.getenv("NATIVE") != null && "sqlite3".equals(database)) {
+            return Utils.executeUpdate(renderSql(sql, args));
+        }
+        try {
+            log.debug("executeUpdate: {} args: {}", sql, args);
+            return alistJdbcTemplate.update(sql, args);
+        } catch (Exception e) {
+            log.warn("execute update failed", e);
+            return 0;
+        }
+    }
+
+    /** 把 ? 占位符渲染为 SQL 字面量(字符串单引号转义,数字/布尔直接),仅用于 sqlite3 CLI 路径。 */
+    private static String renderSql(String sql, Object[] args) {
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        for (int j = 0; j < sql.length(); j++) {
+            char c = sql.charAt(j);
+            if (c == '?' && i < args.length) {
+                Object a = args[i++];
+                if (a == null) {
+                    sb.append("NULL");
+                } else if (a instanceof Number || a instanceof Boolean) {
+                    sb.append(a);
+                } else {
+                    sb.append("'").append(String.valueOf(a).replace("'", "''")).append("'");
+                }
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     public boolean existsById(String tableName, long id) {
@@ -331,8 +369,8 @@ public class AListLocalService {
             log.warn("Token is empty: {} {} ", accountId, key);
             return;
         }
-        String sql = "INSERT INTO x_tokens VALUES('%s','%s',%d,'%s')";
-        executeUpdate(String.format(sql, key, value, accountId, OffsetDateTime.now()));
+        String sql = "INSERT INTO x_tokens VALUES(?,?,?,?)";
+        executeUpdate(sql, key, value, accountId, OffsetDateTime.now());
     }
 
     public void updateToken(Integer accountId, String key, String value) {
@@ -354,8 +392,8 @@ public class AListLocalService {
             ResponseEntity<String> response = restTemplate.exchange("/api/admin/token/update", HttpMethod.POST, entity, String.class);
             log.debug("updateTokenToAList {} response: {}", key, response.getBody());
         } else {
-            String sql = "INSERT INTO x_tokens VALUES('%s','%s',%d,'%s')";
-            executeUpdate(String.format(sql, key, value, accountId, OffsetDateTime.now()));
+            String sql = "INSERT INTO x_tokens VALUES(?,?,?,?)";
+            executeUpdate(sql, key, value, accountId, OffsetDateTime.now());
         }
     }
 

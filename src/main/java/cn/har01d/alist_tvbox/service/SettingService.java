@@ -164,7 +164,7 @@ public class SettingService {
 
     public String generateApiKey() {
         String apiKey = UUID.randomUUID().toString().replace("-", "");
-        log.debug("generate api key: {}", apiKey);
+        log.debug("generate api key: {}", Utils.mask(apiKey));
         settingRepository.save(new Setting("api_key", apiKey));
         tokenFilter.setApiKey(apiKey);
         return apiKey;
@@ -571,12 +571,12 @@ public class SettingService {
                 sources.add("index.video.txt");
             }
 
-            if (driverAccountRepository.countByType(DriverType.PAN115) > 0) {
-                Path index115 = Utils.getIndexPath("index.115.txt");
-                if (Files.exists(index115)) {
-                    sources.add("index.115.txt");
-                }
-            }
+//            if (driverAccountRepository.countByType(DriverType.PAN115) > 0) {
+//                Path index115 = Utils.getIndexPath("index.115.txt");
+//                if (Files.exists(index115)) {
+//                    sources.add("index.115.txt");
+//                }
+//            }
         } else {
             for (int i = 0; i < sources.size(); i++) {
                 String source = sources.get(i);

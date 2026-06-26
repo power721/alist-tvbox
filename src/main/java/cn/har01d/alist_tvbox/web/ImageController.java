@@ -1,8 +1,10 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.PlayUrl;
+import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.ProxyService;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.Utils;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -35,6 +37,9 @@ public class ImageController {
 
     @GetMapping(value = "", produces = "image/webp")
     public ResponseEntity<byte[]> getImage(String url, String referer, HttpServletResponse response) {
+        if (!Utils.isSafeExternalUrl(url)) {
+            throw new BadRequestException("Invalid image URL");
+        }
         if (url.contains(".webp")) {
             response.setContentType("image/webp");
         } else if (url.contains(".svg")) {
