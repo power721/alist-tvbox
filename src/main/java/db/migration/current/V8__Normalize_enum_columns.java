@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 
@@ -96,15 +97,45 @@ public class V8__Normalize_enum_columns extends BaseJavaMigration {
             constraints.addAll(mySqlCheckConstraints(connection, table, column));
         }
 
-        for (String constraint : constraints) {
-            if (isMySql(db)) {
-                execute(connection, "ALTER TABLE " + quote(connection, table)
-                        + " DROP CHECK " + quote(connection, constraint));
-            } else {
-                execute(connection, "ALTER TABLE " + quote(connection, table)
-                        + " DROP CONSTRAINT " + quote(connection, constraint));
-            }
+        // INFORMATION_SCHEMA may surface the same auto-generated constraint name more
+        // than once on legacy databases, or report a name already absent from the live
+        // constraint registry (stale metadata carried across H2 upgrades). Drop each name
+        // at most once and tolerate "constraint not found" so the migration stays
+        // idempotent instead of aborting. A name that DROP reports as missing is not in
+        // the live registry, so it enforces nothing and can be safely skipped.
+        boolean mysql = isMySql(db);
+        for (String constraint : new LinkedHashSet<>(constraints)) {
+            dropCheckConstraint(connection, table, constraint, mysql);
         }
+    }
+
+    void dropCheckConstraint(Connection connection, String table, String constraint, boolean mysql)
+            throws SQLException {
+        String sql = "ALTER TABLE " + quote(connection, table)
+                + (mysql ? " DROP CHECK " : " DROP CONSTRAINT ") + quote(connection, constraint);
+        try {
+            execute(connection, sql);
+        } catch (SQLException e) {
+            if (!isConstraintNotFound(e)) {
+                throw e;
+            }
+            System.err.println("V8: skip already-absent constraint " + constraint + " on " + table + ": " + e.getMessage());
+        }
+    }
+
+    private boolean isConstraintNotFound(SQLException e) {
+        String state = e.getSQLState();
+        if ("90057".equals(state) || e.getErrorCode() == 90057) {
+            return true; // H2: Constraint not found
+        }
+        if ("42704".equals(state)) {
+            return true; // PostgreSQL: undefined object
+        }
+        // MySQL and message-based fallback: only match constraint/check-not-found wording
+        // so an unrelated "table not found" is never masked.
+        String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase(Locale.ROOT);
+        return message.contains("constraint") && message.contains("not found")
+                || message.contains("check constraint") && message.contains("does not exist");
     }
 
     private List<String> h2CheckConstraints(Connection connection, String table, String column) {
