@@ -571,12 +571,12 @@ public class SettingService {
                 sources.add("index.video.txt");
             }
 
-            if (driverAccountRepository.countByType(DriverType.PAN115) > 0) {
-                Path index115 = Utils.getIndexPath("index.115.txt");
-                if (Files.exists(index115)) {
-                    sources.add("index.115.txt");
-                }
-            }
+//            if (driverAccountRepository.countByType(DriverType.PAN115) > 0) {
+//                Path index115 = Utils.getIndexPath("index.115.txt");
+//                if (Files.exists(index115)) {
+//                    sources.add("index.115.txt");
+//                }
+//            }
         } else {
             for (int i = 0; i < sources.size(); i++) {
                 String source = sources.get(i);
