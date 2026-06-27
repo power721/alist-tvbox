@@ -32,6 +32,12 @@
               <el-button :icon="Search" :disabled="searching" @click="search"/>
             </template>
           </el-input>
+          <el-input v-model="fileKeyword" @keyup.enter="searchFiles" :disabled="fileSearching" clearable
+                    placeholder="搜索文件资源" style="width: 300px;">
+            <template #append>
+              <el-button :icon="Search" :disabled="fileSearching" @click="searchFiles"/>
+            </template>
+          </el-input>
           <el-button type="danger" @click="handleDeleteBatch" v-if="isHistory&&selected.length">删除</el-button>
           <el-button type="danger" @click="handleCleanAll" v-if="isHistory">清空</el-button>
           <el-button type="primary" :disabled="loading" @click="refresh">刷新</el-button>
@@ -42,7 +48,7 @@
         <div>
           <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
             <span>{{ filteredResults.length }}/{{ results.length }}条搜索结果</span>
-            <el-select style="width: 120px" v-model="shareType" @change="filterSearchResults">
+            <el-select v-if="searchMode==='tg'" style="width: 120px" v-model="shareType" @change="filterSearchResults">
               <el-option
                 v-for="item in options"
                 :key="item.value"
@@ -53,11 +59,14 @@
             <el-button :icon="Delete" @click="clearSearch">清除</el-button>
           </div>
           <div class="table-scroll-wrapper">
-            <el-table :data="filteredResults" v-loading="searching" @row-click="loadResult" border max-height="1080"
+            <el-table :data="filteredResults" v-loading="searching" @row-click="onResultClick" border max-height="1080"
                       style="min-width: 400px" class="clickable-table">
               <el-table-column prop="vod_name" label="内容">
                 <template #default="scope">
-                  <el-tooltip :content="scope.row.vod_play_url">
+                  <el-tooltip v-if="searchMode==='file'" :content="scope.row.vod_remarks || scope.row.vod_name">
+                    {{ scope.row.vod_name }}
+                  </el-tooltip>
+                  <el-tooltip v-else :content="scope.row.vod_play_url">
                     {{ getShareType(scope.row.type_name) }}
                     {{ scope.row.vod_name }}
                   </el-tooltip>
@@ -813,6 +822,7 @@ const scrollbarRef = ref<ScrollbarInstance>()
 const episodeScrollbarRef = ref<ScrollbarInstance>()
 const filePath = ref('/')
 const keyword = ref('')
+const fileKeyword = ref('')
 const order = ref('index')
 const shareType = ref('ALL')
 const name = ref('')
@@ -866,6 +876,8 @@ const settingVisible = ref(false)
 const addVisible = ref(false)
 const isHistory = ref(false)
 const searching = ref(false)
+const fileSearching = ref(false)
+const searchMode = ref('tg')
 const page = ref(parseInt(route.query.page) || 1)
 const size = ref(parseInt(route.query.size) || 50)
 const total = ref(0)
@@ -1059,6 +1071,7 @@ const handleAdd = () => {
 
 const search = () => {
   searching.value = true
+  searchMode.value = 'tg'
   return axios.get('/api/telegram/search?wd=' + keyword.value).then(({data}) => {
     searching.value = false
     results.value = data.map(e => {
@@ -1083,6 +1096,27 @@ const search = () => {
 
 const filterSearchResults = () => {
   filteredResults.value = shareType.value != 'ALL' ? results.value.filter(e => e.type_name == shareType.value) : results.value
+}
+
+const searchFiles = () => {
+  if (!fileKeyword.value.trim()) {
+    return
+  }
+  searching.value = true
+  fileSearching.value = true
+  searchMode.value = 'file'
+  return axios.get('/vod/' + store.token + '?ac=gui&wd=' + encodeURIComponent(fileKeyword.value)).then(({data}) => {
+    searching.value = false
+    fileSearching.value = false
+    results.value = data.list || []
+    filteredResults.value = results.value
+    if (results.value.length == 0) {
+      ElMessage.info('无搜索结果')
+    }
+  }, () => {
+    searching.value = false
+    fileSearching.value = false
+  })
 }
 
 const getShareType = (type: string) => {
@@ -1132,6 +1166,7 @@ const clearSearch = () => {
   keyword.value = ''
   results.value = []
   filteredResults.value = []
+  searchMode.value = 'tg'
 }
 
 const handleSelectionChange = (val: ShareInfo[]) => {
@@ -1252,6 +1287,33 @@ const loadResult = (row: any) => {
   toClipboard(row.vod_play_url).then()
   axios.post('/api/share-link', form.value).then(({data}) => {
     loadFolder(data)
+  })
+}
+
+const onResultClick = (row: any) => {
+  if (searchMode.value === 'file') {
+    loadFileResult(row)
+  } else {
+    loadResult(row)
+  }
+}
+
+const loadFileResult = (row: any) => {
+  loading.value = true
+  axios.get('/vod/' + store.token + '?ac=web&ids=' + row.vod_id).then(({data}) => {
+    loading.value = false
+    const item = data.list && data.list[0]
+    if (item && item.path) {
+      if (item.type == 1) {
+        loadFolder(item.path)
+      } else {
+        goParent(item.path)
+      }
+    } else {
+      ElMessage.warning('无法定位文件目录')
+    }
+  }, () => {
+    loading.value = false
   })
 }
 
