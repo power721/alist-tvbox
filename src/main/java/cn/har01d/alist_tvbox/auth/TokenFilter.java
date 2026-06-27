@@ -89,7 +89,8 @@ public class TokenFilter extends OncePerRequestFilter {
     // 仅这些 GET 下载端点允许 query token(浏览器 window.location.href 无法设置 Authorization 头)
     private static final Set<String> TOKEN_QUERY_DOWNLOAD_PATHS = Set.of(
             "/api/settings/export", "/api/settings/export-json",
-            "/api/export-shares", "/api/logs/download", "/api/index-files/download");
+            "/api/export-shares", "/api/logs/download", "/api/index-files/download",
+            "/api/static-files/download");
 
     private String getToken(HttpServletRequest request) {
         String token = request.getHeader("Authorization");

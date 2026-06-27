@@ -299,6 +299,11 @@ public class SubscriptionService {
             return;
         }
 
+        // USER 角色的 vod token 即其用户名(/api/token 对非 ADMIN 返回用户名),内容接口需放行
+        if (userService.isUsernameExist(rawToken)) {
+            return;
+        }
+
         for (String t : tokens.split(",")) {
             if (t.equals(rawToken)) {
                 return;
@@ -1508,8 +1513,8 @@ public class SubscriptionService {
                 String address = readHostAddress();
                 String token = getCurrentOrFirstToken();
                 json = appendMd5sum(name, json);
-                // tokenm 交出网盘凭证,改用真实订阅 token(对齐 requireSubscriptionToken),不受 enabledToken/"-" 占位影响
-                String subToken = getFirstSubscriptionToken();
+                // tokenm 交出网盘凭证,需合法订阅 token:优先用当前请求 token(多 token 时不泄漏/错配首个),无有效请求 token 才回退首个
+                String subToken = isValidSubscriptionToken(currentToken.get()) ? currentToken.get() : getFirstSubscriptionToken();
                 json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
                 json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));

@@ -164,8 +164,9 @@ public class ConfigFileService {
     }
 
     /**
-     * 校验目录前缀合法,且规范化后仍位于受信任根(/data 或 /www)之下。
-     * 仅接受 "/data"、"/www" 及 "/www/..."；其余一律拒绝,防止越界写入(如 /etc/cron.d、/Local/...)。
+     * 校验目录规范化后仍位于受信任根(getDataPath / getWebPath)之下。
+     * 接受逻辑前缀("/data"、"/www" 及 "/www/...")与非 docker/自定义 data 目录的真实绝对路径
+     * (如 /opt/atv/data、atv.data.dir);其余一律拒绝,防止越界写入(如 /etc/cron.d、/Local/...)。
      */
     private void ensureTrustedDir(String dir) {
         Path candidate;
@@ -175,7 +176,8 @@ public class ConfigFileService {
             String sub = "/www".equals(dir) ? "" : dir.substring("/www/".length());
             candidate = Utils.getWebPath(sub);
         } else {
-            throw new BadRequestException("非法目录");
+            // 非 docker / 自定义 data 目录的真实绝对路径,交由下方 containment 校验是否受信任
+            candidate = Path.of(dir);
         }
         Path normalized = candidate.toAbsolutePath().normalize();
         Path dataRoot = Utils.getDataPath().toAbsolutePath().normalize();
