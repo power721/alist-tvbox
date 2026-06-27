@@ -28,14 +28,6 @@ setup_symlinks() {
 extract_resource_zips() {
   log_info "Extracting resource packages"
 
-  # cat.zip
-  if [ ! -d /www/cat ]; then
-    log_info "Extracting cat.zip"
-    mkdir -p /www/cat
-    unzip -q -o /cat.zip -d /www/cat
-  fi
-  [ -d /data/cat ] && cp -r /data/cat/* /www/cat/
-
   # pg.zip
   [ ! -f /data/pg.zip ] && cp /pg.zip /data/pg.zip
   if [ ! -d /www/pg ]; then

@@ -53,7 +53,7 @@
     </div>
 
     <div class="table-scroll-wrapper">
-      <el-table v-if="(type==''||type=='1'||type=='8')&&config" :data="config.list" border style="width: 100%; min-width: 800px">
+      <el-table v-if="(type==''||type=='1')&&config" :data="config.list" border style="width: 100%; min-width: 800px">
       <el-table-column prop="vod_name" label="名称" width="300">
         <template #default="scope">
           <a :href="getSearchResultHref(scope.row)" target="_blank">
@@ -74,7 +74,7 @@
     </div>
 
     <div class="table-scroll-wrapper">
-      <el-table v-if="(type=='6')&&config" :data="filteredPanSouResults" border style="width: 100%; min-width: 800px" v-loading="searching">
+      <el-table v-if="(type=='6'||type=='8')&&config" :data="filteredPanSouResults" border style="width: 100%; min-width: 800px" v-loading="searching">
       <el-table-column prop="vod_name" label="名称" sortable>
         <template #default="scope">
           <a :href="'/#/vod?link='+scope.row.vod_id" target="_blank">
@@ -109,8 +109,8 @@
     </el-table>
     </div>
 
-    <h2 v-if="type!='6'">API返回数据</h2>
-    <div class="data" v-if="type!='6'">
+    <h2 v-if="type!='6'&&type!='8'">API返回数据</h2>
+    <div class="data" v-if="type!='6'&&type!='8'">
       <json-viewer :value="config" expanded copyable show-double-quotes :show-array-index="false" :expand-depth=3>
       </json-viewer>
     </div>
