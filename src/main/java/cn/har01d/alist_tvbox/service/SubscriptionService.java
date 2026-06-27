@@ -1488,6 +1488,14 @@ public class SubscriptionService {
                 file = Utils.getWebPath("tvbox", name);
                 folder = "/tvbox/" + getFolder(name);
             }
+            // 安全:规范化后必须仍位于 web 根(/www)之下,杜绝 ../ 或绝对路径穿越读取任意文件(如 /etc/passwd、/opt/alist/data/config.json)
+            Path webRoot = Utils.getWebPath().toAbsolutePath().normalize();
+            Path resolved = file.toAbsolutePath().normalize();
+            if (!resolved.startsWith(webRoot)) {
+                log.warn("rejected config path outside web root: {}", name);
+                return null;
+            }
+            file = resolved;
             if (Files.exists(file)) {
                 log.info("load json from {}", file);
                 String json = Files.readString(file);
