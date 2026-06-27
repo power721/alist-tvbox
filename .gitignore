@@ -64,3 +64,4 @@ musl-toolchain/
 /config/data/
 /scripts/gh_proxy_bench_result.json
 /.claude/worktrees/
+default.conf

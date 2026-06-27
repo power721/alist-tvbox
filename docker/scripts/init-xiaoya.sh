@@ -64,9 +64,6 @@ xiaoya_first_init() {
     sed -i "s/127.0.0.1/0.0.0.0/" /opt/alist/data/config.json
   fi
 
-  # 配置 nginx
-  sed '/location \/dav/i\    location ~* alist {\n        deny all;\n    }\n' nginx.conf > /etc/nginx/http.d/default.conf
-
   # 解压移动端资源
   mv mobi.tgz /www/mobi.tgz
   cd /www
@@ -211,6 +208,8 @@ EOF
 log_info "Starting database operations"
 upgrade_h2
 restore_database
+
+mkdir -p /var/cache/nginx/image
 
 if is_initialized; then
   log_info "Already initialized, running update tasks"
