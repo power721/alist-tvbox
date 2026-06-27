@@ -29,12 +29,10 @@ public class SessionTokenService implements TokenService {
             throw new UserUnauthorizedException("Token过期", 40102);
         }
         String role = session.getRole();
-        if (role == null) {
-            role = Role.ADMIN.name();
-        }
         Integer uid = session.getUserId();
-        if (uid == null) {
-            uid = 1;
+        // fail-closed:会话行缺少 role/userId(数据完整性问题,如脏还原/迁移)时拒绝,而非默认升为 ADMIN/id=1
+        if (role == null || uid == null) {
+            throw new UserUnauthorizedException("会话数据不完整", 40101);
         }
         return new UserToken(uid, session.getUsername(), Set.of(new SimpleGrantedAuthority(role)), token);
     }

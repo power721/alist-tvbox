@@ -86,9 +86,16 @@ public class TokenFilter extends OncePerRequestFilter {
         }
     }
 
+    // 仅这些 GET 下载端点允许 query token(浏览器 window.location.href 无法设置 Authorization 头)
+    private static final Set<String> TOKEN_QUERY_DOWNLOAD_PATHS = Set.of(
+            "/api/settings/export", "/api/settings/export-json",
+            "/api/export-shares", "/api/logs/download", "/api/index-files/download");
+
     private String getToken(HttpServletRequest request) {
-        var token = request.getHeader("Authorization");
-        if (token == null || token.isEmpty()) {
+        String token = request.getHeader("Authorization");
+        if (StringUtils.isBlank(token)
+                && "GET".equalsIgnoreCase(request.getMethod())
+                && TOKEN_QUERY_DOWNLOAD_PATHS.stream().anyMatch(p -> request.getRequestURI().startsWith(p))) {
             token = request.getParameter("X-ACCESS-TOKEN");
         }
         return token;

@@ -326,11 +326,48 @@ public class SettingService {
             settings.put("token", SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString());
             return settings;
         }
+        // 非 ADMIN(如 CLIENT)一律脱敏密钥类配置,避免泄漏 api_key、各 *_token/password/secret/cookie
+        if (!isAdmin()) {
+            map.keySet().removeIf(SettingService::isSecretKey);
+        }
         return map;
     }
 
     public Setting get(String name) {
-        return settingRepository.findById(name).orElse(null);
+        Setting setting = settingRepository.findById(name).orElse(null);
+        if (setting != null && isSecretKey(name)) {
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            // 仅在"已认证但非 ADMIN"时拒绝(防 CLIENT 经 /api/settings/{name} 绕过 findAll 脱敏);内部调用(无认证上下文)放行
+            if (auth != null && !isAdmin()) {
+                throw new BadRequestException("无权访问该配置");
+            }
+        }
+        return setting;
+    }
+
+    private static boolean isAdmin() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> Role.ADMIN.name().equals(a.getAuthority()));
+    }
+
+    private static final Set<String> SECRET_SUFFIXES =
+            Set.of("password", "secret", "api_key", "apikey", "token", "cookie", "refresh_token");
+
+    private static boolean isSecretKey(String name) {
+        if (name == null) {
+            return false;
+        }
+        String n = name.toLowerCase();
+        if (n.equals("api_key") || n.equals("token")) {
+            return true;
+        }
+        for (String s : SECRET_SUFFIXES) {
+            if (n.endsWith(s)) {
+                return true;
+            }
+        }
+        return n.contains("password") || n.contains("secret");
     }
 
     public Setting update(Setting setting) {
