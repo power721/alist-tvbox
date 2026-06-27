@@ -10,10 +10,10 @@ COPY docker/scripts/ /docker/scripts/
 
 COPY data/tvbox.zip /
 COPY data/115.index.zip /
-COPY data/base_version /
-COPY data/cat.zip /
 COPY data/pg.zip /
 COPY data/zx.zip /
+COPY data/nginx.conf /etc/nginx/http.d/default.conf
+COPY data/base_version /
 
 COPY target/application/ ./
 

@@ -39,7 +39,7 @@ public class Index115SiteSeed implements ApplicationRunner {
             String token = settingRepository.findById(TOKEN_SETTING).map(Setting::getValue).orElse("");
             site = new Site();
             site.setName(NAME);
-            site.setUrl("http://localhost:5244");
+            site.setUrl("http://localhost");
             site.setSearchable(true);
             site.setStorageVersion(1);
             site.setSortOrder(2);
@@ -47,9 +47,7 @@ public class Index115SiteSeed implements ApplicationRunner {
                 site.setToken(token);
             }
             site = siteRepository.save(site);
-            log.info("seeded index115 site (version 1, http://localhost:5244)");
-        } else if ("http://localhost".equals(site.getUrl())) {
-            site.setUrl("http://localhost:5244");
+            log.info("seeded index115 site (version 1, http://localhost)");
         }
         registerStorage(site);
     }

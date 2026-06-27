@@ -1056,8 +1056,7 @@ public class TvBoxService {
         }
 
         Site site = getSite(tid);
-        if (site.getStorageVersion() != null && site.getStorageVersion() == 1
-                && Index115PathCodec.decode(path) != null) {
+        if (site.getStorageVersion() != null && site.getStorageVersion() == 1) {
             return index115Adapter.list(site, path, page, size);
         }
         if (path.contains(PLAYLIST)) {

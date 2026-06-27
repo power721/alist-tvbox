@@ -16,7 +16,6 @@ COPY data/update.sql /
 COPY data/tvbox.zip /
 COPY data/115.index.zip /
 COPY data/index.share.zip /
-COPY data/cat.zip /
 COPY data/pg.zip /
 COPY data/zx.zip /
 COPY data/data.zip /
