@@ -294,10 +294,6 @@ public class SubscriptionService {
             return;
         }
 
-        if (userService.isUsernameExist(rawToken)) {
-            return;
-        }
-
         for (String t : tokens.split(",")) {
             if (t.equals(rawToken)) {
                 return;
@@ -305,6 +301,41 @@ public class SubscriptionService {
         }
 
         throw new BadRequestException();
+    }
+
+    /**
+     * 校验订阅 token 是否合法(命中已配置的 token 列表)。不依赖 enabledToken,不做"用户名当 token"旁路。
+     */
+    public boolean isValidSubscriptionToken(String rawToken) {
+        if (StringUtils.isBlank(rawToken) || tokens == null || tokens.isBlank()) {
+            return false;
+        }
+        for (String t : tokens.split(",")) {
+            if (!t.isBlank() && t.equals(rawToken)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 凭证类端点(如 /pg/lib/tokenm)专用:始终要求合法订阅 token,不受全局 enabledToken 影响。
+     * 兼容性:loadLocalConfigJson 生成的配置已注入 getFirstSubscriptionToken(),合法消费端自带有效 token。
+     */
+    public void requireSubscriptionToken(String rawToken) {
+        currentToken.set(rawToken);
+        tenantService.setTenant(rawToken);
+        if (!isValidSubscriptionToken(rawToken)) {
+            throw new BadRequestException();
+        }
+    }
+
+    /** 返回首个真实订阅 token(不受 enabledToken/"-" 占位影响);无配置则返回空串。 */
+    public String getFirstSubscriptionToken() {
+        if (tokens == null || tokens.isBlank()) {
+            return "";
+        }
+        return tokens.split(",")[0];
     }
 
     public TokenDto getTokens() {
@@ -1463,7 +1494,9 @@ public class SubscriptionService {
                 String address = readHostAddress();
                 String token = getCurrentOrFirstToken();
                 json = appendMd5sum(name, json);
-                json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
+                // tokenm 交出网盘凭证,改用真实订阅 token(对齐 requireSubscriptionToken),不受 enabledToken/"-" 占位影响
+                String subToken = getFirstSubscriptionToken();
+                json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
                 json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
                 json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
