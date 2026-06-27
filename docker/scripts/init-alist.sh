@@ -21,17 +21,16 @@ uname -mor
 upgrade_h2
 restore_database
 
+# 创建运行期目录和符号链接。/opt/alist/data 可能是持久化挂载，
+# 但 /opt/atv/log 等路径属于新容器文件系统，每次启动都需要恢复。
+init_directories
+setup_symlinks
+
 # 检查是否已经初始化
 if is_initialized; then
   log_info "Already initialized, skipping first-time setup"
 else
   log_info "Running first-time initialization"
-
-  # 创建目录
-  init_directories
-
-  # 设置符号链接
-  setup_symlinks
 
   # 配置 AList
   if [ ! -f /opt/alist/data/config.json ]; then

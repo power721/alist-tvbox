@@ -347,6 +347,38 @@ test_entrypoints_set_jvm_timezone_for_postgresql() {
   assert_contains "-Duser.timezone=Asia/Shanghai" "$(cat "$ROOT_DIR/docker/scripts/entrypoint-native.sh")" "native entrypoint should not let PostgreSQL JDBC send PRC timezone"
 }
 
+test_init_alist_refreshes_log_symlink_when_already_initialized() {
+  local harness="$TEST_TMP_DIR/init-alist-harness.sh"
+  local app_version="$TEST_TMP_DIR/app_version"
+  printf 'test-version\n' > "$app_version"
+  mkdir -p "$TEST_TMP_DIR/opt-atv" "$TEST_TMP_DIR/data/log"
+
+  {
+    printf 'set -e\n'
+    printf 'INSTALL=new\n'
+    printf 'log_info() { :; }\n'
+    printf 'upgrade_h2() { :; }\n'
+    printf 'restore_database() { :; }\n'
+    printf 'is_initialized() { return 0; }\n'
+    printf 'init_directories() { mkdir -p "%s/data/log" "%s/opt-atv"; }\n' "$TEST_TMP_DIR" "$TEST_TMP_DIR"
+    printf 'setup_symlinks() { rm -rf "%s/opt-atv/log"; ln -s "%s/data/log" "%s/opt-atv/log"; }\n' "$TEST_TMP_DIR" "$TEST_TMP_DIR" "$TEST_TMP_DIR"
+    printf 'download_tvbox() { :; }\n'
+    printf 'mark_initialized() { :; }\n'
+    printf 'extract_resource_zips() { :; }\n'
+    printf 'seed_index115() { :; }\n'
+    sed '/^\. \/docker\/scripts\//d' "$ROOT_DIR/docker/scripts/init-alist.sh" \
+      | sed "s|/app_version|$app_version|g"
+  } > "$harness"
+
+  bash "$harness" >/dev/null
+
+  if [[ ! -L "$TEST_TMP_DIR/opt-atv/log" ]]; then
+    printf 'ASSERT FAIL: initialized container startup should recreate /opt/atv/log symlink\n' >&2
+    exit 1
+  fi
+  assert_eq "$TEST_TMP_DIR/data/log" "$(readlink "$TEST_TMP_DIR/opt-atv/log")" "log symlink should point at persistent data log directory"
+}
+
 build_init_common_harness() {
   local harness="$TEST_TMP_DIR/init-common-harness.sh"
   {
@@ -743,6 +775,7 @@ test_external_db_config_disables_sql_init
 test_prompt_db_connection_defaults_to_host_ip
 test_postgresql_jdbc_url_sets_timezone
 test_entrypoints_set_jvm_timezone_for_postgresql
+test_init_alist_refreshes_log_symlink_when_already_initialized
 test_seed_index115_extracts_once_when_directory_missing
 test_runtime_dockerfiles_copy_index115_zip
 test_config_db_apply_refreshes_external_db_config
