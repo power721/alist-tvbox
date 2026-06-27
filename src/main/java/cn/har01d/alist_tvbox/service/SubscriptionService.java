@@ -177,6 +177,11 @@ public class SubscriptionService {
                     .map(Setting::getValue)
                     .orElse("");
         }
+        // 兜底:TOKEN 缺失或显式空串都生成,保证启动后 tokens 永远非空
+        if (StringUtils.isBlank(tokens)) {
+            tokens = Utils.generateUsername();
+            settingRepository.save(new Setting(TOKEN, tokens));
+        }
 
         if (!settingRepository.existsByName(ENABLED_TOKEN)) {
             settingRepository.save(new Setting(ENABLED_TOKEN, String.valueOf(!tokens.isEmpty())));
@@ -332,9 +337,6 @@ public class SubscriptionService {
 
     /** 返回首个真实订阅 token(不受 enabledToken/"-" 占位影响);无配置则返回空串。 */
     public String getFirstSubscriptionToken() {
-        if (tokens == null || tokens.isBlank()) {
-            return "";
-        }
         return tokens.split(",")[0];
     }
 
@@ -389,9 +391,13 @@ public class SubscriptionService {
 
     public TokenDto updateToken(TokenDto dto) {
         if (dto.isEnabledToken() && StringUtils.isBlank(dto.getToken())) {
-            tokens = IdUtils.generate(8);
+            tokens = Utils.generateUsername();
         } else {
             tokens = Arrays.stream(dto.getToken().split(",")).filter(StringUtils::isNotBlank).collect(Collectors.joining(","));
+        }
+        // 兜底:任何路径都不得把 tokens 置空(否则 /pg/lib/tokenm 无有效 token 可校验)
+        if (tokens.isBlank()) {
+            tokens = Utils.generateUsername();
         }
         dto.setToken(tokens);
         aListLocalService.updateSetting("sign_all", String.valueOf(dto.isEnabledToken()), "bool");
