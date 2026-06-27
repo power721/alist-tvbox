@@ -508,7 +508,7 @@ const confirmDelete = () => {
 }
 
 const downloadFile = (row: any) => {
-  window.open('/api/static-files/download?path=' + encodeURIComponent(row.path), '_blank')
+  window.open('/api/static-files/download?path=' + encodeURIComponent(row.path) + '&X-ACCESS-TOKEN=' + localStorage.getItem("token"), '_blank')
 }
 
 const batchDownloadSelected = () => {
