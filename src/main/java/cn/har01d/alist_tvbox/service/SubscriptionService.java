@@ -1513,8 +1513,10 @@ public class SubscriptionService {
                 String address = readHostAddress();
                 // String token = getCurrentOrFirstToken();
                 json = appendMd5sum(name, json);
-                // tokenm 交出网盘凭证,需合法订阅 token:优先用当前请求 token(多 token 时不泄漏/错配首个),无有效请求 token 才回退首个
-                String subToken = isValidSubscriptionToken(currentToken.get()) ? currentToken.get() : getFirstSubscriptionToken();
+                // 用当前请求 token(订阅 token 或 USER 用户名);仅在无请求 token(后台/导出)时才回退全局首个订阅 token,
+                // 避免把全局订阅 token 注入 USER 的配置(否则 USER 可拿它在 /vod、/sub 等绕过 tenant 隔离)
+                String currentReqToken = currentToken.get();
+                String subToken = StringUtils.isNotBlank(currentReqToken) ? currentReqToken : getFirstSubscriptionToken();
                 json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
@@ -1632,8 +1634,9 @@ public class SubscriptionService {
             json = json.replace("{Cloud-drive", "{\"Cloud-drive");
             if (json.contains("tvfan/Cloud-drive.txt")) {
                 String address = readHostAddress();
-                // String token = getCurrentOrFirstToken();
-                String subToken = isValidSubscriptionToken(currentToken.get()) ? currentToken.get() : getFirstSubscriptionToken();
+                // 用当前请求 token(订阅 token 或 USER 用户名),无请求 token 才回退全局首个,避免把全局订阅 token 泄漏给 USER
+                String currentReqToken = currentToken.get();
+                String subToken = StringUtils.isNotBlank(currentReqToken) ? currentReqToken : getFirstSubscriptionToken();
                 json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
             }
 
