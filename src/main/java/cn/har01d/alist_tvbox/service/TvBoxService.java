@@ -2340,6 +2340,7 @@ public class TvBoxService {
             return true;
         }
 
+        Integer year = doubanService.getYear(movieDetail.getVod_name(), path);
         try {
             Movie movie = null;
             if (site.isXiaoya()) {
@@ -2362,25 +2363,25 @@ public class TvBoxService {
                     }
                 }
 
-                movie = doubanService.getByName(name);
+                movie = doubanService.getByName(name, year);
             }
 
             if (movie == null) {
                 String newName = name.replace("@", "").replace("！", "");
                 if (!newName.equals(name)) {
-                    movie = doubanService.getByName(newName);
+                    movie = doubanService.getByName(newName, year);
                 }
             }
 
             if (movie == null) {
                 int index = name.indexOf(' ');
                 if (index > 0) {
-                    movie = doubanService.getByName(name.substring(0, index));
+                    movie = doubanService.getByName(name.substring(0, index), year);
                 }
             }
 
             if (movie == null && !name.contains("第一季")) {
-                movie = doubanService.getByName(name + " 第一季");
+                movie = doubanService.getByName(name + " 第一季", year);
             }
 
             if (movie == null) {
@@ -2389,7 +2390,7 @@ public class TvBoxService {
                     if (m.matches()) {
                         String newName = getNameFromPath(getParent(path));
                         if (!newName.equals(name) && !DriveId.isShareTokenName(newName)) {
-                            movie = doubanService.getByName(newName);
+                            movie = doubanService.getByName(newName, year);
                             break;
                         }
                     }

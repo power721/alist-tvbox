@@ -423,6 +423,10 @@ public class DoubanService {
     }
 
     public Movie getByName(String name) {
+        return getByName(name, null);
+    }
+
+    public Movie getByName(String name, Integer year) {
         try {
             Alias alias = aliasRepository.findById(name).orElse(null);
             if (alias != null) {
@@ -441,9 +445,9 @@ public class DoubanService {
                 return alias.getMovie();
             }
 
-            List<Movie> movies = movieRepository.getByName(name);
-            if (movies != null && !movies.isEmpty()) {
-                return movies.get(0);
+            Movie movie = pickBest(movieRepository.getByName(name), year);
+            if (movie != null) {
+                return movie;
             }
 
             String newName = TextUtils.updateName(name);
@@ -457,15 +461,68 @@ public class DoubanService {
                     return alias.getMovie();
                 }
 
-                movies = movieRepository.getByName(name);
-                if (movies != null && !movies.isEmpty()) {
-                    return movies.get(0);
+                movie = pickBest(movieRepository.getByName(name), year);
+                if (movie != null) {
+                    return movie;
                 }
+            }
+
+            // no exact-name match: fall back to name-contains scoped by the extracted
+            // year, then pick the best-matching name (exact > shortest > first)
+            if (year != null) {
+                return pickBestName(movieRepository.findByYearAndNameContains(year, name, Pageable.ofSize(10)).getContent(), name);
             }
         } catch (Exception e) {
             log.warn("", e);
         }
         return null;
+    }
+
+    // among same-name candidates, pick the one whose year is closest to the target
+    // (null-year candidates are skipped; ties prefer the smaller year). With no
+    // target year or a single candidate, keep the previous first-match behavior.
+    static Movie pickBest(List<Movie> movies, Integer year) {
+        if (movies == null || movies.isEmpty()) {
+            return null;
+        }
+        if (year == null || movies.size() == 1) {
+            return movies.get(0);
+        }
+        Movie best = null;
+        int bestDelta = Integer.MAX_VALUE;
+        for (Movie m : movies) {
+            Integer y = m.getYear();
+            if (y == null) {
+                continue;
+            }
+            int delta = Math.abs(y - year);
+            if (best == null || delta < bestDelta || (delta == bestDelta && y < best.getYear())) {
+                bestDelta = delta;
+                best = m;
+            }
+        }
+        return best != null ? best : movies.get(0);
+    }
+
+    // among name-contains candidates, prefer an exact name, else the shortest name
+    static Movie pickBestName(List<Movie> movies, String name) {
+        if (movies == null || movies.isEmpty()) {
+            return null;
+        }
+        Movie best = null;
+        int bestLen = Integer.MAX_VALUE;
+        for (Movie m : movies) {
+            String n = m.getName();
+            if (name.equals(n)) {
+                return m;
+            }
+            int len = n == null ? Integer.MAX_VALUE : n.length();
+            if (best == null || len < bestLen) {
+                bestLen = len;
+                best = m;
+            }
+        }
+        return best;
     }
 
     public boolean updateMetaMovie(Integer id, MetaDto dto) {
@@ -818,6 +875,38 @@ public class DoubanService {
                     log.debug("find year {} from path {}", year, path);
                     return year;
                 }
+            }
+        }
+        return null;
+    }
+
+    // extract a release year from the title/path to disambiguate same-name titles;
+    // path takes precedence, then a parenthesized year in the title, then a bare year
+    public Integer getYear(String name, String path) {
+        Integer year = getYearFromPath(path);
+        if (year != null) {
+            return year;
+        }
+        return getYearFromText(name);
+    }
+
+    static Integer getYearFromText(String text) {
+        if (StringUtils.isBlank(text)) {
+            return null;
+        }
+        int max = LocalDate.now().getYear() + 3;
+        Matcher m = YEAR_PATTERN.matcher(text);
+        while (m.find()) {
+            int year = Integer.parseInt(m.group(1));
+            if (year > 1960 && year < max) {
+                return year;
+            }
+        }
+        m = YEAR2_PATTERN.matcher(text);
+        while (m.find()) {
+            int year = Integer.parseInt(m.group(1));
+            if (year > 1960 && year < max) {
+                return year;
             }
         }
         return null;

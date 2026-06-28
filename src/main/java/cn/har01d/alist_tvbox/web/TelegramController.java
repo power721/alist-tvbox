@@ -87,7 +87,7 @@ public class TelegramController {
             return telegramService.detail(id, ac, title);
         } else if (StringUtils.isNotBlank(t)) {
             if (t.equals("0")) {
-                return telegramService.searchTgSearchMovies("", pg, size);
+                return telegramService.searchTgSearchMovies("", pg, 120);
             }
             return telegramService.listTgSearch(t, pg, size);
         } else if (StringUtils.isNotBlank(wd)) {
