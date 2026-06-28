@@ -114,14 +114,14 @@ Native Image 是升级中最大且最不可控的风险。保留配置后,以下
 
 升级分支保留以下 native 相关配置,但不把 native build 作为 JVM jar 迁移的基础验收门槛:
 
-- `pom.xml` 的 `<profile id="native">`(`hibernate-enhance-maven-plugin` + `native-maven-plugin` + buildArgs)
+- `pom.xml` 的 `<profile id="native">`(`native-maven-plugin` + buildArgs)
 - `src/main/resources/META-INF/native-image/`
   - `reflect-config.json`(76KB)
   - `resource-config.json` / `proxy-config.json` / `native-image.properties`
 - `Main.java` 反射配置生成工具
 - `NativeFlywayMigrationConfig` native-only Java migration 注册
 
-> 注:`hibernate-enhance-maven-plugin` 仍只放在 native profile 内,JVM jar 不依赖它。
+> 注:Hibernate 6.x `hibernate-enhance-maven-plugin` 不再用于 native profile,避免生成与 Hibernate 7 `InstanceIdentity` 不兼容的增强实体字节码。
 
 ---
 

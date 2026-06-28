@@ -7,14 +7,14 @@
 
 **Root Cause**: ByteBuddy bytecode enhancement doesn't work in GraalVM native-image. The JIT-based bytecode manipulation that Hibernate normally uses is incompatible with ahead-of-time compilation.
 
-**Solution**: 
+**Solution**:
 - Created `/src/main/resources/META-INF/native-image/native-image.properties` with:
   ```properties
-  Args = -Dhibernate.bytecode.provider=none \
-         -Dhibernate.enable_lazy_load_no_trans=false
+  Args = -Dhibernate.enable_lazy_load_no_trans=false
   ```
+- Rely on Spring ORM's native-image metadata to exclude Hibernate's runtime `BytecodeProvider` service.
 - Added `org.hibernate.bytecode.internal.none.BytecodeProviderImpl` to `reflect-config.json`
-- Build-time bytecode enhancement is already configured via `hibernate-enhance-maven-plugin` in the native profile
+- Build-time bytecode enhancement is not used in the native profile. There is no Hibernate 7.2.x GA release of `hibernate-enhance-maven-plugin`, and the legacy Hibernate 6.x enhancer generates entity bytecode that is incompatible with Hibernate 7's `InstanceIdentity` contract in native images.
 
 ### 2. Flyway Scanner Warning (NON-FATAL)
 **Warning**: `Unable to scan location: /db/migration/current (unsupported protocol: resource)`
@@ -58,10 +58,10 @@ Native-image requires a different approach for Hibernate entity enhancement:
    - Dynamic proxy generation
    - Not compatible with AOT compilation
 
-2. **AOT Mode (works in native-image)**:
-   - Build-time bytecode enhancement via Maven plugin
-   - Static proxy classes generated during compilation
-   - Configured in pom.xml native profile with `hibernate-enhance-maven-plugin`
+2. **Native Mode**:
+   - Spring ORM excludes the runtime `BytecodeProvider` service for native images
+   - Entity build-time enhancement is disabled because there is no matching Hibernate 7.2.x enhancer plugin GA, and Hibernate 6.x enhancer output is incompatible with the Hibernate 7 runtime
+   - Run native builds from a clean target directory so stale enhanced classes are not reused
 
 ### Flyway Resource Scanning
 
