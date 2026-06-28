@@ -18,7 +18,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.env.Environment;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -164,8 +164,8 @@ public class AListLocalService {
         log.debug("set setting {}={}", key, value);
         // Use parameterized queries to prevent SQL injection
         try {
-            alistJdbcTemplate.update("DELETE FROM x_setting_items WHERE `key` = ?", key);
-            alistJdbcTemplate.update("INSERT INTO x_setting_items (`key`,value,type,flag,`group`) VALUES(?,?,?,1,0)", key, value, type);
+            executeUpdate("DELETE FROM x_setting_items WHERE `key` = ?", key);
+            executeUpdate("INSERT INTO x_setting_items (`key`,value,type,flag,`group`) VALUES(?,?,?,1,0)", key, value, type);
             log.info("update setting by SQL: {}", key);
         } catch (Exception e) {
             log.warn("Failed to update setting: {}", key, e);

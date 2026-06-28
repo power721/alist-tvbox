@@ -9,7 +9,7 @@ import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -266,7 +266,7 @@ public class DouyinService implements LivePlatform {
         try {
             ensureCookie();
 
-            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(SEARCH_API)
+            UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(SEARCH_API)
                     .queryParam("device_platform", "webapp")
                     .queryParam("aid", "6383")
                     .queryParam("channel", "channel_pc_web")
@@ -396,7 +396,7 @@ public class DouyinService implements LivePlatform {
 
     private JsonNode getRoomDataByApi(String webRid) {
         try {
-            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(ROOM_ENTER_API)
+            UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(ROOM_ENTER_API)
                     .queryParam("aid", "6383")
                     .queryParam("app_name", "douyin_web")
                     .queryParam("live_id", "1")
@@ -659,7 +659,7 @@ public class DouyinService implements LivePlatform {
     }
 
     private String buildPartitionUrl(String partitionId, String partitionType, int page, int count) {
-        return UriComponentsBuilder.fromHttpUrl(PARTITION_ROOM_API)
+        return UriComponentsBuilder.fromUriString(PARTITION_ROOM_API)
                 .queryParam("aid", "6383")
                 .queryParam("app_name", "douyin_web")
                 .queryParam("live_id", "1")

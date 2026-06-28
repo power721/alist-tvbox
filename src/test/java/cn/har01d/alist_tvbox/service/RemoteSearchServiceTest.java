@@ -5,7 +5,9 @@ import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigDto;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
+import org.springframework.http.converter.StringHttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
@@ -34,7 +36,7 @@ class RemoteSearchServiceTest {
 
         RemoteSearchService service = new RemoteSearchService(
                 appProperties,
-                new RestTemplateBuilder().detectRequestFactory(false).requestFactory(() -> restTemplate.getRequestFactory()),
+                restTemplateBuilder(restTemplate),
                 objectMapper,
                 mock(TelegramChannelRepository.class),
                 mock(ShareService.class),
@@ -69,7 +71,7 @@ class RemoteSearchServiceTest {
 
         RemoteSearchService service = new RemoteSearchService(
                 appProperties,
-                new RestTemplateBuilder().detectRequestFactory(false).requestFactory(() -> restTemplate.getRequestFactory()),
+                restTemplateBuilder(restTemplate),
                 objectMapper,
                 mock(TelegramChannelRepository.class),
                 mock(ShareService.class),
@@ -86,5 +88,15 @@ class RemoteSearchServiceTest {
                 .containsExactly("builtin-a", "builtin-b");
 
         server.verify();
+    }
+
+    private RestTemplateBuilder restTemplateBuilder(RestTemplate restTemplate) {
+        return new RestTemplateBuilder()
+                .messageConverters(
+                        new StringHttpMessageConverter(),
+                        new MappingJackson2HttpMessageConverter(objectMapper)
+                )
+                .detectRequestFactory(false)
+                .requestFactory(() -> restTemplate.getRequestFactory());
     }
 }

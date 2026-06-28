@@ -210,7 +210,7 @@ public class ProxyService {
             if (StringUtils.isNotBlank(site.getFolder())) {
                 path = fixPath(site.getFolder() + "/" + path);
             }
-            return UriComponentsBuilder.fromHttpUrl(site.getUrl())
+            return UriComponentsBuilder.fromUriString(site.getUrl())
                     .replacePath("/p" + path)
                     .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()

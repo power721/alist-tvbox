@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpEntity;
@@ -24,10 +24,11 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +64,19 @@ class AListLocalServiceTest {
                 environment,
                 new ObjectMapper(),
                 jdbcTemplate
+        );
+    }
+
+    @Test
+    void setSettingShouldUseSharedUpdatePath() {
+        AListLocalService spyService = spy(service);
+
+        spyService.setSetting("api_key", "secret", "string");
+
+        verify(spyService).executeUpdate("DELETE FROM x_setting_items WHERE `key` = ?", "api_key");
+        verify(spyService).executeUpdate(
+                "INSERT INTO x_setting_items (`key`,value,type,flag,`group`) VALUES(?,?,?,1,0)",
+                "api_key", "secret", "string"
         );
     }
 

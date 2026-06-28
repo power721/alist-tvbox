@@ -21,6 +21,8 @@ uname -mor
 upgrade_h2
 restore_database
 
+mkdir -p /var/cache/nginx/image
+
 # 创建运行期目录和符号链接。/opt/alist/data 可能是持久化挂载，
 # 但 /opt/atv/log 等路径属于新容器文件系统，每次启动都需要恢复。
 init_directories

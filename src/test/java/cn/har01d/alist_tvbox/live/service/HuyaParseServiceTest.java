@@ -2,7 +2,7 @@ package cn.har01d.alist_tvbox.live.service;
 
 import cn.har01d.alist_tvbox.util.Utils;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.nio.charset.StandardCharsets;

@@ -9,11 +9,12 @@ import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
@@ -43,7 +44,7 @@ class TelegramServiceTest {
         server.expect(once(), request -> {
                     assertThat(request.getURI().toString()).isEqualTo("http://tg-search.example/api/health");
                     assertThat(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("secret-key");
-                    assertThat(request.getHeaders().containsKey("X-API-Key")).isFalse();
+                    assertThat(request.getHeaders().containsHeader("X-API-Key")).isFalse();
                 })
                 .andRespond(withSuccess("""
                         {"service":"ok","version":"2.1.0"}
@@ -105,7 +106,7 @@ class TelegramServiceTest {
                 .andExpect(request -> {
                     assertThat(request.getMethod()).isEqualTo(HttpMethod.POST);
                     assertThat(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("secret-key");
-                    assertThat(request.getHeaders().containsKey("X-API-Key")).isFalse();
+                    assertThat(request.getHeaders().containsHeader("X-API-Key")).isFalse();
                 })
                 .andExpect(content().json("""
                         {
@@ -366,7 +367,7 @@ class TelegramServiceTest {
         server.expect(once(), request -> {
                     assertThat(request.getURI().toString()).isEqualTo("http://tg-search.example/api/health");
                     assertThat(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("secret-key");
-                    assertThat(request.getHeaders().containsKey("X-API-Key")).isFalse();
+                    assertThat(request.getHeaders().containsHeader("X-API-Key")).isFalse();
                 })
                 .andRespond(withSuccess("""
                         {"service":"ok","version":"2.1.0"}
@@ -390,7 +391,10 @@ class TelegramServiceTest {
                 mock(ShareService.class),
                 mock(TvBoxService.class),
                 remoteSearchService,
-                new RestTemplateBuilder().detectRequestFactory(false).requestFactory(() -> restTemplate.getRequestFactory()),
+                new RestTemplateBuilder()
+                        .messageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                        .detectRequestFactory(false)
+                        .requestFactory(() -> restTemplate.getRequestFactory()),
                 objectMapper
         );
     }

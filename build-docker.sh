@@ -1,6 +1,6 @@
 set -e
 
-BASE_DIR=/opt/alist
+BASE_DIR=/opt/alist-tvbox
 PORT1=4567
 PORT2=5344
 MOUNT=""
@@ -58,7 +58,7 @@ cd target && java -Djarmode=layertools -jar alist-tvbox-1.0.jar extract && cd ..
 #mv application-backup.yaml src/main/resources/application.yaml
 
 export TZ=Asia/Shanghai
-echo $((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
+echo $(git describe --tags --abbrev=0)-$((($(date +%Y) - 2023) * 366 + $(date +%j | sed 's/^0*//'))).$(date +%H%M) > data/version
 echo "build haroldli/alist-tvbox:latest"
 docker build -f docker/Dockerfile --tag=haroldli/alist-tvbox:latest .
 
