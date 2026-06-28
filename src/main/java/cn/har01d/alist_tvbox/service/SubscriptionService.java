@@ -1513,10 +1513,10 @@ public class SubscriptionService {
                 String address = readHostAddress();
                 // String token = getCurrentOrFirstToken();
                 json = appendMd5sum(name, json);
-                // 用当前请求 token(订阅 token 或 USER 用户名);仅在无请求 token(后台/导出)时才回退全局首个订阅 token,
-                // 避免把全局订阅 token 注入 USER 的配置(否则 USER 可拿它在 /vod、/sub 等绕过 tenant 隔离)
+                // 用当前请求 token(订阅 token、USER 用户名、或无 token 的 "")原样注入;仅 currentToken==null(未走 checkToken 的可信内部/管理端,如 getCatalog)才回退全局首个订阅 token。
+                // 关键:/sub/{id} 等用户路径会经 checkToken 把 currentToken 设为 "",不算"内部",不注入全局 —— 避免无 token 客户端拿到全局订阅 token 再访问 tokenm/zx/tvfan
                 String currentReqToken = currentToken.get();
-                String subToken = StringUtils.isNotBlank(currentReqToken) ? currentReqToken : getFirstSubscriptionToken();
+                String subToken = currentReqToken != null ? currentReqToken : getFirstSubscriptionToken();
                 json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
@@ -1634,9 +1634,9 @@ public class SubscriptionService {
             json = json.replace("{Cloud-drive", "{\"Cloud-drive");
             if (json.contains("tvfan/Cloud-drive.txt")) {
                 String address = readHostAddress();
-                // 用当前请求 token(订阅 token 或 USER 用户名),无请求 token 才回退全局首个,避免把全局订阅 token 泄漏给 USER
+                // 同 loadLocalConfigJson:用户请求(含空 token "")原样注入,仅 currentToken==null 的可信内部场景回退全局首个
                 String currentReqToken = currentToken.get();
-                String subToken = StringUtils.isNotBlank(currentReqToken) ? currentReqToken : getFirstSubscriptionToken();
+                String subToken = currentReqToken != null ? currentReqToken : getFirstSubscriptionToken();
                 json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
             }
 
