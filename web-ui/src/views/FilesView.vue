@@ -96,7 +96,7 @@
               {{ scope.row.directory ? '-' : formatSize(scope.row.size) }}
             </template>
           </el-table-column>
-          <el-table-column label="修改时间" width="180">
+          <el-table-column label="修改时间" width="185">
             <template #default="scope">
               {{ formatDate(scope.row.lastModified) }}
             </template>
