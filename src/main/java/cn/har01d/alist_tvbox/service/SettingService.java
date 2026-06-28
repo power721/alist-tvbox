@@ -15,6 +15,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.backup.DatabaseBackupService;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +34,7 @@ import org.springframework.util.CollectionUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -41,6 +43,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -158,6 +161,7 @@ public class SettingService {
         if (!settingRepository.existsById("api_key")) {
             generateApiKey();
         }
+        initBasicAuthCredentials();
         appProperties.setSystemId(value);
         log.info("system id: {}", value);
     }
@@ -168,6 +172,39 @@ public class SettingService {
         settingRepository.save(new Setting("api_key", apiKey));
         tokenFilter.setApiKey(apiKey);
         return apiKey;
+    }
+
+    public void initBasicAuthCredentials() {
+        String username = settingRepository.findById(Constants.BASIC_AUTH_USERNAME).map(Setting::getValue).orElse("");
+        String password = settingRepository.findById(Constants.BASIC_AUTH_PASSWORD).map(Setting::getValue).orElse("");
+        if (username.isEmpty() || password.isEmpty()) {
+            username = IdUtils.generate(8);
+            password = IdUtils.generate(16);
+            settingRepository.save(new Setting(Constants.BASIC_AUTH_USERNAME, username));
+            settingRepository.save(new Setting(Constants.BASIC_AUTH_PASSWORD, password));
+            log.info("generated basic auth credentials (username={})", username);
+        }
+        tokenFilter.setBasicAuthCredentials(encodeBasicAuthHeader(username, password));
+    }
+
+    public Map<String, String> getBasicAuthCredentials() {
+        String username = settingRepository.findById(Constants.BASIC_AUTH_USERNAME).map(Setting::getValue).orElse("");
+        String password = settingRepository.findById(Constants.BASIC_AUTH_PASSWORD).map(Setting::getValue).orElse("");
+        return Map.of("username", username, "password", password);
+    }
+
+    public Map<String, String> regenerateBasicAuthCredentials() {
+        String username = IdUtils.generate(8);
+        String password = IdUtils.generate(16);
+        settingRepository.save(new Setting(Constants.BASIC_AUTH_USERNAME, username));
+        settingRepository.save(new Setting(Constants.BASIC_AUTH_PASSWORD, password));
+        tokenFilter.setBasicAuthCredentials(encodeBasicAuthHeader(username, password));
+        log.info("regenerated basic auth credentials (username={})", username);
+        return Map.of("username", username, "password", password);
+    }
+
+    private static String encodeBasicAuthHeader(String username, String password) {
+        return "Basic " + Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
     }
 
     public FileSystemResource exportDatabase() throws IOException {
