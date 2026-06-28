@@ -88,7 +88,7 @@ public class Message {
         this.content = link.getNote();
         this.link = link.getUrl();
         this.type = type;
-        this.name = link.getNote();
+        this.name = parseName();
         this.channel = link.getSource();
     }
 
@@ -102,7 +102,7 @@ public class Message {
         this.media = media;
         this.cover = this.images.isEmpty() ? null : this.images.getFirst();
         Object title = media == null ? null : media.get("title");
-        this.name = title == null || String.valueOf(title).isBlank() ? this.content : String.valueOf(title);
+        this.name = title == null || String.valueOf(title).isBlank() ? parseName() : String.valueOf(title);
         this.channel = "tg-search";
     }
 
