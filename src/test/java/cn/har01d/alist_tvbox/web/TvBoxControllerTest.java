@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.web;
 import cn.har01d.alist_tvbox.config.RestErrorHandler;
 import cn.har01d.alist_tvbox.entity.DeviceRepository;
 import cn.har01d.alist_tvbox.service.HistoryService;
+import cn.har01d.alist_tvbox.service.SettingService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +14,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.util.Map;
 
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,6 +33,8 @@ class TvBoxControllerTest {
     private HistoryService historyService;
     @Mock
     private DeviceRepository deviceRepository;
+    @Mock
+    private SettingService settingService;
 
     private MockMvc mockMvc;
 
@@ -40,11 +45,20 @@ class TvBoxControllerTest {
                 subscriptionService,
                 historyService,
                 deviceRepository,
-                new ObjectMapper()
+                new ObjectMapper(),
+                settingService
         );
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new RestErrorHandler())
                 .build();
+    }
+
+    @Test
+    void openShouldReturnConfig() throws Exception {
+        when(subscriptionService.open()).thenReturn(Map.of("video", "x"));
+
+        mockMvc.perform(get("/open"))
+                .andExpect(status().isOk());
     }
 
     @Test

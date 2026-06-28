@@ -172,3 +172,4 @@ npm run lint
 
 ## Documents
 - Save all documents to folder docs/
+- Save security related documents to folder docs/security/

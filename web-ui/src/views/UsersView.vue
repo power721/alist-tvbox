@@ -16,6 +16,7 @@
       <el-table-column fixed="right" label="操作" width="200">
         <template #default="scope">
           <el-button type="primary" size="small" @click="handleEdit(scope.row)" v-if="scope.row.id!=1">编辑</el-button>
+          <el-button type="primary" size="small" @click="updateAdmin" v-else>编辑</el-button>
           <el-button type="danger" size="small" @click="handleDelete(scope.row)" v-if="scope.row.id!=1">删除</el-button>
         </template>
       </el-table-column>
@@ -56,6 +57,8 @@
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
 import axios from "axios"
+import {useRouter} from "vue-router";
+const router = useRouter()
 
 interface User {
   id: number
@@ -83,6 +86,10 @@ const handleAdd = () => {
     password: '',
   }
   formVisible.value = true
+}
+
+const updateAdmin = () => {
+  router.push('/user')
 }
 
 const handleEdit = (file: User) => {

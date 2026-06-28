@@ -177,6 +177,11 @@ public class SubscriptionService {
                     .map(Setting::getValue)
                     .orElse("");
         }
+        // 兜底:TOKEN 缺失或显式空串都生成,保证启动后 tokens 永远非空
+        if (StringUtils.isBlank(tokens)) {
+            tokens = Utils.generateUsername();
+            settingRepository.save(new Setting(TOKEN, tokens));
+        }
 
         if (!settingRepository.existsByName(ENABLED_TOKEN)) {
             settingRepository.save(new Setting(ENABLED_TOKEN, String.valueOf(!tokens.isEmpty())));
@@ -294,6 +299,7 @@ public class SubscriptionService {
             return;
         }
 
+        // USER 角色的 vod token 即其用户名(/api/token 对非 ADMIN 返回用户名),内容接口需放行
         if (userService.isUsernameExist(rawToken)) {
             return;
         }
@@ -305,6 +311,38 @@ public class SubscriptionService {
         }
 
         throw new BadRequestException();
+    }
+
+    /**
+     * 校验订阅 token 是否合法(命中已配置的 token 列表)。不依赖 enabledToken,不做"用户名当 token"旁路。
+     */
+    public boolean isValidSubscriptionToken(String rawToken) {
+        if (StringUtils.isBlank(rawToken) || tokens == null || tokens.isBlank()) {
+            return false;
+        }
+        for (String t : tokens.split(",")) {
+            if (!t.isBlank() && t.equals(rawToken)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 凭证类端点(如 /pg/lib/tokenm)专用:始终要求合法订阅 token,不受全局 enabledToken 影响。
+     * 兼容性:loadLocalConfigJson 生成的配置已注入 getFirstSubscriptionToken(),合法消费端自带有效 token。
+     */
+    public void requireSubscriptionToken(String rawToken) {
+        currentToken.set(rawToken);
+        tenantService.setTenant(rawToken);
+        if (!isValidSubscriptionToken(rawToken)) {
+            throw new BadRequestException();
+        }
+    }
+
+    /** 返回首个真实订阅 token(不受 enabledToken/"-" 占位影响);无配置则返回空串。 */
+    public String getFirstSubscriptionToken() {
+        return tokens.split(",")[0];
     }
 
     public TokenDto getTokens() {
@@ -358,9 +396,13 @@ public class SubscriptionService {
 
     public TokenDto updateToken(TokenDto dto) {
         if (dto.isEnabledToken() && StringUtils.isBlank(dto.getToken())) {
-            tokens = IdUtils.generate(8);
+            tokens = Utils.generateUsername();
         } else {
             tokens = Arrays.stream(dto.getToken().split(",")).filter(StringUtils::isNotBlank).collect(Collectors.joining(","));
+        }
+        // 兜底:任何路径都不得把 tokens 置空(否则 /pg/lib/tokenm 无有效 token 可校验)
+        if (tokens.isBlank()) {
+            tokens = Utils.generateUsername();
         }
         dto.setToken(tokens);
         aListLocalService.updateSetting("sign_all", String.valueOf(dto.isEnabledToken()), "bool");
@@ -376,6 +418,64 @@ public class SubscriptionService {
 
     public List<Subscription> findAll() {
         return subscriptionRepository.findAll();
+    }
+
+    public Map<String, Object> open() throws IOException {
+        Path path = Utils.getWebPath("cat", "config_open.json");
+        String json = Files.readString(path).replace("﻿", "");
+
+        Map<String, Object> config = objectMapper.readValue(json, Map.class);
+
+        path = Utils.getWebPath("cat", "my.json");
+        if (Files.exists(path)) {
+            try {
+                log.info("read {}", path);
+                String ext = Files.readString(path);
+                Map<String, Object> source = objectMapper.readValue(ext, Map.class);
+                mergeOpen(config, source);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+
+        addCatSites(config);
+
+        json = objectMapper.writeValueAsString(config);
+        json = replaceOpen(json);
+
+        return objectMapper.readValue(json, Map.class);
+    }
+
+    public String node(String file) throws IOException {
+        log.debug("load file {}", file);
+        if (file.contains("index.config.js")) {
+            Path config = Utils.getWebPath("cat", "index.config.js");
+            String json = Files.readString(config);
+            String secret = appProperties.isEnabledToken() ? ("/" + getCurrentOrFirstToken()) : "";
+            json = json.replace("VOD_URL", readHostAddress("/vod" + secret));
+            json = json.replace("VOD1_URL", readHostAddress("/vod1" + secret));
+            json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret));
+            json = json.replace("YOUTUBE_URL", readHostAddress("/youtube" + secret));
+            json = json.replace("EMBY_URL", readHostAddress("/emby" + secret));
+            String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
+            json = json.replace("ALI_TOKEN", ali);
+            ali = accountRepository.getFirstByMasterTrue().map(Account::getOpenToken).orElse("");
+            json = json.replace("ALI_OPEN_TOKEN", ali);
+
+            String quarkCookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("");
+            json = json.replace("QUARK_COOKIE", quarkCookie);
+
+            String address = readHostAddress();
+            json = json.replace("DOCKER_ADDRESS", address);
+            json = json.replace("ATV_ADDRESS", address);
+
+            if ("index.config.js".equals(file)) {
+                return json;
+            } else if ("index.config.js.md5".equals(file)) {
+                return Utils.md5(json);
+            }
+        }
+        return Files.readString(Utils.getWebPath("cat", file));
     }
 
     public int syncCat() {
@@ -451,7 +551,7 @@ public class SubscriptionService {
     private String replaceOpen(String json) {
         json = json.replace("./", "/cat/");
         json = json.replace("assets://js/", "/cat/");
-        String secret = appProperties.isEnabledToken() ? ("/" + tokens.split(",")[0]) : "";
+        String secret = appProperties.isEnabledToken() ? ("/" + getCurrentOrFirstToken()) : "";
         json = json.replace("VOD_EXT", readHostAddress("/vod" + secret));
         json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
         json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
@@ -1457,16 +1557,28 @@ public class SubscriptionService {
                 file = Utils.getWebPath("tvbox", name);
                 folder = "/tvbox/" + getFolder(name);
             }
+            // 安全:规范化后必须仍位于 web 根(/www)之下,杜绝 ../ 或绝对路径穿越读取任意文件(如 /etc/passwd、/opt/alist/data/config.json)
+            Path webRoot = Utils.getWebPath().toAbsolutePath().normalize();
+            Path resolved = file.toAbsolutePath().normalize();
+            if (!resolved.startsWith(webRoot)) {
+                log.warn("rejected config path outside web root: {}", name);
+                return null;
+            }
+            file = resolved;
             if (Files.exists(file)) {
                 log.info("load json from {}", file);
                 String json = Files.readString(file);
                 String address = readHostAddress();
-                String token = getCurrentOrFirstToken();
+                // String token = getCurrentOrFirstToken();
                 json = appendMd5sum(name, json);
-                json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
-                json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
-                json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
-                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
+                // 用当前请求 token(订阅 token、USER 用户名、或无 token 的 "")原样注入;仅 currentToken==null(未走 checkToken 的可信内部/管理端,如 getCatalog)才回退全局首个订阅 token。
+                // 关键:/sub/{id} 等用户路径会经 checkToken 把 currentToken 设为 "",不算"内部",不注入全局 —— 避免无 token 客户端拿到全局订阅 token 再访问 tokenm/zx/tvfan
+                String currentReqToken = currentToken.get();
+                String subToken = currentReqToken != null ? currentReqToken : getFirstSubscriptionToken();
+                json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
+                json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
+                json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
+                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 json = json.replace("./", address + folder);
                 //json = json.replace(address + folder + "lib/tokenm.json", "./lib/tokenm.json");
                 json = json.replace("DOCKER_ADDRESS", address);
@@ -1580,8 +1692,10 @@ public class SubscriptionService {
             json = json.replace("{Cloud-drive", "{\"Cloud-drive");
             if (json.contains("tvfan/Cloud-drive.txt")) {
                 String address = readHostAddress();
-                String token = getCurrentOrFirstToken();
-                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
+                // 同 loadLocalConfigJson:用户请求(含空 token "")原样注入,仅 currentToken==null 的可信内部场景回退全局首个
+                String currentReqToken = currentToken.get();
+                String subToken = currentReqToken != null ? currentReqToken : getFirstSubscriptionToken();
+                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
             }
 
             return objectMapper.readValue(json, Map.class);

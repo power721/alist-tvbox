@@ -145,6 +145,9 @@ public class ConfigFileService {
         if (dto.getName().contains("..") || dto.getName().contains("/") || dto.getName().contains("\\")) {
             throw new BadRequestException("非法文件名");
         }
+        // 安全:目录必须落在受信任根(getDataPath/getWebPath)之下,杜绝任意绝对路径写入。
+        // 前端只使用 /data 与 /www/* 这些逻辑前缀;writeFileContent 也只对它们做实际路径映射。
+        ensureTrustedDir(dto.getDir());
         dto.setPath(new File(dto.getDir(), dto.getName()).getAbsolutePath());
         if (dto.getName().endsWith(".json")) {
             if (StringUtils.isNotBlank(dto.getContent())) {
@@ -157,6 +160,31 @@ public class ConfigFileService {
             } else if ("null".equals(dto.getContent())) {
                 dto.setContent("");
             }
+        }
+    }
+
+    /**
+     * 校验目录规范化后仍位于受信任根(getDataPath / getWebPath)之下。
+     * 接受逻辑前缀("/data"、"/www" 及 "/www/...")与非 docker/自定义 data 目录的真实绝对路径
+     * (如 /opt/atv/data、atv.data.dir);其余一律拒绝,防止越界写入(如 /etc/cron.d、/Local/...)。
+     */
+    private void ensureTrustedDir(String dir) {
+        Path candidate;
+        if ("/data".equals(dir)) {
+            candidate = Utils.getDataPath();
+        } else if ("/www".equals(dir) || dir.startsWith("/www/")) {
+            String sub = "/www".equals(dir) ? "" : dir.substring("/www/".length());
+            candidate = Utils.getWebPath(sub);
+        } else {
+            // 非 docker / 自定义 data 目录的真实绝对路径,交由下方 containment 校验是否受信任
+            candidate = Path.of(dir);
+        }
+        Path normalized = candidate.toAbsolutePath().normalize();
+        Path dataRoot = Utils.getDataPath().toAbsolutePath().normalize();
+        Path webRoot = Utils.getWebPath().toAbsolutePath().normalize();
+        if (!normalized.equals(dataRoot) && !normalized.startsWith(dataRoot)
+                && !normalized.equals(webRoot) && !normalized.startsWith(webRoot)) {
+            throw new BadRequestException("非法目录");
         }
     }
 

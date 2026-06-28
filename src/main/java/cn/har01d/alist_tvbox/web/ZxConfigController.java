@@ -54,7 +54,7 @@ public class ZxConfigController {
 
     @GetMapping("/config")
     public ObjectNode config(String token) throws IOException {
-        subscriptionService.checkToken(token);
+        subscriptionService.requireSubscriptionToken(token);
 
         String json = Files.readString(Utils.getWebPath("zx", "json", "peizhi.json"));
 

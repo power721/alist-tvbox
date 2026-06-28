@@ -3,6 +3,9 @@
     <div class="page-header">
       <h1 class="page-title">订阅管理</h1>
       <div class="page-actions">
+        <el-select v-if="enabledToken && tokens.length > 1" v-model="selectedToken" placeholder="选择安全Token" style="width: 120px; margin-right: 8px">
+          <el-option v-for="item in tokens" :key="item" :label="item" :value="item"/>
+        </el-select>
         <el-button @click="load">刷新</el-button>
         <el-button @click="showGlobalConfig">全局配置</el-button>
         <el-button @click="showPlugins">订阅源管理</el-button>
@@ -54,6 +57,16 @@
     </el-table>
     </div>
 
+    <el-row>
+      猫影视配置接口：
+      <a :href="openUrl" target="_blank">{{ openUrl }}</a>
+      <el-button size="small" style="margin-left: 8px" @click="copyUrl(openUrl)">复制</el-button>
+    </el-row>
+    <el-row>
+      猫影视node配置接口：
+      <a :href="nodeUrl" target="_blank">{{ nodeUrl2 }}</a>
+      <el-button size="small" style="margin-left: 8px" @click="copyUrl(nodeUrl2)">复制</el-button>
+    </el-row>
     <el-row>
       PG包本地： {{ pgLocal }}
       &nbsp;&nbsp;
@@ -858,6 +871,7 @@
 <script setup lang="ts">
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import axios from "axios"
+import clipBorad from "vue-clipboard3";
 import api from "@/utils/api"
 import {ElMessage} from "element-plus";
 import {Link, ArrowRight} from "@element-plus/icons-vue";
@@ -974,7 +988,29 @@ const tgCode = ref('')
 const tgPassword = ref('')
 const tgAuthType = ref('qr')
 const base64QrCode = ref('')
-const token = ref('')
+const enabledToken = ref(false)
+const selectedToken = ref('')
+const token = computed(() => enabledToken.value && selectedToken.value ? '/' + selectedToken.value : '')
+const basicAuthUser = ref('')
+const basicAuthPass = ref('')
+function withBasicAuth(base: string) {
+  if (!basicAuthUser.value && !basicAuthPass.value) return base
+  const prefix = basicAuthUser.value + ':' + basicAuthPass.value + '@'
+  return base.replace('http://', 'http://' + prefix).replace('https://', 'https://' + prefix)
+}
+const openUrl = computed(() => withBasicAuth(currentUrl) + '/open' + token.value)
+const nodeUrl = computed(() => withBasicAuth(currentUrl) + '/node' + (token.value ? token.value : '/-') + '/index.config.js')
+const nodeUrl2 = computed(() => withBasicAuth(currentUrl) + '/node' + (token.value ? token.value : '/-') + '/index.js.md5')
+
+let {toClipboard} = clipBorad();
+
+function copyUrl(text: string) {
+  toClipboard(text).then(() => {
+    ElMessage.success('已复制')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
+}
 const pgLocal = ref('')
 const pgRemote = ref('')
 const zxLocal = ref('')
@@ -2721,7 +2757,8 @@ watch(() => pluginImportForm.value.url, (value) => {
 onMounted(() => {
   axios.get('/api/token').then(({data}) => {
     tokens.value =  data.token ? data.token.split(",") : ['-']
-    token.value = data.enabledToken ? "/" + data.token.split(",")[0] : ""
+    enabledToken.value = data.enabledToken
+    selectedToken.value = data.token ? data.token.split(",")[0] : ""
     load()
     loadVersion()
     axios.get('/api/settings/tg_phase').then(({data}) => {
@@ -2729,6 +2766,10 @@ onMounted(() => {
     })
   })
   loadDevices()
+  axios.get('/api/basic-auth-credentials').then(({data}) => {
+    basicAuthUser.value = data.username
+    basicAuthPass.value = data.password
+  }).catch(() => {})
 })
 
 onUnmounted(() => {

@@ -63,7 +63,7 @@ public class PgTokenController {
 
     @GetMapping("/lib/tokenm")
     public ObjectNode tokenm(String token) throws Exception {
-        subscriptionService.checkToken(token);
+        subscriptionService.requireSubscriptionToken(token);
 
         String json = Files.readString(Utils.getWebPath("pg", "lib", "tokentemplate.json"));
 

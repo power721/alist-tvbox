@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,6 +47,8 @@ class TokenFilterTest {
         settings.put("alist_login", alistLogin);
         settings.put("alist_username", alistUsername);
         settings.put("alist_password", alistPassword);
+        settings.put("basic_auth_username", new AtomicReference<>("catuser"));
+        settings.put("basic_auth_password", new AtomicReference<>("catpass"));
         when(settingRepository.findById(org.mockito.ArgumentMatchers.anyString()))
                 .thenAnswer(invocation -> {
                     String key = invocation.getArgument(0, String.class);
@@ -82,6 +85,48 @@ class TokenFilterTest {
 
         assertEquals(200, nextResponse.getStatus());
         assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test
+    void openEndpointShouldRequireBasicAuth() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/open");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        var chain = mock(jakarta.servlet.FilterChain.class);
+
+        tokenFilter.doFilter(request, response, chain);
+
+        assertEquals(401, response.getStatus());
+        assertEquals("Basic realm=\"alist\"", response.getHeader("Www-Authenticate"));
+        org.mockito.Mockito.verifyNoInteractions(chain);
+    }
+
+    @Test
+    void openEndpointShouldPassWithValidBasicAuth() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/open");
+        request.addHeader("Authorization", basic("catuser", "catpass"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        var chain = mock(jakarta.servlet.FilterChain.class);
+
+        tokenFilter.doFilter(request, response, chain);
+
+        assertEquals(200, response.getStatus());
+        verify(chain).doFilter(request, response);
+    }
+
+    @Test
+    void catEndpointShouldRejectWrongBasicAuth() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/cat/index.config.js");
+        request.addHeader("Authorization", basic("catuser", "wrong"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        var chain = mock(jakarta.servlet.FilterChain.class);
+
+        tokenFilter.doFilter(request, response, chain);
+
+        assertEquals(401, response.getStatus());
+        org.mockito.Mockito.verifyNoInteractions(chain);
     }
 
     private String basic(String username, String password) {

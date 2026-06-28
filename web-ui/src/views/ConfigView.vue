@@ -228,6 +228,11 @@
           <el-input v-model="apiKey" style="width: 300px" type="password" readonly show-password/>
           <el-button type="primary" class="hint" @click="resetApiKey">重置</el-button>
         </el-form-item>
+        <el-form-item label="猫影视Basic Auth">
+          <el-input v-model="basicAuthUser" style="width: 140px" readonly placeholder="用户名"/>
+          <el-input v-model="basicAuthPass" style="width: 220px" type="password" readonly show-password placeholder="密码"/>
+          <el-button type="primary" class="hint" @click="resetBasicAuth">重置</el-button>
+        </el-form-item>
         <el-form-item label="夸克TV机器码">
           <el-input v-model="quarkDeviceId" style="width: 300px" type="text"/>
           <el-button type="primary" class="hint" @click="updateQuarkDeviceId">更新</el-button>
@@ -505,6 +510,8 @@ const tmdbApiKey = ref('')
 const userAgent = ref('')
 const atvPass = ref('')
 const apiKey = ref('')
+const basicAuthUser = ref('')
+const basicAuthPass = ref('')
 const apiClientId = ref('')
 const apiClientSecret = ref('')
 const quarkDeviceId = ref('')
@@ -624,6 +631,14 @@ const resetAListPassword = () => {
   axios.post('/api/alist/password').then(({data}) => {
     atvPass.value = data
     ElMessage.success('重置成功，重启生效')
+  })
+}
+
+const resetBasicAuth = () => {
+  axios.post('/api/basic-auth-credentials/regenerate').then(({data}) => {
+    basicAuthUser.value = data.username
+    basicAuthPass.value = data.password
+    ElMessage.success('重置成功')
   })
 }
 
@@ -812,6 +827,10 @@ const updateIndex115 = () => {
 }
 
 onMounted(() => {
+  axios.get('/api/basic-auth-credentials').then(({data}) => {
+    basicAuthUser.value = data.username
+    basicAuthPass.value = data.password
+  }).catch(() => {})
   axios.get('/api/settings').then(({data}) => {
     form.value.token = data.token
     form.value.enabledToken = data.enabled_token === 'true'

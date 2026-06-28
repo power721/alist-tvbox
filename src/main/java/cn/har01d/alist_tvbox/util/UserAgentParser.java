@@ -17,6 +17,9 @@ public final class UserAgentParser {
         if (ua == null || ua.isBlank()) {
             return "未知";
         }
+        if (ua.contains("ATV-Player") || ua.contains("ATV Player")) {
+            return "ATV Player";
+        }
         Matcher m = EDGE.matcher(ua);
         if (m.find()) return "Edge " + m.group(1);
         m = OPERA.matcher(ua);

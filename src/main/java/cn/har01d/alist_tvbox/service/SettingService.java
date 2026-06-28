@@ -15,6 +15,7 @@ import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.service.backup.DatabaseBackupService;
 import cn.har01d.alist_tvbox.util.Constants;
+import cn.har01d.alist_tvbox.util.IdUtils;
 import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +34,7 @@ import org.springframework.util.CollectionUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -41,6 +43,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -158,6 +161,7 @@ public class SettingService {
         if (!settingRepository.existsById("api_key")) {
             generateApiKey();
         }
+        initBasicAuthCredentials();
         appProperties.setSystemId(value);
         log.info("system id: {}", value);
     }
@@ -168,6 +172,39 @@ public class SettingService {
         settingRepository.save(new Setting("api_key", apiKey));
         tokenFilter.setApiKey(apiKey);
         return apiKey;
+    }
+
+    public void initBasicAuthCredentials() {
+        String username = settingRepository.findById(Constants.BASIC_AUTH_USERNAME).map(Setting::getValue).orElse("");
+        String password = settingRepository.findById(Constants.BASIC_AUTH_PASSWORD).map(Setting::getValue).orElse("");
+        if (username.isEmpty() || password.isEmpty()) {
+            username = IdUtils.generate(8);
+            password = IdUtils.generate(16);
+            settingRepository.save(new Setting(Constants.BASIC_AUTH_USERNAME, username));
+            settingRepository.save(new Setting(Constants.BASIC_AUTH_PASSWORD, password));
+            log.info("generated basic auth credentials (username={})", username);
+        }
+        tokenFilter.setBasicAuthCredentials(encodeBasicAuthHeader(username, password));
+    }
+
+    public Map<String, String> getBasicAuthCredentials() {
+        String username = settingRepository.findById(Constants.BASIC_AUTH_USERNAME).map(Setting::getValue).orElse("");
+        String password = settingRepository.findById(Constants.BASIC_AUTH_PASSWORD).map(Setting::getValue).orElse("");
+        return Map.of("username", username, "password", password);
+    }
+
+    public Map<String, String> regenerateBasicAuthCredentials() {
+        String username = IdUtils.generate(8);
+        String password = IdUtils.generate(16);
+        settingRepository.save(new Setting(Constants.BASIC_AUTH_USERNAME, username));
+        settingRepository.save(new Setting(Constants.BASIC_AUTH_PASSWORD, password));
+        tokenFilter.setBasicAuthCredentials(encodeBasicAuthHeader(username, password));
+        log.info("regenerated basic auth credentials (username={})", username);
+        return Map.of("username", username, "password", password);
+    }
+
+    private static String encodeBasicAuthHeader(String username, String password) {
+        return "Basic " + Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
     }
 
     public FileSystemResource exportDatabase() throws IOException {
@@ -326,11 +363,48 @@ public class SettingService {
             settings.put("token", SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString());
             return settings;
         }
+        // 非 ADMIN(如 CLIENT)一律脱敏密钥类配置,避免泄漏 api_key、各 *_token/password/secret/cookie
+        if (!isAdmin()) {
+            map.keySet().removeIf(SettingService::isSecretKey);
+        }
         return map;
     }
 
     public Setting get(String name) {
-        return settingRepository.findById(name).orElse(null);
+        Setting setting = settingRepository.findById(name).orElse(null);
+        if (setting != null && isSecretKey(name)) {
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            // 仅在"已认证但非 ADMIN"时拒绝(防 CLIENT 经 /api/settings/{name} 绕过 findAll 脱敏);内部调用(无认证上下文)放行
+            if (auth != null && !isAdmin()) {
+                throw new BadRequestException("无权访问该配置");
+            }
+        }
+        return setting;
+    }
+
+    private static boolean isAdmin() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> Role.ADMIN.name().equals(a.getAuthority()));
+    }
+
+    private static final Set<String> SECRET_SUFFIXES =
+            Set.of("password", "secret", "api_key", "apikey", "token", "cookie", "refresh_token");
+
+    private static boolean isSecretKey(String name) {
+        if (name == null) {
+            return false;
+        }
+        String n = name.toLowerCase();
+        if (n.equals("api_key") || n.equals("token")) {
+            return true;
+        }
+        for (String s : SECRET_SUFFIXES) {
+            if (n.endsWith(s)) {
+                return true;
+            }
+        }
+        return n.contains("password") || n.contains("secret");
     }
 
     public Setting update(Setting setting) {
