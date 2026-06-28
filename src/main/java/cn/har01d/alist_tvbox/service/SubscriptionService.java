@@ -420,6 +420,64 @@ public class SubscriptionService {
         return subscriptionRepository.findAll();
     }
 
+    public Map<String, Object> open() throws IOException {
+        Path path = Utils.getWebPath("cat", "config_open.json");
+        String json = Files.readString(path).replace("﻿", "");
+
+        Map<String, Object> config = objectMapper.readValue(json, Map.class);
+
+        path = Utils.getWebPath("cat", "my.json");
+        if (Files.exists(path)) {
+            try {
+                log.info("read {}", path);
+                String ext = Files.readString(path);
+                Map<String, Object> source = objectMapper.readValue(ext, Map.class);
+                mergeOpen(config, source);
+            } catch (Exception e) {
+                log.warn("", e);
+            }
+        }
+
+        addCatSites(config);
+
+        json = objectMapper.writeValueAsString(config);
+        json = replaceOpen(json);
+
+        return objectMapper.readValue(json, Map.class);
+    }
+
+    public String node(String file) throws IOException {
+        log.debug("load file {}", file);
+        if (file.contains("index.config.js")) {
+            Path config = Utils.getWebPath("cat", "index.config.js");
+            String json = Files.readString(config);
+            String secret = appProperties.isEnabledToken() ? ("/" + tokens.split(",")[0]) : "";
+            json = json.replace("VOD_URL", readHostAddress("/vod" + secret));
+            json = json.replace("VOD1_URL", readHostAddress("/vod1" + secret));
+            json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret));
+            json = json.replace("YOUTUBE_URL", readHostAddress("/youtube" + secret));
+            json = json.replace("EMBY_URL", readHostAddress("/emby" + secret));
+            String ali = accountRepository.getFirstByMasterTrue().map(Account::getRefreshToken).orElse("");
+            json = json.replace("ALI_TOKEN", ali);
+            ali = accountRepository.getFirstByMasterTrue().map(Account::getOpenToken).orElse("");
+            json = json.replace("ALI_OPEN_TOKEN", ali);
+
+            String quarkCookie = panAccountRepository.findByTypeAndMasterTrue(DriverType.QUARK).map(DriverAccount::getCookie).orElse("");
+            json = json.replace("QUARK_COOKIE", quarkCookie);
+
+            String address = readHostAddress();
+            json = json.replace("DOCKER_ADDRESS", address);
+            json = json.replace("ATV_ADDRESS", address);
+
+            if ("index.config.js".equals(file)) {
+                return json;
+            } else if ("index.config.js.md5".equals(file)) {
+                return Utils.md5(json);
+            }
+        }
+        return Files.readString(Utils.getWebPath("cat", file));
+    }
+
     public int syncCat() {
         fileDownloader.runTask("pg");
         fileDownloader.runTask("zx");

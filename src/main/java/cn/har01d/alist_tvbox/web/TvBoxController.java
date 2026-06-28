@@ -5,6 +5,7 @@ import cn.har01d.alist_tvbox.entity.Device;
 import cn.har01d.alist_tvbox.entity.DeviceRepository;
 import cn.har01d.alist_tvbox.entity.History;
 import cn.har01d.alist_tvbox.service.HistoryService;
+import cn.har01d.alist_tvbox.service.SettingService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -35,17 +36,20 @@ public class TvBoxController {
     private final HistoryService historyService;
     private final DeviceRepository deviceRepository;
     private final ObjectMapper objectMapper;
+    private final SettingService settingService;
 
     public TvBoxController(TvBoxService tvBoxService,
                            SubscriptionService subscriptionService,
                            HistoryService historyService,
                            DeviceRepository deviceRepository,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           SettingService settingService) {
         this.tvBoxService = tvBoxService;
         this.subscriptionService = subscriptionService;
         this.historyService = historyService;
         this.deviceRepository = deviceRepository;
         this.objectMapper = objectMapper;
+        this.settingService = settingService;
     }
 
     @GetMapping("/vod1")
@@ -210,6 +214,33 @@ public class TvBoxController {
         subscriptionService.checkToken(token);
 
         return subscriptionService.subscription(token, id);
+    }
+
+    @GetMapping("/open")
+    public Map<String, Object> open() throws IOException {
+        return subscriptionService.open();
+    }
+
+    @GetMapping("/open/{token}")
+    public Map<String, Object> open(@PathVariable String token) throws IOException {
+        subscriptionService.checkToken(token);
+        return subscriptionService.open();
+    }
+
+    @GetMapping("/node/{token}/{file}")
+    public String node(@PathVariable String token, @PathVariable String file) throws IOException {
+        subscriptionService.checkToken(token);
+        return subscriptionService.node(file);
+    }
+
+    @GetMapping("/api/basic-auth-credentials")
+    public Map<String, String> getBasicAuthCredentials() {
+        return settingService.getBasicAuthCredentials();
+    }
+
+    @PostMapping("/api/basic-auth-credentials/regenerate")
+    public Map<String, String> regenerateBasicAuthCredentials() {
+        return settingService.regenerateBasicAuthCredentials();
     }
 
     @PostMapping("/api/cat/sync")
