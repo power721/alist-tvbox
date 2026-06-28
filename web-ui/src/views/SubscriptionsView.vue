@@ -55,6 +55,14 @@
     </div>
 
     <el-row>
+      猫影视配置接口：
+      <a :href="openUrl" target="_blank">{{ openUrl }}</a>
+    </el-row>
+    <el-row>
+      猫影视node配置接口：
+      <a :href="nodeUrl" target="_blank">{{ nodeUrl }}</a>
+    </el-row>
+    <el-row>
       PG包本地： {{ pgLocal }}
       &nbsp;&nbsp;
       <a href="https://github.com/power721/pg/releases" target="_blank">PG包远程</a>： {{ pgRemote }}
@@ -975,6 +983,15 @@ const tgPassword = ref('')
 const tgAuthType = ref('qr')
 const base64QrCode = ref('')
 const token = ref('')
+const basicAuthUser = ref('')
+const basicAuthPass = ref('')
+function withBasicAuth(base: string) {
+  if (!basicAuthUser.value && !basicAuthPass.value) return base
+  const prefix = basicAuthUser.value + ':' + basicAuthPass.value + '@'
+  return base.replace('http://', 'http://' + prefix).replace('https://', 'https://' + prefix)
+}
+const openUrl = computed(() => withBasicAuth(currentUrl) + '/open' + token.value)
+const nodeUrl = computed(() => withBasicAuth(currentUrl) + '/node' + (token.value ? token.value : '/-') + '/index.config.js')
 const pgLocal = ref('')
 const pgRemote = ref('')
 const zxLocal = ref('')
@@ -2729,6 +2746,10 @@ onMounted(() => {
     })
   })
   loadDevices()
+  axios.get('/api/basic-auth-credentials').then(({data}) => {
+    basicAuthUser.value = data.username
+    basicAuthPass.value = data.password
+  }).catch(() => {})
 })
 
 onUnmounted(() => {
