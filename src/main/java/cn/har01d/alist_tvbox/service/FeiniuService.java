@@ -760,7 +760,7 @@ public class FeiniuService {
     }
 
     private String buildProxyUrl(String baseUrl, String token, int siteId, String path) {
-        return UriComponentsBuilder.fromHttpUrl(baseUrl)
+        return UriComponentsBuilder.fromUriString(baseUrl)
                 .path("/feiniu-proxy/{token}")
                 .queryParam("site", siteId)
                 .queryParam("path", URLEncoder.encode(path, StandardCharsets.UTF_8).replace("+", "%20"))
@@ -841,7 +841,7 @@ public class FeiniuService {
 
     private String buildImageProxyUrl(String baseUrl, String token, int siteId, String path) {
         if (path.startsWith("http://") || path.startsWith("https://")) {
-            return UriComponentsBuilder.fromHttpUrl(baseUrl)
+            return UriComponentsBuilder.fromUriString(baseUrl)
                     .path("/feiniu-img/{token}")
                     .queryParam("site", siteId)
                     .queryParam("path", path)
@@ -852,7 +852,7 @@ public class FeiniuService {
         if (!path.startsWith("/")) {
             path = "/" + path;
         }
-        return UriComponentsBuilder.fromHttpUrl(baseUrl)
+        return UriComponentsBuilder.fromUriString(baseUrl)
                 .path("/feiniu-img/{token}")
                 .queryParam("site", siteId)
                 .queryParam("path", path)

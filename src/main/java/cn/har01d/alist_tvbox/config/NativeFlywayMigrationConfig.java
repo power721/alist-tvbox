@@ -2,7 +2,8 @@ package cn.har01d.alist_tvbox.config;
 
 import db.migration.current.V2__Normalize_reserved_columns;
 import db.migration.current.V3__Fix_null_sort_order;
-import org.springframework.boot.autoconfigure.flyway.FlywayConfigurationCustomizer;
+import db.migration.current.V8__Normalize_enum_columns;
+import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.NativeDetector;
@@ -13,7 +14,7 @@ import org.springframework.core.NativeDetector;
  * by classpath package scanning (Flyway's ClassPathScanner), which native-image cannot
  * perform: directory listing of {@code resource:} paths is unsupported, so the scanner
  * logs "Unable to scan location: /db/migration/current (unsupported protocol: resource)"
- * and returns nothing. As a result the V2/V3 Java migrations under db.migration.current
+ * and returns nothing. As a result the Java migrations under db.migration.current
  * are never discovered and never run natively (leaving the schema half-migrated).
  *
  * Spring Boot collects {@code JavaMigration} beans for Flyway, but these cannot be
@@ -34,7 +35,8 @@ public class NativeFlywayMigrationConfig {
             }
             configuration.javaMigrations(
                     new V2__Normalize_reserved_columns(),
-                    new V3__Fix_null_sort_order());
+                    new V3__Fix_null_sort_order(),
+                    new V8__Normalize_enum_columns());
         };
     }
 }

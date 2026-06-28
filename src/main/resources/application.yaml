@@ -1,4 +1,7 @@
 spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
   main:
     allow-bean-definition-overriding: true
   servlet:
@@ -10,7 +13,7 @@ spring:
     username: sa
     password: password
     driverClassName: org.h2.Driver
-  jackson:
+  jackson2:
     default-property-inclusion: non_null
     serialization:
       INDENT_OUTPUT: true

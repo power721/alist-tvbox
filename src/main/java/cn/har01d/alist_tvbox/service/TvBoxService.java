@@ -54,7 +54,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -2678,7 +2678,7 @@ public class TvBoxService {
             if (StringUtils.isNotBlank(site.getFolder())) {
                 path = fixPath(site.getFolder() + "/" + path);
             }
-            return UriComponentsBuilder.fromHttpUrl(site.getUrl())
+            return UriComponentsBuilder.fromUriString(site.getUrl())
                     .replacePath("/p" + path)
                     .replaceQuery(StringUtils.isBlank(sign) ? "" : "sign=" + sign)
                     .build()
@@ -2697,7 +2697,7 @@ public class TvBoxService {
                     .toUri()
                     .toASCIIString();
         } else {
-            return UriComponentsBuilder.fromHttpUrl(site.getUrl())
+            return UriComponentsBuilder.fromUriString(site.getUrl())
                     .replacePath(path)
                     .replaceQuery(null)
                     .build()

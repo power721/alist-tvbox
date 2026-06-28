@@ -6,7 +6,7 @@ This is the single source of truth for AI agents (Codex / Claude Code).
 
 # 1. Project Overview
 
-AList-TvBox is a Spring Boot 3 (Java 21) + Vue 3 system:
+AList-TvBox is a Spring Boot 4 (Java 21) + Vue 3 system:
 
 - TVBox VOD API backend
 - Cloud storage aggregation (AList)
@@ -116,6 +116,11 @@ npm run lint
 ## Database
 - use Flyway migration
 
+## Runtime Packaging
+- JVM jar builds are the primary supported deployment target.
+- Native Image configuration is retained as an optional build path.
+- Native Image support must be validated separately with `mvn clean package -Pnative`.
+
 ## Native Image
 - All resource files MUST be registered in `META-INF/native-image/resource-config.json`
   - GraalVM only includes explicitly declared resources
@@ -133,11 +138,6 @@ npm run lint
     ```
   - Main.java scans configured packages (dto/entity/model/domain/storage/etc)
   - Individual classes can be added to `CUSTOM_REFLECTION_CLASSES` list
-- Test native build locally before deployment:
-  ```bash
-  mvn clean package -Pnative
-  ./target/alist-tvbox
-  ```
 - Flyway Java migration file must add to src/main/resources/META-INF/services/org.flywaydb.core.api.migration.JavaMigration
 
 ---
