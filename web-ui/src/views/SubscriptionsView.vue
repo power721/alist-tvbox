@@ -60,7 +60,7 @@
     </el-row>
     <el-row>
       猫影视node配置接口：
-      <a :href="nodeUrl" target="_blank">{{ nodeUrl }}</a>
+      <a :href="nodeUrl" target="_blank">{{ nodeUrl2 }}</a>
     </el-row>
     <el-row>
       PG包本地： {{ pgLocal }}
@@ -992,6 +992,7 @@ function withBasicAuth(base: string) {
 }
 const openUrl = computed(() => withBasicAuth(currentUrl) + '/open' + token.value)
 const nodeUrl = computed(() => withBasicAuth(currentUrl) + '/node' + (token.value ? token.value : '/-') + '/index.config.js')
+const nodeUrl2 = computed(() => withBasicAuth(currentUrl) + '/node' + (token.value ? token.value : '/-') + '/index.js.md5')
 const pgLocal = ref('')
 const pgRemote = ref('')
 const zxLocal = ref('')
