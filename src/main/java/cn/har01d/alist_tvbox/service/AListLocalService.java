@@ -164,8 +164,8 @@ public class AListLocalService {
         log.debug("set setting {}={}", key, value);
         // Use parameterized queries to prevent SQL injection
         try {
-            alistJdbcTemplate.update("DELETE FROM x_setting_items WHERE `key` = ?", key);
-            alistJdbcTemplate.update("INSERT INTO x_setting_items (`key`,value,type,flag,`group`) VALUES(?,?,?,1,0)", key, value, type);
+            executeUpdate("DELETE FROM x_setting_items WHERE `key` = ?", key);
+            executeUpdate("INSERT INTO x_setting_items (`key`,value,type,flag,`group`) VALUES(?,?,?,1,0)", key, value, type);
             log.info("update setting by SQL: {}", key);
         } catch (Exception e) {
             log.warn("Failed to update setting: {}", key, e);
