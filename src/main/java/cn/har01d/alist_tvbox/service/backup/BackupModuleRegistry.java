@@ -37,6 +37,7 @@ public class BackupModuleRegistry {
     public BackupModuleRegistry(EntityManager entityManager,
                                 SettingRepository settingRepository,
                                 UserRepository userRepository,
+                                SessionRepository sessionRepository,
                                 TmdbRepository tmdbRepository,
                                 TmdbMetaRepository tmdbMetaRepository,
                                 SiteRepository siteRepository,
@@ -74,6 +75,7 @@ public class BackupModuleRegistry {
 
         add("settings", "setting", Setting.class, settingRepository, mapper, IdStrategy.ASSIGNED, "name");
         add("users", "x_user", User.class, userRepository, mapper, IdStrategy.IDENTITY, "username");
+        add("sessions", "session", Session.class, sessionRepository, mapper, IdStrategy.IDENTITY, "token");
         add("tmdb", "tmdb", Tmdb.class, tmdbRepository, mapper, IdStrategy.TABLE, "id");
         add("tmdbMeta", "tmdb_meta", TmdbMeta.class, tmdbMetaRepository, mapper, IdStrategy.TABLE, "id");
         add("sites", "site", Site.class, siteRepository, mapper, IdStrategy.TABLE, "id");
