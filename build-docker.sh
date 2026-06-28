@@ -1,6 +1,6 @@
 set -e
 
-BASE_DIR=/opt/alist
+BASE_DIR=/opt/alist-tvbox
 PORT1=4567
 PORT2=5344
 MOUNT=""
