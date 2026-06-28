@@ -451,7 +451,7 @@ public class SubscriptionService {
         if (file.contains("index.config.js")) {
             Path config = Utils.getWebPath("cat", "index.config.js");
             String json = Files.readString(config);
-            String secret = appProperties.isEnabledToken() ? ("/" + tokens.split(",")[0]) : "";
+            String secret = appProperties.isEnabledToken() ? ("/" + getCurrentOrFirstToken()) : "";
             json = json.replace("VOD_URL", readHostAddress("/vod" + secret));
             json = json.replace("VOD1_URL", readHostAddress("/vod1" + secret));
             json = json.replace("BILIBILI_URL", readHostAddress("/bilibili" + secret));
@@ -551,7 +551,7 @@ public class SubscriptionService {
     private String replaceOpen(String json) {
         json = json.replace("./", "/cat/");
         json = json.replace("assets://js/", "/cat/");
-        String secret = appProperties.isEnabledToken() ? ("/" + tokens.split(",")[0]) : "";
+        String secret = appProperties.isEnabledToken() ? ("/" + getCurrentOrFirstToken()) : "";
         json = json.replace("VOD_EXT", readHostAddress("/vod" + secret));
         json = json.replace("VOD1_EXT", readHostAddress("/vod1" + secret));
         json = json.replace("BILIBILI_EXT", readHostAddress("/bilibili" + secret));
