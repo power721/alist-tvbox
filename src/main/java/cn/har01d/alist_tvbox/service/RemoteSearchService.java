@@ -15,6 +15,8 @@ import cn.har01d.alist_tvbox.util.Utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -34,6 +36,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -61,6 +64,9 @@ public class RemoteSearchService {
     private List<String> panSouBuiltinChannels;
     private String panSouToken;
     private String checkedPanSouUrl;
+    // carries the search-result title from search() to detail() so the resolved
+    // storage folder name (often an obfuscated share token) does not overwrite it.
+    private final Cache<String, String> shareTitle = Caffeine.newBuilder().maximumSize(200).expireAfterWrite(Duration.ofHours(2)).build();
 
     public RemoteSearchService(AppProperties appProperties,
                                RestTemplateBuilder restTemplateBuilder,
@@ -140,6 +146,9 @@ public class RemoteSearchService {
             var movieDetail = new MovieDetail();
             movieDetail.setVod_id(encodeUrl(message.getLink()));
             movieDetail.setVod_name(message.getName());
+            if (StringUtils.isNotBlank(message.getLink()) && StringUtils.isNotBlank(movieDetail.getVod_name())) {
+                shareTitle.put(message.getLink(), movieDetail.getVod_name());
+            }
             if (StringUtils.isBlank(message.getCover())) {
                 movieDetail.setVod_pic(getPic(message.getType()));
             } else {
@@ -169,7 +178,10 @@ public class RemoteSearchService {
         share.setLink(tid);
         String path = shareService.add(share);
 
-        return tvBoxService.getDetail("", "1$" + path + "/~playlist");
+        // backfill the title captured during search; without it getPlaylist falls
+        // back to the obfuscated storage folder name and metadata scraping fails.
+        String title = shareTitle.getIfPresent(tid);
+        return tvBoxService.getDetail("", "1$" + path + "/~playlist", title, 0);
     }
 
     public List<Message> search(String keyword, List<String> channels) {

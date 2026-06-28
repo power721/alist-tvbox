@@ -1068,6 +1068,12 @@ public class TelegramService {
                 movieDetail.setVod_remarks(Utils.byte2size(message.getSize()));
             }
         }
+        // cache every search result (not only media-bearing ones, which applyMedia
+        // handles) so detail() can backfill vod_name when the resolved storage
+        // folder name is an obfuscated share token instead of the real title.
+        if (StringUtils.isNotBlank(message.getLink())) {
+            movies.put(message.getLink(), movieDetail);
+        }
         return movieDetail;
     }
 
