@@ -34,7 +34,7 @@ public class TvFanController {
 
     @GetMapping("/config")
     public ObjectNode config(String token) throws IOException {
-        subscriptionService.checkToken(token);
+        subscriptionService.requireSubscriptionToken(token);
 
         ObjectNode objectNode = objectMapper.createObjectNode();
 

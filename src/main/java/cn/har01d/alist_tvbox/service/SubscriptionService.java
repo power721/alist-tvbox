@@ -1511,14 +1511,14 @@ public class SubscriptionService {
                 log.info("load json from {}", file);
                 String json = Files.readString(file);
                 String address = readHostAddress();
-                String token = getCurrentOrFirstToken();
+                // String token = getCurrentOrFirstToken();
                 json = appendMd5sum(name, json);
                 // tokenm 交出网盘凭证,需合法订阅 token:优先用当前请求 token(多 token 时不泄漏/错配首个),无有效请求 token 才回退首个
                 String subToken = isValidSubscriptionToken(currentToken.get()) ? currentToken.get() : getFirstSubscriptionToken();
                 json = json.replace("./lib/tokenm.json", address + "/pg/lib/tokenm" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
-                json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
-                json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
-                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
+                json = json.replace("./peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
+                json = json.replace("./json/peizhi.json", address + "/zx/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
+                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
                 json = json.replace("./", address + folder);
                 //json = json.replace(address + folder + "lib/tokenm.json", "./lib/tokenm.json");
                 json = json.replace("DOCKER_ADDRESS", address);
@@ -1632,8 +1632,9 @@ public class SubscriptionService {
             json = json.replace("{Cloud-drive", "{\"Cloud-drive");
             if (json.contains("tvfan/Cloud-drive.txt")) {
                 String address = readHostAddress();
-                String token = getCurrentOrFirstToken();
-                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(token) ? "" : "?token=" + token));
+                // String token = getCurrentOrFirstToken();
+                String subToken = isValidSubscriptionToken(currentToken.get()) ? currentToken.get() : getFirstSubscriptionToken();
+                json = json.replace("tvfan/Cloud-drive.txt", address + "/tvfan/config" + (StringUtils.isBlank(subToken) ? "" : "?token=" + subToken));
             }
 
             return objectMapper.readValue(json, Map.class);
