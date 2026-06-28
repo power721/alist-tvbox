@@ -476,6 +476,8 @@ public class TelegramService {
             }
         }
 
+        log.debug("Search results: {}", list.subList(0, Math.min(list.size(), 30)));
+
         result.setList(list);
         result.setTotal(list.size());
         result.setLimit(list.size());
@@ -491,6 +493,8 @@ public class TelegramService {
         for (Message message : messages) {
             list.add(toMovieDetail(message));
         }
+
+        log.debug("Search results: {} {}", keyword, list.subList(0, Math.min(list.size(), 30)));
 
         result.setList(list);
         result.setTotal(list.size());

@@ -123,7 +123,11 @@ public class Message {
         if (line.startsWith("https://") && lines.length > 1) {
             line = lines[1];
         }
-        String name = line.replace("名称：", "").replace("名称:", "").replace("资源标题：", "");
+        String name = line.replace("名称：", "")
+                .replace("名称:", "")
+                .replace("资源标题：", "")
+                .replace("\uD83C\uDFAC 电影：", "")
+                .replace("\uD83D\uDCFA 电视剧：", "");
         int index = name.indexOf("描述：");
         if (index > 0) {
             return name.substring(0, index);
