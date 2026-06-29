@@ -661,7 +661,8 @@ const handleConfirm = () => {
     form.value.strmConfig.saveStrmLocalPath = "/data/" + form.value.strmConfig.saveStrmLocalPath;
   }
 
-  axios.post('/api/shares/' + form.value.id, form.value).then(() => {
+  const url = form.value.id ? '/api/shares/' + form.value.id : '/api/shares'
+  axios.post(url, form.value).then(() => {
     formVisible.value = false
     loadShares(page.value)
   })
