@@ -127,6 +127,7 @@ public class Message {
                 .replace("名称:", "")
                 .replace("资源标题：", "")
                 .replace("\uD83C\uDFAC 电影：", "")
+                .replace("#剧集\uD83D\uDDC4 ", "")
                 .replace("\uD83D\uDCFA 电视剧：", "");
         int index = name.indexOf("描述：");
         if (index > 0) {
