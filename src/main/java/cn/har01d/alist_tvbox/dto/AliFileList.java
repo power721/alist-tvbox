@@ -10,5 +10,5 @@ import java.util.List;
 public class AliFileList {
     private List<AliFileItem> items = new ArrayList<>();
     @JsonProperty("next_marker")
-    private String next;
+    private String nextMarker;
 }
