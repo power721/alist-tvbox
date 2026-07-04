@@ -1284,6 +1284,11 @@ public class SubscriptionService {
                     if ("csp_Push".equals(source.siteKey())) {
                         site.put("key", "push_agent");
                     }
+                    if ("csp_AList".equals(source.siteKey())) {
+                        sites.removeIf(item -> "Alist".equals(item.get("key")));
+                    } else if ("csp_Push".equals(source.siteKey())) {
+                        sites.removeIf(item -> "push_agent".equals(item.get("key")));
+                    }
                     // apply user override from config.sites (partial entry added by overrideConfig)
                     String overrideKey = (String) site.get("key");
                     boolean overridden = applySiteOverride(overrideKey, site, sites);
@@ -1291,12 +1296,6 @@ public class SubscriptionService {
                     if (("csp_TgDouBan".equals(source.siteKey()) || "csp_Push".equals(source.siteKey())) && !overridden) {
                         site.put("searchable", 0);
                         site.put("quickSearch", 0);
-                    }
-                    // remove upstream duplicates (after override consumed)
-                    if ("csp_AList".equals(source.siteKey())) {
-                        sites.removeIf(item -> "Alist".equals(item.get("key")));
-                    } else if ("csp_Push".equals(source.siteKey())) {
-                        sites.removeIf(item -> "push_agent".equals(item.get("key")));
                     }
                     sites.add(id++, site);
                     log.debug("add builtin source {}: {}", source.siteKey(), site);

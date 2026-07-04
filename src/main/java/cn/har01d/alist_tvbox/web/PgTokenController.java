@@ -84,6 +84,7 @@ public class PgTokenController {
             }
         });
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.UC).stream().findFirst().ifPresent(share -> objectNode.put("uc_cookie", share.getCookie()));
+        driverAccountRepository.findByTypeAndMasterTrue(DriverType.BAIDU).stream().findFirst().ifPresent(share -> objectNode.put("baidu_cookie", share.getCookie()));
         driverAccountRepository.findByTypeAndMasterTrue(DriverType.PAN123).stream().findFirst().ifPresent(share -> {
             objectNode.put("pan123_username", share.getUsername());
             objectNode.put("pan123_password", share.getPassword());
