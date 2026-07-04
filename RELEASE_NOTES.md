@@ -1,5 +1,5 @@
-# Release Notes - 1.17.0
+# Release Notes - 1.17.1
 
-## 修复
+## 新增
 
-- 修复Emby
+- PG支持百度网盘
