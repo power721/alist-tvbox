@@ -115,7 +115,7 @@ public class StaticFileController {
                         }
                     } else {
                         Path filePath = targetDir.resolve(entry.getName()).normalize();
-                        if (filePath.startsWith(targetDir) && !Files.exists(filePath)) {
+                        if (filePath.startsWith(targetDir)) {
                             Files.createDirectories(filePath.getParent());
                             Files.copy(zis, filePath, StandardCopyOption.REPLACE_EXISTING);
                         }
