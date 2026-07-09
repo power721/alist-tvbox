@@ -254,6 +254,9 @@ public class TvBoxService {
         } else {
             int id = 1;
             for (Site site : siteService.list()) {
+                if (site.getStorageVersion() == 1) {
+                    continue;
+                }
                 Category category = new Category();
                 category.setType_id(site.getId() + "$/" + "$1");
                 category.setType_name(site.getName());
@@ -603,7 +606,7 @@ public class TvBoxService {
             }
             MovieDetail movieDetail = new MovieDetail();
             List<Meta> metas = map.get(name);
-            if (metas.size() > 1) {
+            if (metas != null && metas.size() > 1) {
                 String ids = metas.stream().map(Meta::getId).map(String::valueOf).collect(Collectors.joining("-"));
                 log.debug("duplicate: {} {} {}", name, metas.size(), ids);
                 movieDetail.setVod_id(Objects.toString(meta.getSiteId(), "1") + "$" + encodeUrl(ids) + "$0");
