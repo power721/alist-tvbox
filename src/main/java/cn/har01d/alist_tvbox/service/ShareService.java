@@ -869,6 +869,7 @@ public class ShareService {
     private static final Pattern SHARE_ALI_LINK2 = Pattern.compile("https://www.(?:alipan|aliyundrive).com/s/([\\w-]+)(?:\\?password=(\\w+))?");
     private static final Pattern SHARE_123_LINK1 = Pattern.compile("https://(?:www\\.)?123(?:684|685|865|912|pan|592)\\.(?:com|cn)/s/([\\w-]+)提取码[:：](\\w+)");
     private static final Pattern SHARE_123_LINK2 = Pattern.compile("https://(?:www\\.)?123(?:684|685|865|912|pan|592)\\.(?:com|cn)/s/([\\w-]+)(?:\\.html)?(?:\\??提取码[:：](\\w+))?");
+    private static final Pattern SHARE_123_LINK3 = Pattern.compile("https://.+\\.share\\.123pan\\.cn/123pan/([\\w-]+)");
     private static final Pattern SHARE_GUANGYA_LINK = Pattern.compile("https://(?:www\\.)?guangyapan\\.com/s/([A-Za-z0-9_-]+)");
     public static final Pattern PASSWORD = Pattern.compile("(?:密码|提取码|验证码|访问码|分享密码|密钥|pwd|password|code|share_pwd|pass_code|#)[=:：\\s]*([a-zA-Z0-9]{1,4})");
 
@@ -925,22 +926,19 @@ public class ShareService {
 
         // Whitelist of allowed domains
         String[] allowedDomains = {
-                "alipan.com", "www.alipan.com",
-                "aliyundrive.com", "www.aliyundrive.com",
+                "alipan.com",
+                "aliyundrive.com",
                 "123684.com", "123685.com", "123865.com", "123912.com", "123pan.com", "123592.com",
-                "www.123684.com", "www.123685.com", "www.123865.com", "www.123912.com", "www.123pan.com", "www.123592.com",
-                "123684.cn", "123685.cn", "123865.cn", "123912.cn", "123592.cn",
-                "www.123684.cn", "www.123685.cn", "www.123865.cn", "www.123912.cn", "www.123592.cn",
-                "guangyapan.com", "www.guangyapan.com",
-                "mypikpak.com", "www.mypikpak.com",
-                "pan.xunlei.com",
-                "pan.quark.cn",
-                "caiyun.139.com",
-                "yun.139.com",
-                "drive.uc.cn",
-                "115.com", "115cdn.com", "www.115.com", "anxia.com",
-                "cloud.189.cn",
-                "pan.baidu.com"
+                "123684.cn", "123685.cn", "123865.cn", "123912.cn", "123pan.cn", "123592.cn",
+                "guangyapan.com",
+                "mypikpak.com",
+                "xunlei.com",
+                "quark.cn",
+                "139.com",
+                "uc.cn",
+                "115.com", "115cdn.com", "anxia.com",
+                "189.cn",
+                "baidu.com"
         };
 
         try {
@@ -952,7 +950,7 @@ public class ShareService {
 
             host = host.toLowerCase();
             for (String domain : allowedDomains) {
-                if (host.equals(domain)) {
+                if (host.contains(domain)) {
                     return true;
                 }
             }
@@ -1104,6 +1102,14 @@ public class ShareService {
         }
 
         m = SHARE_123_LINK2.matcher(url);
+        if (m.find()) {
+            share.setType(3);
+            share.setShareId(m.group(1));
+            share.setPassword(parsePassword(url));
+            return true;
+        }
+
+        m = SHARE_123_LINK3.matcher(url);
         if (m.find()) {
             share.setType(3);
             share.setShareId(m.group(1));
