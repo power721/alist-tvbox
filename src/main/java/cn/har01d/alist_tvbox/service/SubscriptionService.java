@@ -222,10 +222,17 @@ public class SubscriptionService {
             sub.setName("真心");
             sub.setUrl("/zx/FongMi.json");
             subscriptionRepository.save(sub);
+
+            sub = new Subscription();
+            sub.setSid("xs");
+            sub.setName("潇洒");
+            sub.setUrl("/static/xs/TVBoxOSC/tvbox/api.json");
+            subscriptionRepository.save(sub);
         } else {
             fixUrl(list);
             fixSid(list);
             fixId(list);
+            fixXsSubscription(list);
         }
         List<Subscription> duplicated = new ArrayList<>();
         Map<String, Subscription> map = new HashMap<>();
@@ -289,6 +296,21 @@ public class SubscriptionService {
             }
             jdbcTemplate.execute("update id_generator set next_id=" + list.size() + " where entity_name = 'subscription';");
             settingRepository.save(new Setting("fix_sub_id", "true"));
+        }
+    }
+
+    private void fixXsSubscription(List<Subscription> list) {
+        if (!settingRepository.existsByName("fix_sub_xs")) {
+            boolean hasXs = list.stream().anyMatch(s -> "xs".equals(s.getSid()));
+            if (!hasXs) {
+                Subscription sub = new Subscription();
+                sub.setSid("xs");
+                sub.setName("潇洒");
+                sub.setUrl("/static/xs/TVBoxOSC/tvbox/api.json");
+                subscriptionRepository.save(sub);
+                list.add(sub);
+            }
+            settingRepository.save(new Setting("fix_sub_xs", "true"));
         }
     }
 
@@ -481,6 +503,7 @@ public class SubscriptionService {
     public int syncCat() {
         fileDownloader.runTask("pg");
         fileDownloader.runTask("zx");
+        fileDownloader.runTask("xs");
 
         var files = configFileService.list();
         for (var file : files) {

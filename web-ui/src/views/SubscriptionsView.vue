@@ -91,6 +91,14 @@
       <span v-else><el-icon color="orange"><Warning/></el-icon></span>
     </el-row>
     <el-row>
+      潇洒包本地： {{ xsLocal }}
+      &nbsp;&nbsp;
+      潇洒包远程： {{ xsRemote }}
+      <span class="hint"></span>
+      <span v-if="xsLocal==xsRemote"><el-icon color="green"><Check/></el-icon></span>
+      <span v-else><el-icon color="orange"><Warning/></el-icon></span>
+    </el-row>
+    <el-row>
       <el-button @click="syncCat">同步文件</el-button>
     </el-row>
     </div>
@@ -1017,6 +1025,8 @@ const zxLocal = ref('')
 const zxRemote = ref('')
 const zxLocal2 = ref('')
 const zxRemote2 = ref('')
+const xsLocal = ref('')
+const xsRemote = ref('')
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
@@ -2747,6 +2757,10 @@ const loadVersion = () => {
     zxRemote.value = data.remote
     zxLocal2.value = data.local2
     zxRemote2.value = data.remote2
+  })
+  axios.get("/xs/version").then(({data}) => {
+    xsLocal.value = data.local
+    xsRemote.value = data.remote
   })
 }
 
