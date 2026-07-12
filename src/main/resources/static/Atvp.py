@@ -5,6 +5,7 @@ import inspect
 import json
 import os
 import re
+import sys
 import types
 from abc import ABCMeta, abstractmethod
 from importlib.machinery import SourceFileLoader
@@ -510,6 +511,13 @@ class Spider(HostSpider):
                 except etree.XMLSyntaxError as exc:
                     if "encoding not supported" not in str(exc):
                         raise
+                    # original_html 即 etree.HTML(str)，走 lxml 的 _parseUnicodeDoc 路径；
+                    # 部分 Chaquopy/libxml2 构建上会对含编码声明的 unicode 串误报
+                    # "encoding not supported"（如 "USC4 little endian"）。原来的兜底再次
+                    # 用同样的 str 调 etree.HTML，必然重蹈覆辙。这里改用 utf-8 字节走
+                    # _parseMemoryDocument 路径（libxml2 自带 BOM/meta charset 检测）重试。
+                    print("[ATVP] html bytes-retry head=%r" % sanitized[:80], file=sys.stderr)
+                    return HostSpider.html(instance, sanitized.encode("utf-8"))
             return HostSpider.html(instance, sanitized)
 
         spider_cls.html = _wrapped_html

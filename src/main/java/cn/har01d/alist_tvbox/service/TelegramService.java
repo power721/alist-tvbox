@@ -55,6 +55,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -355,6 +356,9 @@ public class TelegramService {
     }
 
     public MovieList detail(String tid, String ac, String title) {
+        if (tid.startsWith("%2Fv%2F")) {
+            tid = StringUtils.trimToEmpty(URLDecoder.decode(tid, StandardCharsets.UTF_8));
+        }
         if (tid.startsWith("/v/")) {
             MovieList list = new MovieList();
             MovieDetail detail = new MovieDetail();
