@@ -363,7 +363,10 @@ public final class Utils {
     }
 
     public static Path getWebPath(String... path) {
-        String base = inDocker ? "/www" : "/opt/atv/www";
+        String base = System.getProperty("atv.web.dir");
+        if (StringUtils.isBlank(base)) {
+            base = inDocker ? "/www" : "/opt/atv/www";
+        }
         return Path.of(base, path);
     }
 
