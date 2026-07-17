@@ -180,6 +180,8 @@ class Spider(HostSpider):
         "T0wEER4QHQQdTEtMEEodTw==",
         "HxodEBlLSEoEERFIEQQdHA==",
     ]
+    _self_public_key_chunks = []
+    _self_master_secret_chunks = []
 
     def __init__(self):
         super().__init__()
@@ -191,6 +193,7 @@ class Spider(HostSpider):
         self._detail_result_cache = {}
         self._play_context_cache = {}
         self._filters = []
+        self._secspider_loader = "auto"
 
     def init(self, extend=""):
         self.extend = extend or ""
@@ -199,6 +202,7 @@ class Spider(HostSpider):
         self._backend_api = self._resolve_backend_api(source, payload)
         self._vod_token = self._resolve_vod_token(payload)
         self._localProxyConfig = payload.get("local_proxy_config") if isinstance(payload, dict) else {}
+        self._secspider_loader = self._resolve_secspider_loader(payload)
         package_text = self._load_source(source)
         source_text = package_text if self._is_raw_source(payload) else self._decrypt_secspider_source(package_text)
         spider_cls = self._load_inner_spider_class(source_text)
@@ -300,6 +304,16 @@ class Spider(HostSpider):
             return ""
         token = str(payload.get("token") or "").strip()
         return "" if token == "-" else token
+
+    def _resolve_secspider_loader(self, payload):
+        if not isinstance(payload, dict):
+            return "auto"
+        value = str(
+            payload.get("secspider_loader")
+            or payload.get("secspiderLoader")
+            or "auto"
+        ).strip().lower()
+        return value or "auto"
 
     def _build_backend_endpoint(self, path):
         backend_api = str(self._backend_api or "").rstrip("/")
@@ -420,20 +434,79 @@ class Spider(HostSpider):
             base64.b64decode(self._strip_prefix(headers["sig"], "base64:")),
         )
 
-    def _decrypt_secspider_source(self, package_text):
-        headers, payload_b64 = self._parse_secspider_text(package_text)
-        public_key_text = self._deobfuscate_chunks(
-            self._public_key_chunks,
-            self.PUBLIC_KEY_XOR,
-        )
-        master_secret = self._deobfuscate_chunks(
-            self._master_secret_chunks,
-            self.MASTER_SECRET_XOR,
-        ).encode("utf-8")
+    def _load_external_self_keyring(self):
+        candidates = []
+        env_path = str(os.environ.get("ATV_SECSPIDER_KEYRING") or "").strip()
+        if env_path:
+            candidates.append(env_path)
+        candidates.extend([
+            "/data/secspider/atvp-keyring.json",
+            "/opt/atv/data/secspider/atvp-keyring.json",
+        ])
+        for candidate in candidates:
+            try:
+                if not candidate or not os.path.isfile(candidate):
+                    continue
+                with open(candidate, "r", encoding="utf-8") as fp:
+                    payload = json.load(fp)
+                public_chunks = (
+                    payload.get("publicKeyChunks")
+                    or payload.get("public_key_chunks")
+                    or []
+                )
+                secret_chunks = (
+                    payload.get("masterSecretChunks")
+                    or payload.get("master_secret_chunks")
+                    or []
+                )
+                if isinstance(public_chunks, list) and isinstance(secret_chunks, list) and public_chunks and secret_chunks:
+                    return public_chunks, secret_chunks
+            except Exception as e:
+                self.log(f"Atvp external self keyring load failed: {candidate} {e}")
+        return None
+
+    def _iter_secspider_keyrings(self):
+        external_self_keyring = self._load_external_self_keyring()
+        self_public_chunks = self._self_public_key_chunks
+        self_secret_chunks = self._self_master_secret_chunks
+        if external_self_keyring:
+            self_public_chunks, self_secret_chunks = external_self_keyring
+
+        keyrings = [
+            (
+                "stock",
+                self._public_key_chunks,
+                self._master_secret_chunks,
+                self.PUBLIC_KEY_XOR,
+                self.MASTER_SECRET_XOR,
+            )
+        ]
+        if self_public_chunks and self_secret_chunks:
+            keyrings.append(
+                (
+                    "self",
+                    self_public_chunks,
+                    self_secret_chunks,
+                    self.PUBLIC_KEY_XOR,
+                    self.MASTER_SECRET_XOR,
+                )
+            )
+
+        selected = str(self._secspider_loader or "auto").strip().lower()
+        if selected in ("auto", "dual", "*"):
+            return keyrings
+        return [keyring for keyring in keyrings if keyring[0] == selected] or keyrings
+
+    def _decrypt_secspider_source_with_keyring(self, headers, payload_b64, keyring):
+        loader_name, public_chunks, secret_chunks, public_xor, secret_xor = keyring
+        public_key_text = self._deobfuscate_chunks(public_chunks, public_xor)
+        master_secret = self._deobfuscate_chunks(secret_chunks, secret_xor).encode("utf-8")
         try:
             self._verify_signature(headers, payload_b64, public_key_text)
-        except ImportError:
-            self.log("Atvp: Crypto.Signature.eddsa unavailable, skip secspider signature verification")
+        except ImportError as e:
+            raise RuntimeError(
+                f"Atvp secspider signature verification unavailable for {loader_name}"
+            ) from e
         wrap_key = HKDF(
             master=master_secret,
             key_len=32,
@@ -462,6 +535,24 @@ class Spider(HostSpider):
         if headers["hash"] != f"sha256:{source_hash}":
             raise ValueError("Atvp secspider source hash mismatch")
         return source_bytes.decode("utf-8")
+
+    def _decrypt_secspider_source(self, package_text):
+        headers, payload_b64 = self._parse_secspider_text(package_text)
+        keyrings = self._iter_secspider_keyrings()
+        errors = []
+        for keyring in keyrings:
+            loader_name = keyring[0]
+            try:
+                source = self._decrypt_secspider_source_with_keyring(headers, payload_b64, keyring)
+                if loader_name != "stock":
+                    self.log(f"Atvp secspider loader selected: {loader_name}")
+                return source
+            except Exception as e:
+                errors.append((loader_name, e))
+        if len(errors) == 1:
+            raise errors[0][1]
+        details = "; ".join(f"{name}: {type(error).__name__}: {error}" for name, error in errors)
+        raise ValueError(f"Atvp secspider decrypt failed for all loaders: {details}")
 
     def _sanitize_html_content(self, content):
         if isinstance(content, bytes):
