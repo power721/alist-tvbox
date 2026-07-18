@@ -602,6 +602,7 @@
               <li>默认使用容器托管的 Ed25519 密钥对和 master secret，只需要把 Python 明文插件粘贴到“插件明文”。内层明文必须是合法 Python，不要写外层 <code>//@name</code> 这类包头。</li>
               <li>容器首次启动会自动生成密钥文件，保存到 <code>/data/secspider</code>；只要 Docker 挂载的 <code>/data</code> 不丢，升级镜像后密钥仍然可用。</li>
               <li>点击“编译”后会生成 <code>secspider/1</code> 插件包，自动保存到 <code>/www/static/self-plugins</code>，并自动导入插件管理列表。</li>
+              <li><code>ext.source</code>、<code>token</code>、<code>local_proxy_config</code> 和 <code>ext.data</code> 都由容器上下文自动补齐；原版插件通常只需要源码本身。</li>
               <li>如果需要更换密钥，使用“重置密钥对”。重置后旧密钥编译的自有插件需要重新编译。</li>
               <li>需要强制只走自有 keyring 时，可在站点扩展配置里设置 <code>secspider_loader: self</code>；默认 <code>auto</code> 会先试原版再试自有。</li>
             </ol>
@@ -661,17 +662,8 @@ class Spider(Spider):
         <el-form-item label="插件版本" required>
           <el-input-number v-model="pluginCompilerForm.version" :min="1" :step="1"/>
         </el-form-item>
-        <el-form-item label="插件 ID">
-          <el-input v-model="pluginCompilerForm.id" placeholder="稳定 id，可留空"/>
-        </el-form-item>
-        <el-form-item label="kid">
-          <el-input v-model="pluginCompilerForm.kid" placeholder="例如 self-20260716"/>
-        </el-form-item>
         <el-form-item label="remark">
           <el-input v-model="pluginCompilerForm.remark" placeholder="可留空"/>
-        </el-form-item>
-        <el-form-item label="托管密钥">
-          <el-switch v-model="pluginCompilerForm.useManagedKey" active-text="使用容器密钥" inactive-text="手动填写"/>
         </el-form-item>
         <el-form-item label="自动导入">
           <el-switch v-model="pluginCompilerForm.autoImport" active-text="编译后导入插件管理" inactive-text="只生成包"/>
@@ -684,32 +676,57 @@ class Spider(Spider):
             placeholder="粘贴 Python 明文插件源码"
           />
         </el-form-item>
-        <el-form-item v-if="!pluginCompilerForm.useManagedKey" label="Ed25519 私钥" required>
-          <el-input
-            v-model="pluginCompilerForm.privateKey"
-            type="textarea"
-            :rows="4"
-            show-password
-            placeholder="PKCS8 PEM/base64，或 32 字节 raw seed 的 base64/hex"
-          />
-        </el-form-item>
-        <el-form-item v-if="!pluginCompilerForm.useManagedKey" label="Ed25519 公钥">
-          <el-input
-            v-model="pluginCompilerForm.publicKey"
-            type="textarea"
-            :rows="3"
-            placeholder="可选。填写后返回 _self_public_key_chunks"
-          />
-        </el-form-item>
-        <el-form-item v-if="!pluginCompilerForm.useManagedKey" label="master secret" required>
-          <el-input
-            v-model="pluginCompilerForm.masterSecret"
-            type="textarea"
-            :rows="2"
-            show-password
-            placeholder="自有 Atvp.py 中使用的 master secret"
-          />
-        </el-form-item>
+        <el-collapse v-model="pluginCompilerAdvancedPanels" class="plugin-compiler-advanced">
+          <el-collapse-item name="advanced">
+            <template #title>
+              <span>高级手动参数</span>
+            </template>
+            <div class="plugin-compiler-advanced-body">
+              <el-form-item label="插件 ID">
+                <el-input v-model="pluginCompilerForm.id" placeholder="可留空，按名称自动推导"/>
+              </el-form-item>
+              <el-form-item label="kid">
+                <el-input v-model="pluginCompilerForm.kid" placeholder="可留空，默认 self"/>
+              </el-form-item>
+              <el-form-item label="托管密钥">
+                <el-switch v-model="pluginCompilerForm.useManagedKey" active-text="使用容器密钥" inactive-text="手动填写"/>
+              </el-form-item>
+              <el-alert
+                title="默认建议保持容器密钥。只有你要复用外部自有 keyring 时，才打开下面的手动字段。"
+                type="info"
+                :closable="false"
+                show-icon
+                style="margin-bottom: 12px"
+              />
+              <el-form-item v-if="!pluginCompilerForm.useManagedKey" label="Ed25519 私钥" required>
+                <el-input
+                  v-model="pluginCompilerForm.privateKey"
+                  type="textarea"
+                  :rows="4"
+                  show-password
+                  placeholder="PKCS8 PEM/base64，或 32 字节 raw seed 的 base64/hex"
+                />
+              </el-form-item>
+              <el-form-item v-if="!pluginCompilerForm.useManagedKey" label="Ed25519 公钥">
+                <el-input
+                  v-model="pluginCompilerForm.publicKey"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="可选。填写后返回 _self_public_key_chunks"
+                />
+              </el-form-item>
+              <el-form-item v-if="!pluginCompilerForm.useManagedKey" label="master secret" required>
+                <el-input
+                  v-model="pluginCompilerForm.masterSecret"
+                  type="textarea"
+                  :rows="2"
+                  show-password
+                  placeholder="自有 Atvp.py 中使用的 master secret"
+                />
+              </el-form-item>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
       </el-form>
       <el-alert
         title="默认使用容器托管密钥签名和加密。手动模式下，私钥只随本次请求发送到后端参与签名，接口不会保存或回显私钥。"
@@ -1385,6 +1402,7 @@ const pluginCompilerForm = ref<PluginCompileForm>({
 })
 const pluginCompilerResult = ref<PluginCompileResult | null>(null)
 const pluginCompilerResultTab = ref('package')
+const pluginCompilerAdvancedPanels = ref<string[]>([])
 const pluginCompilerChunksText = computed(() => {
   if (!pluginCompilerResult.value) {
     return ''
@@ -1555,6 +1573,7 @@ const resetPluginCompilerForm = () => {
     useManagedKey: true,
     autoImport: true
   }
+  pluginCompilerAdvancedPanels.value = []
   pluginCompilerResult.value = null
   pluginCompilerResultTab.value = 'package'
 }

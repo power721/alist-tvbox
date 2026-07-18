@@ -85,27 +85,27 @@ class PluginControllerCompileTest {
     }
 
     @Test
-    void compileSecspiderShouldUseManagedKeyAndAutoImport() throws Exception {
+    void compileSecspiderShouldUseManagedKeyAndAutoImportWithoutManualFields() throws Exception {
         KeyPair keyPair = generateKeyPair();
         String privateKey = pem("PRIVATE KEY", keyPair.getPrivate().getEncoded());
         String publicKey = pem("PUBLIC KEY", keyPair.getPublic().getEncoded());
         when(secspiderKeyService.compilerKeyMaterial())
                 .thenReturn(new SecspiderKeyService.CompilerKeyMaterial(privateKey, publicKey, "managed-master-secret"));
-        when(selfPluginFileService.store(eq("managed-demo"), eq(2), anyString(), anyString()))
+        when(selfPluginFileService.store(eq("manageddemo"), eq(2), anyString(), anyString()))
                 .thenReturn(new SelfPluginFileService.StoredPlugin(
-                        "/static/self-plugins/py/managed-demo.txt",
+                        "/static/self-plugins/py/manageddemo.txt",
                         "/static/self-plugins/spiders_v2.json",
-                        "http://localhost/static/self-plugins/py/managed-demo.txt",
+                        "http://localhost/static/self-plugins/py/manageddemo.txt",
                         "http://localhost/static/self-plugins/spiders_v2.json",
-                        "/www/static/self-plugins/py/managed-demo.txt"
+                        "/www/static/self-plugins/py/manageddemo.txt"
                 ));
         Plugin plugin = new Plugin();
         plugin.setId(77);
         plugin.setName("ManagedDemo");
         when(pluginService.upsertCompiledPlugin(
-                eq("http://localhost/static/self-plugins/py/managed-demo.txt"),
-                eq("/www/static/self-plugins/py/managed-demo.txt"),
-                eq("managed-demo"),
+                eq("http://localhost/static/self-plugins/py/manageddemo.txt"),
+                eq("/www/static/self-plugins/py/manageddemo.txt"),
+                eq("manageddemo"),
                 eq("ManagedDemo"),
                 eq(2),
                 anyString()
@@ -117,17 +117,16 @@ class PluginControllerCompileTest {
                                 "name", "ManagedDemo",
                                 "version", 2,
                                 "remark", "",
-                                "id", "managed-demo",
-                                "kid", "self",
                                 "source", "from base.spider import Spider\n\nclass Spider(Spider):\n    pass\n",
-                                "useManagedKey", true,
                                 "autoImport", true
                         ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.format").value("secspider/1"))
+                .andExpect(jsonPath("$.kid").value("self"))
                 .andExpect(jsonPath("$.packageText").value(not(containsString(privateKey))))
                 .andExpect(jsonPath("$.importedPluginId").value(77))
-                .andExpect(jsonPath("$.pluginUrl").value("http://localhost/static/self-plugins/py/managed-demo.txt"))
+                .andExpect(jsonPath("$.importedPluginName").value("ManagedDemo"))
+                .andExpect(jsonPath("$.pluginUrl").value("http://localhost/static/self-plugins/py/manageddemo.txt"))
                 .andExpect(jsonPath("$.repositoryUrl").value("http://localhost/static/self-plugins/spiders_v2.json"));
     }
 

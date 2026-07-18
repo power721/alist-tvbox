@@ -56,6 +56,9 @@ class PluginControllerSecurityTest {
     private TokenFilter tokenFilter;
 
     @Autowired
+    private SecspiderKeyService secspiderKeyService;
+
+    @Autowired
     private WebApplicationContext webApplicationContext;
 
     @Autowired
@@ -82,6 +85,8 @@ class PluginControllerSecurityTest {
         KeyPair keyPair = generateKeyPair();
         String privateKey = pem("PRIVATE KEY", keyPair.getPrivate().getEncoded());
         String publicKey = pem("PUBLIC KEY", keyPair.getPublic().getEncoded());
+        when(secspiderKeyService.compilerKeyMaterial())
+                .thenReturn(new SecspiderKeyService.CompilerKeyMaterial(privateKey, publicKey, "secured-http-master-secret"));
 
         mockMvc.perform(post("/api/plugins/compile/secspider")
                         .header("X-API-KEY", API_KEY)
@@ -90,15 +95,11 @@ class PluginControllerSecurityTest {
                                 "name", "SecuredHttpInterop",
                                 "version", 1,
                                 "remark", "",
-                                "id", "secured-http-interop",
-                                "kid", "secured-http-kid",
-                                "source", "from base.spider import Spider\n\nclass Spider(Spider):\n    pass\n",
-                                "privateKey", privateKey,
-                                "publicKey", publicKey,
-                                "masterSecret", "secured-http-master-secret"
+                                "source", "from base.spider import Spider\n\nclass Spider(Spider):\n    pass\n"
                         ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.format").value("secspider/1"))
+                .andExpect(jsonPath("$.kid").value("self"))
                 .andExpect(jsonPath("$.packageText").value(containsString("//@format:secspider/1")))
                 .andExpect(jsonPath("$.packageText").value(not(containsString(privateKey))))
                 .andExpect(jsonPath("$.publicKeyChunks").isArray())
