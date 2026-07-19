@@ -105,7 +105,7 @@ from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 MODULE = SourceFileLoader("atvp_raw_backend_parse", str(ROOT / "main/resources/static/Atvp.py")).load_module()
 Spider = MODULE.Spider
 
