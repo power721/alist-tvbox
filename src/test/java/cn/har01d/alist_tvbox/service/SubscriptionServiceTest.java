@@ -183,13 +183,15 @@ class SubscriptionServiceTest {
         assertThat(SubscriptionService.selectPluginApi(plugin, false, "http://atv"))
                 .isEqualTo("csp_PyProxy");
         assertThat(payload)
-                .containsEntry("loader", "http://atv/plugins/web/7.py")
+                .containsEntry("loader", "http://atv/Atvp.py")
+                .containsEntry("source", "http://atv/plugins/web/7.py")
+                .containsEntry("raw", true)
                 .containsEntry("api", "http://atv")
                 .containsEntry("token", "vod-token")
                 .containsEntry("secret", "secret")
                 .containsEntry("data", "{\"site\":\"demo\"}")
-                .containsEntry("local_proxy_config", localProxyConfig)
-                .doesNotContainKey("source");
+                .containsEntry("local_proxy_config", localProxyConfig);
+        assertThat(payload.get("loader")).isNotEqualTo("http://atv/plugins/web/7.py");
     }
 
     @Test
