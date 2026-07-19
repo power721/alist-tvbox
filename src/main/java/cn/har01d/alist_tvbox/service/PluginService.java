@@ -575,6 +575,15 @@ public class PluginService {
         return StringUtils.appendIfMissing(proxy, "/") + url;
     }
 
+    static boolean isPythonPluginUrl(String url) {
+        try {
+            String path = URI.create(StringUtils.trimToEmpty(url)).getPath();
+            return StringUtils.endsWithIgnoreCase(path, ".py");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private void applyDownloadedPlugin(Plugin plugin, DownloadedPlugin downloadedPlugin, String entryExternalId, boolean updateName) {
         plugin.setSourceName(downloadedPlugin.sourceName());
         if (updateName) {
