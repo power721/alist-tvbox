@@ -1424,6 +1424,35 @@ public class SubscriptionService {
         return site;
     }
 
+    static String selectPluginApi(Plugin plugin, boolean nativePython, String baseUrl) {
+        if (PluginService.isPythonPluginUrl(plugin.getUrl())) {
+            return "csp_PyProxy";
+        }
+        return nativePython ? baseUrl + "/Atvp.py" : "csp_PyProxy";
+    }
+
+    static Map<String, Object> buildPluginExtPayload(Plugin plugin,
+                                                     String baseUrl,
+                                                     String contentToken,
+                                                     String token,
+                                                     String secret,
+                                                     boolean nativePython,
+                                                     Map<String, Object> localProxyConfig) {
+        boolean rawPython = PluginService.isPythonPluginUrl(plugin.getUrl());
+        Map<String, Object> map = new HashMap<>();
+        map.put("api", baseUrl);
+        String extension = rawPython ? ".py" : ".txt";
+        String contentUrl = baseUrl + "/plugins/" + contentToken + "/" + plugin.getId() + extension;
+        map.put(rawPython ? "loader" : "source", contentUrl);
+        map.put("token", token.isBlank() ? "-" : token);
+        map.put("secret", secret);
+        map.put("local_proxy_config", rawPython || !nativePython ? localProxyConfig : new HashMap<>());
+        if (StringUtils.isNotBlank(plugin.getExtend())) {
+            map.put("data", plugin.getExtend());
+        }
+        return map;
+    }
+
     private Map<String, Object> buildPluginSite(Plugin plugin, String token, String secret) throws JsonProcessingException {
         Map<String, Object> site = new HashMap<>();
         site.put("filterable", 1);
@@ -1432,7 +1461,7 @@ public class SubscriptionService {
         site.put("changeable", 0);
         String url = readHostAddress("");
         boolean nativePython = isNativePythonPluginRunMode();
-        site.put("api", nativePython ? url + "/Atvp.py" : "csp_PyProxy");
+        site.put("api", selectPluginApi(plugin, nativePython, url));
         site.put("type", 3);
         site.put("key", plugin.getName());
         site.put("searchable", 1);
@@ -1443,17 +1472,15 @@ public class SubscriptionService {
             site.put("indexs", 1);
         }
 
-        Map<String, Object> map = new HashMap<>();
-        map.put("api", url);
-        //map.put("loader", url + "/Atvp.py");
-        String source = readHostAddress("") + "/plugins/" + getCurrentOrFirstToken() + "/" + plugin.getId() + ".txt";
-        map.put("source", source);
-        map.put("token", token.isBlank() ? "-" : token);
-        map.put("secret", secret);
-        map.put("local_proxy_config", nativePython ? new HashMap<>() : readLocalProxyConfig());
-        if (StringUtils.isNotBlank(plugin.getExtend())) {
-            map.put("data", plugin.getExtend());
-        }
+        Map<String, Object> map = buildPluginExtPayload(
+                plugin,
+                url,
+                getCurrentOrFirstToken(),
+                token,
+                secret,
+                nativePython,
+                readLocalProxyConfig()
+        );
         // 每个插件站点只下发与自己作用域匹配的过滤器
         List<Map<String, Object>> filters = buildPluginFilters(plugin);
         if (!filters.isEmpty()) {

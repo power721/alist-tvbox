@@ -315,7 +315,7 @@
     <el-dialog v-model="pluginVisible" title="订阅源管理" fullscreen>
       <el-form :inline="true" :model="pluginForm">
         <el-form-item label="插件地址" required>
-          <el-input v-model="pluginForm.url" style="width: 460px" placeholder="https://example.com/plugin.txt"/>
+          <el-input v-model="pluginForm.url" style="width: 460px" placeholder="https://example.com/plugin.txt 或 plugin.py"/>
         </el-form-item>
         <el-form-item label="名称">
           <el-input v-model="pluginForm.name" style="width: 180px" placeholder="留空用默认"/>
