@@ -489,4 +489,3 @@ Confirm from the passing assertions that:
 ```
 
 No additional code commit is needed unless verification uncovers a defect; any fix must start with a failing regression test.
-
