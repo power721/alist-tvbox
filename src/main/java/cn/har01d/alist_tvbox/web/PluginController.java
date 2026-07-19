@@ -109,6 +109,11 @@ public class PluginController {
         );
     }
 
+    @PostMapping("/compatibility-check/secspider")
+    public PluginCompilerService.CompatibilityCheckResponse checkSecspiderCompatibility(@RequestBody PluginCompilerService.CompatibilityCheckRequest request) {
+        return pluginCompilerService.checkMagnetSpiderCompatibility(request);
+    }
+
     @PutMapping("/{id}")
     public Plugin update(@PathVariable Integer id, @RequestBody Plugin plugin) {
         return pluginService.update(id, plugin);

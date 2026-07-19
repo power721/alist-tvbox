@@ -115,6 +115,14 @@ master secret
 
 后端会从 `/data/secspider` 自动读取。
 
+编译前建议先点：
+
+```text
+兼容性校验
+```
+
+它会先跑磁力爬虫门禁，列出不合规项；通过后再点编译，避免把明显不兼容的脚本直接上传进静态仓库。
+
 ## 生成和重置密钥
 
 容器首次启动时会自动生成密钥。
@@ -214,7 +222,7 @@ Atvp spider is not initialized
 后端目标测试：
 
 ```powershell
-.\mvnw.cmd "-Dtest=PluginCompilerServiceTest,PluginCompilerAtvpInteropTest,PluginControllerCompileTest,PluginControllerSecurityTest,SecspiderKeyServiceTest,SelfPluginFileServiceTest" -DfailIfNoTests=false -DforkCount=0 test
+.\mvnw.cmd "-Dtest=PluginCompilerServiceTest,PluginCompilerCompatibilityTest,PluginCompilerAtvpInteropTest,PluginControllerCompileTest,PluginControllerCompatibilityCheckTest,PluginControllerSecurityTest,SecspiderKeyServiceTest,SelfPluginFileServiceTest" -DfailIfNoTests=false -DforkCount=0 test
 ```
 
 前端类型检查：

@@ -34,6 +34,13 @@ test('accepts encrypted txt and raw Python plugin addresses', () => {
   assert.equal(viewSource.includes('placeholder="https://example.com/plugin.txt 或 plugin.py"'), true)
 })
 
+test('exposes compatibility gate entry in the plugin compiler dialog', () => {
+  assert.equal(viewSource.includes('兼容性校验'), true)
+  assert.equal(viewSource.includes('/api/plugins/compatibility-check/secspider'), true)
+  assert.equal(viewSource.includes('checkPluginCompatibility'), true)
+  assert.equal(viewSource.includes('先点“兼容性校验”，看见门禁通过后再点“编译”'), true)
+})
+
 test('uses visual editor for subscription override instead of raw textarea', () => {
   assert.equal(viewSource.includes('SubscriptionConfigEditor'), true)
   assert.equal(viewSource.includes("openEditor(false)"), true)

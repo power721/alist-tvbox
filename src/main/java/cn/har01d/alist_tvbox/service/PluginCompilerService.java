@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
@@ -24,12 +25,22 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 public class PluginCompilerService {
     private static final int PUBLIC_KEY_XOR = 23;
     private static final int MASTER_SECRET_XOR = 41;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final Pattern SPIDER_IMPORT_PATTERN = Pattern.compile("(?m)^\\s*from\\s+base\\.spider\\s+import\\s+Spider\\s*$");
+    private static final Pattern SPIDER_CLASS_PATTERN = Pattern.compile("(?m)^\\s*class\\s+Spider\\s*\\(\\s*Spider\\s*\\)\\s*:\\s*$");
+    private static final Pattern DETAIL_CONTENT_PATTERN = Pattern.compile("(?m)^\\s*def\\s+detailContent\\s*\\(");
+    private static final Pattern PLAYER_CONTENT_PATTERN = Pattern.compile("(?m)^\\s*def\\s+playerContent\\s*\\(");
+    private static final Pattern VOD_PIC_PATTERN = Pattern.compile("\\bvod_pic\\b");
+    private static final Pattern VOD_PLAY_FROM_PATTERN = Pattern.compile("\\bvod_play_from\\b");
+    private static final Pattern VOD_PLAY_URL_PATTERN = Pattern.compile("\\bvod_play_url\\b");
+    private static final Pattern MAGNET_FLOW_PATTERN = Pattern.compile("(?i)magnet:|btih");
+    private static final Pattern OUTER_HEADER_PATTERN = Pattern.compile("(?m)^\\s*//@");
 
     public CompileResponse compileSecspider(CompileRequest request) {
         validateRequest(request);
@@ -108,6 +119,70 @@ public class PluginCompilerService {
         }
     }
 
+    public CompatibilityCheckResponse checkMagnetSpiderCompatibility(CompatibilityCheckRequest request) {
+        validateCompatibilityRequest(request);
+
+        try {
+            String name = StringUtils.trim(request.name());
+            String id = StringUtils.trimToEmpty(request.id());
+            String pluginId = StringUtils.defaultIfBlank(id, derivePluginId(name));
+            String source = StringUtils.defaultString(request.source());
+            List<CompatibilityCheckItem> items = new ArrayList<>();
+
+            items.add(checkItem("outer_headers", "内层明文包头", !OUTER_HEADER_PATTERN.matcher(source).find(),
+                    "内层明文未混入 //@ 包头",
+                    "如果这是 secspider 外层包体，请把外层头部移到包体生成器里，内层只保留 Python 源码"));
+            items.add(checkItem("base_spider_import", "Spider 导入", SPIDER_IMPORT_PATTERN.matcher(source).find(),
+                    "已包含 from base.spider import Spider",
+                    "保留 AList-TVBox 的 Spider 基类导入"));
+            items.add(checkItem("spider_class", "Spider 类定义", SPIDER_CLASS_PATTERN.matcher(source).find(),
+                    "已包含 class Spider(Spider):",
+                    "保留 Spider(Spider) 继承声明"));
+            items.add(checkItem("detail_content", "详情入口", DETAIL_CONTENT_PATTERN.matcher(source).find(),
+                    "已包含 detailContent",
+                    "确保详情页能够返回磁链卡片与封面图"));
+            items.add(checkItem("player_content", "播放入口", PLAYER_CONTENT_PATTERN.matcher(source).find(),
+                    "已包含 playerContent",
+                    "确保播放时能进入插件内部解析流程"));
+            items.add(checkItem("vod_pic", "封面字段", VOD_PIC_PATTERN.matcher(source).find(),
+                    "已包含 vod_pic",
+                    "详情和选片卡片应保留封面图"));
+            items.add(checkItem("vod_play_from", "播放分组", VOD_PLAY_FROM_PATTERN.matcher(source).find(),
+                    "已包含 vod_play_from",
+                    "保留播放分组，避免详情页被压扁成纯文本"));
+            items.add(checkItem("vod_play_url", "播放列表", VOD_PLAY_URL_PATTERN.matcher(source).find(),
+                    "已包含 vod_play_url",
+                    "保留播放列表，确保卡片能绑定到具体磁链"));
+            items.add(checkItem("magnet_flow", "磁力链标记", MAGNET_FLOW_PATTERN.matcher(source).find(),
+                    "已检测到 magnet / btih 相关标记",
+                    "磁力爬虫门禁需要能看见磁力链处理路径"));
+
+            long failCount = items.stream().filter(item -> "FAIL".equals(item.status())).count();
+            long passCount = items.size() - failCount;
+            boolean passed = failCount == 0;
+            String summary = passed
+                    ? "磁力爬虫门禁通过"
+                    : "磁力爬虫门禁未通过：" + failCount + " 项不合规";
+
+            return new CompatibilityCheckResponse(
+                    "磁力爬虫门禁",
+                    name,
+                    pluginId,
+                    request.version(),
+                    sha256Hex(source.getBytes(StandardCharsets.UTF_8)),
+                    passed,
+                    (int) passCount,
+                    (int) failCount,
+                    summary,
+                    items
+            );
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BadRequestException("兼容性校验失败: " + e.getMessage(), e);
+        }
+    }
+
     private void validateRequest(CompileRequest request) {
         if (request == null) {
             throw new BadRequestException("请求不能为空");
@@ -130,6 +205,24 @@ public class PluginCompilerService {
         }
         if (StringUtils.isBlank(request.masterSecret())) {
             throw new BadRequestException("master secret 不能为空");
+        }
+    }
+
+    private void validateCompatibilityRequest(CompatibilityCheckRequest request) {
+        if (request == null) {
+            throw new BadRequestException("请求不能为空");
+        }
+        if (StringUtils.isBlank(request.name())) {
+            throw new BadRequestException("插件名称不能为空");
+        }
+        validateHeaderValue("插件名称", request.name());
+        if (request.version() == null || request.version() < 1) {
+            throw new BadRequestException("插件版本必须大于 0");
+        }
+        validateHeaderValue("remark", request.remark());
+        validateHeaderValue("插件 ID", request.id());
+        if (StringUtils.isBlank(request.source())) {
+            throw new BadRequestException("插件明文不能为空");
         }
     }
 
@@ -233,6 +326,22 @@ public class PluginCompilerService {
         signature.initVerify(publicKey);
         signature.update(data);
         return signature.verify(signatureBytes);
+    }
+
+    private String derivePluginId(String name) {
+        String normalized = StringUtils.defaultString(name)
+                .trim()
+                .toLowerCase()
+                .replaceAll("[^a-z0-9_.-]+", "_")
+                .replaceAll("^_+|_+$", "");
+        if (StringUtils.isNotBlank(normalized)) {
+            return normalized.length() > 80 ? normalized.substring(0, 80) : normalized;
+        }
+        return "plugin_" + DigestUtils.sha256Hex(StringUtils.defaultString(name)).substring(0, 12);
+    }
+
+    private CompatibilityCheckItem checkItem(String code, String title, boolean passed, String message, String suggestion) {
+        return new CompatibilityCheckItem(code, title, passed ? "PASS" : "FAIL", message, suggestion);
     }
 
     private byte[] buildSigningBytes(SecspiderHeaders headers, String payloadB64) {
@@ -341,6 +450,38 @@ public class PluginCompilerService {
         ) {
             this(name, version, remark, id, kid, source, privateKey, publicKey, masterSecret, null, null);
         }
+    }
+
+    public record CompatibilityCheckRequest(
+            String name,
+            Integer version,
+            String remark,
+            String id,
+            String source
+    ) {
+    }
+
+    public record CompatibilityCheckItem(
+            String code,
+            String title,
+            String status,
+            String message,
+            String suggestion
+    ) {
+    }
+
+    public record CompatibilityCheckResponse(
+            String gateName,
+            String pluginName,
+            String pluginId,
+            Integer version,
+            String sourceSha256,
+            boolean passed,
+            int passCount,
+            int failCount,
+            String summary,
+            List<CompatibilityCheckItem> items
+    ) {
     }
 
     public record CompileResponse(

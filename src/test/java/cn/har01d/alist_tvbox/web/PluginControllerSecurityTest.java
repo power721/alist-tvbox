@@ -81,6 +81,14 @@ class PluginControllerSecurityTest {
     }
 
     @Test
+    void compatibilityCheckShouldRequireAuthentication() throws Exception {
+        mockMvc.perform(post("/api/plugins/compatibility-check/secspider")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void compileSecspiderShouldWorkThroughApiKeySecurityChain() throws Exception {
         KeyPair keyPair = generateKeyPair();
         String privateKey = pem("PRIVATE KEY", keyPair.getPrivate().getEncoded());

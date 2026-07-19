@@ -600,6 +600,7 @@
           <div class="plugin-compiler-guide-body">
             <ol>
               <li>默认使用容器托管的 Ed25519 密钥对和 master secret，只需要把 Python 明文插件粘贴到“插件明文”。内层明文必须是合法 Python，不要写外层 <code>//@name</code> 这类包头。</li>
+              <li>先点“兼容性校验”，看见门禁通过后再点“编译”；不合规项会直接列出来。</li>
               <li>容器首次启动会自动生成密钥文件，保存到 <code>/data/secspider</code>；只要 Docker 挂载的 <code>/data</code> 不丢，升级镜像后密钥仍然可用。</li>
               <li>点击“编译”后会生成 <code>secspider/1</code> 插件包，自动保存到 <code>/www/static/self-plugins</code>，并自动导入插件管理列表。</li>
               <li><code>ext.source</code>、<code>token</code>、<code>local_proxy_config</code> 和 <code>ext.data</code> 都由容器上下文自动补齐；原版插件通常只需要源码本身。</li>
@@ -735,6 +736,37 @@ class Spider(Spider):
         :closable="false"
         style="margin-bottom: 12px"
       />
+      <div v-if="pluginCompatibilityResult" style="margin-bottom: 12px">
+        <el-alert
+          :title="pluginCompatibilityResult.summary"
+          :type="pluginCompatibilityResult.passed ? 'success' : 'error'"
+          show-icon
+          :closable="false"
+          style="margin-bottom: 12px"
+        />
+        <el-descriptions :column="4" border size="small" style="margin-bottom: 12px">
+          <el-descriptions-item label="通过项">{{ pluginCompatibilityResult.passCount }}</el-descriptions-item>
+          <el-descriptions-item label="不合规项">{{ pluginCompatibilityResult.failCount }}</el-descriptions-item>
+          <el-descriptions-item label="结果">{{ pluginCompatibilityResult.passed ? '通过' : '未通过' }}</el-descriptions-item>
+          <el-descriptions-item label="门禁">{{ pluginCompatibilityResult.gateName }}</el-descriptions-item>
+          <el-descriptions-item label="目标" :span="2">{{ pluginCompatibilityResult.pluginName }} (#{{ pluginCompatibilityResult.pluginId }})</el-descriptions-item>
+          <el-descriptions-item label="版本">{{ pluginCompatibilityResult.version }}</el-descriptions-item>
+          <el-descriptions-item label="明文 SHA256" :span="3">{{ pluginCompatibilityResult.sourceSha256 }}</el-descriptions-item>
+        </el-descriptions>
+        <el-table :data="pluginCompatibilityResult.items" border size="small">
+          <el-table-column label="状态" width="90">
+            <template #default="scope">
+              <el-tag :type="scope.row.status === 'PASS' ? 'success' : 'danger'">
+                {{ scope.row.status === 'PASS' ? '通过' : '不合规' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="title" label="检查项" width="160"/>
+          <el-table-column prop="message" label="结果说明" min-width="240"/>
+          <el-table-column prop="suggestion" label="建议" min-width="260"/>
+          <el-table-column prop="code" label="Code" width="160"/>
+        </el-table>
+      </div>
       <div v-if="pluginCompilerResult">
         <el-descriptions :column="3" border size="small" style="margin-bottom: 12px">
           <el-descriptions-item label="格式">{{ pluginCompilerResult.format }}</el-descriptions-item>
@@ -763,6 +795,7 @@ class Spider(Spider):
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="pluginCompilerVisible = false">关闭</el-button>
+          <el-button :loading="pluginCompatibilityLoading" @click="checkPluginCompatibility">兼容性校验</el-button>
           <el-button type="primary" :loading="pluginCompiling" @click="compilePlugin">编译</el-button>
         </span>
       </template>
@@ -1182,6 +1215,27 @@ interface PluginCompileResult {
   localPath: string
 }
 
+interface PluginCompatibilityItem {
+  code: string
+  title: string
+  status: 'PASS' | 'FAIL'
+  message: string
+  suggestion: string
+}
+
+interface PluginCompatibilityResult {
+  gateName: string
+  pluginName: string
+  pluginId: string
+  version: number
+  sourceSha256: string
+  passed: boolean
+  passCount: number
+  failCount: number
+  summary: string
+  items: PluginCompatibilityItem[]
+}
+
 interface SecspiderKeyStatus {
   generated: boolean
   privateKeyPath: string
@@ -1268,6 +1322,8 @@ const pluginFilterConfigVisible = ref(false)
 const sourceExtendVisible = ref(false)
 const importingPlugins = ref(false)
 const pluginCompiling = ref(false)
+const pluginCompatibilityLoading = ref(false)
+const pluginCompatibilityResult = ref<PluginCompatibilityResult | null>(null)
 const secspiderKeyLoading = ref(false)
 const secspiderKeyStatus = ref<SecspiderKeyStatus | null>(null)
 const tgVisible = ref(false)
@@ -1574,6 +1630,7 @@ const resetPluginCompilerForm = () => {
     autoImport: true
   }
   pluginCompilerAdvancedPanels.value = []
+  pluginCompatibilityResult.value = null
   pluginCompilerResult.value = null
   pluginCompilerResultTab.value = 'package'
 }
@@ -2791,6 +2848,37 @@ const compilePlugin = async () => {
     }
   } finally {
     pluginCompiling.value = false
+  }
+}
+
+const checkPluginCompatibility = async () => {
+  const form = pluginCompilerForm.value
+  if (!form.name.trim()) {
+    ElMessage.warning('请输入插件名称')
+    return
+  }
+  if (!form.source.trim()) {
+    ElMessage.warning('请粘贴插件明文')
+    return
+  }
+
+  pluginCompatibilityLoading.value = true
+  try {
+    const {data} = await axios.post('/api/plugins/compatibility-check/secspider', {
+      name: form.name.trim(),
+      version: form.version,
+      remark: form.remark,
+      id: form.id.trim(),
+      source: form.source
+    })
+    pluginCompatibilityResult.value = data
+    if (data.passed) {
+      ElMessage.success('兼容性校验通过')
+    } else {
+      ElMessage.error(`发现 ${data.failCount} 项不合规`)
+    }
+  } finally {
+    pluginCompatibilityLoading.value = false
   }
 }
 
