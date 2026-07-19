@@ -47,4 +47,56 @@ class UtilsTest {
         }
     }
 
+    @Test
+    void toAsciiUrl_nullReturnsNull() {
+        assertNull(Utils.toAsciiUrl(null));
+    }
+
+    @Test
+    void toAsciiUrl_blankReturnsOriginal() {
+        assertEquals("", Utils.toAsciiUrl(""));
+    }
+
+    @Test
+    void toAsciiUrl_asciiUrlUnchanged() {
+        assertEquals("https://github.com/user/repo", Utils.toAsciiUrl("https://github.com/user/repo"));
+    }
+
+    @Test
+    void toAsciiUrl_alreadyEncodedIsIdempotent() {
+        assertEquals("https://host/%E4%B8%AD.json", Utils.toAsciiUrl("https://host/%E4%B8%AD.json"));
+    }
+
+    @Test
+    void toAsciiUrl_encodesChineseInPath() {
+        assertEquals("https://github.com/%E7%94%A8%E6%88%B7/%E4%BB%93%E5%BA%93",
+                Utils.toAsciiUrl("https://github.com/用户/仓库"));
+    }
+
+    @Test
+    void toAsciiUrl_encodesChineseInQuery() {
+        assertEquals("https://host/api?name=%E4%B8%AD%E6%96%87",
+                Utils.toAsciiUrl("https://host/api?name=中文"));
+    }
+
+    @Test
+    void toAsciiUrl_preservesPortAndEncodesPath() {
+        assertEquals("https://host:8080/%E4%B8%AD%E6%96%87", Utils.toAsciiUrl("https://host:8080/中文"));
+    }
+
+    @Test
+    void toAsciiUrl_preservesFragment() {
+        assertEquals("https://host/x#%E9%94%9A", Utils.toAsciiUrl("https://host/x#锚"));
+    }
+
+    @Test
+    void toAsciiUrl_relativePathEncodesSegments() {
+        assertEquals("spiders/%E4%B8%AD%E6%96%87.py", Utils.toAsciiUrl("spiders/中文.py"));
+    }
+
+    @Test
+    void toAsciiUrl_garbageDoesNotThrow() {
+        assertDoesNotThrow(() -> Utils.toAsciiUrl("https://[unclosed-bracket"));
+    }
+
 }

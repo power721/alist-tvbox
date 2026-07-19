@@ -382,6 +382,22 @@ class PluginServiceTest {
     }
 
     @Test
+    void importFromSourceShouldAcceptChineseCharactersInUrl() {
+        String sourceUrl = "https://example.com/我的仓库/spiders_v2.json";
+        String encodedSourceUrl = "https://example.com/%E6%88%91%E7%9A%84%E4%BB%93%E5%BA%93/spiders_v2.json";
+        String pluginUrl = "https://example.com/demo.txt";
+
+        when(restTemplate.getForObject(URI.create(encodedSourceUrl), String.class)).thenReturn("[\"" + pluginUrl + "\"]");
+        when(pluginRepository.findByUrl(pluginUrl)).thenReturn(Optional.empty());
+        when(restTemplate.getForObject(URI.create(pluginUrl), String.class)).thenReturn("body");
+        when(pluginRepository.save(any(Plugin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PluginService.ImportResult result = pluginService.importFromSource(sourceUrl);
+
+        assertThat(result.created()).containsExactly("demo");
+    }
+
+    @Test
     void createShouldUseGithubProxyForGithubUrlsWithoutChangingStoredUrl() {
         String url = "https://github.com/har01d5/tvbox/raw/refs/heads/master/py/demo.txt";
         String proxiedUrl = "https://gh-proxy.org/" + url;

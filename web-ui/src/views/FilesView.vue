@@ -88,7 +88,7 @@
               <el-icon v-else style="vertical-align: middle; margin-right: 4px">
                 <Document/>
               </el-icon>
-              <span style="cursor: pointer" @click="handleRowDblClick(scope.row)">{{ scope.row.name }}</span>
+              <span style="cursor: pointer" @click="handleFileNameClick(scope.row)">{{ scope.row.name }}</span>
             </template>
           </el-table-column>
           <el-table-column label="大小" width="120">
@@ -269,11 +269,14 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from 'vue'
 import axios from "axios"
+import clipBorad from "vue-clipboard3"
 import {Folder, Document, Upload} from '@element-plus/icons-vue'
 import {ElMessage} from 'element-plus'
 import type {UploadInstance} from 'element-plus'
 
 const currentUrl = window.location.origin
+const {toClipboard} = clipBorad()
+
 const activeTab = ref('config')
 
 // ========== Config files ==========
@@ -412,6 +415,23 @@ const handleRowDblClick = (row: any) => {
     currentStaticDir.value = row.path
     loadStatic()
   }
+}
+
+const handleFileNameClick = (row: any) => {
+  if (row.directory) {
+    handleRowDblClick(row)
+  } else {
+    copyFileUrl(row)
+  }
+}
+
+const copyFileUrl = (row: any) => {
+  const url = currentUrl + encodeURI(row.url)
+  toClipboard(url).then(() => {
+    ElMessage.success('已复制到剪贴板')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
 }
 
 const handleSelectionChange = (rows: any[]) => {

@@ -49,8 +49,8 @@ public class FileDownloader {
     private static final String REMOTE_DIFF_ZIP_URL = BASE_URL + "diff.zip";
     private static final String PG_LATEST_URL = "https://github.com/power721/PG/releases/latest";
     private static final String ZX_LATEST_URL = "https://github.com/power721/ZX/releases/latest";
-    private static final String XS_VERSION_URL = "https://9877.kstore.space/version.txt";
-    private static final String XS_SINGLE_URL = "https://9877.kstore.space/single.json";
+    private static final String XS_VERSION_URL = "https://oss-v1.wangmeipo.cn/236/version.txt";
+    private static final String XS_SINGLE_URL = "https://oss-v1.wangmeipo.cn/236/single.json";
     private static final String XS_USER_AGENT = "okhttp/5.3.2";
 
     private static final Set<String> GITHUB_PROXY = Set.of("https://slink.ltd/", "https://cors.zme.ink/", "https://git.886.be/", "https://gitdl.cn/", "https://ghfast.top/", "https://ghproxy.net/", "https://github.moeyy.xyz/", "https://gh-proxy.com/", "https://ghproxy.cc/", "https://gh.llkk.cc/", "https://gh.ddlc.top/", "https://gh-proxy.llyke.com/");

@@ -179,6 +179,32 @@ public final class Utils {
         }
     }
 
+    /**
+     * 将可能含非 ASCII 字符(如中文)的 URL 或相对路径转换为严格 ASCII 形式。
+     * 仅对非 ASCII 字节做百分号编码,保留所有 ASCII 字符(含 /、?、#、&、= 及已存在的 %XX 转义)原样不变,
+     * 因此对已编码输入幂等、不会二次编码;也不改变 ASCII 结构,故对纯 ASCII 输入直接返回。
+     * 用于在构造 java.net.URI 之前规范化用户可控 URL(如插件仓库/文件地址),避免 URISyntaxException。
+     */
+    public static String toAsciiUrl(String url) {
+        if (StringUtils.isBlank(url)) {
+            return url;
+        }
+        String s = url.trim();
+        byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
+        StringBuilder sb = new StringBuilder(bytes.length);
+        for (byte b : bytes) {
+            int v = b & 0xFF;
+            if (v < 0x80) {
+                sb.append((char) v);
+            } else {
+                sb.append('%')
+                        .append(Character.toUpperCase(Character.forDigit(v >>> 4, 16)))
+                        .append(Character.toUpperCase(Character.forDigit(v & 0xF, 16)));
+            }
+        }
+        return sb.toString();
+    }
+
     public static String encryptWbi(Map<String, Object> params, String imgKey, String subKey) {
         String mixinKey = getMixinKey(imgKey, subKey);
         params.put("wts", System.currentTimeMillis() / 1000);

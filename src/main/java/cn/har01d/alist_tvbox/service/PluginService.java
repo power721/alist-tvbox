@@ -347,7 +347,7 @@ public class PluginService {
     }
 
     private List<String> resolveImportCandidates(String url) {
-        String source = StringUtils.trimToEmpty(url);
+        String source = Utils.toAsciiUrl(StringUtils.trimToEmpty(url));
         if (source.isBlank()) {
             throw new BadRequestException("仓库地址不能为空");
         }
@@ -386,6 +386,7 @@ public class PluginService {
     }
 
     private DownloadedPlugin downloadPluginData(String url) {
+        url = Utils.toAsciiUrl(url);
         String body = downloadPlugin(url);
         String name = extractPluginName(body);
         if (StringUtils.isBlank(name)) {
@@ -395,6 +396,7 @@ public class PluginService {
     }
 
     private String downloadText(String url, String message) {
+        url = Utils.toAsciiUrl(url);
         // Validate URL to prevent SSRF attacks
         if (!isValidUrl(url)) {
             throw new BadRequestException("Invalid or unsafe URL: " + url);
@@ -533,7 +535,7 @@ public class PluginService {
     }
 
     private String resolvePluginUrl(String sourceUrl, String path) {
-        String candidate = StringUtils.trimToEmpty(path);
+        String candidate = Utils.toAsciiUrl(StringUtils.trimToEmpty(path));
         if (candidate.isBlank()) {
             throw new BadRequestException(PLUGIN_INDEX_FILE + " 格式不正确");
         }
