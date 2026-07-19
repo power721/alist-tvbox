@@ -30,6 +30,10 @@ test('exposes plugin run mode settings in subscription source manager', () => {
   assert.equal(viewSource.includes('Java代理'), true)
 })
 
+test('accepts encrypted txt and raw Python plugin addresses', () => {
+  assert.equal(viewSource.includes('placeholder="https://example.com/plugin.txt 或 plugin.py"'), true)
+})
+
 test('uses visual editor for subscription override instead of raw textarea', () => {
   assert.equal(viewSource.includes('SubscriptionConfigEditor'), true)
   assert.equal(viewSource.includes("openEditor(false)"), true)
