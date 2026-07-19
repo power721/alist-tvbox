@@ -98,4 +98,3 @@ Plugin.content (.py)
 2. 新增 Python Atvp 单元测试，构造 raw ext 和最小内层 Spider；让 `_decrypt_secspider_source` 在被调用时抛错，证明 raw 分支必须跳过它。
 3. 在同一 Python 测试中让内层 Spider 设置 `backend_parse=True`，验证分类结果被改写为 `Atvp.DETAIL_PREFIX`，并模拟 `/parse`/`/play` 响应验证后端端点调用。
 4. 实现最小修改后运行 Java 聚焦测试、Python 单元测试、完整 `mvn test`、前端测试和构建。
-
