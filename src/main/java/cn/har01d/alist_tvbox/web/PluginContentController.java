@@ -22,4 +22,10 @@ public class PluginContentController {
         subscriptionService.checkToken(token);
         return pluginService.readContent(id);
     }
+
+    @GetMapping(value = "/plugins/{token}/{id}.py", produces = "text/x-python;charset=UTF-8")
+    public String pythonContent(@PathVariable String token, @PathVariable Integer id) {
+        subscriptionService.checkToken(token);
+        return pluginService.readContent(id);
+    }
 }
