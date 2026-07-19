@@ -32,7 +32,8 @@ class TestAtvpRawBackendParse(unittest.TestCase):
             "source": "https://atv.example/plugins/demo/7.py",
             "raw": True,
             "token": "demo",
-            "local_proxy_config": {},
+            "data": {"site": "demo"},
+            "local_proxy_config": {"ALI": {"enabled": True}},
         }
         return base64.b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
 
@@ -49,10 +50,38 @@ class TestAtvpRawBackendParse(unittest.TestCase):
 
     def test_raw_source_skips_secspider_decryption(self):
         self.init_inner(
-            'class Spider:\n    def init(self, extend=""):\n        return None\n'
+            'class Spider:\n    def init(self, extend=""):\n        self.received_extend = extend\n'
         )
 
         self.assertIsNotNone(self.spider._inner)
+        self.assertEqual(
+            json.loads(self.spider._inner.received_extend),
+            {
+                "site": "demo",
+                "token": "demo",
+                "local_proxy_config": "{'ALI': {'enabled': True}}",
+            },
+        )
+
+    def test_source_without_raw_marker_still_uses_secspider_decryption(self):
+        payload = {
+            "api": "https://atv.example",
+            "source": "https://atv.example/plugins/demo/7.txt",
+            "token": "demo",
+        }
+        extend = base64.b64encode(
+            json.dumps(payload, separators=(",", ":")).encode()
+        ).decode()
+        source = 'class Spider:\n    def init(self, extend=""):\n        return None\n'
+
+        with (
+            patch.object(Spider, "_load_source", return_value="encrypted") as load_source,
+            patch.object(Spider, "_decrypt_secspider_source", return_value=source) as decrypt,
+        ):
+            self.spider.init(extend)
+
+        load_source.assert_called_once_with(payload["source"])
+        decrypt.assert_called_once_with("encrypted")
 
     def test_backend_parse_rewrites_category_and_uses_backend_parse_and_play(self):
         source = '''
@@ -88,8 +117,17 @@ class Spider:
         )
         played = self.spider.playerContent("网盘", "1@share", [])
         self.assertEqual(played["url"], "https://video.example/demo.m3u8")
-        self.spider.post.assert_called_once()
-        self.spider.fetch.assert_called_once()
+        self.spider.post.assert_called_once_with(
+            "https://atv.example/parse/demo",
+            json={"url": "https://pan.example/share"},
+            params={"ac": "play"},
+            timeout=10,
+        )
+        self.spider.fetch.assert_called_once_with(
+            "https://atv.example/play/demo",
+            params={"id": "1@share"},
+            timeout=10,
+        )
 
 
 if __name__ == "__main__":
