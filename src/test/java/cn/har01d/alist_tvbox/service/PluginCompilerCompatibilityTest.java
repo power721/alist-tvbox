@@ -41,6 +41,9 @@ class PluginCompilerCompatibilityTest {
         assertThat(response.failCount()).isZero();
         assertThat(response.passCount()).isEqualTo(response.items().size());
         assertThat(response.items()).allMatch(item -> "PASS".equals(item.status()));
+        assertThat(response.aiRepairExportText()).contains("\"exportType\" : \"AI修复导出\"");
+        assertThat(response.aiRepairExportText()).contains("\"description\" : \"把错误项需要修改的地方用 AI 更容易理解的方式导出成文本");
+        assertThat(response.aiRepairExportText()).contains("\"source\"");
     }
 
     @Test
@@ -70,5 +73,7 @@ class PluginCompilerCompatibilityTest {
         assertThat(response.items()).anyMatch(item -> item.code().equals("player_content") && item.status().equals("FAIL"));
         assertThat(response.items()).anyMatch(item -> item.code().equals("vod_pic") && item.status().equals("FAIL"));
         assertThat(response.items()).anyMatch(item -> item.code().equals("magnet_flow") && item.status().equals("FAIL"));
+        assertThat(response.aiRepairExportText()).contains("\"repairSuggestions\"");
+        assertThat(response.aiRepairExportText()).contains("AI修复导出");
     }
 }

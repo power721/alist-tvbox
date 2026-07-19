@@ -600,7 +600,7 @@
           <div class="plugin-compiler-guide-body">
             <ol>
               <li>默认使用容器托管的 Ed25519 密钥对和 master secret，只需要把 Python 明文插件粘贴到“插件明文”。内层明文必须是合法 Python，不要写外层 <code>//@name</code> 这类包头。</li>
-              <li>先点“兼容性校验”，看见门禁通过后再点“编译”；不合规项会直接列出来。</li>
+              <li>先点“兼容性校验”打开独立门禁窗口，看见门禁通过后再点“编译”；不合规项和 AI 修复导出会直接列出来。</li>
               <li>容器首次启动会自动生成密钥文件，保存到 <code>/data/secspider</code>；只要 Docker 挂载的 <code>/data</code> 不丢，升级镜像后密钥仍然可用。</li>
               <li>点击“编译”后会生成 <code>secspider/1</code> 插件包，自动保存到 <code>/www/static/self-plugins</code>，并自动导入插件管理列表。</li>
               <li><code>ext.source</code>、<code>token</code>、<code>local_proxy_config</code> 和 <code>ext.data</code> 都由容器上下文自动补齐；原版插件通常只需要源码本身。</li>
@@ -736,37 +736,6 @@ class Spider(Spider):
         :closable="false"
         style="margin-bottom: 12px"
       />
-      <div v-if="pluginCompatibilityResult" style="margin-bottom: 12px">
-        <el-alert
-          :title="pluginCompatibilityResult.summary"
-          :type="pluginCompatibilityResult.passed ? 'success' : 'error'"
-          show-icon
-          :closable="false"
-          style="margin-bottom: 12px"
-        />
-        <el-descriptions :column="4" border size="small" style="margin-bottom: 12px">
-          <el-descriptions-item label="通过项">{{ pluginCompatibilityResult.passCount }}</el-descriptions-item>
-          <el-descriptions-item label="不合规项">{{ pluginCompatibilityResult.failCount }}</el-descriptions-item>
-          <el-descriptions-item label="结果">{{ pluginCompatibilityResult.passed ? '通过' : '未通过' }}</el-descriptions-item>
-          <el-descriptions-item label="门禁">{{ pluginCompatibilityResult.gateName }}</el-descriptions-item>
-          <el-descriptions-item label="目标" :span="2">{{ pluginCompatibilityResult.pluginName }} (#{{ pluginCompatibilityResult.pluginId }})</el-descriptions-item>
-          <el-descriptions-item label="版本">{{ pluginCompatibilityResult.version }}</el-descriptions-item>
-          <el-descriptions-item label="明文 SHA256" :span="3">{{ pluginCompatibilityResult.sourceSha256 }}</el-descriptions-item>
-        </el-descriptions>
-        <el-table :data="pluginCompatibilityResult.items" border size="small">
-          <el-table-column label="状态" width="90">
-            <template #default="scope">
-              <el-tag :type="scope.row.status === 'PASS' ? 'success' : 'danger'">
-                {{ scope.row.status === 'PASS' ? '通过' : '不合规' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="title" label="检查项" width="160"/>
-          <el-table-column prop="message" label="结果说明" min-width="240"/>
-          <el-table-column prop="suggestion" label="建议" min-width="260"/>
-          <el-table-column prop="code" label="Code" width="160"/>
-        </el-table>
-      </div>
       <div v-if="pluginCompilerResult">
         <el-descriptions :column="3" border size="small" style="margin-bottom: 12px">
           <el-descriptions-item label="格式">{{ pluginCompilerResult.format }}</el-descriptions-item>
@@ -795,8 +764,93 @@ class Spider(Spider):
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="pluginCompilerVisible = false">关闭</el-button>
-          <el-button :loading="pluginCompatibilityLoading" @click="checkPluginCompatibility">兼容性校验</el-button>
+          <el-button @click="openPluginCompatibilityDialog">兼容性校验</el-button>
           <el-button type="primary" :loading="pluginCompiling" @click="compilePlugin">编译</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="pluginCompatibilityVisible" title="兼容性校验" width="1040px" destroy-on-close>
+      <el-alert
+        title="磁力爬虫门禁独立校验，不直接修改三方插件编译区的明文；需要回填时请复制 AI 修复后的源码。"
+        type="info"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 12px"
+      />
+      <el-form :model="pluginCompatibilityForm" label-width="120px">
+        <el-form-item label="插件名称" required>
+          <el-input v-model="pluginCompatibilityForm.name" placeholder="例如 JavBus"/>
+        </el-form-item>
+        <el-form-item label="插件版本" required>
+          <el-input-number v-model="pluginCompatibilityForm.version" :min="1" :step="1"/>
+        </el-form-item>
+        <el-form-item label="插件 ID">
+          <el-input v-model="pluginCompatibilityForm.id" placeholder="可留空，按名称自动推导"/>
+        </el-form-item>
+        <el-form-item label="remark">
+          <el-input v-model="pluginCompatibilityForm.remark" placeholder="可留空"/>
+        </el-form-item>
+        <el-form-item label="校验明文" required>
+          <el-input
+            v-model="pluginCompatibilityForm.source"
+            type="textarea"
+            :rows="12"
+            placeholder="粘贴要校验的 Python 明文插件源码"
+          />
+        </el-form-item>
+      </el-form>
+      <div v-if="pluginCompatibilityResult" style="margin-bottom: 12px">
+        <el-alert
+          :title="pluginCompatibilityResult.summary"
+          :type="pluginCompatibilityResult.passed ? 'success' : 'error'"
+          show-icon
+          :closable="false"
+          style="margin-bottom: 12px"
+        />
+        <el-descriptions :column="4" border size="small" style="margin-bottom: 12px">
+          <el-descriptions-item label="通过项">{{ pluginCompatibilityResult.passCount }}</el-descriptions-item>
+          <el-descriptions-item label="不合规项">{{ pluginCompatibilityResult.failCount }}</el-descriptions-item>
+          <el-descriptions-item label="结果">{{ pluginCompatibilityResult.passed ? '通过' : '未通过' }}</el-descriptions-item>
+          <el-descriptions-item label="门禁">{{ pluginCompatibilityResult.gateName }}</el-descriptions-item>
+          <el-descriptions-item label="目标" :span="2">{{ pluginCompatibilityResult.pluginName }} (#{{ pluginCompatibilityResult.pluginId }})</el-descriptions-item>
+          <el-descriptions-item label="版本">{{ pluginCompatibilityResult.version }}</el-descriptions-item>
+          <el-descriptions-item label="明文 SHA256" :span="3">{{ pluginCompatibilityResult.sourceSha256 }}</el-descriptions-item>
+        </el-descriptions>
+        <el-tabs v-model="pluginCompatibilityResultTab">
+          <el-tab-pane label="校验结果" name="result">
+            <el-table :data="pluginCompatibilityResult.items" border size="small">
+              <el-table-column label="状态" width="90">
+                <template #default="scope">
+                  <el-tag :type="scope.row.status === 'PASS' ? 'success' : 'danger'">
+                    {{ scope.row.status === 'PASS' ? '通过' : '不合规' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="title" label="检查项" width="160"/>
+              <el-table-column prop="message" label="结果说明" min-width="240"/>
+              <el-table-column prop="suggestion" label="修改意见" min-width="260"/>
+              <el-table-column prop="code" label="Code" width="160"/>
+            </el-table>
+          </el-tab-pane>
+          <el-tab-pane label="AI修复导出" name="aiRepair">
+            <el-alert
+              title="AI修复导出会把不合规项、需要修改的位置、修改意见和原始明文合并成 AI 更容易理解的文本。把这段内容提交给 AI 修复脚本后，再把修复后的明文拿回来重新做兼容性校验。"
+              type="info"
+              show-icon
+              :closable="false"
+              style="margin-bottom: 12px"
+            />
+            <el-input :model-value="pluginCompatibilityResult.aiRepairExportText" type="textarea" :rows="14" readonly/>
+            <el-button style="margin-top: 8px" @click="copyUrl(pluginCompatibilityResult.aiRepairExportText)">复制 AI 修复导出</el-button>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="pluginCompatibilityVisible = false">关闭</el-button>
+          <el-button @click="loadCompatibilityFromCompiler">从编译区同步一次</el-button>
+          <el-button type="primary" :loading="pluginCompatibilityLoading" @click="checkPluginCompatibility">开始校验</el-button>
         </span>
       </template>
     </el-dialog>
@@ -1197,6 +1251,14 @@ interface PluginCompileForm {
   autoImport: boolean
 }
 
+interface PluginCompatibilityForm {
+  name: string
+  version: number
+  remark: string
+  id: string
+  source: string
+}
+
 interface PluginCompileResult {
   packageText: string
   plainSha256: string
@@ -1234,6 +1296,7 @@ interface PluginCompatibilityResult {
   failCount: number
   summary: string
   items: PluginCompatibilityItem[]
+  aiRepairExportText: string
 }
 
 interface SecspiderKeyStatus {
@@ -1317,6 +1380,7 @@ const formVisible = ref(false)
 const dialogVisible = ref(false)
 const pluginVisible = ref(false)
 const pluginCompilerVisible = ref(false)
+const pluginCompatibilityVisible = ref(false)
 const pluginFilterVisible = ref(false)
 const pluginFilterConfigVisible = ref(false)
 const sourceExtendVisible = ref(false)
@@ -1456,9 +1520,17 @@ const pluginCompilerForm = ref<PluginCompileForm>({
   useManagedKey: true,
   autoImport: true
 })
+const pluginCompatibilityForm = ref<PluginCompatibilityForm>({
+  name: '',
+  version: 1,
+  remark: '',
+  id: '',
+  source: ''
+})
 const pluginCompilerResult = ref<PluginCompileResult | null>(null)
 const pluginCompilerResultTab = ref('package')
 const pluginCompilerAdvancedPanels = ref<string[]>([])
+const pluginCompatibilityResultTab = ref('result')
 const pluginCompilerChunksText = computed(() => {
   if (!pluginCompilerResult.value) {
     return ''
@@ -2726,6 +2798,24 @@ const openPluginCompiler = () => {
   loadSecspiderKeyStatus()
 }
 
+const loadCompatibilityFromCompiler = () => {
+  const form = pluginCompilerForm.value
+  pluginCompatibilityForm.value = {
+    name: form.name,
+    version: form.version,
+    remark: form.remark,
+    id: form.id,
+    source: form.source
+  }
+  pluginCompatibilityResult.value = null
+  pluginCompatibilityResultTab.value = 'result'
+}
+
+const openPluginCompatibilityDialog = () => {
+  loadCompatibilityFromCompiler()
+  pluginCompatibilityVisible.value = true
+}
+
 const loadSecspiderKeyStatus = async () => {
   secspiderKeyLoading.value = true
   try {
@@ -2852,7 +2942,7 @@ const compilePlugin = async () => {
 }
 
 const checkPluginCompatibility = async () => {
-  const form = pluginCompilerForm.value
+  const form = pluginCompatibilityForm.value
   if (!form.name.trim()) {
     ElMessage.warning('请输入插件名称')
     return
@@ -2872,6 +2962,7 @@ const checkPluginCompatibility = async () => {
       source: form.source
     })
     pluginCompatibilityResult.value = data
+    pluginCompatibilityResultTab.value = data.passed ? 'result' : 'aiRepair'
     if (data.passed) {
       ElMessage.success('兼容性校验通过')
     } else {

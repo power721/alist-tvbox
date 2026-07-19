@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.StringUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
@@ -32,6 +33,7 @@ public class PluginCompilerService {
     private static final int PUBLIC_KEY_XOR = 23;
     private static final int MASTER_SECRET_XOR = 41;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private static final Pattern SPIDER_IMPORT_PATTERN = Pattern.compile("(?m)^\\s*from\\s+base\\.spider\\s+import\\s+Spider\\s*$");
     private static final Pattern SPIDER_CLASS_PATTERN = Pattern.compile("(?m)^\\s*class\\s+Spider\\s*\\(\\s*Spider\\s*\\)\\s*:\\s*$");
     private static final Pattern DETAIL_CONTENT_PATTERN = Pattern.compile("(?m)^\\s*def\\s+detailContent\\s*\\(");
@@ -174,7 +176,8 @@ public class PluginCompilerService {
                     (int) passCount,
                     (int) failCount,
                     summary,
-                    items
+                    items,
+                    buildAiRepairExportText(name, pluginId, request.version(), source, source.getBytes(StandardCharsets.UTF_8), passed, summary, items)
             );
         } catch (BadRequestException e) {
             throw e;
@@ -344,6 +347,35 @@ public class PluginCompilerService {
         return new CompatibilityCheckItem(code, title, passed ? "PASS" : "FAIL", message, suggestion);
     }
 
+    private String buildAiRepairExportText(String pluginName,
+                                           String pluginId,
+                                           Integer version,
+                                           String source,
+                                           byte[] sourceBytes,
+                                           boolean passed,
+                                           String summary,
+                                           List<CompatibilityCheckItem> items) throws Exception {
+        List<String> repairSuggestions = items.stream()
+                .filter(item -> "FAIL".equals(item.status()))
+                .map(CompatibilityCheckItem::suggestion)
+                .toList();
+        CompatibilityExportPayload payload = new CompatibilityExportPayload(
+                "AI修复导出",
+                "把错误项需要修改的地方用 AI 更容易理解的方式导出成文本，提交给 AI 修复后再次检查。",
+                "磁力爬虫门禁",
+                pluginName,
+                pluginId,
+                version,
+                sha256Hex(sourceBytes),
+                passed,
+                summary,
+                repairSuggestions,
+                items,
+                source
+        );
+        return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(payload);
+    }
+
     private byte[] buildSigningBytes(SecspiderHeaders headers, String payloadB64) {
         return String.join("\n", signingLines(headers, payloadB64)).getBytes(StandardCharsets.UTF_8);
     }
@@ -480,7 +512,24 @@ public class PluginCompilerService {
             int passCount,
             int failCount,
             String summary,
-            List<CompatibilityCheckItem> items
+            List<CompatibilityCheckItem> items,
+            String aiRepairExportText
+    ) {
+    }
+
+    public record CompatibilityExportPayload(
+            String exportType,
+            String description,
+            String gateName,
+            String pluginName,
+            String pluginId,
+            Integer version,
+            String sourceSha256,
+            boolean passed,
+            String summary,
+            List<String> repairSuggestions,
+            List<CompatibilityCheckItem> items,
+            String source
     ) {
     }
 

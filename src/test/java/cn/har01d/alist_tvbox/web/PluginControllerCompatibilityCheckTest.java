@@ -63,6 +63,7 @@ class PluginControllerCompatibilityCheckTest {
                 .andExpect(jsonPath("$.passed").value(false))
                 .andExpect(jsonPath("$.summary").value(containsString("不合规")))
                 .andExpect(jsonPath("$.items").isArray())
-                .andExpect(jsonPath("$.items[0].status").value(not("")));
+                .andExpect(jsonPath("$.items[0].status").value(not("")))
+                .andExpect(jsonPath("$.aiRepairExportText").value(containsString("AI修复导出")));
     }
 }

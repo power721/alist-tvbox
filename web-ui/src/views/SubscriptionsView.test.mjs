@@ -36,9 +36,14 @@ test('accepts encrypted txt and raw Python plugin addresses', () => {
 
 test('exposes compatibility gate entry in the plugin compiler dialog', () => {
   assert.equal(viewSource.includes('兼容性校验'), true)
+  assert.equal(viewSource.includes('pluginCompatibilityVisible'), true)
+  assert.equal(viewSource.includes('openPluginCompatibilityDialog'), true)
   assert.equal(viewSource.includes('/api/plugins/compatibility-check/secspider'), true)
   assert.equal(viewSource.includes('checkPluginCompatibility'), true)
-  assert.equal(viewSource.includes('先点“兼容性校验”，看见门禁通过后再点“编译”'), true)
+  assert.equal(viewSource.includes('AI修复导出'), true)
+  assert.equal(viewSource.includes('把不合规项、需要修改的位置、修改意见和原始明文合并成 AI 更容易理解的文本'), true)
+  assert.equal(viewSource.includes('aiRepairExportText'), true)
+  assert.equal(viewSource.includes('先点“兼容性校验”打开独立门禁窗口'), true)
 })
 
 test('uses visual editor for subscription override instead of raw textarea', () => {
