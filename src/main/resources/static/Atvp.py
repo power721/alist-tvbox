@@ -200,7 +200,7 @@ class Spider(HostSpider):
         self._vod_token = self._resolve_vod_token(payload)
         self._localProxyConfig = payload.get("local_proxy_config") if isinstance(payload, dict) else {}
         package_text = self._load_source(source)
-        source_text = self._decrypt_secspider_source(package_text)
+        source_text = package_text if self._is_raw_source(payload) else self._decrypt_secspider_source(package_text)
         spider_cls = self._load_inner_spider_class(source_text)
         self._inner = spider_cls()
         result = self._inner.init(inner_extend)
@@ -240,6 +240,9 @@ class Spider(HostSpider):
         if not isinstance(payload, dict):
             return None
         return payload if payload.get("source") or payload.get("api") else None
+
+    def _is_raw_source(self, payload):
+        return isinstance(payload, dict) and payload.get("raw") is True
 
     def _compose_inner_extend(self, payload):
         data_value = payload.get("data")

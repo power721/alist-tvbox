@@ -1443,7 +1443,13 @@ public class SubscriptionService {
         map.put("api", baseUrl);
         String extension = rawPython ? ".py" : ".txt";
         String contentUrl = baseUrl + "/plugins/" + contentToken + "/" + plugin.getId() + extension;
-        map.put(rawPython ? "loader" : "source", contentUrl);
+        if (rawPython) {
+            map.put("loader", baseUrl + "/Atvp.py");
+            map.put("source", contentUrl);
+            map.put("raw", true);
+        } else {
+            map.put("source", contentUrl);
+        }
         map.put("token", token.isBlank() ? "-" : token);
         map.put("secret", secret);
         map.put("local_proxy_config", rawPython || !nativePython ? localProxyConfig : new HashMap<>());
