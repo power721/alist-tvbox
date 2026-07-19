@@ -180,6 +180,8 @@ class SubscriptionServiceTest {
 
         assertThat(SubscriptionService.selectPluginApi(plugin, true, "http://atv"))
                 .isEqualTo("csp_PyProxy");
+        assertThat(SubscriptionService.selectPluginApi(plugin, false, "http://atv"))
+                .isEqualTo("csp_PyProxy");
         assertThat(payload)
                 .containsEntry("loader", "http://atv/plugins/web/7.py")
                 .containsEntry("api", "http://atv")
@@ -203,11 +205,17 @@ class SubscriptionServiceTest {
 
         assertThat(SubscriptionService.selectPluginApi(plugin, true, "http://atv"))
                 .isEqualTo("http://atv/Atvp.py");
+        assertThat(SubscriptionService.selectPluginApi(plugin, false, "http://atv"))
+                .isEqualTo("csp_PyProxy");
         assertThat(payload)
                 .containsEntry("source", "http://atv/plugins/web/8.txt")
                 .containsEntry("token", "-")
                 .doesNotContainKey("loader");
         assertThat(payload.get("local_proxy_config"))
                 .isEqualTo(new HashMap<>());
+
+        Map<String, Object> javaPayload = SubscriptionService.buildPluginExtPayload(
+                plugin, "http://atv", "web", "", "secret", false, localProxyConfig);
+        assertThat(javaPayload.get("local_proxy_config")).isEqualTo(localProxyConfig);
     }
 }
