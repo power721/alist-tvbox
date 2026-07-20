@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
@@ -66,4 +67,16 @@ class FileDownloaderTest {
 //        inOrder.verify(restTemplate).getForObject("https://gh.llkk.cc/https://github.com/power721/ZX/releases/latest", String.class);
 //        inOrder.verify(restTemplate).getForObject("https://github.com/power721/ZX/releases/latest", String.class);
 //    }
+
+    @Test
+    void deriveVersionUrl_swapsSingleJsonForVersionTxt() {
+        assertThat(FileDownloader.deriveVersionUrl("https://oss-v1.wangmeipo.cn/236/single.json"))
+                .isEqualTo("https://oss-v1.wangmeipo.cn/236/version.txt");
+    }
+
+    @Test
+    void deriveVersionUrl_dropsQueryWhenTakingDirname() {
+        assertThat(FileDownloader.deriveVersionUrl("https://x/236/single.json?v=1"))
+                .isEqualTo("https://x/236/version.txt");
+    }
 }

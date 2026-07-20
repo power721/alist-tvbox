@@ -348,6 +348,11 @@ public class FileDownloader {
         throw new IOException("Cannot find xs download url from single.json");
     }
 
+    static String deriveVersionUrl(String singleUrl) {
+        int idx = singleUrl.lastIndexOf('/');
+        return (idx >= 0 ? singleUrl.substring(0, idx) : singleUrl) + "/version.txt";
+    }
+
     private String getGitHubVersion(String name, String url, Pattern pattern) {
         for (String candidate : getVersionUrls(url)) {
             try {
