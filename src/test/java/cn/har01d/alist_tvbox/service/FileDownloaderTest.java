@@ -79,4 +79,22 @@ class FileDownloaderTest {
         assertThat(FileDownloader.deriveVersionUrl("https://x/236/single.json?v=1"))
                 .isEqualTo("https://x/236/version.txt");
     }
+
+    @Test
+    void parseXsSingleUrl_returnsFirstNonEmptyLine() {
+        assertThat(FileDownloader.parseXsSingleUrl("https://x/236/single.json\n"))
+                .isEqualTo("https://x/236/single.json");
+    }
+
+    @Test
+    void parseXsSingleUrl_trimsAndSkipsBlankLines() {
+        assertThat(FileDownloader.parseXsSingleUrl("\n  https://x/236/single.json  \n"))
+                .isEqualTo("https://x/236/single.json");
+    }
+
+    @Test
+    void parseXsSingleUrl_throwsOnEmpty() {
+        assertThatThrownBy(() -> FileDownloader.parseXsSingleUrl(""))
+                .isInstanceOf(IllegalStateException.class);
+    }
 }

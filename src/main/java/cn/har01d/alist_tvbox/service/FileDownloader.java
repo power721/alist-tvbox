@@ -353,6 +353,18 @@ public class FileDownloader {
         return (idx >= 0 ? singleUrl.substring(0, idx) : singleUrl) + "/version.txt";
     }
 
+    static String parseXsSingleUrl(String text) {
+        if (text != null) {
+            for (String line : text.split("\\R")) {
+                String s = line.trim();
+                if (!s.isEmpty()) {
+                    return s;
+                }
+            }
+        }
+        throw new IllegalStateException("xs.txt 内容为空");
+    }
+
     private String getGitHubVersion(String name, String url, Pattern pattern) {
         for (String candidate : getVersionUrls(url)) {
             try {
