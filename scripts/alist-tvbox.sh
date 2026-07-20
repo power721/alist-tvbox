@@ -1558,9 +1558,11 @@ install_container() {
   fi
 
   # 检查基础目录是否为空（排除 .v3 标记文件）。
-  # 用 -print -quit 探测到首个条目即停止，避免对大目录（NAS 上可能数十万文件）全量遍历。
+  # 用 find -print | head -n1 取首个条目即停止，避免对大目录（NAS 上可能数十万文件）全量遍历。
+  # 兼容 iStoreOS/OpenWrt 的 busybox find（不支持 GNU 专有的 -quit）；
+  # head 关闭管道后 find 收到 SIGPIPE（pipefail 下为非零），用 || true 规避 set -e 退出。
   local sample
-  sample="$(find "${CONFIG[BASE_DIR]}" -mindepth 1 ! -name '.v3' -print -quit 2>/dev/null)"
+  sample="$(find "${CONFIG[BASE_DIR]}" -mindepth 1 ! -name '.v3' -print 2>/dev/null | head -n 1)" || true
   if [[ -z "$sample" ]]; then
     INIT=true
   fi
@@ -2610,11 +2612,20 @@ restore_database() {
     return
   fi
 
-  # 列出所有备份文件（按修改时间倒序，最新的在前）
+  # 列出所有备份文件（按修改时间倒序，最新的在前）。
+  # busybox find 不支持 GNU 的 -printf，改用 glob 取候选 + 单次 ls -dt 按修改时间排序。
   local backups=()
-  while IFS= read -r file; do
-    backups+=("$file")
-  done < <(find "$backup_dir" -maxdepth 1 -type f -name "*.zip" -printf "%T@ %p\n" 2>/dev/null | sort -rn | cut -d' ' -f2-)
+  local entries=()
+  local nullglob_was_set=0
+  shopt -q nullglob && nullglob_was_set=1
+  shopt -s nullglob
+  entries=("$backup_dir"/*.zip)
+  (( nullglob_was_set )) || shopt -u nullglob
+  if [[ ${#entries[@]} -gt 0 ]]; then
+    while IFS= read -r file; do
+      backups+=("$file")
+    done < <(ls -dt "${entries[@]}" 2>/dev/null)
+  fi
 
   if [[ ${#backups[@]} -eq 0 ]]; then
     echo -e "${YELLOW}未找到备份文件${NC}"
