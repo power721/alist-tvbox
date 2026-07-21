@@ -1477,13 +1477,32 @@ public class TvBoxService {
             useProxy = true;
             result.put("url", url);
         } else if (driverType == DriverType.QUARK) {
-            var account = getDriverAccount(url, driverType);
-            String cookie = account == null ? "" : account.getCookie();
-            result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.QUARK_USER_AGENT, "Referer", "https://pan.quark.cn"));
+            int marker = url.indexOf("#x-referer=raw");
+            if (marker >= 0) {
+                // PowerList 在夸克分享免转存直链追加 #x-referer=raw:夸克与 UC 共用同一 checkplay 后端,
+                // 同样需用「URL + "\ "」作 Referer 绕过回调(客户端代理场景)。无标记的夸克(原画/自有文件)仍用 Cookie。
+                String cleanUrl = url.substring(0, marker);
+                result.put("url", cleanUrl);
+                result.put("header", Map.of("User-Agent", Constants.QUARK_USER_AGENT, "Referer", cleanUrl + "\\ "));
+            } else {
+                var account = getDriverAccount(url, driverType);
+                String cookie = account == null ? "" : account.getCookie();
+                result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.QUARK_USER_AGENT, "Referer", "https://pan.quark.cn"));
+            }
         } else if (driverType == DriverType.UC) {
-            var account = getDriverAccount(url, driverType);
-            String cookie = account == null ? "" : account.getCookie();
-            result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.UC_USER_AGENT, "Referer", "https://drive.uc.cn"));
+            int marker = url.indexOf("#x-referer=raw");
+            if (marker >= 0) {
+                // PowerList 在 UC 分享免转存直链追加 #x-referer=raw 标记:此类直链需用
+                // 「URL + "\ "」作 Referer 绕过阿里云 checkplay 回调(客户端代理场景;后端代理由 PowerList 自身处理)。
+                // 无标记的 UC(原画/自有文件)仍用 Cookie + drive.uc.cn。
+                String cleanUrl = url.substring(0, marker);
+                result.put("url", cleanUrl);
+                result.put("header", Map.of("User-Agent", Constants.UC_USER_AGENT, "Referer", cleanUrl + "\\ "));
+            } else {
+                var account = getDriverAccount(url, driverType);
+                String cookie = account == null ? "" : account.getCookie();
+                result.put("header", Map.of("Cookie", cookie, "User-Agent", Constants.UC_USER_AGENT, "Referer", "https://drive.uc.cn"));
+            }
         } else if (driverType == DriverType.THUNDER) {
             result.put("header", Map.of("User-Agent", "AndroidDownloadManager/13 (Linux; U; Android 13; M2004J7AC Build/SP1A.210812.016)"));
         } else if (driverType == DriverType.PAN115) {
