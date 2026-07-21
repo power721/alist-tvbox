@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.ParseRequest;
+import cn.har01d.alist_tvbox.model.DownloadTarget;
 import cn.har01d.alist_tvbox.service.OfflineDownloadService;
 import cn.har01d.alist_tvbox.service.SubscriptionService;
 import cn.har01d.alist_tvbox.service.TvBoxService;
@@ -36,7 +37,7 @@ public class PublicOfflineDownloadController {
                            @RequestParam(required = false, defaultValue = "") String ac) {
         subscriptionService.checkToken(token);
 
-        OfflineDownloadService.DownloadTarget target = offlineDownloadService.downloadTarget(request);
+        DownloadTarget target = offlineDownloadService.downloadTarget(request);
         String targetPath = target.path();
         if (target.folder()) {
             targetPath += "/~playlist";

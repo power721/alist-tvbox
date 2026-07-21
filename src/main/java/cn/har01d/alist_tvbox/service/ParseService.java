@@ -3,6 +3,7 @@ package cn.har01d.alist_tvbox.service;
 import cn.har01d.alist_tvbox.dto.ParseRequest;
 import cn.har01d.alist_tvbox.dto.ShareLink;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.DownloadTarget;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -28,7 +29,7 @@ public class ParseService {
         if (request.url().startsWith("http")) {
             return drive(request.url(), ac);
         }
-        OfflineDownloadService.DownloadTarget target = offlineDownloadService.downloadTarget(request);
+        DownloadTarget target = offlineDownloadService.downloadTarget(request);
         String targetPath = target.path();
         if (target.folder()) {
             targetPath += "/~playlist";

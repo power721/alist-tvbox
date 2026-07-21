@@ -12,6 +12,8 @@ import cn.har01d.alist_tvbox.entity.OfflineDownloadTaskRepository;
 import cn.har01d.alist_tvbox.entity.Setting;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.model.DownloadTarget;
+import cn.har01d.alist_tvbox.model.StoredConfig;
 import cn.har01d.alist_tvbox.service.offline.OfflineDownloadHandler;
 import cn.har01d.alist_tvbox.storage.Storage;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -36,12 +38,6 @@ public class OfflineDownloadService {
     static final String SETTING_NAME = "offline_download_config";
     static final String OFFLINE_DIR_NAME = "alist-tvbox-offline";
     private static final String STATUS_COMPLETED = "COMPLETED";
-
-    private record StoredConfig(boolean enabled, String driverType, Integer accountId, String offlineFolderId) {
-    }
-
-    public record DownloadTarget(String path, boolean folder) {
-    }
 
     private final SettingRepository settingRepository;
     private final DriverAccountRepository driverAccountRepository;
