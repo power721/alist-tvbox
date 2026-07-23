@@ -29,6 +29,29 @@ class TextUtilsTest {
     }
 
     @Test
+    void stripLeadingNoise_stripsEmojiPrefix() {
+        assertEquals("【万米危机】", TextUtils.stripLeadingNoise("·✅✅✅【万米危机】"));
+    }
+
+    @Test
+    void stripLeadingNoise_stripsEmojiPrefixWithVariationSelector() {
+        // Telegram emoji usually carry U+FE0F; the leading-noise class includes it.
+        assertEquals("【万米危机】", TextUtils.stripLeadingNoise("·✅️✅️✅️【万米危机】"));
+    }
+
+    @Test
+    void stripLeadingNoise_stripsAlternateCheckmark() {
+        // Different channels use different check emoji (U+2714 here).
+        assertEquals("【万米危机】", TextUtils.stripLeadingNoise("·✔️✔️✔️【万米危机】"));
+    }
+
+    @Test
+    void fixNameAfterStripLeadingNoise_removesPrefixAndBrackets() {
+        // end-to-end: the tg-search vod_name path composes stripLeadingNoise + fixName.
+        assertEquals("万米危机", TextUtils.fixName(TextUtils.stripLeadingNoise("·✅✅✅【万米危机】")));
+    }
+
+    @Test
     public void testNumber() {
         String name = TextUtils.fixName("重紫 第10季");
         log.info("{}", name);

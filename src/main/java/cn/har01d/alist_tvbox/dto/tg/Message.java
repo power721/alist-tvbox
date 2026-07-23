@@ -21,6 +21,10 @@ import java.util.regex.Pattern;
 public class Message {
     private static final Logger LOGGER = LoggerFactory.getLogger(Message.class);
     private static final Pattern LINK = Pattern.compile("(https?://\\S+)");
+    // Leading decorative noise Telegram channels prepend to titles: whitespace,
+    // middle dots (U+00B7/U+0387/U+30FB), invisible variation selectors, ZWJ and
+    // emoji/pictograph ranges. Backstop for prefixes we don't enumerate verbatim.
+    private static final Pattern LEADING_NOISE = Pattern.compile("^[\\s\\u00B7\\u0387\\u30FB\\uFE0F\\uFE0E\\u200D\\u2600-\\u27BF\\u1F300-\\u1FAFF]+");
     private int id;
     private String mid;
     private Instant time;
@@ -79,7 +83,8 @@ public class Message {
         this.content = message.getContent();
         this.link = link.getUrl();
         this.type = parseType(link.getUrl());
-        this.name = message.getTitle();
+        Object title = message.getTitle();
+        this.name = title == null || String.valueOf(title).isBlank() ? parseName() : cleanName(String.valueOf(title));
         this.channel = message.getChannel();
     }
 
@@ -102,7 +107,7 @@ public class Message {
         this.media = media;
         this.cover = this.images.isEmpty() ? null : this.images.getFirst();
         Object title = media == null ? null : media.get("title");
-        this.name = title == null || String.valueOf(title).isBlank() ? parseName() : String.valueOf(title);
+        this.name = title == null || String.valueOf(title).isBlank() ? parseName() : cleanName(String.valueOf(title));
         this.channel = "tg-search";
     }
 
@@ -123,12 +128,23 @@ public class Message {
         if (line.startsWith("https://") && lines.length > 1) {
             line = lines[1];
         }
-        String name = line.replace("名称：", "")
+        return cleanName(line);
+    }
+
+    // Unified title cleaning for both the scraped-content path (parseName) and the
+    // tg-search media.title path. Telegram emoji often carry U+FE0F variation
+    // selectors that defeat exact matches, so strip those first; then drop known
+    // labels/prefixes; then trim any remaining leading decorative run; then cut at
+    // description markers.
+    private String cleanName(String input) {
+        String name = input.replace("\uFE0F", "").replace("\uFE0E", "")
+                .replace("名称：", "")
                 .replace("名称:", "")
                 .replace("资源标题：", "")
                 .replace("\uD83C\uDFAC 电影：", "")
                 .replace("#剧集\uD83D\uDDC4 ", "")
                 .replace("\uD83D\uDCFA 电视剧：", "");
+        name = LEADING_NOISE.matcher(name).replaceFirst("");
         int index = name.indexOf("描述：");
         if (index > 0) {
             return name.substring(0, index);

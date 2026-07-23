@@ -1088,7 +1088,7 @@ public class TelegramService {
         }
         Object title = media.get("title");
         if (title != null && StringUtils.isNotBlank(String.valueOf(title))) {
-            movieDetail.setVod_name(TextUtils.fixName(String.valueOf(title)));
+            movieDetail.setVod_name(TextUtils.fixName(TextUtils.stripLeadingNoise(String.valueOf(title))));
         }
         Object year = media.get("year");
         if (year != null && StringUtils.isNotBlank(String.valueOf(year))) {
