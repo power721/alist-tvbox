@@ -1094,7 +1094,7 @@ public class TelegramService {
         if (year != null && StringUtils.isNotBlank(String.valueOf(year))) {
             movieDetail.setVod_year(String.valueOf(year));
         }
-        List<String> remarks = Stream.of(media.get("episode"), media.get("quality"), media.get("size"))
+        List<String> remarks = Stream.of(movieDetail.getVod_remarks(), media.get("episode"), media.get("quality"), media.get("size"))
                 .filter(e -> e != null && StringUtils.isNotBlank(String.valueOf(e)))
                 .map(String::valueOf)
                 .toList();
