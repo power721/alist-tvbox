@@ -113,6 +113,12 @@ public class SettingService {
         appProperties.setPanSouPassword(settingRepository.findById("pan_sou_password").map(Setting::getValue).orElse(""));
         appProperties.setPanSouLinkCheckEnabled(settingRepository.findById("pan_sou_link_check_enabled").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setPanSouLinkCheckMaxCount(settingRepository.findById("pan_sou_link_check_max_count").map(Setting::getValue).map(Integer::parseInt).orElse(30));
+        appProperties.setPanSouConc(settingRepository.findById("pan_sou_conc").map(Setting::getValue)
+                .filter(StringUtils::isNotBlank).map(v -> Integer.parseInt(v.trim())).orElse(null));
+        appProperties.setPanSouRefresh(settingRepository.findById("pan_sou_refresh").map(Setting::getValue).orElse("").equals("true"));
+        appProperties.setPanSouRes(settingRepository.findById("pan_sou_res").map(Setting::getValue).filter(StringUtils::isNotBlank).orElse("merge"));
+        appProperties.setPanSouFilterInclude(parseList(settingRepository.findById("pan_sou_filter_include").map(Setting::getValue).orElse("")));
+        appProperties.setPanSouFilterExclude(parseList(settingRepository.findById("pan_sou_filter_exclude").map(Setting::getValue).orElse("")));
         appProperties.setTgSortField(settingRepository.findById("tg_sort_field").map(Setting::getValue).orElse("time"));
         appProperties.setTempShareExpiration(settingRepository.findById("temp_share_expiration").map(Setting::getValue).map(Integer::parseInt).orElse(72));
         appProperties.setValidateSharesInterval(settingRepository.findById("validateSharesInterval").map(Setting::getValue).map(Integer::parseInt).orElse(4));
@@ -164,6 +170,13 @@ public class SettingService {
         initBasicAuthCredentials();
         appProperties.setSystemId(value);
         log.info("system id: {}", value);
+    }
+
+    private List<String> parseList(String value) {
+        if (StringUtils.isBlank(value)) {
+            return null;
+        }
+        return Arrays.stream(value.split(",")).map(String::trim).filter(StringUtils::isNotBlank).toList();
     }
 
     public String generateApiKey() {
@@ -503,6 +516,25 @@ public class SettingService {
         }
         if ("panSouPlugins".equals(setting.getName())) {
             appProperties.setPanSouPlugins(Arrays.asList(setting.getValue().split(",")));
+        }
+        if ("pan_sou_conc".equals(setting.getName())) {
+            if (StringUtils.isBlank(setting.getValue())) {
+                appProperties.setPanSouConc(null);
+            } else {
+                appProperties.setPanSouConc(Math.max(0, Integer.parseInt(setting.getValue().trim())));
+            }
+        }
+        if ("pan_sou_refresh".equals(setting.getName())) {
+            appProperties.setPanSouRefresh("true".equals(setting.getValue()));
+        }
+        if ("pan_sou_res".equals(setting.getName())) {
+            appProperties.setPanSouRes(StringUtils.isBlank(setting.getValue()) ? "merge" : setting.getValue());
+        }
+        if ("pan_sou_filter_include".equals(setting.getName())) {
+            appProperties.setPanSouFilterInclude(parseList(setting.getValue()));
+        }
+        if ("pan_sou_filter_exclude".equals(setting.getName())) {
+            appProperties.setPanSouFilterExclude(parseList(setting.getValue()));
         }
         if ("tg_sort_field".equals(setting.getName())) {
             appProperties.setTgSortField(setting.getValue());
