@@ -21,7 +21,7 @@ test('play config exposes PanSou channel list selector', () => {
 })
 
 test('play config includes magnet and ed2k in disk order settings', () => {
-  assert.equal(componentSource.includes(`const defaultDriverOrder = '9,10,5,7,8,3,2,0,6,1,12,magnet,ed2k'.split(',')`), true)
+  assert.equal(componentSource.includes(`const defaultDriverOrder = '9,10,5,7,8,3,2,0,6,1,12,magnet,ed2k,video'.split(',')`), true)
   assert.equal(componentSource.includes(`{label: '光鸭', value: '12'}`), true)
   assert.equal(componentSource.includes(`{label: '光鸭', value: 12}`), true)
   assert.equal(componentSource.includes(`{label: '磁力', value: 'magnet'}`), true)
@@ -65,4 +65,20 @@ test('play config exposes tg-search api key and health version check', () => {
 test('play config links to power721 tg-search deployment guide', () => {
   assert.equal(componentSource.includes(`https://github.com/power721/tg-search`), true)
   assert.equal(componentSource.includes(`TG-Search API Key`), true)
+})
+
+test('play config exposes PanSou search behavior controls', () => {
+  assert.equal(componentSource.includes(`const panSouConc = ref<number | null>(null)`), true)
+  assert.equal(componentSource.includes(`const panSouRefresh = ref(false)`), true)
+  assert.equal(componentSource.includes(`const panSouRes = ref('merge')`), true)
+  assert.equal(componentSource.includes(`{label: '聚合', value: 'merge'}`), true)
+  assert.equal(componentSource.includes(`const updatePanSouSearch = () => {`), true)
+  assert.equal(componentSource.includes(`{name: 'pan_sou_conc', value: panSouConc.value || ''}`), true)
+  assert.equal(componentSource.includes(`panSouRes.value = data.pan_sou_res || 'merge'`), true)
+})
+
+test('play config isolates PanSou config in its own tab', () => {
+  assert.equal(componentSource.includes(`<el-tab-pane label="盘搜" name="pansou">`), true)
+  // PanSou address moved out of the basic tab into the dedicated tab
+  assert.equal(componentSource.includes(`label="PanSou地址"`), true)
 })
