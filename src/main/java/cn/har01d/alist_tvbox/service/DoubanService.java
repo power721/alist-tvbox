@@ -43,7 +43,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -212,7 +211,6 @@ public class DoubanService {
         return list.size();
     }
 
-    @Scheduled(cron = "0 0 20,22 * * ?")
     public void update() {
         getRemoteVersion(new Versions());
     }
