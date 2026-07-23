@@ -1509,7 +1509,7 @@ public class TvBoxService {
             // 115会把UA生成签名校验
             result.put("header", Map.of("User-Agent", Constants.USER_AGENT, "Referer", "https://115.com/"));
         } else if (driverType == DriverType.BAIDU) {
-            result.put("header", Map.of("User-Agent", "netdisk"));
+            result.put("header", Map.of("User-Agent", "netdisk;P2SP;2.2.91.136;android-android;"));
         } else if (url.contains("ali") || driverType == DriverType.ALI) {
             result.put("header", Map.of("User-Agent", appProperties.getUserAgent(), "Referer", Constants.ALIPAN, "origin", Constants.ALIPAN));
         }
