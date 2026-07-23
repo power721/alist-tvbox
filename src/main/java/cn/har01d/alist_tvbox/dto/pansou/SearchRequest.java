@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.dto.pansou;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -16,6 +17,10 @@ public class SearchRequest {
     @JsonProperty("cloud_types")
     private List<String> cloudTypes;
     private Filter filter;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer conc;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Boolean refresh;
     private Map<String, Object> ext;
 
     @Data
