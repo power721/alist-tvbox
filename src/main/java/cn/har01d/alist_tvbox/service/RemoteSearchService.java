@@ -189,11 +189,24 @@ public class RemoteSearchService {
         request.setExt(Map.of("referer", "https://dm.xueximeng.com"));
         boolean offlineDownloadEnabled = offlineDownloadService.getConfig().enabled();
         if (StringUtils.isNotBlank(keyword)) {
-//            request.setFilter(new SearchRequest.Filter(List.of(keyword), List.of()));
             request.setCloudTypes(getPanSouCloudTypes());
         }
         if (!CollectionUtils.isEmpty(appProperties.getPanSouPlugins())) {
             request.setPlugins(appProperties.getPanSouPlugins());
+        }
+        if (appProperties.getPanSouConc() != null && appProperties.getPanSouConc() > 0) {
+            request.setConc(appProperties.getPanSouConc());
+        }
+        if (Boolean.TRUE.equals(appProperties.getPanSouRefresh())) {
+            request.setRefresh(true);
+        }
+        request.setRes(StringUtils.defaultIfBlank(appProperties.getPanSouRes(), "merge"));
+        List<String> filterInclude = appProperties.getPanSouFilterInclude();
+        List<String> filterExclude = appProperties.getPanSouFilterExclude();
+        if (!CollectionUtils.isEmpty(filterInclude) || !CollectionUtils.isEmpty(filterExclude)) {
+            request.setFilter(new SearchRequest.Filter(
+                    CollectionUtils.isEmpty(filterInclude) ? List.of() : filterInclude,
+                    CollectionUtils.isEmpty(filterExclude) ? List.of() : filterExclude));
         }
         String url = appProperties.getPanSouUrl() + "/api/search";
         log.debug("search request: {} {}", url, request);

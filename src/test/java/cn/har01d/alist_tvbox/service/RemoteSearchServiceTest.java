@@ -68,6 +68,45 @@ class RemoteSearchServiceTest {
     }
 
     @Test
+    void searchSendsNewParamsWhenConfigured() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setPanSouChannels("pansou");
+        appProperties.setPanSouSource("all");
+        appProperties.setPanSouConc(20);
+        appProperties.setPanSouRefresh(true);
+        appProperties.setPanSouRes("results");
+        appProperties.setPanSouFilterInclude(List.of("1080"));
+        appProperties.setPanSouFilterExclude(List.of("枪版"));
+        OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+
+        RemoteSearchService service = new RemoteSearchService(
+                appProperties, restTemplateBuilder(restTemplate), objectMapper,
+                mock(TelegramChannelRepository.class), mock(ShareService.class),
+                mock(TvBoxService.class), offlineDownloadService);
+
+        server.expect(once(), requestTo("http://pansou.example/api/health"))
+                .andRespond(withSuccess("""
+                        {"channels":["builtin-a"],"channels_count":1,"auth_enabled":false}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("http://pansou.example/api/search"))
+                .andExpect(content().json("""
+                        {"kw":"movie","src":"all","conc":20,"refresh":true,"res":"results",
+                         "filter":{"include":["1080"],"exclude":["枪版"]}}
+                        """))
+                .andRespond(withSuccess("""
+                        {"code":0,"message":"ok","data":{"total":0,"results":[],"merged_by_type":{}}}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        service.search("movie", List.of());
+
+        server.verify();
+    }
+
+    @Test
     void detailBackfillsSearchResultTitleForPanSou() {
         RestTemplate restTemplate = new RestTemplate();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();

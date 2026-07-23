@@ -45,6 +45,11 @@ public class AppProperties {
     private List<String> panSouPlugins;
     private boolean panSouLinkCheckEnabled;
     private int panSouLinkCheckMaxCount = 30;
+    private Integer panSouConc;
+    private Boolean panSouRefresh = false;
+    private String panSouRes = "merge";
+    private List<String> panSouFilterInclude;
+    private List<String> panSouFilterExclude;
     private String systemId;
     private int tgTimeout = 5000;
     private int tempShareExpiration = 72;
