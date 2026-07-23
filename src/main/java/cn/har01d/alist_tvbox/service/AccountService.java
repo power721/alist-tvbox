@@ -487,7 +487,7 @@ public class AccountService {
                 aListLocalService.executeUpdate(sql);
             }
 
-            sql = "update x_users set disabled = 1 where username = 'admin'";
+            sql = "update x_users set disabled = 1,permission=380 where username = 'admin'";
             aListLocalService.executeUpdate(sql);
             if (login.isEnabled()) {
                 log.info("enable AList login: {}", login.getUsername());
@@ -501,7 +501,7 @@ public class AccountService {
                     aListLocalService.executeUpdate(sql);
                     sql = "delete from x_users where id = 3";
                     aListLocalService.executeUpdate(sql);
-                    sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES (3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,372)";
+                    sql = "INSERT INTO x_users (id,username,password,base_path,role,permission) VALUES (3,'" + login.getUsername() + "','" + login.getPassword() + "','/',0,380)";
                     aListLocalService.executeUpdate(sql);
                 }
             } else {

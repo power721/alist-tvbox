@@ -47,6 +47,14 @@ public class VideoService {
         return playUrlRepository.save(playUrl);
     }
 
+    public void refresh(int id) {
+        PlayUrl playUrl = playUrlRepository.findById(id).orElseThrow(() -> new NotFoundException("Play url not found"));
+        Site site = siteService.getById(playUrl.getSite());
+        String path = playUrl.getPath();
+        aListService.listFiles(site, path, 1, 0, true);
+        log.debug("refreshed directory cache for site {} path {}", site.getId(), path);
+    }
+
     public PlayUrl move(int id, String folder) {
         PlayUrl playUrl = playUrlRepository.findById(id).orElseThrow(() -> new NotFoundException("Play url not found"));
         Site site = siteService.getById(playUrl.getSite());

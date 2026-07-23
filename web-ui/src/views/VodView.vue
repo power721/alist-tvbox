@@ -133,11 +133,17 @@
                 <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
               </template>
             </el-table-column>
-            <el-table-column width="120" v-else>
+            <el-table-column width="200" v-else>
               <template #default="scope">
                 <el-button link type="primary" @click.stop="showRenameFile(scope.row)"
                            v-if="store.admin&&scope.row.type!=9">
                   重命名
+                </el-button>
+                <el-button link type="primary" @click.stop="refreshFile(scope.row)"
+                           v-if="store.admin&&scope.row.type!=9"
+                           :disabled="scope.row.type!=1"
+                           title="强制刷新此目录缓存">
+                  刷新
                 </el-button>
                 <el-button link type="danger" @click.stop="showRemoveFile(scope.row)"
                            v-if="store.admin&&scope.row.type!=9">
@@ -211,11 +217,17 @@
                 <el-button link type="danger" @click.stop="showDelete(scope.row)">删除</el-button>
               </template>
             </el-table-column>
-            <el-table-column width="120" v-else>
+            <el-table-column width="200" v-else>
               <template #default="scope">
                 <el-button link type="primary" @click.stop="showRenameFile(scope.row)"
                            v-if="store.admin&&scope.row.type!=9">
                   重命名
+                </el-button>
+                <el-button link type="primary" @click.stop="refreshFile(scope.row)"
+                           v-if="store.admin&&scope.row.type!=9"
+                           :disabled="scope.row.type!=1"
+                           title="强制刷新此目录缓存">
+                  刷新
                 </el-button>
                 <el-button link type="danger" @click.stop="showRemoveFile(scope.row)"
                            v-if="store.admin&&scope.row.type!=9">
@@ -1187,6 +1199,13 @@ const showRenameFile = (video: VodItem) => {
   name.value = video.vod_name
   renameVisible.value = true
   needRefresh.value = true
+}
+
+const refreshFile = (video: VodItem) => {
+  const id = video.vod_id.split('$')[1]
+  axios.post(`/api/videos/${id}/refresh`).then(() => {
+    ElMessage.success('目录缓存已刷新')
+  })
 }
 
 const showRename = (video: PlayItem) => {

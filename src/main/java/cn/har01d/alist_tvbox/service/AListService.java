@@ -122,6 +122,10 @@ public class AListService {
     }
 
     public FsResponse listFiles(Site site, String path, int page, int size) {
+        return listFiles(site, path, page, size, false);
+    }
+
+    public FsResponse listFiles(Site site, String path, int page, int size, boolean refresh) {
         int version = getVersion(site);
         String url = getUrl(site) + (version == 2 ? "/api/public/path" : "/api/fs/list");
         FsRequest request = new FsRequest();
@@ -132,6 +136,7 @@ public class AListService {
         }
         request.setPage(page);
         request.setSize(size);
+        request.setRefresh(refresh);
         log.debug("call api: {} request: {}", url, request);
         FsListResponse response = post(site, url, request, FsListResponse.class);
         logError(response);
