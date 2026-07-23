@@ -491,6 +491,17 @@ onUnmounted(() => {
           <span class="hint" v-if="tgSearchVersion">版本：{{ tgSearchVersion }}</span>
           <span class="hint error" v-if="tgSearchHealthError">{{ tgSearchHealthError }}</span>
         </el-form-item>
+        <el-form-item label="链接检测" v-if="panSouUrl">
+          <el-switch v-model="panSouLinkCheckEnabled"/>
+          <span class="hint">自动检查盘搜搜索结果的有效性</span>
+        </el-form-item>
+        <el-form-item label="检测数量上限" v-if="panSouUrl">
+          <el-input-number v-model="panSouLinkCheckMaxCount" :min="0" :max="500"/>
+          <span class="hint">仅当网盘结果数量小于等于该值时检查，磁力和ED2K不计算数量</span>
+        </el-form-item>
+        <el-form-item v-if="panSouUrl">
+          <el-button type="primary" @click="updatePanSouLinkCheck">更新</el-button>
+        </el-form-item>
         <el-form-item label="网盘顺序">
           <el-checkbox-group v-model="tgDrivers">
             <VueDraggable ref="el" v-model="tgDriverOrder">
@@ -521,7 +532,7 @@ onUnmounted(() => {
         </el-form-item>
       </el-form>
     </el-tab-pane>
-    <el-tab-pane label="盘搜" name="pansou">
+    <el-tab-pane label="盘搜配置" name="pansou">
       <el-form label-width="140">
         <el-form-item label="PanSou地址">
           <el-input v-model="panSouUrl" placeholder="http://IP:8888"/>
@@ -569,17 +580,6 @@ onUnmounted(() => {
           <el-button type="primary" @click="updatePlugins">更新</el-button>
           <span class="hint">已启用插件 {{ panSouPluginCount }} 个</span>
           <span class="hint">留空使用全部插件搜索</span>
-        </el-form-item>
-        <el-form-item label="链接检测" v-if="panSouUrl">
-          <el-switch v-model="panSouLinkCheckEnabled"/>
-          <span class="hint">自动检查盘搜搜索结果的有效性</span>
-        </el-form-item>
-        <el-form-item label="检测数量上限" v-if="panSouUrl">
-          <el-input-number v-model="panSouLinkCheckMaxCount" :min="0" :max="500"/>
-          <span class="hint">仅当网盘结果数量小于等于该值时检查，磁力和ED2K不计算数量</span>
-        </el-form-item>
-        <el-form-item v-if="panSouUrl">
-          <el-button type="primary" @click="updatePanSouLinkCheck">更新</el-button>
         </el-form-item>
         <el-form-item label="并发数" v-if="panSouUrl">
           <el-input-number v-model="panSouConc" :min="0" placeholder="自动"/>

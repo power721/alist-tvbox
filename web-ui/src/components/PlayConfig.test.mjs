@@ -78,7 +78,7 @@ test('play config exposes PanSou search behavior controls', () => {
 })
 
 test('play config isolates PanSou config in its own tab', () => {
-  assert.equal(componentSource.includes(`<el-tab-pane label="盘搜" name="pansou">`), true)
+  assert.equal(componentSource.includes(`<el-tab-pane label="盘搜配置" name="pansou">`), true)
   // PanSou address moved out of the basic tab into the dedicated tab
   assert.equal(componentSource.includes(`label="PanSou地址"`), true)
 })
