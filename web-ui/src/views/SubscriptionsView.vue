@@ -338,6 +338,7 @@
           <el-button type="primary" :loading="importingPlugins" :disabled="!pluginImportForm.url.trim()" @click="importPlugins">
             导入仓库
           </el-button>
+          <el-button type="primary" @click="openPluginCompiler">三方插件编译</el-button>
         </el-form-item>
       </el-form>
       <el-progress v-if="importingPlugins" :percentage="100" :indeterminate="true" :duration="5"/>
@@ -586,6 +587,270 @@
         <span class="dialog-footer">
           <el-button @click="sourceExtendVisible = false">取消</el-button>
           <el-button type="primary" @click="saveSourceExtend">保存配置</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="pluginCompilerVisible" title="三方插件编译" width="960px" destroy-on-close>
+      <el-collapse class="plugin-compiler-guide">
+        <el-collapse-item name="usage">
+          <template #title>
+            <span>使用说明与示例</span>
+          </template>
+          <div class="plugin-compiler-guide-body">
+            <ol>
+              <li>默认使用容器托管的 Ed25519 密钥对和 master secret，只需要把 Python 明文插件粘贴到“插件明文”。内层明文必须是合法 Python，不要写外层 <code>//@name</code> 这类包头。</li>
+              <li>先点“兼容性校验”打开独立门禁窗口，看见门禁通过后再点“编译”；不合规项和 AI 修复导出会直接列出来。</li>
+              <li>容器首次启动会自动生成密钥文件，保存到 <code>/data/secspider</code>；只要 Docker 挂载的 <code>/data</code> 不丢，升级镜像后密钥仍然可用。</li>
+              <li>点击“编译”后会生成 <code>secspider/1</code> 插件包，自动保存到 <code>/www/static/self-plugins</code>，并自动导入插件管理列表。</li>
+              <li><code>ext.source</code>、<code>token</code>、<code>local_proxy_config</code> 和 <code>ext.data</code> 都由容器上下文自动补齐；原版插件通常只需要源码本身。</li>
+              <li>如果需要更换密钥，使用“重置密钥对”。重置后旧密钥编译的自有插件需要重新编译。</li>
+              <li>需要强制只走自有 keyring 时，可在站点扩展配置里设置 <code>secspider_loader: self</code>；默认 <code>auto</code> 会先试原版再试自有。</li>
+            </ol>
+            <div class="plugin-compiler-example-grid">
+              <div>
+                <div class="plugin-compiler-example-title">明文插件示例</div>
+                <pre class="plugin-compiler-example">from base.spider import Spider
+
+class Spider(Spider):
+    def getName(self):
+        return "Demo"
+
+    def playerContent(self, flag, id, vipFlags):
+        return {"parse": 0, "url": id}</pre>
+              </div>
+              <div>
+                <div class="plugin-compiler-example-title">spiders_v2.json 示例</div>
+                <pre class="plugin-compiler-example">[
+  {
+    "id": "javbus_self",
+    "file": "py/javbus_self.txt",
+    "version": 1,
+    "valid": true
+  }
+]</pre>
+              </div>
+            </div>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
+      <el-alert
+        v-if="secspiderKeyStatus"
+        type="success"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 12px"
+      >
+        <template #title>
+          容器托管密钥已就绪：{{ secspiderKeyStatus.keyringPath }}
+        </template>
+      </el-alert>
+      <div class="plugin-compiler-key-actions">
+        <el-button type="primary" :loading="secspiderKeyLoading" @click="generateSecspiderKey">
+          生成密钥对
+        </el-button>
+        <el-button type="danger" :loading="secspiderKeyLoading" @click="resetSecspiderKey">
+          重置密钥对
+        </el-button>
+        <span class="plugin-compiler-key-hint">
+          私钥仅保存在容器数据目录；编译时后端自动读取，不会回显到页面。
+        </span>
+      </div>
+      <el-form :model="pluginCompilerForm" label-width="120px">
+        <el-form-item label="插件名称" required>
+          <el-input v-model="pluginCompilerForm.name" placeholder="例如 JavBus"/>
+        </el-form-item>
+        <el-form-item label="插件版本" required>
+          <el-input-number v-model="pluginCompilerForm.version" :min="1" :step="1"/>
+        </el-form-item>
+        <el-form-item label="remark">
+          <el-input v-model="pluginCompilerForm.remark" placeholder="可留空"/>
+        </el-form-item>
+        <el-form-item label="自动导入">
+          <el-switch v-model="pluginCompilerForm.autoImport" active-text="编译后导入插件管理" inactive-text="只生成包"/>
+        </el-form-item>
+        <el-form-item label="插件明文" required>
+          <el-input
+            v-model="pluginCompilerForm.source"
+            type="textarea"
+            :rows="9"
+            placeholder="粘贴 Python 明文插件源码"
+          />
+        </el-form-item>
+        <el-collapse v-model="pluginCompilerAdvancedPanels" class="plugin-compiler-advanced">
+          <el-collapse-item name="advanced">
+            <template #title>
+              <span>高级手动参数</span>
+            </template>
+            <div class="plugin-compiler-advanced-body">
+              <el-form-item label="插件 ID">
+                <el-input v-model="pluginCompilerForm.id" placeholder="可留空，按名称自动推导"/>
+              </el-form-item>
+              <el-form-item label="kid">
+                <el-input v-model="pluginCompilerForm.kid" placeholder="可留空，默认 self"/>
+              </el-form-item>
+              <el-form-item label="托管密钥">
+                <el-switch v-model="pluginCompilerForm.useManagedKey" active-text="使用容器密钥" inactive-text="手动填写"/>
+              </el-form-item>
+              <el-alert
+                title="默认建议保持容器密钥。只有你要复用外部自有 keyring 时，才打开下面的手动字段。"
+                type="info"
+                :closable="false"
+                show-icon
+                style="margin-bottom: 12px"
+              />
+              <el-form-item v-if="!pluginCompilerForm.useManagedKey" label="Ed25519 私钥" required>
+                <el-input
+                  v-model="pluginCompilerForm.privateKey"
+                  type="textarea"
+                  :rows="4"
+                  show-password
+                  placeholder="PKCS8 PEM/base64，或 32 字节 raw seed 的 base64/hex"
+                />
+              </el-form-item>
+              <el-form-item v-if="!pluginCompilerForm.useManagedKey" label="Ed25519 公钥">
+                <el-input
+                  v-model="pluginCompilerForm.publicKey"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="可选。填写后返回 _self_public_key_chunks"
+                />
+              </el-form-item>
+              <el-form-item v-if="!pluginCompilerForm.useManagedKey" label="master secret" required>
+                <el-input
+                  v-model="pluginCompilerForm.masterSecret"
+                  type="textarea"
+                  :rows="2"
+                  show-password
+                  placeholder="自有 Atvp.py 中使用的 master secret"
+                />
+              </el-form-item>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </el-form>
+      <el-alert
+        title="默认使用容器托管密钥签名和加密。手动模式下，私钥只随本次请求发送到后端参与签名，接口不会保存或回显私钥。"
+        type="warning"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 12px"
+      />
+      <div v-if="pluginCompilerResult">
+        <el-descriptions :column="3" border size="small" style="margin-bottom: 12px">
+          <el-descriptions-item label="格式">{{ pluginCompilerResult.format }}</el-descriptions-item>
+          <el-descriptions-item label="kid">{{ pluginCompilerResult.kid }}</el-descriptions-item>
+          <el-descriptions-item label="大小">{{ pluginCompilerResult.packageSize }}</el-descriptions-item>
+          <el-descriptions-item label="明文 SHA256" :span="3">{{ pluginCompilerResult.plainSha256 }}</el-descriptions-item>
+          <el-descriptions-item v-if="pluginCompilerResult.importedPluginId" label="已导入插件" :span="3">
+            #{{ pluginCompilerResult.importedPluginId }} {{ pluginCompilerResult.importedPluginName }}，
+            <a :href="pluginCompilerResult.pluginUrl" target="_blank">{{ pluginCompilerResult.pluginUrl }}</a>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="pluginCompilerResult.repositoryUrl" label="自用仓库" :span="3">
+            <a :href="pluginCompilerResult.repositoryUrl" target="_blank">{{ pluginCompilerResult.repositoryUrl }}</a>
+          </el-descriptions-item>
+        </el-descriptions>
+        <el-tabs v-model="pluginCompilerResultTab">
+          <el-tab-pane label="插件包" name="package">
+            <el-input v-model="pluginCompilerResult.packageText" type="textarea" :rows="10"/>
+            <el-button style="margin-top: 8px" @click="copyUrl(pluginCompilerResult.packageText)">复制插件包</el-button>
+          </el-tab-pane>
+          <el-tab-pane label="Atvp chunks" name="chunks">
+            <el-input :model-value="pluginCompilerChunksText" type="textarea" :rows="10" readonly/>
+            <el-button style="margin-top: 8px" @click="copyUrl(pluginCompilerChunksText)">复制 chunks</el-button>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="pluginCompilerVisible = false">关闭</el-button>
+          <el-button @click="openPluginCompatibilityDialog">兼容性校验</el-button>
+          <el-button type="primary" :loading="pluginCompiling" @click="compilePlugin">编译</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="pluginCompatibilityVisible" title="兼容性校验" width="1040px" destroy-on-close>
+      <el-alert
+        title="磁力爬虫门禁独立校验，不直接修改三方插件编译区的明文；需要回填时请复制 AI 修复后的源码。"
+        type="info"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 12px"
+      />
+      <el-form :model="pluginCompatibilityForm" label-width="120px">
+        <el-form-item label="插件名称" required>
+          <el-input v-model="pluginCompatibilityForm.name" placeholder="例如 JavBus"/>
+        </el-form-item>
+        <el-form-item label="插件版本" required>
+          <el-input-number v-model="pluginCompatibilityForm.version" :min="1" :step="1"/>
+        </el-form-item>
+        <el-form-item label="插件 ID">
+          <el-input v-model="pluginCompatibilityForm.id" placeholder="可留空，按名称自动推导"/>
+        </el-form-item>
+        <el-form-item label="remark">
+          <el-input v-model="pluginCompatibilityForm.remark" placeholder="可留空"/>
+        </el-form-item>
+        <el-form-item label="校验明文" required>
+          <el-input
+            v-model="pluginCompatibilityForm.source"
+            type="textarea"
+            :rows="12"
+            placeholder="粘贴要校验的 Python 明文插件源码"
+          />
+        </el-form-item>
+      </el-form>
+      <div v-if="pluginCompatibilityResult" style="margin-bottom: 12px">
+        <el-alert
+          :title="pluginCompatibilityResult.summary"
+          :type="pluginCompatibilityResult.passed ? 'success' : 'error'"
+          show-icon
+          :closable="false"
+          style="margin-bottom: 12px"
+        />
+        <el-descriptions :column="4" border size="small" style="margin-bottom: 12px">
+          <el-descriptions-item label="通过项">{{ pluginCompatibilityResult.passCount }}</el-descriptions-item>
+          <el-descriptions-item label="不合规项">{{ pluginCompatibilityResult.failCount }}</el-descriptions-item>
+          <el-descriptions-item label="结果">{{ pluginCompatibilityResult.passed ? '通过' : '未通过' }}</el-descriptions-item>
+          <el-descriptions-item label="门禁">{{ pluginCompatibilityResult.gateName }}</el-descriptions-item>
+          <el-descriptions-item label="目标" :span="2">{{ pluginCompatibilityResult.pluginName }} (#{{ pluginCompatibilityResult.pluginId }})</el-descriptions-item>
+          <el-descriptions-item label="版本">{{ pluginCompatibilityResult.version }}</el-descriptions-item>
+          <el-descriptions-item label="明文 SHA256" :span="3">{{ pluginCompatibilityResult.sourceSha256 }}</el-descriptions-item>
+        </el-descriptions>
+        <el-tabs v-model="pluginCompatibilityResultTab">
+          <el-tab-pane label="校验结果" name="result">
+            <el-table :data="pluginCompatibilityResult.items" border size="small">
+              <el-table-column label="状态" width="90">
+                <template #default="scope">
+                  <el-tag :type="scope.row.status === 'PASS' ? 'success' : 'danger'">
+                    {{ scope.row.status === 'PASS' ? '通过' : '不合规' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="title" label="检查项" width="160"/>
+              <el-table-column prop="message" label="结果说明" min-width="240"/>
+              <el-table-column prop="suggestion" label="修改意见" min-width="260"/>
+              <el-table-column prop="code" label="Code" width="160"/>
+            </el-table>
+          </el-tab-pane>
+          <el-tab-pane label="AI修复导出" name="aiRepair">
+            <el-alert
+              title="AI修复导出会把不合规项、需要修改的位置、修改意见和原始明文合并成 AI 更容易理解的文本。把这段内容提交给 AI 修复脚本后，再把修复后的明文拿回来重新做兼容性校验。"
+              type="info"
+              show-icon
+              :closable="false"
+              style="margin-bottom: 12px"
+            />
+            <el-input :model-value="pluginCompatibilityResult.aiRepairExportText" type="textarea" :rows="14" readonly/>
+            <el-button style="margin-top: 8px" @click="copyUrl(pluginCompatibilityResult.aiRepairExportText)">复制 AI 修复导出</el-button>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="pluginCompatibilityVisible = false">关闭</el-button>
+          <el-button @click="loadCompatibilityFromCompiler">从编译区同步一次</el-button>
+          <el-button type="primary" :loading="pluginCompatibilityLoading" @click="checkPluginCompatibility">开始校验</el-button>
         </span>
       </template>
     </el-dialog>
@@ -972,6 +1237,79 @@ interface PluginFilterExtraEntry {
   value: string
 }
 
+interface PluginCompileForm {
+  name: string
+  version: number
+  remark: string
+  id: string
+  kid: string
+  source: string
+  privateKey: string
+  publicKey: string
+  masterSecret: string
+  useManagedKey: boolean
+  autoImport: boolean
+}
+
+interface PluginCompatibilityForm {
+  name: string
+  version: number
+  remark: string
+  id: string
+  source: string
+}
+
+interface PluginCompileResult {
+  packageText: string
+  plainSha256: string
+  packageSize: number
+  format: string
+  alg: string
+  wrap: string
+  sign: string
+  kid: string
+  publicKeyChunks: string[]
+  masterSecretChunks: string[]
+  importedPluginId: number | null
+  importedPluginName: string
+  pluginUrl: string
+  repositoryUrl: string
+  localPath: string
+}
+
+interface PluginCompatibilityItem {
+  code: string
+  title: string
+  status: 'PASS' | 'FAIL'
+  message: string
+  suggestion: string
+}
+
+interface PluginCompatibilityResult {
+  gateName: string
+  pluginName: string
+  pluginId: string
+  version: number
+  sourceSha256: string
+  passed: boolean
+  passCount: number
+  failCount: number
+  summary: string
+  items: PluginCompatibilityItem[]
+  aiRepairExportText: string
+}
+
+interface SecspiderKeyStatus {
+  generated: boolean
+  privateKeyPath: string
+  publicKeyPath: string
+  masterSecretPath: string
+  keyringPath: string
+  publicKey: string
+  publicKeyChunks: string[]
+  masterSecretChunks: string[]
+}
+
 const PLUGIN_REPO_URL_KEY = 'plugin_repo_url'
 const currentUrl = window.location.origin
 const filterStageOptions = [
@@ -1041,10 +1379,17 @@ const rawJsonData = computed(() => JSON.stringify(jsonData.value, null, 2))
 const formVisible = ref(false)
 const dialogVisible = ref(false)
 const pluginVisible = ref(false)
+const pluginCompilerVisible = ref(false)
+const pluginCompatibilityVisible = ref(false)
 const pluginFilterVisible = ref(false)
 const pluginFilterConfigVisible = ref(false)
 const sourceExtendVisible = ref(false)
 const importingPlugins = ref(false)
+const pluginCompiling = ref(false)
+const pluginCompatibilityLoading = ref(false)
+const pluginCompatibilityResult = ref<PluginCompatibilityResult | null>(null)
+const secspiderKeyLoading = ref(false)
+const secspiderKeyStatus = ref<SecspiderKeyStatus | null>(null)
 const tgVisible = ref(false)
 const scanVisible = ref(false)
 const confirm = ref(false)
@@ -1161,6 +1506,38 @@ const pluginForm = ref<Plugin>({
 })
 const pluginImportForm = ref({
   url: localStorage.getItem(PLUGIN_REPO_URL_KEY) || ''
+})
+const pluginCompilerForm = ref<PluginCompileForm>({
+  name: '',
+  version: 1,
+  remark: '',
+  id: '',
+  kid: 'self',
+  source: '',
+  privateKey: '',
+  publicKey: '',
+  masterSecret: '',
+  useManagedKey: true,
+  autoImport: true
+})
+const pluginCompatibilityForm = ref<PluginCompatibilityForm>({
+  name: '',
+  version: 1,
+  remark: '',
+  id: '',
+  source: ''
+})
+const pluginCompilerResult = ref<PluginCompileResult | null>(null)
+const pluginCompilerResultTab = ref('package')
+const pluginCompilerAdvancedPanels = ref<string[]>([])
+const pluginCompatibilityResultTab = ref('result')
+const pluginCompilerChunksText = computed(() => {
+  if (!pluginCompilerResult.value) {
+    return ''
+  }
+  const publicKeyChunks = JSON.stringify(pluginCompilerResult.value.publicKeyChunks || [], null, 2)
+  const masterSecretChunks = JSON.stringify(pluginCompilerResult.value.masterSecretChunks || [], null, 2)
+  return `_self_public_key_chunks = ${publicKeyChunks}\n_self_master_secret_chunks = ${masterSecretChunks}`
 })
 const pluginSettingsForm = ref({
   githubProxy: '',
@@ -1308,6 +1685,26 @@ const resetPluginForm = () => {
     lastCheckedAt: '',
     lastError: ''
   }
+}
+
+const resetPluginCompilerForm = () => {
+  pluginCompilerForm.value = {
+    name: '',
+    version: 1,
+    remark: '',
+    id: '',
+    kid: 'self',
+    source: '',
+    privateKey: '',
+    publicKey: '',
+    masterSecret: '',
+    useManagedKey: true,
+    autoImport: true
+  }
+  pluginCompilerAdvancedPanels.value = []
+  pluginCompatibilityResult.value = null
+  pluginCompilerResult.value = null
+  pluginCompilerResultTab.value = 'package'
 }
 
 const parsePluginFilterStages = (value: string) => {
@@ -2395,6 +2792,62 @@ const showPlugins = () => {
   loadPluginSettings()
 }
 
+const openPluginCompiler = () => {
+  resetPluginCompilerForm()
+  pluginCompilerVisible.value = true
+  loadSecspiderKeyStatus()
+}
+
+const loadCompatibilityFromCompiler = () => {
+  const form = pluginCompilerForm.value
+  pluginCompatibilityForm.value = {
+    name: form.name,
+    version: form.version,
+    remark: form.remark,
+    id: form.id,
+    source: form.source
+  }
+  pluginCompatibilityResult.value = null
+  pluginCompatibilityResultTab.value = 'result'
+}
+
+const openPluginCompatibilityDialog = () => {
+  loadCompatibilityFromCompiler()
+  pluginCompatibilityVisible.value = true
+}
+
+const loadSecspiderKeyStatus = async () => {
+  secspiderKeyLoading.value = true
+  try {
+    const {data} = await axios.get('/api/plugins/secspider/key')
+    secspiderKeyStatus.value = data
+  } finally {
+    secspiderKeyLoading.value = false
+  }
+}
+
+const generateSecspiderKey = async () => {
+  secspiderKeyLoading.value = true
+  try {
+    const {data} = await axios.post('/api/plugins/secspider/key/generate')
+    secspiderKeyStatus.value = data
+    ElMessage.success('密钥对已就绪')
+  } finally {
+    secspiderKeyLoading.value = false
+  }
+}
+
+const resetSecspiderKey = async () => {
+  secspiderKeyLoading.value = true
+  try {
+    const {data} = await axios.post('/api/plugins/secspider/key/reset')
+    secspiderKeyStatus.value = data
+    ElMessage.warning('密钥对已重置，旧自有插件需要重新编译')
+  } finally {
+    secspiderKeyLoading.value = false
+  }
+}
+
 const showPluginFilters = () => {
   pluginFilterVisible.value = true
   resetPluginFilterForm()
@@ -2440,6 +2893,83 @@ const importPlugins = async () => {
     loadManagedSources()
   } finally {
     importingPlugins.value = false
+  }
+}
+
+const compilePlugin = async () => {
+  const form = pluginCompilerForm.value
+  if (!form.name.trim()) {
+    ElMessage.warning('请输入插件名称')
+    return
+  }
+  if (!form.source.trim()) {
+    ElMessage.warning('请粘贴插件明文')
+    return
+  }
+  if (!form.useManagedKey && !form.privateKey.trim()) {
+    ElMessage.warning('请粘贴 Ed25519 私钥')
+    return
+  }
+  if (!form.useManagedKey && !form.masterSecret.trim()) {
+    ElMessage.warning('请填写 master secret')
+    return
+  }
+
+  pluginCompiling.value = true
+  try {
+    const {data} = await axios.post('/api/plugins/compile/secspider', {
+      name: form.name.trim(),
+      version: form.version,
+      remark: form.remark,
+      id: form.id.trim(),
+      kid: form.kid.trim(),
+      source: form.source,
+      privateKey: form.privateKey,
+      publicKey: form.publicKey,
+      masterSecret: form.masterSecret,
+      useManagedKey: form.useManagedKey,
+      autoImport: form.autoImport
+    })
+    pluginCompilerResult.value = data
+    pluginCompilerResultTab.value = 'package'
+    ElMessage.success(data.importedPluginId ? '编译完成，已自动导入插件管理' : '编译完成')
+    if (data.importedPluginId) {
+      loadManagedSources()
+    }
+  } finally {
+    pluginCompiling.value = false
+  }
+}
+
+const checkPluginCompatibility = async () => {
+  const form = pluginCompatibilityForm.value
+  if (!form.name.trim()) {
+    ElMessage.warning('请输入插件名称')
+    return
+  }
+  if (!form.source.trim()) {
+    ElMessage.warning('请粘贴插件明文')
+    return
+  }
+
+  pluginCompatibilityLoading.value = true
+  try {
+    const {data} = await axios.post('/api/plugins/compatibility-check/secspider', {
+      name: form.name.trim(),
+      version: form.version,
+      remark: form.remark,
+      id: form.id.trim(),
+      source: form.source
+    })
+    pluginCompatibilityResult.value = data
+    pluginCompatibilityResultTab.value = data.passed ? 'result' : 'aiRepair'
+    if (data.passed) {
+      ElMessage.success('兼容性校验通过')
+    } else {
+      ElMessage.error(`发现 ${data.failCount} 项不合规`)
+    }
+  } finally {
+    pluginCompatibilityLoading.value = false
   }
 }
 
@@ -2871,6 +3401,62 @@ onUnmounted(() => {
 .filter-config-extra-empty {
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+
+.plugin-compiler-guide {
+  margin-bottom: 14px;
+}
+
+.plugin-compiler-key-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.plugin-compiler-key-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.plugin-compiler-guide-body {
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.plugin-compiler-guide-body ol {
+  margin: 0 0 12px 20px;
+  padding: 0;
+}
+
+.plugin-compiler-example-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.plugin-compiler-example-title {
+  color: var(--el-text-color-primary);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.plugin-compiler-example {
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .plugin-compiler-example-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .json pre {

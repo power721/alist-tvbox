@@ -111,6 +111,7 @@ public class SubscriptionService {
     private final UserService userService;
     private final FileDownloader fileDownloader;
     private final SubscriptionSourceService subscriptionSourceService;
+    private final AtvpScriptService atvpScriptService;
 
     private final OkHttpClient okHttpClient = new OkHttpClient();
     private final ThreadLocal<String> currentToken = new ThreadLocal<>();
@@ -138,7 +139,8 @@ public class SubscriptionService {
                                TenantService tenantService,
                                UserService userService,
                                FileDownloader fileDownloader,
-                               SubscriptionSourceService subscriptionSourceService) {
+                               SubscriptionSourceService subscriptionSourceService,
+                               AtvpScriptService atvpScriptService) {
         this.environment = environment;
         this.appProperties = appProperties;
         this.restTemplate = builder
@@ -164,6 +166,7 @@ public class SubscriptionService {
         this.userService = userService;
         this.fileDownloader = fileDownloader;
         this.subscriptionSourceService = subscriptionSourceService;
+        this.atvpScriptService = atvpScriptService;
     }
 
     @PostConstruct
@@ -1467,7 +1470,8 @@ public class SubscriptionService {
         site.put("changeable", 0);
         String url = readHostAddress("");
         boolean nativePython = isNativePythonPluginRunMode();
-        site.put("api", selectPluginApi(plugin, nativePython, url));
+        String atvpLoader = buildAtvpLoaderUrl(url, token);
+        site.put("api", PluginService.isPythonPluginUrl(plugin.getUrl()) ? "csp_PyProxy" : nativePython ? atvpLoader : "csp_PyProxy");
         site.put("type", 3);
         site.put("key", plugin.getName());
         site.put("searchable", 1);
@@ -1487,6 +1491,7 @@ public class SubscriptionService {
                 nativePython,
                 readLocalProxyConfig()
         );
+        map.put("loader", atvpLoader);
         // 每个插件站点只下发与自己作用域匹配的过滤器
         List<Map<String, Object>> filters = buildPluginFilters(plugin);
         if (!filters.isEmpty()) {
@@ -1496,6 +1501,11 @@ public class SubscriptionService {
         ext = Base64.getEncoder().encodeToString(ext.getBytes());
         site.put("ext", ext);
         return site;
+    }
+
+    private String buildAtvpLoaderUrl(String baseUrl, String token) {
+        String loaderToken = StringUtils.defaultIfBlank(token, getCurrentOrFirstToken());
+        return baseUrl + "/Atvp/" + loaderToken + "/" + atvpScriptService.version() + ".py";
     }
 
     private List<Map<String, Object>> buildPluginFilters(Plugin plugin) {
