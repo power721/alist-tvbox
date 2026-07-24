@@ -67,6 +67,19 @@ class TextUtilsTest {
         log.info("{}", name);
     }
 
+    @Test
+    void collapseCjkSpacesJoinsDottedCjkNames() {
+        // fixName turns the anti-detection dots in "百.花.杀" into spaces; collapse them
+        // back so the real title "百花杀" (stored without spaces) can match.
+        assertEquals("百花杀", TextUtils.collapseCjkSpaces("百 花 杀"));
+        assertEquals("百花杀", TextUtils.collapseCjkSpaces("百花杀"));
+        // spaces between Latin words are preserved
+        assertEquals("Show Name", TextUtils.collapseCjkSpaces("Show Name"));
+        // only space between two Han characters is removed; Latin<->Han space is kept
+        assertEquals("X 战警", TextUtils.collapseCjkSpaces("X 战 警"));
+        assertNull(TextUtils.collapseCjkSpaces(null));
+    }
+
 
     @Test
     void loadShares() {

@@ -589,6 +589,18 @@ public class TextUtils {
         return newName;
     }
 
+    // Uploaders often dot-separate CJK characters to evade detection ("百.花.杀").
+    // fixName turns those dots into spaces, so the key becomes "百 花 杀" and no longer
+    // matches the real title "百花杀" stored without spaces. Collapse whitespace between
+    // Han characters so such names resolve. Applied deliberately, not inside fixName:
+    // legitimate names like "重紫 第10季" rely on the separating space.
+    public static String collapseCjkSpaces(String name) {
+        if (name == null) {
+            return null;
+        }
+        return name.replaceAll("(?<=[\\u4e00-\\u9fa5])\\s+(?=[\\u4e00-\\u9fa5])", "");
+    }
+
     public static String number2text(String text) {
         if (text.startsWith("0") && text.length() > 1) {
             text = text.substring(1);

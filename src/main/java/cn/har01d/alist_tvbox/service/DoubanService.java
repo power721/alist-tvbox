@@ -77,6 +77,8 @@ public class DoubanService {
     private static final Pattern NUMBER1 = Pattern.compile("第(\\d{1,2})季");
     private static final Pattern YEAR_PATTERN = Pattern.compile("\\((\\d{4})\\)");
     private static final Pattern YEAR2_PATTERN = Pattern.compile("(\\d{4})");
+    // matches a whole string that is only a season marker (第一季, 第3季, Season 1, S01)
+    private static final Pattern SEASON_ONLY = Pattern.compile("^第[0-9一二三四五六七八九十百零两]+季$|^Season\\s+\\d{1,2}$|^S\\d{1,2}$|^SE\\d{1,2}$");
     private static final String DB_PREFIX = "https://movie.douban.com/subject/";
     private static final String[] tokens = new String[]{"导演:", "编剧:", "主演:", "类型:", "制片国家/地区:", "语言:", "上映日期:",
             "片长:", "又名:", "IMDb链接:", "官方网站:", "官方小站:", "首播:", "季数:", "集数:", "单集片长:"};
@@ -432,7 +434,7 @@ public class DoubanService {
                 return alias.getMovie();
             }
 
-            name = TextUtils.fixName(name);
+            name = TextUtils.collapseCjkSpaces(TextUtils.fixName(name));
             if (name.isEmpty()) {
                 return null;
             }
@@ -466,8 +468,10 @@ public class DoubanService {
             }
 
             // no exact-name match: fall back to name-contains scoped by the extracted
-            // year, then pick the best-matching name (exact > shortest > first)
-            if (year != null) {
+            // year, then pick the best-matching name (exact > shortest > first).
+            // Skip for a bare season token (第一季/Season 1/S01): it is not a title and
+            // the LIKE would match every season-N show of that year (wrong title).
+            if (year != null && !isSeasonOnly(name)) {
                 return pickBestName(movieRepository.findByYearAndNameContains(year, name, Pageable.ofSize(10)).getContent(), name);
             }
         } catch (Exception e) {
@@ -500,6 +504,12 @@ public class DoubanService {
             }
         }
         return best != null ? best : movies.get(0);
+    }
+
+    // true when the (already fixName'd) search key is only a season marker, i.e. not a
+    // discriminative title. Used to skip the year-scoped name-contains fallback.
+    static boolean isSeasonOnly(String name) {
+        return name != null && SEASON_ONLY.matcher(name).matches();
     }
 
     // among name-contains candidates, prefer an exact name, else the shortest name
