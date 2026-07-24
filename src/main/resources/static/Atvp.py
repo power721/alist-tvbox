@@ -690,10 +690,41 @@ class Spider(HostSpider):
 
     def _decode_parse(self, vod_id):
         value = str(vod_id or "").strip()
+        if value.startswith(self.PUSH_PREFIX):
+            value = value[len(self.PUSH_PREFIX):].strip()
         if (value.startswith("http://") or value.startswith("https://")
                 or value.startswith("magnet:") or value.startswith("ed2k:")):
             return value
         return None
+
+    def _resolve_deferred_share_url(self, source_id, share_url):
+        original = str(share_url or "").strip()
+        context = self._lookup_play_context(source_id)
+        play_id = str(context.get("play_id") or "").strip()
+        if not play_id.startswith(self.PUSH_PREFIX):
+            return original
+
+        player = getattr(self._require_inner(), "playerContent", None)
+        if not callable(player):
+            return original
+        try:
+            result = player(str(context.get("play_from") or ""), play_id, [])
+        except Exception as exc:
+            self.log(f"Atvp deferred share resolve failed: {exc}")
+            return original
+
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except Exception:
+                return original
+        if not isinstance(result, dict):
+            return original
+
+        resolved = str(result.get("url") or "").strip()
+        if resolved.startswith(self.PUSH_PREFIX):
+            resolved = resolved[len(self.PUSH_PREFIX):].strip()
+        return self._decode_parse(resolved) or original
 
     def _encode_category_id(self, vod_id):
         return self.DETAIL_PREFIX + vod_id
@@ -970,9 +1001,13 @@ class Spider(HostSpider):
     def detailContent(self, ids):
         print('detailContent', ids)
         if isinstance(ids, (list, tuple)) and len(ids) == 1:
-            share_url = self._decode_parse(ids[0])
+            raw_id = str(ids[0] or "").strip()
+            share_url = self._decode_parse(raw_id)
             if share_url is not None:
-                return self._parse(share_url)
+                resolved_url = self._resolve_deferred_share_url(raw_id, share_url)
+                if resolved_url != share_url and share_url in self._detail_result_cache:
+                    self._detail_result_cache[resolved_url] = self._detail_result_cache[share_url]
+                return self._parse(resolved_url)
         result = self._require_inner().detailContent(ids)
         result = self._run_filters("detail", result, {"ids": ids})
         self._cache_detail_result(result)
