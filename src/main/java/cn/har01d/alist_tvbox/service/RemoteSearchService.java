@@ -44,6 +44,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -52,6 +53,8 @@ import java.util.stream.Collectors;
 public class RemoteSearchService {
     private static final String CHECK_STATE_BAD = "bad";
     private static final String CHECK_STATE_UNCERTAIN = "uncertain";
+    private static final Set<String> PAN_SOU_CHECK_TYPES = Set.of(
+            "baidu", "aliyun", "quark", "tianyi", "uc", "mobile", "115", "xunlei", "123");
 
     private final AppProperties appProperties;
     private final RestTemplate restTemplate;
@@ -249,14 +252,30 @@ public class RemoteSearchService {
         }
     }
 
+    List<Message> selectCheckable(List<Message> messages) {
+        Set<String> enabledLinkCheckTypes = getEnabledLinkCheckTypes();
+        return messages.stream()
+                .filter(message -> !isOfflineDownloadType(message.getType()))
+                .filter(message -> StringUtils.isNotBlank(getPanSouCloudType(message.getType())))
+                .filter(message -> enabledLinkCheckTypes.contains(getPanSouCloudType(message.getType())))
+                .toList();
+    }
+
+    private Set<String> getEnabledLinkCheckTypes() {
+        List<String> configured = appProperties.getPanSouLinkCheckTypes();
+        if (CollectionUtils.isEmpty(configured)) {
+            return PAN_SOU_CHECK_TYPES;
+        }
+        return configured.stream()
+                .filter(PAN_SOU_CHECK_TYPES::contains)
+                .collect(Collectors.toSet());
+    }
+
     public List<Message> filterInvalidPanSouLinks(List<Message> messages) {
         if (!appProperties.isPanSouLinkCheckEnabled() || messages.isEmpty()) {
             return messages;
         }
-        List<Message> checkable = messages.stream()
-                .filter(message -> !isOfflineDownloadType(message.getType()))
-                .filter(message -> StringUtils.isNotBlank(getPanSouCloudType(message.getType())))
-                .toList();
+        List<Message> checkable = selectCheckable(messages);
         log.debug("filterInvalidPanSouLinks totla={} checkable={} threashold={}", messages.size(), checkable.size(), appProperties.getPanSouLinkCheckMaxCount());
         if (checkable.isEmpty() || checkable.size() > appProperties.getPanSouLinkCheckMaxCount()) {
             return messages;

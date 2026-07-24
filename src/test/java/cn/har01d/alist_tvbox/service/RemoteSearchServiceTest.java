@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.service;
 
 import cn.har01d.alist_tvbox.config.AppProperties;
 import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigDto;
+import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -179,6 +180,50 @@ class RemoteSearchServiceTest {
                 .containsExactly("builtin-a", "builtin-b");
 
         server.verify();
+    }
+
+    @Test
+    void selectCheckableHonorsSelectedDiskTypes() {
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouLinkCheckTypes(List.of("quark"));
+        RemoteSearchService service = new RemoteSearchService(
+                appProperties, restTemplateBuilder(new RestTemplate()), objectMapper,
+                mock(TelegramChannelRepository.class), mock(ShareService.class),
+                mock(TvBoxService.class), mock(OfflineDownloadService.class));
+
+        // Only quark selected -> baidu (unselected) and pikpak (not in supported 9) are NOT checkable.
+        List<Message> checkable = service.selectCheckable(List.of(
+                message("5", "https://pan.quark.cn/s/q1"),
+                message("10", "https://pan.baidu.com/s/b1"),
+                message("1", "https://www.pikpak.com/s/p1")));
+
+        org.assertj.core.api.Assertions.assertThat(checkable).extracting(Message::getLink)
+                .containsExactly("https://pan.quark.cn/s/q1");
+    }
+
+    @Test
+    void selectCheckableDefaultsToAllSupportedWhenUnset() {
+        AppProperties appProperties = new AppProperties(); // panSouLinkCheckTypes unset -> all 9
+        RemoteSearchService service = new RemoteSearchService(
+                appProperties, restTemplateBuilder(new RestTemplate()), objectMapper,
+                mock(TelegramChannelRepository.class), mock(ShareService.class),
+                mock(TvBoxService.class), mock(OfflineDownloadService.class));
+
+        // Unset -> all supported types checkable; pikpak (not supported) still excluded.
+        List<Message> checkable = service.selectCheckable(List.of(
+                message("5", "https://pan.quark.cn/s/q1"),
+                message("10", "https://pan.baidu.com/s/b1"),
+                message("1", "https://www.pikpak.com/s/p1")));
+
+        org.assertj.core.api.Assertions.assertThat(checkable).extracting(Message::getLink)
+                .containsExactlyInAnyOrder("https://pan.quark.cn/s/q1", "https://pan.baidu.com/s/b1");
+    }
+
+    private static Message message(String type, String link) {
+        Message m = new Message();
+        m.setType(type);
+        m.setLink(link);
+        return m;
     }
 
     private RestTemplateBuilder restTemplateBuilder(RestTemplate restTemplate) {
