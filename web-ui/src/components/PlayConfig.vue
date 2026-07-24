@@ -40,6 +40,18 @@ const panSouPluginCount = ref(0)
 const panSouPlugins = ref([])
 const panSouLinkCheckEnabled = ref(false)
 const panSouLinkCheckMaxCount = ref(30)
+const panSouLinkCheckTypes = ref<string[]>([])
+const panSouLinkCheckTypeOptions = [
+  {label: '百度网盘', value: 'baidu'},
+  {label: '阿里云盘', value: 'aliyun'},
+  {label: '夸克网盘', value: 'quark'},
+  {label: '天翼云盘', value: 'tianyi'},
+  {label: 'UC网盘', value: 'uc'},
+  {label: '移动云盘', value: 'mobile'},
+  {label: '115网盘', value: '115'},
+  {label: '迅雷网盘', value: 'xunlei'},
+  {label: '123网盘', value: '123'},
+]
 const panSouConc = ref<number | null>(null)
 const panSouRefresh = ref(false)
 const panSouRes = ref('merge')
@@ -235,6 +247,7 @@ const updatePanSouAuth = () => {
 
 const updatePanSouLinkCheck = () => {
   axios.post('/api/settings', {name: 'pan_sou_link_check_enabled', value: panSouLinkCheckEnabled.value}).then()
+  axios.post('/api/settings', {name: 'pan_sou_link_check_types', value: panSouLinkCheckTypes.value.join(',')}).then()
   axios.post('/api/settings', {name: 'pan_sou_link_check_max_count', value: panSouLinkCheckMaxCount.value}).then(() => {
     ElMessage.success('更新成功')
   })
@@ -449,6 +462,7 @@ onMounted(() => {
     panSouChannels.value = data.pan_sou_channels || 'custom'
     panSouLinkCheckEnabled.value = data.pan_sou_link_check_enabled === 'true'
     panSouLinkCheckMaxCount.value = +(data.pan_sou_link_check_max_count || 30)
+    panSouLinkCheckTypes.value = data.pan_sou_link_check_types ? data.pan_sou_link_check_types.split(',') : []
     panSouConc.value = data.pan_sou_conc ? +data.pan_sou_conc : null
     panSouRefresh.value = data.pan_sou_refresh === 'true'
     panSouRes.value = data.pan_sou_res || 'merge'
@@ -494,6 +508,12 @@ onUnmounted(() => {
         <el-form-item label="链接检测" v-if="panSouUrl">
           <el-switch v-model="panSouLinkCheckEnabled"/>
           <span class="hint">自动检查盘搜搜索结果的有效性</span>
+        </el-form-item>
+        <el-form-item label="检测网盘类型" v-if="panSouUrl">
+          <el-checkbox-group v-model="panSouLinkCheckTypes">
+            <el-checkbox v-for="t in panSouLinkCheckTypeOptions" :key="t.value" :label="t.label" :value="t.value"/>
+          </el-checkbox-group>
+          <span class="hint">留空=检测全部9种</span>
         </el-form-item>
         <el-form-item label="检测数量上限" v-if="panSouUrl">
           <el-input-number v-model="panSouLinkCheckMaxCount" :min="0" :max="500"/>
