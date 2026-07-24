@@ -45,6 +45,7 @@ public class AppProperties {
     private List<String> panSouPlugins;
     private boolean panSouLinkCheckEnabled;
     private int panSouLinkCheckMaxCount = 30;
+    private List<String> panSouLinkCheckTypes;
     private Integer panSouConc;
     private Boolean panSouRefresh = false;
     private String panSouRes = "merge";

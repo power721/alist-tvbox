@@ -39,7 +39,7 @@ public class SyncService {
         "bilibili_cookie", "bilibili_qn", "bilibili_dash", "bilibili_heartbeat", "bilibili_searchable",
         "tg_search", "tg_search_api_key", "tg_drivers", "tgDriverOrder", "tg_timeout", "tg_sort_field",
         "pan_sou_url", "pan_sou_source", "pan_sou_channels", "pan_sou_username", "pan_sou_password",
-        "pan_sou_link_check_enabled", "pan_sou_link_check_max_count", "panSouPlugins",
+        "pan_sou_link_check_enabled", "pan_sou_link_check_max_count", "pan_sou_link_check_types", "panSouPlugins",
         "search_excluded_paths", "search_index_source",
         "merge_site_source", "mix_site_source", "replace_ali_token", "clean_invalid_shares",
         "temp_share_expiration", "validateSharesInterval",

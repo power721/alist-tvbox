@@ -113,6 +113,7 @@ public class SettingService {
         appProperties.setPanSouPassword(settingRepository.findById("pan_sou_password").map(Setting::getValue).orElse(""));
         appProperties.setPanSouLinkCheckEnabled(settingRepository.findById("pan_sou_link_check_enabled").map(Setting::getValue).orElse("").equals("true"));
         appProperties.setPanSouLinkCheckMaxCount(settingRepository.findById("pan_sou_link_check_max_count").map(Setting::getValue).map(Integer::parseInt).orElse(30));
+        appProperties.setPanSouLinkCheckTypes(parseList(settingRepository.findById("pan_sou_link_check_types").map(Setting::getValue).orElse("")));
         appProperties.setPanSouConc(settingRepository.findById("pan_sou_conc").map(Setting::getValue)
                 .filter(StringUtils::isNotBlank).map(v -> Integer.parseInt(v.trim())).orElse(null));
         appProperties.setPanSouRefresh(settingRepository.findById("pan_sou_refresh").map(Setting::getValue).orElse("").equals("true"));
@@ -513,6 +514,9 @@ public class SettingService {
             int value = Math.max(0, Integer.parseInt(setting.getValue()));
             setting.setValue(String.valueOf(value));
             appProperties.setPanSouLinkCheckMaxCount(value);
+        }
+        if ("pan_sou_link_check_types".equals(setting.getName())) {
+            appProperties.setPanSouLinkCheckTypes(parseList(setting.getValue()));
         }
         if ("panSouPlugins".equals(setting.getName())) {
             appProperties.setPanSouPlugins(Arrays.asList(setting.getValue().split(",")));

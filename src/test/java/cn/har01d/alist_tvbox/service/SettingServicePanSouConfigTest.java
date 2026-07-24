@@ -75,4 +75,16 @@ class SettingServicePanSouConfigTest {
         service.update(new Setting("pan_sou_conc", ""));
         assertNull(appProperties.getPanSouConc());
     }
+
+    @Test
+    void linkCheckTypesParsesCsv() {
+        service.update(new Setting("pan_sou_link_check_types", "quark, baidu, 115"));
+        assertEquals(java.util.List.of("quark", "baidu", "115"), appProperties.getPanSouLinkCheckTypes());
+    }
+
+    @Test
+    void blankLinkCheckTypesBecomesNull() {
+        service.update(new Setting("pan_sou_link_check_types", ""));
+        assertNull(appProperties.getPanSouLinkCheckTypes());
+    }
 }
