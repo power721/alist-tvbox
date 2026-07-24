@@ -2413,6 +2413,15 @@ public class TvBoxService {
                         String newName = getNameFromPath(getParent(path));
                         if (!newName.equals(name) && !DriveId.isShareTokenName(newName)) {
                             movie = doubanService.getByName(newName, year);
+                            if (movie == null && details) {
+                                // No Douban entry for this show; surface the show name
+                                // derived from the parent folder instead of leaving the
+                                // bare season token (e.g. "S01" -> "百.花.杀（2026）" -> "百花杀").
+                                String showName = TextUtils.collapseCjkSpaces(TextUtils.fixName(newName));
+                                if (StringUtils.isNotBlank(showName) && !excludeNames.contains(showName)) {
+                                    movieDetail.setVod_name(showName);
+                                }
+                            }
                             break;
                         }
                     }
@@ -2447,7 +2456,7 @@ public class TvBoxService {
         if (!details) {
             return;
         }
-        if (movieDetail.getVod_id().endsWith("playlist$1")) {
+        if (movieDetail.getPath() != null && movieDetail.getPath().contains(PLAYLIST)) {
             movieDetail.setVod_name(movie.getName());
         }
         movieDetail.setVod_actor(movie.getActors());
@@ -2498,7 +2507,7 @@ public class TvBoxService {
         if (!details) {
             return;
         }
-        if (movieDetail.getVod_id().endsWith("playlist$1")) {
+        if (movieDetail.getPath() != null && movieDetail.getPath().contains(PLAYLIST)) {
             movieDetail.setVod_name(movie.getName());
         }
         movieDetail.setVod_actor(movie.getActors());
