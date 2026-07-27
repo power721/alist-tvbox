@@ -234,6 +234,25 @@ class PianDanServiceTest {
     }
 
     @Test
+    void varietyWithoutFiltersUsesHotDefaults() {
+        when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getPath()).isEqualTo("/3/discover/tv");
+                    assertThat(request.getURI().getQuery()).contains(
+                            "sort_by=popularity.desc",
+                            "with_genres=10764%7C10767"
+                    );
+                })
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        MovieList result = service.list("tmdb:variety", "", 1, 20, Map.of());
+
+        assertThat(result.getList()).isEmpty();
+        server.verify();
+    }
+
+    @Test
     void platformCategoriesMapNetworksProvidersAndSorts() {
         when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
         String futureLimit = LocalDate.now().plusDays(31).toString();

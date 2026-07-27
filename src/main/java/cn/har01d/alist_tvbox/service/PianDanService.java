@@ -659,7 +659,8 @@ public class PianDanService {
     }
 
     private String cacheKey(String type, int page, int size, Map<String, String> filters) {
-        String date = "variety".equals(type) && Set.of("today", "tomorrow").contains(filters.get("list_type"))
+        String listType = filters.get("list_type");
+        String date = "variety".equals(type) && ("today".equals(listType) || "tomorrow".equals(listType))
                 ? "|" + LocalDate.now()
                 : "";
         return type + '|' + page + '|' + size + '|' + new TreeMap<>(filters) + date;
