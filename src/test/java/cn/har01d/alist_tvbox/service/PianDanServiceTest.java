@@ -9,14 +9,17 @@ import cn.har01d.alist_tvbox.tvbox.CategoryList;
 import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.restclient.RestTemplateBuilder;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
@@ -28,6 +31,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 @ExtendWith(MockitoExtension.class)
 class PianDanServiceTest {
@@ -63,10 +67,37 @@ class PianDanServiceTest {
 
         assertThat(result.getCategories())
                 .extracting(Category::getType_id)
-                .contains("douban:local", "tmdb:trending", "tmdb:discover_movie", "tmdb:discover_tv");
+                .contains(
+                        "douban:local",
+                        "tmdb:trending",
+                        "tmdb:movie_upcoming",
+                        "tmdb:tv_on_the_air",
+                        "tmdb:anime",
+                        "tmdb:discover_movie",
+                        "tmdb:discover_tv"
+                );
         assertThat(result.getCategories().get(0).getType_name()).isEqualTo("豆瓣·浏览");
         assertThat(result.getFilters().get("douban:local")).containsExactly(filter);
-        assertThat(result.getFilters()).containsKeys("tmdb:trending", "tmdb:discover_movie", "tmdb:discover_tv");
+        assertThat(result.getFilters()).containsKeys(
+                "tmdb:trending",
+                "tmdb:movie_upcoming",
+                "tmdb:anime",
+                "tmdb:discover_movie",
+                "tmdb:discover_tv"
+        );
+        assertThat(result.getFilters().get("tmdb:discover_movie"))
+                .extracting(Filter::getKey)
+                .containsExactly(
+                        "origin_group",
+                        "with_origin_country",
+                        "sort_by",
+                        "with_genres",
+                        "year",
+                        "with_original_language",
+                        "vote_average.gte",
+                        "vote_count.gte",
+                        "runtime"
+                );
         assertThat(result.getTotal()).isEqualTo(result.getCategories().size());
     }
 
@@ -118,7 +149,7 @@ class PianDanServiceTest {
                             "with_genres=18",
                             "with_origin_country=CN",
                             "primary_release_year=2025",
-                            "vote_count.gte=200"
+                            "vote_count.gte=50"
                     );
                 })
                 .andRespond(withSuccess("""
@@ -157,6 +188,141 @@ class PianDanServiceTest {
             assertThat(movie.getVod_remarks()).isEqualTo("2025 · 8.3");
             assertThat(movie.getVod_content()).isEqualTo("剧情简介");
         });
+        server.verify();
+    }
+
+    @Test
+    void animeUsesDiscoverFiltersCapsPagesAndFallsBackToBackdrop() {
+        when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getPath()).isEqualTo("/3/discover/movie");
+                    assertThat(request.getURI().getQuery()).contains(
+                            "page=500",
+                            "sort_by=vote_average.desc",
+                            "with_genres=16",
+                            "with_origin_country=CN",
+                            "primary_release_year=2026",
+                            "vote_count.gte=20"
+                    );
+                })
+                .andRespond(withSuccess("""
+                        {
+                          "page": 500,
+                          "total_pages": 900,
+                          "total_results": 20000,
+                          "results": [
+                            {
+                              "id": 88,
+                              "title": "测试动画",
+                              "poster_path": null,
+                              "backdrop_path": "/backdrop.jpg",
+                              "release_date": "2026-01-02",
+                              "vote_average": 9.0
+                            }
+                          ]
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        MovieList result = service.list("tmdb:anime", "", 999, 20, Map.of(
+                "kind", "movie",
+                "anime_region", "CN",
+                "sort_by", "vote_average.desc",
+                "year", "2026"
+        ));
+
+        assertThat(result.getPage()).isEqualTo(500);
+        assertThat(result.getPagecount()).isEqualTo(500);
+        assertThat(result.getList()).singleElement().satisfies(movie -> {
+            assertThat(movie.getVod_id()).isEqualTo("tmdb:movie:88");
+            assertThat(movie.getVod_pic()).isEqualTo("https://image.tmdb.org/t/p/w500/backdrop.jpg");
+        });
+        server.verify();
+    }
+
+    @Test
+    void trendingRejectsInvalidPathValuesAndCachesResult() {
+        when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(once(), request -> assertThat(request.getURI().getPath()).isEqualTo("/3/trending/all/week"))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+        Map<String, String> filters = Map.of("mediaType", "../../movie", "time_window", "month");
+
+        MovieList first = service.list("tmdb:trending", "", 1, 20, filters);
+        MovieList second = service.list("tmdb:trending", "", 1, 20, filters);
+
+        assertThat(second).isSameAs(first);
+        server.verify();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void tmdbFallsBackToStaleCacheWhenRefreshReturnsInvalidJson() {
+        when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(once(), request -> assertThat(request.getURI().getPath()).isEqualTo("/3/tv/popular"))
+                .andRespond(withSuccess("""
+                        {
+                          "results": [
+                            {"id": 9, "name": "缓存剧集", "first_air_date": "2024-01-01"}
+                          ]
+                        }
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(once(), request -> assertThat(request.getURI().getPath()).isEqualTo("/3/tv/popular"))
+                .andRespond(withSuccess("{", MediaType.APPLICATION_JSON));
+
+        MovieList fresh = service.list("tmdb:tv_popular", "", 1, 20, Map.of());
+        Cache<String, MovieList> freshCache = (Cache<String, MovieList>) ReflectionTestUtils.getField(service, "listCache");
+        assertThat(freshCache).isNotNull();
+        freshCache.invalidateAll();
+
+        MovieList stale = service.list("tmdb:tv_popular", "", 1, 20, Map.of());
+
+        assertThat(stale).isSameAs(fresh);
+        assertThat(stale.getList()).singleElement()
+                .satisfies(movie -> assertThat(movie.getVod_name()).isEqualTo("缓存剧集"));
+        server.verify();
+    }
+
+    @Test
+    void discoverMapsExtendedFilters() {
+        when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(once(), request -> assertThat(request.getURI().getQuery()).contains(
+                        "sort_by=revenue.desc",
+                        "with_origin_country=JP%7CKR",
+                        "with_original_language=ja",
+                        "vote_average.gte=8",
+                        "vote_count.gte=100",
+                        "with_runtime.gte=90",
+                        "with_runtime.lte=120"
+                ))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        service.list("tmdb:discover_movie", "", 1, 20, Map.of(
+                "sort_by", "revenue.desc",
+                "origin_group", "JP|KR",
+                "with_original_language", "ja",
+                "vote_average.gte", "8",
+                "vote_count.gte", "100",
+                "runtime", "medium"
+        ));
+
+        server.verify();
+    }
+
+    @Test
+    void tmdbRetriesTemporaryServerFailure() {
+        when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(once(), request -> assertThat(request.getURI().getPath()).isEqualTo("/3/movie/upcoming"))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+        server.expect(once(), request -> assertThat(request.getURI().getPath()).isEqualTo("/3/movie/upcoming"))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        MovieList result = service.list("tmdb:movie_upcoming", "", 1, 20, Map.of("region", "JP"));
+
+        assertThat(result.getList()).isEmpty();
         server.verify();
     }
 

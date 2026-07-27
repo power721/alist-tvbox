@@ -11,19 +11,25 @@ import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 
 import static cn.har01d.alist_tvbox.util.Constants.TMDB_API_KEY;
 
@@ -34,11 +40,23 @@ public class PianDanService {
     static final String TMDB_PREFIX = "tmdb:";
     private static final String TMDB_API = "https://api.themoviedb.org/3";
     private static final String TMDB_IMAGE = "https://image.tmdb.org/t/p/w500";
+    private static final Set<String> TRENDING_MEDIA = Set.of("all", "movie", "tv");
+    private static final Set<String> TRENDING_WINDOWS = Set.of("day", "week");
+    private static final Set<String> ANIME_MEDIA = Set.of("movie", "tv");
+    private static final int TMDB_MAX_PAGE = 500;
 
     private final TelegramService telegramService;
     private final SettingRepository settingRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final Cache<String, MovieList> listCache = Caffeine.newBuilder()
+            .maximumSize(256)
+            .expireAfterWrite(Duration.ofMinutes(5))
+            .build();
+    private final Cache<String, MovieList> staleListCache = Caffeine.newBuilder()
+            .maximumSize(256)
+            .expireAfterWrite(Duration.ofHours(24))
+            .build();
 
     public PianDanService(TelegramService telegramService,
                           SettingRepository settingRepository,
@@ -65,9 +83,12 @@ public class PianDanService {
         addTmdbCategory(result, "movie_popular", "TMDB热门电影");
         addTmdbCategory(result, "movie_top_rated", "TMDB高分电影");
         addTmdbCategory(result, "movie_now_playing", "TMDB院线热映");
+        addTmdbCategory(result, "movie_upcoming", "TMDB即将上映");
         addTmdbCategory(result, "tv_popular", "TMDB热门剧集");
         addTmdbCategory(result, "tv_top_rated", "TMDB高分剧集");
         addTmdbCategory(result, "tv_airing_today", "TMDB今日播出");
+        addTmdbCategory(result, "tv_on_the_air", "TMDB正在播出");
+        addTmdbCategory(result, "anime", "TMDB动漫");
         addTmdbCategory(result, "discover_movie", "TMDB电影片库");
         addTmdbCategory(result, "discover_tv", "TMDB剧集片库");
         addTmdbFilters(result);
@@ -118,56 +139,99 @@ public class PianDanService {
     }
 
     private MovieList listTmdb(String type, int page, int size, Map<String, String> filters) {
+        int safePage = Math.min(TMDB_MAX_PAGE, Math.max(1, page));
+        String cacheKey = cacheKey(type, safePage, size, filters);
+        MovieList cached = listCache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
         String path = tmdbPath(type, filters);
         if (path == null) {
-            return emptyList(page, size);
+            return emptyList(safePage, size);
         }
 
         UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(TMDB_API + path)
                 .queryParam("api_key", apiKey())
                 .queryParam("language", "zh-CN")
-                .queryParam("region", "CN")
                 .queryParam("include_adult", false)
-                .queryParam("page", page);
-        addDiscoverFilters(uri, type, filters);
+                .queryParam("page", safePage);
+        addTmdbQueryFilters(uri, type, filters);
 
         try {
-            String json = restTemplate.getForObject(uri.build().encode().toUriString(), String.class);
+            String json = fetchTmdb(uri.build().encode().toUriString());
             JsonNode body = StringUtils.isBlank(json) ? null : objectMapper.readTree(json);
-            return mapTmdb(body, type, page, size);
+            MovieList result = mapTmdb(body, type, filters, safePage, size);
+            listCache.put(cacheKey, result);
+            staleListCache.put(cacheKey, result);
+            return result;
         } catch (RestClientException | JsonProcessingException e) {
             log.warn("load TMDB navigation list failed: {}", type, e);
-            return emptyList(page, size);
+            MovieList stale = staleListCache.getIfPresent(cacheKey);
+            return stale == null ? emptyList(safePage, size) : stale;
         }
     }
 
     private String tmdbPath(String type, Map<String, String> filters) {
         return switch (type) {
-            case "trending" -> "/trending/" + valueOrDefault(filters, "mediaType", "all") + "/"
-                    + valueOrDefault(filters, "time_window", "week");
+            case "trending" -> "/trending/" + allowedValue(filters, "mediaType", "all", TRENDING_MEDIA) + "/"
+                    + allowedValue(filters, "time_window", "week", TRENDING_WINDOWS);
             case "movie_popular" -> "/movie/popular";
             case "movie_top_rated" -> "/movie/top_rated";
             case "movie_now_playing" -> "/movie/now_playing";
+            case "movie_upcoming" -> "/movie/upcoming";
             case "tv_popular" -> "/tv/popular";
             case "tv_top_rated" -> "/tv/top_rated";
             case "tv_airing_today" -> "/tv/airing_today";
+            case "tv_on_the_air" -> "/tv/on_the_air";
             case "discover_movie" -> "/discover/movie";
             case "discover_tv" -> "/discover/tv";
+            case "anime" -> "/discover/" + allowedValue(filters, "kind", "tv", ANIME_MEDIA);
             default -> null;
         };
     }
 
-    private void addDiscoverFilters(UriComponentsBuilder uri, String type, Map<String, String> filters) {
-        if (!type.startsWith("discover_")) {
+    private void addTmdbQueryFilters(UriComponentsBuilder uri, String type, Map<String, String> filters) {
+        if (type.startsWith("movie_") && !type.startsWith("discover_")) {
+            uri.queryParam("region", valueOrDefault(filters, "region", "CN"));
             return;
         }
-        addQueryParam(uri, "sort_by", filters.get("sort_by"));
-        addQueryParam(uri, "with_genres", filters.get("with_genres"));
-        addQueryParam(uri, "with_origin_country", filters.get("with_origin_country"));
+        if (!type.startsWith("discover_") && !"anime".equals(type)) {
+            return;
+        }
+
+        boolean anime = "anime".equals(type);
+        boolean movie = type.endsWith("movie") || (anime && "movie".equals(allowedValue(filters, "kind", "tv", ANIME_MEDIA)));
+        String sort = valueOrDefault(filters, "sort_by", "popularity.desc");
+        String country = filters.get("with_origin_country");
+        String origin = StringUtils.defaultIfBlank(country, filters.get("origin_group"));
+
+        addQueryParam(uri, "sort_by", sort);
+        addQueryParam(uri, "with_genres", anime ? "16" : filters.get("with_genres"));
+        addQueryParam(uri, "with_origin_country", anime ? valueOrDefault(filters, "anime_region", "JP") : origin);
+        addQueryParam(uri, "with_original_language", filters.get("with_original_language"));
+        addQueryParam(uri, "vote_average.gte", filters.get("vote_average.gte"));
         String year = filters.get("year");
-        addQueryParam(uri, type.endsWith("movie") ? "primary_release_year" : "first_air_date_year", year);
-        if ("vote_average.desc".equals(filters.get("sort_by"))) {
-            uri.queryParam("vote_count.gte", 200);
+        addQueryParam(uri, movie ? "primary_release_year" : "first_air_date_year", year);
+        if (movie && StringUtils.isNotBlank(country) && !country.contains("|")) {
+            uri.queryParam("region", country);
+        }
+        String votes = filters.get("vote_count.gte");
+        if (StringUtils.isBlank(votes) && "vote_average.desc".equals(sort)) {
+            votes = anime ? "20" : "50";
+        }
+        addQueryParam(uri, "vote_count.gte", votes);
+        addRuntimeFilters(uri, filters.get("runtime"));
+    }
+
+    private void addRuntimeFilters(UriComponentsBuilder uri, String runtime) {
+        if ("short".equals(runtime)) {
+            uri.queryParam("with_runtime.lte", 90);
+        } else if ("medium".equals(runtime)) {
+            uri.queryParam("with_runtime.gte", 90);
+            uri.queryParam("with_runtime.lte", 120);
+        } else if ("long".equals(runtime)) {
+            uri.queryParam("with_runtime.gte", 120);
         }
     }
 
@@ -177,18 +241,43 @@ public class PianDanService {
         }
     }
 
-    private MovieList mapTmdb(JsonNode body, String categoryType, int page, int size) {
+    private String fetchTmdb(String url) {
+        RestClientException lastError = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return restTemplate.getForObject(url, String.class);
+            } catch (RestClientException e) {
+                lastError = e;
+                if (attempt == 2 || !isRetryable(e)) {
+                    throw e;
+                }
+                log.debug("retry TMDB navigation request: attempt={}", attempt + 2);
+            }
+        }
+        throw lastError;
+    }
+
+    private boolean isRetryable(RestClientException error) {
+        if (error instanceof RestClientResponseException responseError) {
+            int status = responseError.getStatusCode().value();
+            return status == 429 || status >= 500;
+        }
+        return true;
+    }
+
+    private MovieList mapTmdb(JsonNode body, String categoryType, Map<String, String> filters, int page, int size) {
         if (body == null || !body.path("results").isArray()) {
             return emptyList(page, size);
         }
         List<MovieDetail> items = new ArrayList<>();
         for (JsonNode item : body.path("results")) {
-            String mediaType = item.path("media_type").asText(defaultMediaType(categoryType));
+            String mediaType = item.path("media_type").asText(defaultMediaType(categoryType, filters));
             if (!"movie".equals(mediaType) && !"tv".equals(mediaType)) {
                 continue;
             }
             String title = firstNotBlank(item.path("title").asText(""), item.path("name").asText(""));
-            if (StringUtils.isBlank(title)) {
+            int tmdbId = item.path("id").asInt(0);
+            if (StringUtils.isBlank(title) || tmdbId < 1) {
                 continue;
             }
             String date = firstNotBlank(item.path("release_date").asText(""), item.path("first_air_date").asText(""));
@@ -196,9 +285,9 @@ public class PianDanService {
             double score = item.path("vote_average").asDouble(0);
 
             MovieDetail movie = new MovieDetail();
-            movie.setVod_id(TMDB_PREFIX + mediaType + ":" + item.path("id").asText());
+            movie.setVod_id(TMDB_PREFIX + mediaType + ":" + tmdbId);
             movie.setVod_name(title);
-            String poster = item.path("poster_path").asText("");
+            String poster = firstNotBlank(item.path("poster_path").asText(""), item.path("backdrop_path").asText(""));
             if (StringUtils.isNotBlank(poster)) {
                 movie.setVod_pic(TMDB_IMAGE + poster);
             }
@@ -215,13 +304,16 @@ public class PianDanService {
         MovieList result = new MovieList();
         result.setList(items);
         result.setPage(body.path("page").asInt(page));
-        result.setPagecount(Math.max(1, body.path("total_pages").asInt(1)));
+        result.setPagecount(Math.min(TMDB_MAX_PAGE, Math.max(1, body.path("total_pages").asInt(1))));
         result.setTotal(body.path("total_results").asInt(items.size()));
         result.setLimit(items.size());
         return result;
     }
 
-    private String defaultMediaType(String type) {
+    private String defaultMediaType(String type, Map<String, String> filters) {
+        if ("anime".equals(type)) {
+            return allowedValue(filters, "kind", "tv", ANIME_MEDIA);
+        }
         if (type.startsWith("movie_") || type.endsWith("movie")) {
             return "movie";
         }
@@ -259,33 +351,96 @@ public class PianDanService {
                 filter("mediaType", "范围", values("全部", "all", "电影", "movie", "剧集", "tv")),
                 filter("time_window", "周期", values("本周", "week", "今日", "day"))
         ));
+        List<Filter> movieRegion = List.of(filter("region", "地区", regionValues()));
+        result.getFilters().put(TMDB_PREFIX + "movie_popular", movieRegion);
+        result.getFilters().put(TMDB_PREFIX + "movie_top_rated", movieRegion);
+        result.getFilters().put(TMDB_PREFIX + "movie_now_playing", movieRegion);
+        result.getFilters().put(TMDB_PREFIX + "movie_upcoming", movieRegion);
         List<Filter> movieFilters = discoverFilters(true);
         List<Filter> tvFilters = discoverFilters(false);
         result.getFilters().put(TMDB_PREFIX + "discover_movie", movieFilters);
         result.getFilters().put(TMDB_PREFIX + "discover_tv", tvFilters);
+        result.getFilters().put(TMDB_PREFIX + "anime", List.of(
+                filter("sort_by", "排序", tvSortValues()),
+                filter("anime_region", "地区", values("国漫", "CN", "日漫", "JP", "韩漫", "KR", "美漫", "US")),
+                filter("kind", "内容", values("动画剧集", "tv", "动画电影", "movie")),
+                filter("year", "年代", yearValues())
+        ));
     }
 
     private List<Filter> discoverFilters(boolean movie) {
-        List<FilterValue> sort = movie
-                ? values("热度", "popularity.desc", "最新", "primary_release_date.desc", "评分", "vote_average.desc")
-                : values("热度", "popularity.desc", "最新", "first_air_date.desc", "评分", "vote_average.desc");
-        List<FilterValue> genre = movie
-                ? values("全部", "", "剧情", "18", "喜剧", "35", "动作", "28", "科幻", "878", "动画", "16", "悬疑", "9648", "纪录", "99")
-                : values("全部", "", "剧情", "18", "喜剧", "35", "动作冒险", "10759", "科幻奇幻", "10765", "动画", "16", "悬疑", "9648", "纪录", "99");
         return List.of(
-                filter("sort_by", "排序", sort),
-                filter("with_genres", "类型", genre),
-                filter("with_origin_country", "地区", values("全部", "", "中国", "CN", "美国", "US", "日本", "JP", "韩国", "KR", "英国", "GB", "法国", "FR")),
-                filter("year", "年份", yearValues())
+                filter("origin_group", "大区", originGroupValues()),
+                filter("with_origin_country", "国家/地区", regionValues()),
+                filter("sort_by", "排序", movie ? movieSortValues() : tvSortValues()),
+                filter("with_genres", "类型", movie ? movieGenreValues() : tvGenreValues()),
+                filter("year", "年代", yearValues()),
+                filter("with_original_language", "原始语言", languageValues()),
+                filter("vote_average.gte", "最低评分", values("不限评分", "", "6分以上", "6", "7分以上", "7", "8分以上", "8", "9分以上", "9")),
+                filter("vote_count.gte", "评分人数", values("不限人数", "", "20票以上", "20", "50票以上", "50", "100票以上", "100", "500票以上", "500")),
+                filter("runtime", movie ? "片长" : "单集片长", values("不限片长", "", "90分钟内", "short", "90-120分钟", "medium", "120分钟以上", "long"))
+        );
+    }
+
+    private List<FilterValue> originGroupValues() {
+        return values(
+                "全部地区", "", "日韩", "JP|KR", "欧美", "US|GB|FR|DE|ES|IT|CA|AU",
+                "国产", "CN|HK|TW", "东南亚", "TH|SG|MY|PH|ID|VN"
+        );
+    }
+
+    private List<FilterValue> regionValues() {
+        return values(
+                "全部地区", "", "中国大陆", "CN", "中国香港", "HK", "中国台湾", "TW",
+                "日本", "JP", "韩国", "KR", "美国", "US", "英国", "GB", "法国", "FR",
+                "德国", "DE", "西班牙", "ES", "意大利", "IT", "加拿大", "CA", "澳大利亚", "AU",
+                "泰国", "TH", "新加坡", "SG", "马来西亚", "MY", "菲律宾", "PH",
+                "印度尼西亚", "ID", "越南", "VN", "印度", "IN", "俄罗斯", "RU",
+                "巴西", "BR", "墨西哥", "MX", "土耳其", "TR"
+        );
+    }
+
+    private List<FilterValue> movieGenreValues() {
+        return values(
+                "全部类型", "", "动作", "28", "冒险", "12", "动画", "16", "喜剧", "35",
+                "犯罪", "80", "纪录片", "99", "剧情", "18", "家庭", "10751", "奇幻", "14",
+                "历史", "36", "恐怖", "27", "音乐", "10402", "悬疑", "9648", "爱情", "10749",
+                "科幻", "878", "惊悚", "53", "战争", "10752", "西部", "37"
+        );
+    }
+
+    private List<FilterValue> tvGenreValues() {
+        return values(
+                "全部类型", "", "动作冒险", "10759", "动画", "16", "喜剧", "35", "犯罪", "80",
+                "纪录片", "99", "剧情", "18", "家庭", "10751", "儿童", "10762", "悬疑", "9648",
+                "真人秀", "10764", "科幻奇幻", "10765", "肥皂剧", "10766", "脱口秀", "10767",
+                "战争政治", "10768", "西部", "37"
+        );
+    }
+
+    private List<FilterValue> movieSortValues() {
+        return values(
+                "热度", "popularity.desc", "更新时间", "primary_release_date.desc",
+                "评分", "vote_average.desc", "票房", "revenue.desc"
+        );
+    }
+
+    private List<FilterValue> tvSortValues() {
+        return values("热度", "popularity.desc", "更新时间", "first_air_date.desc", "评分", "vote_average.desc");
+    }
+
+    private List<FilterValue> languageValues() {
+        return values(
+                "全部语言", "", "中文", "zh", "日语", "ja", "韩语", "ko", "英语", "en",
+                "法语", "fr", "德语", "de", "西班牙语", "es", "印地语", "hi", "泰语", "th"
         );
     }
 
     private List<FilterValue> yearValues() {
         List<FilterValue> values = new ArrayList<>();
-        values.add(new FilterValue("全部", ""));
-        int year = LocalDate.now().getYear();
-        for (int i = 0; i < 20; i++) {
-            String value = String.valueOf(year - i);
+        values.add(new FilterValue("全部年代", ""));
+        for (int year = LocalDate.now().getYear() + 1; year >= 1980; year--) {
+            String value = String.valueOf(year);
             values.add(new FilterValue(value, value));
         }
         return values;
@@ -359,6 +514,15 @@ public class PianDanService {
 
     private String valueOrDefault(Map<String, String> values, String key, String defaultValue) {
         return StringUtils.defaultIfBlank(values.get(key), defaultValue);
+    }
+
+    private String allowedValue(Map<String, String> values, String key, String defaultValue, Set<String> allowed) {
+        String value = valueOrDefault(values, key, defaultValue);
+        return allowed.contains(value) ? value : defaultValue;
+    }
+
+    private String cacheKey(String type, int page, int size, Map<String, String> filters) {
+        return type + '|' + page + '|' + size + '|' + new TreeMap<>(filters);
     }
 
     private String firstNotBlank(String first, String second) {
