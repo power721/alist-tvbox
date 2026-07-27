@@ -185,7 +185,7 @@ class PianDanServiceTest {
             assertThat(movie.getVod_name()).isEqualTo("测试电影");
             assertThat(movie.getVod_pic()).isEqualTo("https://image.tmdb.org/t/p/w500/poster.jpg");
             assertThat(movie.getVod_year()).isEqualTo("2025");
-            assertThat(movie.getVod_remarks()).isEqualTo("2025 · 8.3");
+            assertThat(movie.getVod_remarks()).isEqualTo("8.3");
             assertThat(movie.getVod_content()).isEqualTo("剧情简介");
         });
         server.verify();

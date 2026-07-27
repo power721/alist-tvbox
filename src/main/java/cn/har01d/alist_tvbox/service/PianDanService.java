@@ -325,9 +325,9 @@ public class PianDanService {
 
     private String remarks(String year, double score) {
         String rating = score > 0 ? String.format(Locale.ROOT, "%.1f", score) : "";
-        if (StringUtils.isNotBlank(year) && StringUtils.isNotBlank(rating)) {
-            return year + " · " + rating;
-        }
+//        if (StringUtils.isNotBlank(year) && StringUtils.isNotBlank(rating)) {
+//            return year + " · " + rating;
+//        }
         return StringUtils.defaultIfBlank(rating, year);
     }
 
