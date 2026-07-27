@@ -238,7 +238,7 @@
           />
           <span class="hint">主账号用来观看分享</span>
         </el-form-item>
-        <el-form-item label="自动签到" v-if="form.type=='CLOUD189'">
+        <el-form-item label="自动签到" v-if="form.type=='CLOUD189'||form.type=='BAIDU'">
           <el-switch
             v-model="form.addition.auto_checkin"
             inline-prompt
