@@ -1316,10 +1316,7 @@ public class SubscriptionService {
                     String overrideKey = (String) site.get("key");
                     boolean overridden = applySiteOverride(overrideKey, site, sites);
                     // special defaults when no user override
-                    if (("csp_TgDouBan".equals(source.siteKey()) || "csp_Push".equals(source.siteKey())) && !overridden) {
-                        site.put("searchable", 0);
-                        site.put("quickSearch", 0);
-                    }
+                    applyBuiltinSiteCapabilities(source.siteKey(), overridden, site);
                     sites.add(id++, site);
                     log.debug("add builtin source {}: {}", source.siteKey(), site);
                 } else if (source.plugin() != null) {
@@ -1335,6 +1332,19 @@ public class SubscriptionService {
             }
         }
         return order;
+    }
+
+    static void applyBuiltinSiteCapabilities(String key, boolean overridden, Map<String, Object> site) {
+        if (("csp_TgDouBan".equals(key) || "csp_Push".equals(key)) && !overridden) {
+            site.put("searchable", 0);
+            site.put("quickSearch", 0);
+        }
+        if ("csp_PianDan".equals(key)) {
+            site.put("indexs", 1);
+            site.put("searchable", 0);
+            site.put("quickSearch", 0);
+            site.put("filterable", 1);
+        }
     }
 
     /**

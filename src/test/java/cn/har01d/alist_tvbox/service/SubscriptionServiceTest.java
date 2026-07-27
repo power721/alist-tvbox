@@ -220,4 +220,21 @@ class SubscriptionServiceTest {
                 plugin, "http://atv", "web", "", "secret", false, localProxyConfig);
         assertThat(javaPayload.get("local_proxy_config")).isEqualTo(localProxyConfig);
     }
+
+    @Test
+    void pianDanBuiltinAlwaysKeepsIndexNavigationCapabilities() {
+        Map<String, Object> site = new HashMap<>();
+        site.put("indexs", 0);
+        site.put("searchable", 1);
+        site.put("quickSearch", 1);
+        site.put("filterable", 0);
+
+        SubscriptionService.applyBuiltinSiteCapabilities("csp_PianDan", true, site);
+
+        assertThat(site)
+                .containsEntry("indexs", 1)
+                .containsEntry("searchable", 0)
+                .containsEntry("quickSearch", 0)
+                .containsEntry("filterable", 1);
+    }
 }
