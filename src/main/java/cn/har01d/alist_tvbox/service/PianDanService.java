@@ -43,6 +43,13 @@ public class PianDanService {
     private static final Set<String> TRENDING_MEDIA = Set.of("all", "movie", "tv");
     private static final Set<String> TRENDING_WINDOWS = Set.of("day", "week");
     private static final Set<String> ANIME_MEDIA = Set.of("movie", "tv");
+    private static final Set<String> VARIETY_LISTS = Set.of("hot", "today", "tomorrow", "trend", "top");
+    private static final Set<String> TV_PLATFORM_CONTENT = Set.of("drama", "variety", "anime");
+    private static final Set<String> TV_PLATFORM_SORTS = Set.of("popularity.desc", "first_air_date.desc", "vote_average.desc");
+    private static final Set<String> MOVIE_PLATFORM_SORTS = Set.of("popularity.desc", "primary_release_date.desc", "vote_average.desc", "revenue.desc");
+    private static final Set<String> TV_NETWORKS = Set.of("2007", "1330", "1419", "1631", "1605", "213", "2739", "49", "2552");
+    private static final Set<String> MOVIE_PROVIDERS = Set.of("8", "337", "1899", "350", "9");
+    private static final Set<String> WATCH_REGIONS = Set.of("US", "CN", "HK", "TW", "JP", "KR", "GB", "CA", "AU");
     private static final int TMDB_MAX_PAGE = 500;
 
     private final TelegramService telegramService;
@@ -88,7 +95,10 @@ public class PianDanService {
         addTmdbCategory(result, "tv_top_rated", "TMDB高分剧集");
         addTmdbCategory(result, "tv_airing_today", "TMDB今日播出");
         addTmdbCategory(result, "tv_on_the_air", "TMDB正在播出");
-        addTmdbCategory(result, "anime", "TMDB动漫");
+        addTmdbCategory(result, "anime", "TMDB动漫片库");
+        addTmdbCategory(result, "variety", "TMDB综艺");
+        addTmdbCategory(result, "platform_tv", "TMDB平台剧集");
+        addTmdbCategory(result, "platform_movie", "TMDB流媒体电影");
         addTmdbCategory(result, "discover_movie", "TMDB电影片库");
         addTmdbCategory(result, "discover_tv", "TMDB剧集片库");
         addTmdbFilters(result);
@@ -187,6 +197,8 @@ public class PianDanService {
             case "discover_movie" -> "/discover/movie";
             case "discover_tv" -> "/discover/tv";
             case "anime" -> "/discover/" + allowedValue(filters, "kind", "tv", ANIME_MEDIA);
+            case "variety", "platform_tv" -> "/discover/tv";
+            case "platform_movie" -> "/discover/movie";
             default -> null;
         };
     }
@@ -194,6 +206,18 @@ public class PianDanService {
     private void addTmdbQueryFilters(UriComponentsBuilder uri, String type, Map<String, String> filters) {
         if (type.startsWith("movie_") && !type.startsWith("discover_")) {
             uri.queryParam("region", valueOrDefault(filters, "region", "CN"));
+            return;
+        }
+        if ("variety".equals(type)) {
+            addVarietyFilters(uri, filters);
+            return;
+        }
+        if ("platform_tv".equals(type)) {
+            addTvPlatformFilters(uri, filters);
+            return;
+        }
+        if ("platform_movie".equals(type)) {
+            addMoviePlatformFilters(uri, filters);
             return;
         }
         if (!type.startsWith("discover_") && !"anime".equals(type)) {
@@ -222,6 +246,66 @@ public class PianDanService {
         }
         addQueryParam(uri, "vote_count.gte", votes);
         addRuntimeFilters(uri, filters.get("runtime"));
+        if (movie) {
+            uri.queryParam("include_video", false);
+        }
+        addReleaseDateLimit(uri, movie, sort);
+    }
+
+    private void addVarietyFilters(UriComponentsBuilder uri, Map<String, String> filters) {
+        String listType = allowedValue(filters, "list_type", "hot", VARIETY_LISTS);
+        String sort = "top".equals(listType) ? "vote_average.desc" : "popularity.desc";
+        LocalDate date = LocalDate.now();
+
+        uri.queryParam("sort_by", sort)
+                .queryParam("with_genres", "10764|10767");
+        addQueryParam(uri, "with_origin_country", filters.get("region"));
+        if ("today".equals(listType) || "tomorrow".equals(listType)) {
+            String airDate = date.plusDays("tomorrow".equals(listType) ? 1 : 0).toString();
+            uri.queryParam("air_date.gte", airDate).queryParam("air_date.lte", airDate);
+        } else if ("trend".equals(listType)) {
+            uri.queryParam("first_air_date.gte", date.minusYears(5));
+        } else if ("top".equals(listType)) {
+            uri.queryParam("vote_count.gte", 15);
+        }
+    }
+
+    private void addTvPlatformFilters(UriComponentsBuilder uri, Map<String, String> filters) {
+        String content = allowedValue(filters, "content", "drama", TV_PLATFORM_CONTENT);
+        String sort = allowedValue(filters, "sort_by", "popularity.desc", TV_PLATFORM_SORTS);
+        uri.queryParam("sort_by", sort)
+                .queryParam("with_networks", allowedValue(filters, "network", "2007", TV_NETWORKS))
+                .queryParam("include_null_first_air_dates", false);
+        if ("anime".equals(content)) {
+            uri.queryParam("with_genres", "16");
+        } else if ("variety".equals(content)) {
+            uri.queryParam("with_genres", "10764|10767");
+        } else {
+            uri.queryParam("without_genres", "16,10764,10767");
+        }
+        if ("vote_average.desc".equals(sort)) {
+            uri.queryParam("vote_count.gte", 50);
+        }
+        addReleaseDateLimit(uri, false, sort);
+    }
+
+    private void addMoviePlatformFilters(UriComponentsBuilder uri, Map<String, String> filters) {
+        String sort = allowedValue(filters, "sort_by", "popularity.desc", MOVIE_PLATFORM_SORTS);
+        uri.queryParam("sort_by", sort)
+                .queryParam("watch_region", allowedValue(filters, "watch_region", "US", WATCH_REGIONS))
+                .queryParam("with_watch_providers", allowedValue(filters, "provider", "8", MOVIE_PROVIDERS))
+                .queryParam("include_video", false);
+        if ("vote_average.desc".equals(sort)) {
+            uri.queryParam("vote_count.gte", 50);
+        }
+        addReleaseDateLimit(uri, true, sort);
+    }
+
+    private void addReleaseDateLimit(UriComponentsBuilder uri, boolean movie, String sort) {
+        String latestSort = movie ? "primary_release_date.desc" : "first_air_date.desc";
+        if (latestSort.equals(sort)) {
+            uri.queryParam(movie ? "primary_release_date.lte" : "first_air_date.lte", LocalDate.now().plusDays(31));
+        }
     }
 
     private void addRuntimeFilters(UriComponentsBuilder uri, String runtime) {
@@ -314,6 +398,9 @@ public class PianDanService {
         if ("anime".equals(type)) {
             return allowedValue(filters, "kind", "tv", ANIME_MEDIA);
         }
+        if ("variety".equals(type)) {
+            return "tv";
+        }
         if (type.startsWith("movie_") || type.endsWith("movie")) {
             return "movie";
         }
@@ -366,6 +453,23 @@ public class PianDanService {
                 filter("kind", "内容", values("动画剧集", "tv", "动画电影", "movie")),
                 filter("year", "年代", yearValues())
         ));
+        result.getFilters().put(TMDB_PREFIX + "variety", List.of(
+                filter("region", "地区", varietyRegionValues()),
+                filter("list_type", "榜单", values(
+                        "近期热播", "hot", "今日更新", "today", "明日预告", "tomorrow",
+                        "五年热榜", "trend", "高分综艺", "top"
+                ))
+        ));
+        result.getFilters().put(TMDB_PREFIX + "platform_tv", List.of(
+                filter("content", "内容", values("电视剧", "drama", "综艺", "variety", "动漫", "anime")),
+                filter("network", "播出平台", tvNetworkValues()),
+                filter("sort_by", "排序", tvSortValues())
+        ));
+        result.getFilters().put(TMDB_PREFIX + "platform_movie", List.of(
+                filter("provider", "流媒体", movieProviderValues()),
+                filter("watch_region", "观看地区", watchRegionValues()),
+                filter("sort_by", "排序", movieSortValues())
+        ));
     }
 
     private List<Filter> discoverFilters(boolean movie) {
@@ -385,7 +489,9 @@ public class PianDanService {
     private List<FilterValue> originGroupValues() {
         return values(
                 "全部地区", "", "日韩", "JP|KR", "欧美", "US|GB|FR|DE|ES|IT|CA|AU",
-                "国产", "CN|HK|TW", "东南亚", "TH|SG|MY|PH|ID|VN"
+                "国产", "CN|HK|TW", "港台", "HK|TW", "东南亚", "TH|SG|MY|PH|ID|VN",
+                "亚太", "CN|HK|TW|JP|KR|TH|SG|MY|IN", "欧洲", "GB|DE|FR|IT|ES|SE|NO|DK|FI|NL|BE|CH|AT|IE",
+                "拉美", "MX|AR|CO|CL|PE|VE"
         );
     }
 
@@ -396,7 +502,38 @@ public class PianDanService {
                 "德国", "DE", "西班牙", "ES", "意大利", "IT", "加拿大", "CA", "澳大利亚", "AU",
                 "泰国", "TH", "新加坡", "SG", "马来西亚", "MY", "菲律宾", "PH",
                 "印度尼西亚", "ID", "越南", "VN", "印度", "IN", "俄罗斯", "RU",
-                "巴西", "BR", "墨西哥", "MX", "土耳其", "TR"
+                "巴西", "BR", "墨西哥", "MX", "土耳其", "TR", "瑞典", "SE", "挪威", "NO",
+                "丹麦", "DK", "芬兰", "FI", "荷兰", "NL", "比利时", "BE", "瑞士", "CH",
+                "奥地利", "AT", "爱尔兰", "IE", "阿根廷", "AR", "哥伦比亚", "CO",
+                "智利", "CL", "秘鲁", "PE", "委内瑞拉", "VE"
+        );
+    }
+
+    private List<FilterValue> varietyRegionValues() {
+        return values(
+                "全球", "", "中国大陆", "CN", "韩国", "KR", "日本", "JP", "中国台湾", "TW",
+                "中国香港", "HK", "欧美", "US|GB|DE|FR|IT|ES|CA|AU"
+        );
+    }
+
+    private List<FilterValue> tvNetworkValues() {
+        return values(
+                "腾讯视频", "2007", "爱奇艺", "1330", "优酷", "1419", "芒果TV", "1631",
+                "Bilibili", "1605", "Netflix", "213", "Disney+", "2739", "HBO", "49", "Apple TV+", "2552"
+        );
+    }
+
+    private List<FilterValue> movieProviderValues() {
+        return values(
+                "Netflix", "8", "Disney+", "337", "Max", "1899",
+                "Apple TV+", "350", "Amazon Prime", "9"
+        );
+    }
+
+    private List<FilterValue> watchRegionValues() {
+        return values(
+                "美国", "US", "中国大陆", "CN", "中国香港", "HK", "中国台湾", "TW",
+                "日本", "JP", "韩国", "KR", "英国", "GB", "加拿大", "CA", "澳大利亚", "AU"
         );
     }
 
@@ -522,7 +659,10 @@ public class PianDanService {
     }
 
     private String cacheKey(String type, int page, int size, Map<String, String> filters) {
-        return type + '|' + page + '|' + size + '|' + new TreeMap<>(filters);
+        String date = "variety".equals(type) && Set.of("today", "tomorrow").contains(filters.get("list_type"))
+                ? "|" + LocalDate.now()
+                : "";
+        return type + '|' + page + '|' + size + '|' + new TreeMap<>(filters) + date;
     }
 
     private String firstNotBlank(String first, String second) {

@@ -22,6 +22,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -73,6 +74,9 @@ class PianDanServiceTest {
                         "tmdb:movie_upcoming",
                         "tmdb:tv_on_the_air",
                         "tmdb:anime",
+                        "tmdb:variety",
+                        "tmdb:platform_tv",
+                        "tmdb:platform_movie",
                         "tmdb:discover_movie",
                         "tmdb:discover_tv"
                 );
@@ -82,6 +86,9 @@ class PianDanServiceTest {
                 "tmdb:trending",
                 "tmdb:movie_upcoming",
                 "tmdb:anime",
+                "tmdb:variety",
+                "tmdb:platform_tv",
+                "tmdb:platform_movie",
                 "tmdb:discover_movie",
                 "tmdb:discover_tv"
         );
@@ -188,6 +195,99 @@ class PianDanServiceTest {
             assertThat(movie.getVod_remarks()).isEqualTo("8.3");
             assertThat(movie.getVod_content()).isEqualTo("剧情简介");
         });
+        server.verify();
+    }
+
+    @Test
+    void varietyMapsRegionAndTomorrowSchedule() {
+        when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
+        String tomorrow = LocalDate.now().plusDays(1).toString();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getPath()).isEqualTo("/3/discover/tv");
+                    assertThat(request.getURI().getQuery()).contains(
+                            "sort_by=popularity.desc",
+                            "with_genres=10764%7C10767",
+                            "with_origin_country=KR",
+                            "air_date.gte=" + tomorrow,
+                            "air_date.lte=" + tomorrow
+                    );
+                })
+                .andRespond(withSuccess("""
+                        {"results":[{"id":71,"name":"明日综艺","first_air_date":"2026-08-01"}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        MovieList result = service.list("tmdb:variety", "", 1, 20, Map.of(
+                "region", "KR",
+                "list_type", "tomorrow"
+        ));
+
+        assertThat(result.getList()).singleElement().satisfies(movie -> {
+            assertThat(movie.getVod_id()).isEqualTo("tmdb:tv:71");
+            assertThat(movie.getVod_name()).isEqualTo("明日综艺");
+        });
+        server.verify();
+    }
+
+    @Test
+    void platformCategoriesMapNetworksProvidersAndSorts() {
+        when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
+        String futureLimit = LocalDate.now().plusDays(31).toString();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getPath()).isEqualTo("/3/discover/tv");
+                    assertThat(request.getURI().getQuery()).contains(
+                            "sort_by=first_air_date.desc",
+                            "with_networks=1605",
+                            "with_genres=16",
+                            "include_null_first_air_dates=false",
+                            "first_air_date.lte=" + futureLimit
+                    );
+                })
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+        server.expect(once(), request -> {
+                    assertThat(request.getURI().getPath()).isEqualTo("/3/discover/movie");
+                    assertThat(request.getURI().getQuery()).contains(
+                            "sort_by=vote_average.desc",
+                            "watch_region=KR",
+                            "with_watch_providers=1899",
+                            "include_video=false",
+                            "vote_count.gte=50"
+                    );
+                })
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        service.list("tmdb:platform_tv", "", 1, 20, Map.of(
+                "content", "anime",
+                "network", "1605",
+                "sort_by", "first_air_date.desc"
+        ));
+        service.list("tmdb:platform_movie", "", 1, 20, Map.of(
+                "provider", "1899",
+                "watch_region", "KR",
+                "sort_by", "vote_average.desc"
+        ));
+
+        server.verify();
+    }
+
+    @Test
+    void platformCategoriesRejectUnknownFilterValues() {
+        when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(once(), request -> assertThat(request.getURI().getQuery()).contains(
+                        "sort_by=popularity.desc",
+                        "with_networks=2007",
+                        "without_genres=16,10764,10767"
+                ))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        service.list("tmdb:platform_tv", "", 1, 20, Map.of(
+                "content", "unknown",
+                "network", "../../network",
+                "sort_by", "invalid"
+        ));
+
         server.verify();
     }
 
