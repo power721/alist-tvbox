@@ -6,6 +6,7 @@ import cn.har01d.alist_tvbox.model.Filter;
 import cn.har01d.alist_tvbox.model.FilterValue;
 import cn.har01d.alist_tvbox.tvbox.Category;
 import cn.har01d.alist_tvbox.tvbox.CategoryList;
+import cn.har01d.alist_tvbox.tvbox.MovieDetail;
 import cn.har01d.alist_tvbox.tvbox.MovieList;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,8 +71,14 @@ class PianDanServiceTest {
     }
 
     @Test
-    void listDelegatesPrefixedDoubanCategoryAndFilters() {
+    void listRemovesDoubanFolderMetadataWithoutMutatingSharedResult() {
+        MovieDetail folder = new MovieDetail();
+        folder.setVod_id("s:测试电影");
+        folder.setVod_name("测试电影");
+        folder.setVod_tag("folder");
+        folder.setCate(new CategoryList());
         MovieList expected = new MovieList();
+        expected.setList(List.of(folder));
         when(telegramService.listDouban("local", "web", "score,desc", 2025, "剧情", "中国", 2, 30))
                 .thenReturn(expected);
 
@@ -82,7 +89,16 @@ class PianDanServiceTest {
                 "region", "中国"
         ));
 
-        assertThat(result).isSameAs(expected);
+        assertThat(result).isNotSameAs(expected);
+        assertThat(result.getList()).singleElement().satisfies(movie -> {
+            assertThat(movie).isNotSameAs(folder);
+            assertThat(movie.getVod_id()).isEqualTo("s:测试电影");
+            assertThat(movie.getVod_name()).isEqualTo("测试电影");
+            assertThat(movie.getVod_tag()).isNull();
+            assertThat(movie.getCate()).isNull();
+        });
+        assertThat(folder.getVod_tag()).isEqualTo("folder");
+        assertThat(folder.getCate()).isNotNull();
         verify(telegramService).listDouban("local", "web", "score,desc", 2025, "剧情", "中国", 2, 30);
     }
 

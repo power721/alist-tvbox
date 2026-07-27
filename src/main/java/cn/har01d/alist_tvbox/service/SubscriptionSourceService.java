@@ -255,6 +255,7 @@ public class SubscriptionSourceService {
     private List<BuiltinDefinition> builtinDefinitions() {
         List<BuiltinDefinition> definitions = new ArrayList<>();
         int order = 1;
+        definitions.add(new BuiltinDefinition("csp_PianDan", "片单导航", order++));
         Site xiaoya = siteRepository.findById(1).orElse(null);
         if (xiaoya != null) {
             definitions.add(new BuiltinDefinition("csp_XiaoYa", xiaoya.getName(), order++));
@@ -272,7 +273,6 @@ public class SubscriptionSourceService {
         }
         definitions.add(new BuiltinDefinition("csp_Live", "网络直播", order++));
         definitions.add(new BuiltinDefinition("csp_TgDouBan", "电报豆瓣", order++));
-        definitions.add(new BuiltinDefinition("csp_PianDan", "片单导航", order++));
         if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
             definitions.add(new BuiltinDefinition("csp_TgChannel", "电报频道", order++));
         }

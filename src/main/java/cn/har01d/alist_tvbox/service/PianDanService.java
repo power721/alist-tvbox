@@ -81,7 +81,7 @@ public class PianDanService {
         List<MovieDetail> items = new ArrayList<>();
         try {
             MovieList douban = telegramService.listDouban("hot_movie", "", null, null, null, null, 1, 10);
-            items.addAll(douban.getList().stream().limit(10).toList());
+            items.addAll(toNavigationList(douban).getList().stream().limit(10).toList());
         } catch (RuntimeException e) {
             log.warn("load Douban navigation home failed", e);
         }
@@ -100,7 +100,7 @@ public class PianDanService {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, size);
         if (StringUtils.startsWith(type, DOUBAN_PREFIX)) {
-            return telegramService.listDouban(
+            return toNavigationList(telegramService.listDouban(
                     type.substring(DOUBAN_PREFIX.length()),
                     ac,
                     filters.get("sort"),
@@ -109,7 +109,7 @@ public class PianDanService {
                     filters.get("region"),
                     safePage,
                     safeSize
-            );
+            ));
         }
         if (StringUtils.startsWith(type, TMDB_PREFIX)) {
             return listTmdb(type.substring(TMDB_PREFIX.length()), safePage, safeSize, filters);
@@ -289,6 +289,43 @@ public class PianDanService {
             values.add(new FilterValue(value, value));
         }
         return values;
+    }
+
+    private MovieList toNavigationList(MovieList source) {
+        MovieList result = new MovieList();
+        result.setPage(source.getPage());
+        result.setPagecount(source.getPagecount());
+        result.setLimit(source.getLimit());
+        result.setTotal(source.getTotal());
+        result.setHeader(source.getHeader());
+        result.setList(source.getList().stream().map(this::toNavigationMovie).toList());
+        return result;
+    }
+
+    private MovieDetail toNavigationMovie(MovieDetail source) {
+        MovieDetail result = new MovieDetail();
+        result.setVod_id(source.getVod_id());
+        result.setVod_name(source.getVod_name());
+        result.setVod_pic(source.getVod_pic());
+        result.setVod_time(source.getVod_time());
+        result.setVod_remarks(source.getVod_remarks());
+        result.setType_name(source.getType_name());
+        result.setVod_actor(source.getVod_actor());
+        result.setVod_area(source.getVod_area());
+        result.setVod_content(source.getVod_content());
+        result.setVod_director(source.getVod_director());
+        result.setVod_lang(source.getVod_lang());
+        result.setVod_year(source.getVod_year());
+        result.setValidity_state(source.getValidity_state());
+        result.setValidity_summary(source.getValidity_summary());
+        result.setDbid(source.getDbid());
+        result.setType(source.getType());
+        result.setSize(source.getSize());
+        result.setExt(source.getExt());
+        // TvBox checks folder state before indexs; navigation items must reach the index branch.
+        result.setVod_tag(null);
+        result.setCate(null);
+        return result;
     }
 
     private Filter filter(String key, String name, List<FilterValue> values) {
