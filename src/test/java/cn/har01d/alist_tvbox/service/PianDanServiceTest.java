@@ -81,6 +81,10 @@ class PianDanServiceTest {
                         "tmdb:discover_tv"
                 );
         assertThat(result.getCategories().get(0).getType_name()).isEqualTo("豆瓣·浏览");
+        assertThat(result.getCategories())
+                .filteredOn(category -> "tmdb:anime".equals(category.getType_id()) || "tmdb:variety".equals(category.getType_id()))
+                .extracting(Category::getType_name)
+                .containsExactly("TMDB动漫片库", "TMDB综艺片库");
         assertThat(result.getFilters().get("douban:local")).containsExactly(filter);
         assertThat(result.getFilters()).containsKeys(
                 "tmdb:trending",

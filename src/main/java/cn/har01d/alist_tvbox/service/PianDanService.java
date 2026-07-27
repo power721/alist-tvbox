@@ -96,7 +96,7 @@ public class PianDanService {
         addTmdbCategory(result, "tv_airing_today", "TMDB今日播出");
         addTmdbCategory(result, "tv_on_the_air", "TMDB正在播出");
         addTmdbCategory(result, "anime", "TMDB动漫片库");
-        addTmdbCategory(result, "variety", "TMDB综艺");
+        addTmdbCategory(result, "variety", "TMDB综艺片库");
         addTmdbCategory(result, "platform_tv", "TMDB平台剧集");
         addTmdbCategory(result, "platform_movie", "TMDB流媒体电影");
         addTmdbCategory(result, "discover_movie", "TMDB电影片库");
