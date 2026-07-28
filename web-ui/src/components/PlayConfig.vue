@@ -609,11 +609,11 @@ onUnmounted(() => {
           <el-switch v-model="panSouRefresh"/>
           <span class="hint">跳过缓存，获取最新数据</span>
         </el-form-item>
-        <el-form-item label="结果类型" v-if="panSouUrl">
-          <el-select v-model="panSouRes" style="width: 160px">
-            <el-option v-for="item in resOptions" :key="item.value" :label="item.label" :value="item.value"/>
-          </el-select>
-        </el-form-item>
+<!--        <el-form-item label="结果类型" v-if="panSouUrl">-->
+<!--          <el-select v-model="panSouRes" style="width: 160px">-->
+<!--            <el-option v-for="item in resOptions" :key="item.value" :label="item.label" :value="item.value"/>-->
+<!--          </el-select>-->
+<!--        </el-form-item>-->
         <el-form-item label="包含词" v-if="panSouUrl">
           <el-input v-model="panSouFilterInclude" placeholder="多个用逗号分隔，如 1080,4K"/>
         </el-form-item>
