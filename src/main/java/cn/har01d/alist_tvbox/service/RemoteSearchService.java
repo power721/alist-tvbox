@@ -41,10 +41,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -70,6 +72,12 @@ public class RemoteSearchService {
     // carries the search-result title from search() to detail() so the resolved
     // storage folder name (often an obfuscated share token) does not overwrite it.
     private final Cache<String, String> shareTitle = Caffeine.newBuilder().maximumSize(200).expireAfterWrite(Duration.ofHours(2)).build();
+    // holds one grouped search result set per short cache id so the folder
+    // drill-down can page through it without hitting PanSou again.
+    private final Cache<String, List<Message>> groupCache = Caffeine.newBuilder()
+            .expireAfterWrite(Duration.ofMinutes(15))
+            .maximumSize(20)
+            .build();
 
     public RemoteSearchService(AppProperties appProperties,
                                RestTemplateBuilder restTemplateBuilder,
@@ -146,25 +154,7 @@ public class RemoteSearchService {
 
         var messages = search(keyword, channels);
         for (var message : messages) {
-            var movieDetail = new MovieDetail();
-            movieDetail.setVod_id(encodeUrl(message.getLink()));
-            movieDetail.setVod_name(message.getName());
-            if (StringUtils.isNotBlank(message.getLink()) && StringUtils.isNotBlank(movieDetail.getVod_name())) {
-                shareTitle.put(message.getLink(), movieDetail.getVod_name());
-            }
-            if (StringUtils.isBlank(message.getCover())) {
-                movieDetail.setVod_pic(getPic(message.getType()));
-            } else {
-                movieDetail.setVod_pic(message.getCover());
-            }
-            movieDetail.setVod_remarks(getTypeName(message.getType()));
-            movieDetail.setVod_play_from(message.getChannel());
-            if (message.getTime() != null) {
-                movieDetail.setVod_time(message.getTime().toString());
-            }
-            movieDetail.setValidity_state(message.getValidityState());
-            movieDetail.setValidity_summary(message.getValiditySummary());
-            list.add(movieDetail);
+            list.add(toMovieDetail(message));
         }
 
         result.setList(list);
@@ -173,6 +163,113 @@ public class RemoteSearchService {
 
         long end = System.currentTimeMillis();
         log.info("Search {} get {} results from PanSou elapsed {} ms.", keyword, result.getTotal(), end - start);
+        return result;
+    }
+
+    private MovieDetail toMovieDetail(Message message) {
+        var movieDetail = new MovieDetail();
+        movieDetail.setVod_id(encodeUrl(message.getLink()));
+        movieDetail.setVod_name(message.getName());
+        if (StringUtils.isNotBlank(message.getLink()) && StringUtils.isNotBlank(movieDetail.getVod_name())) {
+            shareTitle.put(message.getLink(), movieDetail.getVod_name());
+        }
+        if (StringUtils.isBlank(message.getCover())) {
+            movieDetail.setVod_pic(getPic(message.getType()));
+        } else {
+            movieDetail.setVod_pic(message.getCover());
+        }
+        movieDetail.setVod_remarks(getTypeName(message.getType()));
+        movieDetail.setVod_play_from(message.getChannel());
+        if (message.getTime() != null) {
+            movieDetail.setVod_time(message.getTime().toString());
+        }
+        movieDetail.setValidity_state(message.getValidityState());
+        movieDetail.setValidity_summary(message.getValiditySummary());
+        return movieDetail;
+    }
+
+    public MovieList pansouGroup(String keyword) {
+        long start = System.currentTimeMillis();
+        List<String> channels = telegramChannelRepository.findByEnabledTrue(Sort.by("sortOrder")).stream()
+                .filter(TelegramChannel::isValid)
+                .map(TelegramChannel::getUsername)
+                .toList();
+        List<Message> messages = search(keyword, channels);
+        String cacheId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        groupCache.put(cacheId, messages);
+
+        // seed with the configured driver order so folders follow the user's preferred order
+        Map<String, List<Message>> byType = new LinkedHashMap<>();
+        for (String type : appProperties.getTgDriverOrder()) {
+            byType.put(type, new ArrayList<>());
+        }
+        for (Message message : messages) {
+            byType.computeIfAbsent(message.getType(), key -> new ArrayList<>()).add(message);
+        }
+
+        List<MovieDetail> folders = new ArrayList<>();
+        for (var entry : byType.entrySet()) {
+            if (entry.getValue().isEmpty()) {
+                continue;
+            }
+            String type = entry.getKey();
+            String typeName = getTypeName(type);
+            var folder = new MovieDetail();
+            folder.setVod_id("pgroup:" + cacheId + ":" + type);
+            folder.setVod_name((typeName == null ? type : typeName) + "网盘");
+            folder.setVod_pic(getPic(type));
+            folder.setVod_remarks(entry.getValue().size() + "条结果");
+            folder.setVod_tag("folder");
+            folders.add(folder);
+        }
+
+        var result = new MovieList();
+        result.setList(folders);
+        result.setTotal(folders.size());
+        result.setLimit(folders.size());
+        log.info("Grouped search {} get {} disk types from PanSou elapsed {} ms.", keyword, folders.size(), System.currentTimeMillis() - start);
+        return result;
+    }
+
+    public MovieList pansouGroupList(String tid, int pg) {
+        int page = Math.max(1, pg);
+        String rest = tid.startsWith("pgroup:") ? tid.substring("pgroup:".length()) : "";
+        int sep = rest.indexOf(':');
+        if (sep < 0) {
+            return emptyGroupList(page);
+        }
+        String cacheId = rest.substring(0, sep);
+        String type = rest.substring(sep + 1);
+        List<Message> messages = groupCache.getIfPresent(cacheId);
+        if (messages == null) {
+            log.info("grouped search cache {} expired", cacheId);
+            return emptyGroupList(page);
+        }
+        List<MovieDetail> all = messages.stream()
+                .filter(message -> type.equals(message.getType()))
+                .map(this::toMovieDetail)
+                .toList();
+        int size = 20;
+        int from = Math.min((page - 1) * size, all.size());
+        int to = Math.min(from + size, all.size());
+        List<MovieDetail> pageItems = new ArrayList<>(all.subList(from, to));
+
+        var result = new MovieList();
+        result.setList(pageItems);
+        result.setPage(page);
+        result.setPagecount(Math.max(1, (int) Math.ceil(all.size() / (double) size)));
+        result.setLimit(pageItems.size());
+        result.setTotal(all.size());
+        return result;
+    }
+
+    private MovieList emptyGroupList(int page) {
+        var result = new MovieList();
+        result.setList(new ArrayList<>());
+        result.setPage(page);
+        result.setPagecount(1);
+        result.setLimit(0);
+        result.setTotal(0);
         return result;
     }
 
@@ -203,7 +300,7 @@ public class RemoteSearchService {
         if (Boolean.TRUE.equals(appProperties.getPanSouRefresh())) {
             request.setRefresh(true);
         }
-        request.setRes(StringUtils.defaultIfBlank(appProperties.getPanSouRes(), "merge"));
+        //request.setRes(StringUtils.defaultIfBlank(appProperties.getPanSouRes(), "merge"));
         List<String> filterInclude = appProperties.getPanSouFilterInclude();
         List<String> filterExclude = appProperties.getPanSouFilterExclude();
         if (!CollectionUtils.isEmpty(filterInclude) || !CollectionUtils.isEmpty(filterExclude)) {

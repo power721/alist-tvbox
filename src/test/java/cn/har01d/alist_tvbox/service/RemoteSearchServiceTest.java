@@ -78,7 +78,7 @@ class RemoteSearchServiceTest {
         appProperties.setPanSouSource("all");
         appProperties.setPanSouConc(20);
         appProperties.setPanSouRefresh(true);
-        appProperties.setPanSouRes("results");
+        appProperties.setPanSouRes("merge");
         appProperties.setPanSouFilterInclude(List.of("1080"));
         appProperties.setPanSouFilterExclude(List.of("枪版"));
         OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
@@ -95,7 +95,7 @@ class RemoteSearchServiceTest {
                         """, org.springframework.http.MediaType.APPLICATION_JSON));
         server.expect(once(), requestTo("http://pansou.example/api/search"))
                 .andExpect(content().json("""
-                        {"kw":"movie","src":"all","conc":20,"refresh":true,"res":"results",
+                        {"kw":"movie","src":"all","conc":20,"refresh":true,"res":"merge",
                          "filter":{"include":["1080"],"exclude":["枪版"]}}
                         """))
                 .andRespond(withSuccess("""
@@ -217,6 +217,58 @@ class RemoteSearchServiceTest {
 
         org.assertj.core.api.Assertions.assertThat(checkable).extracting(Message::getLink)
                 .containsExactlyInAnyOrder("https://pan.quark.cn/s/q1", "https://pan.baidu.com/s/b1");
+    }
+
+    @Test
+    void pansouGroupReturnsFolderPerDiskType() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanSouUrl("http://pansou.example");
+        appProperties.setPanSouSource("all");
+        TelegramChannelRepository telegramChannelRepository = mock(TelegramChannelRepository.class);
+        when(telegramChannelRepository.findByEnabledTrue(any())).thenReturn(List.of());
+        OfflineDownloadService offlineDownloadService = mock(OfflineDownloadService.class);
+        when(offlineDownloadService.getConfig()).thenReturn(new OfflineDownloadConfigDto(false, "", null, ""));
+
+        RemoteSearchService service = new RemoteSearchService(
+                appProperties, restTemplateBuilder(restTemplate), objectMapper,
+                telegramChannelRepository, mock(ShareService.class),
+                mock(TvBoxService.class), offlineDownloadService);
+
+        server.expect(once(), requestTo("http://pansou.example/api/search"))
+                .andRespond(withSuccess("""
+                        {"code":0,"data":{"total":2,"results":[],"merged_by_type":{
+                          "quark":[{"note":"电影A","url":"https://pan.quark.cn/s/a"}],
+                          "uc":[{"note":"电影B","url":"https://pan.uc.cn/s/b"}]}}}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+        try {
+            cn.har01d.alist_tvbox.tvbox.MovieList result = service.pansouGroup("电影");
+            org.assertj.core.api.Assertions.assertThat(result.getList()).hasSize(2);
+            org.assertj.core.api.Assertions.assertThat(result.getList())
+                    .extracting(cn.har01d.alist_tvbox.tvbox.MovieDetail::getVod_tag)
+                    .containsOnly("folder");
+            org.assertj.core.api.Assertions.assertThat(result.getList())
+                    .extracting(cn.har01d.alist_tvbox.tvbox.MovieDetail::getVod_name)
+                    .containsExactlyInAnyOrder("夸克网盘", "UC网盘");
+            org.assertj.core.api.Assertions.assertThat(result.getList())
+                    .extracting(cn.har01d.alist_tvbox.tvbox.MovieDetail::getVod_remarks)
+                    .containsOnly("1条结果");
+            String quarkId = result.getList().stream()
+                    .filter(m -> "夸克网盘".equals(m.getVod_name())).findFirst().orElseThrow().getVod_id();
+
+            // folder click → list resources of that type
+            cn.har01d.alist_tvbox.tvbox.MovieList list = service.pansouGroupList(quarkId, 1);
+            org.assertj.core.api.Assertions.assertThat(list.getList()).hasSize(1);
+            // vod_id is encodeUrl(link) → starts with the scheme; NOT a pgroup: id
+            org.assertj.core.api.Assertions.assertThat(list.getList().get(0).getVod_id()).startsWith("https");
+            org.assertj.core.api.Assertions.assertThat(list.getTotal()).isEqualTo(1);
+            server.verify();
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
     }
 
     private static Message message(String type, String link) {

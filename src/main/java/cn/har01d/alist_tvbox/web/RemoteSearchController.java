@@ -60,6 +60,24 @@ public class RemoteSearchController {
         return null;
     }
 
+    @GetMapping("/pansou-group")
+    public Object pansouGroup(String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
+        return pansouGroup("", id, t, wd, pg);
+    }
+
+    @GetMapping("/pansou-group/{token}")
+    public Object pansouGroup(@PathVariable String token, String id, String t, String wd, @RequestParam(required = false, defaultValue = "1") int pg) {
+        subscriptionService.checkToken(token);
+        if (StringUtils.isNotBlank(id)) {
+            return remoteSearchService.detail(id);
+        } else if (StringUtils.isNotBlank(wd)) {
+            return remoteSearchService.pansouGroup(wd);
+        } else if (StringUtils.isNotBlank(t) && !"0".equals(t)) {
+            return remoteSearchService.pansouGroupList(t, pg);
+        }
+        return null;
+    }
+
     @GetMapping("/tgsp")
     public String searchPg(String keyword, String channelUsername, String encode, HttpServletResponse response) {
         response.setHeader("server", "hypercorn-h11");
