@@ -225,6 +225,20 @@ class ShareLinkTest {
         assertEquals("L4qVTd-Jabud", share.getShareId());
 
         share = new Share();
+        share.setShareId("https://123pan.cn/123pan/iSkpvd-rEyt?pwd=p5X3");
+        assertTrue(shareService.parseLink(share));
+        assertEquals(3, share.getType());
+        assertEquals("iSkpvd-rEyt", share.getShareId());
+        assertEquals("p5X3", share.getPassword());
+
+        share = new Share();
+        share.setShareId("https://123pan.cn/s/iSkpvd-rEyt?pwd=p5X3");
+        assertTrue(shareService.parseLink(share));
+        assertEquals(3, share.getType());
+        assertEquals("iSkpvd-rEyt", share.getShareId());
+        assertEquals("p5X3", share.getPassword());
+
+        share = new Share();
         share.setShareId("https://mypikpak.com/s/VOEN_iLOacbr2EMItNu4EW9Lo1");
         assertTrue(shareService.parseLink(share));
         assertEquals(1, share.getType());
