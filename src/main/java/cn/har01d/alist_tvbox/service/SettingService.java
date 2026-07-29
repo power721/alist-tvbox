@@ -570,6 +570,21 @@ public class SettingService {
         if ("ali_to_115".equals(setting.getName())) {
             aListLocalService.updateSetting("ali_to_115", setting.getValue(), "bool");
         }
+        if ("ali_to_123".equals(setting.getName())) {
+            aListLocalService.updateSetting("ali_to_123", setting.getValue(), "bool");
+        }
+        if ("115_to_123".equals(setting.getName())) {
+            aListLocalService.updateSetting("115_to_123", setting.getValue(), "bool");
+        }
+        if ("quark_to_123".equals(setting.getName())) {
+            aListLocalService.updateSetting("quark_to_123", setting.getValue(), "bool");
+        }
+        if ("uc_to_123".equals(setting.getName())) {
+            aListLocalService.updateSetting("uc_to_123", setting.getValue(), "bool");
+        }
+        if ("guangya_to_123".equals(setting.getName())) {
+            aListLocalService.updateSetting("guangya_to_123", setting.getValue(), "bool");
+        }
         if ("github_proxy".equals(setting.getName())) {
             try {
                 gitHubProxyService.saveToFile(setting.getValue());

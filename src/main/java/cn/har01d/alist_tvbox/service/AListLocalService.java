@@ -111,6 +111,16 @@ public class AListLocalService {
         setSetting("delete_delay_time", time, "number");
         String aliTo115 = settingRepository.findById("ali_to_115").map(Setting::getValue).orElse("false");
         setSetting("ali_to_115", aliTo115, "bool");
+        String aliTo123 = settingRepository.findById("ali_to_123").map(Setting::getValue).orElse("false");
+        setSetting("ali_to_123", aliTo123, "bool");
+        String pan115To123 = settingRepository.findById("115_to_123").map(Setting::getValue).orElse("false");
+        setSetting("115_to_123", pan115To123, "bool");
+        String quarkTo123 = settingRepository.findById("quark_to_123").map(Setting::getValue).orElse("false");
+        setSetting("quark_to_123", quarkTo123, "bool");
+        String ucTo123 = settingRepository.findById("uc_to_123").map(Setting::getValue).orElse("false");
+        setSetting("uc_to_123", ucTo123, "bool");
+        String guangyaTo123 = settingRepository.findById("guangya_to_123").map(Setting::getValue).orElse("false");
+        setSetting("guangya_to_123", guangyaTo123, "bool");
         String roundRobin = settingRepository.findById("driver_round_robin").map(Setting::getValue).orElse("false");
         setSetting("driver_round_robin", roundRobin, "bool");
         String ussQuarkTv = settingRepository.findById("use_quark_tv").map(Setting::getValue).orElse("false");
