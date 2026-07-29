@@ -580,7 +580,7 @@
         v-model="sourceExtendText"
         type="textarea"
         :rows="18"
-        placeholder="输入扩展配置文本"
+        :placeholder="extHint"
       />
       <template #footer>
         <span class="dialog-footer">
@@ -1146,6 +1146,7 @@ const getSortedProxyNodes = () => {
 // 排序后的代理节点列表（按测速结果排序）
 const sortedProxyNodes = computed(() => getSortedProxyNodes())
 
+const extHint = '输入扩展配置文本，比如：\n{"cookie": "xxx"}'
 const pluginFilters = ref<PluginFilter[]>([])
 const pluginForm = ref<Plugin>({
   id: 0,

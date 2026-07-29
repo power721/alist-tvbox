@@ -146,6 +146,8 @@ public class Storage {
             return "/我的移动云盘/" + account.getName();
         } else if (account.getType() == DriverType.PAN123) {
             return "/我的123网盘/" + account.getName();
+        } else if (account.getType() == DriverType.OPEN123) {
+            return "/我的123Open/" + account.getName();
         } else if (account.getType() == DriverType.BAIDU) {
             return "/我的百度网盘/" + account.getName();
         } else if (account.getType() == DriverType.GUANGYA) {

@@ -14,7 +14,7 @@ public enum DriverType {
     BAIDU,
     ALI,
     GUANGYA,
-    OTHER6,
+    OPEN123,
     OTHER7,
     OTHER8,
     OTHER9,

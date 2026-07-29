@@ -263,5 +263,8 @@ public class QuarkUCTV {
         private String qrData;
         @JsonProperty("query_token")
         private String queryToken;
+        // 浏览器跳转式授权(如 123 Open 走 oauth 代理)没有二维码,前端改为新标签页打开该链接。
+        @JsonProperty("auth_url")
+        private String authUrl;
     }
 }

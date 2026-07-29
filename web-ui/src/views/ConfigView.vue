@@ -355,7 +355,61 @@
             />
             <span class="hint">帐号页面添加115网盘、配置删除码</span>
           </el-form-item>
+          <el-form-item label="开启阿里秒传123">
+            <el-switch
+              v-model="aliTo123"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateAliTo123"
+            />
+            <span class="hint">帐号页面添加 123 Open 网盘;按 SHA1 秒传,优先于快传115,失败回退</span>
+          </el-form-item>
         </div>
+        <div class="el-row">
+          <el-form-item label="开启115秒传123">
+            <el-switch
+              v-model="pan115To123"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updatePan115To123"
+            />
+            <span class="hint">帐号页面添加 123 Open 网盘;按 SHA1 秒传,失败回退 115 直链</span>
+          </el-form-item>
+          <el-form-item label="开启光鸭秒传123">
+            <el-switch
+              v-model="guangyaTo123"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateGuangyaTo123"
+            />
+            <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退光鸭直链</span>
+          </el-form-item>
+        </div>
+<!--        <div class="el-row">-->
+<!--          <el-form-item label="开启夸克秒传123">-->
+<!--            <el-switch-->
+<!--              v-model="quarkTo123"-->
+<!--              inline-prompt-->
+<!--              active-text="开启"-->
+<!--              inactive-text="关闭"-->
+<!--              @change="updateQuarkTo123"-->
+<!--            />-->
+<!--            <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退夸克直链</span>-->
+<!--          </el-form-item>-->
+<!--          <el-form-item label="开启UC秒传123">-->
+<!--            <el-switch-->
+<!--              v-model="ucTo123"-->
+<!--              inline-prompt-->
+<!--              active-text="开启"-->
+<!--              inactive-text="关闭"-->
+<!--              @change="updateUcTo123"-->
+<!--            />-->
+<!--            <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退 UC 直链</span>-->
+<!--          </el-form-item>-->
+<!--        </div>-->
         <div class="el-row">
           <el-form-item label="网盘文件删除延时">
             <el-input-number v-model="deleteDelayTime" min="0"></el-input-number>
@@ -477,6 +531,11 @@ const replaceAliToken = ref(false)
 const debugLog = ref(false)
 const aListDebug = ref(false)
 const aliTo115 = ref(false)
+const aliTo123 = ref(false)
+const pan115To123 = ref(false)
+const quarkTo123 = ref(false)
+const ucTo123 = ref(false)
+const guangyaTo123 = ref(false)
 const driverRoundRobin = ref(false)
 const ussQuarkTv = ref(false)
 const aliLazyLoad = ref(false)
@@ -696,6 +755,36 @@ const updateAliTo115 = () => {
   })
 }
 
+const updateAliTo123 = () => {
+  axios.post('/api/settings', {name: 'ali_to_123', value: aliTo123.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePan115To123 = () => {
+  axios.post('/api/settings', {name: '115_to_123', value: pan115To123.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateQuarkTo123 = () => {
+  axios.post('/api/settings', {name: 'quark_to_123', value: quarkTo123.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateUcTo123 = () => {
+  axios.post('/api/settings', {name: 'uc_to_123', value: ucTo123.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
+const updateGuangyaTo123 = () => {
+  axios.post('/api/settings', {name: 'guangya_to_123', value: guangyaTo123.value}).then(() => {
+    ElMessage.success('更新成功')
+  })
+}
+
 const updateDriverRoundRobin = () => {
   axios.post('/api/settings', {name: 'driver_round_robin', value: driverRoundRobin.value}).then(() => {
     ElMessage.success('更新成功')
@@ -856,6 +945,11 @@ onMounted(() => {
     debugLog.value = data.debug_log === 'true'
     aListDebug.value = data.alist_debug === 'true'
     aliTo115.value = data.ali_to_115 === 'true'
+    aliTo123.value = data.ali_to_123 === 'true'
+    pan115To123.value = data['115_to_123'] === 'true'
+    quarkTo123.value = data.quark_to_123 === 'true'
+    ucTo123.value = data.uc_to_123 === 'true'
+    guangyaTo123.value = data.guangya_to_123 === 'true'
     driverRoundRobin.value = data.driver_round_robin === 'true'
     ussQuarkTv.value = data.use_quark_tv === 'true'
     cleanInvalidShares.value = data.clean_invalid_shares === 'true'

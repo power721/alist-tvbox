@@ -13,6 +13,7 @@ import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
 import cn.har01d.alist_tvbox.storage.BaiduNetdisk;
 import cn.har01d.alist_tvbox.storage.GuangYaPan;
+import cn.har01d.alist_tvbox.storage.Open123;
 import cn.har01d.alist_tvbox.storage.Pan115;
 import cn.har01d.alist_tvbox.storage.Pan123;
 import cn.har01d.alist_tvbox.storage.Pan139;
@@ -58,7 +59,9 @@ public class DriverAccountService {
     private static final String GY_ACCOUNT_API = "https://account.guangyapan.com";
     private static final String GY_CLIENT_ID = "aMe-8VSlkrbQXpUR";
     private static final String GY_DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
-    private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.PAN139, DriverType.BAIDU, DriverType.THUNDER);
+    private static final String PAN123_OAUTH_SERVER = "https://oauth.litepan.top";
+    private static final String PAN123_OAUTH_DRIVER = "123云盘Open";
+    private static final Set<DriverType> TOKEN_TYPES = Set.of(DriverType.OPEN115, DriverType.OPEN123, DriverType.PAN139, DriverType.BAIDU, DriverType.THUNDER);
     private static final Set<DriverType> COOKIE_TYPES = Set.of(DriverType.PAN115, DriverType.QUARK, DriverType.UC, DriverType.CLOUD189);
     private final PanAccountRepository panAccountRepository;
     private final DriverAccountRepository driverAccountRepository;
@@ -274,6 +277,8 @@ public class DriverAccountService {
             storage = new Pan115(account);
         } else if (account.getType() == DriverType.OPEN115) {
             //storage = new Open115(account);
+        } else if (account.getType() == DriverType.OPEN123) {
+            storage = new Open123(account);
         } else if (account.getType() == DriverType.GUANGYA) {
             storage = new GuangYaPan(account);
         } else if (account.getType() == DriverType.BAIDU) {
@@ -319,10 +324,19 @@ public class DriverAccountService {
     public void updateToken(Integer id, DriverAccount dto) {
         log.debug("update token: {} {}", id - IDX, dto);
         var account = get(id - IDX);
-        if (account.getType() == DriverType.THUNDER) {
+        if (account.getType() == DriverType.OPEN123) {
+            // Go 刷新后同步回来的是 refresh_token(可能轮换),写回 addition.refresh_token,保留 access token。
+            try {
+                var add = Utils.readJson(account.getAddition());
+                add.put("refresh_token", dto.getToken());
+                account.setAddition(objectMapper.writeValueAsString(add));
+            } catch (Exception e) {
+                log.warn("sync OPEN123 refresh_token failed", e);
+            }
+        } else if (account.getType() == DriverType.THUNDER) {
             account.setToken(dto.getToken());
             account.setCookie(dto.getCookie());
-        } if (account.getType() == DriverType.UC_TV) {
+        } else if (account.getType() == DriverType.UC_TV) {
             account.setUsername(dto.getUsername());
             account.setPassword(dto.getPassword());
         } else if (TOKEN_TYPES.contains(account.getType())) {
@@ -428,11 +442,17 @@ public class DriverAccountService {
             if (StringUtils.isBlank(accessToken) && StringUtils.isBlank(refreshToken)) {
                 throw new BadRequestException("Token不能为空");
             }
+        } else if (dto.getType() == DriverType.OPEN123) {
+            Map<String, Object> addition = readAddition(dto.getAddition());
+            String refreshToken = text(addition.get("refresh_token"));
+            if (StringUtils.isBlank(dto.getToken()) && StringUtils.isBlank(refreshToken)) {
+                throw new BadRequestException("请扫码登录或填写 Access Token / Refresh Token");
+            }
         } else if (StringUtils.isBlank(dto.getCookie()) && StringUtils.isBlank(dto.getToken())) {
             throw new BadRequestException("Cookie和Token不能同时为空");
         }
         if (StringUtils.isBlank(dto.getFolder())) {
-            if (dto.getType() == DriverType.QUARK || dto.getType() == DriverType.UC || dto.getType() == DriverType.QUARK_TV || dto.getType() == DriverType.UC_TV || dto.getType() == DriverType.PAN115 || dto.getType() == DriverType.OPEN115 || dto.getType() == DriverType.PAN123 || dto.getType() == DriverType.GUANGYA) {
+            if (dto.getType() == DriverType.QUARK || dto.getType() == DriverType.UC || dto.getType() == DriverType.QUARK_TV || dto.getType() == DriverType.UC_TV || dto.getType() == DriverType.PAN115 || dto.getType() == DriverType.OPEN115 || dto.getType() == DriverType.OPEN123 || dto.getType() == DriverType.PAN123 || dto.getType() == DriverType.GUANGYA) {
                 dto.setFolder("0");
             } else if (dto.getType() == DriverType.CLOUD189) {
                 dto.setFolder("-11");
@@ -512,11 +532,41 @@ public class DriverAccountService {
         if (DriverType.GUANGYA.name().equals(type)) {
             return getGuangYaQr();
         }
+        if (DriverType.OPEN123.name().equals(type)) {
+            return getPan123OpenQr();
+        }
         QuarkUCTV driver = drivers.get(type);
         if (driver == null) {
             throw new BadRequestException("不支持的类型");
         }
         return driver.getLoginCode();
+    }
+
+    private QuarkUCTV.LoginResponse getPan123OpenQr() {
+        // 用户无自有 client_id:经 oauth.litepan.top 代理(内置开发者凭据)走 123 官方授权页拿 access/refresh token。
+        // litepan 是浏览器重定向流程,不是扫码流程:返回授权链接让前端新标签页打开,授权后轮询 session 取 token。
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
+        Map<String, Object> body = Map.of(
+                "driver_type", PAN123_OAUTH_DRIVER,
+                "callback_url", PAN123_OAUTH_SERVER + "/callback-popup"
+        );
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+        ObjectNode json = restTemplate.postForObject(PAN123_OAUTH_SERVER + "/api/oauth/start", entity, ObjectNode.class);
+        if (json == null) {
+            throw new BadRequestException("123 Open 授权链接获取失败: empty response");
+        }
+        String sessionId = json.path("data").path("session_id").asText("");
+        String oauthUrl = json.path("data").path("oauth_url").asText("");
+        if (StringUtils.isAnyBlank(sessionId, oauthUrl)) {
+            String error = json.path("data").path("error").asText(json.path("message").asText("invalid response"));
+            throw new BadRequestException("123 Open 授权链接获取失败: " + error);
+        }
+        var res = new QuarkUCTV.LoginResponse();
+        res.setAuthUrl(oauthUrl);
+        res.setQueryToken(sessionId);
+        return res;
     }
 
     private QuarkUCTV.LoginResponse getGuangYaQr() throws IOException {
@@ -574,6 +624,9 @@ public class DriverAccountService {
         if (DriverType.GUANGYA.name().equals(type)) {
             return getGuangYaToken(queryToken);
         }
+        if (DriverType.OPEN123.name().equals(type)) {
+            return getPan123OpenToken(queryToken);
+        }
         QuarkUCTV driver = drivers.get(type);
         if (driver == null) {
             throw new BadRequestException("不支持的类型");
@@ -583,6 +636,37 @@ public class DriverAccountService {
         var info = new AccountInfo();
         info.setToken(token);
         return info;
+    }
+
+    private AccountInfo getPan123OpenToken(String sessionId) {
+        ObjectNode json = restTemplate.getForObject(PAN123_OAUTH_SERVER + "/api/oauth/status/{sid}", ObjectNode.class, sessionId);
+        if (json == null) {
+            throw new BadRequestException("等待用户在新标签页完成授权...");
+        }
+        var data = json.path("data");
+        var td = data.path("token_data");
+        // 对齐 JS extractTokenData:token_data 优先、其次 data;access_token 兼容 access_token/accessToken/token。
+        String accessToken = firstNonBlank(td.path("access_token"), td.path("accessToken"), td.path("token"),
+                data.path("access_token"), data.path("accessToken"), data.path("token"));
+        String refreshToken = firstNonBlank(td.path("refresh_token"), td.path("refreshToken"),
+                data.path("refresh_token"), data.path("refreshToken"));
+        if (StringUtils.isNotBlank(accessToken)) {
+            // 对齐 JS:拿到 token 后通知 litepan「已收到」(无 body,仅 Accept),best-effort,失败不阻塞登录。
+            try {
+                restTemplate.postForObject(PAN123_OAUTH_SERVER + "/api/oauth/confirm-received/{sid}",
+                        null, ObjectNode.class, sessionId);
+            } catch (Exception ignore) {
+            }
+            var info = new AccountInfo();
+            info.setToken(accessToken);
+            info.getAddition().put("refresh_token", refreshToken);
+            return info;
+        }
+        String status = data.path("status").asText("");
+        if ("expired".equals(status) || "failed".equals(status)) {
+            throw new BadRequestException("授权链接已过期，请重新获取！");
+        }
+        throw new BadRequestException("等待用户在新标签页完成授权...");
     }
 
     private AccountInfo getGuangYaToken(String queryToken) {
@@ -692,6 +776,20 @@ public class DriverAccountService {
 
     private static String text(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    // 对齐 JS extractTokenData 的多路径/多键容错:返回第一个非空白文本。
+    private static String firstNonBlank(com.fasterxml.jackson.databind.JsonNode... nodes) {
+        for (var n : nodes) {
+            if (n == null || n.isMissingNode() || n.isNull()) {
+                continue;
+            }
+            String s = n.asText("");
+            if (StringUtils.isNotBlank(s)) {
+                return s.trim();
+            }
+        }
+        return "";
     }
 
     private AccountInfo getQuarkCookie(String token) {
