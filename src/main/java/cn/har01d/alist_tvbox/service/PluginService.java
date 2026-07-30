@@ -104,6 +104,41 @@ public class PluginService {
     }
 
     @Transactional
+    public Plugin upsertCompiledPlugin(String url,
+                                       String localPath,
+                                       String externalId,
+                                       String sourceName,
+                                       Integer version,
+                                       String packageText) {
+        Plugin plugin = findExistingPlugin(url, externalId);
+        boolean created = plugin == null;
+        if (created) {
+            plugin = new Plugin();
+            plugin.setEnabled(true);
+            plugin.setSortOrder(subscriptionSourceService.nextSortOrder());
+        } else {
+            validateUrlUniqueness(url, plugin.getId());
+            validateExternalIdUniqueness(externalId, plugin.getId());
+        }
+
+        plugin.setUrl(url);
+        plugin.setLocalPath(localPath);
+        plugin.setExternalId(StringUtils.trimToNull(externalId));
+        plugin.setSourceName(StringUtils.defaultIfBlank(sourceName, externalId));
+        plugin.setName(StringUtils.defaultIfBlank(plugin.getName(), plugin.getSourceName()));
+        plugin.setVersion(version);
+        plugin.setContent(packageText);
+        plugin.setLastCheckedAt(OffsetDateTime.now());
+        plugin.setLastError("");
+
+        if (created) {
+            validateUrlUniqueness(plugin.getUrl(), null);
+            validateExternalIdUniqueness(plugin.getExternalId(), null);
+        }
+        return pluginRepository.save(plugin);
+    }
+
+    @Transactional
     public Plugin update(Integer id, Plugin input) {
         Plugin plugin = pluginRepository.findById(id).orElseThrow(NotFoundException::new);
         boolean urlChanged = !StringUtils.equals(plugin.getUrl(), input.getUrl());

@@ -63,6 +63,7 @@ musl-toolchain/
 /alist-tvbox.yaml
 /config/data/
 /scripts/gh_proxy_bench_result.json
+/work/
 /.claude/worktrees/
 default.conf
 /docs/security/
