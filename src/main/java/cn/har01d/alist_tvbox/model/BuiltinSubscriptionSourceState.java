@@ -4,6 +4,7 @@ public class BuiltinSubscriptionSourceState {
     private String name;
     private Boolean enabled;
     private Integer sortOrder;
+    private String extend;
 
     public String getName() {
         return name;
@@ -27,5 +28,13 @@ public class BuiltinSubscriptionSourceState {
 
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public String getExtend() {
+        return extend;
+    }
+
+    public void setExtend(String extend) {
+        this.extend = extend;
     }
 }

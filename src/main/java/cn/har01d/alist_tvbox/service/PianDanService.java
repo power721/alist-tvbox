@@ -51,9 +51,17 @@ public class PianDanService {
     private static final Set<String> MOVIE_PROVIDERS = Set.of("8", "337", "1899", "350", "9");
     private static final Set<String> WATCH_REGIONS = Set.of("US", "CN", "HK", "TW", "JP", "KR", "GB", "CA", "AU");
     private static final int TMDB_MAX_PAGE = 500;
+    private static final String HOME_DEFAULT_CATEGORY = "hot_movie";
+    private static final Set<String> HOME_DOUBAN_CATEGORIES = Set.of(
+            "hot_movie", "hot_tv", "tv_domestic", "tv_american", "tv_animation", "tv_variety_show",
+            "tv_korean", "tv_japanese", "suggestion_movie", "suggestion_tv", "movie_top250",
+            "movie_real_time_hotest", "movie_weekly_best", "tv_real_time_hotest",
+            "tv_chinese_best_weekly", "tv_global_best_weekly", "show_chinese_best_weekly"
+    );
 
     private final TelegramService telegramService;
     private final SettingRepository settingRepository;
+    private final SubscriptionSourceService subscriptionSourceService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final Cache<String, MovieList> listCache = Caffeine.newBuilder()
@@ -67,10 +75,12 @@ public class PianDanService {
 
     public PianDanService(TelegramService telegramService,
                           SettingRepository settingRepository,
+                          SubscriptionSourceService subscriptionSourceService,
                           RestTemplateBuilder builder,
                           ObjectMapper objectMapper) {
         this.telegramService = telegramService;
         this.settingRepository = settingRepository;
+        this.subscriptionSourceService = subscriptionSourceService;
         this.restTemplate = builder.build();
         this.objectMapper = objectMapper;
     }
@@ -111,7 +121,7 @@ public class PianDanService {
     public MovieList home() {
         List<MovieDetail> items = new ArrayList<>();
         try {
-            MovieList douban = telegramService.listDouban("hot_movie", "", null, null, null, null, 1, 10);
+            MovieList douban = telegramService.listDouban(homeDoubanCategory(), "", null, null, null, null, 1, 10);
             items.addAll(toNavigationList(douban).getList().stream().limit(10).toList());
         } catch (RuntimeException e) {
             log.warn("load Douban navigation home failed", e);
@@ -125,6 +135,23 @@ public class PianDanService {
         result.setLimit(items.size());
         result.setTotal(items.size());
         return result;
+    }
+
+    private String homeDoubanCategory() {
+        String extend = subscriptionSourceService.getBuiltinExtend("csp_PianDan");
+        if (StringUtils.isBlank(extend)) {
+            return HOME_DEFAULT_CATEGORY;
+        }
+        String category = "";
+        try {
+            JsonNode node = objectMapper.readTree(extend);
+            if (node.isObject()) {
+                category = node.path("home").asText("");
+            }
+        } catch (JsonProcessingException e) {
+            category = extend.trim();
+        }
+        return HOME_DOUBAN_CATEGORIES.contains(category) ? category : HOME_DEFAULT_CATEGORY;
     }
 
     public MovieList list(String type, String ac, int page, int size, Map<String, String> filters) {

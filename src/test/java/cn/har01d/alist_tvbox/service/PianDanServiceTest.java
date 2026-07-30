@@ -41,6 +41,8 @@ class PianDanServiceTest {
     @Mock
     private SettingRepository settingRepository;
     @Mock
+    private SubscriptionSourceService subscriptionSourceService;
+    @Mock
     private RestTemplateBuilder builder;
 
     private RestTemplate restTemplate;
@@ -50,7 +52,7 @@ class PianDanServiceTest {
     void setUp() {
         restTemplate = new RestTemplate();
         when(builder.build()).thenReturn(restTemplate);
-        service = new PianDanService(telegramService, settingRepository, builder, new ObjectMapper());
+        service = new PianDanService(telegramService, settingRepository, subscriptionSourceService, builder, new ObjectMapper());
     }
 
     @Test

@@ -565,7 +565,7 @@
         </el-table-column>
         <el-table-column label="操作" width="160">
           <template #default="scope">
-            <el-button v-if="scope.row.extendable" link type="primary" @click="openSourceExtendDialog(scope.row)">配置</el-button>
+            <el-button v-if="scope.row.extendable" link type="primary" @click="openSourceConfig(scope.row)">配置</el-button>
             <el-button v-if="scope.row.refreshable" link type="primary" @click="refreshPlugin(scope.row.pluginId)">刷新</el-button>
             <el-button v-if="scope.row.deletable" link type="danger" @click="deletePlugin(scope.row.pluginId)">删除</el-button>
             <span v-if="!scope.row.extendable && !scope.row.refreshable && !scope.row.deletable">-</span>
@@ -586,6 +586,23 @@
         <span class="dialog-footer">
           <el-button @click="sourceExtendVisible = false">取消</el-button>
           <el-button type="primary" @click="saveSourceExtend">保存配置</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="pianDanHomeVisible" :title="pianDanHomeTitle" width="420px">
+      <el-form label-width="90px">
+        <el-form-item label="首页分类">
+          <el-select v-model="pianDanHomeValue" style="width: 100%">
+            <el-option v-for="item in pianDanHomeOptions" :key="item.value" :label="item.label" :value="item.value"/>
+          </el-select>
+          <div class="ext-tip">首页豆瓣展示块使用的分类，TMDB 趋势块不受影响。</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="pianDanHomeVisible = false">取消</el-button>
+          <el-button type="primary" @click="savePianDanHome">保存</el-button>
         </span>
       </template>
     </el-dialog>
@@ -1181,6 +1198,30 @@ const customProxyUrls = ref('')
 const selectedPluginIds = ref<number[]>([])
 const sourceExtendTarget = ref<ManagedSource | null>(null)
 const sourceExtendText = ref('')
+const pianDanHomeVisible = ref(false)
+const pianDanHomeTarget = ref<ManagedSource | null>(null)
+const pianDanHomeValue = ref('hot_movie')
+const pianDanHomeTitle = computed(() => (pianDanHomeTarget.value?.name || '片单导航') + ' · 首页分类')
+const pianDanHomeOptions = [
+  {label: '热门电影', value: 'hot_movie'},
+  {label: '热门电视剧', value: 'hot_tv'},
+  {label: '国产剧', value: 'tv_domestic'},
+  {label: '欧美剧', value: 'tv_american'},
+  {label: '动漫', value: 'tv_animation'},
+  {label: '综艺', value: 'tv_variety_show'},
+  {label: '韩剧', value: 'tv_korean'},
+  {label: '日剧', value: 'tv_japanese'},
+  {label: '电影推荐', value: 'suggestion_movie'},
+  {label: '电视剧推荐', value: 'suggestion_tv'},
+  {label: '电影Top250', value: 'movie_top250'},
+  {label: '实时热门电影', value: 'movie_real_time_hotest'},
+  {label: '一周口碑电影榜', value: 'movie_weekly_best'},
+  {label: '实时热门电视', value: 'tv_real_time_hotest'},
+  {label: '华语口碑剧集榜', value: 'tv_chinese_best_weekly'},
+  {label: '全球口碑剧集榜', value: 'tv_global_best_weekly'},
+  {label: '国内口碑综艺榜', value: 'show_chinese_best_weekly'}
+]
+const pianDanHomeValues = new Set(pianDanHomeOptions.map(item => item.value))
 const pluginFilterForm = ref<PluginFilter>({
   id: 0,
   name: '',
@@ -2513,6 +2554,38 @@ const saveSourceExtend = () => {
   sourceExtendVisible.value = false
 }
 
+const openSourceConfig = (source: ManagedSource) => {
+  if (source.builtin && source.key === 'csp_PianDan') {
+    openPianDanHomeDialog(source)
+  } else {
+    openSourceExtendDialog(source)
+  }
+}
+
+const openPianDanHomeDialog = (source: ManagedSource) => {
+  pianDanHomeTarget.value = source
+  let value = 'hot_movie'
+  try {
+    const parsed = source.extend ? JSON.parse(source.extend) : null
+    if (parsed && typeof parsed === 'object' && pianDanHomeValues.has(parsed.home)) {
+      value = parsed.home
+    }
+  } catch {
+    value = 'hot_movie'
+  }
+  pianDanHomeValue.value = value
+  pianDanHomeVisible.value = true
+}
+
+const savePianDanHome = () => {
+  if (!pianDanHomeTarget.value) {
+    return
+  }
+  pianDanHomeTarget.value.extend = JSON.stringify({home: pianDanHomeValue.value})
+  updateSource(pianDanHomeTarget.value)
+  pianDanHomeVisible.value = false
+}
+
 const updatePluginFilter = (filter: PluginFilter) => {
   if (!validatePluginFilter(filter)) {
     return
@@ -2801,6 +2874,13 @@ onUnmounted(() => {
 
 .hint {
   margin-left: 16px;
+}
+
+.ext-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
+  margin-top: 4px;
 }
 
 .pointer {
