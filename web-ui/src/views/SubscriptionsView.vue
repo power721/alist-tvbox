@@ -598,6 +598,13 @@
           </el-select>
           <div class="ext-tip">首页豆瓣展示块使用的分类，TMDB 趋势块不受影响。</div>
         </el-form-item>
+        <el-form-item label="分类模式">
+          <el-select v-model="pianDanMode" style="width: 100%">
+            <el-option label="全部分类" value="all"/>
+            <el-option label="精简分类" value="lite"/>
+          </el-select>
+          <div class="ext-tip">精简模式合并子分类，通过筛选条件下钻；全部模式返回所有分类。</div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -1201,7 +1208,8 @@ const sourceExtendText = ref('')
 const pianDanHomeVisible = ref(false)
 const pianDanHomeTarget = ref<ManagedSource | null>(null)
 const pianDanHomeValue = ref('hot_movie')
-const pianDanHomeTitle = computed(() => (pianDanHomeTarget.value?.name || '片单导航') + ' · 首页分类')
+const pianDanMode = ref('all')
+const pianDanHomeTitle = computed(() => (pianDanHomeTarget.value?.name || '片单导航') + ' · 设置')
 const pianDanHomeOptions = [
   {label: '热门电影', value: 'hot_movie'},
   {label: '热门电视剧', value: 'hot_tv'},
@@ -2564,16 +2572,23 @@ const openSourceConfig = (source: ManagedSource) => {
 
 const openPianDanHomeDialog = (source: ManagedSource) => {
   pianDanHomeTarget.value = source
-  let value = 'hot_movie'
+  let home = 'hot_movie'
+  let mode = 'all'
   try {
     const parsed = source.extend ? JSON.parse(source.extend) : null
-    if (parsed && typeof parsed === 'object' && pianDanHomeValues.has(parsed.home)) {
-      value = parsed.home
+    if (parsed && typeof parsed === 'object') {
+      if (pianDanHomeValues.has(parsed.home)) {
+        home = parsed.home
+      }
+      if (parsed.mode === 'lite') {
+        mode = 'lite'
+      }
     }
   } catch {
-    value = 'hot_movie'
+    home = 'hot_movie'
   }
-  pianDanHomeValue.value = value
+  pianDanHomeValue.value = home
+  pianDanMode.value = mode
   pianDanHomeVisible.value = true
 }
 
@@ -2581,7 +2596,7 @@ const savePianDanHome = () => {
   if (!pianDanHomeTarget.value) {
     return
   }
-  pianDanHomeTarget.value.extend = JSON.stringify({home: pianDanHomeValue.value})
+  pianDanHomeTarget.value.extend = JSON.stringify({home: pianDanHomeValue.value, mode: pianDanMode.value})
   updateSource(pianDanHomeTarget.value)
   pianDanHomeVisible.value = false
 }

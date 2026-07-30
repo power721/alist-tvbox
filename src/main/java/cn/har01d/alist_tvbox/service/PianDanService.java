@@ -58,6 +58,14 @@ public class PianDanService {
             "movie_real_time_hotest", "movie_weekly_best", "tv_real_time_hotest",
             "tv_chinese_best_weekly", "tv_global_best_weekly", "show_chinese_best_weekly"
     );
+    private static final Set<String> TMDB_MOVIE_LISTS = Set.of("popular", "top_rated", "now_playing", "upcoming", "discover", "platform");
+    private static final Set<String> TMDB_TV_LISTS = Set.of("popular", "top_rated", "airing_today", "on_the_air", "discover", "platform");
+    private static final Set<String> DOUBAN_CATEGORY_VALUES = Set.of("tv_domestic", "tv_american", "tv_korean", "tv_japanese", "tv_animation", "tv_variety_show");
+    private static final Set<String> DOUBAN_BILLBOARD_VALUES = Set.of(
+            "movie_top250", "movie_real_time_hotest", "movie_weekly_best", "tv_real_time_hotest",
+            "tv_chinese_best_weekly", "tv_global_best_weekly", "show_chinese_best_weekly",
+            "show_global_best_weekly", "suggestion_movie", "suggestion_tv"
+    );
 
     private final TelegramService telegramService;
     private final SettingRepository settingRepository;
@@ -86,6 +94,10 @@ public class PianDanService {
     }
 
     public CategoryList category() {
+        return "lite".equals(categoryMode()) ? buildLiteCategory() : buildFullCategory();
+    }
+
+    private CategoryList buildFullCategory() {
         CategoryList result = new CategoryList();
         CategoryList douban = telegramService.categoryDouban();
         for (Category source : douban.getCategories()) {
@@ -118,11 +130,81 @@ public class PianDanService {
         return result;
     }
 
+    private CategoryList buildLiteCategory() {
+        CategoryList result = new CategoryList();
+        CategoryList douban = telegramService.categoryDouban();
+        keepDoubanCategories(result, douban, Set.of("hot_movie", "hot_tv"));
+        addDoubanCategory(result, "category", "分类");
+        addDoubanCategory(result, "billboard", "榜单");
+        keepDoubanCategories(result, douban, Set.of("local"));
+        result.getFilters().put(DOUBAN_PREFIX + "category", List.of(
+                filter("category", "分类", values(
+                        "国产剧", "tv_domestic", "欧美剧", "tv_american", "韩剧", "tv_korean",
+                        "日剧", "tv_japanese", "动漫", "tv_animation", "综艺", "tv_variety_show"))));
+        result.getFilters().put(DOUBAN_PREFIX + "billboard", List.of(
+                filter("billboard", "榜单", values(
+                        "电影Top250", "movie_top250", "实时热门电影", "movie_real_time_hotest",
+                        "一周口碑电影榜", "movie_weekly_best", "实时热门电视", "tv_real_time_hotest",
+                        "华语口碑剧集榜", "tv_chinese_best_weekly", "全球口碑剧集榜", "tv_global_best_weekly",
+                        "国内口碑综艺榜", "show_chinese_best_weekly", "国外口碑综艺榜", "show_global_best_weekly",
+                        "电影推荐", "suggestion_movie", "电视剧推荐", "suggestion_tv"))));
+
+        addTmdbCategory(result, "trending", "TMDB趋势");
+        addTmdbCategory(result, "movie", "TMDB电影");
+        addTmdbCategory(result, "tv", "TMDB剧集");
+        addTmdbCategory(result, "discover_movie", "TMDB电影片库");
+        addTmdbCategory(result, "discover_tv", "TMDB剧集片库");
+        addTmdbCategory(result, "anime", "TMDB动漫片库");
+        addTmdbCategory(result, "variety", "TMDB综艺片库");
+        result.getFilters().put(TMDB_PREFIX + "trending", trendingFilters());
+        result.getFilters().put(TMDB_PREFIX + "movie", List.of(
+                filter("list", "分类", values(
+                        "热门", "popular", "高分", "top_rated", "院线热映", "now_playing",
+                        "即将上映", "upcoming", "流媒体", "platform"))));
+        result.getFilters().put(TMDB_PREFIX + "tv", List.of(
+                filter("list", "分类", values(
+                        "热门", "popular", "高分", "top_rated", "今日播出", "airing_today",
+                        "正在播出", "on_the_air", "平台", "platform"))));
+        result.getFilters().put(TMDB_PREFIX + "discover_movie", discoverFilters(true));
+        result.getFilters().put(TMDB_PREFIX + "discover_tv", discoverFilters(false));
+        result.getFilters().put(TMDB_PREFIX + "anime", animeFilters());
+        result.getFilters().put(TMDB_PREFIX + "variety", varietyFilters());
+
+        result.setTotal(result.getCategories().size());
+        result.setLimit(result.getCategories().size());
+        return result;
+    }
+
+    private void keepDoubanCategories(CategoryList result, CategoryList douban, Set<String> ids) {
+        for (Category source : douban.getCategories()) {
+            if (ids.contains(source.getType_id())) {
+                Category category = copyCategory(source);
+                category.setType_id(DOUBAN_PREFIX + source.getType_id());
+                category.setType_name("豆瓣·" + source.getType_name());
+                result.getCategories().add(category);
+            }
+        }
+        for (String id : ids) {
+            List<Filter> filters = douban.getFilters().get(id);
+            if (filters != null) {
+                result.getFilters().put(DOUBAN_PREFIX + id, filters);
+            }
+        }
+    }
+
+    private void addDoubanCategory(CategoryList result, String id, String name) {
+        Category category = new Category();
+        category.setType_id(DOUBAN_PREFIX + id);
+        category.setType_name("豆瓣·" + name);
+        category.setType_flag(0);
+        result.getCategories().add(category);
+    }
+
     public MovieList home() {
         List<MovieDetail> items = new ArrayList<>();
         try {
-            MovieList douban = telegramService.listDouban(homeDoubanCategory(), "", null, null, null, null, 1, 10);
-            items.addAll(toNavigationList(douban).getList().stream().limit(10).toList());
+            MovieList douban = telegramService.listDouban(homeDoubanCategory(), "", null, null, null, null, 1, 20);
+            items.addAll(toNavigationList(douban).getList().stream().limit(20).toList());
         } catch (RuntimeException e) {
             log.warn("load Douban navigation home failed", e);
         }
@@ -137,21 +219,29 @@ public class PianDanService {
         return result;
     }
 
-    private String homeDoubanCategory() {
+    private JsonNode pianDanConfig() {
         String extend = subscriptionSourceService.getBuiltinExtend("csp_PianDan");
         if (StringUtils.isBlank(extend)) {
-            return HOME_DEFAULT_CATEGORY;
+            return null;
         }
-        String category = "";
         try {
             JsonNode node = objectMapper.readTree(extend);
-            if (node.isObject()) {
-                category = node.path("home").asText("");
-            }
+            return node.isObject() ? node : null;
         } catch (JsonProcessingException e) {
-            category = extend.trim();
+            return null;
         }
+    }
+
+    private String homeDoubanCategory() {
+        JsonNode config = pianDanConfig();
+        String category = config == null ? "" : config.path("home").asText("");
         return HOME_DOUBAN_CATEGORIES.contains(category) ? category : HOME_DEFAULT_CATEGORY;
+    }
+
+    private String categoryMode() {
+        JsonNode config = pianDanConfig();
+        String mode = config == null ? "" : config.path("mode").asText("");
+        return "lite".equalsIgnoreCase(mode) ? "lite" : "all";
     }
 
     public MovieList list(String type, String ac, int page, int size, Map<String, String> filters) {
@@ -159,7 +249,7 @@ public class PianDanService {
         int safeSize = Math.max(1, size);
         if (StringUtils.startsWith(type, DOUBAN_PREFIX)) {
             return toNavigationList(telegramService.listDouban(
-                    type.substring(DOUBAN_PREFIX.length()),
+                    resolveDoubanType(type.substring(DOUBAN_PREFIX.length()), filters),
                     ac,
                     filters.get("sort"),
                     parseYear(filters.get("year")),
@@ -177,13 +267,14 @@ public class PianDanService {
 
     private MovieList listTmdb(String type, int page, int size, Map<String, String> filters) {
         int safePage = Math.min(TMDB_MAX_PAGE, Math.max(1, page));
-        String cacheKey = cacheKey(type, safePage, size, filters);
+        String effectiveType = resolveTmdbType(type, filters);
+        String cacheKey = cacheKey(effectiveType, safePage, size, filters);
         MovieList cached = listCache.getIfPresent(cacheKey);
         if (cached != null) {
             return cached;
         }
 
-        String path = tmdbPath(type, filters);
+        String path = tmdbPath(effectiveType, filters);
         if (path == null) {
             return emptyList(safePage, size);
         }
@@ -193,12 +284,12 @@ public class PianDanService {
                 .queryParam("language", "zh-CN")
                 .queryParam("include_adult", false)
                 .queryParam("page", safePage);
-        addTmdbQueryFilters(uri, type, filters);
+        addTmdbQueryFilters(uri, effectiveType, filters);
 
         try {
             String json = fetchTmdb(uri.build().encode().toUriString());
             JsonNode body = StringUtils.isBlank(json) ? null : objectMapper.readTree(json);
-            MovieList result = mapTmdb(body, type, filters, safePage, size);
+            MovieList result = mapTmdb(body, effectiveType, filters, safePage, size);
             listCache.put(cacheKey, result);
             staleListCache.put(cacheKey, result);
             return result;
@@ -207,6 +298,40 @@ public class PianDanService {
             MovieList stale = staleListCache.getIfPresent(cacheKey);
             return stale == null ? emptyList(safePage, size) : stale;
         }
+    }
+
+    private String resolveTmdbType(String type, Map<String, String> filters) {
+        if ("movie".equals(type)) {
+            return switch (allowedValue(filters, "list", "popular", TMDB_MOVIE_LISTS)) {
+                case "top_rated" -> "movie_top_rated";
+                case "now_playing" -> "movie_now_playing";
+                case "upcoming" -> "movie_upcoming";
+                case "discover" -> "discover_movie";
+                case "platform" -> "platform_movie";
+                default -> "movie_popular";
+            };
+        }
+        if ("tv".equals(type)) {
+            return switch (allowedValue(filters, "list", "popular", TMDB_TV_LISTS)) {
+                case "top_rated" -> "tv_top_rated";
+                case "airing_today" -> "tv_airing_today";
+                case "on_the_air" -> "tv_on_the_air";
+                case "discover" -> "discover_tv";
+                case "platform" -> "platform_tv";
+                default -> "tv_popular";
+            };
+        }
+        return type;
+    }
+
+    private String resolveDoubanType(String type, Map<String, String> filters) {
+        if ("category".equals(type)) {
+            return allowedValue(filters, "category", "tv_domestic", DOUBAN_CATEGORY_VALUES);
+        }
+        if ("billboard".equals(type)) {
+            return allowedValue(filters, "billboard", "movie_top250", DOUBAN_BILLBOARD_VALUES);
+        }
+        return type;
     }
 
     private String tmdbPath(String type, Map<String, String> filters) {
@@ -461,10 +586,7 @@ public class PianDanService {
     }
 
     private void addTmdbFilters(CategoryList result) {
-        result.getFilters().put(TMDB_PREFIX + "trending", List.of(
-                filter("mediaType", "范围", values("全部", "all", "电影", "movie", "剧集", "tv")),
-                filter("time_window", "周期", values("本周", "week", "今日", "day"))
-        ));
+        result.getFilters().put(TMDB_PREFIX + "trending", trendingFilters());
         List<Filter> movieRegion = List.of(filter("region", "地区", regionValues()));
         result.getFilters().put(TMDB_PREFIX + "movie_popular", movieRegion);
         result.getFilters().put(TMDB_PREFIX + "movie_top_rated", movieRegion);
@@ -474,19 +596,8 @@ public class PianDanService {
         List<Filter> tvFilters = discoverFilters(false);
         result.getFilters().put(TMDB_PREFIX + "discover_movie", movieFilters);
         result.getFilters().put(TMDB_PREFIX + "discover_tv", tvFilters);
-        result.getFilters().put(TMDB_PREFIX + "anime", List.of(
-                filter("sort_by", "排序", tvSortValues()),
-                filter("anime_region", "地区", values("国漫", "CN", "日漫", "JP", "韩漫", "KR", "美漫", "US")),
-                filter("kind", "内容", values("动画剧集", "tv", "动画电影", "movie")),
-                filter("year", "年代", yearValues())
-        ));
-        result.getFilters().put(TMDB_PREFIX + "variety", List.of(
-                filter("region", "地区", varietyRegionValues()),
-                filter("list_type", "榜单", values(
-                        "近期热播", "hot", "今日更新", "today", "明日预告", "tomorrow",
-                        "五年热榜", "trend", "高分综艺", "top"
-                ))
-        ));
+        result.getFilters().put(TMDB_PREFIX + "anime", animeFilters());
+        result.getFilters().put(TMDB_PREFIX + "variety", varietyFilters());
         result.getFilters().put(TMDB_PREFIX + "platform_tv", List.of(
                 filter("content", "内容", values("电视剧", "drama", "综艺", "variety", "动漫", "anime")),
                 filter("network", "播出平台", tvNetworkValues()),
@@ -497,6 +608,32 @@ public class PianDanService {
                 filter("watch_region", "观看地区", watchRegionValues()),
                 filter("sort_by", "排序", movieSortValues())
         ));
+    }
+
+    private List<Filter> trendingFilters() {
+        return List.of(
+                filter("mediaType", "范围", values("全部", "all", "电影", "movie", "剧集", "tv")),
+                filter("time_window", "周期", values("本周", "week", "今日", "day"))
+        );
+    }
+
+    private List<Filter> animeFilters() {
+        return List.of(
+                filter("sort_by", "排序", tvSortValues()),
+                filter("anime_region", "地区", values("国漫", "CN", "日漫", "JP", "韩漫", "KR", "美漫", "US")),
+                filter("kind", "内容", values("动画剧集", "tv", "动画电影", "movie")),
+                filter("year", "年代", yearValues())
+        );
+    }
+
+    private List<Filter> varietyFilters() {
+        return List.of(
+                filter("region", "地区", varietyRegionValues()),
+                filter("list_type", "榜单", values(
+                        "近期热播", "hot", "今日更新", "today", "明日预告", "tomorrow",
+                        "五年热榜", "trend", "高分综艺", "top"
+                ))
+        );
     }
 
     private List<Filter> discoverFilters(boolean movie) {

@@ -115,6 +115,67 @@ class PianDanServiceTest {
     }
 
     @Test
+    void categoryLiteModeMergesCategoriesAndKeepsBrowse() {
+        when(subscriptionSourceService.getBuiltinExtend("csp_PianDan")).thenReturn("{\"mode\":\"lite\"}");
+        CategoryList douban = new CategoryList();
+        douban.setCategories(List.of(
+                doubanCategory("hot_movie", "热门电影"),
+                doubanCategory("hot_tv", "热门电视剧"),
+                doubanCategory("local", "浏览"),
+                doubanCategory("tv_domestic", "国产剧"),
+                doubanCategory("movie_top250", "电影Top250")
+        ));
+        Filter browseFilter = new Filter("sort", "排序", List.of(new FilterValue("热门", "hot")));
+        douban.getFilters().put("local", List.of(browseFilter));
+        when(telegramService.categoryDouban()).thenReturn(douban);
+
+        CategoryList result = service.category();
+
+        assertThat(result.getCategories())
+                .extracting(Category::getType_id)
+                .containsExactly(
+                        "douban:hot_movie", "douban:hot_tv",
+                        "douban:category", "douban:billboard", "douban:local",
+                        "tmdb:trending", "tmdb:movie", "tmdb:tv",
+                        "tmdb:discover_movie", "tmdb:discover_tv", "tmdb:anime", "tmdb:variety"
+                );
+        assertThat(result.getCategories()).extracting(Category::getType_id)
+                .doesNotContain("douban:tv_domestic", "douban:movie_top250", "tmdb:movie_popular", "tmdb:platform_tv");
+        assertThat(result.getFilters().get("douban:local")).containsExactly(browseFilter);
+        assertThat(result.getFilters().get("douban:category")).extracting(Filter::getKey).containsExactly("category");
+        assertThat(result.getFilters().get("douban:billboard")).extracting(Filter::getKey).containsExactly("billboard");
+        assertThat(result.getFilters().get("tmdb:movie")).extracting(Filter::getKey).containsExactly("list");
+        assertThat(result.getFilters().get("tmdb:tv")).extracting(Filter::getKey).containsExactly("list");
+        assertThat(result.getFilters()).containsKeys(
+                "tmdb:trending", "tmdb:discover_movie", "tmdb:discover_tv", "tmdb:anime", "tmdb:variety");
+        assertThat(result.getTotal()).isEqualTo(12);
+    }
+
+    @Test
+    void listResolvesMergedTmdbMovieListFilter() {
+        when(settingRepository.findById("tmdb_api_key")).thenReturn(Optional.empty());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(once(), request -> assertThat(request.getURI().getPath()).isEqualTo("/3/movie/top_rated"))
+                .andRespond(withSuccess("{\"page\":1,\"total_pages\":1,\"total_results\":0,\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        MovieList result = service.list("tmdb:movie", "", 1, 20, Map.of("list", "top_rated"));
+
+        assertThat(result.getList()).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    void listResolvesMergedDoubanCategoryFilter() {
+        MovieList expected = new MovieList();
+        expected.setList(List.of());
+        when(telegramService.listDouban("tv_korean", "web", null, null, null, null, 1, 20)).thenReturn(expected);
+
+        service.list("douban:category", "web", 1, 20, Map.of("category", "tv_korean"));
+
+        verify(telegramService).listDouban("tv_korean", "web", null, null, null, null, 1, 20);
+    }
+
+    @Test
     void listRemovesDoubanFolderMetadataWithoutMutatingSharedResult() {
         MovieDetail folder = new MovieDetail();
         folder.setVod_id("s:测试电影");
@@ -480,5 +541,13 @@ class PianDanServiceTest {
             assertThat(movie.getVod_year()).isEmpty();
         });
         server.verify();
+    }
+
+    private Category doubanCategory(String typeId, String name) {
+        Category category = new Category();
+        category.setType_id(typeId);
+        category.setType_name(name);
+        category.setType_flag(0);
+        return category;
     }
 }
