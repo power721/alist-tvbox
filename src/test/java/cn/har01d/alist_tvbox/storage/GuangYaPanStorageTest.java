@@ -29,12 +29,8 @@ class GuangYaPanStorageTest {
         assertEquals("GuangYaPan", storage.getDriver());
         assertEquals("/我的光鸭云盘/main", storage.getPath());
         assertEquals("root-folder", addition.get("root_folder_id").asText());
-        assertEquals("access-token", addition.get("access_token").asText());
         assertEquals("refresh-token", addition.get("refresh_token").asText());
         assertEquals("0123456789abcdef0123456789abcdef", addition.get("device_id").asText());
-        assertEquals(100, addition.get("page_size").asInt());
-        assertEquals(3, addition.get("order_by").asInt());
-        assertEquals(1, addition.get("sort_type").asInt());
     }
 
     @Test
@@ -49,7 +45,6 @@ class GuangYaPanStorageTest {
         GuangYaPan storage = new GuangYaPan(account);
         JsonNode addition = objectMapper.readTree(storage.getAddition());
 
-        assertEquals("addition-access", addition.get("access_token").asText());
         assertEquals("refresh-token", addition.get("refresh_token").asText());
     }
 

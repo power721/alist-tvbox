@@ -324,14 +324,14 @@ public class DriverAccountService {
     public void updateToken(Integer id, DriverAccount dto) {
         log.debug("update token: {} {}", id - IDX, dto);
         var account = get(id - IDX);
-        if (account.getType() == DriverType.OPEN123) {
+        if (account.getType() == DriverType.OPEN123 || account.getType() == DriverType.GUANGYA) {
             // Go 刷新后同步回来的是 refresh_token(可能轮换),写回 addition.refresh_token,保留 access token。
             try {
                 var add = Utils.readJson(account.getAddition());
                 add.put("refresh_token", dto.getToken());
                 account.setAddition(objectMapper.writeValueAsString(add));
             } catch (Exception e) {
-                log.warn("sync OPEN123 refresh_token failed", e);
+                log.warn("sync {} refresh_token failed", account.getType(), e);
             }
         } else if (account.getType() == DriverType.THUNDER) {
             account.setToken(dto.getToken());
