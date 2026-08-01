@@ -142,16 +142,6 @@ npm run lint
 
 ---
 
-# 7. Git Workflow
-
-1. worktree per task
-2. feature branch
-3. no direct main commits
-4. PR-based merge
-5. cleanup after merge
-
----
-
 # 8. AI CODING RULES
 
 ## Codex Mode

@@ -388,28 +388,28 @@
             <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退光鸭直链</span>
           </el-form-item>
         </div>
-<!--        <div class="el-row">-->
-<!--          <el-form-item label="开启夸克秒传123">-->
-<!--            <el-switch-->
-<!--              v-model="quarkTo123"-->
-<!--              inline-prompt-->
-<!--              active-text="开启"-->
-<!--              inactive-text="关闭"-->
-<!--              @change="updateQuarkTo123"-->
-<!--            />-->
-<!--            <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退夸克直链</span>-->
-<!--          </el-form-item>-->
-<!--          <el-form-item label="开启UC秒传123">-->
-<!--            <el-switch-->
-<!--              v-model="ucTo123"-->
-<!--              inline-prompt-->
-<!--              active-text="开启"-->
-<!--              inactive-text="关闭"-->
-<!--              @change="updateUcTo123"-->
-<!--            />-->
-<!--            <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退 UC 直链</span>-->
-<!--          </el-form-item>-->
-<!--        </div>-->
+        <div class="el-row">
+          <el-form-item label="开启夸克秒传123">
+            <el-switch
+              v-model="quarkTo123"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateQuarkTo123"
+            />
+            <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退夸克直链</span>
+          </el-form-item>
+          <el-form-item label="开启UC秒传123">
+            <el-switch
+              v-model="ucTo123"
+              inline-prompt
+              active-text="开启"
+              inactive-text="关闭"
+              @change="updateUcTo123"
+            />
+            <span class="hint">帐号页面添加 123 Open 网盘;按 MD5 秒传,失败回退 UC 直链</span>
+          </el-form-item>
+        </div>
         <div class="el-row">
           <el-form-item label="网盘文件删除延时">
             <el-input-number v-model="deleteDelayTime" min="0"></el-input-number>
