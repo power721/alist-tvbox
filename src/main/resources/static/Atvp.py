@@ -913,9 +913,12 @@ class Spider(HostSpider):
         return payload
 
     def _play(self, play_id):
+        proxy_type = ""
+        if self._localProxyConfig:
+            proxy_type = "client-proxy"
         rsp = self.fetch(
             self._build_backend_endpoint("play"),
-            params={"id": str(play_id or ""), "type": "client-proxy"},
+            params={"id": str(play_id or ""), "type": proxy_type},
             timeout=10,
         )
         body = str(rsp.text or "")
