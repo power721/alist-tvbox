@@ -13,4 +13,7 @@ public interface PluginRepository extends JpaRepository<Plugin, Integer> {
     List<Plugin> findAllByOrderBySortOrderAscIdAsc();
 
     List<Plugin> findByEnabledTrueOrderBySortOrderAscIdAsc();
+
+    // 文件-backed 插件：url 以 /static/plugins/ 开头，用于目录双向同步
+    List<Plugin> findByUrlStartingWithOrderBySortOrderAscIdAsc(String prefix);
 }

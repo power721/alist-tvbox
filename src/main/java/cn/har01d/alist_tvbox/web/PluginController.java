@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.Plugin;
+import cn.har01d.alist_tvbox.service.PluginFileSyncService;
 import cn.har01d.alist_tvbox.service.PluginService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,7 @@ import java.util.List;
 @RequestMapping("/api/plugins")
 public class PluginController {
     private final PluginService pluginService;
+    private final PluginFileSyncService pluginFileSyncService;
 
     private record PluginImportRequest(String url) {
     }
@@ -25,8 +27,9 @@ public class PluginController {
     private record PluginBatchDeleteRequest(List<Integer> ids) {
     }
 
-    public PluginController(PluginService pluginService) {
+    public PluginController(PluginService pluginService, PluginFileSyncService pluginFileSyncService) {
         this.pluginService = pluginService;
+        this.pluginFileSyncService = pluginFileSyncService;
     }
 
     @GetMapping
@@ -54,6 +57,11 @@ public class PluginController {
     @PostMapping("/{id}/refresh")
     public Plugin refresh(@PathVariable Integer id) {
         return pluginService.refresh(id);
+    }
+
+    @PostMapping("/scan")
+    public void scan() {
+        pluginFileSyncService.reconcile();
     }
 
     @PostMapping("/reorder")
