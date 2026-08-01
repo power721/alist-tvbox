@@ -87,6 +87,30 @@ class ConfigSchemaParserTest {
     }
 
     @Test
+    void secspiderHeaderFormIsParsed() {
+        // 模拟 secspider 加密 .txt：源码在加密 payload 里不可读，schema 以明文 //@config-schema:{...} 头导出。
+        String content = String.join("\n",
+                "//@name:观影",
+                "//@version:3",
+                "//@config-schema:{\"description\":\"观影配置\",\"fields\":["
+                        + "{\"key\":\"sites\",\"label\":\"站点\",\"type\":\"string\"},"
+                        + "{\"key\":\"password\",\"label\":\"密码\",\"type\":\"secret\"}]}",
+                "//@format:secspider/1",
+                "//@sig:base64:fake",
+                "",
+                "payload.base64:QUVT");
+
+        PluginFilterConfigSchema schema = ConfigSchemaParser.parse(content, "PLUGIN_CONFIG_SCHEMA");
+
+        assertThat(schema).isNotNull();
+        assertThat(schema.getDescription()).isEqualTo("观影配置");
+        assertThat(schema.getFields()).hasSize(2);
+        assertThat(schema.getFields().get(0).getKey()).isEqualTo("sites");
+        assertThat(schema.getFields().get(1).getKey()).isEqualTo("password");
+        assertThat(schema.getFields().get(1).getType()).isEqualTo("secret");
+    }
+
+    @Test
     void noDeclarationReturnsNull() {
         String py = """
                 # coding=utf-8

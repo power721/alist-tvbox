@@ -20,8 +20,9 @@ import java.util.regex.Pattern;
 public final class ConfigSchemaParser {
 
     // 兼容早期注释式 schema 声明：// @config-schema { ... }
+    // 同时识别 secspider 打包输出的明文头：//@config-schema:{ ... }（宿主不解密 payload 时的回退通道）。
     private static final Pattern COMMENT_SCHEMA =
-            Pattern.compile("(?s)//\\s*@config-schema\\s*(\\{.*?})\\s*(?:\\R\\s*//\\s*@|\\z)");
+            Pattern.compile("(?s)//\\s*@config-schema\\s*:?\\s*(\\{.*?})\\s*(?:\\R\\s*//\\s*@|\\z)");
 
     private ConfigSchemaParser() {
     }

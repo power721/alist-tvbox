@@ -70,11 +70,22 @@ class Spider(BaseSpider):
 
 ## 兼容：注释式声明
 
-旧格式仍被识别（适合不便放顶层常量的 `.txt` 场景）：
+注释式声明仍被识别（`//` 与 `@config-schema` 之间可有可无空格，冒号可选）：
 
 ```
 // @config-schema {"description":"...", "fields":[{"key":"site","type":"string"}]}
 ```
+
+## 加密 `.txt`（secspider）如何生效
+
+线上分发的爬虫通常是 secspider 加密包：`.py` 源码（含 `PLUGIN_CONFIG_SCHEMA`）被 AES 加密进 `payload.base64:`，**alist-tvbox 不解密**，因此常量式声明读不到。
+
+解决办法：打包时（atv-spiders `build_secspider_package`）自动把 `PLUGIN_CONFIG_SCHEMA` 抽出、压成单行 JSON，以**明文头** `//@config-schema:{...}` 写进 `.txt`。该头不进签名区（只影响 UI），alist-tvbox 的注释式解析器会直接识别。即：
+
+- `.py` 直接导入 / 明文 `.txt` → 读 `PLUGIN_CONFIG_SCHEMA` 常量
+- secspider 加密 `.txt` → 读 `//@config-schema:{...}` 明文头（打包时自动生成）
+
+两路殊途同归，无需 alist-tvbox 持有解密密钥。
 
 ## 后端接口
 
