@@ -435,27 +435,21 @@ public class RemoteSearchService {
         Map<String, String> summaries = new java.util.HashMap<>();
         Map<String, List<Message>> groups = checkable.stream()
                 .collect(Collectors.groupingBy(message -> getPanSouCloudType(message.getType())));
-        int batchSize = 10;
         List<CompletableFuture<ObjectNode>> futures = new ArrayList<>();
         for (var entry : groups.entrySet()) {
             String diskType = entry.getKey();
-            List<Message> all = entry.getValue();
-            int batchTotal = (all.size() + batchSize - 1) / batchSize;
-            for (int i = 0; i < all.size(); i += batchSize) {
-                final List<Message> batch = all.subList(i, Math.min(i + batchSize, all.size()));
-                final int batchIndex = i / batchSize;
-                futures.add(CompletableFuture.supplyAsync(() -> {
-                    long startedAt = System.currentTimeMillis();
-                    try {
-                        ObjectNode response = checkPanSouLinks(buildPanSouLinkCheckRequest(diskType, batch));
-                        logPanSouLinkCheck(diskType + (batchTotal > 1 ? "[" + batchIndex + "]" : ""), batch.size(), response, startedAt);
-                        return response;
-                    } catch (Exception e) {
-                        log.warn("check PanSou search links failed: {} batch {}", diskType, batchIndex, e);
-                        return null;
-                    }
-                }));
-            }
+            final List<Message> all = entry.getValue();
+            futures.add(CompletableFuture.supplyAsync(() -> {
+                long startedAt = System.currentTimeMillis();
+                try {
+                    ObjectNode response = checkPanSouLinks(buildPanSouLinkCheckRequest(diskType, all));
+                    logPanSouLinkCheck(diskType, all.size(), response, startedAt);
+                    return response;
+                } catch (Exception e) {
+                    log.warn("check PanSou search links failed: {}", diskType, e);
+                    return null;
+                }
+            }));
         }
         for (CompletableFuture<ObjectNode> future : futures) {
             ObjectNode response = future.join();
