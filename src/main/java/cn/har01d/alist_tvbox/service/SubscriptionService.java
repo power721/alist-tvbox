@@ -88,6 +88,9 @@ import static cn.har01d.alist_tvbox.util.Constants.TOKEN;
 public class SubscriptionService {
     private static final String PLUGIN_RUN_MODE = "plugin_run_mode";
     private static final String PLUGIN_RUN_MODE_PYTHON = "python";
+    private static final String AUTO_UPDATE_PG = "auto_update_pg";
+    private static final String AUTO_UPDATE_ZX = "auto_update_zx";
+    private static final String AUTO_UPDATE_XS = "auto_update_xs";
 
     private final Environment environment;
     private final AppProperties appProperties;
@@ -501,9 +504,19 @@ public class SubscriptionService {
     }
 
     public int syncCat() {
-        fileDownloader.runTask("pg");
-        fileDownloader.runTask("zx");
-        fileDownloader.runTask("xs");
+        return syncCat(false);
+    }
+
+    public int syncCat(boolean auto) {
+        if (!auto || isAutoUpdateEnabled(AUTO_UPDATE_PG)) {
+            fileDownloader.runTask("pg");
+        }
+        if (!auto || isAutoUpdateEnabled(AUTO_UPDATE_ZX)) {
+            fileDownloader.runTask("zx");
+        }
+        if (!auto || isAutoUpdateEnabled(AUTO_UPDATE_XS)) {
+            fileDownloader.runTask("xs");
+        }
 
         var files = configFileService.list();
         for (var file : files) {
@@ -517,6 +530,13 @@ public class SubscriptionService {
         }
 
         return 0;
+    }
+
+    private boolean isAutoUpdateEnabled(String name) {
+        return settingRepository.findById(name)
+            .map(Setting::getValue)
+            .map("true"::equalsIgnoreCase)
+            .orElse(true);
     }
 
     private void addCatSites(Map<String, Object> config) {

@@ -74,6 +74,8 @@
       <span class="hint"></span>
       <span v-if="pgLocal==pgRemote"><el-icon color="green"><Check/></el-icon></span>
       <span v-else><el-icon color="orange"><Warning/></el-icon></span>
+      <span class="hint">自动更新：</span>
+      <el-switch v-model="autoUpdatePg" @change="saveAutoUpdate('auto_update_pg', autoUpdatePg)"/>
     </el-row>
 <!--    <el-row>-->
 <!--      真心全量包本地： {{ zxLocal2 }}-->
@@ -89,6 +91,8 @@
       <span class="hint"></span>
       <span v-if="zxLocal==zxRemote"><el-icon color="green"><Check/></el-icon></span>
       <span v-else><el-icon color="orange"><Warning/></el-icon></span>
+      <span class="hint">自动更新：</span>
+      <el-switch v-model="autoUpdateZx" @change="saveAutoUpdate('auto_update_zx', autoUpdateZx)"/>
     </el-row>
     <el-row>
       潇洒包本地： {{ xsLocal }}
@@ -97,6 +101,8 @@
       <span class="hint"></span>
       <span v-if="xsLocal==xsRemote"><el-icon color="green"><Check/></el-icon></span>
       <span v-else><el-icon color="orange"><Warning/></el-icon></span>
+      <span class="hint">自动更新：</span>
+      <el-switch v-model="autoUpdateXs" @change="saveAutoUpdate('auto_update_xs', autoUpdateXs)"/>
     </el-row>
     <el-row>
       <el-button @click="syncCat">同步文件</el-button>
@@ -1051,6 +1057,9 @@ const zxLocal2 = ref('')
 const zxRemote2 = ref('')
 const xsLocal = ref('')
 const xsRemote = ref('')
+const autoUpdatePg = ref(true)
+const autoUpdateZx = ref(true)
+const autoUpdateXs = ref(true)
 const updateAction = ref(false)
 const dialogTitle = ref('')
 const jsonData = ref({})
@@ -2810,6 +2819,12 @@ const syncCat = () => {
   })
 }
 
+const saveAutoUpdate = (name: string, value: boolean) => {
+  axios.post('/api/settings', {name, value: String(value)}).then(() => {
+    ElMessage.success(value ? '已开启自动更新' : '已关闭自动更新')
+  })
+}
+
 const load = () => {
   console.log('📋 开始加载订阅列表')
   console.time('load-subscriptions')
@@ -2850,6 +2865,15 @@ const loadVersion = () => {
   axios.get("/xs/version").then(({data}) => {
     xsLocal.value = data.local
     xsRemote.value = data.remote
+  })
+  axios.get('/api/settings/auto_update_pg').then(({data}) => {
+    autoUpdatePg.value = data?.value !== 'false'
+  })
+  axios.get('/api/settings/auto_update_zx').then(({data}) => {
+    autoUpdateZx.value = data?.value !== 'false'
+  })
+  axios.get('/api/settings/auto_update_xs').then(({data}) => {
+    autoUpdateXs.value = data?.value !== 'false'
   })
 }
 

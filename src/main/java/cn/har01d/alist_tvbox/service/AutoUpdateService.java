@@ -29,7 +29,7 @@ public class AutoUpdateService {
 
     @Scheduled(cron = "0 0 20 * * ?")
     public void autoSyncCat() {
-        executor.scheduleWithJitter(subscriptionService::syncCat);
+        executor.scheduleWithJitter(() -> subscriptionService.syncCat(true));
     }
 
     @Scheduled(cron = "0 0 22 * * ?")
