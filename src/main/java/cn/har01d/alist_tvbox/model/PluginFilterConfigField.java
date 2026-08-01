@@ -15,7 +15,8 @@ public class PluginFilterConfigField {
     // 面向用户展示的中文名称。
     private String label = "";
 
-    // 字段类型，目前前端支持 string / number / boolean / object。
+    // 字段类型，目前前端支持 string / number / boolean / object / secret。
+    // secret 用于 cookie / 密码等敏感字段，前端脱敏展示，写入 extend 时仍是普通字符串。
     private String type = "string";
 
     // 是否必填。前端保存前会据此做校验。

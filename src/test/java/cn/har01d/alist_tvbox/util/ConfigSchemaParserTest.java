@@ -1,0 +1,133 @@
+package cn.har01d.alist_tvbox.util;
+
+import cn.har01d.alist_tvbox.model.PluginFilterConfigField;
+import cn.har01d.alist_tvbox.model.PluginFilterConfigSchema;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class ConfigSchemaParserTest {
+
+    private static final String PLUGIN_SCHEMA_PY = """
+            # coding=utf-8
+            import json
+
+            PLUGIN_CONFIG_SCHEMA = {
+              "description": "观影配置",
+              "allowAdditional": false,
+              "fields": [
+                {"key": "sites", "label": "站点", "type": "string", "required": true, "aliases": ["site", "host"]},
+                {"key": "username", "label": "用户名", "type": "string"},
+                {"key": "password", "label": "密码", "type": "secret"},
+                {"key": "cookie", "label": "Cookie", "type": "secret", "placeholder": "可代替账号密码", "defaultValue": ""}
+              ]
+            }
+
+            class Spider(BaseSpider):
+                def init(self, extend=""):
+                    pass
+            """;
+
+    @Test
+    void pluginConfigSchemaConstantIsParsed() {
+        PluginFilterConfigSchema schema = ConfigSchemaParser.parse(PLUGIN_SCHEMA_PY, "PLUGIN_CONFIG_SCHEMA");
+
+        assertThat(schema).isNotNull();
+        assertThat(schema.getDescription()).isEqualTo("观影配置");
+        assertThat(schema.isAllowAdditional()).isFalse();
+        assertThat(schema.getFields()).hasSize(4);
+
+        PluginFilterConfigField site = schema.getFields().get(0);
+        assertThat(site.getKey()).isEqualTo("sites");
+        assertThat(site.getLabel()).isEqualTo("站点");
+        assertThat(site.getType()).isEqualTo("string");
+        assertThat(site.isRequired()).isTrue();
+        assertThat(site.getAliases()).containsExactly("site", "host");
+
+        PluginFilterConfigField password = schema.getFields().get(2);
+        assertThat(password.getKey()).isEqualTo("password");
+        assertThat(password.getType()).isEqualTo("secret");
+
+        PluginFilterConfigField cookie = schema.getFields().get(3);
+        assertThat(cookie.getType()).isEqualTo("secret");
+        assertThat(cookie.getPlaceholder()).isEqualTo("可代替账号密码");
+    }
+
+    @Test
+    void filterConfigSchemaConstantStillWorks() {
+        String py = """
+                FILTER_CONFIG_SCHEMA = {
+                  "fields": [
+                    {"key": "cookie", "type": "string"}
+                  ]
+                }
+
+                class Spider(BaseSpider):
+                    pass
+                """;
+
+        PluginFilterConfigSchema schema = ConfigSchemaParser.parse(py, "FILTER_CONFIG_SCHEMA");
+
+        assertThat(schema).isNotNull();
+        assertThat(schema.getFields()).hasSize(1);
+        assertThat(schema.getFields().get(0).getKey()).isEqualTo("cookie");
+    }
+
+    @Test
+    void legacyCommentFormIsParsed() {
+        String content = "// @config-schema {\"description\":\"legacy\",\"fields\":[{\"key\":\"site\",\"label\":\"站点\",\"type\":\"string\"}]}";
+
+        PluginFilterConfigSchema schema = ConfigSchemaParser.parse(content, "PLUGIN_CONFIG_SCHEMA");
+
+        assertThat(schema).isNotNull();
+        assertThat(schema.getDescription()).isEqualTo("legacy");
+        assertThat(schema.getFields()).hasSize(1);
+        assertThat(schema.getFields().get(0).getKey()).isEqualTo("site");
+        assertThat(schema.getFields().get(0).getLabel()).isEqualTo("站点");
+    }
+
+    @Test
+    void noDeclarationReturnsNull() {
+        String py = """
+                # coding=utf-8
+                class Spider(BaseSpider):
+                    def init(self, extend=""):
+                        pass
+                """;
+
+        assertThat(ConfigSchemaParser.parse(py, "PLUGIN_CONFIG_SCHEMA")).isNull();
+    }
+
+    @Test
+    void blankContentReturnsNull() {
+        assertThat(ConfigSchemaParser.parse("", "PLUGIN_CONFIG_SCHEMA")).isNull();
+        assertThat(ConfigSchemaParser.parse(null, "PLUGIN_CONFIG_SCHEMA")).isNull();
+    }
+
+    @Test
+    void nestedObjectChildrenAreParsed() {
+        String py = """
+                PLUGIN_CONFIG_SCHEMA = {
+                  "fields": [
+                    {"key": "headers", "type": "object", "children": [
+                      {"key": "ua", "type": "string"},
+                      {"key": "referer", "type": "string"}
+                    ]}
+                  ]
+                }
+
+                class Spider(BaseSpider):
+                    pass
+                """;
+
+        PluginFilterConfigSchema schema = ConfigSchemaParser.parse(py, "PLUGIN_CONFIG_SCHEMA");
+
+        assertThat(schema).isNotNull();
+        assertThat(schema.getFields()).hasSize(1);
+        PluginFilterConfigField headers = schema.getFields().get(0);
+        assertThat(headers.getType()).isEqualTo("object");
+        assertThat(headers.getChildren()).hasSize(2);
+        assertThat(headers.getChildren().get(0).getKey()).isEqualTo("ua");
+        assertThat(headers.getChildren().get(1).getKey()).isEqualTo("referer");
+    }
+}

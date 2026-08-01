@@ -1,5 +1,6 @@
 package cn.har01d.alist_tvbox.entity;
 
+import cn.har01d.alist_tvbox.model.PluginFilterConfigSchema;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -58,4 +59,8 @@ public class Plugin {
 
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
+
+    // 运行时临时字段，不入库。由 PluginService 从脚本内容解析后挂载，供前端生成可视化配置表单。
+    @Transient
+    private PluginFilterConfigSchema configSchema;
 }

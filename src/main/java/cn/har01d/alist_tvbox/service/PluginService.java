@@ -7,6 +7,8 @@ import cn.har01d.alist_tvbox.entity.PluginRepository;
 import cn.har01d.alist_tvbox.entity.SettingRepository;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
 import cn.har01d.alist_tvbox.exception.NotFoundException;
+import cn.har01d.alist_tvbox.model.PluginFilterConfigSchema;
+import cn.har01d.alist_tvbox.util.ConfigSchemaParser;
 import cn.har01d.alist_tvbox.util.Utils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +42,8 @@ public class PluginService {
     private static final Pattern PLUGIN_ID = Pattern.compile("(?m)^\\s*//@id:([^\\s]+)\\s*$");
     private static final Pattern PLUGIN_VERSION = Pattern.compile("(?m)^\\s*//@version:(\\d+)\\s*$");
     private static final Pattern PLUGIN_NAME = Pattern.compile("(?m)^\\s*//@name:(.+)\\s*$");
+    // spider 插件配置结构声明：脚本顶层 PLUGIN_CONFIG_SCHEMA = { ... }；解析逻辑见 ConfigSchemaParser。
+    private static final String PLUGIN_CONFIG_CONST = "PLUGIN_CONFIG_SCHEMA";
     private static final String GITHUB_PROXY = "github_proxy";
 
     // 文件-backed 插件：url 形如 /static/plugins/<相对路径>.py，由静态文件目录双向同步管理
@@ -92,7 +96,9 @@ public class PluginService {
     }
 
     public List<Plugin> findAll() {
-        return pluginRepository.findAllByOrderBySortOrderAscIdAsc();
+        return pluginRepository.findAllByOrderBySortOrderAscIdAsc().stream()
+                .peek(this::applyConfigSchema)
+                .toList();
     }
 
     public List<Plugin> findEnabled() {
@@ -163,7 +169,9 @@ public class PluginService {
         plugin.setName(StringUtils.defaultIfBlank(input.getName(), plugin.getSourceName()));
         plugin.setEnabled(input.isEnabled());
         plugin.setExtend(input.getExtend());
-        return pluginRepository.save(plugin);
+        Plugin saved = pluginRepository.save(plugin);
+        applyConfigSchema(saved);
+        return saved;
     }
 
     @Transactional
@@ -675,5 +683,36 @@ public class PluginService {
         plugin.setExternalId(StringUtils.defaultIfBlank(downloadedPlugin.externalId(), entryExternalId));
         plugin.setContent(downloadedPlugin.body());
         plugin.setVersion(downloadedPlugin.version());
+        applyConfigSchema(plugin);
+    }
+
+    // 从插件脚本内容解析自声明的配置结构并挂到运行时 transient 字段，供前端渲染可视化配置表单。
+    private void applyConfigSchema(Plugin plugin) {
+        if (plugin == null) {
+            return;
+        }
+        plugin.setConfigSchema(buildConfigSchema(plugin.getContent()));
+    }
+
+    private PluginFilterConfigSchema buildConfigSchema(String content) {
+        PluginFilterConfigSchema declared = ConfigSchemaParser.parse(content, PLUGIN_CONFIG_CONST);
+        if (declared != null) {
+            if (StringUtils.isBlank(declared.getDescription())) {
+                declared.setDescription("来自插件脚本内声明");
+            }
+            if (StringUtils.isBlank(declared.getSource())) {
+                declared.setSource("declared");
+            }
+            return declared;
+        }
+        PluginFilterConfigSchema schema = new PluginFilterConfigSchema();
+        schema.setSource("none");
+        schema.setDescription("插件未声明配置结构，可直接输入 JSON");
+        return schema;
+    }
+
+    public PluginFilterConfigSchema readConfigSchema(Integer id) {
+        Plugin plugin = pluginRepository.findById(id).orElseThrow(NotFoundException::new);
+        return buildConfigSchema(plugin.getContent());
     }
 }

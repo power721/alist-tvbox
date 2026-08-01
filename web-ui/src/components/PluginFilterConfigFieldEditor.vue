@@ -14,6 +14,15 @@
       @update:model-value="setScalarValue($event)"
     />
 
+    <el-input
+      v-else-if="field.type === 'secret'"
+      :model-value="stringValue"
+      type="password"
+      show-password
+      :placeholder="field.placeholder || field.key"
+      @update:model-value="setScalarValue($event)"
+    />
+
     <el-input-number
       v-else-if="field.type === 'number'"
       :model-value="numberValue"

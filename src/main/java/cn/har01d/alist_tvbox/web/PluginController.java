@@ -1,6 +1,7 @@
 package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.entity.Plugin;
+import cn.har01d.alist_tvbox.model.PluginFilterConfigSchema;
 import cn.har01d.alist_tvbox.service.PluginFileSyncService;
 import cn.har01d.alist_tvbox.service.PluginService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -57,6 +58,11 @@ public class PluginController {
     @PostMapping("/{id}/refresh")
     public Plugin refresh(@PathVariable Integer id) {
         return pluginService.refresh(id);
+    }
+
+    @GetMapping("/{id}/config-schema")
+    public PluginFilterConfigSchema configSchema(@PathVariable Integer id) {
+        return pluginService.readConfigSchema(id);
     }
 
     @PostMapping("/scan")

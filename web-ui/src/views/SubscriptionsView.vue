@@ -581,8 +581,65 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="sourceExtendVisible" title="扩展配置" width="720px">
+    <el-dialog v-model="sourceExtendVisible" title="扩展配置" width="780px" destroy-on-close>
+      <div v-if="sourceConfigHasSchema && sourceExtendTarget" class="filter-config-dialog">
+        <div class="filter-config-header">
+          <div class="filter-config-title">{{ sourceExtendTarget.name || sourceExtendTarget.sourceName || sourceExtendTarget.url }}</div>
+          <div class="filter-config-subtitle">
+            <span v-if="sourceConfigSchema.description">{{ sourceConfigSchema.description }}</span>
+            <span v-if="sourceConfigSchema.source">来源：{{ pluginSchemaSourceLabel(sourceConfigSchema.source) }}</span>
+          </div>
+        </div>
+
+        <el-alert
+          v-if="sourceConfigError"
+          type="warning"
+          :closable="false"
+          :title="sourceConfigError"
+          style="margin-bottom: 12px"
+        />
+
+        <el-tabs v-model="sourceConfigMode">
+          <el-tab-pane label="表单编辑" name="form">
+            <div class="filter-config-form">
+              <PluginFilterConfigFieldEditor
+                v-for="field in sourceConfigSchema.fields"
+                :key="field.key"
+                :field="field"
+                :model-value="sourceConfigObject"
+                @update:model-value="onSourceConfigObjectChange"
+              />
+            </div>
+
+            <div class="filter-config-extra">
+              <div class="filter-config-extra-header">
+                <span>额外字段</span>
+                <el-button v-if="sourceConfigSchema.allowAdditional" link type="primary" @click="addSourceConfigExtraEntry">添加字段</el-button>
+              </div>
+              <div v-if="sourceConfigExtras.length" class="filter-config-extra-list">
+                <div v-for="(item, index) in sourceConfigExtras" :key="`${index}-${item.key}`" class="filter-config-extra-row">
+                  <el-input v-model="item.key" placeholder="key"/>
+                  <el-input v-model="item.value" placeholder="value / JSON"/>
+                  <el-button link type="danger" @click="removeSourceConfigExtraEntry(index)">删除</el-button>
+                </div>
+              </div>
+              <div v-else-if="!sourceConfigSchema.allowAdditional" class="filter-config-extra-empty">当前插件未开放额外字段，建议只填写已声明的配置项。</div>
+              <div v-else class="filter-config-extra-empty">如果插件支持更多自定义参数，可以在这里补充声明外的字段。</div>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="JSON 编辑" name="json">
+            <el-input
+              v-model="sourceConfigJson"
+              type="textarea"
+              :rows="20"
+              placeholder="{&#10;  &quot;key&quot;: &quot;value&quot;&#10;}"
+            />
+          </el-tab-pane>
+        </el-tabs>
+      </div>
       <el-input
+        v-else
         v-model="sourceExtendText"
         type="textarea"
         :rows="18"
@@ -591,6 +648,7 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="sourceExtendVisible = false">取消</el-button>
+          <el-button v-if="sourceConfigHasSchema" @click="syncSourceConfigJsonFromForm">同步到 JSON</el-button>
           <el-button type="primary" @click="saveSourceExtend">保存配置</el-button>
         </span>
       </template>
@@ -977,6 +1035,7 @@ interface ManagedSource {
   deletable: boolean
   refreshable: boolean
   extendable: boolean
+  configSchema?: PluginFilterConfigSchema
 }
 
 interface PluginFilter {
@@ -1718,6 +1777,151 @@ const ensurePluginFilterConfigSchema = async (filter: PluginFilter) => {
   const {data} = await axios.get(`/api/plugin-filters/${filter.id}/config-schema`)
   filter.configSchema = normalizePluginFilterConfigSchema(data)
   pluginFilterConfigSchema.value = filter.configSchema
+}
+
+// ---- spider 插件 (订阅源) 扩展配置：复用 PluginFilterConfigFieldEditor 与通用 schema 工具 ----
+const sourceConfigSchema = ref<PluginFilterConfigSchema>({
+  source: 'none',
+  description: '',
+  allowAdditional: true,
+  singleValueKey: '',
+  example: '',
+  fields: []
+})
+const sourceConfigObject = ref<Record<string, any>>({})
+const sourceConfigJson = ref('')
+const sourceConfigMode = ref<'form' | 'json'>('form')
+const sourceConfigError = ref('')
+const sourceConfigExtras = ref<PluginFilterExtraEntry[]>([])
+const sourceConfigHasSchema = computed(() => sourceConfigSchema.value.fields.length > 0)
+
+const pluginSchemaSourceLabel = (source: string) => {
+  if (source === 'declared') {
+    return '插件脚本声明'
+  }
+  if (source === 'none') {
+    return '未声明'
+  }
+  return source || '未知'
+}
+
+const onSourceConfigObjectChange = (value: Record<string, any>) => {
+  sourceConfigObject.value = value
+}
+
+const rebuildSourceConfigExtras = () => {
+  const declared = new Set(getDeclaredFieldKeys(sourceConfigSchema.value))
+  sourceConfigExtras.value = Object.entries(sourceConfigObject.value)
+    .filter(([key]) => !declared.has(key))
+    .map(([key, value]) => ({
+      key,
+      value: typeof value === 'string' ? value : JSON.stringify(value)
+    }))
+}
+
+const validateSourceConfigObject = () => {
+  const validateFields = (fields: PluginFilterConfigField[], container: Record<string, any>, path: string[] = []): string => {
+    for (const field of fields) {
+      const currentPath = [...path, field.label || field.key]
+      const value = fieldValueByAliases(field, container)
+      if (field.type === 'object' && field.children?.length) {
+        const nested = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+        if (field.required && !Object.keys(nested).length) {
+          return currentPath.join(' / ')
+        }
+        const nestedRequiredPath = validateFields(field.children, nested, currentPath)
+        if (nestedRequiredPath) {
+          return nestedRequiredPath
+        }
+        continue
+      }
+      if (!field.required) {
+        continue
+      }
+      if (value === undefined || value === null || value === '') {
+        return currentPath.join(' / ')
+      }
+    }
+    return ''
+  }
+  const invalidPath = validateFields(sourceConfigSchema.value.fields, sourceConfigObject.value)
+  if (invalidPath) {
+    ElMessage.warning(`请填写 ${invalidPath}`)
+    return false
+  }
+  return true
+}
+
+const syncSourceConfigJsonFromForm = () => {
+  const declared = new Set(getDeclaredFieldKeys(sourceConfigSchema.value))
+  const nextValue: Record<string, any> = {}
+  for (const field of sourceConfigSchema.value.fields) {
+    const value = fieldValueByAliases(field, sourceConfigObject.value)
+    if (value !== undefined && value !== null && value !== '') {
+      nextValue[field.key] = cloneJsonValue(value)
+    }
+  }
+  for (const item of sourceConfigExtras.value) {
+    const key = (item.key || '').trim()
+    if (!key || declared.has(key)) {
+      continue
+    }
+    const raw = (item.value || '').trim()
+    if (!raw) {
+      continue
+    }
+    try {
+      nextValue[key] = JSON.parse(raw)
+    } catch {
+      nextValue[key] = raw
+    }
+  }
+  sourceConfigObject.value = nextValue
+  sourceConfigJson.value = stringifyPluginFilterExtend(nextValue) || '{}'
+  sourceConfigError.value = ''
+}
+
+const syncSourceConfigFormFromJson = () => {
+  try {
+    const parsed = sourceConfigJson.value.trim() ? JSON.parse(sourceConfigJson.value) : {}
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      sourceConfigError.value = '配置必须是 JSON 对象'
+      return false
+    }
+    sourceConfigObject.value = cloneJsonValue(parsed)
+    rebuildSourceConfigExtras()
+    sourceConfigError.value = ''
+    return true
+  } catch {
+    sourceConfigError.value = 'JSON 格式不正确，请先修正后再保存'
+    return false
+  }
+}
+
+const addSourceConfigExtraEntry = () => {
+  sourceConfigExtras.value.push({key: '', value: ''})
+}
+
+const removeSourceConfigExtraEntry = (index: number) => {
+  sourceConfigExtras.value.splice(index, 1)
+}
+
+const ensureSourceConfigSchema = async (source: ManagedSource) => {
+  if (source.configSchema?.fields?.length || source.configSchema?.description) {
+    sourceConfigSchema.value = normalizePluginFilterConfigSchema(source.configSchema)
+    return
+  }
+  if (!source.pluginId) {
+    sourceConfigSchema.value = normalizePluginFilterConfigSchema(undefined)
+    return
+  }
+  try {
+    const {data} = await axios.get(`/api/plugins/${source.pluginId}/config-schema`)
+    source.configSchema = normalizePluginFilterConfigSchema(data)
+    sourceConfigSchema.value = source.configSchema
+  } catch {
+    sourceConfigSchema.value = normalizePluginFilterConfigSchema(undefined)
+  }
 }
 
 const openPluginFilterConfig = async (filter: PluginFilter) => {
@@ -2591,9 +2795,19 @@ const updateSource = (source: ManagedSource) => {
   })
 }
 
-const openSourceExtendDialog = (source: ManagedSource) => {
+const openSourceExtendDialog = async (source: ManagedSource) => {
   sourceExtendTarget.value = source
-  sourceExtendText.value = source.extend || ''
+  await ensureSourceConfigSchema(source)
+  if (sourceConfigHasSchema.value) {
+    const parsed = parsePluginFilterExtend(source.extend)
+    sourceConfigObject.value = parsed ? cloneJsonValue(parsed) : {}
+    sourceConfigJson.value = source.extend && source.extend.trim() ? source.extend : '{}'
+    sourceConfigMode.value = 'form'
+    sourceConfigError.value = ''
+    rebuildSourceConfigExtras()
+  } else {
+    sourceExtendText.value = source.extend || ''
+  }
   sourceExtendVisible.value = true
 }
 
@@ -2601,7 +2815,21 @@ const saveSourceExtend = () => {
   if (!sourceExtendTarget.value) {
     return
   }
-  sourceExtendTarget.value.extend = sourceExtendText.value
+  let extend = ''
+  if (sourceConfigHasSchema.value) {
+    if (sourceConfigMode.value === 'form') {
+      syncSourceConfigJsonFromForm()
+    } else if (!syncSourceConfigFormFromJson()) {
+      return
+    }
+    if (!validateSourceConfigObject()) {
+      return
+    }
+    extend = sourceConfigJson.value
+  } else {
+    extend = sourceExtendText.value
+  }
+  sourceExtendTarget.value.extend = extend
   updateSource(sourceExtendTarget.value)
   sourceExtendVisible.value = false
 }
