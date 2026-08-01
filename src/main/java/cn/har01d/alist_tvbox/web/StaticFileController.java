@@ -2,6 +2,7 @@ package cn.har01d.alist_tvbox.web;
 
 import cn.har01d.alist_tvbox.dto.StaticFileInfo;
 import cn.har01d.alist_tvbox.exception.BadRequestException;
+import cn.har01d.alist_tvbox.service.PluginFileSyncService;
 import cn.har01d.alist_tvbox.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.http.HttpServletResponse;
@@ -39,6 +40,29 @@ import java.util.zip.ZipOutputStream;
 public class StaticFileController {
 
     private static final String URL_PREFIX = "/static/";
+    private static final String PLUGINS_DIR = "plugins";
+
+    private final PluginFileSyncService pluginFileSyncService;
+
+    public StaticFileController(PluginFileSyncService pluginFileSyncService) {
+        this.pluginFileSyncService = pluginFileSyncService;
+    }
+
+    /** 路径是否落在 plugins/ 目录下（相对 static 根）。 */
+    private static boolean underPlugins(String path) {
+        return path != null && !path.isEmpty()
+                && (path.equals(PLUGINS_DIR) || path.startsWith(PLUGINS_DIR + "/"));
+    }
+
+    private void maybeSyncPlugins(boolean touched) {
+        if (touched) {
+            try {
+                pluginFileSyncService.reconcile();
+            } catch (Exception e) {
+                log.warn("plugin file sync failed", e);
+            }
+        }
+    }
 
     @GetMapping
     public List<StaticFileInfo> list(@RequestParam(defaultValue = "") String dir) throws IOException {
@@ -132,6 +156,8 @@ public class StaticFileController {
             file.transferTo(filePath.toFile());
             log.info("uploaded file: {}", filePath);
         }
+
+        maybeSyncPlugins(underPlugins(dir) || extract);
     }
 
     @DeleteMapping
@@ -159,6 +185,7 @@ public class StaticFileController {
             Files.delete(targetPath);
         }
         log.info("deleted: {}", targetPath);
+        maybeSyncPlugins(underPlugins(path));
     }
 
     @PostMapping("/rename")
@@ -185,6 +212,7 @@ public class StaticFileController {
 
         Files.move(targetPath, newPath);
         log.info("renamed {} -> {}", targetPath, newPath);
+        maybeSyncPlugins(underPlugins(path));
     }
 
     @DeleteMapping("/batch")
@@ -219,6 +247,7 @@ public class StaticFileController {
             log.info("deleted: {}", targetPath);
             count++;
         }
+        maybeSyncPlugins(paths.stream().anyMatch(StaticFileController::underPlugins));
         return count;
     }
 
@@ -326,6 +355,7 @@ public class StaticFileController {
             log.info("moved {} -> {}", srcPath, newPath);
             count++;
         }
+        maybeSyncPlugins(paths.stream().anyMatch(StaticFileController::underPlugins) || underPlugins(targetDir));
         return count;
     }
 

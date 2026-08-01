@@ -61,6 +61,7 @@
               <el-button @click="loadStatic">刷新</el-button>
               <el-button type="success" @click="showUploadDialog">上传文件</el-button>
               <el-button type="primary" @click="showMkdirDialog">新建文件夹</el-button>
+              <el-button type="warning" @click="scanPlugins">扫描插件目录</el-button>
             </template>
           </div>
         </el-row>
@@ -73,6 +74,16 @@
               <a :href="currentUrl+'/wallpaper'+token" target="_blank">{{ currentUrl }}/wallpaper{{ token }}</a><br>
               订阅定制，壁纸地址填写：
               <code>WALLPAPER_API</code><br>
+            </p>
+          </template>
+        </el-alert>
+
+        <el-alert type="success" :closable="false" show-icon style="margin-bottom: 10px">
+          <template #title>
+            <p>
+              将 <code>.py</code> 爬虫脚本上传到 <strong>plugins</strong> 文件夹，会自动同步到<strong>订阅源管理</strong>：
+              上传/重传即注册或更新，删除文件即移除（也可
+              <a href="javascript:void(0)" style="color: var(--el-color-success)" @click="scanPlugins">手动扫描</a>）。
             </p>
           </template>
         </el-alert>
@@ -445,6 +456,10 @@ const showUploadDialog = () => {
 
 const handleUploadSuccess = () => {
   ElMessage.success('上传成功')
+  const dir = currentStaticDir.value || ''
+  if (dir === 'plugins' || dir.startsWith('plugins/')) {
+    ElMessage.info('已同步到订阅源管理')
+  }
   uploadDialogVisible.value = false
   uploadRef.value?.clearFiles()
   loadStatic()
@@ -452,6 +467,14 @@ const handleUploadSuccess = () => {
 
 const handleUploadError = () => {
   ElMessage.error('上传失败')
+}
+
+const scanPlugins = () => {
+  axios.post('/api/plugins/scan').then(() => {
+    ElMessage.success('已扫描 plugins 目录并同步订阅源')
+  }).catch(() => {
+    ElMessage.error('扫描失败')
+  })
 }
 
 const showMkdirDialog = () => {
