@@ -46,7 +46,7 @@ public class AppProperties {
     private Boolean panSouAuthEnabled;
     private List<String> panSouPlugins;
     private boolean panSouLinkCheckEnabled;
-    private int panSouLinkCheckMaxCount = 30;
+    private int panSouLinkCheckMaxCount = 300;
     private List<String> panSouLinkCheckTypes;
     private Integer panSouConc;
     private Boolean panSouRefresh = false;

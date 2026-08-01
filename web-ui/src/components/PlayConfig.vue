@@ -41,7 +41,7 @@ const panSouBuiltinChannelsCount = ref(0)
 const panSouPluginCount = ref(0)
 const panSouPlugins = ref([])
 const panSouLinkCheckEnabled = ref(false)
-const panSouLinkCheckMaxCount = ref(30)
+const panSouLinkCheckMaxCount = ref(300)
 const panSouLinkCheckTypes = ref<string[]>([])
 const panSouLinkCheckTypeOptions = [
   {label: '百度网盘', value: 'baidu'},
@@ -478,7 +478,7 @@ onMounted(() => {
     panSouSource.value = data.pan_sou_source || 'all'
     panSouChannels.value = data.pan_sou_channels || 'custom'
     panSouLinkCheckEnabled.value = data.pan_sou_link_check_enabled === 'true'
-    panSouLinkCheckMaxCount.value = +(data.pan_sou_link_check_max_count || 30)
+    panSouLinkCheckMaxCount.value = +(data.pan_sou_link_check_max_count || 300)
     panSouLinkCheckTypes.value = data.pan_sou_link_check_types ? data.pan_sou_link_check_types.split(',') : []
     panSouConc.value = data.pan_sou_conc ? +data.pan_sou_conc : null
     panSouRefresh.value = data.pan_sou_refresh === 'true'
@@ -548,7 +548,7 @@ onUnmounted(() => {
           <span class="hint">留空=检测全部9种</span>
         </el-form-item>
         <el-form-item label="检测数量上限" v-if="panSouUrl">
-          <el-input-number v-model="panSouLinkCheckMaxCount" :min="0" :max="500"/>
+          <el-input-number v-model="panSouLinkCheckMaxCount" :min="0" :max="1000"/>
           <span class="hint">仅当网盘结果数量小于等于该值时检查，磁力和ED2K不计算数量</span>
         </el-form-item>
         <el-form-item v-if="panSouUrl">
