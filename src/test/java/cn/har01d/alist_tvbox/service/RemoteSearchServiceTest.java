@@ -5,6 +5,8 @@ import cn.har01d.alist_tvbox.dto.OfflineDownloadConfigDto;
 import cn.har01d.alist_tvbox.dto.tg.Message;
 import cn.har01d.alist_tvbox.entity.TelegramChannelRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -15,8 +17,11 @@ import org.springframework.http.converter.json.MappingJackson2HttpMessageConvert
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -24,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -338,6 +344,146 @@ class RemoteSearchServiceTest {
         service.search("movie", List.of(), "csp_FishPanSou");
 
         server.verify();
+    }
+
+    @Test
+    void checkPanSouLinksUsesPanCheckWhenConfiguredAndNormalizesBuckets() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanCheckUrl("http://pc.example");
+        RemoteSearchService service = newService(appProperties, restTemplate);
+
+        ObjectNode request = objectMapper.createObjectNode();
+        ArrayNode items = request.putArray("items");
+        items.addObject().put("disk_type", "quark").put("url", "https://pan.quark.cn/s/a");
+        items.addObject().put("disk_type", "quark").put("url", "https://pan.quark.cn/s/b");
+        request.put("view_token", "t");
+
+        server.expect(once(), requestTo("http://pc.example/api/v1/links/check"))
+                .andExpect(content().json("""
+                        {"links":["https://pan.quark.cn/s/a","https://pan.quark.cn/s/b"],"selected_platforms":["quark"]}
+                        """))
+                .andRespond(withSuccess("""
+                        {"submission_id":1,"valid_links":["https://pan.quark.cn/s/a"],
+                         "invalid_links":["https://pan.quark.cn/s/b"],"locked_links":[],"pending_links":[]}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        ObjectNode out = service.checkPanSouLinks(request);
+        server.verify();
+        Map<String, String> states = new HashMap<>();
+        out.get("results").forEach(r -> states.put(r.get("url").asText(), r.get("state").asText()));
+        assertThat(states).containsEntry("https://pan.quark.cn/s/a", "ok")
+                .containsEntry("https://pan.quark.cn/s/b", "bad");
+    }
+
+    @Test
+    void checkPanSouLinksMapsDiskTypeToPanCheckPlatform() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanCheckUrl("http://pc.example");
+        RemoteSearchService service = newService(appProperties, restTemplate);
+
+        ObjectNode request = objectMapper.createObjectNode();
+        request.putArray("items").addObject().put("disk_type", "123").put("url", "https://www.123pan.com/s/x");
+
+        server.expect(once(), requestTo("http://pc.example/api/v1/links/check"))
+                .andExpect(content().json("""
+                        {"selected_platforms":["pan123"]}
+                        """))
+                .andRespond(withSuccess("""
+                        {"valid_links":["https://www.123pan.com/s/x"]}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        ObjectNode out = service.checkPanSouLinks(request);
+        server.verify();
+        assertThat(out.get("results").get(0).get("state").asText()).isEqualTo("ok");
+    }
+
+    @Test
+    void checkPanSouLinksFallsBackToTgSearchAndUnwrapsData() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setTgSearch("http://tg.example");
+        appProperties.setTgSearchApiKey("tgkey");
+        RemoteSearchService service = newService(appProperties, restTemplate);
+
+        ObjectNode request = objectMapper.createObjectNode();
+        request.putArray("items").addObject().put("disk_type", "quark").put("url", "https://pan.quark.cn/s/a");
+        request.put("view_token", "t");
+
+        server.expect(once(), requestTo("http://tg.example/api/check/links"))
+                .andExpect(header("X-API-Key", "tgkey"))
+                .andExpect(content().json("""
+                        {"items":[{"disk_type":"quark","url":"https://pan.quark.cn/s/a"}]}
+                        """))
+                .andRespond(withSuccess("""
+                        {"code":0,"message":"success","data":{"results":[
+                          {"url":"https://pan.quark.cn/s/a","state":"ok","summary":"链接有效"}]}}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        ObjectNode out = service.checkPanSouLinks(request);
+        server.verify();
+        assertThat(out.get("results").get(0).get("url").asText()).isEqualTo("https://pan.quark.cn/s/a");
+        assertThat(out.has("data")).isFalse();
+    }
+
+    @Test
+    void checkPanSouLinksTgSearchSendsConfiguredTimeout() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setTgSearch("http://tg.example");
+        appProperties.setPanCheckTimeoutMs(3000);
+        RemoteSearchService service = newService(appProperties, restTemplate);
+
+        ObjectNode request = objectMapper.createObjectNode();
+        request.putArray("items").addObject().put("disk_type", "quark").put("url", "https://pan.quark.cn/s/a");
+        request.put("view_token", "t");
+
+        // timeout_ms injected only because TG-Search is the active backend and a timeout is configured
+        server.expect(once(), requestTo("http://tg.example/api/check/links"))
+                .andExpect(content().json("""
+                        {"items":[{"disk_type":"quark","url":"https://pan.quark.cn/s/a"}],"timeout_ms":3000}
+                        """))
+                .andRespond(withSuccess("""
+                        {"code":0,"data":{"results":[{"url":"https://pan.quark.cn/s/a","state":"ok"}]}}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        service.checkPanSouLinks(request);
+        server.verify();
+    }
+
+    @Test
+    void checkPanSouLinksPanCheckWinsOverTgSearch() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        AppProperties appProperties = new AppProperties();
+        appProperties.setPanCheckUrl("http://pc.example");
+        appProperties.setTgSearch("http://tg.example");
+        RemoteSearchService service = newService(appProperties, restTemplate);
+
+        ObjectNode request = objectMapper.createObjectNode();
+        request.putArray("items").addObject().put("disk_type", "quark").put("url", "https://pan.quark.cn/s/a");
+
+        // Only PanCheck is hit; TG-Search must not be contacted.
+        server.expect(once(), requestTo("http://pc.example/api/v1/links/check"))
+                .andRespond(withSuccess("""
+                        {"valid_links":["https://pan.quark.cn/s/a"]}
+                        """, org.springframework.http.MediaType.APPLICATION_JSON));
+
+        ObjectNode out = service.checkPanSouLinks(request);
+        server.verify();
+        assertThat(out.get("results").get(0).get("state").asText()).isEqualTo("ok");
+    }
+
+    private RemoteSearchService newService(AppProperties appProperties, RestTemplate restTemplate) {
+        return new RemoteSearchService(
+                appProperties, restTemplateBuilder(restTemplate), objectMapper,
+                mock(TelegramChannelRepository.class), mock(ShareService.class),
+                mock(TvBoxService.class), mock(OfflineDownloadService.class), mock(SubscriptionSourceService.class));
     }
 
     private static Message message(String type, String link) {

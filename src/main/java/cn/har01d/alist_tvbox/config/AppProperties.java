@@ -36,6 +36,8 @@ public class AppProperties {
     private String tgSearchApiKey;
     private String tgSortField = "time";
     private boolean tgLogin;
+    private String panCheckUrl;
+    private Integer panCheckTimeoutMs;
     private String panSouUrl;
     private String panSouSource = "all";
     private String panSouChannels = "custom";

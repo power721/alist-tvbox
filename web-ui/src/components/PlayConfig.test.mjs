@@ -67,6 +67,21 @@ test('play config links to power721 tg-search deployment guide', () => {
   assert.equal(componentSource.includes(`TG-Search API Key`), true)
 })
 
+test('play config exposes dedicated PanCheck 盘检地址 with fallback hint', () => {
+  assert.equal(componentSource.includes(`const panCheckUrl = ref('')`), true)
+  assert.equal(componentSource.includes(`panCheckUrl.value = data.pan_check_url`), true)
+  assert.equal(componentSource.includes(`name: 'pan_check_url', value: panCheckUrl.value`), true)
+  assert.equal(componentSource.includes(`label="盘检地址"`), true)
+  assert.equal(componentSource.includes(`https://github.com/Lampon/PanCheck`), true)
+})
+
+test('play config exposes TG-Search-only 盘检超时 setting', () => {
+  assert.equal(componentSource.includes(`const panCheckTimeoutMs = ref<number | null>(null)`), true)
+  assert.equal(componentSource.includes(`panCheckTimeoutMs.value = data.pan_check_timeout_ms ? +data.pan_check_timeout_ms : null`), true)
+  assert.equal(componentSource.includes(`name: 'pan_check_timeout_ms', value: panCheckTimeoutMs.value || ''`), true)
+  assert.equal(componentSource.includes(`label="盘检超时(ms)"`), true)
+})
+
 test('play config exposes PanSou search behavior controls', () => {
   assert.equal(componentSource.includes(`const panSouConc = ref<number | null>(null)`), true)
   assert.equal(componentSource.includes(`const panSouRefresh = ref(false)`), true)

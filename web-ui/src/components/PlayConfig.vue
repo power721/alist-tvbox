@@ -28,6 +28,8 @@ const tgSearch = ref('')
 const tgSearchApiKey = ref('')
 const tgSearchVersion = ref('')
 const tgSearchHealthError = ref('')
+const panCheckUrl = ref('')
+const panCheckTimeoutMs = ref<number | null>(null)
 const panSouUrl = ref('')
 const panSouSource = ref('all')
 const panSouChannels = ref('custom')
@@ -222,6 +224,19 @@ const updatePanSouUrl = () => {
   axios.post('/api/settings', {name: 'pan_sou_url', value: panSouUrl.value}).then(({data}) => {
     panSouUrl.value = data.value
     loadPanSouInfo()
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePanCheckUrl = () => {
+  axios.post('/api/settings', {name: 'pan_check_url', value: panCheckUrl.value}).then(({data}) => {
+    panCheckUrl.value = data.value
+    ElMessage.success('更新成功')
+  })
+}
+
+const updatePanCheckTimeout = () => {
+  axios.post('/api/settings', {name: 'pan_check_timeout_ms', value: panCheckTimeoutMs.value || ''}).then(() => {
     ElMessage.success('更新成功')
   })
 }
@@ -448,6 +463,8 @@ onMounted(() => {
     tgWebChannels.value = data.tg_web_channels
     tgSearch.value = data.tg_search
     tgSearchApiKey.value = data.tg_search_api_key
+    panCheckUrl.value = data.pan_check_url
+    panCheckTimeoutMs.value = data.pan_check_timeout_ms ? +data.pan_check_timeout_ms : null
     checkTgSearchHealth()
     panSouUrl.value = data.pan_sou_url
     if (panSouUrl.value) {
@@ -504,6 +521,21 @@ onUnmounted(() => {
           <a class="hint" target="_blank" title="部署TG-Search" href="https://github.com/power721/tg-search">部署</a>
           <span class="hint" v-if="tgSearchVersion">版本：{{ tgSearchVersion }}</span>
           <span class="hint error" v-if="tgSearchHealthError">{{ tgSearchHealthError }}</span>
+        </el-form-item>
+        <el-form-item label="盘检地址">
+          <el-input v-model="panCheckUrl" placeholder="http://IP:6080"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updatePanCheckUrl">更新</el-button>
+          <a class="hint" target="_blank" title="部署PanCheck" href="https://github.com/Lampon/PanCheck">部署</a>
+          <span class="hint">独立的网盘链接检测后端，配置后优先使用；检测优先级：盘检地址 &gt; TG-Search &gt; PanSou，留空则回退</span>
+        </el-form-item>
+        <el-form-item label="盘检超时(ms)">
+          <el-input-number v-model="panCheckTimeoutMs" :min="0" :step="1000" placeholder="默认5000"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="updatePanCheckTimeout">更新</el-button>
+          <span class="hint">仅在走 TG-Search 盘检时作为 timeout_ms 生效，0/留空用上游默认（PanCheck/PanSou 无此参数）</span>
         </el-form-item>
         <el-form-item label="链接检测" v-if="panSouUrl">
           <el-switch v-model="panSouLinkCheckEnabled"/>

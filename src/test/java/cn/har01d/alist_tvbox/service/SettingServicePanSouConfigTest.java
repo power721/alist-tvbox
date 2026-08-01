@@ -87,4 +87,21 @@ class SettingServicePanSouConfigTest {
         service.update(new Setting("pan_sou_link_check_types", ""));
         assertNull(appProperties.getPanSouLinkCheckTypes());
     }
+
+    @Test
+    void panCheckUrlIsNormalized() {
+        when(settingRepository.save(any(Setting.class))).thenAnswer(inv -> inv.getArgument(0));
+        service.update(new Setting("pan_check_url", "http://pc.example:6080/api/v1/links/check"));
+        assertEquals("http://pc.example:6080", appProperties.getPanCheckUrl());
+        service.update(new Setting("pan_check_url", "http://pc.example:6080/"));
+        assertEquals("http://pc.example:6080", appProperties.getPanCheckUrl());
+    }
+
+    @Test
+    void panCheckTimeoutMsParsesOrBlanks() {
+        service.update(new Setting("pan_check_timeout_ms", "3000"));
+        assertEquals(3000, appProperties.getPanCheckTimeoutMs());
+        service.update(new Setting("pan_check_timeout_ms", ""));
+        assertNull(appProperties.getPanCheckTimeoutMs());
+    }
 }

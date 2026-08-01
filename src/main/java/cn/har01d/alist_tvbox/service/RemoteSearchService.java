@@ -43,6 +43,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -535,6 +536,110 @@ public class RemoteSearchService {
     }
 
     public ObjectNode checkPanSouLinks(ObjectNode request) {
+        // Priority: dedicated 盘检地址 (PanCheck) > TG-Search > PanSou
+        if (StringUtils.isNotBlank(appProperties.getPanCheckUrl())) {
+            return checkViaPanCheck(request);
+        }
+        if (StringUtils.isNotBlank(appProperties.getTgSearch())) {
+            return checkViaTgSearch(request);
+        }
+        return checkViaPanSou(request);
+    }
+
+    // PanCheck backend (see /home/harold/workspace/PanCheck): different contract —
+    // req {links:[url...], selected_platforms:[...]}, resp bucketed by validity.
+    private ObjectNode checkViaPanCheck(ObjectNode request) {
+        ObjectNode panCheckReq = objectMapper.createObjectNode();
+        ArrayNode links = panCheckReq.putArray("links");
+        Set<String> platforms = new LinkedHashSet<>();
+        if (request.has("items") && request.get("items").isArray()) {
+            for (JsonNode item : request.get("items")) {
+                if (item.has("url")) {
+                    links.add(item.get("url").asText());
+                }
+                if (item.has("disk_type")) {
+                    platforms.add(mapPanCheckPlatform(item.get("disk_type").asText()));
+                }
+            }
+        }
+        // send selected_platforms so PanCheck runs the checkers synchronously (realtime)
+        ArrayNode selectedPlatforms = panCheckReq.putArray("selected_platforms");
+        platforms.forEach(selectedPlatforms::add);
+        String url = appProperties.getPanCheckUrl() + "/api/v1/links/check";
+        ObjectNode response = restTemplate.postForObject(url, panCheckReq, ObjectNode.class);
+        return normalizePanCheckResponse(response);
+    }
+
+    private String mapPanCheckPlatform(String diskType) {
+        return switch (diskType) {
+            case "123" -> "pan123";
+            case "115" -> "pan115";
+            case "mobile" -> "cmcc";
+            default -> diskType;
+        };
+    }
+
+    private ObjectNode normalizePanCheckResponse(ObjectNode response) {
+        ObjectNode result = objectMapper.createObjectNode();
+        ArrayNode results = result.putArray("results");
+        if (response == null) {
+            return result;
+        }
+        addPanCheckResults(results, response, "valid_links", "ok");
+        addPanCheckResults(results, response, "invalid_links", "bad");
+        addPanCheckResults(results, response, "locked_links", "locked");
+        addPanCheckResults(results, response, "pending_links", "uncertain");
+        return result;
+    }
+
+    private void addPanCheckResults(ArrayNode results, ObjectNode response, String field, String state) {
+        if (response.has(field) && response.get(field).isArray()) {
+            for (JsonNode link : response.get(field)) {
+                results.addObject()
+                        .put("url", link.asText())
+                        .put("state", state)
+                        .put("summary", getPanCheckSummary(state));
+            }
+        }
+    }
+
+    private String getPanCheckSummary(String state) {
+        return switch (state) {
+            case "ok" -> "链接有效";
+            case "bad" -> "链接失效";
+            case "locked" -> "链接受限";
+            case "uncertain" -> "状态不确定";
+            default -> state;
+        };
+    }
+
+    // TG-Search exposes the same /api/check/links contract but wraps results under "data"
+    // and authenticates via X-API-Key. Unwrap so downstream sees the canonical {results} shape.
+    private ObjectNode checkViaTgSearch(ObjectNode request) {
+        String url = appProperties.getTgSearch() + "/api/check/links";
+        // Only TG-Search exposes a server-side check timeout; honor it when configured.
+        Integer timeoutMs = appProperties.getPanCheckTimeoutMs();
+        if (timeoutMs != null && timeoutMs > 0) {
+            request.put("timeout_ms", timeoutMs);
+        }
+        HttpHeaders headers = new HttpHeaders();
+        if (StringUtils.isNotBlank(appProperties.getTgSearchApiKey())) {
+            headers.set("X-API-Key", appProperties.getTgSearchApiKey());
+        }
+        ObjectNode response = restTemplate.exchange(url, HttpMethod.POST,
+                new HttpEntity<>(request, headers), ObjectNode.class).getBody();
+        if (response != null && response.has("data") && response.get("data").isObject()) {
+            JsonNode data = response.get("data");
+            if (data.has("results")) {
+                ObjectNode normalized = objectMapper.createObjectNode();
+                normalized.set("results", data.get("results"));
+                return normalized;
+            }
+        }
+        return response == null ? objectMapper.createObjectNode() : response;
+    }
+
+    private ObjectNode checkViaPanSou(ObjectNode request) {
         String url = appProperties.getPanSouUrl() + "/api/check/links";
         if (!shouldUsePanSouAuth()) {
             return restTemplate.postForObject(url, request, ObjectNode.class);

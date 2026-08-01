@@ -106,6 +106,9 @@ public class SettingService {
         appProperties.setSearchable(!settingRepository.findById("bilibili_searchable").map(Setting::getValue).orElse("").equals("false"));
         appProperties.setTgSearch(settingRepository.findById("tg_search").map(Setting::getValue).orElse(""));
         appProperties.setTgSearchApiKey(settingRepository.findById("tg_search_api_key").map(Setting::getValue).orElse(""));
+        appProperties.setPanCheckUrl(settingRepository.findById("pan_check_url").map(Setting::getValue).orElse(""));
+        appProperties.setPanCheckTimeoutMs(settingRepository.findById("pan_check_timeout_ms").map(Setting::getValue)
+                .filter(StringUtils::isNotBlank).map(v -> Integer.parseInt(v.trim())).orElse(null));
         appProperties.setPanSouUrl(settingRepository.findById("pan_sou_url").map(Setting::getValue).orElse(""));
         appProperties.setPanSouSource(settingRepository.findById("pan_sou_source").map(Setting::getValue).orElse("all"));
         appProperties.setPanSouChannels(settingRepository.findById("pan_sou_channels").map(Setting::getValue).map(this::normalizePanSouChannels).orElse("custom"));
@@ -492,6 +495,23 @@ public class SettingService {
                 setting.setValue(setting.getValue().substring(0, setting.getValue().length() - 11));
             }
             appProperties.setPanSouUrl(setting.getValue());
+        }
+        if ("pan_check_url".equals(setting.getName())) {
+            if (setting.getValue().endsWith("/")) {
+                setting.setValue(setting.getValue().substring(0, setting.getValue().length() - 1));
+            }
+            String suffix = "/api/v1/links/check";
+            if (setting.getValue().endsWith(suffix)) {
+                setting.setValue(setting.getValue().substring(0, setting.getValue().length() - suffix.length()));
+            }
+            appProperties.setPanCheckUrl(setting.getValue());
+        }
+        if ("pan_check_timeout_ms".equals(setting.getName())) {
+            if (StringUtils.isBlank(setting.getValue())) {
+                appProperties.setPanCheckTimeoutMs(null);
+            } else {
+                appProperties.setPanCheckTimeoutMs(Math.max(0, Integer.parseInt(setting.getValue().trim())));
+            }
         }
         if ("pan_sou_source".equals(setting.getName())) {
             appProperties.setPanSouSource(setting.getValue());
