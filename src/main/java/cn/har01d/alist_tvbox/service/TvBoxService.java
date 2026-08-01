@@ -1573,7 +1573,7 @@ public class TvBoxService {
 
         boolean enabled = !(item.get("enabled") instanceof Boolean value) || value;
         int concurrency = readInt(item.get("concurrency"), 1);
-        return enabled && concurrency > 1;
+        return enabled && concurrency > 0;
     }
 
     private int readInt(Object value, int defaultValue) {
